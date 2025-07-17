@@ -1,0 +1,39 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "paths": {
+      "@codecraft/shared": ["packages/shared/src/index.ts"],
+      "@codecraft/shared/*": ["packages/shared/src/*"],
+      "@codecraft/cli": ["packages/cli/src/index.ts"],
+      "@codecraft/cli/*": ["packages/cli/src/*"],
+      "@codecraft/web": ["packages/web/src/index.ts"],
+      "@codecraft/web/*": ["packages/web/src/*"],
+      "@codecraft/vscode-extension": ["packages/vscode-extension/src/index.ts"],
+      "@codecraft/vscode-extension/*": ["packages/vscode-extension/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

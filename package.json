@@ -1,0 +1,137 @@
+{
+  "name": "codecraft",
+  "version": "1.0.0",
+  "description": "AI-powered development platform with production-ready code generation",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "backend",
+    "scripts"
+  ],
+  "scripts": {
+    "setup:husky": "husky install",
+    
+    "build": "nx run-many --target=build --all",
+    "build:cli": "nx build @codecraft/cli",
+    "build:shared": "nx build @codecraft/shared",
+    "build:extension": "nx build @codecraft/vscode-extension",
+    "build:web": "nx build @codecraft/web",
+    "build:backend": "nx build backend",
+    
+    "dev": "nx run-many --target=dev --all --parallel",
+    "dev:cli": "nx dev @codecraft/cli",
+    "dev:shared": "nx dev @codecraft/shared",
+    "dev:web": "nx dev @codecraft/web",
+    "dev:backend": "nx dev backend",
+    
+    "test": "nx run-many --target=test --all",
+    "test:cli": "nx test @codecraft/cli",
+    "test:shared": "nx test @codecraft/shared",
+    "test:web": "nx test @codecraft/web",
+    "test:backend": "nx test backend",
+    "test:e2e": "nx run-many --target=e2e --all",
+    "test:coverage": "nx run-many --target=test --all --coverage",
+    
+    "lint": "nx run-many --target=lint --all",
+    "lint:fix": "nx run-many --target=lint --all --fix",
+    "typecheck": "nx run-many --target=typecheck --all",
+    
+    "clean": "nx reset && rimraf node_modules packages/*/node_modules backend/node_modules packages/*/dist backend/dist",
+    "clean:cache": "nx reset",
+    "clean:deps": "rimraf node_modules packages/*/node_modules backend/node_modules",
+    "clean:build": "rimraf packages/*/dist backend/dist packages/*/out",
+    
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish",
+    
+    "release": "npm run build && npm run changeset:publish",
+    "release:cli": "nx build @codecraft/cli && cd packages/cli && npm publish",
+    "release:extension": "nx build @codecraft/vscode-extension && cd packages/vscode-extension && vsce publish",
+    
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up",
+    "docker:down": "docker-compose down",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up",
+    
+    "docs:build": "typedoc --options typedoc.json",
+    "docs:serve": "http-server docs/dist -p 8080",
+    "docs:dev": "typedoc --watch --options typedoc.json",
+    
+    "setup": "npm install && npm run build",
+    "setup:dev": "npm install && npm run setup:env",
+    "setup:env": "cp .env.example .env",
+    
+    "health": "node scripts/health-check.js",
+    "audit": "npm audit --audit-level=high",
+    "audit:fix": "npm audit fix"
+  },
+  "keywords": [
+    "ai",
+    "code-generation",
+    "development",
+    "automation",
+    "cli",
+    "blockchain",
+    "web3",
+    "react",
+    "nextjs",
+    "production-ready",
+    "vscode",
+    "extension"
+  ],
+  "author": "CodeCraft Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@nx/devkit": "^17.2.8",
+    "@nx/eslint-plugin": "^17.2.8",
+    "@nx/jest": "^17.2.8",
+    "@nx/js": "^17.2.8",
+    "@nx/linter": "^17.2.8",
+    "@nx/node": "^17.2.8",
+    "@nx/vite": "^17.2.8",
+    "@nx/workspace": "^17.2.8",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^8.0.3",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "lerna": "^8.0.2",
+    "lint-staged": "^15.2.0",
+    "nx": "^17.2.8",
+    "prettier": "^3.1.1",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3",
+    "typedoc": "^0.25.4",
+    "vite": "^5.0.10",
+    "vitest": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codecraft-team/codecraft.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codecraft-team/codecraft/issues"
+  },
+  "homepage": "https://codecraft.dev",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/codecraft-team"
+  }
+}

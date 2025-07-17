@@ -1,0 +1,231 @@
+{
+  "name": "@codecraft/vscode-extension",
+  "displayName": "CodeCraft",
+  "description": "AI-powered development platform with production-ready code generation",
+  "version": "1.0.0",
+  "publisher": "codecraft-team",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "AI",
+    "Productivity",
+    "Developer Tools"
+  ],
+  "keywords": [
+    "ai",
+    "code-generation",
+    "automation",
+    "blockchain",
+    "web3",
+    "react",
+    "nextjs"
+  ],
+  "activationEvents": [
+    "onCommand:codecraft.planProject",
+    "onCommand:codecraft.generateCode",
+    "onCommand:codecraft.validateIntegrations",
+    "onView:codecraft-planner",
+    "onView:codecraft-agents",
+    "onView:codecraft-projects"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codecraft.planProject",
+        "title": "Plan New Project",
+        "category": "CodeCraft",
+        "icon": "$(project)"
+      },
+      {
+        "command": "codecraft.generateCode",
+        "title": "Generate Production Code",
+        "category": "CodeCraft",
+        "icon": "$(code)"
+      },
+      {
+        "command": "codecraft.validateIntegrations",
+        "title": "Validate Integrations",
+        "category": "CodeCraft",
+        "icon": "$(check)"
+      },
+      {
+        "command": "codecraft.createAgent",
+        "title": "Create AI Agent",
+        "category": "CodeCraft",
+        "icon": "$(robot)"
+      },
+      {
+        "command": "codecraft.openChat",
+        "title": "Open CodeCraft Chat",
+        "category": "CodeCraft",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "codecraft.refreshPlanner",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codecraft.refreshAgents",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "views": {
+      "codecraft": [
+        {
+          "id": "codecraft-planner",
+          "name": "Project Planner",
+          "when": "true",
+          "type": "webview"
+        },
+        {
+          "id": "codecraft-agents",
+          "name": "AI Agents",
+          "when": "true"
+        },
+        {
+          "id": "codecraft-projects",
+          "name": "Projects",
+          "when": "true"
+        },
+        {
+          "id": "codecraft-validation",
+          "name": "Validation Results",
+          "when": "true"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codecraft",
+          "title": "CodeCraft",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "codecraft.refreshPlanner",
+          "when": "view == codecraft-planner",
+          "group": "navigation"
+        },
+        {
+          "command": "codecraft.refreshAgents",
+          "when": "view == codecraft-agents",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codecraft.generateCode",
+          "when": "view == codecraft-projects && viewItem == project",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "codecraft.planProject",
+          "when": "true"
+        },
+        {
+          "command": "codecraft.generateCode",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "codecraft.validateIntegrations",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CodeCraft",
+      "properties": {
+        "codecraft.apiUrl": {
+          "type": "string",
+          "default": "https://api.codecraft.dev",
+          "description": "CodeCraft API URL"
+        },
+        "codecraft.defaultModel": {
+          "type": "string",
+          "default": "gpt-4",
+          "enum": [
+            "gpt-4",
+            "gpt-3.5-turbo",
+            "claude-3-opus",
+            "claude-3-sonnet",
+            "ollama/llama2",
+            "ollama/codellama"
+          ],
+          "description": "Default AI model for code generation"
+        },
+        "codecraft.autoValidate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically validate generated code"
+        },
+        "codecraft.productionMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Generate production-ready code with real integrations"
+        },
+        "codecraft.enableTelemetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable telemetry to improve CodeCraft"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:watch": "webpack --mode development --watch",
+    "dev": "webpack --mode development --watch",
+    "compile": "webpack --mode development",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist out",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@codecraft/shared": "*",
+    "axios": "^1.6.2",
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "rimraf": "^5.0.5",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codecraft-team/codecraft.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codecraft-team/codecraft/issues"
+  },
+  "homepage": "https://codecraft.dev"
+}

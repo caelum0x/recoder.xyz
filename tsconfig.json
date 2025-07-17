@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./packages/vscode-extension"
+    },
+    {
+      "path": "./packages/web"
+    },
+    {
+      "path": "./backend"
+    }
+  ]
+}
