@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(md packagesclisrccommandsagent)",
+      "Bash(md packagesclisrccommandsproject)",
+      "Bash(md packagesclisrclib)",
+      "Bash(md packagesclisrcagents)",
+      "Bash(md packagesclisrcanalyzers)",
+      "Bash(md packagesclisrcgenerators)",
+      "Bash(md packagesclisrcvalidators)",
+      "Bash(md packagesclisrcplanners)",
+      "Bash(md packagesclisrcstructures)",
+      "Bash(md packagesclisrcmodels)",
+      "Bash(md packagesclisrctemplatesweb)",
+      "Bash(md packagesclisrctemplatesmobile)",
+      "Bash(md packagesclisrctemplatesblockchain)",
+      "Bash(md packagesclisrctemplatesai)",
+      "Bash(md packagesclisrctemplatesfullstack)",
+      "Bash(md packagesclisrcintegrationspayment)",
+      "Bash(md packagesclisrcintegrationsblockchain)",
+      "Bash(md packagesclisrcintegrationsai)",
+      "Bash(md packagesclisrcintegrationsdatabase)",
+      "Bash(md packagesclisrcintegrationscloud)",
+      "Bash(md packagesclisrcutils)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(npm:*)",
+      "Bash(npx nx:*)",
+      "Bash(ls:*)"
+    ],
+    "deny": []
+  }
+}

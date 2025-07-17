@@ -1,0 +1,26 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "description": "Build and deployment scripts for CodeCraft monorepo",
+  "private": true,
+  "scripts": {
+    "health-check": "node health-check.js",
+    "setup": "node setup.js",
+    "build-all": "node build-all.js",
+    "deploy": "node deploy.js",
+    "test-all": "node test-all.js",
+    "release": "node release.js"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "fs-extra": "^11.2.0",
+    "axios": "^1.6.2",
+    "semver": "^7.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  },
+  "author": "CodeCraft Team",
+  "license": "MIT"
+}
