@@ -1,12 +1,12 @@
 {
-  "name": "@codecraft/cli",
+  "name": "@recoder/cli",
   "version": "1.0.0",
-  "description": "CodeCraft CLI - AI-powered development platform with production-ready code generation",
+  "description": "Recoder CLI - AI-powered development platform with production-ready code generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "codecraft": "dist/index.js",
-    "cc": "dist/index.js"
+    "recoder": "dist/index.js",
+    "rec": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -34,10 +34,10 @@
     "nextjs",
     "production-ready"
   ],
-  "author": "CodeCraft Team",
+  "author": "Recoder Team",
   "license": "MIT",
   "dependencies": {
-    "@codecraft/shared": "*",
+    "@recoder/shared": "*",
     "commander": "^11.1.0",
     "inquirer": "^9.2.12",
     "chalk": "^4.1.2",
@@ -57,7 +57,7 @@
     "update-notifier": "^6.0.2",
     "keytar": "^7.9.0",
     "open": "^8.4.2"
-  }
+  },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.7",
@@ -66,6 +66,7 @@
     "@types/semver": "^7.5.6",
     "@types/figlet": "^1.5.8",
     "@types/update-notifier": "^6.0.8",
+    "@types/conf": "^3.0.2",
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "eslint": "^8.56.0",
@@ -79,11 +80,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/codecraft-team/codecraft.git",
+    "url": "https://github.com/recoder-team/recoder.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/codecraft-team/codecraft/issues"
+    "url": "https://github.com/recoder-team/recoder/issues"
   },
-  "homepage": "https://codecraft.dev"
+  "homepage": "https://recoder.xyz"
 }

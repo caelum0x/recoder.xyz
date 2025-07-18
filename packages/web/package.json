@@ -1,7 +1,7 @@
 {
-  "name": "@codecraft/web",
+  "name": "@recoder/web",
   "version": "1.0.0",
-  "description": "CodeCraft web dashboard - project management and monitoring interface",
+  "description": "Recoder web dashboard - project management and monitoring interface",
   "private": true,
   "scripts": {
     "build": "next build",
@@ -19,7 +19,7 @@
     "export": "next export"
   },
   "dependencies": {
-    "@codecraft/shared": "*",
+    "@recoder/shared": "*",
     "next": "^14.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -63,20 +63,20 @@
     "typescript": "^5.3.3"
   },
   "keywords": [
-    "codecraft",
+    "recoder",
     "dashboard",
     "web",
     "nextjs",
     "react"
   ],
-  "author": "CodeCraft Team",
+  "author": "Recoder Team",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/codecraft-team/codecraft.git",
+    "url": "https://github.com/recoder-team/recoder.git",
     "directory": "packages/web"
   }
 }

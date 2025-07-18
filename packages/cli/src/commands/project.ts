@@ -10,7 +10,7 @@ import boxen from 'boxen';
 import path from 'path';
 import fs from 'fs-extra';
 import chokidar from 'chokidar';
-import { Logger } from '@codecraft/shared';
+import { Logger } from '@recoder/shared';
 import { ProjectService } from '../services/project';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';
@@ -23,7 +23,7 @@ export function setupProjectCommands(program: Command): void {
   // Initialize project command
   project
     .command('init')
-    .description('Initialize a new CodeCraft project')
+    .description('Initialize a new Recoder project')
     .option('-n, --name <name>', 'project name')
     .option('-d, --description <description>', 'project description')
     .option('-t, --type <type>', 'project type')
@@ -194,7 +194,7 @@ export function setupProjectCommands(program: Command): void {
 async function handleInitProject(options: any): Promise<void> {
   console.log(
     boxen(
-      chalk.cyan('🚀 Initialize CodeCraft Project'),
+      chalk.cyan('🚀 Initialize Recoder Project'),
       {
         padding: 1,
         borderStyle: 'round',
@@ -344,7 +344,7 @@ async function handleInitProject(options: any): Promise<void> {
         boxen(
           chalk.white('🚀 Next Steps:\n') +
           chalk.gray(`1. cd ${result.project.path}\n`) +
-          chalk.gray('2. codecraft project generate\n') +
+          chalk.gray('2. recoder project generate\n') +
           chalk.gray('3. npm install\n') +
           chalk.gray('4. npm run dev'),
           {
@@ -397,13 +397,13 @@ async function handleAddFeature(feature: string, options: any): Promise<void> {
     )
   );
 
-  // Check if we're in a CodeCraft project
+  // Check if we're in a Recoder project
   const projectPath = options.path || '.';
-  const planFile = path.join(projectPath, 'codecraft.json');
+  const planFile = path.join(projectPath, 'recoder.json');
   
   if (!await fs.pathExists(planFile)) {
-    console.log(chalk.yellow('No CodeCraft project found in current directory.'));
-    console.log(chalk.gray('Run "codecraft project init" to initialize a project first.'));
+    console.log(chalk.yellow('No Recoder project found in current directory.'));
+    console.log(chalk.gray('Run "recoder project init" to initialize a project first.'));
     return;
   }
 
@@ -653,7 +653,7 @@ async function handleGenerateCode(options: any): Promise<void> {
 
   // Auto-detect plan file if not specified
   if (!planFile) {
-    const possiblePlans = ['codecraft.json', 'project-plan.md', 'plan.json'];
+    const possiblePlans = ['recoder.json', 'project-plan.md', 'plan.json'];
     for (const plan of possiblePlans) {
       if (await fs.pathExists(plan)) {
         planFile = plan;
@@ -664,7 +664,7 @@ async function handleGenerateCode(options: any): Promise<void> {
 
   if (!planFile || !await fs.pathExists(planFile)) {
     console.log(chalk.red('No project plan found.'));
-    console.log(chalk.gray('Run "codecraft project init" to create a project plan first.'));
+    console.log(chalk.gray('Run "recoder project init" to create a project plan first.'));
     return;
   }
 
@@ -675,7 +675,7 @@ async function handleGenerateCode(options: any): Promise<void> {
   // Confirm if output directory is not empty
   if (await fs.pathExists(outputDir)) {
     const files = await fs.readdir(outputDir);
-    const nonConfigFiles = files.filter(f => !f.startsWith('.') && !['codecraft.json', 'package.json'].includes(f));
+    const nonConfigFiles = files.filter(f => !f.startsWith('.') && !['recoder.json', 'package.json'].includes(f));
     
     if (nonConfigFiles.length > 0 && !options.force) {
       const confirmed = await inquirer.prompt([
@@ -751,7 +751,7 @@ async function handleGenerateCode(options: any): Promise<void> {
           chalk.white('🚀 Next Steps:\n') +
           chalk.gray(`1. cd ${result.generation.outputDir}\n`) +
           chalk.gray('2. npm install\n') +
-          chalk.gray('3. codecraft project validate\n') +
+          chalk.gray('3. recoder project validate\n') +
           chalk.gray('4. npm run dev'),
           {
             padding: 1,
@@ -953,7 +953,7 @@ async function handleListProjects(options: any): Promise<void> {
       
       if (result.projects.length === 0) {
         console.log(chalk.yellow('No projects found.'));
-        console.log(chalk.gray('Create your first project with: codecraft project init'));
+        console.log(chalk.gray('Create your first project with: recoder project init'));
         return;
       }
 

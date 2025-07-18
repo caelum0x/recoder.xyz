@@ -1,0 +1,345 @@
+// Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String
+  organization    String?
+  role            String    @default("user")
+  isActive        Boolean   @default(true)
+  emailVerified   Boolean   @default(false)
+  subscription    String    @default("free")
+  apiKey          String?   @unique
+  refreshToken    String?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  projects        Project[]
+  templates       Template[]
+  agents          Agent[]
+  usageRecords    UsageRecord[]
+  subscriptions   Subscription[]
+  invoices        Invoice[]
+  paymentMethods  PaymentMethod[]
+
+  @@map("users")
+}
+
+model Project {
+  id                      String    @id @default(cuid())
+  name                    String
+  type                    String    // web, mobile, desktop, api, blockchain, ai
+  description             String?
+  status                  String    @default("planning") // planning, active, completed, archived
+  config                  Json      @default("{}")
+  structure               Json?
+  lastGenerated           DateTime?
+  generatedCodeMetadata   Json?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  // Foreign keys
+  userId                  String
+  templateId              String?
+
+  // Relations
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template                Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  agents                  Agent[]
+  usageRecords            UsageRecord[]
+
+  @@map("projects")
+}
+
+model Template {
+  id          String    @id @default(cuid())
+  name        String
+  category    String    // web, mobile, desktop, api, blockchain, ai
+  description String?
+  structure   Json
+  config      Json      @default("{}")
+  public      Boolean   @default(false)
+  version     String    @default("1.0.0")
+  imported    Boolean   @default(false)
+  originalTemplateId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Foreign keys
+  userId      String
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects    Project[]
+
+  @@map("templates")
+}
+
+model Agent {
+  id          String    @id @default(cuid())
+  name        String
+  type        String    // code, chat, analysis, deployment
+  description String?
+  config      Json      @default("{}")
+  status      String    @default("inactive") // active, inactive, training, error
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Foreign keys
+  userId      String
+  projectId   String?
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  usageRecords UsageRecord[]
+
+  @@map("agents")
+}
+
+model UsageRecord {
+  id          String    @id @default(cuid())
+  type        String    // api_usage, model_usage, code_generation, bandwidth, etc.
+  metadata    Json      @default("{}")
+  tokens      Int?
+  cost        Float?
+  duration    Int?
+  success     Boolean   @default(true)
+  timestamp   DateTime  @default(now())
+
+  // Foreign keys
+  userId      String
+  projectId   String?
+  agentId     String?
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  agent       Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@map("usage_records")
+}
+
+model Subscription {
+  id                    String    @id @default(cuid())
+  planId                String
+  status                String    // active, inactive, cancelled, past_due
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean   @default(false)
+  cancelledAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Foreign keys
+  userId                String
+  paymentMethodId       String?
+
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentMethod         PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  invoices              Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id              String    @id @default(cuid())
+  amount          Float
+  currency        String    @default("USD")
+  status          String    // draft, open, paid, void, uncollectible
+  description     String?
+  items           Json      @default("[]")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  paidAt          DateTime?
+  voidedAt        DateTime?
+
+  // Foreign keys
+  userId          String
+  subscriptionId  String?
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription    Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@map("invoices")
+}
+
+model PaymentMethod {
+  id          String    @id @default(cuid())
+  type        String    // card, bank_account
+  provider    String    @default("stripe")
+  providerId  String
+  brand       String?
+  last4       String?
+  expMonth    Int?
+  expYear     Int?
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Foreign keys
+  userId      String
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@map("payment_methods")
+}
+
+model Integration {
+  id          String    @id @default(cuid())
+  name        String
+  type        String    // ai, cloud, payment, blockchain
+  provider    String
+  config      Json      @default("{}")
+  status      String    @default("inactive") // active, inactive, error
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Foreign keys
+  userId      String
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("integrations")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  key         String    @unique
+  permissions Json      @default("{}")
+  lastUsed    DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Foreign keys
+  userId      String
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  action      String
+  resource    String
+  resourceId  String?
+  metadata    Json      @default("{}")
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime  @default(now())
+
+  // Foreign keys
+  userId      String?
+
+  // Relations
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model Configuration {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  value       Json
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("configurations")
+}
+
+model NotificationSettings {
+  id                    String    @id @default(cuid())
+  emailNotifications    Boolean   @default(true)
+  pushNotifications     Boolean   @default(false)
+  weeklyReports         Boolean   @default(true)
+  securityAlerts        Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Foreign keys
+  userId                String    @unique
+
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_settings")
+}
+
+model FileUpload {
+  id          String    @id @default(cuid())
+  filename    String
+  originalName String
+  mimetype    String
+  size        Int
+  path        String
+  url         String?
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
+  // Foreign keys
+  userId      String
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("file_uploads")
+}
+
+model Webhook {
+  id          String    @id @default(cuid())
+  url         String
+  events      String[]
+  secret      String?
+  isActive    Boolean   @default(true)
+  lastDelivery DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Foreign keys
+  userId      String
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id          String    @id @default(cuid())
+  event       String
+  payload     Json
+  response    Json?
+  status      String    // success, failed, pending
+  attempts    Int       @default(1)
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+
+  // Foreign keys
+  webhookId   String
+
+  // Relations
+  webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_deliveries")
+}

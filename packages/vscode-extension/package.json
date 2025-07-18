@@ -1,9 +1,9 @@
 {
-  "name": "@codecraft/vscode-extension",
-  "displayName": "CodeCraft",
+  "name": "@recoder/vscode-extension",
+  "displayName": "Recoder",
   "description": "AI-powered development platform with production-ready code generation",
   "version": "1.0.0",
-  "publisher": "codecraft-team",
+  "publisher": "recoder-team",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.74.0"
@@ -24,77 +24,77 @@
     "nextjs"
   ],
   "activationEvents": [
-    "onCommand:codecraft.planProject",
-    "onCommand:codecraft.generateCode",
-    "onCommand:codecraft.validateIntegrations",
-    "onView:codecraft-planner",
-    "onView:codecraft-agents",
-    "onView:codecraft-projects"
+    "onCommand:recoder.planProject",
+    "onCommand:recoder.generateCode",
+    "onCommand:recoder.validateIntegrations",
+    "onView:recoder-planner",
+    "onView:recoder-agents",
+    "onView:recoder-projects"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "codecraft.planProject",
+        "command": "recoder.planProject",
         "title": "Plan New Project",
-        "category": "CodeCraft",
+        "category": "Recoder",
         "icon": "$(project)"
       },
       {
-        "command": "codecraft.generateCode",
+        "command": "recoder.generateCode",
         "title": "Generate Production Code",
-        "category": "CodeCraft",
+        "category": "Recoder",
         "icon": "$(code)"
       },
       {
-        "command": "codecraft.validateIntegrations",
+        "command": "recoder.validateIntegrations",
         "title": "Validate Integrations",
-        "category": "CodeCraft",
+        "category": "Recoder",
         "icon": "$(check)"
       },
       {
-        "command": "codecraft.createAgent",
+        "command": "recoder.createAgent",
         "title": "Create AI Agent",
-        "category": "CodeCraft",
+        "category": "Recoder",
         "icon": "$(robot)"
       },
       {
-        "command": "codecraft.openChat",
-        "title": "Open CodeCraft Chat",
-        "category": "CodeCraft",
+        "command": "recoder.openChat",
+        "title": "Open Recoder Chat",
+        "category": "Recoder",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "codecraft.refreshPlanner",
+        "command": "recoder.refreshPlanner",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "codecraft.refreshAgents",
+        "command": "recoder.refreshAgents",
         "title": "Refresh",
         "icon": "$(refresh)"
       }
     ],
     "views": {
-      "codecraft": [
+      "recoder": [
         {
-          "id": "codecraft-planner",
+          "id": "recoder-planner",
           "name": "Project Planner",
           "when": "true",
           "type": "webview"
         },
         {
-          "id": "codecraft-agents",
+          "id": "recoder-agents",
           "name": "AI Agents",
           "when": "true"
         },
         {
-          "id": "codecraft-projects",
+          "id": "recoder-projects",
           "name": "Projects",
           "when": "true"
         },
         {
-          "id": "codecraft-validation",
+          "id": "recoder-validation",
           "name": "Validation Results",
           "when": "true"
         }
@@ -103,8 +103,8 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "codecraft",
-          "title": "CodeCraft",
+          "id": "recoder",
+          "title": "Recoder",
           "icon": "$(rocket)"
         }
       ]
@@ -112,47 +112,47 @@
     "menus": {
       "view/title": [
         {
-          "command": "codecraft.refreshPlanner",
-          "when": "view == codecraft-planner",
+          "command": "recoder.refreshPlanner",
+          "when": "view == recoder-planner",
           "group": "navigation"
         },
         {
-          "command": "codecraft.refreshAgents",
-          "when": "view == codecraft-agents",
+          "command": "recoder.refreshAgents",
+          "when": "view == recoder-agents",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "codecraft.generateCode",
-          "when": "view == codecraft-projects && viewItem == project",
+          "command": "recoder.generateCode",
+          "when": "view == recoder-projects && viewItem == project",
           "group": "inline"
         }
       ],
       "commandPalette": [
         {
-          "command": "codecraft.planProject",
+          "command": "recoder.planProject",
           "when": "true"
         },
         {
-          "command": "codecraft.generateCode",
+          "command": "recoder.generateCode",
           "when": "workspaceFolderCount > 0"
         },
         {
-          "command": "codecraft.validateIntegrations",
+          "command": "recoder.validateIntegrations",
           "when": "workspaceFolderCount > 0"
         }
       ]
     },
     "configuration": {
-      "title": "CodeCraft",
+      "title": "Recoder",
       "properties": {
-        "codecraft.apiUrl": {
+        "recoder.apiUrl": {
           "type": "string",
-          "default": "https://api.codecraft.dev",
-          "description": "CodeCraft API URL"
+          "default": "https://api.recoder.xyz",
+          "description": "Recoder API URL"
         },
-        "codecraft.defaultModel": {
+        "recoder.defaultModel": {
           "type": "string",
           "default": "gpt-4",
           "enum": [
@@ -165,20 +165,20 @@
           ],
           "description": "Default AI model for code generation"
         },
-        "codecraft.autoValidate": {
+        "recoder.autoValidate": {
           "type": "boolean",
           "default": true,
           "description": "Automatically validate generated code"
         },
-        "codecraft.productionMode": {
+        "recoder.productionMode": {
           "type": "boolean",
           "default": true,
           "description": "Generate production-ready code with real integrations"
         },
-        "codecraft.enableTelemetry": {
+        "recoder.enableTelemetry": {
           "type": "boolean",
           "default": true,
-          "description": "Enable telemetry to improve CodeCraft"
+          "description": "Enable telemetry to improve Recoder"
         }
       }
     }
@@ -199,7 +199,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@codecraft/shared": "*",
+    "@recoder/shared": "*",
     "axios": "^1.6.2",
     "fs-extra": "^11.2.0"
   },
@@ -222,10 +222,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/codecraft-team/codecraft.git"
+    "url": "https://github.com/recoder-team/recoder.git"
   },
   "bugs": {
-    "url": "https://github.com/codecraft-team/codecraft/issues"
+    "url": "https://github.com/recoder-team/recoder/issues"
   },
-  "homepage": "https://codecraft.dev"
+  "homepage": "https://recoder.xyz"
 }

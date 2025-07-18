@@ -1,5 +1,5 @@
 {
-  "name": "codecraft",
+  "name": "recoder",
   "version": "1.0.0",
   "description": "AI-powered development platform with production-ready code generation",
   "private": true,
@@ -12,22 +12,22 @@
     "setup:husky": "husky install",
     
     "build": "nx run-many --target=build --all",
-    "build:cli": "nx build @codecraft/cli",
-    "build:shared": "nx build @codecraft/shared",
-    "build:extension": "nx build @codecraft/vscode-extension",
-    "build:web": "nx build @codecraft/web",
+    "build:cli": "nx build @recoder/cli",
+    "build:shared": "nx build @recoder/shared",
+    "build:extension": "nx build @recoder/vscode-extension",
+    "build:web": "nx build @recoder/web",
     "build:backend": "nx build backend",
     
     "dev": "nx run-many --target=dev --all --parallel",
-    "dev:cli": "nx dev @codecraft/cli",
-    "dev:shared": "nx dev @codecraft/shared",
-    "dev:web": "nx dev @codecraft/web",
+    "dev:cli": "nx dev @recoder/cli",
+    "dev:shared": "nx dev @recoder/shared",
+    "dev:web": "nx dev @recoder/web",
     "dev:backend": "nx dev backend",
     
     "test": "nx run-many --target=test --all",
-    "test:cli": "nx test @codecraft/cli",
-    "test:shared": "nx test @codecraft/shared",
-    "test:web": "nx test @codecraft/web",
+    "test:cli": "nx test @recoder/cli",
+    "test:shared": "nx test @recoder/shared",
+    "test:web": "nx test @recoder/web",
     "test:backend": "nx test backend",
     "test:e2e": "nx run-many --target=e2e --all",
     "test:coverage": "nx run-many --target=test --all --coverage",
@@ -49,8 +49,8 @@
     "changeset:publish": "changeset publish",
     
     "release": "npm run build && npm run changeset:publish",
-    "release:cli": "nx build @codecraft/cli && cd packages/cli && npm publish",
-    "release:extension": "nx build @codecraft/vscode-extension && cd packages/vscode-extension && vsce publish",
+    "release:cli": "nx build @recoder/cli && cd packages/cli && npm publish",
+    "release:extension": "nx build @recoder/vscode-extension && cd packages/vscode-extension && vsce publish",
     
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up",
@@ -83,7 +83,7 @@
     "vscode",
     "extension"
   ],
-  "author": "CodeCraft Team",
+  "author": "Recoder Team",
   "license": "MIT",
   "devDependencies": {
     "@changesets/cli": "^2.27.1",
@@ -124,14 +124,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/codecraft-team/codecraft.git"
+    "url": "https://github.com/recoder-team/recoder.git"
   },
   "bugs": {
-    "url": "https://github.com/codecraft-team/codecraft/issues"
+    "url": "https://github.com/recoder-team/recoder/issues"
   },
-  "homepage": "https://codecraft.dev",
+  "homepage": "https://recoder.xyz",
   "funding": {
     "type": "github",
-    "url": "https://github.com/sponsors/codecraft-team"
+    "url": "https://github.com/sponsors/recoder-team"
   }
 }
