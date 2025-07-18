@@ -1,5 +1,5 @@
 /**
- * CodeCraft Backend API Server
+ * Recoder Backend API Server
  * Enhanced planning and production code generation
  */
 
@@ -9,7 +9,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import { Logger } from '@codecraft/shared';
+import { Logger } from '@recoder/shared';
 
 // Load environment variables
 dotenv.config();
@@ -37,7 +37,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.get('/api/v1/status', (req, res) => {
   res.json({
-    service: 'CodeCraft API',
+    service: 'Recoder API',
     version: '1.0.0',
     status: 'running'
   });
@@ -89,7 +89,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Start server
 app.listen(PORT, () => {
-  Logger.info(`CodeCraft API server running on port ${PORT}`);
+  Logger.info(`Recoder API server running on port ${PORT}`);
 });
 
 export default app;

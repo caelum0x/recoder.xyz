@@ -8,7 +8,7 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
 import readline from 'readline';
-import { Logger } from '@codecraft/shared';
+import { Logger } from '@recoder/shared';
 import { ChatService } from '../services/chat';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';
@@ -152,7 +152,7 @@ export function setupChatCommands(program: Command): void {
 async function handleStartChat(options: any): Promise<void> {
   console.log(
     boxen(
-      chalk.cyan('🤖 CodeCraft AI Assistant') + '\n' +
+      chalk.cyan('🤖 Recoder AI Assistant') + '\n' +
       chalk.gray('Type "/help" for commands, "/exit" to quit'),
       {
         padding: 1,

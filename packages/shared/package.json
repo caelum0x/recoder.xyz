@@ -1,7 +1,7 @@
 {
-  "name": "@codecraft/shared",
+  "name": "@recoder/shared",
   "version": "1.0.0",
-  "description": "Shared types, utilities, and configurations for CodeCraft",
+  "description": "Shared types, utilities, and configurations for Recoder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -18,12 +18,12 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "codecraft",
+    "recoder",
     "shared",
     "types",
     "utilities"
   ],
-  "author": "CodeCraft Team",
+  "author": "Recoder Team",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.2",
@@ -53,7 +53,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/codecraft-team/codecraft.git",
+    "url": "https://github.com/recoder-team/recoder.git",
     "directory": "packages/shared"
   }
 }

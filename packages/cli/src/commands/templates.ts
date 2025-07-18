@@ -9,7 +9,7 @@ import ora from 'ora';
 import boxen from 'boxen';
 import path from 'path';
 import fs from 'fs-extra';
-import { Logger } from '@codecraft/shared';
+import { Logger } from '@recoder/shared';
 import { TemplateService } from '../services/template';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';
@@ -196,11 +196,11 @@ async function handleListTemplates(options: any): Promise<void> {
     });
     
     if (result.success) {
-      spinner.succeed(chalk.green(`Found ${result.templates.length} templates`));
+      spinner.succeed(chalk.green(`Found ${result.templates?.length || 0} templates`));
       
-      if (result.templates.length === 0) {
+      if (!result.templates || result.templates.length === 0) {
         console.log(chalk.yellow('No templates found.'));
-        console.log(chalk.gray('Browse public templates or create your own with: codecraft templates create'));
+        console.log(chalk.gray('Browse public templates or create your own with: recoder templates create'));
         return;
       }
 
@@ -360,7 +360,7 @@ async function handleShowTemplate(templateId: string, options: any): Promise<voi
         console.log(
           boxen(
             chalk.white('🚀 Usage Example\n') +
-            chalk.gray(`codecraft templates use ${template.id} --output ./my-project --name MyProject`),
+            chalk.gray(`recoder templates use ${template.id} --output ./my-project --name MyProject`),
             {
               padding: 1,
               borderStyle: 'round',
@@ -630,7 +630,7 @@ async function handleUseTemplate(templateId: string, options: any): Promise<void
     const projectName = options.name || path.basename(options.output || process.cwd());
     variables = {
       projectName,
-      projectNamePascal: projectName.replace(/[-_]/g, ' ').replace(/\w\S*/g, (txt) => 
+      projectNamePascal: projectName.replace(/[-_]/g, ' ').replace(/\w\S*/g, (txt: string) => 
         txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
       ).replace(/\s/g, ''),
       projectNameKebab: projectName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
@@ -938,9 +938,9 @@ async function handleSearchTemplates(query: string, options: any): Promise<void>
     });
     
     if (result.success) {
-      spinner.succeed(chalk.green(`Found ${result.templates.length} templates matching "${query}"`));
+      spinner.succeed(chalk.green(`Found ${result.templates?.length || 0} templates matching "${query}"`));
       
-      if (result.templates.length === 0) {
+      if (!result.templates || result.templates.length === 0) {
         console.log(chalk.yellow('No templates found matching your search.'));
         console.log(chalk.gray('Try different keywords or create your own template.'));
         return;
@@ -952,7 +952,7 @@ async function handleSearchTemplates(query: string, options: any): Promise<void>
         console.log(
           boxen(
             chalk.white(`🔍 Search Results for "${query}"\n`) +
-            result.templates.map((template: any) => 
+            result!.templates.map((template: any) => 
               chalk.cyan(`• ${template.name}`) + chalk.gray(` (${template.id})\n`) +
               chalk.gray(`  ${template.description}\n`) +
               chalk.gray(`  Category: ${template.category} | Type: ${template.type}\n`) +
@@ -971,7 +971,7 @@ async function handleSearchTemplates(query: string, options: any): Promise<void>
         console.log(
           boxen(
             chalk.white('💡 Usage Tip\n') +
-            chalk.gray('Use template with: ') + chalk.cyan('codecraft templates use <template-id>'),
+            chalk.gray('Use template with: ') + chalk.cyan('recoder templates use <template-id>'),
             {
               padding: 1,
               borderStyle: 'round',

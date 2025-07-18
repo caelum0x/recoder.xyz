@@ -1,9 +1,24 @@
 /**
- * CodeCraft Shared Utilities
+ * Recoder Shared Utilities
  * Common types, utilities, and constants shared across all packages
  */
 
-// Types
+// Core types
+export * from './types';
+
+// Error handling
+export * from './errors';
+
+// Logger
+export * from './logger';
+
+// Constants
+export * from './constants';
+
+// Utilities
+export * from './utils';
+
+// Legacy exports for backward compatibility
 export interface ProjectPlan {
   name: string;
   description: string;
@@ -20,7 +35,7 @@ export interface CodeGenerationOptions {
   skipExisting: boolean;
 }
 
-// Utilities
+// Simple logger class for backward compatibility
 export class Logger {
   static info(message: string): void {
     console.log(`[INFO] ${message}`);

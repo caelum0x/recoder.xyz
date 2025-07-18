@@ -5,87 +5,87 @@ import { ProjectProvider } from './providers/projectProvider';
 import { ValidationProvider } from './providers/validationProvider';
 import { PlannerView } from './views/plannerView';
 import { ChatView } from './views/chatView';
-import { CodeCraftService } from './services/cliService';
+import { RecoderService } from './services/cliService';
 import { ConfigService } from './services/configService';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('CodeCraft extension is now active!');
+    console.log('Recoder extension is now active!');
 
     // Initialize services
     const configService = new ConfigService();
-    const codeCraftService = new CodeCraftService(configService);
+    const recoderService = new RecoderService(configService);
 
     // Initialize providers
-    const plannerProvider = new PlannerProvider(codeCraftService);
-    const agentProvider = new AgentProvider(codeCraftService);
-    const projectProvider = new ProjectProvider(codeCraftService);
-    const validationProvider = new ValidationProvider(codeCraftService);
+    const plannerProvider = new PlannerProvider(recoderService);
+    const agentProvider = new AgentProvider(recoderService);
+    const projectProvider = new ProjectProvider(recoderService);
+    const validationProvider = new ValidationProvider(recoderService);
 
     // Register tree data providers
-    vscode.window.createTreeView('codecraft-agents', {
+    vscode.window.createTreeView('recoder-agents', {
         treeDataProvider: agentProvider,
         showCollapseAll: true
     });
 
-    vscode.window.createTreeView('codecraft-projects', {
+    vscode.window.createTreeView('recoder-projects', {
         treeDataProvider: projectProvider,
         showCollapseAll: true
     });
 
-    vscode.window.createTreeView('codecraft-validation', {
+    vscode.window.createTreeView('recoder-validation', {
         treeDataProvider: validationProvider,
         showCollapseAll: true
     });
 
     // Register webview providers
-    const plannerView = new PlannerView(context.extensionUri, codeCraftService);
-    const chatView = new ChatView(context.extensionUri, codeCraftService);
+    const plannerView = new PlannerView(context.extensionUri, recoderService);
+    const chatView = new ChatView(context.extensionUri, recoderService);
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('codecraft-planner', plannerView)
+        vscode.window.registerWebviewViewProvider('recoder-planner', plannerView)
     );
 
     // Register commands
     const commands = [
         // Project Planning
-        vscode.commands.registerCommand('codecraft.planProject', async () => {
-            await handlePlanProject(codeCraftService);
+        vscode.commands.registerCommand('recoder.planProject', async () => {
+            await handlePlanProject(recoderService);
         }),
 
         // Code Generation
-        vscode.commands.registerCommand('codecraft.generateCode', async (projectItem?) => {
-            await handleGenerateCode(codeCraftService, projectItem);
+        vscode.commands.registerCommand('recoder.generateCode', async (projectItem?) => {
+            await handleGenerateCode(recoderService, projectItem);
         }),
 
         // Integration Validation
-        vscode.commands.registerCommand('codecraft.validateIntegrations', async () => {
-            await handleValidateIntegrations(codeCraftService);
+        vscode.commands.registerCommand('recoder.validateIntegrations', async () => {
+            await handleValidateIntegrations(recoderService);
         }),
 
         // Agent Management
-        vscode.commands.registerCommand('codecraft.createAgent', async () => {
-            await handleCreateAgent(codeCraftService);
+        vscode.commands.registerCommand('recoder.createAgent', async () => {
+            await handleCreateAgent(recoderService);
         }),
 
         // Chat Interface
-        vscode.commands.registerCommand('codecraft.openChat', async () => {
+        vscode.commands.registerCommand('recoder.openChat', async () => {
             await chatView.show();
         }),
 
         // Refresh Commands
-        vscode.commands.registerCommand('codecraft.refreshPlanner', () => {
+        vscode.commands.registerCommand('recoder.refreshPlanner', () => {
             plannerProvider.refresh();
         }),
 
-        vscode.commands.registerCommand('codecraft.refreshAgents', () => {
+        vscode.commands.registerCommand('recoder.refreshAgents', () => {
             agentProvider.refresh();
         }),
 
-        vscode.commands.registerCommand('codecraft.refreshProjects', () => {
+        vscode.commands.registerCommand('recoder.refreshProjects', () => {
             projectProvider.refresh();
         }),
 
-        vscode.commands.registerCommand('codecraft.refreshValidation', () => {
+        vscode.commands.registerCommand('recoder.refreshValidation', () => {
             validationProvider.refresh();
         })
     ];
@@ -95,22 +95,22 @@ export function activate(context: vscode.ExtensionContext) {
     // Register configuration change handler
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('codecraft')) {
+            if (e.affectsConfiguration('recoder')) {
                 configService.reload();
-                vscode.window.showInformationMessage('CodeCraft configuration updated!');
+                vscode.window.showInformationMessage('Recoder configuration updated!');
             }
         })
     );
 
     // Show welcome message on first activation
-    const isFirstActivation = context.globalState.get('codecraft.firstActivation', true);
+    const isFirstActivation = context.globalState.get('recoder.firstActivation', true);
     if (isFirstActivation) {
         showWelcomeMessage();
-        context.globalState.update('codecraft.firstActivation', false);
+        context.globalState.update('recoder.firstActivation', false);
     }
 }
 
-async function handlePlanProject(service: CodeCraftService) {
+async function handlePlanProject(service: RecoderService) {
     try {
         const description = await vscode.window.showInputBox({
             prompt: 'Describe your project (e.g., "Build a Solana DEX with real trading functionality")',
@@ -162,7 +162,7 @@ async function handlePlanProject(service: CodeCraftService) {
                             vscode.window.showTextDocument(doc);
                         });
                     } else if (selection === 'Generate Code') {
-                        vscode.commands.executeCommand('codecraft.generateCode');
+                        vscode.commands.executeCommand('recoder.generateCode');
                     }
                 });
             } else {
@@ -175,7 +175,7 @@ async function handlePlanProject(service: CodeCraftService) {
     }
 }
 
-async function handleGenerateCode(service: CodeCraftService, projectItem?: any) {
+async function handleGenerateCode(service: RecoderService, projectItem?: any) {
     try {
         let planFile: string;
 
@@ -240,7 +240,7 @@ async function handleGenerateCode(service: CodeCraftService, projectItem?: any) 
                         vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(result.outputDir));
                     } else if (selection === 'Run Tests') {
                         // Open integrated terminal and run tests
-                        const terminal = vscode.window.createTerminal('CodeCraft Tests');
+                        const terminal = vscode.window.createTerminal('Recoder Tests');
                         terminal.sendText(`cd "${result.outputDir}" && npm test`);
                         terminal.show();
                     }
@@ -255,7 +255,7 @@ async function handleGenerateCode(service: CodeCraftService, projectItem?: any) 
     }
 }
 
-async function handleValidateIntegrations(service: CodeCraftService) {
+async function handleValidateIntegrations(service: RecoderService) {
     try {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
@@ -293,7 +293,7 @@ async function handleValidateIntegrations(service: CodeCraftService) {
     }
 }
 
-async function handleCreateAgent(service: CodeCraftService) {
+async function handleCreateAgent(service: RecoderService) {
     try {
         const name = await vscode.window.showInputBox({
             prompt: 'Enter agent name',
@@ -353,7 +353,7 @@ async function handleCreateAgent(service: CodeCraftService) {
                 ).then(selection => {
                     if (selection === 'Configure Agent') {
                         // Open agent configuration
-                        vscode.commands.executeCommand('codecraft.configureAgent', result.agentId);
+                        vscode.commands.executeCommand('recoder.configureAgent', result.agentId);
                     }
                 });
             } else {
@@ -368,20 +368,20 @@ async function handleCreateAgent(service: CodeCraftService) {
 
 function showWelcomeMessage() {
     vscode.window.showInformationMessage(
-        'Welcome to CodeCraft! Generate production-ready code with AI.',
+        'Welcome to Recoder! Generate production-ready code with AI.',
         'Get Started', 'View Documentation'
     ).then(selection => {
         if (selection === 'Get Started') {
-            vscode.commands.executeCommand('codecraft.planProject');
+            vscode.commands.executeCommand('recoder.planProject');
         } else if (selection === 'View Documentation') {
-            vscode.env.openExternal(vscode.Uri.parse('https://docs.codecraft.dev'));
+            vscode.env.openExternal(vscode.Uri.parse('https://docs.recoder.xyz'));
         }
     });
 }
 
 function showValidationResults(checks: any[]) {
     const panel = vscode.window.createWebviewPanel(
-        'codecraft-validation',
+        'recoder-validation',
         'Validation Results',
         vscode.ViewColumn.One,
         {
@@ -451,5 +451,5 @@ function getValidationWebviewContent(checks: any[]) {
 }
 
 export function deactivate() {
-    console.log('CodeCraft extension is deactivated');
+    console.log('Recoder extension is deactivated');
 }

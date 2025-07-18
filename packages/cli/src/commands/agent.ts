@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
-import { Logger } from '@codecraft/shared';
+import { Logger } from '@recoder/shared';
 import { AgentService } from '../services/agent';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';
@@ -340,11 +340,11 @@ async function handleListAgents(options: any): Promise<void> {
     });
     
     if (result.success) {
-      spinner.succeed(chalk.green(`Found ${result.agents.length} agents`));
+      spinner.succeed(chalk.green(`Found ${result.agents?.length || 0} agents`));
       
-      if (result.agents.length === 0) {
+      if (!result.agents || result.agents.length === 0) {
         console.log(chalk.yellow('No agents found.'));
-        console.log(chalk.gray('Create your first agent with: codecraft agent create'));
+        console.log(chalk.gray('Create your first agent with: recoder agent create'));
         return;
       }
 
@@ -354,7 +354,7 @@ async function handleListAgents(options: any): Promise<void> {
         console.log(
           boxen(
             chalk.white('🤖 Available Agents\n') +
-            result.agents.map((agent: any) => 
+            (result.agents || []).map((agent: any) => 
               chalk.cyan(`• ${agent.name}`) + chalk.gray(` (${agent.id})\n`) +
               chalk.gray(`  Type: ${agent.type} | Model: ${agent.model}\n`) +
               chalk.gray(`  ${agent.description}\n`) +

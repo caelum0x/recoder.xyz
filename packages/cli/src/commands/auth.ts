@@ -8,7 +8,7 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
 import open from 'open';
-import { Logger } from '@codecraft/shared';
+import { Logger } from '@recoder/shared';
 import { AuthService } from '../services/auth';
 import { ConfigManager } from '../utils/config';
 
@@ -20,7 +20,7 @@ export function setupAuthCommands(program: Command): void {
   // Login command
   auth
     .command('login')
-    .description('Login to your CodeCraft account')
+    .description('Login to your Recoder account')
     .option('-e, --email <email>', 'email address')
     .option('-p, --password <password>', 'password')
     .option('-t, --token <token>', 'API token')
@@ -37,7 +37,7 @@ export function setupAuthCommands(program: Command): void {
   // Register command
   auth
     .command('register')
-    .description('Register a new CodeCraft account')
+    .description('Register a new Recoder account')
     .option('-e, --email <email>', 'email address')
     .option('-u, --username <username>', 'username')
     .option('-p, --password <password>', 'password')
@@ -54,7 +54,7 @@ export function setupAuthCommands(program: Command): void {
   // Logout command
   auth
     .command('logout')
-    .description('Logout from your CodeCraft account')
+    .description('Logout from your Recoder account')
     .option('-a, --all', 'logout from all devices')
     .action(async (options) => {
       try {
@@ -100,7 +100,7 @@ export function setupAuthCommands(program: Command): void {
 async function handleLogin(options: any): Promise<void> {
   console.log(
     boxen(
-      chalk.cyan('🔐 CodeCraft Login'),
+      chalk.cyan('🔐 Recoder Login'),
       {
         padding: 1,
         borderStyle: 'round',
@@ -246,7 +246,7 @@ async function handleTokenLogin(token: string): Promise<void> {
 async function handleRegister(options: any): Promise<void> {
   console.log(
     boxen(
-      chalk.cyan('📝 CodeCraft Registration'),
+      chalk.cyan('📝 Recoder Registration'),
       {
         padding: 1,
         borderStyle: 'round',
@@ -329,9 +329,9 @@ async function handleRegister(options: any): Promise<void> {
       
       console.log(
         boxen(
-          chalk.white('🎉 Welcome to CodeCraft!\n') +
+          chalk.white('🎉 Welcome to Recoder!\n') +
           chalk.gray('Please check your email to verify your account.\n') +
-          chalk.gray('Then run "codecraft auth login" to get started.'),
+          chalk.gray('Then run "recoder auth login" to get started.'),
           {
             padding: 1,
             borderStyle: 'round',
@@ -389,7 +389,7 @@ async function handleLogout(options: any): Promise<void> {
     console.log(
       boxen(
         chalk.white('👋 Goodbye!\n') +
-        chalk.gray('You have been logged out of CodeCraft.'),
+        chalk.gray('You have been logged out of Recoder.'),
         {
           padding: 1,
           borderStyle: 'round',
@@ -409,7 +409,7 @@ async function handleWhoami(options: any): Promise<void> {
   
   if (!currentUser || !currentToken) {
     console.log(chalk.yellow('You are not currently logged in.'));
-    console.log(chalk.gray('Run "codecraft auth login" to authenticate.'));
+    console.log(chalk.gray('Run "recoder auth login" to authenticate.'));
     return;
   }
 
@@ -464,7 +464,7 @@ async function handleWhoami(options: any): Promise<void> {
     } else {
       spinner.fail(chalk.red('Failed to get user information'));
       console.log(chalk.red(result.error || 'Authentication may have expired'));
-      console.log(chalk.yellow('Try running "codecraft auth login" again.'));
+      console.log(chalk.yellow('Try running "recoder auth login" again.'));
     }
   } catch (error) {
     spinner.fail(chalk.red('Failed to get user information'));

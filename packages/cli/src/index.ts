@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * CodeCraft CLI
+ * Recoder CLI
  * AI-powered development platform with production-ready code generation
  */
 
@@ -10,7 +10,7 @@ import chalk from 'chalk';
 import figlet from 'figlet';
 import boxen from 'boxen';
 import updateNotifier from 'update-notifier';
-import { Logger, VERSION } from '@codecraft/shared';
+import { Logger, VERSION } from '@recoder/shared';
 import { ConfigManager } from './utils/config';
 import { setupCommands } from './commands';
 import { checkAuth } from './utils/auth';
@@ -25,10 +25,10 @@ async function main() {
     isGlobal: true,
   });
 
-  // Display CodeCraft banner
+  // Display Recoder banner
   console.log(
     chalk.cyan(
-      figlet.textSync('CodeCraft', {
+      figlet.textSync('Recoder', {
         font: 'ANSI Shadow',
         horizontalLayout: 'default',
         verticalLayout: 'default',
@@ -57,7 +57,7 @@ async function main() {
   const program = new Command();
   
   program
-    .name('codecraft')
+    .name('recoder')
     .description('AI-powered development platform with production-ready code generation')
     .version(VERSION, '-v, --version', 'display version number')
     .option('--verbose', 'enable verbose logging')
@@ -86,7 +86,7 @@ async function main() {
   // Handle unknown commands
   program.on('command:*', (operands) => {
     Logger.error(`Unknown command: ${operands[0]}`);
-    console.log(chalk.yellow('Run ') + chalk.cyan('codecraft --help') + chalk.yellow(' to see available commands.'));
+    console.log(chalk.yellow('Run ') + chalk.cyan('recoder --help') + chalk.yellow(' to see available commands.'));
     process.exitCode = 1;
   });
 
