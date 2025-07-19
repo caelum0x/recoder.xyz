@@ -12,3 +12,4 @@ export * from './codeGeneration';
 export * from './validation';
 export * from './api';
 export * from './common';
+export * from './code-generation';
