@@ -1,15 +1,31 @@
 /**
- * Recoder Backend API Server
+ * Craft Code Backend API Server
  * Enhanced planning and production code generation
  */
 
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import morgan from 'morgan';
-import dotenv from 'dotenv';
-import { Logger } from '@recoder/shared';
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const morgan = require('morgan');
+const dotenv = require('dotenv');
+const { logger } = require('./utils/logger');
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const projectRoutes = require('./routes/projects');
+const agentRoutes = require('./routes/agents');
+const templateRoutes = require('./routes/templates');
+const plannerRoutes = require('./routes/planner');
+const structureRoutes = require('./routes/structure');
+const validationRoutes = require('./routes/validation');
+const modelRoutes = require('./routes/models');
+const billingRoutes = require('./routes/billing');
+
+// Import middleware
+const { apiLimiter } = require('./middleware/rateLimit');
+const { validateRequestId } = require('./middleware/validation');
 
 // Load environment variables
 dotenv.config();
@@ -18,78 +34,136 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(helmet());
-app.use(cors());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Request-ID']
+}));
+
 app.use(compression());
-app.use(morgan('combined'));
+app.use(morgan('combined', { stream: logger.stream }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Global middleware
+app.use(validateRequestId);
+app.use('/api', apiLimiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/agents', agentRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/planner', plannerRoutes);
+app.use('/api/structure', structureRoutes);
+app.use('/api/validation', validationRoutes);
+app.use('/api/models', modelRoutes);
+app.use('/api/billing', billingRoutes);
+
+// Legacy API endpoints for backward compatibility
 app.get('/api/v1/status', (req, res) => {
   res.json({
-    service: 'Recoder API',
+    service: 'Craft Code API',
     version: '1.0.0',
-    status: 'running'
+    status: 'running',
+    timestamp: new Date().toISOString()
   });
 });
 
-// Planning endpoints
-app.post('/api/v1/plan', async (req, res) => {
-  try {
-    const { description, type, options } = req.body;
-    
-    Logger.info(`Planning project: ${description}`);
-    
-    // Project planning logic will be implemented here
-    res.json({
-      success: true,
-      planId: `plan_${Date.now()}`,
-      message: 'Project planning functionality will be implemented here'
-    });
-  } catch (error) {
-    Logger.error(`Planning error: ${error}`);
-    res.status(500).json({ error: 'Planning failed' });
-  }
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: {
+      message: 'Route not found',
+      code: 'ROUTE_NOT_FOUND',
+      path: req.originalUrl
+    }
+  });
 });
 
-// Code generation endpoints
-app.post('/api/v1/generate', async (req, res) => {
-  try {
-    const { planId, outputDir, options } = req.body;
-    
-    Logger.info(`Generating code for plan: ${planId}`);
-    
-    // Code generation logic will be implemented here
-    res.json({
-      success: true,
-      generationId: `gen_${Date.now()}`,
-      message: 'Code generation functionality will be implemented here'
-    });
-  } catch (error) {
-    Logger.error(`Generation error: ${error}`);
-    res.status(500).json({ error: 'Code generation failed' });
-  }
+// Global error handler
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', {
+    error: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
+
+  // Don't leak error details in production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  res.status(err.status || 500).json({
+    error: {
+      message: isDevelopment ? err.message : 'Internal server error',
+      code: err.code || 'INTERNAL_ERROR',
+      ...(isDevelopment && { stack: err.stack })
+    }
+  });
 });
 
-// Error handling
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  Logger.error(`Server error: ${err.message}`);
-  res.status(500).json({ error: 'Internal server error' });
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  process.exit(0);
+});
+
+// Uncaught exception handler
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception:', err);
+  process.exit(1);
+});
+
+// Unhandled rejection handler
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
 
 // Start server
-app.listen(PORT, () => {
-  Logger.info(`Recoder API server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  logger.info(`Craft Code API server running on port ${PORT}`, {
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT
+  });
 });
 
-export default app;
+// Increase timeout for long-running operations
+server.timeout = 300000; // 5 minutes
+
+module.exports = app;
