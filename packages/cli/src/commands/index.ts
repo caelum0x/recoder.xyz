@@ -8,6 +8,8 @@ import { setupAgentCommands } from './agent';
 import { setupProjectCommands } from './project';
 import { setupChatCommands } from './chat';
 import { setupTemplateCommands } from './templates';
+import { setupValidateCommands } from './validate';
+import { setupModelCommands } from './models';
 import { createPlanCommand } from './plan';
 import { createStructureCommand } from './structure';
 
@@ -27,6 +29,12 @@ export function setupCommands(program: Command): void {
   // Template commands
   setupTemplateCommands(program);
   
+  // Validation commands
+  setupValidateCommands(program);
+  
+  // AI Model commands
+  setupModelCommands(program);
+  
   // Plan commands
   program.addCommand(createPlanCommand());
   
@@ -39,5 +47,7 @@ export * from './agent';
 export * from './project';
 export * from './chat';
 export * from './templates';
+export * from './validate';
+export * from './models';
 export * from './plan';
 export * from './structure';

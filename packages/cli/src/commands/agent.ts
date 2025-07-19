@@ -1,5 +1,5 @@
 /**
- * Agent management commands
+ * Agent management commands - Enhanced with full CRUD operations
  */
 
 import { Command } from 'commander';
@@ -7,28 +7,56 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
+import Table from 'cli-table3';
+import fs from 'fs-extra';
 import { Logger } from '@recoder/shared';
-import { AgentService } from '../services/agent';
+import {
+  Agent,
+  AgentStatus,
+  AgentCategory,
+  ExpertiseLevel,
+  PersonalityTone,
+  VerbosityLevel,
+  FormalityLevel,
+  ApproachStyle,
+  FeedbackStyle,
+  CommunicationStyle,
+  WebFramework,
+  MobileFramework,
+  BlockchainNetwork,
+  ProgrammingLanguage,
+  CreateAgentRequest,
+  UpdateAgentRequest,
+  AgentListFilter,
+  AgentListSort
+} from '@recoder/shared/types/agent';
+import { AgentManager } from '../services/agent-manager';
+import { AIModelHub } from '../services/ai-models/ai-hub';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';
+
+let agentManager: AgentManager | null = null;
+let aiHub: AIModelHub | null = null;
 
 export function setupAgentCommands(program: Command): void {
   const agent = program
     .command('agent')
-    .description('AI agent management and configuration');
+    .description('AI agent management and configuration with full CRUD operations');
 
-  // Create agent command
+  // Create agent command - Enhanced interactive creation
   agent
     .command('create')
-    .description('Create a new AI agent')
+    .description('Create a new AI agent with comprehensive configuration')
     .option('-n, --name <name>', 'agent name')
-    .option('-t, --type <type>', 'agent specialization type')
+    .option('-t, --type <type>', 'agent specialization category')
     .option('-m, --model <model>', 'AI model to use')
     .option('-d, --description <description>', 'agent description')
-    .option('--interactive', 'interactive agent creation')
+    .option('-c, --config <file>', 'load configuration from JSON file')
+    .option('--template <template>', 'use predefined template')
+    .option('--interactive', 'interactive agent creation wizard')
     .action(async (options) => {
       try {
-        await requireAuth();
+        await initializeServices();
         await handleCreateAgent(options);
       } catch (error) {
         Logger.error(`Agent creation failed: ${error instanceof Error ? error.message : error}`);
@@ -36,18 +64,27 @@ export function setupAgentCommands(program: Command): void {
       }
     });
 
-  // List agents command
+  // List agents command - Enhanced with filtering and sorting
   agent
     .command('list')
     .alias('ls')
-    .description('List all available agents')
+    .description('List agents with advanced filtering and sorting')
     .option('-j, --json', 'output as JSON')
-    .option('-f, --filter <type>', 'filter by agent type')
-    .option('--mine', 'show only my agents')
-    .option('--public', 'show only public agents')
+    .option('-t, --table', 'display as formatted table')
+    .option('-s, --status <status>', 'filter by status (active, inactive, error, maintenance)')
+    .option('-c, --category <category>', 'filter by category')
+    .option('-m, --model <model>', 'filter by AI model')
+    .option('-l, --language <language>', 'filter by programming language')
+    .option('-f, --framework <framework>', 'filter by framework')
+    .option('--search <query>', 'search agents by name or description')
+    .option('--tags <tags>', 'filter by tags (comma-separated)')
+    .option('--sort <field>', 'sort by field (name, created, updated, used, performance)')
+    .option('--order <direction>', 'sort order (asc, desc)', 'desc')
+    .option('--limit <number>', 'limit number of results')
+    .option('--stats', 'show usage statistics')
     .action(async (options) => {
       try {
-        await requireAuth();
+        await initializeServices();
         await handleListAgents(options);
       } catch (error) {
         Logger.error(`Failed to list agents: ${error instanceof Error ? error.message : error}`);
@@ -55,16 +92,20 @@ export function setupAgentCommands(program: Command): void {
       }
     });
 
-  // Show agent command
+  // Show agent command - Enhanced with comprehensive details
   agent
     .command('show <agentId>')
-    .description('Show detailed information about an agent')
+    .description('Show comprehensive agent information and analytics')
     .option('-j, --json', 'output as JSON')
-    .option('--config', 'show configuration')
-    .option('--usage', 'show usage statistics')
+    .option('--config', 'show detailed configuration')
+    .option('--capabilities', 'show capabilities breakdown')
+    .option('--personality', 'show personality settings')
+    .option('--performance', 'show performance metrics')
+    .option('--history', 'show usage history')
+    .option('--export <file>', 'export agent configuration to file')
     .action(async (agentId, options) => {
       try {
-        await requireAuth();
+        await initializeServices();
         await handleShowAgent(agentId, options);
       } catch (error) {
         Logger.error(`Failed to show agent: ${error instanceof Error ? error.message : error}`);
@@ -72,18 +113,24 @@ export function setupAgentCommands(program: Command): void {
       }
     });
 
-  // Edit agent command
+  // Edit agent command - Enhanced with comprehensive editing
   agent
     .command('edit <agentId>')
-    .description('Edit an existing agent')
-    .option('-n, --name <name>', 'new agent name')
-    .option('-d, --description <description>', 'new description')
+    .description('Edit agent configuration with guided wizard')
+    .option('-n, --name <name>', 'update agent name')
+    .option('-d, --description <description>', 'update description')
     .option('-m, --model <model>', 'change AI model')
-    .option('--config <file>', 'load configuration from file')
-    .option('--interactive', 'interactive editing')
+    .option('-s, --status <status>', 'update status')
+    .option('-c, --config <file>', 'load configuration from JSON file')
+    .option('--capabilities', 'edit capabilities interactively')
+    .option('--personality', 'edit personality settings')
+    .option('--preferences', 'edit language and framework preferences')
+    .option('--instructions', 'edit custom instructions')
+    .option('--settings', 'edit model settings (temperature, tokens, etc.)')
+    .option('--interactive', 'full interactive editing wizard')
     .action(async (agentId, options) => {
       try {
-        await requireAuth();
+        await initializeServices();
         await handleEditAgent(agentId, options);
       } catch (error) {
         Logger.error(`Agent editing failed: ${error instanceof Error ? error.message : error}`);
@@ -91,15 +138,17 @@ export function setupAgentCommands(program: Command): void {
       }
     });
 
-  // Delete agent command
+  // Delete agent command - Enhanced with safety checks
   agent
     .command('delete <agentId>')
     .alias('rm')
-    .description('Delete an agent')
+    .description('Delete an agent with confirmation and backup options')
     .option('-f, --force', 'force deletion without confirmation')
+    .option('--backup', 'create backup before deletion')
+    .option('--multiple <ids>', 'delete multiple agents (comma-separated IDs)')
     .action(async (agentId, options) => {
       try {
-        await requireAuth();
+        await initializeServices();
         await handleDeleteAgent(agentId, options);
       } catch (error) {
         Logger.error(`Agent deletion failed: ${error instanceof Error ? error.message : error}`);
@@ -107,15 +156,24 @@ export function setupAgentCommands(program: Command): void {
       }
     });
 
-  // Models command
+  // Models command - Enhanced with comprehensive model information
   agent
     .command('models')
-    .description('List available AI models')
+    .description('List and compare available AI models with detailed information')
     .option('-j, --json', 'output as JSON')
-    .option('-p, --provider <provider>', 'filter by provider')
-    .option('--pricing', 'show pricing information')
+    .option('-t, --table', 'display as formatted table')
+    .option('-p, --provider <provider>', 'filter by provider (openai, anthropic, google, ollama, etc.)')
+    .option('-c, --capabilities <caps>', 'filter by capabilities (code, chat, vision, reasoning)')
+    .option('-l, --local', 'show only local models')
+    .option('--cloud', 'show only cloud models')
+    .option('--available', 'show only available models')
+    .option('--pricing', 'show detailed pricing information')
+    .option('--performance', 'show performance metrics')
+    .option('--compare <models>', 'compare specific models (comma-separated)')
+    .option('--recommend <task>', 'get model recommendations for specific task')
     .action(async (options) => {
       try {
+        await initializeServices();
         await handleListModels(options);
       } catch (error) {
         Logger.error(`Failed to list models: ${error instanceof Error ? error.message : error}`);
@@ -158,9 +216,13 @@ export function setupAgentCommands(program: Command): void {
 }
 
 async function handleCreateAgent(options: any): Promise<void> {
+  if (!agentManager) {
+    throw new Error('Agent manager not initialized');
+  }
+
   console.log(
     boxen(
-      chalk.cyan('🤖 Create AI Agent'),
+      chalk.cyan('🤖 Create AI Agent - Enhanced Configuration Wizard'),
       {
         padding: 1,
         borderStyle: 'round',
@@ -169,209 +231,146 @@ async function handleCreateAgent(options: any): Promise<void> {
     )
   );
 
-  let agentConfig: any;
+  let agentConfig: CreateAgentRequest;
 
-  if (options.interactive || !options.name) {
-    agentConfig = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'name',
-        message: 'Agent name:',
-        default: options.name,
-        validate: (input) => input.length >= 3 || 'Agent name must be at least 3 characters',
-      },
-      {
-        type: 'list',
-        name: 'type',
-        message: 'Agent specialization:',
-        default: options.type,
-        choices: [
-          { name: '🌐 Web Development', value: 'web' },
-          { name: '📱 Mobile Development', value: 'mobile' },
-          { name: '⛓️  Blockchain/Web3', value: 'blockchain' },
-          { name: '🧠 AI/ML Development', value: 'ai' },
-          { name: '🔧 Backend Development', value: 'backend' },
-          { name: '☁️  DevOps/Cloud', value: 'devops' },
-          { name: '🎨 UI/UX Design', value: 'design' },
-          { name: '📊 Data Science', value: 'data' },
-          { name: '🔒 Security', value: 'security' },
-          { name: '⚡ Performance', value: 'performance' },
-        ],
-      },
-      {
-        type: 'list',
-        name: 'model',
-        message: 'AI model:',
-        default: options.model || 'gpt-4',
-        choices: [
-          { name: 'GPT-4 (OpenAI) - Most capable', value: 'gpt-4' },
-          { name: 'GPT-3.5 Turbo (OpenAI) - Fast and efficient', value: 'gpt-3.5-turbo' },
-          { name: 'Claude 3 Opus (Anthropic) - Excellent reasoning', value: 'claude-3-opus' },
-          { name: 'Claude 3 Sonnet (Anthropic) - Balanced', value: 'claude-3-sonnet' },
-          { name: 'Claude 3 Haiku (Anthropic) - Fast', value: 'claude-3-haiku' },
-          { name: 'Gemini Pro (Google) - Multimodal', value: 'gemini-pro' },
-          { name: 'Local Llama2 (Ollama)', value: 'ollama/llama2' },
-          { name: 'Local CodeLlama (Ollama)', value: 'ollama/codellama' },
-        ],
-      },
-      {
-        type: 'input',
-        name: 'description',
-        message: 'Agent description:',
-        default: options.description,
-        validate: (input) => input.length >= 10 || 'Description must be at least 10 characters',
-      },
-      {
-        type: 'input',
-        name: 'systemPrompt',
-        message: 'System prompt (optional):',
-        validate: (input) => !input || input.length >= 20 || 'System prompt must be at least 20 characters if provided',
-      },
-      {
-        type: 'input',
-        name: 'temperature',
-        message: 'Temperature (0.0 - 1.0):',
-        default: '0.7',
-        validate: (input) => {
-          const temp = parseFloat(input);
-          return (!isNaN(temp) && temp >= 0 && temp <= 1) || 'Temperature must be between 0.0 and 1.0';
-        },
-      },
-      {
-        type: 'number',
-        name: 'maxTokens',
-        message: 'Max tokens:',
-        default: 2048,
-        validate: (input) => input > 0 || 'Max tokens must be greater than 0',
-      },
-      {
-        type: 'confirm',
-        name: 'public',
-        message: 'Make agent public?',
-        default: false,
-      },
-      {
-        type: 'checkbox',
-        name: 'capabilities',
-        message: 'Agent capabilities:',
-        choices: [
-          { name: 'Code Generation', value: 'code-generation' },
-          { name: 'Code Review', value: 'code-review' },
-          { name: 'Documentation', value: 'documentation' },
-          { name: 'Testing', value: 'testing' },
-          { name: 'Debugging', value: 'debugging' },
-          { name: 'Architecture Design', value: 'architecture' },
-          { name: 'Performance Optimization', value: 'performance' },
-          { name: 'Security Analysis', value: 'security' },
-        ],
-      },
-    ]);
+  if (options.config) {
+    // Load configuration from file
+    try {
+      const configData = await fs.readJson(options.config);
+      agentConfig = configData;
+    } catch (error) {
+      Logger.error(`Failed to load config file: ${error}`);
+      return;
+    }
+  } else if (options.template) {
+    // Use predefined template
+    agentConfig = getAgentTemplate(options.template);
+    
+    // Override with command line options
+    if (options.name) agentConfig.name = options.name;
+    if (options.description) agentConfig.description = options.description;
+    if (options.model) agentConfig.model = options.model;
+  } else if (options.interactive || !options.name) {
+    // Interactive creation wizard
+    agentConfig = await runInteractiveAgentCreation(options);
   } else {
+    // Quick creation from command line options
     agentConfig = {
       name: options.name,
-      type: options.type || 'web',
+      description: options.description || `${options.name} - AI coding assistant`,
       model: options.model || 'gpt-4',
-      description: options.description || `${options.name} agent`,
-      temperature: 0.7,
-      maxTokens: 2048,
-      public: false,
-      capabilities: ['code-generation'],
+      capabilities: {
+        general: {
+          codeGeneration: true,
+          codeReview: true,
+          debugging: true,
+          testing: true,
+          documentation: true
+        }
+      },
+      preferences: {
+        languages: [options.language || 'typescript'],
+        frameworks: [],
+        tools: []
+      },
+      personality: {
+        tone: PersonalityTone.PROFESSIONAL,
+        verbosity: VerbosityLevel.CONCISE,
+        formality: FormalityLevel.NEUTRAL
+      },
+      metadata: {
+        category: AgentCategory.GENERAL,
+        tags: [options.type || 'general'],
+        visibility: 'private'
+      }
     };
   }
 
-  const spinner = ora('Creating agent...').start();
+  const spinner = ora('Creating agent with enhanced configuration...').start();
 
   try {
-    const token = ConfigManager.get('auth.token');
-    const result = await AgentService.createAgent(token, agentConfig);
+    const agent = await agentManager.createAgent(agentConfig);
     
-    if (result.success) {
-      spinner.succeed(chalk.green('Agent created successfully!'));
-      
-      console.log(
-        boxen(
-          chalk.white(`🤖 ${result.agent.name}\n`) +
-          chalk.gray(`ID: ${result.agent.id}\n`) +
-          chalk.gray(`Type: ${result.agent.type}\n`) +
-          chalk.gray(`Model: ${result.agent.model}\n`) +
-          chalk.gray(`Status: ${result.agent.status}\n`) +
-          (result.agent.public ? chalk.green('Public') : chalk.yellow('Private')),
-          {
-            padding: 1,
-            borderStyle: 'round',
-            borderColor: 'green',
-            title: 'Agent Created',
-          }
-        )
-      );
+    spinner.succeed(chalk.green('Agent created successfully!'));
+    
+    // Display comprehensive agent information
+    displayAgentCreated(agent);
 
-      // Ask if user wants to test the agent
-      const testAgent = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'test',
-          message: 'Test the agent now?',
-          default: true,
-        },
-      ]);
+    // Ask if user wants to test the agent
+    const testAgent = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'test',
+        message: 'Test the agent now?',
+        default: true,
+      },
+    ]);
 
-      if (testAgent.test) {
-        await handleTestAgent(result.agent.id, { prompt: 'Hello! Can you help me with a simple code example?' });
-      }
-    } else {
-      spinner.fail(chalk.red('Agent creation failed'));
-      console.log(chalk.red(result.error || 'Unknown error'));
+    if (testAgent.test) {
+      await handleTestAgent(agent.id, { prompt: 'Hello! Can you help me with a simple code example?' });
     }
   } catch (error) {
     spinner.fail(chalk.red('Agent creation failed'));
-    throw error;
+    Logger.error(`Error: ${error instanceof Error ? error.message : error}`);
   }
 }
 
 async function handleListAgents(options: any): Promise<void> {
+  if (!agentManager) {
+    throw new Error('Agent manager not initialized');
+  }
+
   const spinner = ora('Fetching agents...').start();
 
   try {
-    const token = ConfigManager.get('auth.token');
-    const result = await AgentService.listAgents(token, {
-      filter: options.filter,
-      mine: options.mine,
-      public: options.public,
-    });
+    // Build filter from options
+    const filter: AgentListFilter = {};
+    if (options.status) {
+      filter.status = Array.isArray(options.status) ? options.status : [options.status];
+    }
+    if (options.category) {
+      filter.category = Array.isArray(options.category) ? options.category : [options.category];
+    }
+    if (options.search) {
+      filter.search = options.search;
+    }
+    if (options.tags) {
+      filter.tags = options.tags.split(',').map((t: string) => t.trim());
+    }
+    if (options.language) {
+      filter.languages = [options.language];
+    }
+    if (options.framework) {
+      filter.frameworks = [options.framework];
+    }
     
-    if (result.success) {
-      spinner.succeed(chalk.green(`Found ${result.agents?.length || 0} agents`));
-      
-      if (!result.agents || result.agents.length === 0) {
-        console.log(chalk.yellow('No agents found.'));
-        console.log(chalk.gray('Create your first agent with: recoder agent create'));
-        return;
-      }
+    // Build sort from options
+    const sort: AgentListSort = {
+      field: options.sort || 'updatedAt',
+      direction: options.order === 'asc' ? 'asc' : 'desc'
+    };
+    
+    const limit = options.limit ? parseInt(options.limit) : undefined;
+    
+    const agents = await agentManager.listAgents(filter, sort, limit);
+    
+    spinner.succeed(chalk.green(`Found ${agents.length} agent${agents.length !== 1 ? 's' : ''}`));
+    
+    if (agents.length === 0) {
+      console.log(chalk.yellow('No agents found matching your criteria.'));
+      console.log(chalk.gray('Create your first agent with: codecraft agent create'));
+      return;
+    }
 
-      if (options.json) {
-        console.log(JSON.stringify(result.agents, null, 2));
-      } else {
-        console.log(
-          boxen(
-            chalk.white('🤖 Available Agents\n') +
-            (result.agents || []).map((agent: any) => 
-              chalk.cyan(`• ${agent.name}`) + chalk.gray(` (${agent.id})\n`) +
-              chalk.gray(`  Type: ${agent.type} | Model: ${agent.model}\n`) +
-              chalk.gray(`  ${agent.description}\n`) +
-              (agent.public ? chalk.green('  Public') : chalk.yellow('  Private')) +
-              chalk.gray(` | Created: ${new Date(agent.createdAt).toLocaleDateString()}`)
-            ).join('\n\n'),
-            {
-              padding: 1,
-              borderStyle: 'round',
-              borderColor: 'cyan',
-            }
-          )
-        );
-      }
+    if (options.json) {
+      console.log(JSON.stringify(agents, null, 2));
+      return;
+    }
+
+    if (options.table) {
+      displayAgentsTable(agents, options.stats);
     } else {
-      spinner.fail(chalk.red('Failed to fetch agents'));
-      console.log(chalk.red(result.error || 'Unknown error'));
+      displayAgentsList(agents, options.stats);
     }
   } catch (error) {
     spinner.fail(chalk.red('Failed to fetch agents'));
@@ -380,79 +379,78 @@ async function handleListAgents(options: any): Promise<void> {
 }
 
 async function handleShowAgent(agentId: string, options: any): Promise<void> {
+  if (!agentManager) {
+    throw new Error('Agent manager not initialized');
+  }
+
   const spinner = ora('Fetching agent details...').start();
 
   try {
-    const token = ConfigManager.get('auth.token');
-    const result = await AgentService.getAgent(token, agentId);
+    const agent = await agentManager.getAgent(agentId);
     
-    if (result.success) {
-      spinner.succeed(chalk.green('Agent details retrieved'));
-      
-      const agent = result.agent;
+    if (!agent) {
+      spinner.fail(chalk.red('Agent not found'));
+      console.log(chalk.red(`No agent found with ID: ${agentId}`));
+      return;
+    }
 
-      if (options.json) {
-        console.log(JSON.stringify(agent, null, 2));
-      } else {
-        console.log(
-          boxen(
-            chalk.white(`🤖 ${agent.name}\n`) +
-            chalk.gray(`ID: ${agent.id}\n`) +
-            chalk.gray(`Type: ${agent.type}\n`) +
-            chalk.gray(`Model: ${agent.model}\n`) +
-            chalk.gray(`Description: ${agent.description}\n`) +
-            chalk.gray(`Status: ${agent.status}\n`) +
-            chalk.gray(`Visibility: ${agent.public ? 'Public' : 'Private'}\n`) +
-            chalk.gray(`Created: ${new Date(agent.createdAt).toLocaleString()}\n`) +
-            chalk.gray(`Updated: ${new Date(agent.updatedAt).toLocaleString()}`),
-            {
-              padding: 1,
-              borderStyle: 'round',
-              borderColor: 'cyan',
-              title: 'Agent Details',
-            }
-          )
-        );
+    spinner.succeed(chalk.green('Agent details retrieved'));
 
-        if (options.config && agent.config) {
-          console.log(
-            boxen(
-              chalk.white('⚙️  Configuration\n') +
-              chalk.gray(`Temperature: ${agent.config.temperature}\n`) +
-              chalk.gray(`Max Tokens: ${agent.config.maxTokens}\n`) +
-              chalk.gray(`Capabilities: ${agent.config.capabilities?.join(', ') || 'None'}\n`) +
-              (agent.config.systemPrompt ? chalk.gray(`System Prompt: ${agent.config.systemPrompt.substring(0, 100)}...`) : ''),
-              {
-                padding: 1,
-                borderStyle: 'round',
-                borderColor: 'blue',
-                title: 'Configuration',
-              }
-            )
-          );
+    if (options.json) {
+      console.log(JSON.stringify(agent, null, 2));
+      return;
+    }
+
+    // Basic agent information
+    console.log(
+      boxen(
+        chalk.white(`🤖 ${agent.name}\n`) +
+        chalk.gray(`ID: ${agent.id}\n`) +
+        chalk.gray(`Model: ${agent.model}\n`) +
+        chalk.gray(`Category: ${agent.metadata.category}\n`) +
+        chalk.gray(`Status: ${getStatusIcon(agent.status)} ${agent.status}\n`) +
+        chalk.gray(`Description: ${agent.description}\n`) +
+        chalk.gray(`Tags: ${agent.metadata.tags.join(', ') || 'None'}\n`) +
+        chalk.gray(`Created: ${agent.createdAt.toLocaleString()}\n`) +
+        chalk.gray(`Updated: ${agent.updatedAt.toLocaleString()}\n`) +
+        getVisibilityBadge(agent.metadata.visibility),
+        {
+          padding: 1,
+          borderStyle: 'round',
+          borderColor: 'cyan',
+          title: 'Agent Details',
         }
+      )
+    );
 
-        if (options.usage && agent.usage) {
-          console.log(
-            boxen(
-              chalk.white('📊 Usage Statistics\n') +
-              chalk.gray(`Total Requests: ${agent.usage.totalRequests}\n`) +
-              chalk.gray(`This Month: ${agent.usage.thisMonth}\n`) +
-              chalk.gray(`Average Response Time: ${agent.usage.avgResponseTime}ms\n`) +
-              chalk.gray(`Last Used: ${agent.usage.lastUsed ? new Date(agent.usage.lastUsed).toLocaleString() : 'Never'}`),
-              {
-                padding: 1,
-                borderStyle: 'round',
-                borderColor: 'green',
-                title: 'Usage',
-              }
-            )
-          );
-        }
-      }
-    } else {
-      spinner.fail(chalk.red('Failed to fetch agent details'));
-      console.log(chalk.red(result.error || 'Agent not found'));
+    // Show capabilities if requested
+    if (options.capabilities) {
+      displayCapabilitiesSection(agent);
+    }
+
+    // Show personality if requested
+    if (options.personality) {
+      displayPersonalitySection(agent);
+    }
+
+    // Show configuration if requested
+    if (options.config) {
+      displayConfigurationSection(agent);
+    }
+
+    // Show performance metrics if requested
+    if (options.performance) {
+      displayPerformanceSection(agent);
+    }
+
+    // Show usage history if requested
+    if (options.history) {
+      displayHistorySection(agent);
+    }
+
+    // Export agent configuration if requested
+    if (options.export) {
+      await exportAgentConfiguration(agent, options.export);
     }
   } catch (error) {
     spinner.fail(chalk.red('Failed to fetch agent details'));
@@ -789,5 +787,702 @@ async function handleCloneAgent(agentId: string, options: any): Promise<void> {
   } catch (error) {
     spinner.fail(chalk.red('Agent cloning failed'));
     throw error;
+  }
+}
+
+async function runInteractiveAgentCreation(options: any): Promise<CreateAgentRequest> {
+  console.log(chalk.cyan('\n📋 Starting Enhanced Agent Creation Wizard\n'));
+
+  // Step 1: Basic Information
+  const basicInfo = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'name',
+      message: '👤 Agent name:',
+      default: options.name,
+      validate: (input) => {
+        if (input.length < 3) return 'Name must be at least 3 characters';
+        if (!/^[a-zA-Z0-9\s\-_]+$/.test(input)) return 'Name can only contain letters, numbers, spaces, hyphens, and underscores';
+        return true;
+      },
+    },
+    {
+      type: 'editor',
+      name: 'description',
+      message: '📝 Agent description (opens editor):',
+      default: options.description || 'An intelligent AI coding assistant specialized in...',
+      validate: (input) => input.length >= 10 || 'Description must be at least 10 characters',
+    }
+  ]);
+
+  // Step 2: Category and Specialization
+  const specialization = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'category',
+      message: '🎯 Primary specialization category:',
+      choices: [
+        { name: '🌐 Web Development - Frontend, backend, full-stack', value: AgentCategory.WEB },
+        { name: '📱 Mobile Development - iOS, Android, cross-platform', value: AgentCategory.MOBILE },
+        { name: '⛓️  Blockchain/Web3 - Smart contracts, DeFi, NFTs', value: AgentCategory.BLOCKCHAIN },
+        { name: '🧠 AI/ML Development - Machine learning, deep learning', value: AgentCategory.AI },
+        { name: '🔧 Backend Development - APIs, databases, microservices', value: AgentCategory.BACKEND },
+        { name: '☁️  DevOps/Cloud - Infrastructure, deployment, monitoring', value: AgentCategory.DEVOPS },
+        { name: '🎨 UI/UX Design - Design systems, prototyping', value: AgentCategory.DESIGN },
+        { name: '📊 Data Science - Analytics, visualization, modeling', value: AgentCategory.DATA },
+        { name: '🔒 Security - Cybersecurity, penetration testing', value: AgentCategory.SECURITY },
+        { name: '⚡ Performance - Optimization, profiling, scaling', value: AgentCategory.PERFORMANCE },
+        { name: '🏗️  General - Multi-purpose development assistant', value: AgentCategory.GENERAL },
+      ],
+    },
+    {
+      type: 'checkbox',
+      name: 'tags',
+      message: '🏷️  Additional tags (select all that apply):',
+      choices: [
+        'frontend', 'backend', 'fullstack', 'api', 'database', 'testing',
+        'security', 'performance', 'cloud', 'devops', 'mobile', 'web3',
+        'ai', 'ml', 'data', 'analytics', 'ui', 'ux', 'design'
+      ],
+    }
+  ]);
+
+  // Step 3: AI Model Selection
+  const availableModels = aiHub ? await aiHub.getAvailableModels() : [];
+  const modelChoices = availableModels.length > 0 
+    ? availableModels.map(model => ({
+        name: `${model.name} (${model.provider}) - ${model.description}`,
+        value: model.id
+      }))
+    : [
+        { name: 'GPT-4o (OpenAI) - Most capable, latest model', value: 'gpt-4o' },
+        { name: 'GPT-4 Turbo (OpenAI) - High capability, cost effective', value: 'gpt-4-turbo' },
+        { name: 'Claude 3.5 Sonnet (Anthropic) - Excellent reasoning', value: 'claude-3.5-sonnet' },
+        { name: 'Claude 3 Opus (Anthropic) - Most powerful', value: 'claude-3-opus' },
+        { name: 'Claude 3 Haiku (Anthropic) - Fast and efficient', value: 'claude-3-haiku' },
+        { name: 'Gemini Pro 1.5 (Google) - Multimodal capabilities', value: 'gemini-pro-1.5' },
+        { name: 'Qwen2.5-Coder:7B (Local/Ollama) - Code-focused, private', value: 'ollama/qwen2.5-coder:7b' },
+        { name: 'CodeLlama:13B (Local/Ollama) - Code generation, private', value: 'ollama/codellama:13b' },
+        { name: 'DeepSeek Coder:6.7B (Local/Ollama) - Fast coding, private', value: 'ollama/deepseek-coder:6.7b' },
+      ];
+
+  const modelSelection = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'model',
+      message: '🤖 Select AI model:',
+      default: options.model || 'claude-3.5-sonnet',
+      choices: modelChoices,
+    },
+    {
+      type: 'confirm',
+      name: 'configureAdvanced',
+      message: '⚙️  Configure advanced model settings?',
+      default: false,
+    }
+  ]);
+
+  let modelSettings = {
+    temperature: 0.7,
+    maxTokens: 2000,
+    topP: 1.0
+  };
+
+  if (modelSelection.configureAdvanced) {
+    const advancedSettings = await inquirer.prompt([
+      {
+        type: 'number',
+        name: 'temperature',
+        message: '🌡️  Temperature (creativity vs consistency, 0.0-1.0):',
+        default: 0.7,
+        validate: (input) => input >= 0 && input <= 1 || 'Must be between 0.0 and 1.0',
+      },
+      {
+        type: 'number',
+        name: 'maxTokens',
+        message: '📏 Maximum tokens per response:',
+        default: 2000,
+        validate: (input) => input > 100 && input <= 32000 || 'Must be between 100 and 32000',
+      }
+    ]);
+    modelSettings = { ...modelSettings, ...advancedSettings };
+  }
+
+  // Step 4: Capabilities Configuration
+  const capabilities = await configureCapabilities(specialization.category);
+
+  // Step 5: Language and Framework Preferences
+  const preferences = await configurePreferences();
+
+  // Step 6: Personality Configuration
+  const personality = await configurePersonality();
+
+  // Step 7: Custom Instructions
+  const instructions = await configureInstructions();
+
+  // Step 8: Final Configuration
+  const finalConfig = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'visibility',
+      message: '👁️  Agent visibility:',
+      default: 'private',
+      choices: [
+        { name: '🔒 Private - Only you can use this agent', value: 'private' },
+        { name: '🏢 Team - Team members can use this agent', value: 'team' },
+        { name: '🌐 Public - Anyone can discover and use this agent', value: 'public' },
+      ],
+    },
+    {
+      type: 'input',
+      name: 'version',
+      message: '🏷️  Initial version:',
+      default: '1.0.0',
+      validate: (input) => /^\d+\.\d+\.\d+$/.test(input) || 'Version must be in semver format (e.g., 1.0.0)',
+    }
+  ]);
+
+  // Construct the complete agent configuration
+  const agentConfig: CreateAgentRequest = {
+    name: basicInfo.name,
+    description: basicInfo.description,
+    model: modelSelection.model,
+    capabilities,
+    preferences,
+    personality,
+    instructions,
+    metadata: {
+      category: specialization.category,
+      tags: specialization.tags,
+      visibility: finalConfig.visibility,
+      version: finalConfig.version,
+      author: 'user'
+    },
+    settings: modelSettings
+  };
+
+  // Show configuration summary
+  displayConfigurationSummary(agentConfig);
+
+  const confirmation = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'create',
+      message: '✅ Create agent with this configuration?',
+      default: true,
+    }
+  ]);
+
+  if (!confirmation.create) {
+    throw new Error('Agent creation cancelled by user');
+  }
+
+  return agentConfig;
+}
+
+async function configureCapabilities(category: AgentCategory): Promise<any> {
+  console.log(chalk.cyan('\n🛠️  Configuring Agent Capabilities\n'));
+
+  const generalCapabilities = await inquirer.prompt([
+    {
+      type: 'checkbox',
+      name: 'general',
+      message: '⚙️  General capabilities:',
+      choices: [
+        { name: '💻 Code Generation - Write new code from scratch', value: 'codeGeneration', checked: true },
+        { name: '👁️  Code Review - Analyze and improve existing code', value: 'codeReview', checked: true },
+        { name: '🐛 Debugging - Find and fix code issues', value: 'debugging', checked: true },
+        { name: '🧪 Testing - Create and manage tests', value: 'testing', checked: true },
+        { name: '📚 Documentation - Generate docs and comments', value: 'documentation', checked: true },
+        { name: '🔄 Refactoring - Improve code structure', value: 'refactoring' },
+        { name: '🏗️  Architecture - Design system architecture', value: 'architecture' },
+        { name: '🔐 Security - Security analysis and hardening', value: 'security' },
+        { name: '⚡ Performance - Optimization and profiling', value: 'performance' },
+        { name: '🚀 Deployment - Deployment and DevOps tasks', value: 'deployment' },
+      ],
+    }
+  ]);
+
+  // Category-specific capabilities
+  let specificCapabilities = {};
+  
+  if (category === AgentCategory.WEB) {
+    const webCapabilities = await inquirer.prompt([
+      {
+        type: 'checkbox',
+        name: 'frameworks',
+        message: '🌐 Web frameworks expertise:',
+        choices: [
+          'React', 'Vue.js', 'Angular', 'Svelte', 'Next.js', 'Nuxt.js',
+          'Express.js', 'Fastify', 'NestJS', 'Koa.js'
+        ],
+      },
+      {
+        type: 'checkbox',
+        name: 'features',
+        message: '✨ Web-specific features:',
+        choices: [
+          'PWA Development', 'SSR/SSG', 'Performance Optimization',
+          'SEO Optimization', 'Accessibility', 'Responsive Design'
+        ],
+      }
+    ]);
+    specificCapabilities = { web: { enabled: true, ...webCapabilities } };
+  }
+
+  // Similar for other categories...
+  
+  return {
+    general: generalCapabilities.general.reduce((acc: any, cap: string) => {
+      acc[cap] = true;
+      return acc;
+    }, {}),
+    ...specificCapabilities
+  };
+}
+
+async function configurePreferences(): Promise<any> {
+  console.log(chalk.cyan('\n🎯 Configuring Language & Framework Preferences\n'));
+
+  return await inquirer.prompt([
+    {
+      type: 'checkbox',
+      name: 'languages',
+      message: '💬 Preferred programming languages:',
+      choices: [
+        'TypeScript', 'JavaScript', 'Python', 'Java', 'C#', 'Go',
+        'Rust', 'C++', 'Swift', 'Kotlin', 'PHP', 'Ruby', 'Scala'
+      ],
+    },
+    {
+      type: 'checkbox',
+      name: 'tools',
+      message: '🔧 Preferred development tools:',
+      choices: [
+        'VS Code', 'IntelliJ', 'Vim/Neovim', 'Git', 'Docker',
+        'Kubernetes', 'AWS', 'Azure', 'GCP', 'Terraform'
+      ],
+    },
+    {
+      type: 'list',
+      name: 'codingStyle',
+      message: '📝 Coding style preference:',
+      choices: [
+        { name: 'Minimal - Clean and concise code', value: 'minimal' },
+        { name: 'Documented - Well-commented code', value: 'documented' },
+        { name: 'Verbose - Explicit and detailed code', value: 'verbose' },
+        { name: 'Enterprise - Enterprise-grade patterns', value: 'enterprise' }
+      ],
+    }
+  ]);
+}
+
+async function configurePersonality(): Promise<any> {
+  console.log(chalk.cyan('\n🎭 Configuring Agent Personality\n'));
+
+  return await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'tone',
+      message: '🗣️  Communication tone:',
+      choices: [
+        { name: '👔 Professional - Formal and business-like', value: PersonalityTone.PROFESSIONAL },
+        { name: '😊 Friendly - Warm and approachable', value: PersonalityTone.FRIENDLY },
+        { name: '🤝 Casual - Relaxed and informal', value: PersonalityTone.CASUAL },
+        { name: '🎓 Academic - Scholarly and detailed', value: PersonalityTone.ACADEMIC },
+        { name: '💡 Enthusiastic - Energetic and positive', value: PersonalityTone.ENTHUSIASTIC }
+      ],
+    },
+    {
+      type: 'list',
+      name: 'verbosity',
+      message: '📏 Response length preference:',
+      choices: [
+        { name: '📝 Concise - Short and to the point', value: VerbosityLevel.CONCISE },
+        { name: '📄 Detailed - Comprehensive explanations', value: VerbosityLevel.DETAILED },
+        { name: '📚 Verbose - Extensive documentation', value: VerbosityLevel.VERBOSE }
+      ],
+    },
+    {
+      type: 'list',
+      name: 'approach',
+      message: '🎯 Problem-solving approach:',
+      choices: [
+        { name: '⚡ Pragmatic - Practical, get-it-done solutions', value: ApproachStyle.PRAGMATIC },
+        { name: '🔬 Methodical - Systematic, step-by-step approach', value: ApproachStyle.METHODICAL },
+        { name: '💡 Creative - Innovative and unconventional solutions', value: ApproachStyle.CREATIVE },
+        { name: '🎓 Academic - Research-based, theoretical approach', value: ApproachStyle.ACADEMIC }
+      ],
+    }
+  ]);
+}
+
+async function configureInstructions(): Promise<any> {
+  console.log(chalk.cyan('\n📋 Configuring Custom Instructions\n'));
+
+  return await inquirer.prompt([
+    {
+      type: 'editor',
+      name: 'system',
+      message: '🤖 System prompt (defines agent behavior):',
+      default: 'You are an expert software developer and coding assistant. Always provide high-quality, production-ready code with proper error handling and best practices.',
+    },
+    {
+      type: 'editor',
+      name: 'context',
+      message: '📄 Additional context (optional):',
+      default: '',
+    },
+    {
+      type: 'input',
+      name: 'constraints',
+      message: '🚫 Constraints or limitations (comma-separated):',
+      filter: (input: string) => input.split(',').map(s => s.trim()).filter(Boolean),
+    }
+  ]);
+}
+
+function displayConfigurationSummary(config: CreateAgentRequest): void {
+  console.log(
+    boxen(
+      chalk.white('📋 Agent Configuration Summary\n\n') +
+      chalk.cyan('Basic Information:\n') +
+      chalk.gray(`• Name: ${config.name}\n`) +
+      chalk.gray(`• Model: ${config.model}\n`) +
+      chalk.gray(`• Category: ${config.metadata?.category}\n`) +
+      chalk.gray(`• Visibility: ${config.metadata?.visibility}\n\n`) +
+      chalk.cyan('Capabilities:\n') +
+      chalk.gray(`• General: ${Object.keys(config.capabilities?.general || {}).filter(k => (config.capabilities?.general as any)?.[k]).join(', ')}\n`) +
+      chalk.gray(`• Languages: ${config.preferences?.languages?.join(', ') || 'None specified'}\n`) +
+      chalk.gray(`• Personality: ${config.personality?.tone} / ${config.personality?.verbosity}\n`),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: 'cyan',
+        title: 'Configuration Summary'
+      }
+    )
+  );
+}
+
+function displayAgentCreated(agent: Agent): void {
+  console.log(
+    boxen(
+      chalk.white(`🤖 ${agent.name}\n`) +
+      chalk.gray(`ID: ${agent.id}\n`) +
+      chalk.gray(`Model: ${agent.model}\n`) +
+      chalk.gray(`Category: ${agent.metadata.category}\n`) +
+      chalk.gray(`Status: ${agent.status}\n`) +
+      chalk.gray(`Created: ${agent.createdAt.toLocaleString()}\n`) +
+      (agent.metadata.visibility === 'public' ? chalk.green('🌐 Public') : 
+       agent.metadata.visibility === 'team' ? chalk.yellow('🏢 Team') : 
+       chalk.blue('🔒 Private')),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: 'green',
+        title: 'Agent Created Successfully',
+      }
+    )
+  );
+}
+
+function getAgentTemplate(templateName: string): CreateAgentRequest {
+  const templates: Record<string, CreateAgentRequest> = {
+    'web-developer': {
+      name: 'Web Developer',
+      description: 'Full-stack web development specialist with expertise in modern frameworks and best practices.',
+      model: 'claude-3.5-sonnet',
+      capabilities: {
+        web: { enabled: true, frameworks: ['React', 'Next.js', 'Express.js'], features: ['SSR/SSG', 'Performance'] },
+        general: { codeGeneration: true, codeReview: true, debugging: true, testing: true }
+      },
+      preferences: {
+        languages: ['TypeScript', 'JavaScript'],
+        frameworks: ['React', 'Next.js', 'Express.js'],
+        tools: ['VS Code', 'Git', 'Docker']
+      },
+      personality: {
+        tone: PersonalityTone.PROFESSIONAL,
+        verbosity: VerbosityLevel.DETAILED,
+        approach: ApproachStyle.PRAGMATIC
+      },
+      metadata: {
+        category: AgentCategory.WEB,
+        tags: ['web', 'frontend', 'backend', 'fullstack'],
+        visibility: 'private'
+      }
+    },
+    'mobile-developer': {
+      name: 'Mobile Developer',
+      description: 'Cross-platform mobile development expert with React Native and native development experience.',
+      model: 'gpt-4o',
+      capabilities: {
+        mobile: { enabled: true, platforms: ['iOS', 'Android'], frameworks: ['React Native', 'Flutter'] },
+        general: { codeGeneration: true, codeReview: true, debugging: true, testing: true }
+      },
+      preferences: {
+        languages: ['TypeScript', 'Swift', 'Kotlin', 'Dart'],
+        frameworks: ['React Native', 'Flutter'],
+        tools: ['Xcode', 'Android Studio', 'VS Code']
+      },
+      personality: {
+        tone: PersonalityTone.FRIENDLY,
+        verbosity: VerbosityLevel.DETAILED,
+        approach: ApproachStyle.METHODICAL
+      },
+      metadata: {
+        category: AgentCategory.MOBILE,
+        tags: ['mobile', 'ios', 'android', 'cross-platform'],
+        visibility: 'private'
+      }
+    }
+  };
+
+  return templates[templateName] || templates['web-developer'];
+}
+
+function displayAgentsList(agents: Agent[], showStats: boolean): void {
+  for (const agent of agents) {
+    console.log(
+      boxen(
+        chalk.white(`🤖 ${agent.name}\n`) +
+        chalk.gray(`ID: ${agent.id}\n`) +
+        chalk.gray(`Model: ${agent.model}\n`) +
+        chalk.gray(`Category: ${agent.metadata.category}\n`) +
+        chalk.gray(`Status: ${getStatusIcon(agent.status)} ${agent.status}\n`) +
+        chalk.gray(`Description: ${agent.description}\n`) +
+        chalk.gray(`Tags: ${agent.metadata.tags.join(', ') || 'None'}\n`) +
+        (showStats ? displayPerformanceStats(agent) : '') +
+        chalk.gray(`Created: ${agent.createdAt.toLocaleDateString()} | `) +
+        chalk.gray(`Updated: ${agent.updatedAt.toLocaleDateString()}\n`) +
+        getVisibilityBadge(agent.metadata.visibility),
+        {
+          padding: 1,
+          borderStyle: 'round',
+          borderColor: getStatusColor(agent.status),
+          title: `Agent ${agent.id.substring(0, 8)}`
+        }
+      )
+    );
+  }
+}
+
+function displayAgentsTable(agents: Agent[], showStats: boolean): void {
+  const table = new Table({
+    head: [
+      chalk.cyan('Name'),
+      chalk.cyan('ID'),
+      chalk.cyan('Model'),
+      chalk.cyan('Category'),
+      chalk.cyan('Status'),
+      chalk.cyan('Performance'),
+      chalk.cyan('Updated')
+    ],
+    style: {
+      head: [],
+      border: []
+    }
+  });
+
+  for (const agent of agents) {
+    table.push([
+      agent.name,
+      agent.id.substring(0, 12) + '...',
+      agent.model,
+      agent.metadata.category,
+      `${getStatusIcon(agent.status)} ${agent.status}`,
+      showStats ? `${agent.performance.successRate}% | ${agent.performance.totalRequests} req` : 'N/A',
+      agent.updatedAt.toLocaleDateString()
+    ]);
+  }
+
+  console.log(table.toString());
+}
+
+function displayPerformanceStats(agent: Agent): string {
+  return chalk.gray(`Performance: ${agent.performance.successRate}% success | `) +
+         chalk.gray(`${agent.performance.totalRequests} requests | `) +
+         chalk.gray(`${agent.performance.averageResponseTime}ms avg\n`);
+}
+
+function getStatusIcon(status: AgentStatus): string {
+  switch (status) {
+    case AgentStatus.ACTIVE: return '🟢';
+    case AgentStatus.INACTIVE: return '🔴';
+    case AgentStatus.ERROR: return '🔴';
+    case AgentStatus.MAINTENANCE: return '🟡';
+    default: return '⚪';
+  }
+}
+
+function getStatusColor(status: AgentStatus): string {
+  switch (status) {
+    case AgentStatus.ACTIVE: return 'green';
+    case AgentStatus.INACTIVE: return 'red';
+    case AgentStatus.ERROR: return 'red';
+    case AgentStatus.MAINTENANCE: return 'yellow';
+    default: return 'gray';
+  }
+}
+
+function getVisibilityBadge(visibility: string): string {
+  switch (visibility) {
+    case 'public': return chalk.green('🌐 Public');
+    case 'team': return chalk.yellow('🏢 Team');
+    case 'private': return chalk.blue('🔒 Private');
+    default: return chalk.gray('👁️  Unknown');
+  }
+}
+
+function displayCapabilitiesSection(agent: Agent): void {
+  const generalCaps = Object.entries(agent.capabilities.general || {})
+    .filter(([_, enabled]) => enabled)
+    .map(([cap]) => cap)
+    .join(', ');
+    
+  console.log(
+    boxen(
+      chalk.white('🛠️  Agent Capabilities\n\n') +
+      chalk.cyan('General Capabilities:\n') +
+      chalk.gray(`${generalCaps || 'None'}\n\n`) +
+      chalk.cyan('Specialized Capabilities:\n') +
+      (agent.capabilities.web?.enabled ? chalk.gray(`Web: ${agent.capabilities.web.frameworks?.join(', ') || 'General'}\n`) : '') +
+      (agent.capabilities.mobile?.enabled ? chalk.gray(`Mobile: ${agent.capabilities.mobile.platforms?.join(', ') || 'General'}\n`) : '') +
+      (agent.capabilities.blockchain?.enabled ? chalk.gray(`Blockchain: ${agent.capabilities.blockchain.networks?.join(', ') || 'General'}\n`) : '') +
+      (agent.capabilities.ai?.enabled ? chalk.gray(`AI/ML: ${agent.capabilities.ai.domains?.join(', ') || 'General'}\n`) : ''),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: 'blue',
+        title: 'Capabilities'
+      }
+    )
+  );
+}
+
+function displayPersonalitySection(agent: Agent): void {
+  console.log(
+    boxen(
+      chalk.white('🎭 Agent Personality\n\n') +
+      chalk.cyan('Communication Style:\n') +
+      chalk.gray(`Tone: ${agent.personality.tone}\n`) +
+      chalk.gray(`Verbosity: ${agent.personality.verbosity}\n`) +
+      chalk.gray(`Formality: ${agent.personality.formality}\n`) +
+      chalk.gray(`Approach: ${agent.personality.approach}\n`) +
+      chalk.gray(`Feedback Style: ${agent.personality.feedback}\n`) +
+      chalk.gray(`Communication: ${agent.personality.communication}\n`) +
+      (agent.personality.customTraits?.length ? 
+        chalk.cyan(`\nCustom Traits:\n`) + chalk.gray(agent.personality.customTraits.join(', ')) : ''),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: 'magenta',
+        title: 'Personality'
+      }
+    )
+  );
+}
+
+function displayConfigurationSection(agent: Agent): void {
+  console.log(
+    boxen(
+      chalk.white('⚙️  Model Configuration\n\n') +
+      chalk.cyan('Model Settings:\n') +
+      chalk.gray(`Temperature: ${agent.settings.temperature}\n`) +
+      chalk.gray(`Max Tokens: ${agent.settings.maxTokens}\n`) +
+      chalk.gray(`Top P: ${agent.settings.topP}\n`) +
+      chalk.gray(`Response Format: ${agent.settings.responseFormat}\n`) +
+      chalk.gray(`Streaming: ${agent.settings.streaming ? 'Enabled' : 'Disabled'}\n`) +
+      chalk.gray(`Timeout: ${agent.settings.timeout}ms\n\n`) +
+      chalk.cyan('Instructions:\n') +
+      chalk.gray(`System: ${agent.instructions.system.substring(0, 100)}${agent.instructions.system.length > 100 ? '...' : ''}\n`) +
+      (agent.instructions.context ? chalk.gray(`Context: ${agent.instructions.context.substring(0, 100)}...\n`) : '') +
+      (agent.instructions.constraints?.length ? chalk.gray(`Constraints: ${agent.instructions.constraints.join(', ')}\n`) : ''),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: 'yellow',
+        title: 'Configuration'
+      }
+    )
+  );
+}
+
+function displayPerformanceSection(agent: Agent): void {
+  console.log(
+    boxen(
+      chalk.white('📊 Performance Metrics\n\n') +
+      chalk.cyan('Usage Statistics:\n') +
+      chalk.gray(`Total Requests: ${agent.performance.totalRequests}\n`) +
+      chalk.gray(`Success Rate: ${agent.performance.successRate}%\n`) +
+      chalk.gray(`Average Response Time: ${agent.performance.averageResponseTime}ms\n`) +
+      chalk.gray(`Average Tokens: ${agent.performance.averageTokens}\n`) +
+      chalk.gray(`Total Cost: $${agent.performance.totalCost}\n\n`) +
+      chalk.cyan('Quality Metrics:\n') +
+      chalk.gray(`User Ratings: ${agent.performance.ratings?.length || 0} reviews\n`) +
+      chalk.gray(`Last Evaluated: ${agent.performance.lastEvaluated ? new Date(agent.performance.lastEvaluated).toLocaleDateString() : 'Never'}\n`),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: 'green',
+        title: 'Performance'
+      }
+    )
+  );
+}
+
+function displayHistorySection(agent: Agent): void {
+  console.log(
+    boxen(
+      chalk.white('📈 Usage History\n\n') +
+      chalk.cyan('Recent Activity:\n') +
+      chalk.gray(`Last Used: ${agent.lastUsed ? new Date(agent.lastUsed).toLocaleString() : 'Never'}\n`) +
+      chalk.gray(`Created: ${agent.createdAt.toLocaleString()}\n`) +
+      chalk.gray(`Last Updated: ${agent.updatedAt.toLocaleString()}\n\n`) +
+      chalk.cyan('Feedback Summary:\n') +
+      chalk.gray(`Total Feedback: ${agent.performance.feedback?.length || 0} items\n`) +
+      (agent.performance.feedback?.slice(0, 3).map((feedback: any, i: number) => 
+        chalk.gray(`${i + 1}. ${feedback.comment?.substring(0, 50)}...\n`)
+      ).join('') || chalk.gray('No feedback available\n')),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: 'cyan',
+        title: 'History'
+      }
+    )
+  );
+}
+
+async function exportAgentConfiguration(agent: Agent, filePath: string): Promise<void> {
+  try {
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      agent: {
+        ...agent,
+        // Remove runtime data that shouldn't be exported
+        performance: undefined,
+        lastUsed: undefined
+      }
+    };
+    
+    await fs.writeJson(filePath, exportData, { spaces: 2 });
+    console.log(
+      boxen(
+        chalk.green(`✅ Agent configuration exported successfully!\n`) +
+        chalk.gray(`File: ${filePath}\n`) +
+        chalk.gray(`Size: ${JSON.stringify(exportData).length} bytes`),
+        {
+          padding: 1,
+          borderStyle: 'round',
+          borderColor: 'green',
+          title: 'Export Complete'
+        }
+      )
+    );
+  } catch (error) {
+    Logger.error(`Failed to export agent configuration: ${error}`);
   }
 }
