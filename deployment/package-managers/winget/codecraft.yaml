@@ -1,0 +1,185 @@
+# CodeCraft CLI - Windows Package Manager (winget) Manifest
+# Created with YamlCreate.ps1 v2.4.1
+
+PackageIdentifier: CodeCraft.CLI
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: CodeCraft Team
+PublisherUrl: https://codecraft.dev
+PublisherSupportUrl: https://github.com/recoder-team/recoder/issues
+PrivacyUrl: https://codecraft.dev/privacy
+Author: CodeCraft Team
+PackageName: CodeCraft CLI
+PackageUrl: https://codecraft.dev
+License: MIT
+LicenseUrl: https://github.com/recoder-team/recoder/blob/main/LICENSE
+Copyright: Copyright © 2024 CodeCraft Team
+CopyrightUrl: https://github.com/recoder-team/recoder/blob/main/LICENSE
+ShortDescription: Intelligent code generation and project management CLI tool
+Description: |-
+  CodeCraft CLI is an intelligent code generation and project management tool that helps developers create, modify, and optimize code using AI-powered assistance.
+  
+  Features:
+  • Smart Code Generation - Generate real, production-ready code with comprehensive validation
+  • Project Analysis - Deep understanding of your codebase structure and patterns  
+  • Multi-file Support - Generate and manage complex, multi-file implementations
+  • Interactive Mode - Step-by-step guidance with user approval and previews
+  • Framework Agnostic - Works with React, Vue, Angular, Node.js, Python, and more
+  • Validation Pipeline - Comprehensive syntax, type, security, and performance validation
+  
+  Commands:
+  • codecraft generate <description> - Generate code from natural language descriptions
+  • codecraft modify <file> <changes> - Modify existing files with AI assistance
+  • codecraft refactor <path> <goals> - Intelligent code refactoring
+  • codecraft fix <error> - Automatically fix compilation and runtime errors
+  • codecraft optimize <target> - Performance and code quality optimization
+Moniker: codecraft
+Tags:
+- cli
+- code-generation
+- ai
+- development
+- automation
+- typescript
+- javascript
+- react
+- nodejs
+- python
+- productivity
+- developer-tools
+ReleaseDate: 2024-01-01
+ReleaseNotes: |-
+  Initial release of CodeCraft CLI v1.0.0
+  
+  🎉 Features:
+  • Complete code generation system with AI integration
+  • Multi-file project scaffolding and management
+  • Interactive development workflows
+  • Comprehensive validation and quality assurance
+  • Cross-platform support (Windows, macOS, Linux)
+  • Native installers and package manager integration
+  
+  📦 Distribution:
+  • NPM package for global installation
+  • Native Windows installer (.exe)
+  • Chocolatey package
+  • Windows Package Manager (winget) support
+  • Docker containers for containerized workflows
+  
+  🚀 Getting Started:
+  Run 'codecraft --help' after installation to see all available commands.
+  Visit https://codecraft.dev/docs for comprehensive documentation.
+ReleaseNotesUrl: https://github.com/recoder-team/recoder/releases/tag/v1.0.0
+PurchaseUrl: https://codecraft.dev/pricing
+InstallationNotes: |-
+  After installation:
+  1. Restart your command prompt or PowerShell
+  2. Run 'codecraft --version' to verify installation
+  3. Run 'codecraft --help' to see available commands
+  4. Visit https://codecraft.dev/docs for documentation
+  
+  Requirements:
+  • Windows 10 version 1809 or later
+  • PowerShell 5.1 or later (PowerShell 7+ recommended)
+  • Node.js 18+ (installed automatically if missing)
+Documentations:
+- DocumentLabel: Documentation
+  DocumentUrl: https://codecraft.dev/docs
+- DocumentLabel: Getting Started Guide
+  DocumentUrl: https://codecraft.dev/docs/getting-started
+- DocumentLabel: API Reference
+  DocumentUrl: https://codecraft.dev/docs/api
+- DocumentLabel: Examples
+  DocumentUrl: https://codecraft.dev/docs/examples
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
+
+---
+# CodeCraft CLI - Windows Package Manager (winget) Installer Manifest
+
+PackageIdentifier: CodeCraft.CLI
+PackageVersion: 1.0.0
+Platform:
+- Windows.Desktop
+MinimumOSVersion: 10.0.17763.0
+InstallerType: exe
+Scope: machine
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+Commands:
+- codecraft
+- cc
+FileExtensions:
+- js
+- ts
+- jsx
+- tsx
+- json
+- md
+Dependencies:
+  PackageDependencies:
+  - PackageIdentifier: OpenJS.NodeJS
+    MinimumVersion: 18.0.0
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/recoder-team/recoder/releases/download/v1.0.0/CodeCraft-CLI-Setup-1.0.0-x64.exe
+  InstallerSha256: PLACEHOLDER_SHA256_X64
+  InstallerSwitches:
+    Silent: /S
+    SilentWithProgress: /S
+    Interactive: ''
+    InstallLocation: /D=<INSTALLPATH>
+    Log: /LOG="<LOGPATH>"
+  ProductCode: '{PLACEHOLDER-GUID-FOR-CODECRAFT-CLI}'
+  AppsAndFeaturesEntries:
+  - DisplayName: CodeCraft CLI
+    DisplayVersion: 1.0.0
+    Publisher: CodeCraft Team
+    ProductCode: '{PLACEHOLDER-GUID-FOR-CODECRAFT-CLI}'
+    UpgradeCode: '{PLACEHOLDER-UPGRADE-GUID-FOR-CODECRAFT-CLI}'
+- Architecture: x86
+  InstallerUrl: https://github.com/recoder-team/recoder/releases/download/v1.0.0/CodeCraft-CLI-Setup-1.0.0-ia32.exe
+  InstallerSha256: PLACEHOLDER_SHA256_X86
+  InstallerSwitches:
+    Silent: /S
+    SilentWithProgress: /S
+    Interactive: ''
+    InstallLocation: /D=<INSTALLPATH>
+    Log: /LOG="<LOGPATH>"
+  ProductCode: '{PLACEHOLDER-GUID-FOR-CODECRAFT-CLI-X86}'
+  AppsAndFeaturesEntries:
+  - DisplayName: CodeCraft CLI
+    DisplayVersion: 1.0.0
+    Publisher: CodeCraft Team
+    ProductCode: '{PLACEHOLDER-GUID-FOR-CODECRAFT-CLI-X86}'
+    UpgradeCode: '{PLACEHOLDER-UPGRADE-GUID-FOR-CODECRAFT-CLI}'
+- Architecture: arm64
+  InstallerUrl: https://github.com/recoder-team/recoder/releases/download/v1.0.0/CodeCraft-CLI-Setup-1.0.0-arm64.exe
+  InstallerSha256: PLACEHOLDER_SHA256_ARM64
+  InstallerSwitches:
+    Silent: /S
+    SilentWithProgress: /S
+    Interactive: ''
+    InstallLocation: /D=<INSTALLPATH>
+    Log: /LOG="<LOGPATH>"
+  ProductCode: '{PLACEHOLDER-GUID-FOR-CODECRAFT-CLI-ARM64}'
+  AppsAndFeaturesEntries:
+  - DisplayName: CodeCraft CLI
+    DisplayVersion: 1.0.0
+    Publisher: CodeCraft Team
+    ProductCode: '{PLACEHOLDER-GUID-FOR-CODECRAFT-CLI-ARM64}'
+    UpgradeCode: '{PLACEHOLDER-UPGRADE-GUID-FOR-CODECRAFT-CLI}'
+ManifestType: installer
+ManifestVersion: 1.6.0
+
+---
+# CodeCraft CLI - Windows Package Manager (winget) Version Manifest
+
+PackageIdentifier: CodeCraft.CLI
+PackageVersion: 1.0.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

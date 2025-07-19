@@ -10,6 +10,7 @@ import { setupChatCommands } from './chat';
 import { setupTemplateCommands } from './templates';
 import { setupValidateCommands } from './validate';
 import { setupModelCommands } from './models';
+import { setupGenerateCommands } from './generate';
 import { createPlanCommand } from './plan';
 import { createStructureCommand } from './structure';
 
@@ -35,6 +36,9 @@ export function setupCommands(program: Command): void {
   // AI Model commands
   setupModelCommands(program);
   
+  // Code Generation commands
+  setupGenerateCommands(program);
+  
   // Plan commands
   program.addCommand(createPlanCommand());
   
@@ -49,5 +53,6 @@ export * from './chat';
 export * from './templates';
 export * from './validate';
 export * from './models';
+export * from './generate';
 export * from './plan';
 export * from './structure';

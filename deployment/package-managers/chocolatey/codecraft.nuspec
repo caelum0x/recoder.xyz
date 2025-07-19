@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CodeCraft CLI - Chocolatey Package Specification -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>codecraft</id>
+    <version>1.0.0</version>
+    <packageSourceUrl>https://github.com/recoder-team/chocolatey-packages/tree/main/codecraft</packageSourceUrl>
+    <owners>CodeCraft Team</owners>
+    
+    <!-- Information -->
+    <title>CodeCraft CLI</title>
+    <authors>CodeCraft Team</authors>
+    <projectUrl>https://codecraft.dev</projectUrl>
+    <iconUrl>https://codecraft.dev/assets/icon.png</iconUrl>
+    <copyright>Copyright © 2024 CodeCraft Team</copyright>
+    <licenseUrl>https://github.com/recoder-team/recoder/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/recoder-team/recoder</projectSourceUrl>
+    <docsUrl>https://codecraft.dev/docs</docsUrl>
+    <mailingListUrl>https://github.com/recoder-team/recoder/discussions</mailingListUrl>
+    <bugTrackerUrl>https://github.com/recoder-team/recoder/issues</bugTrackerUrl>
+    
+    <!-- Description -->
+    <summary>Intelligent code generation and project management CLI tool powered by AI</summary>
+    <description><![CDATA[
+# CodeCraft CLI
+
+CodeCraft CLI is an intelligent code generation and project management tool that helps developers create, modify, and optimize code using AI-powered assistance.
+
+## Features
+
+- **Smart Code Generation**: Generate real, production-ready code with comprehensive validation
+- **Project Analysis**: Deep understanding of your codebase structure and patterns
+- **Multi-file Support**: Generate and manage complex, multi-file implementations
+- **Interactive Mode**: Step-by-step guidance with user approval and previews
+- **Framework Agnostic**: Works with React, Vue, Angular, Node.js, Python, and more
+- **Validation Pipeline**: Comprehensive syntax, type, security, and performance validation
+
+## Commands
+
+- `codecraft generate <description>` - Generate code from natural language descriptions
+- `codecraft modify <file> <changes>` - Modify existing files with AI assistance
+- `codecraft refactor <path> <goals>` - Intelligent code refactoring
+- `codecraft fix <error>` - Automatically fix compilation and runtime errors
+- `codecraft optimize <target>` - Performance and code quality optimization
+
+## Getting Started
+
+After installation, run:
+```
+codecraft --help
+```
+
+For detailed documentation, visit: https://codecraft.dev/docs
+
+## Requirements
+
+- Windows 10 or later
+- PowerShell 5.1 or later (PowerShell Core 6+ recommended)
+- .NET Framework 4.8 or .NET 6+ (automatically installed if missing)
+
+## Notes
+
+This package installs the latest stable version of CodeCraft CLI. The tool will be available globally in your PATH as `codecraft` and `cc` (short alias).
+]]></description>
+    
+    <!-- Release Notes -->
+    <releaseNotes>https://github.com/recoder-team/recoder/releases/tag/v1.0.0</releaseNotes>
+    
+    <!-- Tags -->
+    <tags>cli code-generation ai development automation typescript javascript react nodejs python productivity developer-tools</tags>
+    
+    <!-- Dependencies -->
+    <dependencies>
+      <dependency id="nodejs" version="[18.0.0,)" />
+    </dependencies>
+  </metadata>
+  
+  <!-- Files to include -->
+  <files>
+    <file src="tools\**" target="tools" />
+    <file src="legal\**" target="legal" />
+  </files>
+</package>

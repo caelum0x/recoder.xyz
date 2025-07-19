@@ -1,0 +1,190 @@
+{
+  "name": "@recoder/cli",
+  "version": "1.0.0",
+  "description": "CodeCraft CLI - Intelligent code generation and project management tool",
+  "main": "dist/index.js",
+  "bin": {
+    "codecraft": "dist/index.js",
+    "cc": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "npm run build:core && npm run build:pkg",
+    "build:core": "npm run build --workspace=packages/cli",
+    "build:pkg": "pkg dist/index.js --targets node18-linux-x64,node18-macos-x64,node18-win-x64,node18-linux-arm64,node18-macos-arm64 --out-path build/",
+    "build:docker": "docker build -t recoder/codecraft:latest -f deployment/docker/Dockerfile .",
+    "build:installers": "npm run build:installer:win && npm run build:installer:mac && npm run build:installer:linux",
+    "build:installer:win": "electron-builder build --win --publish never",
+    "build:installer:mac": "electron-builder build --mac --publish never",
+    "build:installer:linux": "electron-builder build --linux --publish never",
+    "test:deployment": "npm run test:npm && npm run test:docker && npm run test:installers",
+    "test:npm": "npm pack && npm install -g ./recoder-cli-*.tgz && codecraft --version",
+    "test:docker": "docker run --rm recoder/codecraft:latest --version",
+    "test:installers": "echo 'Testing installers...' && npm run verify:builds",
+    "verify:builds": "ls -la build/ && file build/*",
+    "release": "npm run build && npm run test:deployment && npm publish",
+    "release:beta": "npm run build && npm run test:deployment && npm publish --tag beta",
+    "release:alpha": "npm run build && npm run test:deployment && npm publish --tag alpha"
+  },
+  "keywords": [
+    "cli",
+    "code-generation",
+    "ai",
+    "development",
+    "automation",
+    "productivity",
+    "typescript",
+    "javascript",
+    "react",
+    "nodejs"
+  ],
+  "author": "CodeCraft Team <team@recoder.xyz>",
+  "license": "MIT",
+  "homepage": "https://codecraft.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/recoder-team/recoder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/recoder-team/recoder/issues"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/recoder-team"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "preferGlobal": true,
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^5.3.0",
+    "inquirer": "^9.2.0",
+    "ora": "^7.0.0",
+    "update-notifier": "^7.0.0",
+    "semver": "^7.5.0",
+    "node-fetch": "^3.3.0",
+    "fs-extra": "^11.1.0",
+    "glob": "^10.3.0",
+    "tar": "^6.1.0",
+    "zlib": "^1.0.5"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.0",
+    "@types/node": "^20.5.0",
+    "@types/fs-extra": "^11.0.0",
+    "@types/tar": "^6.1.0",
+    "typescript": "^5.2.0"
+  },
+  "pkg": {
+    "scripts": [
+      "dist/**/*.js"
+    ],
+    "assets": [
+      "node_modules/**/*"
+    ],
+    "outputPath": "build"
+  },
+  "build": {
+    "appId": "dev.codecraft.cli",
+    "productName": "CodeCraft CLI",
+    "copyright": "Copyright © 2024 CodeCraft Team",
+    "directories": {
+      "output": "build/installers"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64", "ia32"]
+        }
+      ],
+      "publisherName": "CodeCraft Team",
+      "verifyUpdateCodeSignature": false
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "rpm",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "snap",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CodeCraft"
+    },
+    "snap": {
+      "summary": "Intelligent code generation CLI tool"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "recoder-team",
+      "repo": "recoder"
+    }
+  },
+  "updateConfig": {
+    "url": "https://api.codecraft.dev/updates",
+    "channel": "stable"
+  }
+}

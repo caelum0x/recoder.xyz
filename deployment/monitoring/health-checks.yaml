@@ -1,0 +1,219 @@
+# Health checks configuration for CodeCraft CLI release validation
+# These checks are used by the rollback validator to monitor release health
+
+healthChecks:
+  # Critical health checks (failure triggers immediate rollback)
+  - name: "api-availability"
+    type: "http"
+    endpoint: "https://api.codecraft.dev/health"
+    timeout: 10000
+    retries: 3
+    critical: true
+    description: "Verify API is responding and healthy"
+
+  - name: "cli-download-endpoint"
+    type: "http"
+    endpoint: "https://api.codecraft.dev/downloads/latest"
+    timeout: 15000
+    retries: 3
+    critical: true
+    description: "Ensure CLI download endpoint is accessible"
+
+  - name: "update-service"
+    type: "http"
+    endpoint: "https://api.codecraft.dev/updates/check"
+    timeout: 10000
+    retries: 2
+    critical: true
+    description: "Verify update checking service is functional"
+
+  - name: "kubernetes-deployment"
+    type: "command"
+    command: "kubectl get deployment codecraft-cli -n codecraft-production -o jsonpath='{.status.readyReplicas}'"
+    timeout: 30000
+    retries: 2
+    critical: true
+    description: "Check Kubernetes deployment has ready replicas"
+
+  - name: "database-connectivity"
+    type: "command"
+    command: "kubectl exec -n codecraft-production deployment/codecraft-cli -- node -e \"require('pg').Client({connectionString: process.env.DATABASE_URL}).connect().then(() => console.log('OK')).catch(e => {console.error(e); process.exit(1)})\""
+    timeout: 15000
+    retries: 2
+    critical: true
+    description: "Verify database connectivity from application"
+
+  # Performance health checks (failure after threshold triggers rollback)
+  - name: "response-time-check"
+    type: "http"
+    endpoint: "https://api.codecraft.dev/health"
+    timeout: 5000
+    retries: 1
+    critical: false
+    description: "Monitor API response times"
+
+  - name: "memory-usage"
+    type: "metric"
+    metricName: "container_memory_usage_bytes{pod=~'codecraft-cli-.*'}"
+    threshold: 536870912  # 512MB
+    timeout: 10000
+    retries: 1
+    critical: false
+    description: "Monitor container memory usage"
+
+  - name: "cpu-usage"
+    type: "metric"
+    metricName: "rate(container_cpu_usage_seconds_total{pod=~'codecraft-cli-.*'}[5m])"
+    threshold: 0.8  # 80% CPU
+    timeout: 10000
+    retries: 1
+    critical: false
+    description: "Monitor container CPU usage"
+
+  - name: "error-rate"
+    type: "metric"
+    metricName: "rate(http_requests_total{status=~'5..'}[5m])"
+    threshold: 0.05  # 5% error rate
+    timeout: 10000
+    retries: 1
+    critical: false
+    description: "Monitor HTTP error rate"
+
+  # Functional health checks
+  - name: "cli-version-check"
+    type: "command"
+    command: "curl -s https://api.codecraft.dev/version | jq -r '.version'"
+    timeout: 10000
+    retries: 2
+    critical: false
+    description: "Verify API returns correct version information"
+
+  - name: "npm-package-availability"
+    type: "http"
+    endpoint: "https://registry.npmjs.org/@recoder/cli"
+    timeout: 15000
+    retries: 2
+    critical: false
+    description: "Check NPM package is published and accessible"
+
+  - name: "docker-image-availability"
+    type: "command"
+    command: "docker manifest inspect recoder/codecraft:latest"
+    timeout: 20000
+    retries: 2
+    critical: false
+    description: "Verify Docker image is available in registry"
+
+  - name: "cdn-assets"
+    type: "http"
+    endpoint: "https://cdn.codecraft.dev/assets/icon.png"
+    timeout: 10000
+    retries: 2
+    critical: false
+    description: "Check CDN assets are accessible"
+
+  - name: "ssl-certificate"
+    type: "command"
+    command: "openssl s_client -connect api.codecraft.dev:443 -servername api.codecraft.dev < /dev/null 2>/dev/null | openssl x509 -noout -dates"
+    timeout: 10000
+    retries: 1
+    critical: false
+    description: "Verify SSL certificate is valid"
+
+  # Integration health checks
+  - name: "github-api-integration"
+    type: "http"
+    endpoint: "https://api.github.com/repos/recoder-team/recoder/releases/latest"
+    timeout: 15000
+    retries: 2
+    critical: false
+    description: "Check GitHub API integration for releases"
+
+  - name: "analytics-service"
+    type: "http"
+    endpoint: "https://api.codecraft.dev/analytics/health"
+    timeout: 10000
+    retries: 2
+    critical: false
+    description: "Verify analytics service is operational"
+
+  - name: "notification-service"
+    type: "http"
+    endpoint: "https://api.codecraft.dev/notifications/health"
+    timeout: 10000
+    retries: 2
+    critical: false
+    description: "Check notification service health"
+
+# Rollback configuration
+rollbackConfig:
+  enabled: true
+  autoRollback: true
+  
+  # Thresholds that trigger automatic rollback
+  thresholds:
+    errorRatePercent: 5.0        # Maximum 5% error rate
+    responseTimeMs: 2000         # Maximum 2 second response time
+    availabilityPercent: 95.0    # Minimum 95% availability
+    failedHealthChecks: 2        # Maximum 2 failed critical health checks
+  
+  # Validation settings
+  validationPeriodMinutes: 30    # Monitor for 30 minutes after deployment
+  rollbackTimeoutMinutes: 10     # Maximum time allowed for rollback
+  
+  # Notification channels for rollback alerts
+  notificationChannels:
+    - "slack://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+    - "discord://discord.com/api/webhooks/YOUR/DISCORD/WEBHOOK"
+    - "email://alerts@codecraft.dev"
+
+# Environment-specific configurations
+environments:
+  staging:
+    validationPeriodMinutes: 15
+    thresholds:
+      errorRatePercent: 10.0
+      responseTimeMs: 3000
+      availabilityPercent: 90.0
+      failedHealthChecks: 3
+  
+  production:
+    validationPeriodMinutes: 60
+    thresholds:
+      errorRatePercent: 2.0
+      responseTimeMs: 1000
+      availabilityPercent: 99.0
+      failedHealthChecks: 1
+
+# Monitoring integration
+monitoring:
+  prometheus:
+    enabled: true
+    endpoint: "http://prometheus:9090"
+    
+  grafana:
+    enabled: true
+    endpoint: "http://grafana:3000"
+    dashboardId: "codecraft-release-health"
+    
+  datadog:
+    enabled: false
+    apiKey: "${DATADOG_API_KEY}"
+    
+  newrelic:
+    enabled: false
+    licenseKey: "${NEWRELIC_LICENSE_KEY}"
+
+# Custom health check scripts
+customChecks:
+  - name: "end-to-end-test"
+    script: "./scripts/e2e-health-check.sh"
+    timeout: 60000
+    critical: true
+    description: "Run end-to-end tests to verify full functionality"
+    
+  - name: "performance-benchmark"
+    script: "./scripts/performance-test.sh"
+    timeout: 120000
+    critical: false
+    description: "Run performance benchmarks"
