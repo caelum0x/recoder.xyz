@@ -10,10 +10,12 @@ import chalk from 'chalk';
 import figlet from 'figlet';
 import boxen from 'boxen';
 import updateNotifier from 'update-notifier';
-import { Logger, VERSION } from '@recoder/shared';
+import { Logger } from '../../shared/src/logger';
+const VERSION = '1.0.0';
 import { ConfigManager } from './utils/config';
 import { setupCommands } from './commands';
 import { checkAuth } from './utils/auth';
+import { ConversationManager } from './services/conversation-manager';
 
 const pkg = require('../package.json');
 
@@ -90,7 +92,32 @@ async function main() {
     process.exitCode = 1;
   });
 
-  // Parse command line arguments
+  // Check if natural language command was provided
+  const args = process.argv.slice(2);
+  
+  // If just "recoder" is called with no arguments, start interactive mode
+  if (args.length === 0) {
+    const conversationManager = ConversationManager.getInstance();
+    await conversationManager.startInteractiveMode();
+    return;
+  }
+  
+  // Check if this looks like a natural language command (contains spaces and no flags)
+  if (args.length === 1 && args[0].includes(' ') && !args[0].startsWith('-')) {
+    const conversationManager = ConversationManager.getInstance();
+    await conversationManager.processSingleCommand(args[0]);
+    return;
+  }
+  
+  // Handle quoted natural language commands
+  if (args.length >= 1 && !args[0].startsWith('-') && !['auth', 'generate', 'plan', 'agent', 'validate', 'infrastructure', 'chat', 'config'].includes(args[0])) {
+    const naturalCommand = args.join(' ');
+    const conversationManager = ConversationManager.getInstance();
+    await conversationManager.processSingleCommand(naturalCommand);
+    return;
+  }
+
+  // Parse command line arguments normally
   try {
     await program.parseAsync(process.argv);
   } catch (error) {

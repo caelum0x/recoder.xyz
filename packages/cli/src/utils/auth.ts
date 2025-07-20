@@ -3,7 +3,7 @@
  */
 
 import chalk from 'chalk';
-import { Logger } from '@recoder/shared';
+import { Logger } from '../../../shared/src/logger';
 import { ConfigManager } from './config';
 
 /**

@@ -8,7 +8,7 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
 import open from 'open';
-import { Logger } from '@recoder/shared';
+import { Logger } from '../../../shared/src/logger';
 import { AuthService } from '../services/auth';
 import { ConfigManager } from '../utils/config';
 
