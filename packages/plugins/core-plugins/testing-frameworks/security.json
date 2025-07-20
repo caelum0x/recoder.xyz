@@ -1,0 +1,40 @@
+{
+  "permissions": [
+    "workspace:read",
+    "workspace:write",
+    "filesystem:read",
+    "filesystem:write",
+    "shell:execute",
+    "ui:panels",
+    "ui:commands",
+    "ui:notifications",
+    "ui:progress",
+    "ui:statusbar",
+    "ui:quickpick"
+  ],
+  "sandboxConfig": {
+    "allowNetworkAccess": false,
+    "allowFileSystemAccess": true,
+    "allowShellAccess": true,
+    "timeoutMs": 300000,
+    "memoryLimitMB": 500,
+    "cpuLimitPercent": 50,
+    "allowedPaths": [
+      ".",
+      "/tmp",
+      "/var/tmp"
+    ]
+  },
+  "trustedDomains": [],
+  "publisher": {
+    "id": "craft-code-team",
+    "verified": true,
+    "reputation": 100
+  },
+  "riskLevel": "medium",
+  "requiredConsent": [
+    "File system access for test discovery and execution",
+    "Shell access for running test commands",
+    "Long-running processes for test execution"
+  ]
+}

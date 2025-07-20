@@ -1,0 +1,144 @@
+{
+  "name": "@craft-code/deployment-providers",
+  "version": "1.0.0",
+  "description": "Multi-platform deployment providers for Craft Code",
+  "main": "index.js",
+  "author": "Craft Code Team",
+  "license": "MIT",
+  "craftCodePlugin": {
+    "metadata": {
+      "displayName": "Deployment Providers",
+      "category": "deployment",
+      "tags": ["deployment", "cloud", "aws", "azure", "gcp", "heroku", "vercel"],
+      "engines": {
+        "craftCode": ">=1.0.0"
+      },
+      "dependencies": {},
+      "capabilities": [
+        "workspace:read",
+        "workspace:write",
+        "filesystem:read",
+        "filesystem:write",
+        "shell:execute",
+        "ui:panels",
+        "ui:commands",
+        "ui:notifications",
+        "ui:progress",
+        "network:access"
+      ]
+    },
+    "configuration": {
+      "schema": {
+        "defaultProvider": {
+          "type": "string",
+          "title": "Default Deployment Provider",
+          "description": "Default provider for deployments",
+          "enum": ["aws", "azure", "gcp", "heroku", "vercel", "netlify"],
+          "default": "vercel"
+        },
+        "autoDetectConfigs": {
+          "type": "boolean",
+          "title": "Auto-detect Deployment Configs",
+          "description": "Automatically detect deployment configuration files",
+          "default": true
+        },
+        "showDeploymentStatus": {
+          "type": "boolean",
+          "title": "Show Deployment Status",
+          "description": "Display deployment status in status bar",
+          "default": true
+        },
+        "confirmBeforeDeploy": {
+          "type": "boolean",
+          "title": "Confirm Before Deploy",
+          "description": "Show confirmation dialog before deploying",
+          "default": true
+        },
+        "buildBeforeDeploy": {
+          "type": "boolean",
+          "title": "Build Before Deploy",
+          "description": "Automatically build project before deployment",
+          "default": true
+        },
+        "environmentMapping": {
+          "type": "object",
+          "title": "Environment Mapping",
+          "description": "Map branches to deployment environments",
+          "properties": {
+            "main": {
+              "type": "string",
+              "default": "production"
+            },
+            "develop": {
+              "type": "string",
+              "default": "staging"
+            },
+            "feature/*": {
+              "type": "string",
+              "default": "preview"
+            }
+          }
+        }
+      }
+    },
+    "contributes": {
+      "commands": [
+        {
+          "command": "deploy.quick",
+          "title": "Deploy: Quick Deploy",
+          "category": "Deploy"
+        },
+        {
+          "command": "deploy.configure",
+          "title": "Deploy: Configure Provider",
+          "category": "Deploy"
+        },
+        {
+          "command": "deploy.environments",
+          "title": "Deploy: Manage Environments",
+          "category": "Deploy"
+        },
+        {
+          "command": "deploy.history",
+          "title": "Deploy: Deployment History",
+          "category": "Deploy"
+        },
+        {
+          "command": "deploy.rollback",
+          "title": "Deploy: Rollback",
+          "category": "Deploy"
+        },
+        {
+          "command": "deploy.logs",
+          "title": "Deploy: View Logs",
+          "category": "Deploy"
+        },
+        {
+          "command": "deploy.status",
+          "title": "Deploy: Check Status",
+          "category": "Deploy"
+        },
+        {
+          "command": "deploy.promote",
+          "title": "Deploy: Promote Environment",
+          "category": "Deploy"
+        }
+      ],
+      "panels": [
+        {
+          "id": "deployment-manager",
+          "title": "Deployments",
+          "icon": "rocket",
+          "location": "sidebar"
+        }
+      ],
+      "statusBar": [
+        {
+          "id": "deployment-status",
+          "alignment": "left",
+          "priority": 80
+        }
+      ]
+    }
+  }
+}

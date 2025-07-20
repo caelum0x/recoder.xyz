@@ -1,0 +1,42 @@
+{
+  "permissions": [
+    "workspace:read",
+    "workspace:write",
+    "filesystem:read",
+    "filesystem:write",
+    "shell:execute",
+    "ui:panels",
+    "ui:commands",
+    "ui:statusbar"
+  ],
+  "sandboxConfig": {
+    "allowNetworkAccess": true,
+    "allowFileSystemAccess": true,
+    "allowShellAccess": true,
+    "timeoutMs": 60000,
+    "memoryLimitMB": 200,
+    "cpuLimitPercent": 25,
+    "allowedPaths": [
+      ".",
+      "/tmp",
+      "/var/tmp"
+    ]
+  },
+  "trustedDomains": [
+    "github.com",
+    "gitlab.com",
+    "bitbucket.org",
+    "dev.azure.com"
+  ],
+  "publisher": {
+    "id": "craft-code-team",
+    "verified": true,
+    "reputation": 100
+  },
+  "riskLevel": "medium",
+  "requiredConsent": [
+    "File system access for Git operations",
+    "Shell access for Git commands",
+    "Network access for remote Git operations"
+  ]
+}
