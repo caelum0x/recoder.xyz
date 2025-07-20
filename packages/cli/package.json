@@ -2,11 +2,11 @@
   "name": "@recoder/cli",
   "version": "1.0.0",
   "description": "Recoder CLI - AI-powered development platform with production-ready code generation",
-  "main": "dist/index.js",
+  "main": "test-cli.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "recoder": "dist/index.js",
-    "rec": "dist/index.js"
+    "recoder": "test-cli.js",
+    "rec": "test-cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -37,7 +37,6 @@
   "author": "Recoder Team",
   "license": "MIT",
   "dependencies": {
-    "@recoder/shared": "*",
     "commander": "^11.1.0",
     "inquirer": "^9.2.12",
     "chalk": "^4.1.2",
@@ -56,7 +55,10 @@
     "chokidar": "^3.5.3",
     "update-notifier": "^6.0.2",
     "keytar": "^7.9.0",
-    "open": "^8.4.2"
+    "open": "^8.4.2",
+    "cli-table3": "^0.6.3",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
@@ -67,6 +69,9 @@
     "@types/figlet": "^1.5.8",
     "@types/update-notifier": "^6.0.8",
     "@types/conf": "^3.0.2",
+    "@types/cli-table3": "^0.5.4",
+    "@types/lodash": "^4.14.0",
+    "@types/uuid": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "eslint": "^8.56.0",

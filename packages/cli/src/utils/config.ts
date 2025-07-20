@@ -6,7 +6,7 @@ import Conf from 'conf';
 import path from 'path';
 import fs from 'fs-extra';
 import os from 'os';
-import { Logger } from '@recoder/shared';
+import { Logger } from '../../../shared/src/logger';
 
 export interface RecoderConfig {
   // Authentication

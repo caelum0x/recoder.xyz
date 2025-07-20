@@ -8,8 +8,8 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
 import readline from 'readline';
-import { Logger } from '@recoder/shared';
-import { ChatService } from '../services/chat';
+import { Logger } from '../../../shared/src/logger';
+import { ConversationManager } from '../services/conversation-manager';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';
 
@@ -150,149 +150,13 @@ export function setupChatCommands(program: Command): void {
 }
 
 async function handleStartChat(options: any): Promise<void> {
-  console.log(
-    boxen(
-      chalk.cyan('🤖 Recoder AI Assistant') + '\n' +
-      chalk.gray('Type "/help" for commands, "/exit" to quit'),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-      }
-    )
-  );
-
-  let agentId = options.agent;
-  let model = options.model;
-  let sessionId = options.session;
-
-  // Agent selection if not specified
-  if (!agentId && !model) {
-    const token = ConfigManager.get('auth.token');
-    const agentsResult = await ChatService.getAvailableAgents(token);
-    
-    if (agentsResult.success && agentsResult.agents.length > 0) {
-      const response = await inquirer.prompt([
-        {
-          type: 'list',
-          name: 'agent',
-          message: 'Choose an agent:',
-          choices: [
-            { name: 'Default Assistant', value: 'default' },
-            ...agentsResult.agents.map((agent: any) => ({
-              name: `${agent.name} (${agent.type})`,
-              value: agent.id,
-            })),
-          ],
-        },
-      ]);
-      agentId = response.agent;
-    }
+  try {
+    const conversationManager = ConversationManager.getInstance();
+    await conversationManager.startInteractiveMode();
+  } catch (error) {
+    Logger.error(`Chat session failed: ${error}`);
+    console.log(chalk.red(`❌ Chat failed: ${error.message}`));
   }
-
-  // Load context if specified
-  let context = '';
-  if (options.context) {
-    try {
-      const fs = require('fs-extra');
-      context = await fs.readFile(options.context, 'utf8');
-      console.log(chalk.green(`📄 Loaded context from: ${options.context}`));
-    } catch (error) {
-      console.log(chalk.yellow(`⚠️  Failed to load context file: ${error}`));
-    }
-  }
-
-  // Create or resume session
-  const token = ConfigManager.get('auth.token');
-  let session;
-
-  if (sessionId) {
-    const sessionResult = await ChatService.getSession(token, sessionId);
-    if (sessionResult.success) {
-      session = sessionResult.session;
-      console.log(chalk.green(`📝 Resumed session: ${session.id}`));
-    } else {
-      console.log(chalk.yellow('⚠️  Session not found, starting new session'));
-    }
-  }
-
-  if (!session) {
-    const newSessionResult = await ChatService.createSession(token, {
-      agentId,
-      model,
-      context,
-      stream: options.stream,
-    });
-    
-    if (newSessionResult.success) {
-      session = newSessionResult.session;
-      console.log(chalk.green(`🆕 Started new session: ${session.id}`));
-    } else {
-      console.log(chalk.red('Failed to create chat session'));
-      return;
-    }
-  }
-
-  // Setup readline interface
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: chalk.cyan('You: '),
-  });
-
-  console.log('\n' + chalk.yellow('💬 Chat started! Ask me anything about code, projects, or development.'));
-  rl.prompt();
-
-  rl.on('line', async (input) => {
-    const message = input.trim();
-    
-    if (!message) {
-      rl.prompt();
-      return;
-    }
-
-    // Handle special commands
-    if (message.startsWith('/')) {
-      await handleChatCommand(message, session, rl);
-      return;
-    }
-
-    // Send message to AI
-    const spinner = ora('🤔 Thinking...').start();
-    
-    try {
-      if (options.stream) {
-        spinner.succeed();
-        console.log(chalk.blue('Assistant: '));
-        
-        await ChatService.sendMessageStream(token, session.id, message, (chunk: string) => {
-          process.stdout.write(chunk);
-        });
-        
-        console.log('\n');
-      } else {
-        const response = await ChatService.sendMessage(token, session.id, message);
-        
-        if (response.success) {
-          spinner.succeed();
-          console.log(chalk.blue('Assistant: ') + response.message);
-        } else {
-          spinner.fail(chalk.red('Failed to get response'));
-          console.log(chalk.red(response.error || 'Unknown error'));
-        }
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Error sending message'));
-      console.log(chalk.red(`Error: ${error}`));
-    }
-    
-    rl.prompt();
-  });
-
-  rl.on('close', () => {
-    console.log(chalk.yellow('\n👋 Chat session ended. Session saved as: ') + chalk.cyan(session.id));
-    process.exit(0);
-  });
 }
 
 async function handleChatCommand(command: string, session: any, rl: any): Promise<void> {
@@ -368,71 +232,16 @@ async function handleChatCommand(command: string, session: any, rl: any): Promis
 }
 
 async function handleQuickAsk(question: string, options: any): Promise<void> {
-  console.log(
-    boxen(
-      chalk.cyan('❓ Quick Question'),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-      }
-    )
-  );
-
-  console.log(chalk.white('Question: ') + chalk.gray(question));
-
-  const spinner = ora('🤔 Getting answer...').start();
-
   try {
-    const token = ConfigManager.get('auth.token');
-    
-    // Load context if specified
-    let context = '';
-    if (options.context) {
-      const fs = require('fs-extra');
-      context = await fs.readFile(options.context, 'utf8');
-    }
-
-    const result = await ChatService.quickAsk(token, question, {
-      agentId: options.agent,
-      model: options.model,
-      context,
-      stream: options.stream,
-    });
-    
-    if (result.success) {
-      spinner.succeed(chalk.green('Answer received'));
-      
-      if (options.stream) {
-        console.log(chalk.blue('\nAnswer: '));
-        await ChatService.streamResponse(result.responseStream, (chunk: string) => {
-          process.stdout.write(chunk);
-        });
-        console.log('\n');
-      } else {
-        console.log(
-          boxen(
-            result.answer,
-            {
-              padding: 1,
-              borderStyle: 'round',
-              borderColor: 'green',
-              title: 'Answer',
-            }
-          )
-        );
-      }
-
-      if (result.usage) {
-        console.log(chalk.gray(`\n💰 Tokens used: ${result.usage.totalTokens} | Cost: $${result.usage.cost || 'N/A'}`));
-      }
+    const conversationManager = ConversationManager.getInstance();
+    if (options.agent) {
+      await conversationManager.processSingleCommand(`${options.agent} agent, ${question}`);
     } else {
-      spinner.fail(chalk.red('Failed to get answer'));
-      console.log(chalk.red(result.error || 'Unknown error'));
+      await conversationManager.processSingleCommand(question);
     }
   } catch (error) {
-    spinner.fail(chalk.red('Question failed'));
-    throw error;
+    Logger.error(`Quick ask failed: ${error}`);
+    console.log(chalk.red(`❌ Failed: ${error.message}`));
   }
 }
 

@@ -27,7 +27,11 @@
       "Bash(npm install:*)",
       "Bash(npm:*)",
       "Bash(npx nx:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(touch:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx tsx:*)",
+      "Bash(recoder:*)"
     ],
     "deny": []
   }
