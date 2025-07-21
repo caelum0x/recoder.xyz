@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Quick test version of Recoder CLI
+ * Recoder CLI with Conversational AI Interface
  */
 
 const { Command } = require('commander');
 const chalk = require('chalk');
+const inquirer = require('inquirer');
 
 const program = new Command();
 
