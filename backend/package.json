@@ -35,7 +35,7 @@
   "author": "Recoder Team",
   "license": "MIT",
   "dependencies": {
-    "@recoder/shared": "*",
+    "@recoder/shared": "file:../packages/shared",
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "helmet": "^7.1.0",

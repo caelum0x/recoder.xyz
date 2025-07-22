@@ -22,7 +22,7 @@
     "context-awareness"
   ],
   "dependencies": {
-    "@recoder/shared": "workspace:*",
+    "@recoder/shared": "file:../shared",
     "ml-matrix": "^6.10.7",
     "ml-kmeans": "^6.0.0",
     "simple-statistics": "^7.8.3",

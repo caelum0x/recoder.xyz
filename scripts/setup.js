@@ -87,10 +87,47 @@ class SetupScript {
     const spinner = ora('Installing dependencies...').start();
     
     try {
-      this.exec('npm install', { cwd: this.rootDir });
-      spinner.succeed('Dependencies installed');
+      // Install root dependencies first
+      spinner.text = 'Installing root dependencies...';
+      this.exec('npm install --ignore-workspace-root-check', { cwd: this.rootDir });
+      
+      // Install CLI package dependencies
+      spinner.text = 'Installing CLI dependencies...';
+      const cliPath = path.join(this.rootDir, 'packages/cli');
+      if (await fs.pathExists(cliPath)) {
+        this.exec('npm install', { cwd: cliPath });
+      }
+      
+      // Install shared package dependencies
+      spinner.text = 'Installing shared dependencies...';
+      const sharedPath = path.join(this.rootDir, 'packages/shared');
+      if (await fs.pathExists(sharedPath)) {
+        this.exec('npm install', { cwd: sharedPath });
+      }
+      
+      // Install backend dependencies
+      spinner.text = 'Installing backend dependencies...';
+      const backendPath = path.join(this.rootDir, 'backend');
+      if (await fs.pathExists(backendPath)) {
+        this.exec('npm install', { cwd: backendPath });
+      }
+      
+      // Install production engine dependencies
+      spinner.text = 'Installing production engine dependencies...';
+      const enginePath = path.join(this.rootDir, 'production-engine');
+      if (await fs.pathExists(enginePath)) {
+        this.exec('npm install', { cwd: enginePath });
+      }
+      
+      spinner.succeed('All dependencies installed successfully');
     } catch (error) {
       spinner.fail('Failed to install dependencies');
+      console.error(chalk.yellow('\n💡 Try running these commands manually:'));
+      console.error(chalk.gray('  npm install --ignore-workspace-root-check'));
+      console.error(chalk.gray('  cd packages/cli && npm install'));
+      console.error(chalk.gray('  cd ../shared && npm install'));
+      console.error(chalk.gray('  cd ../../backend && npm install'));
+      console.error(chalk.gray('  cd ../production-engine && npm install'));
       throw error;
     }
   }

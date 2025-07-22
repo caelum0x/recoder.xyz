@@ -5,6 +5,7 @@
 
 import { AIHub, TaskContext } from './ai-hub';
 import { Logger } from '../utils/logger';
+import axios from 'axios';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 
@@ -36,9 +37,38 @@ export interface ValidationResult {
 
 export class ProductionGenerator {
   private aiHub: AIHub;
+  private backendUrl: string;
+  private engineUrl: string;
 
   constructor() {
     this.aiHub = AIHub.getInstance();
+    this.backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    this.engineUrl = process.env.ENGINE_URL || 'http://localhost:3002';
+  }
+
+  /**
+   * Check backend connectivity
+   */
+  private async checkBackendConnectivity(): Promise<{ backend: boolean; engine: boolean }> {
+    const results = { backend: false, engine: false };
+    
+    try {
+      await axios.get(`${this.backendUrl}/health`, { timeout: 5000 });
+      results.backend = true;
+      Logger.info('✅ Backend server is available');
+    } catch (error) {
+      Logger.warn('⚠️ Backend server not available, using fallback generation');
+    }
+
+    try {
+      await axios.get(`${this.engineUrl}/health`, { timeout: 5000 });
+      results.engine = true;
+      Logger.info('✅ Production engine is available');
+    } catch (error) {
+      Logger.warn('⚠️ Production engine not available, using local generation');
+    }
+
+    return results;
   }
 
   /**
@@ -48,10 +78,128 @@ export class ProductionGenerator {
     try {
       Logger.info(`🚀 Generating production ${request.type} application: ${request.description}`);
 
+      // Check backend connectivity
+      const connectivity = await this.checkBackendConnectivity();
+
+      let result: GenerationResult;
+
+      if (connectivity.engine) {
+        // Use production engine for real code generation
+        result = await this.generateWithProductionEngine(request);
+      } else if (connectivity.backend) {
+        // Use backend API for generation
+        result = await this.generateWithBackendAPI(request);
+      } else {
+        // Fallback to local AI generation
+        result = await this.generateWithLocalAI(request);
+      }
+
+      // Write files to output directory if generation succeeded
+      if (result.success && result.files.length > 0) {
+        const writtenFiles = await this.writeFilesToDisk(result.files, request.outputDir);
+        result.files = writtenFiles;
+        Logger.info(`✅ Successfully generated ${writtenFiles.length} files`);
+      }
+
+      return result;
+
+    } catch (error: any) {
+      Logger.error(`❌ Generation failed: ${error.message}`);
+      return {
+        success: false,
+        files: [],
+        instructions: '',
+        testSuite: '',
+        deployment: '',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Generate using production engine
+   */
+  private async generateWithProductionEngine(request: GenerationRequest): Promise<GenerationResult> {
+    try {
+      Logger.info('🎯 Using Production Engine for real code generation...');
+
+      const response = await axios.post(`${this.engineUrl}/api/generate`, {
+        type: request.type,
+        description: request.description,
+        requirements: request.features,
+        language: 'TypeScript',
+        outputPath: request.outputDir,
+        realFunctionality: request.realFunctionality,
+        testingRequired: true,
+        deploymentRequired: true
+      }, {
+        timeout: 300000 // 5 minutes timeout for complex generation
+      });
+
+      const engineResult = response.data.data;
+
+      return {
+        success: engineResult.success,
+        files: engineResult.files || [],
+        instructions: engineResult.documentation || '',
+        testSuite: engineResult.tests?.map((t: any) => `${t.path}: ${t.content}`).join('\n\n') || '',
+        deployment: engineResult.deployment?.commands?.join('\n') || '',
+        validationResults: engineResult.validationResults || []
+      };
+
+    } catch (error: any) {
+      Logger.error(`Production engine generation failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate using backend API
+   */
+  private async generateWithBackendAPI(request: GenerationRequest): Promise<GenerationResult> {
+    try {
+      Logger.info('🔧 Using Backend API for code generation...');
+
+      const response = await axios.post(`${this.backendUrl}/api/planner/create`, {
+        description: request.description,
+        options: {
+          type: request.type,
+          features: request.features,
+          complexity: request.complexity
+        }
+      }, {
+        timeout: 120000 // 2 minutes timeout
+      });
+
+      const planResult = response.data.data;
+
+      // Convert plan to generation result
+      return {
+        success: true,
+        files: this.generateFilesFromPlan(planResult, request),
+        instructions: planResult.description || '',
+        testSuite: 'Tests will be generated based on the plan',
+        deployment: 'Deployment instructions included in plan',
+        validationResults: []
+      };
+
+    } catch (error: any) {
+      Logger.error(`Backend API generation failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate using local AI (fallback)
+   */
+  private async generateWithLocalAI(request: GenerationRequest): Promise<GenerationResult> {
+    try {
+      Logger.info('🤖 Using Local AI for code generation...');
+
       const context: TaskContext = {
         type: this.mapRequestTypeToContext(request.type),
         complexity: request.complexity,
-        priority: 'quality', // Always prioritize quality for production
+        priority: 'quality',
         requirements: request.features
       };
 
@@ -65,29 +213,73 @@ export class ProductionGenerator {
       // Create specialized generators based on type
       const specializedResult = await this.applySpecializedGeneration(request, codeResult);
 
-      // Write files to output directory
-      const files = await this.writeFilesToDisk(specializedResult.files, request.outputDir);
-
       return {
         success: true,
-        files,
-        instructions: specializedResult.instructions,
-        testSuite: specializedResult.tests,
+        files: specializedResult.files || [],
+        instructions: specializedResult.instructions || '',
+        testSuite: specializedResult.tests || '',
         deployment: specializedResult.deployment || '',
-        validationResults: [] // Will be populated by validation engine
+        validationResults: []
       };
 
     } catch (error: any) {
-      Logger.error(`❌ Generation failed: ${error.message}`);
-      return {
-        success: false,
-        files: [],
-        instructions: '',
-        testSuite: '',
-        deployment: '',
-        error: error.message
-      };
+      Logger.error(`Local AI generation failed: ${error.message}`);
+      throw error;
     }
+  }
+
+  /**
+   * Generate files from backend plan
+   */
+  private generateFilesFromPlan(plan: any, request: GenerationRequest): Array<{ path: string; content: string; }> {
+    const files = [];
+
+    // Generate basic project structure based on plan
+    if (plan.phases) {
+      for (const phase of plan.phases) {
+        if (phase.tasks) {
+          for (const task of phase.tasks) {
+            // Create a basic file structure based on tasks
+            if (task.includes('package.json') || task.includes('dependencies')) {
+              files.push({
+                path: 'package.json',
+                content: this.generateBasicPackageJson(request)
+              });
+            }
+            if (task.includes('README') || task.includes('documentation')) {
+              files.push({
+                path: 'README.md',
+                content: `# ${request.description}\n\n${plan.description || 'Generated by Recoder.xyz'}`
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return files;
+  }
+
+  /**
+   * Generate basic package.json
+   */
+  private generateBasicPackageJson(request: GenerationRequest): string {
+    const name = request.description.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    
+    return JSON.stringify({
+      name,
+      version: '1.0.0',
+      description: request.description,
+      main: 'index.js',
+      scripts: {
+        dev: 'node index.js',
+        start: 'node index.js',
+        test: 'echo "No tests specified" && exit 0'
+      },
+      keywords: request.features,
+      author: 'Generated by Recoder.xyz',
+      license: 'MIT'
+    }, null, 2);
   }
 
   /**
