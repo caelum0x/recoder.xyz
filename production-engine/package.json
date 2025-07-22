@@ -47,8 +47,8 @@
     "adm-zip": "^0.5.10",
     
     "@solana/web3.js": "^1.87.6",
-    "@project-serum/anchor": "^0.28.0",
-    "@solana/spl-token": "^0.3.8",
+    "@coral-xyz/anchor": "^0.29.0",
+    "@solana/spl-token": "^0.4.1",
     "@solana/wallet-adapter-base": "^0.9.23",
     
     "web3": "^4.3.0",
@@ -58,14 +58,14 @@
     
     "openai": "^4.20.1",
     "@anthropic-ai/sdk": "^0.9.1",
-    "langchain": "^0.0.200",
+    "langchain": "^0.3.2",
     "@pinecone-database/pinecone": "^1.1.2",
     
     "stripe": "^14.9.0",
     "paypal-rest-sdk": "^1.8.1",
     
     "pg": "^8.11.3",
-    "mongodb": "^6.3.0",
+    "mongodb": "^5.9.2",
     "redis": "^4.6.10",
     "prisma": "^5.7.0",
     "@prisma/client": "^5.7.0",

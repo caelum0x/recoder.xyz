@@ -135,6 +135,230 @@ class GroqProvider implements AIProvider {
   }
 }
 
+// Mistral Provider
+class MistralProvider implements AIProvider {
+  name = 'mistral';
+  specialties = ['code-generation', 'multilingual', 'reasoning', 'efficiency'];
+  private client: AxiosInstance;
+
+  constructor(apiKey?: string) {
+    this.client = axios.create({
+      baseURL: 'https://api.mistral.ai/v1',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey || process.env.MISTRAL_API_KEY || ''}`
+      }
+    });
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      const response = await this.client.post('/chat/completions', {
+        model: options.model || 'mistral-large-2407',
+        messages,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      });
+
+      const choice = response.data.choices[0];
+      return {
+        content: choice.message.content,
+        model: response.data.model,
+        provider: 'mistral',
+        tokens: {
+          input: response.data.usage.prompt_tokens,
+          output: response.data.usage.completion_tokens
+        }
+      };
+    } catch (error: any) {
+      Logger.error(`Mistral API error: ${error.message}`);
+      throw new Error(`Mistral API failed: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    return !!(process.env.MISTRAL_API_KEY);
+  }
+}
+
+// Perplexity Provider
+class PerplexityProvider implements AIProvider {
+  name = 'perplexity';
+  specialties = ['research', 'real-time-data', 'web-search', 'factual-queries'];
+  private client: AxiosInstance;
+
+  constructor(apiKey?: string) {
+    this.client = axios.create({
+      baseURL: 'https://api.perplexity.ai',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey || process.env.PERPLEXITY_API_KEY || ''}`
+      }
+    });
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      const response = await this.client.post('/chat/completions', {
+        model: options.model || 'llama-3.1-sonar-large-128k-online',
+        messages,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      });
+
+      const choice = response.data.choices[0];
+      return {
+        content: choice.message.content,
+        model: response.data.model,
+        provider: 'perplexity',
+        tokens: {
+          input: response.data.usage.prompt_tokens || 0,
+          output: response.data.usage.completion_tokens || 0
+        }
+      };
+    } catch (error: any) {
+      Logger.error(`Perplexity API error: ${error.message}`);
+      throw new Error(`Perplexity API failed: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    return !!(process.env.PERPLEXITY_API_KEY);
+  }
+}
+
+// Cohere Provider
+class CohereProvider implements AIProvider {
+  name = 'cohere';
+  specialties = ['text-generation', 'classification', 'embeddings', 'summarization'];
+  private client: AxiosInstance;
+
+  constructor(apiKey?: string) {
+    this.client = axios.create({
+      baseURL: 'https://api.cohere.com/v1',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey || process.env.COHERE_API_KEY || ''}`,
+        'Cohere-Version': '2022-12-06'
+      }
+    });
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      // Convert messages to Cohere format
+      const lastMessage = messages[messages.length - 1];
+      const conversationHistory = messages.slice(0, -1).map(msg => ({
+        role: msg.role === 'assistant' ? 'CHATBOT' : 'USER',
+        message: msg.content
+      }));
+
+      const response = await this.client.post('/chat', {
+        model: options.model || 'command-r-plus',
+        message: lastMessage.content,
+        chat_history: conversationHistory,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      });
+
+      return {
+        content: response.data.text,
+        model: 'command-r-plus',
+        provider: 'cohere',
+        tokens: {
+          input: response.data.meta?.tokens?.input_tokens || 0,
+          output: response.data.meta?.tokens?.output_tokens || 0
+        }
+      };
+    } catch (error: any) {
+      Logger.error(`Cohere API error: ${error.message}`);
+      throw new Error(`Cohere API failed: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    return !!(process.env.COHERE_API_KEY);
+  }
+}
+
+// Custom Endpoint Provider
+class CustomProvider implements AIProvider {
+  name: string;
+  specialties: string[];
+  private client: AxiosInstance;
+  private config: CustomProviderConfig;
+
+  constructor(config: CustomProviderConfig) {
+    this.name = config.name;
+    this.specialties = config.specialties || ['general'];
+    this.config = config;
+    
+    this.client = axios.create({
+      baseURL: config.baseUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': config.authHeader || `Bearer ${config.apiKey}`,
+        ...config.customHeaders
+      },
+      timeout: config.timeout || 30000
+    });
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      const requestBody = this.config.requestFormat === 'openai' ? {
+        model: options.model || this.config.defaultModel,
+        messages,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      } : {
+        // Custom format - can be extended
+        prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
+        max_length: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      };
+
+      const response = await this.client.post(this.config.chatEndpoint || '/chat/completions', requestBody);
+      
+      // Parse response based on format
+      const content = this.config.responseFormat === 'openai' 
+        ? response.data.choices[0].message.content
+        : response.data.text || response.data.response || JSON.stringify(response.data);
+
+      return {
+        content,
+        model: this.config.defaultModel || 'custom',
+        provider: this.name,
+        tokens: {
+          input: response.data.usage?.prompt_tokens || 0,
+          output: response.data.usage?.completion_tokens || 0
+        }
+      };
+    } catch (error: any) {
+      Logger.error(`Custom provider ${this.name} error: ${error.message}`);
+      throw new Error(`Custom provider failed: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    return !!(this.config.apiKey || this.config.authHeader);
+  }
+}
+
+interface CustomProviderConfig {
+  name: string;
+  baseUrl: string;
+  apiKey?: string;
+  authHeader?: string;
+  customHeaders?: Record<string, string>;
+  defaultModel?: string;
+  specialties?: string[];
+  chatEndpoint?: string;
+  requestFormat?: 'openai' | 'custom';
+  responseFormat?: 'openai' | 'custom';
+  timeout?: number;
+}
+
 // Google Gemini Provider
 class GeminiProvider implements AIProvider {
   name = 'gemini';
@@ -186,6 +410,8 @@ class GeminiProvider implements AIProvider {
   }
 }
 
+export { CustomProviderConfig };
+
 export class AIHub {
   private providers: Map<string, AIProvider> = new Map();
   private providerPreferences: Map<string, string[]> = new Map();
@@ -208,8 +434,15 @@ export class AIHub {
     const providers = [
       new AnthropicProvider(),
       new GroqProvider(),
-      new GeminiProvider()
+      new GeminiProvider(),
+      new MistralProvider(),
+      new PerplexityProvider(),
+      new CohereProvider()
     ];
+    
+    // Add custom providers from configuration
+    const customProviders = this.loadCustomProviders();
+    providers.push(...customProviders);
 
     for (const provider of providers) {
       if (provider.isAvailable()) {
@@ -225,18 +458,23 @@ export class AIHub {
       Logger.error('   ANTHROPIC_API_KEY - for Claude');
       Logger.error('   GROQ_API_KEY - for Groq/Llama');
       Logger.error('   GOOGLE_API_KEY - for Gemini');
+      Logger.error('   MISTRAL_API_KEY - for Mistral');
+      Logger.error('   PERPLEXITY_API_KEY - for Perplexity');
+      Logger.error('   COHERE_API_KEY - for Cohere');
     }
   }
 
   private setupProviderPreferences(): void {
     // Define task-specific provider preferences
-    this.providerPreferences.set('blockchain', ['claude', 'groq', 'gemini']);
-    this.providerPreferences.set('web', ['groq', 'claude', 'gemini']);
-    this.providerPreferences.set('mobile', ['groq', 'claude', 'gemini']);
-    this.providerPreferences.set('backend', ['groq', 'claude', 'gemini']);
-    this.providerPreferences.set('security', ['claude', 'gemini', 'groq']);
-    this.providerPreferences.set('devops', ['claude', 'groq', 'gemini']);
-    this.providerPreferences.set('general', ['groq', 'claude', 'gemini']);
+    this.providerPreferences.set('blockchain', ['claude', 'mistral', 'groq', 'gemini']);
+    this.providerPreferences.set('web', ['groq', 'mistral', 'claude', 'gemini']);
+    this.providerPreferences.set('mobile', ['groq', 'mistral', 'claude', 'gemini']);
+    this.providerPreferences.set('backend', ['groq', 'mistral', 'claude', 'gemini']);
+    this.providerPreferences.set('security', ['claude', 'gemini', 'mistral', 'groq']);
+    this.providerPreferences.set('devops', ['claude', 'mistral', 'groq', 'gemini']);
+    this.providerPreferences.set('research', ['perplexity', 'gemini', 'claude', 'groq']);
+    this.providerPreferences.set('documentation', ['cohere', 'gemini', 'claude', 'mistral']);
+    this.providerPreferences.set('general', ['groq', 'mistral', 'claude', 'gemini']);
   }
 
   /**
@@ -454,7 +692,10 @@ SECURITY SPECIALIZATION:
     const allProviders = [
       { name: 'claude', specialties: ['blockchain', 'security', 'complex-reasoning'], available: false },
       { name: 'groq', specialties: ['react', 'nextjs', 'rapid-prototyping'], available: false },
-      { name: 'gemini', specialties: ['multimodal', 'large-codebases', 'documentation'], available: false }
+      { name: 'gemini', specialties: ['multimodal', 'large-codebases', 'documentation'], available: false },
+      { name: 'mistral', specialties: ['code-generation', 'multilingual', 'reasoning'], available: false },
+      { name: 'perplexity', specialties: ['research', 'real-time-data', 'web-search'], available: false },
+      { name: 'cohere', specialties: ['text-generation', 'classification', 'summarization'], available: false }
     ];
 
     return allProviders.map(p => ({
@@ -468,8 +709,7 @@ SECURITY SPECIALIZATION:
    */
   public async generateResponse(prompt: string, options: AIRequestOptions = {}): Promise<string> {
     try {
-      const config = ConfigManager.getChatConfig();
-      const model = options.model || config.model;
+      const model = options.model || 'claude-3-sonnet-20240229';
       
       // For now, return a simulated response
       // In a real implementation, this would call the actual AI APIs
@@ -622,7 +862,11 @@ SECURITY SPECIALIZATION:
       'gemini-pro',
       'gemini-ultra',
       'llama-70b',
-      'mixtral-8x7b'
+      'mixtral-8x7b',
+      'mistral-large-2407',
+      'mistral-nemo',
+      'llama-3.1-sonar-large-128k-online',
+      'command-r-plus'
     ];
   }
 
@@ -652,10 +896,50 @@ SECURITY SPECIALIZATION:
       'gemini-pro': { maxTokens: 32768, supportsCoding: true, supportsStreaming: true, cost: 0.0005 },
       'gemini-ultra': { maxTokens: 32768, supportsCoding: true, supportsStreaming: true, cost: 0.002 },
       'llama-70b': { maxTokens: 4096, supportsCoding: true, supportsStreaming: true, cost: 0.0007 },
-      'mixtral-8x7b': { maxTokens: 32768, supportsCoding: true, supportsStreaming: true, cost: 0.0006 }
+      'mixtral-8x7b': { maxTokens: 32768, supportsCoding: true, supportsStreaming: true, cost: 0.0006 },
+      'mistral-large-2407': { maxTokens: 128000, supportsCoding: true, supportsStreaming: true, cost: 0.003 },
+      'mistral-nemo': { maxTokens: 128000, supportsCoding: true, supportsStreaming: true, cost: 0.0003 },
+      'llama-3.1-sonar-large-128k-online': { maxTokens: 127072, supportsCoding: false, supportsStreaming: true, cost: 0.001 },
+      'command-r-plus': { maxTokens: 128000, supportsCoding: true, supportsStreaming: true, cost: 0.003 }
     };
 
     return capabilities[model] || { maxTokens: 4096, supportsCoding: false, supportsStreaming: false, cost: 0.001 };
+  }
+
+  private loadCustomProviders(): CustomProvider[] {
+    const customProviders: CustomProvider[] = [];
+    
+    try {
+      const customConfig = process.env.RECODER_CUSTOM_PROVIDERS;
+      if (customConfig) {
+        const configs: CustomProviderConfig[] = JSON.parse(customConfig);
+        for (const config of configs) {
+          const provider = new CustomProvider(config);
+          if (provider.isAvailable()) {
+            customProviders.push(provider);
+            Logger.info(`✅ Loaded custom provider: ${config.name}`);
+          }
+        }
+      }
+    } catch (error) {
+      Logger.warn('Failed to load custom providers:', error);
+    }
+    
+    return customProviders;
+  }
+
+  public addCustomProvider(config: CustomProviderConfig): boolean {
+    try {
+      const provider = new CustomProvider(config);
+      if (provider.isAvailable()) {
+        this.providers.set(config.name, provider);
+        Logger.info(`✅ Added custom provider: ${config.name}`);
+        return true;
+      }
+    } catch (error) {
+      Logger.error(`Failed to add custom provider ${config.name}:`, error);
+    }
+    return false;
   }
 
   /**

@@ -31,7 +31,9 @@
       "Bash(touch:*)",
       "Bash(npx tsc:*)",
       "Bash(npx tsx:*)",
-      "Bash(recoder:*)"
+      "Bash(recoder:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 3 npm run dev)"
     ],
     "deny": []
   }

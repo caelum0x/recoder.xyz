@@ -20,6 +20,9 @@ import { RealityValidationSystem } from './services/reality-validator';
 import { AgentManager, AgentRequest } from './services/specialized-agents';
 import { ProjectContextAnalyzer } from './services/project-context';
 
+// Import commands
+import { createOllamaCommand } from './commands/ollama';
+
 // Production-ready command setup
 function setupProductionCommands(program: Command): void {
   const aiHub = AIHub.getInstance();
@@ -478,6 +481,9 @@ Make this a production-ready plan that can actually be executed.`;
         Logger.error(`Context analysis failed: ${error.message}`);
       }
     });
+
+  // Add Ollama management command
+  program.addCommand(createOllamaCommand());
 }
 
 async function main() {
