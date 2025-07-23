@@ -30,6 +30,8 @@ import { RealityValidator } from '../services/reality-validator';
 import { ValidationPipeline } from '../services/validation-pipeline';
 import { AIModelHub } from '../services/ai-models/ai-hub';
 import { DependencyManager } from '../services/dependency-manager';
+import { HybridConsensusSystem } from '../services/hybrid-consensus';
+import { consensusCache } from '../services/consensus-cache';
 import { requireAuth } from '../utils/auth';
 
 let codeGenerator: CodeGenerator | null = null;
@@ -57,6 +59,9 @@ export function setupGenerateCommands(program: Command): void {
     .option('--output <path>', 'output directory for generated files')
     .option('--language <lang>', 'target programming language')
     .option('--framework <framework>', 'target framework')
+    .option('--consensus <level>', 'consensus level (none, basic, critical, security, performance)', 'none')
+    .option('--min-agreement <percent>', 'minimum agreement percentage for consensus (60-95)', '70')
+    .option('--max-cost <amount>', 'maximum cost for consensus processing in USD', '2.00')
     .action(async (description, options) => {
       try {
         await initializeServices();
@@ -195,6 +200,22 @@ export function setupGenerateCommands(program: Command): void {
         process.exitCode = 1;
       }
     });
+
+  // Consensus cache management
+  generate
+    .command('consensus <action>')
+    .description('Manage consensus cache and optimization')
+    .option('--task-type <type>', 'filter by task type')
+    .option('--privacy <level>', 'filter by privacy level')
+    .option('--older-than <hours>', 'filter by age in hours')
+    .action(async (action, options) => {
+      try {
+        await handleConsensusManagement(action, options);
+      } catch (error) {
+        Logger.error(`Consensus management failed: ${error instanceof Error ? error.message : error}`);
+        process.exitCode = 1;
+      }
+    });
 }
 
 async function initializeServices(): Promise<void> {
@@ -252,6 +273,12 @@ async function handleGenerateCode(description: string, options: any): Promise<vo
       options,
       projectPath
     );
+
+    // Check if consensus is required for critical tasks
+    if (options.consensus !== 'none') {
+      await handleConsensusGeneration(description, options, request, spinner);
+      return;
+    }
 
     if (options.dryRun) {
       spinner.text = 'Generating preview...';
@@ -878,6 +905,276 @@ function displayGenerationPreview(preview: any): void {
 
   if (preview.files.length > 3) {
     console.log(chalk.gray(`\n... and ${preview.files.length - 3} more files`));
+  }
+}
+
+async function handleConsensusGeneration(
+  description: string,
+  options: any,
+  request: GenerationRequest,
+  spinner: any
+): Promise<void> {
+  spinner.text = 'Initializing hybrid consensus system...';
+  
+  const hybridConsensus = new HybridConsensusSystem();
+  const maxCost = parseFloat(options.maxCost) || 2.0;
+  const minAgreement = parseInt(options.minAgreement) || 70;
+  
+  // Validate consensus parameters
+  if (minAgreement < 60 || minAgreement > 95) {
+    throw new Error('Minimum agreement must be between 60-95%');
+  }
+
+  // Map consensus level to task type
+  const taskTypeMapping = {
+    'basic': 'critical-decision',
+    'critical': 'critical-decision', 
+    'security': 'security-analysis',
+    'performance': 'code-audit'
+  };
+  
+  const taskType = taskTypeMapping[options.consensus as keyof typeof taskTypeMapping] || 'critical-decision';
+  
+  // Check cache first
+  spinner.text = 'Checking consensus cache...';
+  const consensusRequest = {
+    prompt: `Generate production-ready code: ${description}`,
+    taskType: taskType as any,
+    context: {
+      type: 'general',
+      complexity: 'complex',
+      priority: 'quality',
+      privacyLevel: 'internal'
+    },
+    privacyLevel: 'internal' as any,
+    consensusThreshold: minAgreement / 100,
+    maxModels: Math.min(4, Math.ceil(maxCost / 0.5)) // Estimate models based on cost
+  };
+
+  const cachedResult = await consensusCache.getCachedConsensus(consensusRequest);
+  
+  if (cachedResult) {
+    spinner.succeed(chalk.green('Using cached consensus result'));
+    displayConsensusResult(cachedResult, true);
+    return;
+  }
+
+  spinner.text = `Processing with ${options.consensus} consensus (${minAgreement}% agreement required)...`;
+  
+  try {
+    const startTime = Date.now();
+    let consensusResult;
+
+    // Use specialized consensus methods based on type
+    switch (taskType) {
+      case 'security-analysis':
+        consensusResult = await hybridConsensus.securityConsensus(
+          `Generate secure code: ${description}`,
+          'internal' as any
+        );
+        break;
+      
+      case 'code-audit':
+        consensusResult = await hybridConsensus.codeAuditConsensus(
+          `Generate optimized code: ${description}`,
+          options.language || 'typescript',
+          'internal' as any
+        );
+        break;
+        
+      default:
+        consensusResult = await hybridConsensus.processWithConsensus(consensusRequest);
+        break;
+    }
+
+    const responseTime = Date.now() - startTime;
+    const estimatedCost = consensusResult.modelResponses.length * 0.5; // Rough estimate
+
+    // Cache the result
+    await consensusCache.cacheConsensusResult(
+      consensusRequest,
+      consensusResult,
+      estimatedCost,
+      responseTime
+    );
+
+    if (estimatedCost > maxCost) {
+      console.log(chalk.yellow(`⚠️  Consensus cost (${estimatedCost.toFixed(2)}) exceeded budget (${maxCost.toFixed(2)})`));
+    }
+
+    spinner.succeed(chalk.green('Consensus processing completed!'));
+    displayConsensusResult(consensusResult, false);
+
+  } catch (error) {
+    spinner.fail(chalk.red('Consensus processing failed'));
+    
+    // Fallback to regular generation
+    console.log(chalk.yellow('Falling back to standard generation...'));
+    
+    spinner.start('Generating code with standard method...');
+    const result = await codeGenerator!.generateCode(request);
+    spinner.succeed(chalk.green('Code generation completed!'));
+    displayGenerationResult(result);
+  }
+}
+
+function displayConsensusResult(result: any, fromCache: boolean): void {
+  console.log(
+    boxen(
+      chalk.cyan(`🤖 Consensus Result ${fromCache ? '(Cached)' : ''}\n\n`) +
+      chalk.white(`Consensus Reached: ${result.consensusReached ? '✅ Yes' : '❌ No'}\n`) +
+      chalk.white(`Consensus Score: ${(result.consensusScore * 100).toFixed(1)}%\n`) +
+      chalk.white(`Models Consulted: ${result.modelResponses.length}\n`) +
+      chalk.white(`Recommended Action: ${result.recommendedAction}\n\n`) +
+      chalk.gray(`Average Model Confidence: ${(result.modelResponses.reduce((sum: number, r: any) => sum + r.confidence, 0) / result.modelResponses.length * 100).toFixed(1)}%`),
+      {
+        padding: 1,
+        borderStyle: 'round',
+        borderColor: result.consensusReached ? 'green' : 'yellow',
+        title: 'Hybrid Consensus Analysis'
+      }
+    )
+  );
+
+  // Show the consensus answer
+  console.log(chalk.cyan('\n📝 Consensus Answer:'));
+  console.log(chalk.white(result.finalAnswer));
+
+  // Show model breakdown
+  if (result.modelResponses.length > 1) {
+    console.log(chalk.cyan('\n🔍 Model Analysis:'));
+    result.modelResponses.forEach((response: any, index: number) => {
+      const qualityEmoji = response.quality.overall > 0.8 ? '🟢' : response.quality.overall > 0.6 ? '🟡' : '🔴';
+      console.log(
+        `  ${qualityEmoji} ${response.model}: ${(response.confidence * 100).toFixed(0)}% confidence, ` +
+        `${(response.quality.overall * 100).toFixed(0)}% quality (${response.executionTime}ms)`
+      );
+    });
+  }
+
+  // Show alternatives if available
+  if (result.alternatives && result.alternatives.length > 0) {
+    console.log(chalk.cyan('\n🔄 Alternative Approaches:'));
+    result.alternatives.slice(0, 3).forEach((alt: string, index: number) => {
+      console.log(`  ${index + 1}. ${alt.substring(0, 100)}...`);
+    });
+  }
+
+  // Show reasoning
+  console.log(chalk.cyan('\n💭 Reasoning:'));
+  console.log(chalk.gray(result.reasoning));
+}
+
+async function handleConsensusManagement(action: string, options: any): Promise<void> {
+  switch (action) {
+    case 'stats':
+      const stats = consensusCache.getCacheStatistics();
+      console.log(
+        boxen(
+          chalk.cyan('📊 Consensus Cache Statistics\n\n') +
+          chalk.white(`Total Cache Entries: ${stats.totalEntries}\n`) +
+          chalk.white(`Cache Hit Ratio: ${(stats.hitRatio * 100).toFixed(1)}%\n`) +
+          chalk.white(`Average Response Time: ${stats.averageResponseTime.toFixed(0)}ms\n`) +
+          chalk.white(`Total Cost Saved: $${stats.totalCostSaved.toFixed(2)}\n\n`) +
+          chalk.cyan('Top Task Types:\n') +
+          stats.topTaskTypes.map(t => `  • ${t.taskType}: ${t.count} entries`).join('\n'),
+          {
+            padding: 1,
+            borderStyle: 'round',
+            borderColor: 'cyan',
+            title: 'Cache Statistics'
+          }
+        )
+      );
+      break;
+
+    case 'performance':
+      const allMetrics = consensusCache.getModelPerformance() as Map<string, any>;
+      if (allMetrics.size === 0) {
+        console.log(chalk.yellow('No performance metrics available yet'));
+        return;
+      }
+
+      console.log(chalk.cyan('🚀 Model Performance Metrics\n'));
+      
+      Array.from(allMetrics.entries())
+        .sort(([, a], [, b]) => b.averageQuality - a.averageQuality)
+        .slice(0, 10)
+        .forEach(([modelId, metrics]) => {
+          console.log(
+            chalk.white(`${modelId}:\n`) +
+            chalk.gray(`  Quality: ${(metrics.averageQuality * 100).toFixed(1)}% | `) +
+            chalk.gray(`Confidence: ${(metrics.averageConfidence * 100).toFixed(1)}% | `) +
+            chalk.gray(`Speed: ${metrics.averageResponseTime.toFixed(0)}ms | `) +
+            chalk.gray(`Requests: ${metrics.totalRequests}\n`)
+          );
+        });
+      break;
+
+    case 'optimize':
+      console.log(chalk.cyan('🔄 Running consensus optimization...\n'));
+      
+      const spinner = ora('Precomputing common patterns...').start();
+      try {
+        await consensusCache.precomputeCommonPatterns();
+        spinner.succeed(chalk.green('Optimization completed'));
+        
+        const newStats = consensusCache.getCacheStatistics();
+        console.log(chalk.green(`Cache now contains ${newStats.totalEntries} optimized entries`));
+      } catch (error) {
+        spinner.fail(chalk.red('Optimization failed'));
+        throw error;
+      }
+      break;
+
+    case 'clear':
+      const filters: any = {};
+      
+      if (options.taskType) filters.taskType = options.taskType;
+      if (options.privacy) filters.privacy = options.privacy;
+      if (options.olderThan) {
+        const hours = parseInt(options.olderThan);
+        filters.olderThan = Date.now() - (hours * 60 * 60 * 1000);
+      }
+
+      const removed = consensusCache.clearCache(Object.keys(filters).length > 0 ? filters : undefined);
+      console.log(chalk.green(`✅ Cleared ${removed} cache entries`));
+      break;
+
+    case 'model-ranking':
+      const taskType = options.taskType || 'security-analysis';
+      const optimizedModels = consensusCache.optimizeModelSelection(taskType, 5, 'internal');
+      
+      console.log(
+        boxen(
+          chalk.cyan(`🏆 Optimized Model Ranking for ${taskType}\n\n`) +
+          optimizedModels.map((model, index) => 
+            `${index + 1}. ${model} ${index === 0 ? '(Best)' : ''}`
+          ).join('\n'),
+          {
+            padding: 1,
+            borderStyle: 'round',
+            borderColor: 'cyan',
+            title: 'Model Optimization'
+          }
+        )
+      );
+      break;
+
+    case 'thresholds':
+      console.log(chalk.cyan('🎯 Adaptive Thresholds\n'));
+      
+      const taskTypes = ['security-analysis', 'architecture-review', 'code-audit', 'critical-decision'];
+      taskTypes.forEach(taskType => {
+        const threshold = consensusCache.getAdaptiveThreshold(taskType);
+        console.log(`${taskType}: ${(threshold * 100).toFixed(1)}%`);
+      });
+      break;
+
+    default:
+      console.log(chalk.red(`Unknown consensus action: ${action}`));
+      console.log(chalk.gray('Available actions: stats, performance, optimize, clear, model-ranking, thresholds'));
+      break;
   }
 }
 

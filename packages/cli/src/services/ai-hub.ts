@@ -5,6 +5,7 @@
 import chalk from 'chalk';
 import axios, { AxiosInstance } from 'axios';
 import { Logger } from '../utils/logger';
+import { enhancedOllamaProvider } from './ai-providers';
 
 // Real AI Provider Interfaces
 export interface AIProvider {
@@ -418,8 +419,16 @@ export class AIHub {
   private static instance: AIHub;
 
   private constructor() {
-    this.initializeProviders();
+    this.initializeProvidersAsync();
     this.setupProviderPreferences();
+  }
+
+  private async initializeProvidersAsync(): Promise<void> {
+    try {
+      await this.initializeProviders();
+    } catch (error) {
+      Logger.error('Failed to initialize AI providers:', error);
+    }
   }
 
   public static getInstance(): AIHub {
@@ -429,7 +438,7 @@ export class AIHub {
     return AIHub.instance;
   }
 
-  private initializeProviders(): void {
+  private async initializeProviders(): Promise<void> {
     // Initialize all AI providers
     const providers = [
       new AnthropicProvider(),
@@ -439,6 +448,16 @@ export class AIHub {
       new PerplexityProvider(),
       new CohereProvider()
     ];
+    
+    // Initialize Enhanced Ollama Provider (with auto-installation)
+    try {
+      await enhancedOllamaProvider.initialize();
+      if (enhancedOllamaProvider.isAvailable()) {
+        providers.push(enhancedOllamaProvider);
+      }
+    } catch (error) {
+      Logger.warn('⚠️ Enhanced Ollama provider initialization failed:', error);
+    }
     
     // Add custom providers from configuration
     const customProviders = this.loadCustomProviders();
@@ -454,27 +473,31 @@ export class AIHub {
     }
 
     if (this.providers.size === 0) {
-      Logger.error('❌ No AI providers available. Please configure API keys in environment variables:');
+      Logger.error('❌ No AI providers available. Configure API keys or enable local AI:');
+      Logger.error('   LOCAL AI: Ollama auto-installs for free, private local models');
       Logger.error('   ANTHROPIC_API_KEY - for Claude');
       Logger.error('   GROQ_API_KEY - for Groq/Llama');
       Logger.error('   GOOGLE_API_KEY - for Gemini');
       Logger.error('   MISTRAL_API_KEY - for Mistral');
       Logger.error('   PERPLEXITY_API_KEY - for Perplexity');
       Logger.error('   COHERE_API_KEY - for Cohere');
+    } else {
+      Logger.info(`✅ AI Hub initialized with ${this.providers.size} providers: ${Array.from(this.providers.keys()).join(', ')}`);
     }
   }
 
   private setupProviderPreferences(): void {
     // Define task-specific provider preferences
-    this.providerPreferences.set('blockchain', ['claude', 'mistral', 'groq', 'gemini']);
-    this.providerPreferences.set('web', ['groq', 'mistral', 'claude', 'gemini']);
-    this.providerPreferences.set('mobile', ['groq', 'mistral', 'claude', 'gemini']);
-    this.providerPreferences.set('backend', ['groq', 'mistral', 'claude', 'gemini']);
-    this.providerPreferences.set('security', ['claude', 'gemini', 'mistral', 'groq']);
-    this.providerPreferences.set('devops', ['claude', 'mistral', 'groq', 'gemini']);
-    this.providerPreferences.set('research', ['perplexity', 'gemini', 'claude', 'groq']);
-    this.providerPreferences.set('documentation', ['cohere', 'gemini', 'claude', 'mistral']);
-    this.providerPreferences.set('general', ['groq', 'mistral', 'claude', 'gemini']);
+    // Ollama is prioritized for cost-free, privacy-first local processing
+    this.providerPreferences.set('blockchain', ['ollama', 'claude', 'mistral', 'groq', 'gemini']);
+    this.providerPreferences.set('web', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
+    this.providerPreferences.set('mobile', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
+    this.providerPreferences.set('backend', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
+    this.providerPreferences.set('security', ['claude', 'ollama', 'gemini', 'mistral', 'groq']);
+    this.providerPreferences.set('devops', ['ollama', 'claude', 'mistral', 'groq', 'gemini']);
+    this.providerPreferences.set('research', ['perplexity', 'gemini', 'claude', 'ollama', 'groq']);
+    this.providerPreferences.set('documentation', ['ollama', 'cohere', 'gemini', 'claude', 'mistral']);
+    this.providerPreferences.set('general', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
   }
 
   /**
@@ -688,14 +711,57 @@ SECURITY SPECIALIZATION:
   /**
    * Get available providers info
    */
-  getAvailableProviders(): Array<{name: string; specialties: string[]; available: boolean}> {
+  getAvailableProviders(): Array<{name: string; specialties: string[]; available: boolean; cost: string; privacy: string}> {
     const allProviders = [
-      { name: 'claude', specialties: ['blockchain', 'security', 'complex-reasoning'], available: false },
-      { name: 'groq', specialties: ['react', 'nextjs', 'rapid-prototyping'], available: false },
-      { name: 'gemini', specialties: ['multimodal', 'large-codebases', 'documentation'], available: false },
-      { name: 'mistral', specialties: ['code-generation', 'multilingual', 'reasoning'], available: false },
-      { name: 'perplexity', specialties: ['research', 'real-time-data', 'web-search'], available: false },
-      { name: 'cohere', specialties: ['text-generation', 'classification', 'summarization'], available: false }
+      { 
+        name: 'ollama', 
+        specialties: ['code-generation', 'local-processing', 'privacy-first', 'offline-capable'], 
+        available: false,
+        cost: 'free',
+        privacy: 'local'
+      },
+      { 
+        name: 'claude', 
+        specialties: ['blockchain', 'security', 'complex-reasoning'], 
+        available: false,
+        cost: 'paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'groq', 
+        specialties: ['react', 'nextjs', 'rapid-prototyping'], 
+        available: false,
+        cost: 'free/paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'gemini', 
+        specialties: ['multimodal', 'large-codebases', 'documentation'], 
+        available: false,
+        cost: 'free/paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'mistral', 
+        specialties: ['code-generation', 'multilingual', 'reasoning'], 
+        available: false,
+        cost: 'paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'perplexity', 
+        specialties: ['research', 'real-time-data', 'web-search'], 
+        available: false,
+        cost: 'paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'cohere', 
+        specialties: ['text-generation', 'classification', 'summarization'], 
+        available: false,
+        cost: 'paid',
+        privacy: 'cloud'
+      }
     ];
 
     return allProviders.map(p => ({

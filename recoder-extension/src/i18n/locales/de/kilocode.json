@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "Einstellungen erfolgreich importiert."
+	},
+	"userFeedback": {
+		"message_update_failed": "Fehler beim Aktualisieren der Nachricht",
+		"no_checkpoint_found": "Kein Checkpoint vor dieser Nachricht gefunden",
+		"message_updated": "Nachricht erfolgreich aktualisiert"
+	},
+	"lowCreditWarning": {
+		"title": "Warnung: Niedriges Guthaben!",
+		"message": "Prüfen Sie, ob Sie kostenloses Guthaben aufladen oder mehr kaufen können!"
+	},
+	"notLoggedInError": "Anfrage kann nicht abgeschlossen werden. Stelle sicher, dass du mit dem ausgewählten Anbieter verbunden und angemeldet bist.\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "Löschen",
+			"confirmDelete": "Bist du sicher, dass du {{filename}} löschen möchtest?",
+			"deleted": "{{filename}} gelöscht"
+		},
+		"errors": {
+			"noWorkspaceFound": "Kein Arbeitsbereich-Ordner gefunden",
+			"fileAlreadyExists": "Datei {{filename}} existiert bereits",
+			"failedToCreateRuleFile": "Regel-Datei konnte nicht erstellt werden.",
+			"failedToDeleteRuleFile": "Regel-Datei konnte nicht gelöscht werden."
+		},
+		"templates": {
+			"workflow": {
+				"description": "Workflow-Beschreibung hier...",
+				"stepsHeader": "## Schritte",
+				"step1": "Schritt 1",
+				"step2": "Schritt 2"
+			},
+			"rule": {
+				"description": "Regel-Beschreibung hier...",
+				"guidelinesHeader": "## Richtlinien",
+				"guideline1": "Richtlinie 1",
+				"guideline2": "Richtlinie 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Kilo Code Commit-Nachrichten-Generator aktiviert",
+		"gitNotFound": "⚠️ Git-Repository nicht gefunden oder Git nicht verfügbar",
+		"gitInitError": "⚠️ Git-Initialisierungsfehler: {{error}}",
+		"generating": "Kilo: Generiere Commit-Nachricht...",
+		"noChanges": "Kilo: Keine Änderungen zum Analysieren gefunden",
+		"generated": "Kilo: Commit-Nachricht generiert!",
+		"generationFailed": "Kilo: Fehler beim Generieren der Commit-Nachricht: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: Nachricht mit nicht bereitgestellten Änderungen generieren",
+		"activationFailed": "Kilo: Der Nachrichtengenerator konnte nicht aktiviert werden: {{error}}",
+		"providerRegistered": "Kilo: Commit-Nachrichtenanbieter registriert"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"disabled": "$(circle-slash) Kilo Autovervollständigung",
+			"tooltip": {
+				"basic": "Kilo Code Autovervollständigung",
+				"sessionTotal": "Gesamtkosten der Sitzung:",
+				"disabled": "Kilo Code Autovervollständigung (deaktiviert)",
+				"tokenError": "Ein gültiges Token muss eingestellt werden, um die Autovervollständigung zu verwenden",
+				"lastCompletion": "Letzte Vervollständigung:",
+				"model": "Modell:"
+			},
+			"warning": "$(warning) Kilo Autovervollständigung",
+			"enabled": "$(sparkle) Kilo Autovervollständigung",
+			"cost": {
+				"lessThanCent": "<0,01 €",
+				"zero": "0,00 €"
+			}
+		},
+		"toggleMessage": "Kilo Autovervollständigung {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"generating": "Generiere vorgeschlagene Änderungen...",
+			"analyzing": "Analysiere deinen Code...",
+			"processing": "Verarbeitung von Änderungsvorschlägen...",
+			"showing": "Zeige Bearbeitungsvorschläge an...",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"title": "Kilo Code: Schnellaufgabe",
+			"placeholder": "z.B. 'diese Funktion umgestalten, um effizienter zu sein'"
+		},
+		"commands": {
+			"generateSuggestions": "Kilo Code: Vorgeschlagene Änderungen generieren",
+			"displaySuggestions": "Vorgeschlagene Änderungen anzeigen",
+			"cancelSuggestions": "Vorgeschlagene Änderungen abbrechen",
+			"applyAllSuggestions": "Alle vorgeschlagenen Änderungen übernehmen",
+			"promptCodeSuggestion": "Schnellaufgabe erstellen",
+			"applyCurrentSuggestion": "Aktuelle Vorgeschlagene Änderung Übernehmen",
+			"category": "Kilo Code"
+		},
+		"chatParticipant": {
+			"name": "Agent",
+			"fullName": "Kilo Code Agent",
+			"description": "Ich kann Ihnen mit schnellen Aufgaben und vorgeschlagenen Änderungen helfen."
+		},
+		"codeAction": {
+			"title": "Kilo Code: Vorgeschlagene Änderungen"
+		},
+		"messages": {
+			"provideCodeSuggestions": "Code-Vorschläge werden bereitgestellt..."
+		}
+	}
+}

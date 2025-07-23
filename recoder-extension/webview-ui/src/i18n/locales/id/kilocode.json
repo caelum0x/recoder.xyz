@@ -1,0 +1,159 @@
+{
+	"welcome": {
+		"greeting": "Selamat datang di Kilo Code!",
+		"introText1": "Kilo Code adalah agen coding AI gratis dan open source.",
+		"introText2": "Bekerja dengan model AI terbaru seperti Claude 4 Sonnet, Gemini 2.5 Pro, GPT-4.1, dan lebih dari 450 model lainnya.",
+		"introText3": "Buat akun gratis dan dapatkan $20 token untuk digunakan dengan model AI apapun.",
+		"ctaButton": "Buat akun gratis",
+		"manualModeButton": "Gunakan API key sendiri",
+		"alreadySignedUp": "Sudah mendaftar?",
+		"loginText": "Masuk di sini"
+	},
+	"lowCreditWarning": {
+		"addCredit": "Tambah Kredit",
+		"lowBalance": "Saldo Kilo Code kamu rendah"
+	},
+	"notifications": {
+		"toolRequest": "Permintaan tool menunggu persetujuan",
+		"browserAction": "Aksi browser menunggu persetujuan",
+		"command": "Perintah menunggu persetujuan"
+	},
+	"settings": {
+		"sections": {
+			"mcp": "Server MCP"
+		},
+		"provider": {
+			"account": "Akun Kilo Code",
+			"apiKey": "API Key Kilo Code",
+			"login": "Masuk ke Kilo Code",
+			"logout": "Keluar dari Kilo Code",
+			"providerRouting": {
+				"title": "Kilo Code - Perutean Penyedia OpenRouter",
+				"description": "Kilo Code merutekan permintaan ke penyedia terbaik yang tersedia untuk model Anda. Secara default, permintaan diseimbangkan bebannya di seluruh penyedia teratas untuk memaksimalkan waktu aktif. Namun, Anda dapat memilih penyedia tertentu untuk digunakan untuk model ini."
+			}
+		},
+		"contextManagement": {
+			"allowVeryLargeReads": {
+				"label": "Izinkan pembacaan file yang sangat besar",
+				"description": "Saat diaktifkan, Kilo Code akan melakukan pembacaan file atau output MCP yang sangat besar meskipun ada kemungkinan tinggi meluapnya jendela konteks (ukuran konten >80% dari jendela konteks)."
+			}
+		},
+		"systemNotifications": {
+			"label": "Aktifkan Notifikasi Sistem",
+			"description": "Saat diaktifkan, Kilo Code akan mengirim notifikasi sistem untuk kejadian penting seperti penyelesaian tugas atau kesalahan.",
+			"testButton": "Uji Notifikasi",
+			"testTitle": "Kilo Code",
+			"testMessage": "Ini adalah notifikasi uji dari Kilo Code."
+		}
+	},
+	"chat": {
+		"condense": {
+			"wantsToCondense": "Kilo Code ingin mengondensasi percakapan kamu",
+			"condenseConversation": "Kondensasi Percakapan"
+		}
+	},
+	"newTaskPreview": {
+		"task": "Tugas"
+	},
+	"profile": {
+		"title": "Profil",
+		"dashboard": "Dashboard",
+		"logOut": "Keluar",
+		"currentBalance": "SALDO SAAT INI",
+		"loading": "Memuat..."
+	},
+	"docs": "Dokumentasi",
+	"rules": {
+		"tooltip": "Kelola Aturan & Alur Kerja Kilo Code",
+		"ariaLabel": "Aturan Kilo Code",
+		"tabs": {
+			"rules": "Aturan",
+			"workflows": "Alur Kerja"
+		},
+		"description": {
+			"rules": "Aturan memungkinkan kamu memberikan instruksi kepada Kilo Code yang harus diikuti di semua mode dan untuk semua prompt. Mereka adalah cara persisten untuk menyertakan konteks dan preferensi untuk semua percakapan di workspace kamu atau secara global.",
+			"workflows": "Alur kerja adalah template yang disiapkan untuk percakapan. Alur kerja memungkinkan kamu menentukan prompt yang sering kamu gunakan, dan dapat mencakup serangkaian langkah untuk memandu Kilo Code melalui tugas-tugas berulang, seperti menerapkan layanan atau mengirim PR. Untuk memanggil alur kerja, ketik",
+			"workflowsInChat": "di chat."
+		},
+		"sections": {
+			"globalRules": "Aturan Global",
+			"workspaceRules": "Aturan Workspace",
+			"globalWorkflows": "Alur Kerja Global",
+			"workspaceWorkflows": "Alur Kerja Workspace"
+		},
+		"validation": {
+			"invalidFileExtension": "Hanya ekstensi .md, .txt atau tanpa ekstensi yang diizinkan"
+		},
+		"placeholders": {
+			"workflowName": "nama-alur-kerja (.md, .txt atau tanpa ekstensi)",
+			"ruleName": "nama-aturan (.md, .txt atau tanpa ekstensi)"
+		},
+		"newFile": {
+			"newWorkflowFile": "File alur kerja baru...",
+			"newRuleFile": "File aturan baru..."
+		}
+	},
+	"taskTimeline": {
+		"tooltip": {
+			"clickToScroll": "Lihat {{messageType}} (#{{messageNumber}})",
+			"messageTypes": {
+				"browser_action": "aksi peramban",
+				"browser_action_result": "hasil tindakan peramban",
+				"browser_action_launch": "peluncuran browser",
+				"command_output": "hasil perintah",
+				"checkpoint_saved": "pos pemeriksaan tersimpan",
+				"completion_result": "hasil penyelesaian",
+				"command": "eksekusi perintah",
+				"condense_context": "ringkas konteks",
+				"error": "pesan error",
+				"followup": "pertanyaan lanjutan",
+				"mcp_server_response": "Respon server MCP",
+				"text": "Respons AI",
+				"reasoning": "Penalaran AI",
+				"tool": "penggunaan alat",
+				"unknown": "jenis pesan tidak diketahui",
+				"use_mcp_server": "Penggunaan server MCP",
+				"user": "umpan balik pengguna"
+			}
+		}
+	},
+	"userFeedback": {
+		"editCancel": "Batal",
+		"send": "Kirim",
+		"restoreAndSend": "Pulihkan & Kirim"
+	},
+	"ideaSuggestionsBox": {
+		"newHere": "Baru di sini?",
+		"suggestionText": "<suggestionButton>Klik di sini</suggestionButton> untuk ide yang keren, lalu ketuk <sendIcon /> dan lihat saya melakukan keajaiban!",
+		"ideas": {
+			"idea1": "Buat bola 3D yang berputar dan bersinar yang merespons gerakan mouse. Buat aplikasi berfungsi di browser.",
+			"idea2": "Buat website portfolio untuk pengembang perangkat lunak Python",
+			"idea3": "Buat mockup aplikasi keuangan di browser. Lalu uji apakah berfungsi",
+			"idea4": "Buat website direktori yang berisi model generasi video AI terbaik saat ini",
+			"idea5": "Buat generator gradien CSS yang mengekspor stylesheet kustom dan menampilkan pratinjau langsung",
+			"idea6": "Buat kartu yang mengungkap konten dinamis dengan indah saat dihover",
+			"idea7": "Buat starfield interaktif yang menenangkan yang bergerak dengan gerakan mouse"
+		}
+	},
+	"ghost": {
+		"title": "Bantuan Inline",
+		"settings": {
+			"enableQuickInlineTaskKeybinding": {
+				"label": "Tugas Cepat Sebaris",
+				"description": "Hanya butuh perubahan cepat? Pilih beberapa kode (atau tidak perlu!) dan tekan Cmd+I. Jelaskan tujuan Anda dalam bahasa sehari-hari (\"buat komponen React dengan prop ini\", \"tambahkan penanganan kesalahan ke fungsi ini\"), dan dapatkan beberapa saran siap pakai langsung di editor Anda. <DocsLink>Lihat pintasan</DocsLink>"
+			},
+			"enableAutoInlineTaskKeybinding": {
+				"label": "Tugas Otomatis Inline",
+				"description": "Butuh perbaikan cepat, penyelesaian, atau refaktor? Kilo akan menggunakan konteks di sekitarnya untuk menawarkan peningkatan langsung, membuat Anda tetap fokus dalam alur kerja. <DocsLink>Lihat pintasan</DocsLink>"
+			},
+			"provider": "Penyedia",
+			"apiConfigId": {
+				"label": "Konfigurasi API",
+				"current": "Gunakan konfigurasi API yang dipilih saat ini",
+				"description": "Pilih konfigurasi API untuk digunakan untuk prompt Bantuan Inline, atau cukup gunakan apa pun yang saat ini dipilih"
+			},
+			"triggers": "Pemicu",
+			"keybindingDescription": "Fitur Bantuan Inline dipicu oleh perintah. Anda dapat mengonfigurasi <DocsLink>pintasan keyboard di sini</DocsLink>."
+		}
+	}
+}

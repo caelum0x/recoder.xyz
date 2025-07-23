@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "설정을 성공적으로 가져왔습니다."
+	},
+	"userFeedback": {
+		"message_update_failed": "메시지 업데이트에 실패했습니다",
+		"no_checkpoint_found": "이 메시지 이전에 체크포인트를 찾을 수 없습니다",
+		"message_updated": "메시지가 성공적으로 업데이트되었습니다"
+	},
+	"lowCreditWarning": {
+		"title": "크레딧 부족 경고!",
+		"message": "무료 크레딧으로 충전하거나 추가 구매가 가능한지 확인하세요!"
+	},
+	"notLoggedInError": "요청을 완료할 수 없어. 선택한 제공자에 연결되어 있고 로그인되어 있는지 확인해.\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "삭제",
+			"confirmDelete": "{{filename}}을(를) 삭제하시겠습니까?",
+			"deleted": "{{filename}}이(가) 삭제되었습니다"
+		},
+		"errors": {
+			"noWorkspaceFound": "워크스페이스 폴더를 찾을 수 없습니다",
+			"fileAlreadyExists": "파일 {{filename}}이(가) 이미 존재합니다",
+			"failedToCreateRuleFile": "규칙 파일 생성에 실패했습니다.",
+			"failedToDeleteRuleFile": "규칙 파일 삭제에 실패했습니다."
+		},
+		"templates": {
+			"workflow": {
+				"description": "워크플로우 설명을 여기에...",
+				"stepsHeader": "## 단계",
+				"step1": "1단계",
+				"step2": "2단계"
+			},
+			"rule": {
+				"description": "규칙 설명을 여기에...",
+				"guidelinesHeader": "## 가이드라인",
+				"guideline1": "가이드라인 1",
+				"guideline2": "가이드라인 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Kilo Code 커밋 메시지 생성기가 활성화되었습니다",
+		"gitNotFound": "⚠️ Git 저장소를 찾을 수 없거나 git을 사용할 수 없습니다",
+		"gitInitError": "⚠️ Git 초기화 오류: {{error}}",
+		"generating": "Kilo: 커밋 메시지 생성 중...",
+		"noChanges": "Kilo: 분석할 변경사항이 없습니다",
+		"generated": "Kilo: 커밋 메시지가 생성되었습니다!",
+		"generationFailed": "Kilo: 커밋 메시지 생성 실패: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: 스테이징되지 않은 변경사항을 사용하여 메시지 생성",
+		"activationFailed": "Kilo: 메시지 생성기 활성화 실패: {{error}}",
+		"providerRegistered": "Kilo: 커밋 메시지 제공자가 등록됨"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"disabled": "$(circle-slash) Kilo 자동완성",
+			"enabled": "$(sparkle) Kilo 자동완성",
+			"tooltip": {
+				"disabled": "Kilo Code 자동완성 (비활성화됨)",
+				"basic": "Kilo Code 자동완성",
+				"tokenError": "자동완성을 사용하려면 유효한 토큰을 설정해야 합니다",
+				"sessionTotal": "세션 총 비용:",
+				"lastCompletion": "마지막 완료:",
+				"model": "모델:"
+			},
+			"warning": "$(warning) Kilo 자동완성",
+			"cost": {
+				"lessThanCent": "<$0.01",
+				"zero": "0원"
+			}
+		},
+		"toggleMessage": "Kilo 자동완성 {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"analyzing": "코드 분석 중...",
+			"generating": "수정 제안 생성 중...",
+			"processing": "제안된 편집 처리 중...",
+			"showing": "추천 편집 표시 중...",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"placeholder": "예: '이 함수를 더 효율적으로 리팩터링하세요'",
+			"title": "Kilo Code: 빠른 작업"
+		},
+		"commands": {
+			"displaySuggestions": "추천 편집 표시하기",
+			"generateSuggestions": "Kilo Code: 수정 제안 생성하기",
+			"cancelSuggestions": "제안된 편집 취소",
+			"category": "Kilo Code",
+			"applyAllSuggestions": "제안된 편집 모두 적용",
+			"applyCurrentSuggestion": "현재 제안된 편집 적용",
+			"promptCodeSuggestion": "프롬프트 빠른 작업"
+		},
+		"chatParticipant": {
+			"fullName": "Kilo Code 에이전트",
+			"name": "에이전트",
+			"description": "빠른 작업과 추천 편집을 도와드릴 수 있습니다."
+		},
+		"codeAction": {
+			"title": "Kilo Code: 제안된 편집"
+		},
+		"messages": {
+			"provideCodeSuggestions": "코드 제안 중..."
+		}
+	}
+}
