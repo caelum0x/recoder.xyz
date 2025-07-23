@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "Configurações importadas com sucesso."
+	},
+	"userFeedback": {
+		"message_update_failed": "Falha ao atualizar mensagem",
+		"no_checkpoint_found": "Nenhum ponto de verificação encontrado antes desta mensagem",
+		"message_updated": "Mensagem atualizada com sucesso"
+	},
+	"lowCreditWarning": {
+		"title": "Aviso de Crédito Baixo!",
+		"message": "Verifique se você pode recarregar com créditos gratuitos ou comprar mais!"
+	},
+	"notLoggedInError": "Não é possível concluir a solicitação, certifique-se de que você está conectado e logado com o provedor selecionado.\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "Excluir",
+			"confirmDelete": "Tem certeza de que deseja excluir {{filename}}?",
+			"deleted": "{{filename}} excluído"
+		},
+		"errors": {
+			"noWorkspaceFound": "Nenhuma pasta de workspace encontrada",
+			"fileAlreadyExists": "O arquivo {{filename}} já existe",
+			"failedToCreateRuleFile": "Falha ao criar arquivo de regra.",
+			"failedToDeleteRuleFile": "Falha ao excluir arquivo de regra."
+		},
+		"templates": {
+			"workflow": {
+				"description": "Descrição do fluxo de trabalho aqui...",
+				"stepsHeader": "## Passos",
+				"step1": "Passo 1",
+				"step2": "Passo 2"
+			},
+			"rule": {
+				"description": "Descrição da regra aqui...",
+				"guidelinesHeader": "## Diretrizes",
+				"guideline1": "Diretriz 1",
+				"guideline2": "Diretriz 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Gerador de mensagens de commit do Kilo Code ativado",
+		"gitNotFound": "⚠️ Repositório Git não encontrado ou git não disponível",
+		"gitInitError": "⚠️ Erro de inicialização do Git: {{error}}",
+		"generating": "Kilo: Gerando mensagem de commit...",
+		"noChanges": "Kilo: Nenhuma alteração encontrada para analisar",
+		"generated": "Kilo: Mensagem de commit gerada!",
+		"generationFailed": "Kilo: Falha ao gerar mensagem de commit: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: Gerando mensagem usando alterações não preparadas",
+		"activationFailed": "Kilo: Falha ao ativar o gerador de mensagens: {{error}}",
+		"providerRegistered": "Kilo: Provedor de mensagem de commit registrado"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"enabled": "$(sparkle) Kilo Preenchimento automático",
+			"disabled": "$(circle-slash) Kilo Preenchimento automático",
+			"tooltip": {
+				"disabled": "Preenchimento Automático do Kilo Code (desativado)",
+				"tokenError": "Um token válido deve ser definido para usar o preenchimento automático",
+				"basic": "Kilo Code Preenchimento automático",
+				"lastCompletion": "Última conclusão:",
+				"sessionTotal": "Custo total da sessão:",
+				"model": "Modelo:"
+			},
+			"warning": "$(warning) Kilo Preenchimento automático",
+			"cost": {
+				"zero": "R$ 0,00",
+				"lessThanCent": "<R$0,01"
+			}
+		},
+		"toggleMessage": "Kilo Preenchimento automático {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"analyzing": "Analisando seu código...",
+			"processing": "Processando sugestões de edição...",
+			"generating": "Gerando edições sugeridas...",
+			"showing": "Exibindo edições sugeridas…",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"title": "Kilo Code: Tarefa Rápida",
+			"placeholder": "p. ex., 'refatore esta função para ser mais eficiente'"
+		},
+		"commands": {
+			"generateSuggestions": "Kilo Code: Gerar Edições Sugeridas",
+			"displaySuggestions": "Exibir Edições Sugeridas",
+			"cancelSuggestions": "Cancelar Edições Sugeridas",
+			"applyAllSuggestions": "Aplicar Todas as Edições Sugeridas",
+			"applyCurrentSuggestion": "Aplicar Edição Sugerida Atual",
+			"promptCodeSuggestion": "Tarefa Rápida",
+			"category": "Kilo Code"
+		},
+		"codeAction": {
+			"title": "Kilo Code: Edições Sugeridas"
+		},
+		"chatParticipant": {
+			"name": "Agente",
+			"fullName": "Kilo Code Agente",
+			"description": "Posso ajudar você com tarefas rápidas e sugestões de edição."
+		},
+		"messages": {
+			"provideCodeSuggestions": "Sugerindo códigos..."
+		}
+	}
+}

@@ -22,6 +22,7 @@ import { ProjectContextAnalyzer } from './services/project-context';
 
 // Import commands
 import { createOllamaCommand } from './commands/ollama';
+import AICommandsRegistry from './commands/ai';
 
 // Production-ready command setup
 function setupProductionCommands(program: Command): void {
@@ -482,8 +483,11 @@ Make this a production-ready plan that can actually be executed.`;
       }
     });
 
-  // Add Ollama management command
+  // Add Ollama management command (legacy)
   program.addCommand(createOllamaCommand());
+  
+  // Add unified AI commands with enhanced capabilities
+  AICommandsRegistry.register(program);
 }
 
 async function main() {

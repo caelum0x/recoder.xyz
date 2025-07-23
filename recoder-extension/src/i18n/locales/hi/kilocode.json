@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "सेटिंग्स सफलतापूर्वक आयात की गईं।"
+	},
+	"userFeedback": {
+		"message_update_failed": "संदेश अपडेट करने में विफल",
+		"no_checkpoint_found": "इस संदेश से पहले कोई चेकपॉइंट नहीं मिला",
+		"message_updated": "संदेश सफलतापूर्वक अपडेट किया गया"
+	},
+	"lowCreditWarning": {
+		"title": "कम क्रेडिट चेतावनी!",
+		"message": "जांचें कि क्या आप मुफ्त क्रेडिट से टॉप अप कर सकते हैं या अधिक खरीद सकते हैं!"
+	},
+	"notLoggedInError": "अनुरोध पूरा नहीं कर सकते, सुनिश्चित करें कि आप चयनित प्रदाता से कनेक्ट और लॉग इन हैं।\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "हटाएं",
+			"confirmDelete": "क्या आप वाकई {{filename}} को हटाना चाहते हैं?",
+			"deleted": "{{filename}} हटा दिया गया"
+		},
+		"errors": {
+			"noWorkspaceFound": "कोई वर्कस्पेस फ़ोल्डर नहीं मिला",
+			"fileAlreadyExists": "फ़ाइल {{filename}} पहले से मौजूद है",
+			"failedToCreateRuleFile": "नियम फ़ाइल बनाने में विफल।",
+			"failedToDeleteRuleFile": "नियम फ़ाइल हटाने में विफल।"
+		},
+		"templates": {
+			"workflow": {
+				"description": "वर्कफ़्लो विवरण यहाँ...",
+				"stepsHeader": "## चरण",
+				"step1": "चरण 1",
+				"step2": "चरण 2"
+			},
+			"rule": {
+				"description": "नियम विवरण यहाँ...",
+				"guidelinesHeader": "## दिशानिर्देश",
+				"guideline1": "दिशानिर्देश 1",
+				"guideline2": "दिशानिर्देश 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Kilo Code कमिट मैसेज जनरेटर सक्रिय",
+		"gitNotFound": "⚠️ Git रिपॉजिटरी नहीं मिली या git उपलब्ध नहीं है",
+		"gitInitError": "⚠️ गिट इनिशियलाइज़ेशन त्रुटि: {{error}}",
+		"generating": "Kilo: कमिट संदेश उत्पन्न कर रहा है...",
+		"noChanges": "Kilo: विश्लेषण करने के लिए कोई परिवर्तन नहीं मिला",
+		"generated": "Kilo: कमिट मैसेज जनरेट हो गया!",
+		"generationFailed": "Kilo: प्रतिबद्धता संदेश उत्पन्न करने में विफल: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: अपरिवर्तित परिवर्तनों का उपयोग करके संदेश उत्पन्न कर रहा है",
+    "activationFailed": "Kilo: संदेश जनरेटर सक्रिय करने में विफल: {{error}}",
+		"providerRegistered": "किलो: कमिट संदेश प्रदाता पंजीकृत"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"disabled": "$(circle-slash) Kilo ऑटोकम्प्लीट",
+			"warning": "$(warning) Kilo ऑटोकम्प्लीट",
+			"enabled": "$(sparkle) Kilo ऑटोकम्प्लीट",
+			"tooltip": {
+				"basic": "Kilo Code ऑटोकम्प्लीट",
+				"tokenError": "स्वतः पूर्ण का उपयोग करने के लिए एक वैध टोकन सेट किया जाना चाहिए",
+				"model": "मॉडल:",
+				"sessionTotal": "सत्र की कुल लागत:",
+				"lastCompletion": "अंतिम पूर्णता:",
+				"disabled": "Kilo Code स्वतः पूर्ण (अक्षम)"
+			},
+			"cost": {
+				"zero": "₹0.00",
+				"lessThanCent": "<₹0.01"
+			}
+		},
+		"toggleMessage": "Kilo ऑटोकम्प्लीट {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"processing": "संपादन सुझावों पर कार्यवाही कर रहे हैं...",
+			"analyzing": "आपके कोड का विश्लेषण किया जा रहा है...",
+			"generating": "सुझाएँ गए संपादन उत्पन्न हो रहे हैं...",
+			"showing": "सुझाए गए संपादन प्रदर्शित किए जा रहे हैं...",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"placeholder": "उदाहरण के लिए, 'इस फंक्शन को अधिक कुशल होने के लिए रीफैक्टर करें'",
+			"title": "Kilo Code: त्वरित कार्य"
+		},
+		"commands": {
+			"cancelSuggestions": "सुझाए गए संपादनों को रद्द करें",
+			"displaySuggestions": "सुझाए गए संपादन दिखाएं",
+			"generateSuggestions": "Kilo Code: सुझाये गए संपादन उत्पन्न करें",
+			"applyCurrentSuggestion": "वर्तमान सुझाए गए संपादन को लागू करें",
+			"category": "Kilo Code",
+			"applyAllSuggestions": "सभी सुझाए गए संपादन लागू करें",
+			"promptCodeSuggestion": "त्वरित कार्य संकेत"
+		},
+		"chatParticipant": {
+			"fullName": "Kilo Code एजेंट",
+			"name": "एजेंट",
+			"description": "मैं आपकी त्वरित कार्यों और सुझाए गए संपादनों में मदद कर सकता हूँ।"
+		},
+		"codeAction": {
+			"title": "Kilo Code: सुझाए गए संपादन"
+		},
+		"messages": {
+			"provideCodeSuggestions": "कोड सुझाव प्रदान किए जा रहे हैं..."
+		}
+	}
+}

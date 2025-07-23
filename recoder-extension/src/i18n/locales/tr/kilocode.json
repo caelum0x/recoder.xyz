@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "Ayarlar başarıyla içe aktarıldı."
+	},
+	"userFeedback": {
+		"message_update_failed": "Mesaj güncellenemedi",
+		"no_checkpoint_found": "Bu mesajdan önce kontrol noktası bulunamadı",
+		"message_updated": "Mesaj güncellendi"
+	},
+	"lowCreditWarning": {
+		"title": "Düşük Kredi Uyarısı!",
+		"message": "Ücretsiz kredilerle yükleme yapabilir veya daha fazla satın alabilir misiniz kontrol edin!"
+	},
+	"notLoggedInError": "İstek tamamlanamıyor, seçili sağlayıcıya bağlı olduğundan ve oturum açtığından emin ol.\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "Sil",
+			"confirmDelete": "{{filename}} dosyasını silmek istediğinizden emin misiniz?",
+			"deleted": "{{filename}} silindi"
+		},
+		"errors": {
+			"noWorkspaceFound": "Çalışma alanı klasörü bulunamadı",
+			"fileAlreadyExists": "{{filename}} dosyası zaten mevcut",
+			"failedToCreateRuleFile": "Kural dosyası oluşturulamadı.",
+			"failedToDeleteRuleFile": "Kural dosyası silinemedi."
+		},
+		"templates": {
+			"workflow": {
+				"description": "İş akışı açıklaması buraya...",
+				"stepsHeader": "## Adımlar",
+				"step1": "Adım 1",
+				"step2": "Adım 2"
+			},
+			"rule": {
+				"description": "Kural açıklaması buraya...",
+				"guidelinesHeader": "## Yönergeler",
+				"guideline1": "Yönerge 1",
+				"guideline2": "Yönerge 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Kilo Code taahhüt mesajı oluşturucu etkinleştirildi",
+		"gitNotFound": "⚠️ Git deposu bulunamadı veya git kullanılabilir değil",
+		"gitInitError": "⚠️ Git başlatma hatası: {{error}}",
+		"generating": "Kilo: İşlem mesajı oluşturuluyor...",
+		"noChanges": "Kilo: Analiz edilecek değişiklik bulunamadı",
+		"generated": "Kilo: İşleme mesajı oluşturuldu!",
+		"generationFailed": "Kilo: Taahhüt mesajı oluşturulamadı: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: Evrelenmemiş değişiklikleri kullanarak mesaj oluşturuluyor",
+		"providerRegistered": "Kilo: İşleme mesaj sağlayıcısı kaydedildi",
+		"activationFailed": "Kilo: Mesaj oluşturucu etkinleştirilemedi: {{error}}"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"enabled": "$(sparkle) Kilo Otomatik Tamamlama",
+			"disabled": "$(circle-slash) Kilo Otomatik Tamamlama",
+			"tooltip": {
+				"basic": "Kilo Code Otomatik Tamamlama",
+				"disabled": "Kilo Code Otomatik Tamamlama (devre dışı)",
+				"tokenError": "Otomatik tamamlama özelliğini kullanmak için geçerli bir belirteç ayarlanmalıdır",
+				"sessionTotal": "Oturum toplam maliyeti:",
+				"lastCompletion": "Son tamamlama:",
+				"model": "Model:"
+			},
+			"warning": "$(warning) Kilo Otomatik Tamamlama",
+			"cost": {
+				"zero": "0,00 ₺",
+				"lessThanCent": "<0,01$"
+			}
+		},
+		"toggleMessage": "Kilo Otomatik Tamamlama {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"analyzing": "Kodunuz analiz ediliyor...",
+			"generating": "Düzenleme önerileri oluşturuluyor...",
+			"processing": "Önerilen düzeltmeler işleniyor...",
+			"showing": "Önerilen düzenlemeler görüntüleniyor...",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"title": "Kilo Code: Hızlı Görev",
+			"placeholder": "örneğin, 'bu fonksiyonu daha verimli olacak şekilde yeniden düzenleyin'"
+		},
+		"commands": {
+			"generateSuggestions": "Kilo Code: Önerilen Düzenlemeleri Oluştur",
+			"displaySuggestions": "Önerilen Düzenlemeleri Göster",
+			"cancelSuggestions": "Önerilen Düzenlemeleri İptal Et",
+			"applyCurrentSuggestion": "Mevcut Önerilen Düzenlemeyi Uygula",
+			"category": "Kilo Code",
+			"applyAllSuggestions": "Önerilen Düzenlemelerin Tümünü Uygula",
+			"promptCodeSuggestion": "Hızlı Görev İsteği"
+		},
+		"chatParticipant": {
+			"fullName": "Kilo Code Ajanı",
+			"name": "Temsilci",
+			"description": "Hızlı görevler ve önerilen düzenlemeler konusunda size yardımcı olabilirim."
+		},
+		"codeAction": {
+			"title": "Kilo Code: Önerilen Düzenlemeler"
+		},
+		"messages": {
+			"provideCodeSuggestions": "Kod önerileri sunuluyor..."
+		}
+	}
+}

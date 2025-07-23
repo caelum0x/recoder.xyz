@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "Impostazioni importate con successo."
+	},
+	"userFeedback": {
+		"message_update_failed": "Errore durante l'aggiornamento del messaggio",
+		"no_checkpoint_found": "Nessun checkpoint trovato prima di questo messaggio",
+		"message_updated": "Messaggio aggiornato con successo"
+	},
+	"lowCreditWarning": {
+		"title": "Avviso Credito Basso!",
+		"message": "Verifica se puoi ricaricare con crediti gratuiti o acquistarne altri!"
+	},
+	"notLoggedInError": "Impossibile completare la richiesta, assicurati di essere connesso e di aver effettuato l'accesso con il provider selezionato.\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "Elimina",
+			"confirmDelete": "Sei sicuro di voler eliminare {{filename}}?",
+			"deleted": "{{filename}} eliminato"
+		},
+		"errors": {
+			"noWorkspaceFound": "Nessuna cartella dell'area di lavoro trovata",
+			"fileAlreadyExists": "Il file {{filename}} esiste già",
+			"failedToCreateRuleFile": "Impossibile creare il file delle regole.",
+			"failedToDeleteRuleFile": "Impossibile eliminare il file delle regole."
+		},
+		"templates": {
+			"workflow": {
+				"description": "Descrizione del flusso di lavoro qui...",
+				"stepsHeader": "## Passaggi",
+				"step1": "Passaggio 1",
+				"step2": "Passaggio 2"
+			},
+			"rule": {
+				"description": "Descrizione della regola qui...",
+				"guidelinesHeader": "## Linee guida",
+				"guideline1": "Linea guida 1",
+				"guideline2": "Linea guida 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Generatore di messaggi di commit Kilo Code attivato",
+		"gitNotFound": "⚠️ Repository Git non trovato o git non disponibile",
+		"gitInitError": "⚠️ Errore di inizializzazione Git: {{error}}",
+		"generating": "Kilo: Generazione del messaggio di commit in corso...",
+		"noChanges": "Kilo: Nessuna modifica trovata da analizzare",
+		"generated": "Kilo: Messaggio di commit generato!",
+		"generationFailed": "Kilo: Impossibile generare il messaggio di commit: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: Generazione del messaggio usando modifiche non in staging",
+		"providerRegistered": "Kilo: Provider di messaggi commit registrato",
+		"activationFailed": "Kilo: Impossibile attivare il generatore di messaggi: {{error}}"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"enabled": "$(sparkle) Kilo Autocompletamento",
+			"tooltip": {
+				"basic": "Completamento Automatico Kilo Code",
+				"sessionTotal": "Costo totale della sessione:",
+				"lastCompletion": "Ultimo completamento:",
+				"model": "Modello:",
+				"tokenError": "È necessario impostare un token valido per utilizzare l'autocompletamento",
+				"disabled": "Completamento Automatico Kilo Code (disabilitato)"
+			},
+			"disabled": "$(circle-slash) Kilo Autocompletamento",
+			"warning": "$(warning) Kilo Autocompletamento",
+			"cost": {
+				"zero": "€0,00",
+				"lessThanCent": "<€0,01"
+			}
+		},
+		"toggleMessage": "Kilo Autocompletamento {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"analyzing": "Analisi del codice in corso...",
+			"generating": "Generazione di modifiche suggerite...",
+			"showing": "Visualizzazione modifiche suggerite...",
+			"processing": "Elaborazione modifiche suggerite...",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"title": "Kilo Code: Compito Rapido",
+			"placeholder": "ad es., 'ristruttura questa funzione per renderla più efficiente'"
+		},
+		"commands": {
+			"generateSuggestions": "Kilo Code: Genera Suggerimenti di Modifica",
+			"promptCodeSuggestion": "Compito Veloce",
+			"cancelSuggestions": "Annulla Modifiche Suggerite",
+			"displaySuggestions": "Mostra Modifiche Suggerite",
+			"applyCurrentSuggestion": "Applica Modifica Attualmente Suggerita",
+			"applyAllSuggestions": "Applica Tutte le Modifiche Suggerite",
+			"category": "Kilo Code"
+		},
+		"codeAction": {
+			"title": "Kilo Code: Modifiche suggerite"
+		},
+		"chatParticipant": {
+			"fullName": "Agente Kilo Code",
+			"name": "Agente",
+			"description": "Posso aiutarti con attività veloci e modifiche suggerite."
+		},
+		"messages": {
+			"provideCodeSuggestions": "Fornendo suggerimenti di codice..."
+		}
+	}
+}
