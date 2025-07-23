@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "Pengaturan berhasil diimpor."
+	},
+	"userFeedback": {
+		"message_update_failed": "Gagal memperbarui pesan",
+		"no_checkpoint_found": "Tidak ditemukan checkpoint sebelum pesan ini",
+		"message_updated": "Pesan berhasil diperbarui"
+	},
+	"lowCreditWarning": {
+		"title": "Peringatan Kredit Rendah!",
+		"message": "Periksa apakah kamu bisa mengisi ulang dengan kredit gratis atau beli lebih banyak!"
+	},
+	"notLoggedInError": "Tidak dapat menyelesaikan permintaan, pastikan kamu terhubung dan masuk dengan penyedia yang dipilih.\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "Hapus",
+			"confirmDelete": "Apakah kamu yakin ingin menghapus {{filename}}?",
+			"deleted": "{{filename}} telah dihapus"
+		},
+		"errors": {
+			"noWorkspaceFound": "Folder workspace tidak ditemukan",
+			"fileAlreadyExists": "File {{filename}} sudah ada",
+			"failedToCreateRuleFile": "Gagal membuat file aturan.",
+			"failedToDeleteRuleFile": "Gagal menghapus file aturan."
+		},
+		"templates": {
+			"workflow": {
+				"description": "Deskripsi alur kerja di sini...",
+				"stepsHeader": "## Langkah-langkah",
+				"step1": "Langkah 1",
+				"step2": "Langkah 2"
+			},
+			"rule": {
+				"description": "Deskripsi aturan di sini...",
+				"guidelinesHeader": "## Pedoman",
+				"guideline1": "Pedoman 1",
+				"guideline2": "Pedoman 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Generator pesan commit Kilo Code diaktifkan",
+		"gitNotFound": "⚠️ Repositori Git tidak ditemukan atau git tidak tersedia",
+		"gitInitError": "⚠️ Kesalahan inisialisasi Git: {{error}}",
+		"generating": "Kilo: Menghasilkan pesan commit...",
+		"noChanges": "Kilo: Tidak ada perubahan yang ditemukan untuk dianalisis",
+		"generated": "Kilo: Pesan commit telah dibuat!",
+		"generationFailed": "Kilo: Gagal menghasilkan pesan commit: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: Membuat pesan menggunakan perubahan yang belum di-stage",
+		"activationFailed": "Kilo: Gagal mengaktifkan pembangkit pesan: {{error}}",
+		"providerRegistered": "Kilo: Penyedia pesan commit telah terdaftar"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"disabled": "$(circle-slash) Kilo Autocomplete",
+			"enabled": "$(sparkle) Kilo Autocomplete",
+			"tooltip": {
+				"basic": "Kilo Code Autocomplete",
+				"disabled": "Kilo Code Autocomplete (dinonaktifkan)",
+				"tokenError": "Token yang valid harus ditetapkan untuk menggunakan autocomplete",
+				"lastCompletion": "Penyelesaian terakhir:",
+				"sessionTotal": "Biaya total sesi:",
+				"model": "Model:"
+			},
+			"warning": "$(warning) Kilo Autocomplete",
+			"cost": {
+				"zero": "Rp0,00",
+				"lessThanCent": "<Rp0,01"
+			}
+		},
+		"toggleMessage": "Kilo Autocomplete {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"analyzing": "Menganalisis kode Anda...",
+			"generating": "Membuat saran pengeditan...",
+			"processing": "Memproses saran pengeditan...",
+			"showing": "Menampilkan saran pengeditan...",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"title": "Kilo Code: Tugas Cepat",
+			"placeholder": "misalnya, 'refaktor fungsi ini agar lebih efisien'"
+		},
+		"commands": {
+			"cancelSuggestions": "Batalkan Saran Pengeditan",
+			"applyCurrentSuggestion": "Terapkan Saran Pengeditan Saat Ini",
+			"generateSuggestions": "Kilo Code: Hasilkan Saran Penyuntingan",
+			"applyAllSuggestions": "Terapkan Semua Suntingan yang Disarankan",
+			"displaySuggestions": "Tampilkan Saran Pengeditan",
+			"promptCodeSuggestion": "Tugas Cepat Prompt",
+			"category": "Kilo Code"
+		},
+		"codeAction": {
+			"title": "Kilo Code: Saran Penyuntingan"
+		},
+		"chatParticipant": {
+			"fullName": "Kilo Code Agen",
+			"name": "Agen",
+			"description": "Saya dapat membantu Anda dengan tugas cepat dan saran pengeditan."
+		},
+		"messages": {
+			"provideCodeSuggestions": "Memberikan saran kode..."
+		}
+	}
+}

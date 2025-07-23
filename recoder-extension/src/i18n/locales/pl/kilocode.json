@@ -1,0 +1,107 @@
+{
+	"info": {
+		"settings_imported": "Ustawienia zostały pomyślnie zaimportowane."
+	},
+	"userFeedback": {
+		"message_update_failed": "Nie udało się zaktualizować wiadomości",
+		"no_checkpoint_found": "Nie znaleziono punktu kontrolnego przed tą wiadomością",
+		"message_updated": "Wiadomość pomyślnie zaktualizowana"
+	},
+	"lowCreditWarning": {
+		"title": "Ostrzeżenie o Niskim Kredycie!",
+		"message": "Sprawdź, czy możesz doładować darmowymi kredytami lub kupić więcej!"
+	},
+	"notLoggedInError": "Nie można ukończyć żądania, upewnij się, że jesteś połączony i zalogowany u wybranego dostawcy.\n\n{{error}}",
+	"rules": {
+		"actions": {
+			"delete": "Usuń",
+			"confirmDelete": "Czy na pewno chcesz usunąć {{filename}}?",
+			"deleted": "Usunięto {{filename}}"
+		},
+		"errors": {
+			"noWorkspaceFound": "Nie znaleziono folderu obszaru roboczego",
+			"fileAlreadyExists": "Plik {{filename}} już istnieje",
+			"failedToCreateRuleFile": "Nie udało się utworzyć pliku reguły.",
+			"failedToDeleteRuleFile": "Nie udało się usunąć pliku reguły."
+		},
+		"templates": {
+			"workflow": {
+				"description": "Opis przepływu pracy tutaj...",
+				"stepsHeader": "## Kroki",
+				"step1": "Krok 1",
+				"step2": "Krok 2"
+			},
+			"rule": {
+				"description": "Opis reguły tutaj...",
+				"guidelinesHeader": "## Wytyczne",
+				"guideline1": "Wytyczna 1",
+				"guideline2": "Wytyczna 2"
+			}
+		}
+	},
+	"commitMessage": {
+		"activated": "Generator komunikatów dla commitów Kilo Code aktywowany",
+		"gitNotFound": "⚠️ Repozytorium Git nie zostało znalezione lub git jest niedostępny",
+		"gitInitError": "⚠️ Błąd inicjalizacji Git: {{error}}",
+		"generating": "Kilo: Generowanie komunikatu zatwierdzenia...",
+		"noChanges": "Kilo: Nie znaleziono żadnych zmian do przeanalizowania",
+		"generated": "Kilo: Wiadomość commitu wygenerowana!",
+		"generationFailed": "Kilo: Nie udało się wygenerować komunikatu zatwierdzenia: {{errorMessage}}",
+		"generatingFromUnstaged": "Kilo: Generowanie wiadomości na podstawie niezatwierdzonych zmian",
+		"activationFailed": "Kilo: Nie udało się aktywować generatora wiadomości: {{error}}",
+		"providerRegistered": "Kilo: Zarejestrowano dostawcę komunikatów commit"
+	},
+	"autocomplete": {
+		"statusBar": {
+			"disabled": "$(circle-slash) Kilo Autouzupełnianie",
+			"enabled": "$(sparkle) Kilo Autouzupełnianie",
+			"tooltip": {
+				"lastCompletion": "Ostatnie zakończenie:",
+				"disabled": "Kilo Code automatyczne uzupełnianie (wyłączone)",
+				"basic": "Kilo Code Autouzupełnianie",
+				"tokenError": "Aby korzystać z autouzupełniania, należy ustawić prawidłowy token",
+				"sessionTotal": "Całkowity koszt sesji:",
+				"model": "Model:"
+			},
+			"warning": "$(warning) Kilo Autouzupełnianie",
+			"cost": {
+				"lessThanCent": "<0,01 zł",
+				"zero": "0,00 zł"
+			}
+		},
+		"toggleMessage": "Kilo Autouzupełnianie {{status}}"
+	},
+	"ghost": {
+		"progress": {
+			"analyzing": "Analizowanie twojego kodu...",
+			"processing": "Przetwarzanie sugerowanych zmian...",
+			"generating": "Generowanie sugerowanych zmian...",
+			"showing": "Wyświetlanie sugerowanych poprawek...",
+			"title": "Kilo Code"
+		},
+		"input": {
+			"title": "Kilo Code: Szybkie Zadanie",
+			"placeholder": "np. „zrefaktoruj tę funkcję, aby była bardziej wydajna\""
+		},
+		"commands": {
+			"displaySuggestions": "Wyświetl sugerowane poprawki",
+			"cancelSuggestions": "Anuluj sugerowane zmiany",
+			"applyCurrentSuggestion": "Zastosuj bieżącą sugerowaną edycję",
+			"applyAllSuggestions": "Zastosuj wszystkie sugerowane poprawki",
+			"generateSuggestions": "Kilo Code: Generowanie Sugerowanych Poprawek",
+			"promptCodeSuggestion": "Szybkie zadanie",
+			"category": "Kilo Code"
+		},
+		"codeAction": {
+			"title": "Kilo Code: Sugerowane edycje"
+		},
+		"chatParticipant": {
+			"name": "Agent",
+			"fullName": "Agent Kilo Code",
+			"description": "Mogę pomóc Ci w szybkich zadaniach i zasugerować poprawki."
+		},
+		"messages": {
+			"provideCodeSuggestions": "Generowanie sugestii kodu..."
+		}
+	}
+}
