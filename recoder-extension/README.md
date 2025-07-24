@@ -1,46 +1,82 @@
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=kilocode.Kilo-Code"><img src="https://img.shields.io/visual-studio-marketplace/v/kilocode.Kilo-Code.svg?label=VS%20Code%20Marketplace" alt="VS Code Marketplace"></a>
-  <!--<a href="https://marketplace.visualstudio.com/items?itemName=kilocode.Kilo-Code"><img src="https://img.shields.io/badge/Get%20$20%20of%20free%20tokens-green?logo=claude&logoColor=white" alt="Get $20 of tokens for free"></a>-->
-  <a href="https://x.com/kilo_code"><img src="https://img.shields.io/twitter/follow/kilo_code?style=flat&logo=x&color=555" alt="X (Twitter)"></a>
-  <a href="https://blog.kilocode.ai"><img src="https://img.shields.io/badge/Blog-555?style=flat&logo=substack&logoColor=white" alt="Substack Blog"></a>
-  <a href="https://kilocode.ai/discord"><img src="https://img.shields.io/discord/1349288496988160052?style=flat&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://www.reddit.com/r/kilocode/"><img src="https://img.shields.io/reddit/subreddit-subscribers/kilocode?style=flat&logo=reddit&logoColor=white" alt="Reddit"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=recoderxyz.recoder-vscode"><img src="https://img.shields.io/visual-studio-marketplace/v/recoderxyz.recoder-vscode.svg?label=VS%20Code%20Marketplace" alt="VS Code Marketplace"></a>
+  <a href="https://github.com/recoderxyz/recoder-extension"><img src="https://img.shields.io/github/stars/recoderxyz/recoder-extension?style=flat&logo=github" alt="GitHub Stars"></a>
+  <a href="https://recoder.xyz"><img src="https://img.shields.io/badge/Web%20Platform-2563eb?style=flat&logo=internetexplorer&logoColor=white" alt="Web Platform"></a>
+  <a href="https://recoder.xyz/cli"><img src="https://img.shields.io/badge/CLI%20Tool-7c3aed?style=flat&logo=terminal&logoColor=white" alt="CLI Tool"></a>
 </p>
 
-# 🚀 Kilo Code
+# 🚀 Recoder VS Code Extension
 
-> Open-source VS Code AI agent. Merged features from [Roo Code](https://github.com/RooVetGit/Roo-Code) and [Cline](https://github.com/cline/cline).
+> **Production-Ready AI Coding Assistant** - Multi-AI intelligence that generates real, working code with Claude, Groq, Gemini, and Ollama. Part of the [recoder.xyz](https://recoder.xyz) ecosystem.
 
-- ✨ Generate code from natural language
-- ✅ Checks its own work
-- 🧪 Run terminal commands
-- 🌐 Automate the browser
-- 🤖 Latest AI models
-- 🎁 API keys optional
-- 💡 **$20 free credits for Gemini 2.5 Pro, Claude 4 Sonnet & Opus, and GPT-4.1**<br/>Share feedback and earn more credits!
+- 🎆 **Real Production Code** - No mock implementations, only working solutions
+- 🤖 **Multi-AI Intelligence** - Claude for complex logic, Groq for speed, Gemini for scale, Ollama for privacy
+- ⚡ **Enterprise Ready** - Real database operations, blockchain contracts, payment processing
+- 🔗 **Ecosystem Integration** - Works with [Recoder Web](https://web.recoder.xyz) and [Recoder CLI](https://recoder.xyz/cli)
+- 🔍 **Quality Validation** - Automatic code quality checks and vulnerability scanning
+- 🚀 **Deployment Ready** - Generated code deploys to production immediately
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Kilo-Org/kilocode/refs/heads/main/kilo.gif" width="100%" />
+  <img src="https://raw.githubusercontent.com/recoderxyz/recoder-extension/main/assets/demo.gif" width="100%" alt="Recoder VS Code Extension Demo" />
 </p>
 
-- [VS Code Marketplace](https://kilocode.ai/vscode-marketplace?utm_source=Readme) (download)
-- [Official KiloCode.ai Home page](https://kilocode.ai) (learn more)
+## 🔗 Recoder Ecosystem
 
-## Key Features
+- **[VS Code Extension](https://marketplace.visualstudio.com/items?itemName=recoderxyz.recoder-vscode)** - Code directly in your editor
+- **[Web Platform](https://web.recoder.xyz)** - Browser-based code generation
+- **[CLI Tool](https://recoder.xyz/cli)** - Terminal-based development
+- **[Main Site](https://recoder.xyz)** - Learn more about Recoder
 
-- **Code Generation:** Generate code using natural language.
-- **Task Automation:** Automate repetitive coding tasks.
-- **Automated Refactoring:** Refactor and improve existing code.
-- **MCP Server Marketplace**: Easily find, and use MCP servers to extend the agent capabilities.
-- **Multi Mode**: Plan with Architect, Code with Coder, and Debug with Debugger, and make your own custom modes.
+## 🎨 Key Features
 
-## How to get started with Kilo Code
+### 💻 Real Code Generation
+- **Production-Ready Output** - Every line of code works in production environments
+- **No Mock Implementations** - Real database operations, API integrations, and business logic
+- **Quality Validation** - Automatic vulnerability scanning and code quality checks
 
-1.  Install the Kilo Code extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=kilocode.Kilo-Code).
-2.  Log in with your Google Account to get $20 in free Claude 4 Sonnet & Opus credits.
-3.  Start using the extension. Here's a video to help you get started (just click on the image below and you'll be redirected to YouTube):
+### 🤖 Multi-AI Intelligence
+- **Claude** - Complex logic, security, architecture decisions
+- **Groq** - Fast prototyping, API endpoints, React components
+- **Gemini** - Large codebases, multimodal tasks, documentation
+- **Ollama** - Private/offline development, custom models
 
-[![Watch the video](https://img.youtube.com/vi/pqGfYXgrhig/maxresdefault.jpg)](https://youtu.be/pqGfYXgrhig)
+### ⚙️ Advanced Features
+- **Smart Model Routing** - Automatically selects the best AI for each task
+- **Context Awareness** - Understands your entire project structure
+- **Real Integrations** - Stripe payments, blockchain contracts, auth systems
+- **Deployment Ready** - Generated code deploys with Docker, Kubernetes, CI/CD
+
+## 🚀 Getting Started with Recoder
+
+### 1. Install the Extension
+```bash
+# Via VS Code Marketplace
+code --install-extension recoderxyz.recoder-vscode
+```
+
+### 2. Configure AI Providers
+Add your API keys to VS Code settings or environment variables:
+```json
+{
+  "recoder.apiKeys": {
+    "anthropic": "your-claude-api-key",
+    "groq": "your-groq-api-key",
+    "google": "your-gemini-api-key",
+    "ollama": "http://localhost:11434"
+  }
+}
+```
+
+### 3. Start Coding
+- **Ctrl+Shift+A** (Cmd+Shift+A on Mac) - Open Recoder
+- Describe what you want to build
+- Watch Recoder generate production-ready code
+- Deploy immediately to your preferred platform
+
+### 4. Ecosystem Integration
+- Use with [Recoder Web](https://web.recoder.xyz) for browser-based development
+- Combine with [Recoder CLI](https://recoder.xyz/cli) for terminal workflows
+- Access the full [Recoder.xyz](https://recoder.xyz) platform
 
 ## Difference between Roo Code and Cline
 

@@ -1,6 +1,28 @@
 {
-  "name": "llamacoder-new",
-  "version": "0.1.0",
+  "name": "recoder-web-platform",
+  "version": "1.0.0",
+  "description": "Recoder Web Platform - AI-powered code generation with multi-AI intelligence and offline capabilities",
+  "author": "Recoder.xyz Team <hello@recoder.xyz>",
+  "license": "MIT",
+  "homepage": "https://web.recoder.xyz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/recoderxyz/recoder.xyz.git",
+    "directory": "recoder-web"
+  },
+  "bugs": {
+    "url": "https://github.com/recoderxyz/recoder.xyz/issues"
+  },
+  "keywords": [
+    "recoder",
+    "ai",
+    "code-generation",
+    "web-platform",
+    "typescript",
+    "nextjs",
+    "multi-ai",
+    "offline-capable"
+  ],
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
