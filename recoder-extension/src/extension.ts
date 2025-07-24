@@ -12,8 +12,8 @@ try {
 	console.warn("Failed to load environment variables:", e)
 }
 
-import { CloudService } from "@roo-code/cloud"
-import { TelemetryService, PostHogTelemetryClient } from "@roo-code/telemetry"
+import { CloudService } from "@recoder/cloud"
+import { TelemetryService, PostHogTelemetryClient } from "@recoder/telemetry"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
 import { createOutputChannelLogger, createDualLogger } from "./utils/outputChannelLogger"
@@ -42,7 +42,8 @@ import {
 	CodeActionProvider,
 } from "./activate"
 import { initializeI18n } from "./i18n"
-import { registerGhostProvider } from "./services/ghost" // kilocode_change
+import { registerGhostProvider } from "./services/ghost" // recoder_integration
+import { recoderAI } from "./services/ai/RecoderAIProvider" // recoder_ai_integration
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit

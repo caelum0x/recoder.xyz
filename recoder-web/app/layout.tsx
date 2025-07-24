@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import PlausibleProvider from "next-plausible";
+import { getBrandConfig } from "../lib/recoder-config";
 import "./globals.css";
 
-let title = "Llama Coder – AI Code Generator";
-let description = "Generate your next app with Llama 3.1 405B";
-let url = "https://llamacoder.io/";
-let ogimage = "https://llamacoder.io/og-image.png";
-let sitename = "llamacoder.io";
+const brandConfig = getBrandConfig();
+
+let title = `${brandConfig.fullName} – AI Development Platform`;
+let description = "AI-powered code generation platform that creates real, production-ready applications with multi-AI intelligence and offline capabilities";
+let url = brandConfig.urls.web();
+let ogimage = `${url}/recoder-og.png`;
+let sitename = "recoder.xyz";
 
 export const metadata: Metadata = {
   metadataBase: new URL(url),
@@ -40,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <head>
-        <PlausibleProvider domain="llamacoder.io" />
+        <PlausibleProvider domain="web.recoder.xyz" />
       </head>
 
       {children}

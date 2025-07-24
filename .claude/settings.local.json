@@ -33,7 +33,8 @@
       "Bash(npx tsx:*)",
       "Bash(recoder:*)",
       "Bash(curl:*)",
-      "Bash(timeout 3 npm run dev)"
+      "Bash(timeout 3 npm run dev)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }
