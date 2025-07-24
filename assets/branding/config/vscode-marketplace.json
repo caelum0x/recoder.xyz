@@ -1,0 +1,269 @@
+{
+  "publisher": {
+    "name": "recoderxyz",
+    "displayName": "Recoder.xyz",
+    "description": "AI-powered development platform that generates real, production-ready code",
+    "website": "https://recoder.xyz",
+    "supportUrl": "https://support.recoder.xyz",
+    "privacyPolicyUrl": "https://recoder.xyz/privacy",
+    "license": "MIT"
+  },
+  "extension": {
+    "name": "recoder-vscode",
+    "displayName": "Recoder - AI Development Assistant",
+    "description": "Production-ready AI coding with Claude, Groq, Gemini & Ollama. Real functionality, not mock implementations.",
+    "version": "1.0.0",
+    "categories": [
+      "Other",
+      "Machine Learning",
+      "Programming Languages",
+      "Snippets",
+      "Formatters"
+    ],
+    "keywords": [
+      "ai",
+      "assistant",
+      "code-generation",
+      "claude",
+      "gemini",
+      "groq",
+      "ollama",
+      "offline",
+      "productivity",
+      "recoder"
+    ],
+    "galleryBanner": {
+      "color": "#2563eb",
+      "theme": "dark"
+    },
+    "icon": "assets/icons/recoder-icon.png",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/recoderxyz/recoder.xyz.git"
+    },
+    "homepage": "https://recoder.xyz",
+    "bugs": {
+      "url": "https://github.com/recoderxyz/recoder.xyz/issues"
+    },
+    "qna": "https://github.com/recoderxyz/recoder.xyz/discussions",
+    "license": "MIT",
+    "engines": {
+      "vscode": "^1.80.0"
+    },
+    "main": "./dist/extension.js",
+    "activationEvents": [
+      "onStartupFinished"
+    ],
+    "contributes": {
+      "configuration": {
+        "title": "Recoder Configuration",
+        "properties": {
+          "recoder.aiProvider": {
+            "type": "string",
+            "enum": ["auto", "claude", "groq", "gemini", "ollama"],
+            "default": "auto",
+            "description": "Preferred AI provider for code generation",
+            "enumDescriptions": [
+              "Automatically select the best AI provider based on task",
+              "Use Claude (Anthropic) for complex reasoning and code analysis",
+              "Use Groq for fast code generation and completion",
+              "Use Gemini (Google) for multimodal tasks and large context",
+              "Use Ollama for offline, private code generation"
+            ]
+          },
+          "recoder.enableOfflineMode": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable offline-first capabilities with local AI models"
+          },
+          "recoder.realCodeGeneration": {
+            "type": "boolean",
+            "default": true,
+            "description": "Generate real, production-ready code instead of mock implementations"
+          },
+          "recoder.performanceOptimization": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable automatic performance optimization and intelligent caching"
+          }
+        }
+      },
+      "commands": [
+        {
+          "command": "recoder.startChat",
+          "title": "Start AI Chat",
+          "category": "Recoder",
+          "icon": "$(comment-discussion)"
+        },
+        {
+          "command": "recoder.generateCode",
+          "title": "Generate Code",
+          "category": "Recoder",
+          "icon": "$(sparkle)"
+        },
+        {
+          "command": "recoder.explainCode",
+          "title": "Explain Code",
+          "category": "Recoder",
+          "icon": "$(question)"
+        },
+        {
+          "command": "recoder.reviewCode",
+          "title": "Review Code",
+          "category": "Recoder",
+          "icon": "$(checklist)"
+        },
+        {
+          "command": "recoder.optimizeCode",
+          "title": "Optimize Code",
+          "category": "Recoder",
+          "icon": "$(rocket)"
+        },
+        {
+          "command": "recoder.showStatus",
+          "title": "Show AI System Status",
+          "category": "Recoder",
+          "icon": "$(pulse)"
+        }
+      ],
+      "menus": {
+        "editor/context": [
+          {
+            "submenu": "recoder.contextMenu",
+            "group": "recoder"
+          }
+        ],
+        "recoder.contextMenu": [
+          {
+            "command": "recoder.explainCode",
+            "when": "editorHasSelection",
+            "group": "recoder@1"
+          },
+          {
+            "command": "recoder.reviewCode",
+            "when": "editorHasSelection",
+            "group": "recoder@2"
+          },
+          {
+            "command": "recoder.optimizeCode",
+            "when": "editorHasSelection",
+            "group": "recoder@3"
+          }
+        ],
+        "commandPalette": [
+          {
+            "command": "recoder.startChat"
+          },
+          {
+            "command": "recoder.generateCode"
+          },
+          {
+            "command": "recoder.explainCode"
+          },
+          {
+            "command": "recoder.reviewCode"
+          },
+          {
+            "command": "recoder.optimizeCode"
+          },
+          {
+            "command": "recoder.showStatus"
+          }
+        ]
+      },
+      "submenus": [
+        {
+          "id": "recoder.contextMenu",
+          "label": "Recoder AI"
+        }
+      ],
+      "viewsContainers": {
+        "activitybar": [
+          {
+            "id": "recoder",
+            "title": "Recoder AI",
+            "icon": "$(robot)"
+          }
+        ]
+      },
+      "views": {
+        "recoder": [
+          {
+            "type": "webview",
+            "id": "recoder.chatView",
+            "name": "AI Assistant",
+            "when": "true"
+          }
+        ]
+      },
+      "keybindings": [
+        {
+          "command": "recoder.startChat",
+          "key": "ctrl+shift+r",
+          "mac": "cmd+shift+r"
+        },
+        {
+          "command": "recoder.generateCode",
+          "key": "ctrl+shift+g",
+          "mac": "cmd+shift+g"
+        }
+      ]
+    },
+    "scripts": {
+      "vscode:prepublish": "npm run compile",
+      "compile": "tsc -p ./",
+      "watch": "tsc -watch -p ./"
+    }
+  },
+  "pricing": {
+    "model": "freemium",
+    "freeFeatures": [
+      "Local AI with Ollama",
+      "Basic code generation",
+      "Code explanation",
+      "Offline capabilities"
+    ],
+    "premiumFeatures": [
+      "Claude 4 Sonnet & Opus",
+      "Gemini 2.5 Pro",
+      "Advanced code review",
+      "Performance optimization",
+      "Background updates",
+      "Priority support"
+    ]
+  },
+  "marketing": {
+    "taglines": [
+      "Production-ready AI coding with real functionality",
+      "The only AI assistant that generates actual working code",
+      "Multi-AI intelligence with offline-first architecture",
+      "From prototype to production in seconds"
+    ],
+    "features": [
+      {
+        "title": "Real Code Generation",
+        "description": "Generate actual working code, not mock implementations. Ready for production use."
+      },
+      {
+        "title": "Multi-AI Intelligence",
+        "description": "Leverage Claude, Groq, Gemini, and Ollama for optimal results on every task."
+      },
+      {
+        "title": "Offline-First",
+        "description": "Full functionality without internet using local Ollama models with intelligent caching."
+      },
+      {
+        "title": "Performance Optimized",
+        "description": "Automatic performance monitoring and optimization for lightning-fast responses."
+      },
+      {
+        "title": "Project-Aware",
+        "description": "Deep understanding of your codebase with intelligent context analysis."
+      },
+      {
+        "title": "Enterprise Ready",
+        "description": "Security, compliance, and scalability built-in for professional development."
+      }
+    ]
+  }
+}

@@ -3,6 +3,7 @@
 /**
  * Recoder CLI
  * AI-powered development platform with production-ready code generation
+ * Integrated with unified configuration and session management
  */
 
 import { Command } from 'commander';
@@ -10,6 +11,11 @@ import chalk from 'chalk';
 // import figlet from 'figlet';
 import boxen from 'boxen';
 import { Logger } from './utils/logger';
+
+// Import unified ecosystem components
+import { cliConfig, UnifiedConfigManager } from '../../shared/src/config/unified-config';
+import { cliSessionManager, SessionManager } from '../../shared/src/session/session-manager';
+import { packageRegistry } from '../../shared/src/registry/package-registry';
 
 const VERSION = '1.0.0';
 
@@ -24,10 +30,15 @@ import { ProjectContextAnalyzer } from './services/project-context';
 import { createOllamaCommand } from './commands/ollama';
 import AICommandsRegistry from './commands/ai';
 
-// Production-ready command setup
+// Production-ready command setup with unified configuration
 function setupProductionCommands(program: Command): void {
+  const config = cliConfig();
+  const sessionManager = cliSessionManager();
   const aiHub = AIHub.getInstance();
   const generator = new ProductionGenerator();
+  
+  // Initialize package registry with core packages
+  packageRegistry.registerCorePackages();
   const validator = new RealityValidationSystem();
   const agentManager = new AgentManager();
   const contextAnalyzer = new ProjectContextAnalyzer();

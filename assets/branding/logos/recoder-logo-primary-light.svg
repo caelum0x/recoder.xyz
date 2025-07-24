@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="48" viewBox="0 0 200 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Recoder.xyz Primary Logo - Light Theme -->
+  
+  <!-- Icon Background Circle -->
+  <circle cx="24" cy="24" r="20" fill="url(#gradient-primary)" stroke="none"/>
+  
+  <!-- Code Brackets Icon -->
+  <g transform="translate(24, 24)">
+    <!-- Left bracket -->
+    <path d="M-6 -8 L-10 -4 L-10 4 L-6 8" 
+          stroke="#ffffff" 
+          stroke-width="2" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          fill="none"/>
+    
+    <!-- Right bracket -->
+    <path d="M6 -8 L10 -4 L10 4 L6 8" 
+          stroke="#ffffff" 
+          stroke-width="2" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          fill="none"/>
+    
+    <!-- AI Spark -->
+    <circle cx="8" cy="-8" r="2" fill="#7c3aed" opacity="0.8"/>
+    <circle cx="8" cy="-8" r="1" fill="#ffffff"/>
+  </g>
+  
+  <!-- Wordmark -->
+  <g transform="translate(56, 32)">
+    <!-- "Recoder" text -->
+    <text x="0" y="0" 
+          font-family="Outfit, sans-serif" 
+          font-size="24" 
+          font-weight="700" 
+          letter-spacing="-0.025em"
+          fill="#0f172a"
+          text-anchor="start" 
+          dominant-baseline="middle">Recoder</text>
+    
+    <!-- ".xyz" suffix -->
+    <text x="106" y="0" 
+          font-family="Outfit, sans-serif" 
+          font-size="24" 
+          font-weight="700" 
+          letter-spacing="-0.025em"
+          fill="#7c3aed"
+          text-anchor="start" 
+          dominant-baseline="middle">.xyz</text>
+  </g>
+  
+  <!-- Gradient Definitions -->
+  <defs>
+    <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>

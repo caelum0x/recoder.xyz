@@ -1,0 +1,111 @@
+/**
+ * Recoder.xyz Brand Colors
+ * 
+ * Comprehensive color system for consistent branding across
+ * CLI, Web Platform, and VS Code Extension
+ */
+
+:root {
+  /* Primary Brand Colors */
+  --recoder-primary: #2563eb;        /* Bright Blue - Main brand color */
+  --recoder-primary-50: #eff6ff;     /* Lightest blue */
+  --recoder-primary-100: #dbeafe;    /* Very light blue */
+  --recoder-primary-200: #bfdbfe;    /* Light blue */
+  --recoder-primary-300: #93c5fd;    /* Medium light blue */
+  --recoder-primary-400: #60a5fa;    /* Medium blue */
+  --recoder-primary-500: #3b82f6;    /* Standard blue */
+  --recoder-primary-600: #2563eb;    /* Primary brand blue */
+  --recoder-primary-700: #1d4ed8;    /* Dark blue */
+  --recoder-primary-800: #1e40af;    /* Darker blue */
+  --recoder-primary-900: #1e3a8a;    /* Darkest blue */
+
+  /* Secondary Brand Colors */
+  --recoder-secondary: #7c3aed;      /* Purple - AI/Intelligence accent */
+  --recoder-secondary-50: #faf5ff;   /* Lightest purple */
+  --recoder-secondary-100: #f3e8ff;  /* Very light purple */
+  --recoder-secondary-200: #e9d5ff;  /* Light purple */
+  --recoder-secondary-300: #d8b4fe;  /* Medium light purple */
+  --recoder-secondary-400: #c084fc;  /* Medium purple */
+  --recoder-secondary-500: #a855f7;  /* Standard purple */
+  --recoder-secondary-600: #9333ea;  /* Strong purple */
+  --recoder-secondary-700: #7c3aed;  /* Secondary brand purple */
+  --recoder-secondary-800: #6b21a8;  /* Dark purple */
+  --recoder-secondary-900: #581c87;  /* Darkest purple */
+
+  /* Accent Colors */
+  --recoder-accent-green: #059669;   /* Success/Generation green */
+  --recoder-accent-orange: #ea580c;  /* Warning/Processing orange */
+  --recoder-accent-red: #dc2626;     /* Error/Danger red */
+  --recoder-accent-yellow: #d97706;  /* Caution/Info yellow */
+
+  /* Neutral Colors */
+  --recoder-gray-50: #f8fafc;        /* Lightest gray - backgrounds */
+  --recoder-gray-100: #f1f5f9;       /* Very light gray */
+  --recoder-gray-200: #e2e8f0;       /* Light gray - borders */
+  --recoder-gray-300: #cbd5e1;       /* Medium light gray */
+  --recoder-gray-400: #94a3b8;       /* Medium gray - disabled */
+  --recoder-gray-500: #64748b;       /* Standard gray - text secondary */
+  --recoder-gray-600: #475569;       /* Dark gray - text primary */
+  --recoder-gray-700: #334155;       /* Darker gray */
+  --recoder-gray-800: #1e293b;       /* Very dark gray */
+  --recoder-gray-900: #0f172a;       /* Darkest gray - dark backgrounds */
+
+  /* Theme Colors */
+  --recoder-light-bg: #ffffff;       /* Light theme background */
+  --recoder-light-surface: #f8fafc;  /* Light theme surface */
+  --recoder-light-text: #0f172a;     /* Light theme text */
+  
+  --recoder-dark-bg: #0f172a;        /* Dark theme background */
+  --recoder-dark-surface: #1e293b;   /* Dark theme surface */
+  --recoder-dark-text: #f8fafc;      /* Dark theme text */
+
+  /* Special Purpose Colors */
+  --recoder-code-bg: #1e293b;        /* Code editor background */
+  --recoder-code-border: #334155;    /* Code editor borders */
+  --recoder-ai-glow: #7c3aed;        /* AI processing glow effect */
+  --recoder-success: #059669;        /* Success states */
+  --recoder-warning: #d97706;        /* Warning states */
+  --recoder-error: #dc2626;          /* Error states */
+  --recoder-info: #2563eb;           /* Information states */
+
+  /* Gradients */
+  --recoder-gradient-primary: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  --recoder-gradient-secondary: linear-gradient(135deg, #7c3aed 0%, #059669 100%);
+  --recoder-gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  
+  /* Shadows */
+  --recoder-shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --recoder-shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.1), 0 2px 4px -2px rgb(15 23 42 / 0.1);
+  --recoder-shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.1), 0 4px 6px -4px rgb(15 23 42 / 0.1);
+  --recoder-shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.1);
+  
+  /* AI-specific colors */
+  --recoder-ai-claude: #ff6b35;      /* Claude brand color */
+  --recoder-ai-groq: #f55036;        /* Groq brand color */
+  --recoder-ai-gemini: #4285f4;      /* Gemini brand color */
+  --recoder-ai-ollama: #8b5cf6;      /* Ollama brand color */
+}
+
+/* Dark theme overrides */
+[data-theme="dark"] {
+  --recoder-light-bg: var(--recoder-dark-bg);
+  --recoder-light-surface: var(--recoder-dark-surface);
+  --recoder-light-text: var(--recoder-dark-text);
+}
+
+/* Utility classes for common color applications */
+.recoder-primary { color: var(--recoder-primary); }
+.recoder-secondary { color: var(--recoder-secondary); }
+.recoder-accent-green { color: var(--recoder-accent-green); }
+.recoder-text-primary { color: var(--recoder-gray-600); }
+.recoder-text-secondary { color: var(--recoder-gray-500); }
+
+.recoder-bg-primary { background-color: var(--recoder-primary); }
+.recoder-bg-secondary { background-color: var(--recoder-secondary); }
+.recoder-bg-surface { background-color: var(--recoder-light-surface); }
+
+.recoder-gradient-primary { background: var(--recoder-gradient-primary); }
+.recoder-gradient-secondary { background: var(--recoder-gradient-secondary); }
+
+.recoder-shadow-md { box-shadow: var(--recoder-shadow-md); }
+.recoder-shadow-lg { box-shadow: var(--recoder-shadow-lg); }

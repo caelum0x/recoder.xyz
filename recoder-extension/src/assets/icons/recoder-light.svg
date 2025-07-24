@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Recoder.xyz Icon - Light Theme (16x16 for VS Code) -->
+  
+  <!-- Icon Background Circle -->
+  <circle cx="8" cy="8" r="7" fill="url(#gradient-primary)" stroke="none"/>
+  
+  <!-- Code Brackets Icon -->
+  <g transform="translate(8, 8)">
+    <!-- Left bracket -->
+    <path d="M-2.5 -3 L-4 -1.5 L-4 1.5 L-2.5 3" 
+          stroke="#ffffff" 
+          stroke-width="1" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          fill="none"/>
+    
+    <!-- Right bracket -->
+    <path d="M2.5 -3 L4 -1.5 L4 1.5 L2.5 3" 
+          stroke="#ffffff" 
+          stroke-width="1" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          fill="none"/>
+    
+    <!-- Center dot (cursor) -->
+    <circle cx="0" cy="0" r="0.5" fill="#ffffff" opacity="0.8"/>
+    
+    <!-- AI Spark indicators -->
+    <circle cx="3" cy="-3" r="0.8" fill="#ffffff" opacity="0.3"/>
+    <circle cx="3" cy="-3" r="0.4" fill="#ffffff"/>
+    
+    <circle cx="-3" cy="3" r="0.6" fill="#ffffff" opacity="0.3"/>
+    <circle cx="-3" cy="3" r="0.2" fill="#ffffff"/>
+  </g>
+  
+  <!-- Gradient Definitions -->
+  <defs>
+    <linearGradient id="gradient-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>
