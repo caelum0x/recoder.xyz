@@ -1,22 +1,27 @@
 {
-  "name": "@musistudio/claude-code-router",
+  "name": "@recoder/cli-router",
   "version": "1.0.26",
-  "description": "Use Claude Code without an Anthropics account and route it to another LLM provider",
+  "description": "Route Recoder CLI requests to different LLM providers including Kimi K2, Qwen 3, and DeepSeek R1",
   "bin": {
-    "ccr": "./dist/cli.js"
+    "rcr": "./dist/cli.js",
+    "recoder-router": "./dist/cli.js"
   },
   "scripts": {
     "build": "esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js && shx cp node_modules/tiktoken/tiktoken_bg.wasm dist/tiktoken_bg.wasm",
     "release": "npm run build && npm publish"
   },
   "keywords": [
-    "claude",
-    "code",
+    "recoder",
+    "ai",
     "router",
     "llm",
-    "anthropic"
+    "kimi",
+    "qwen",
+    "deepseek",
+    "claude",
+    "code-generation"
   ],
-  "author": "musistudio",
+  "author": "recoder.xyz",
   "license": "MIT",
   "dependencies": {
     "@musistudio/llms": "^1.0.12",
