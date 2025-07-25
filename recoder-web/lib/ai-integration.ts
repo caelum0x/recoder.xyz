@@ -216,6 +216,99 @@ Generate a complete, production-ready implementation. Structure your response as
 }
 
 /**
+ * Together AI Provider (supports many models including new ones)
+ */
+class TogetherProvider implements AIProvider {
+  name = 'together';
+  models = [
+    'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo',
+    'deepseek-ai/DeepSeek-V3', 
+    'Qwen/QwenQwen2.5-Coder-32B-Instruct',
+    'moonshot-ai/moonshot-v1-128k',
+    'DeepSeek-AI/deepseek-r1-0528'
+  ];
+  useCases = ['multi-model', 'cost-effective', 'variety', 'latest-models'];
+
+  async generateCode(prompt: string, options: GenerationOptions): Promise<GenerationResult> {
+    if (!process.env.TOGETHER_API_KEY) {
+      throw new Error('Together API key not configured');
+    }
+
+    try {
+      const response = await fetch('https://api.together.xyz/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.TOGETHER_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: options.model || 'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are Recoder, an AI that generates real, production-ready code. Never create mock implementations.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: options.temperature || 0.2,
+          max_tokens: options.maxTokens || 4000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Together API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+
+      return {
+        code: this.extractCodeFromResponse(content),
+        explanation: 'Generated with Together AI multi-model platform',
+        confidence: 0.85,
+        provider: 'together',
+        model: options.model || 'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo',
+        tokens: {
+          input: data.usage?.prompt_tokens || 0,
+          output: data.usage?.completion_tokens || 0
+        },
+        metadata: {
+          language: options.language || 'typescript',
+          framework: options.framework,
+          dependencies: this.extractDependencies(content),
+          realFunctionality: true
+        }
+      };
+    } catch (error) {
+      throw new Error(`Together generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    return !!process.env.TOGETHER_API_KEY;
+  }
+
+  private extractCodeFromResponse(response: string): string {
+    const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)\n```/g;
+    const matches = response.match(codeBlockRegex);
+    
+    if (matches && matches.length > 0) {
+      return matches[0].replace(/```(?:\w+)?\n/, '').replace(/\n```$/, '');
+    }
+    
+    return response;
+  }
+
+  private extractDependencies(code: string): string[] {
+    // Similar to Claude implementation
+    return [];
+  }
+}
+
+/**
  * Groq AI Provider  
  */
 class GroqProvider implements AIProvider {
@@ -319,6 +412,7 @@ export class IntelligentAIRouter {
     // Initialize available providers
     const claude = new ClaudeProvider();
     const groq = new GroqProvider();
+    const together = new TogetherProvider();
 
     if (await claude.isAvailable()) {
       this.providers.set('claude', claude);
@@ -326,6 +420,10 @@ export class IntelligentAIRouter {
     
     if (await groq.isAvailable()) {
       this.providers.set('groq', groq);
+    }
+    
+    if (await together.isAvailable()) {
+      this.providers.set('together', together);
     }
   }
 
@@ -396,6 +494,18 @@ export class IntelligentAIRouter {
       return 'code-review';
     }
     
+    if (lowerPrompt.includes('reasoning') || lowerPrompt.includes('step-by-step') || lowerPrompt.includes('logic')) {
+      return 'reasoning';
+    }
+    
+    if (lowerPrompt.includes('code') || lowerPrompt.includes('function') || lowerPrompt.includes('class')) {
+      return 'code-generation';
+    }
+    
+    if (lowerPrompt.includes('multiple') || lowerPrompt.includes('variety') || lowerPrompt.includes('latest')) {
+      return 'multi-model';
+    }
+    
     return 'general';
   }
 
@@ -409,12 +519,23 @@ export class IntelligentAIRouter {
       return specialist;
     }
     
-    // Default to Claude if available (most capable), then Groq
-    const claude = providers.find(p => p.name === 'claude');
-    if (claude) return claude;
+    // Task-specific provider preferences
+    const taskPreferences: { [key: string]: string[] } = {
+      'reasoning': ['together', 'claude', 'groq'],
+      'code-generation': ['together', 'groq', 'claude'],
+      'multi-model': ['together', 'claude', 'groq'],
+      'fast-generation': ['groq', 'together', 'claude'],
+      'complex-logic': ['claude', 'together', 'groq'],
+      'code-review': ['claude', 'together', 'groq']
+    };
     
-    const groq = providers.find(p => p.name === 'groq');
-    if (groq) return groq;
+    const preferences = taskPreferences[taskType] || ['claude', 'together', 'groq'];
+    
+    // Find first available provider from preferences
+    for (const preferredName of preferences) {
+      const provider = providers.find(p => p.name === preferredName);
+      if (provider) return provider;
+    }
     
     return providers[0];
   }

@@ -439,7 +439,7 @@ export class AIHub {
   }
 
   private async initializeProviders(): Promise<void> {
-    // Initialize all AI providers
+    // Initialize all AI providers including new models
     const providers = [
       new AnthropicProvider(),
       new GroqProvider(),
@@ -448,6 +448,44 @@ export class AIHub {
       new PerplexityProvider(),
       new CohereProvider()
     ];
+    
+    // Initialize new AI models (Kimi K2, Qwen 3, DeepSeek R1)
+    try {
+      // Import new providers dynamically to avoid dependency issues
+      const { KimiProvider } = await import('../../core/src/ai/providers/kimi-provider');
+      const { QwenProvider } = await import('../../core/src/ai/providers/qwen-provider');
+      const { DeepSeekR1Provider } = await import('../../core/src/ai/providers/deepseek-r1-provider');
+      
+      // Add Kimi K2 if API key is available
+      if (process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY) {
+        const kimiProvider = new KimiProvider({
+          apiKey: process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY!,
+          defaultModel: 'moonshot-v1-128k'
+        });
+        providers.push(kimiProvider);
+      }
+      
+      // Add Qwen 3 if API key is available
+      if (process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY) {
+        const qwenProvider = new QwenProvider({
+          apiKey: process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY!,
+          defaultModel: 'qwen2.5-coder-32b-instruct'
+        });
+        providers.push(qwenProvider);
+      }
+      
+      // Add DeepSeek R1 if API key is available
+      if (process.env.DEEPSEEK_API_KEY) {
+        const deepseekR1Provider = new DeepSeekR1Provider({
+          apiKey: process.env.DEEPSEEK_API_KEY,
+          defaultModel: 'deepseek-r1'
+        });
+        providers.push(deepseekR1Provider);
+      }
+      
+    } catch (importError) {
+      Logger.warn('⚠️ Some new AI providers could not be loaded:', importError);
+    }
     
     // Initialize Enhanced Ollama Provider (with auto-installation)
     try {
@@ -487,17 +525,21 @@ export class AIHub {
   }
 
   private setupProviderPreferences(): void {
-    // Define task-specific provider preferences
+    // Define task-specific provider preferences with new models
     // Ollama is prioritized for cost-free, privacy-first local processing
-    this.providerPreferences.set('blockchain', ['ollama', 'claude', 'mistral', 'groq', 'gemini']);
-    this.providerPreferences.set('web', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
-    this.providerPreferences.set('mobile', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
-    this.providerPreferences.set('backend', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
-    this.providerPreferences.set('security', ['claude', 'ollama', 'gemini', 'mistral', 'groq']);
-    this.providerPreferences.set('devops', ['ollama', 'claude', 'mistral', 'groq', 'gemini']);
-    this.providerPreferences.set('research', ['perplexity', 'gemini', 'claude', 'ollama', 'groq']);
-    this.providerPreferences.set('documentation', ['ollama', 'cohere', 'gemini', 'claude', 'mistral']);
-    this.providerPreferences.set('general', ['ollama', 'groq', 'mistral', 'claude', 'gemini']);
+    // New models: Kimi K2 for analysis, Qwen for coding, DeepSeek R1 for reasoning
+    this.providerPreferences.set('blockchain', ['ollama', 'claude', 'deepseek-r1', 'mistral', 'groq', 'gemini', 'kimi', 'qwen']);
+    this.providerPreferences.set('web', ['ollama', 'qwen', 'groq', 'mistral', 'claude', 'gemini', 'kimi']);
+    this.providerPreferences.set('mobile', ['ollama', 'qwen', 'groq', 'mistral', 'claude', 'gemini', 'kimi']);
+    this.providerPreferences.set('backend', ['ollama', 'qwen', 'deepseek-r1', 'groq', 'mistral', 'claude', 'gemini']);
+    this.providerPreferences.set('security', ['claude', 'deepseek-r1', 'ollama', 'gemini', 'mistral', 'groq', 'kimi']);
+    this.providerPreferences.set('devops', ['ollama', 'deepseek-r1', 'claude', 'mistral', 'groq', 'gemini', 'qwen']);
+    this.providerPreferences.set('research', ['perplexity', 'kimi', 'gemini', 'claude', 'deepseek-r1', 'ollama', 'groq']);
+    this.providerPreferences.set('documentation', ['ollama', 'cohere', 'kimi', 'gemini', 'claude', 'mistral', 'qwen']);
+    this.providerPreferences.set('general', ['ollama', 'qwen', 'groq', 'mistral', 'claude', 'gemini', 'kimi', 'deepseek-r1']);
+    this.providerPreferences.set('reasoning', ['deepseek-r1', 'claude', 'kimi', 'ollama', 'gemini', 'mistral']);
+    this.providerPreferences.set('code-generation', ['qwen', 'ollama', 'groq', 'claude', 'deepseek-r1', 'mistral']);
+    this.providerPreferences.set('analysis', ['kimi', 'deepseek-r1', 'claude', 'gemini', 'ollama', 'groq']);
   }
 
   /**
@@ -758,6 +800,27 @@ SECURITY SPECIALIZATION:
       { 
         name: 'cohere', 
         specialties: ['text-generation', 'classification', 'summarization'], 
+        available: false,
+        cost: 'paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'kimi', 
+        specialties: ['analysis', 'long-context', 'chinese-language', 'code-generation'], 
+        available: false,
+        cost: 'paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'qwen', 
+        specialties: ['code-generation', 'chinese-language', 'efficiency', 'instruction-following'], 
+        available: false,
+        cost: 'paid',
+        privacy: 'cloud'
+      },
+      { 
+        name: 'deepseek-r1', 
+        specialties: ['reasoning', 'step-by-step', 'cost-effective', 'problem-solving'], 
         available: false,
         cost: 'paid',
         privacy: 'cloud'

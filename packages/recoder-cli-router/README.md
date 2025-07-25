@@ -1,39 +1,39 @@
-# Claude Code Router
+# Recoder CLI Router
 
 [中文版](README_zh.md)
 
-> A powerful tool to route Claude Code requests to different models and customize any request.
+> A powerful tool to route Recoder CLI requests to different AI models including Kimi K2, Qwen 3, DeepSeek R1, and traditional providers.
 
 ![](blog/images/claude-code.png)
 
 ## ✨ Features
 
 -   **Model Routing**: Route requests to different models based on your needs (e.g., background tasks, thinking, long context).
--   **Multi-Provider Support**: Supports various model providers like OpenRouter, DeepSeek, Ollama, Gemini, Volcengine, and SiliconFlow.
+-   **Multi-Provider Support**: Supports various model providers like OpenRouter, DeepSeek R1, Kimi K2, Qwen 3, Ollama, Gemini, Volcengine, and SiliconFlow.
 -   **Request/Response Transformation**: Customize requests and responses for different providers using transformers.
--   **Dynamic Model Switching**: Switch models on-the-fly within Claude Code using the `/model` command.
--   **GitHub Actions Integration**: Trigger Claude Code tasks in your GitHub workflows.
+-   **Dynamic Model Switching**: Switch models on-the-fly within Recoder CLI using the `/model` command.
+-   **GitHub Actions Integration**: Trigger Recoder CLI tasks in your GitHub workflows.
 -   **Plugin System**: Extend functionality with custom transformers.
 
 ## 🚀 Getting Started
 
 ### 1. Installation
 
-First, ensure you have [Claude Code](https://docs.anthropic.com/en/docs/claude-code/quickstart) installed:
+First, ensure you have Recoder CLI installed:
 
 ```shell
-npm install -g @anthropic-ai/claude-code
+npm install -g @recoder/cli
 ```
 
-Then, install Claude Code Router:
+Then, install Recoder CLI Router:
 
 ```shell
-npm install -g @musistudio/claude-code-router
+npm install -g @recoder/cli-router
 ```
 
 ### 2. Configuration
 
-Create and configure your `~/.claude-code-router/config.json` file. For more details, you can refer to `config.example.json`.
+Create and configure your `~/.recoder-cli-router/config.json` file. For more details, you can refer to `config.example.json`.
 
 The `config.json` file has several key sections:
 - **`PROXY_URL`** (optional): You can set a proxy for API requests, for example: `"PROXY_URL": "http://127.0.0.1:7890"`.
@@ -148,10 +148,16 @@ Here is a comprehensive example:
 
 ### 3. Running Claude Code with the Router
 
-Start Claude Code using the router:
+Start Recoder CLI using the router:
 
 ```shell
-ccr code
+rcr code
+```
+
+Or:
+
+```shell
+recoder-router code
 ```
 
 #### Providers

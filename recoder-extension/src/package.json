@@ -83,7 +83,7 @@
 					{
 						"id": "modes",
 						"title": "Get things working again",
-						"description": "Stuck on an error? Recoder can find the issue, fix it with production-quality solutions, and get your code running."
+						"description": "Stuck on an error? Recoder can find the issue, fix it with production-quality solutions, and get your code running.",
 						"media": {
 							"markdown": "./dist/walkthrough/step3.md"
 						}
@@ -576,7 +576,7 @@
 		"@recoder/cloud": "workspace:^",
 		"@recoder/ipc": "workspace:^",
 		"@recoder/telemetry": "workspace:^",
-		"@recoder/types": "workspace:^,
+		"@recoder/types": "workspace:^",
 		"@types/lodash.debounce": "^4.0.9",
 		"@vscode/codicons": "^0.0.36",
 		"async-mutex": "^0.5.0",
@@ -641,7 +641,7 @@
 	"devDependencies": {
 		"@recoder/build": "workspace:^",
 		"@recoder/config-eslint": "workspace:^",
-		"@recoder/config-typescript": "workspace:^,
+		"@recoder/config-typescript": "workspace:^",
 		"@types/clone-deep": "^4.0.4",
 		"@types/debug": "^4.1.12",
 		"@types/diff": "^5.2.1",
