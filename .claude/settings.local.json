@@ -34,7 +34,8 @@
       "Bash(recoder:*)",
       "Bash(curl:*)",
       "Bash(timeout 3 npm run dev)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(npx next:*)"
     ],
     "deny": []
   }

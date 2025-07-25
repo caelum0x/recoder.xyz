@@ -104,7 +104,7 @@ export const STAGING_CONFIG: RecoderEnvironmentConfig = {
 export function getRecoderConfig(): RecoderEnvironmentConfig {
   const env = process.env.NODE_ENV || 'development';
   
-  switch (env) {
+  switch (env as string) {
     case 'production':
       return PRODUCTION_CONFIG;
     case 'staging':
