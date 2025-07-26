@@ -1,7 +1,6 @@
 /**
  * Shared utility functions
  */
-/// <reference types="node" />
 /**
  * String utilities
  */

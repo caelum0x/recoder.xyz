@@ -264,7 +264,7 @@ export class ProjectAnalyzer {
 
     } catch (error) {
       spinner.fail('Project analysis failed');
-      Logger.error('Project analysis error', { error: error.message, projectPath });
+      Logger.error('Project analysis error', { error: error instanceof Error ? error.message : String(error), projectPath });
       throw error;
     }
   }
@@ -317,7 +317,7 @@ export class ProjectAnalyzer {
 
     } catch (error) {
       spinner.fail('Project structure generation failed');
-      Logger.error('Project generation error', { error: error.message, projectName, options });
+      Logger.error('Project generation error', { error: error instanceof Error ? error.message : String(error), projectName, options });
       throw error;
     }
   }
@@ -384,7 +384,7 @@ export class ProjectAnalyzer {
 
     } catch (error) {
       spinner.fail('Project structure validation failed');
-      Logger.error('Project validation error', { error: error.message, projectPath });
+      Logger.error('Project validation error', { error: error instanceof Error ? error.message : String(error), projectPath });
       throw error;
     }
   }
@@ -429,7 +429,7 @@ export class ProjectAnalyzer {
 
     } catch (error) {
       spinner.fail('Project structure comparison failed');
-      Logger.error('Project comparison error', { error: error.message, project1Path, project2Path });
+      Logger.error('Project comparison error', { error: error instanceof Error ? error.message : String(error), project1Path, project2Path });
       throw error;
     }
   }
@@ -440,13 +440,13 @@ export class ProjectAnalyzer {
     const directories = await this.getAllDirectories(projectPath);
     
     const structure: ProjectStructure = {
-      directories: directories.map(dir => ({
+      directories: await Promise.all(directories.map(async dir => ({
         name: path.basename(dir),
         path: path.relative(projectPath, dir),
         type: 'directory' as const,
         size: 0,
         modified: (await fs.stat(dir)).mtime.toISOString()
-      })),
+      }))),
       files: await Promise.all(files.map(async file => {
         const stats = await fs.stat(file);
         return {
@@ -484,9 +484,25 @@ export class ProjectAnalyzer {
   private static async getAllDirectories(dir: string): Promise<string[]> {
     const pattern = path.join(dir, '**/*').replace(/\\/g, '/');
     return new Promise((resolve, reject) => {
-      glob(pattern, { onlyDirectories: true, dot: true }, (err, dirs) => {
-        if (err) reject(err);
-        else resolve(dirs);
+      glob(pattern, { dot: true }, async (err, files) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        // Filter for directories only
+        const dirs: string[] = [];
+        for (const file of files) {
+          try {
+            const stat = await fs.stat(file);
+            if (stat.isDirectory()) {
+              dirs.push(file);
+            }
+          } catch (e) {
+            // Skip files that can't be accessed
+          }
+        }
+        resolve(dirs);
       });
     });
   }

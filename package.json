@@ -11,10 +11,8 @@
     "setup:full": "node scripts/setup.js",
     "setup:husky": "husky install",
     "setup:env": "cp .env.example .env || copy .env.example .env",
-    
     "install:all": "npm install && npm run install:packages",
     "install:packages": "cd packages/cli && npm install && cd ../shared && npm install && cd ../../backend && npm install && cd ../production-engine && npm install",
-    
     "build": "npm run build:shared && npm run build:cli && npm run build:backend && npm run build:engine",
     "build:all": "npm run build",
     "build:cli": "cd packages/cli && npm run build",
@@ -22,56 +20,44 @@
     "build:backend": "cd backend && npm run build || echo 'Backend build not configured'",
     "build:engine": "cd production-engine && npm run build",
     "build:web": "cd packages/web && npm run build || echo 'Web build not configured'",
-    
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:engine\" --names \"backend,engine\" --prefix-colors \"blue,green\"",
     "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:engine\" \"npm run dev:cli\" \"npm run dev:web\" --names \"backend,engine,cli,web\" --prefix-colors \"blue,green,cyan,magenta\"",
     "dev:cli": "cd packages/cli && npm run dev",
     "dev:backend": "cd backend && npm run dev || node src/server.js",
     "dev:engine": "cd production-engine && npm run dev || node src/server.js",
     "dev:web": "cd packages/web && npm run dev",
-    
     "start": "concurrently \"npm run start:backend\" \"npm run start:engine\"",
     "start:backend": "cd backend && npm start || node src/server.js",
     "start:engine": "cd production-engine && npm start || node dist/server.js",
-    
     "test": "npm run test:cli",
     "test:cli": "cd packages/cli && npm test || echo 'CLI tests not configured'",
     "test:backend": "cd backend && npm test || echo 'Backend tests not configured'",
     "test:engine": "cd production-engine && npm test || echo 'Engine tests not configured'",
     "test:integration": "node scripts/test-cli.js",
     "test:full": "npm run build && npm run test:integration",
-    
     "lint": "npm run lint:cli",
     "lint:cli": "cd packages/cli && npm run lint || echo 'CLI lint not configured'",
-    "lint:backend": "cd backend && npm run lint || echo 'Backend lint not configured'", 
+    "lint:backend": "cd backend && npm run lint || echo 'Backend lint not configured'",
     "lint:engine": "cd production-engine && npm run lint || echo 'Engine lint not configured'",
     "lint:fix": "npm run lint:cli -- --fix",
-    
     "typecheck": "cd packages/cli && npm run typecheck || echo 'Typecheck not configured'",
-    
     "clean": "rimraf node_modules packages/*/node_modules backend/node_modules production-engine/node_modules packages/*/dist backend/dist production-engine/dist",
     "clean:cache": "rimraf .nx packages/*/.nx backend/.nx production-engine/.nx",
     "clean:deps": "rimraf node_modules packages/*/node_modules backend/node_modules production-engine/node_modules",
     "clean:build": "rimraf packages/*/dist backend/dist production-engine/dist packages/*/out",
-    
     "format": "prettier --write . || echo 'Prettier not configured'",
     "format:check": "prettier --check . || echo 'Prettier not configured'",
-    
     "link:cli": "cd packages/cli && npm link",
     "unlink:cli": "cd packages/cli && npm unlink -g || echo 'CLI not linked'",
-    
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
     "docker:dev": "docker-compose -f docker-compose.yml up -d postgres redis",
-    
     "health": "node scripts/health-check.js",
     "health:backend": "curl -f http://localhost:3001/health || echo 'Backend not running'",
     "health:engine": "curl -f http://localhost:3002/health || echo 'Engine not running'",
-    
     "deploy": "npm run build && npm run test && docker-compose up -d",
-    
     "postinstall": "echo 'Run npm run setup for full setup'",
     "precommit": "lint-staged || echo 'Lint-staged not configured'"
   },
@@ -92,6 +78,7 @@
   "author": "Recoder Team",
   "license": "MIT",
   "devDependencies": {
+    "@types/glob": "^8.1.0",
     "@types/node": "^20.10.0",
     "chalk": "^4.1.2",
     "concurrently": "^8.2.2",

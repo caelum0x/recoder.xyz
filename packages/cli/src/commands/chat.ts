@@ -12,6 +12,7 @@ import { Logger } from '../../../shared/src/logger';
 import { ConversationManager } from '../services/conversation-manager';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';
+import { ChatService } from 'src/services/chat';
 
 export function setupChatCommands(program: Command): void {
   const chat = program
@@ -155,7 +156,11 @@ async function handleStartChat(options: any): Promise<void> {
     await conversationManager.startInteractiveMode();
   } catch (error) {
     Logger.error(`Chat session failed: ${error}`);
-    console.log(chalk.red(`❌ Chat failed: ${error.message}`));
+    if (error instanceof Error) {
+      console.log(chalk.red(`❌ Chat failed: ${error.message}`));
+    } else {
+      console.log(chalk.red(`❌ Chat failed: ${String(error)}`));
+    }
   }
 }
 
@@ -241,7 +246,11 @@ async function handleQuickAsk(question: string, options: any): Promise<void> {
     }
   } catch (error) {
     Logger.error(`Quick ask failed: ${error}`);
-    console.log(chalk.red(`❌ Failed: ${error.message}`));
+    if (error instanceof Error) {
+      console.log(chalk.red(`❌ Failed: ${error.message}`));
+    } else {
+      console.log(chalk.red(`❌ Failed: ${String(error)}`));
+    }
   }
 }
 

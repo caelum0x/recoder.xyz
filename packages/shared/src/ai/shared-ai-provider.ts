@@ -78,13 +78,13 @@ export class ClaudeProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     const config = UnifiedConfigManager.getInstance('cli');
-    return config.getAIProviders().claude.enabled;
+    return config.getAIProviders()['claude'].enabled;
   }
 
   async testConnection(): Promise<boolean> {
     try {
       const config = UnifiedConfigManager.getInstance('cli');
-      const claudeConfig = config.getAIProviders().claude;
+      const claudeConfig = config.getAIProviders()['claude'];
       
       if (!claudeConfig.apiKey) {
         return false;
@@ -113,7 +113,7 @@ export class ClaudeProvider implements AIProvider {
   async generateCode(request: AIGenerationRequest): Promise<AIGenerationResult> {
     const startTime = Date.now();
     const config = UnifiedConfigManager.getInstance('cli');
-    const claudeConfig = config.getAIProviders().claude;
+    const claudeConfig = config.getAIProviders()['claude'];
 
     if (!claudeConfig.apiKey) {
       throw new Error('Claude API key not configured');
@@ -261,13 +261,13 @@ export class GroqProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     const config = UnifiedConfigManager.getInstance('cli');
-    return config.getAIProviders().groq.enabled;
+    return config.getAIProviders()['groq'].enabled;
   }
 
   async testConnection(): Promise<boolean> {
     try {
       const config = UnifiedConfigManager.getInstance('cli');
-      const groqConfig = config.getAIProviders().groq;
+      const groqConfig = config.getAIProviders()['groq'];
       
       if (!groqConfig.apiKey) {
         return false;
@@ -288,7 +288,7 @@ export class GroqProvider implements AIProvider {
   async generateCode(request: AIGenerationRequest): Promise<AIGenerationResult> {
     const startTime = Date.now();
     const config = UnifiedConfigManager.getInstance('cli');
-    const groqConfig = config.getAIProviders().groq;
+    const groqConfig = config.getAIProviders()['groq'];
 
     if (!groqConfig.apiKey) {
       throw new Error('Groq API key not configured');
@@ -316,7 +316,7 @@ export class GroqProvider implements AIProvider {
             }
           ],
           temperature: request.options?.temperature || 0.2,
-          max_tokens: request.options?.maxTokens || 4000
+          max_tokens: request.options?.maxTokens || 4000 
         })
       });
 

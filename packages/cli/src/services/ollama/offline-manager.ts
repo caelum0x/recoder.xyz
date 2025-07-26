@@ -634,7 +634,7 @@ export class OfflineManager extends EventEmitter {
     }
   }
 
-  private async loadCacheEntry(key: string): Promise<CacheEntry | null> {
+  private async loadCacheEntry(key: string): Promise<CacheEntry | undefined> {
     try {
       const filePath = path.join(this.CACHE_DIR, `${this.sanitizeKey(key)}.json`);
       const data = await fs.readFile(filePath, 'utf8');
@@ -647,7 +647,7 @@ export class OfflineManager extends EventEmitter {
       
       return entry;
     } catch (error) {
-      return null;
+      return undefined;
     }
   }
 

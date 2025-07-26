@@ -4,7 +4,6 @@
     "module": "commonjs",
     "target": "es2020",
     "lib": ["es2020"],
-    "rootDir": "src",
     "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
@@ -15,8 +14,13 @@
     "declarationMap": true,
     "sourceMap": true,
     "types": ["node", "jest"],
-    "noPropertyAccessFromIndexSignature": false
+    "noPropertyAccessFromIndexSignature": false,
+    "baseUrl": ".",
+    "paths": {
+      "@recoder/shared": ["../shared/src"],
+      "@recoder/shared/*": ["../shared/src/*"]
+    }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../shared/src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

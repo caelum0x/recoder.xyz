@@ -568,7 +568,7 @@ async function createToken(authToken: string): Promise<void> {
     const result = await AuthService.createToken(authToken, {
       name: details.name,
       scope: details.scope,
-      expiresIn: details.expiresIn ? parseInt(details.expiresIn) : null,
+      expiresIn: details.expiresIn ? parseInt(details.expiresIn) : undefined,
     });
     
     if (result.success) {
@@ -702,6 +702,11 @@ async function handleStatus(options: any): Promise<void> {
     const user = result.user;
     const sub = subscription.data;
 
+    if (!sub) {
+      console.log(chalk.red('❌ No subscription data available'));
+      return;
+    }
+
     if (options.json) {
       console.log(JSON.stringify({ user, subscription: sub }, null, 2));
       return;
@@ -796,6 +801,11 @@ async function handleUsage(options: any): Promise<void> {
     spinner.stop();
     const sub = subscription.data;
 
+    if (!sub) {
+      console.log(chalk.red('❌ No subscription data available'));
+      return;
+    }
+
     if (options.json) {
       console.log(JSON.stringify(sub.usage, null, 2));
       return;
@@ -870,7 +880,7 @@ async function handleUpgrade(): Promise<void> {
     // Get current subscription
     const subscription = await AuthService.getSubscription(currentToken);
     
-    if (subscription.success) {
+    if (subscription.success && subscription.data) {
       const currentPlan = subscription.data.plan;
       console.log(chalk.gray(`Current plan: ${currentPlan.toUpperCase()}`));
       console.log();

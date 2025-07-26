@@ -131,7 +131,7 @@ export class ProjectStructureManager {
 
     } catch (error) {
       spinner.fail('Project structure generation failed');
-      Logger.error('Structure generation error', { error: error.message, config: this.config });
+      Logger.error('Structure generation error', { error: error instanceof Error ? error.message : String(error), config: this.config });
       throw error;
     }
   }
@@ -165,7 +165,7 @@ export class ProjectStructureManager {
 
     } catch (error) {
       spinner.fail('Structure validation failed');
-      Logger.error('Structure validation error', { error: error.message, projectPath });
+      Logger.error('Structure validation error', { error: error instanceof Error ? error.message : String(error), projectPath });
       throw error;
     }
   }
@@ -2525,5 +2525,3 @@ class DeploymentConfigGenerator implements ConfigGenerator {
   }
 }
 
-export { ProjectStructureManager };
-export type { StructureManagerConfig, StructureResult };

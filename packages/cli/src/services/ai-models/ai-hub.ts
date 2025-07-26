@@ -155,19 +155,23 @@ export class AIModelHub extends EventEmitter {
       this.usageTracker.trackRequestStart(request);
       
       const stream = this.router.streamRequest(request);
-      let finalResponse: ModelResponse;
+      let finalResponse: ModelResponse | undefined;
       
       for await (const chunk of stream) {
         yield chunk;
         finalResponse = chunk as any; // Will be the final response
       }
       
-      this.usageTracker.trackRequestComplete(request, finalResponse!);
-      await this.contextManager.updateContext(request, finalResponse!);
+      if (!finalResponse) {
+        throw new Error('No response received from stream');
+      }
+      
+      this.usageTracker.trackRequestComplete(request, finalResponse);
+      await this.contextManager.updateContext(request, finalResponse);
       
       this.emit('stream-completed', { request, response: finalResponse });
       
-      return finalResponse!;
+      return finalResponse;
     } catch (error) {
       this.usageTracker.trackRequestError(request, error);
       this.emit('stream-failed', { request, error });
@@ -237,11 +241,13 @@ export class AIModelHub extends EventEmitter {
   public async installLocalModel(modelName: string): Promise<void> {
     this.ensureInitialized();
     
-    const ollamaProvider = this.providers.get(ModelProvider.OLLAMA) as OllamaProvider;
+    const provider = this.providers.get(ModelProvider.OLLAMA);
     
-    if (!ollamaProvider) {
+    if (!provider || provider.constructor.name !== 'OllamaProvider') {
       throw new Error('Ollama provider not available');
     }
+    
+    const ollamaProvider = provider as unknown as OllamaProvider;
 
     await ollamaProvider.installModel(modelName);
     
@@ -251,11 +257,13 @@ export class AIModelHub extends EventEmitter {
   public async uninstallLocalModel(modelName: string): Promise<void> {
     this.ensureInitialized();
     
-    const ollamaProvider = this.providers.get(ModelProvider.OLLAMA) as OllamaProvider;
+    const provider = this.providers.get(ModelProvider.OLLAMA);
     
-    if (!ollamaProvider) {
+    if (!provider || provider.constructor.name !== 'OllamaProvider') {
       throw new Error('Ollama provider not available');
     }
+    
+    const ollamaProvider = provider as unknown as OllamaProvider;
 
     await ollamaProvider.uninstallModel(modelName);
     
@@ -263,8 +271,14 @@ export class AIModelHub extends EventEmitter {
   }
 
   public getModelDownloadProgress(modelName: string): { progress: number; status: string } | undefined {
-    const ollamaProvider = this.providers.get(ModelProvider.OLLAMA) as OllamaProvider;
-    return ollamaProvider?.getDownloadProgress(modelName);
+    const provider = this.providers.get(ModelProvider.OLLAMA);
+    
+    if (!provider || provider.constructor.name !== 'OllamaProvider') {
+      return undefined;
+    }
+    
+    const ollamaProvider = provider as unknown as OllamaProvider;
+    return ollamaProvider.getDownloadProgress(modelName);
   }
 
   public getUsageStats(period: string = 'day'): ModelUsageStats[] {
@@ -383,7 +397,7 @@ export class AIModelHub extends EventEmitter {
         this.providers.set(ModelProvider.OPENAI, openaiProvider);
         this.logger.info('OpenAI provider initialized');
       } catch (error) {
-        this.logger.warn('Failed to initialize OpenAI provider', { error: error.message });
+        this.logger.warn('Failed to initialize OpenAI provider', { error: error instanceof Error ? error.message : String(error) });
       }
     }
 
@@ -395,7 +409,7 @@ export class AIModelHub extends EventEmitter {
         this.providers.set(ModelProvider.ANTHROPIC, anthropicProvider);
         this.logger.info('Anthropic provider initialized');
       } catch (error) {
-        this.logger.warn('Failed to initialize Anthropic provider', { error: error.message });
+        this.logger.warn('Failed to initialize Anthropic provider', { error: error instanceof Error ? error.message : String(error) });
       }
     }
 
@@ -413,7 +427,7 @@ export class AIModelHub extends EventEmitter {
         ollamaProvider.on('model-download-completed', (data) => this.emit('model-download-completed', data));
         ollamaProvider.on('model-download-failed', (data) => this.emit('model-download-failed', data));
       } catch (error) {
-        this.logger.warn('Failed to initialize Ollama provider', { error: error.message });
+        this.logger.warn('Failed to initialize Ollama provider', { error: error instanceof Error ? error.message : String(error) });
       }
     }
 

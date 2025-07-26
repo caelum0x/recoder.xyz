@@ -312,9 +312,9 @@ export class UserMigrationSystem {
       // Update configuration (this will save automatically)
       Object.entries(mappedConfig).forEach(([key, value]) => {
         if (key === 'extension') {
-          this.configManager.updatePlatformConfig(value);
+          this.configManager.updatePlatformConfig(value as any);
         } else if (key === 'projectDefaults') {
-          this.configManager.updateProjectDefaults(value);
+          this.configManager.updateProjectDefaults(value as any);
         }
       });
 
@@ -399,8 +399,7 @@ export class UserMigrationSystem {
             convertedProject.title || 'Migrated Project',
             {
               projectPath: convertedProject.path,
-              framework: convertedProject.framework,
-              language: convertedProject.language
+              framework: convertedProject.framework
             }
           );
 

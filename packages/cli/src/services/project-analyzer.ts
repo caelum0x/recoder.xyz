@@ -2,28 +2,80 @@
  * Project Analysis and Context Understanding System
  */
 
-import fs from 'fs-extra';
-import path from 'path';
-import { glob } from 'glob';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 import { Logger } from '@recoder/shared';
-import {
-  ProjectContext,
-  CodebaseContext,
-  EnvironmentContext,
-  FileStructure,
-  ExistingCodeInfo,
-  CodePattern,
-  CodingConventions,
-  DocumentationInfo,
-  ArchitectureInfo,
-  Dependency,
-  LanguageInfo,
-  FrameworkInfo,
-  DirectoryInfo,
-  FileInfo,
-  StructurePattern,
-  CodeQualityMetrics
-} from '@recoder/shared/types/code-generation';
+
+import { ArchitectureInfo, CodebaseContext, CodePattern, CodeQualityMetrics, CodingConventions, Dependency, DirectoryInfo, DocumentationInfo, EnvironmentContext, ExistingCodeInfo, FileInfo, FileStructure, FrameworkInfo, LanguageInfo, ProjectContext, StructurePattern } from '@recoder/shared/types/code-generation';
+
+// Helper function to recursively find files matching patterns
+async function findFiles(dir: string, patterns: string[], ignorePatterns: string[] = []): Promise<string[]> {
+  const results: string[] = [];
+  
+  async function walk(currentDir: string, relativePath: string = '') {
+    try {
+      const entries = await fs.readdir(currentDir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        const relPath = path.join(relativePath, entry.name);
+        
+        // Check if should ignore
+        if (ignorePatterns.some(pattern => relPath.includes(pattern.replace('/**', '')))) {
+          continue;
+        }
+        
+        if (entry.isDirectory()) {
+          await walk(fullPath, relPath);
+        } else {
+          // Check if file matches any pattern
+          if (patterns.some(pattern => {
+            const regex = new RegExp(pattern.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*').replace(/\./g, '\\.'));
+            return regex.test(relPath);
+          })) {
+            results.push(relPath);
+          }
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
+    }
+  }
+  
+  await walk(dir);
+  return results;
+}
+
+// Helper function to recursively find directories
+async function findDirectories(dir: string, ignorePatterns: string[] = []): Promise<string[]> {
+  const results: string[] = [];
+  
+  async function walk(currentDir: string, relativePath: string = '') {
+    try {
+      const entries = await fs.readdir(currentDir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        const relPath = path.join(relativePath, entry.name);
+        
+        // Check if should ignore
+        if (ignorePatterns.some(pattern => relPath.includes(pattern.replace('/**', '')))) {
+          continue;
+        }
+        
+        if (entry.isDirectory()) {
+          results.push(relPath);
+          await walk(fullPath, relPath);
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
+    }
+  }
+  
+  await walk(dir);
+  return results;
+}
 
 export class ProjectAnalyzer {
   private logger: Logger;
@@ -276,15 +328,16 @@ export class ProjectAnalyzer {
     };
 
     try {
-      const files = await glob('**/*{.js,.jsx,.ts,.tsx,.py,.java,.cs,.go,.rs,.php,.rb,.swift,.kt,.scala,.cpp,.c,.dart}', {
-        cwd: rootPath,
-        ignore: ['node_modules/**', 'dist/**', 'build/**', '.git/**']
-      });
+      const files = await findFiles(rootPath, [
+        '**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx', '**/*.py', '**/*.java', 
+        '**/*.cs', '**/*.go', '**/*.rs', '**/*.php', '**/*.rb', '**/*.swift', 
+        '**/*.kt', '**/*.scala', '**/*.cpp', '**/*.c', '**/*.dart'
+      ], ['node_modules', 'dist', 'build', '.git']);
 
-      files.forEach(file => {
+      files.forEach((file: string) => {
         const ext = path.extname(file);
-        if (extensions[ext]) {
-          languages.add(extensions[ext]);
+        if (extensions[ext as keyof typeof extensions]) {
+          languages.add(extensions[ext as keyof typeof extensions]);
         }
       });
     } catch (error) {
@@ -402,12 +455,8 @@ export class ProjectAnalyzer {
 
   private async getDirectoryStructure(rootPath: string): Promise<string[]> {
     try {
-      const dirs = await glob('**/*/', {
-        cwd: rootPath,
-        ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**'],
-        onlyDirectories: true
-      });
-      return dirs.map(dir => dir.replace(/\/$/, ''));
+      const dirs = await findDirectories(rootPath, ['node_modules', '.git', 'dist', 'build']);
+      return dirs.map((dir: string) => dir.replace(/\/$/, ''));
     } catch (error) {
       this.logger.warn('Failed to get directory structure', { error });
       return [];
@@ -421,11 +470,7 @@ export class ProjectAnalyzer {
 
     try {
       // Analyze directories
-      const dirPaths = await glob('**/*//', {
-        cwd: rootPath,
-        ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**'],
-        onlyDirectories: true
-      });
+      const dirPaths = await findDirectories(rootPath, ['node_modules', '.git', 'dist', 'build']);
 
       for (const dirPath of dirPaths) {
         const fullPath = path.join(rootPath, dirPath);
@@ -440,11 +485,7 @@ export class ProjectAnalyzer {
       }
 
       // Analyze files
-      const filePaths = await glob('**/*', {
-        cwd: rootPath,
-        ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**', '**/.*'],
-        nodir: true
-      });
+      const filePaths = await findFiles(rootPath, ['**/*'], ['node_modules', '.git', 'dist', 'build']);
 
       for (const filePath of filePaths.slice(0, 100)) { // Limit for performance
         const fullPath = path.join(rootPath, filePath);
@@ -503,7 +544,7 @@ export class ProjectAnalyzer {
     };
 
     const dirName = path.basename(dirPath);
-    return purposes[dirName] || 'General';
+    return purposes[dirName as keyof typeof purposes] || 'General';
   }
 
   private async detectDirectoryConventions(dirPath: string): Promise<string[]> {
@@ -558,7 +599,7 @@ export class ProjectAnalyzer {
       '.rb': 'Ruby'
     };
     
-    return languages[ext] || 'Unknown';
+    return languages[ext as keyof typeof languages] || 'Unknown';
   }
 
   private categorizeFilePurpose(filePath: string): string {
@@ -619,10 +660,10 @@ export class ProjectAnalyzer {
     const frameworkUsage = new Map<string, number>();
 
     try {
-      const files = await glob('**/*.{js,jsx,ts,tsx,py,java,cs,go,rs,php,rb}', {
-        cwd: rootPath,
-        ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**']
-      });
+      const files = await findFiles(rootPath, [
+        '**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx', '**/*.py', '**/*.java',
+        '**/*.cs', '**/*.go', '**/*.rs', '**/*.php', '**/*.rb'
+      ], ['node_modules', '.git', 'dist', 'build']);
 
       totalFiles = files.length;
 
@@ -753,10 +794,9 @@ export class ProjectAnalyzer {
 
     try {
       // Check for documentation files
-      const docFiles = await glob('**/*.{md,txt,rst,doc,docx}', {
-        cwd: rootPath,
-        ignore: ['node_modules/**', '.git/**']
-      });
+      const docFiles = await findFiles(rootPath, [
+        '**/*.md', '**/*.txt', '**/*.rst', '**/*.doc', '**/*.docx'
+      ], ['node_modules', '.git']);
 
       exists = docFiles.length > 0;
       

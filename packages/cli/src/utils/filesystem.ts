@@ -425,7 +425,9 @@ export class FileSystemUtils {
    */
   static watchPath(filePath: string, callback: (eventType: string, filename: string) => void): fs.FSWatcher | null {
     try {
-      return fs.watch(filePath, { recursive: true }, callback);
+      return fs.watch(filePath, { recursive: true }, (eventType, filename) => {
+        callback(eventType, filename || '');
+      });
     } catch (error) {
       Logger.error(`Failed to watch path ${filePath}: ${error}`);
       return null;
