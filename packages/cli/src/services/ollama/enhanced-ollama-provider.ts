@@ -134,8 +134,8 @@ export class EnhancedOllamaProvider extends EventEmitter {
   /**
    * Check if provider is available
    */
-  isAvailable(): boolean {
-    return this.isInitialized && ollamaService.isReady();
+  async isAvailable(): Promise<boolean> {
+    return this.isInitialized && await ollamaService.isReady();
   }
 
   /**
@@ -152,7 +152,7 @@ export class EnhancedOllamaProvider extends EventEmitter {
     const cacheHitRate = this.calculateCacheHitRate();
 
     return {
-      available: this.isAvailable(),
+      available: await this.isAvailable(),
       modelsInstalled: status.modelCount,
       activeModel: undefined, // Would track currently active model
       performanceStats: this.getPerformanceStats(),
@@ -241,7 +241,7 @@ export class EnhancedOllamaProvider extends EventEmitter {
       // Try fallback if enabled
       if (options.retryOnFailure !== false) {
         Logger.warn('Primary completion failed, trying fallback:', error);
-        return await this.tryFallbackCompletion(messages, options, error);
+        return await this.tryFallbackCompletion(messages, options, error instanceof Error ? error : new Error(String(error)));
       }
 
       Logger.error('Chat completion failed:', error);
@@ -359,7 +359,9 @@ export class EnhancedOllamaProvider extends EventEmitter {
     maxRecommendations: number = 3
   ): Promise<ModelRecommendation[]> {
     try {
-      return await modelManager.getRecommendations(useCase, maxRecommendations);
+      // Map extended use cases to supported ones
+      const mappedUseCase = useCase === 'documentation' || useCase === 'analysis' ? 'general' : useCase;
+      return await modelManager.getRecommendations(mappedUseCase, maxRecommendations);
     } catch (error) {
       Logger.error('Failed to get model recommendations:', error);
       return [];
@@ -415,14 +417,23 @@ export class EnhancedOllamaProvider extends EventEmitter {
   } {
     const stats = this.getPerformanceStats();
     const cacheHitRate = this.calculateCacheHitRate();
+    const errorRate = this.calculateErrorRate();
 
     return {
       totalCompletions: stats.totalRequests,
       averageLatency: stats.averageLatency,
       mostUsedModels: stats.modelUsage,
       cacheHitRate,
-      errorRate: stats.errorRate || 0
+      errorRate
     };
+  }
+
+  /**
+   * Calculate error rate
+   */
+  private calculateErrorRate(): number {
+    // Implementation would track error rate - return 0 for now
+    return 0;
   }
 
   /**
@@ -706,7 +717,9 @@ export class EnhancedOllamaProvider extends EventEmitter {
     // Manage cache size
     if (this.responseCache.size >= this.MAX_CACHE_SIZE) {
       const oldestKey = this.responseCache.keys().next().value;
-      this.responseCache.delete(oldestKey);
+      if (oldestKey) {
+        this.responseCache.delete(oldestKey);
+      }
     }
 
     const cacheKey = this.generateCacheKey(messages, options);

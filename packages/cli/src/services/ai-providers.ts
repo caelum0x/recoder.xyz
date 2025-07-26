@@ -61,7 +61,7 @@ export class AnthropicProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Claude API error: ${error.message}`);
+      Logger.error(`Claude API error: ${error.message}`, '');
       throw new Error(`Claude API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }
@@ -107,7 +107,7 @@ export class GroqProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Groq API error: ${error.message}`);
+      Logger.error(`Groq API error: ${error.message}`, '');
       throw new Error(`Groq API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }
@@ -158,7 +158,7 @@ export class GeminiProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Gemini API error: ${error.message}`);
+      Logger.error(`Gemini API error: ${error.message}`, '');
       throw new Error(`Gemini API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }
@@ -198,7 +198,7 @@ export class OllamaProvider implements AIProvider {
         provider: 'ollama'
       };
     } catch (error: any) {
-      Logger.error(`Ollama API error: ${error.message}`);
+      Logger.error(`Ollama API error: ${error.message}`, '');
       throw new Error(`Ollama API failed: ${error.message}`);
     }
   }
@@ -249,7 +249,7 @@ export class OpenAIProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`OpenAI API error: ${error.message}`);
+      Logger.error(`OpenAI API error: ${error.message}`, '');
       throw new Error(`OpenAI API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }

@@ -150,29 +150,29 @@ export class UnifiedConfigManager {
       
       aiProviders: {
         claude: {
-          enabled: !!process.env.ANTHROPIC_API_KEY,
-          apiKey: process.env.ANTHROPIC_API_KEY,
+          enabled: !!process.env['ANTHROPIC_API_KEY'],
+          apiKey: process.env['ANTHROPIC_API_KEY'],
           models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
           useCases: ['complex-logic', 'architecture', 'security', 'code-review'],
           priority: 1
         },
         groq: {
-          enabled: !!process.env.GROQ_API_KEY,
-          apiKey: process.env.GROQ_API_KEY,
+          enabled: !!process.env['GROQ_API_KEY'],
+          apiKey: process.env['GROQ_API_KEY'],
           models: ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant'],
           useCases: ['fast-generation', 'api-endpoints', 'prototyping', 'react'],
           priority: 2
         },
         gemini: {
-          enabled: !!process.env.GOOGLE_API_KEY,
-          apiKey: process.env.GOOGLE_API_KEY,
+          enabled: !!process.env['GOOGLE_API_KEY'],
+          apiKey: process.env['GOOGLE_API_KEY'],
           models: ['gemini-2.0-flash-exp', 'gemini-1.5-pro'],
           useCases: ['large-codebases', 'multimodal', 'documentation', 'analysis'],
           priority: 3
         },
         ollama: {
-          enabled: !!process.env.OLLAMA_BASE_URL || fs.existsSync('/usr/local/bin/ollama'),
-          baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+          enabled: !!process.env['OLLAMA_BASE_URL'] || fs.existsSync('/usr/local/bin/ollama'),
+          baseUrl: process.env['OLLAMA_BASE_URL'] || 'http://localhost:11434',
           models: ['llama3.2', 'codellama', 'deepseek-coder'],
           useCases: ['offline', 'privacy', 'local-development', 'custom-models'],
           priority: 4

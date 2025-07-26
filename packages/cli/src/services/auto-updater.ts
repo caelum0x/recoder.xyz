@@ -42,7 +42,7 @@ export interface UpdateProgress {
 export class AutoUpdater {
   private readonly configPath: string;
   private readonly updateApiUrl = 'https://api.codecraft.dev/updates';
-  private readonly logger = new Logger('AutoUpdater');
+  private readonly logger = new Logger();
   private updateInProgress = false;
   private progressCallback?: (progress: UpdateProgress) => void;
 

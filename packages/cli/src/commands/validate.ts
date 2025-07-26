@@ -456,7 +456,7 @@ async function handleRulesManagement(options: any): Promise<void> {
     console.log(
       boxen(
         chalk.white(`${icon} ${categoryName}\n`) +
-        (categoryRules as any[]).map((rule: any) => {
+        (categoryRules as { id: string; name: string; category: string; severity: 'error' | 'warning' | 'info'; }[]).map((rule) => {
           const severityIcon = { error: '🚨', warning: '⚠️', info: 'ℹ️' }[rule.severity];
           return chalk.cyan(`• ${rule.name}`) + chalk.gray(` (${rule.id})`) + ` ${severityIcon}`;
         }).join('\n'),
@@ -574,7 +574,7 @@ async function getInteractiveConfig(currentOptions: any): Promise<any> {
 function displayValidationSummary(report: any): void {
   const { summary } = report;
   
-  let summaryColor = 'green';
+  let summaryColor: 'green' | 'red' | 'yellow' | 'blue' = 'green';
   let summaryIcon = '🎉';
   let summaryText = 'Excellent';
 
@@ -592,9 +592,16 @@ function displayValidationSummary(report: any): void {
     summaryText = 'Good';
   }
 
+  const chalkColorMap = {
+    green: chalk.green,
+    red: chalk.red,
+    yellow: chalk.yellow,
+    blue: chalk.blue,
+  };
+
   console.log('\n' + 
     boxen(
-      chalk[summaryColor](`${summaryIcon} Reality Score: ${summary.score}/100\n`) +
+      chalkColorMap[summaryColor](`${summaryIcon} Reality Score: ${summary.score}/100\n`) +
       chalk.white(`Status: ${summaryText}\n`) +
       chalk.gray(`${summary.passed} passed | ${summary.failed} failed | ${summary.warnings} warnings`),
       {

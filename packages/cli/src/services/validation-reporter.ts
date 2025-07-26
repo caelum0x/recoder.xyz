@@ -21,6 +21,8 @@ export interface ReportOptions {
   showPassedRules?: boolean;
   groupByCategory?: boolean;
   minSeverity?: 'error' | 'warning' | 'info';
+  colors?: boolean;
+  compact?: boolean;
 }
 
 export interface ConsoleReportOptions extends ReportOptions {

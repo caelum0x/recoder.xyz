@@ -8,1481 +8,809 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
 import Table from 'cli-table3';
-import fs from 'fs-extra';
 import { Logger } from '@recoder/shared';
-import {
-  Agent,
-  AgentStatus,
-  AgentCategory,
-  ExpertiseLevel,
-  PersonalityTone,
-  VerbosityLevel,
-  FormalityLevel,
-  ApproachStyle,
-  FeedbackStyle,
-  CommunicationStyle,
-  WebFramework,
-  MobileFramework,
-  BlockchainNetwork,
-  ProgrammingLanguage,
-  CreateAgentRequest,
-  UpdateAgentRequest,
-  AgentListFilter,
-  AgentListSort
-} from '@recoder/shared/types/agent';
-import { AgentManager } from '../services/agent-manager';
-import { AIModelHub } from '../services/ai-models/ai-hub';
-import { ConfigManager } from '../utils/config';
-import { requireAuth } from '../utils/auth';
+import { ApiClient } from '../services/api';
+import { ValidationHelper } from '../utils/validation';
+import { FileSystemUtils } from '../utils/filesystem';
 
-let agentManager: AgentManager | null = null;
-let aiHub: AIModelHub | null = null;
-
-export function setupAgentCommands(program: Command): void {
-  const agent = program
-    .command('agent')
-    .description('AI agent management and configuration with full CRUD operations');
-
-  // Create agent command - Enhanced interactive creation
-  agent
-    .command('create')
-    .description('Create a new AI agent with comprehensive configuration')
-    .option('-n, --name <name>', 'agent name')
-    .option('-t, --type <type>', 'agent specialization category')
-    .option('-m, --model <model>', 'AI model to use')
-    .option('-d, --description <description>', 'agent description')
-    .option('-c, --config <file>', 'load configuration from JSON file')
-    .option('--template <template>', 'use predefined template')
-    .option('--interactive', 'interactive agent creation wizard')
-    .action(async (options) => {
-      try {
-        await initializeServices();
-        await handleCreateAgent(options);
-      } catch (error) {
-        Logger.error(`Agent creation failed: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
-
-  // List agents command - Enhanced with filtering and sorting
-  agent
-    .command('list')
-    .alias('ls')
-    .description('List agents with advanced filtering and sorting')
-    .option('-j, --json', 'output as JSON')
-    .option('-t, --table', 'display as formatted table')
-    .option('-s, --status <status>', 'filter by status (active, inactive, error, maintenance)')
-    .option('-c, --category <category>', 'filter by category')
-    .option('-m, --model <model>', 'filter by AI model')
-    .option('-l, --language <language>', 'filter by programming language')
-    .option('-f, --framework <framework>', 'filter by framework')
-    .option('--search <query>', 'search agents by name or description')
-    .option('--tags <tags>', 'filter by tags (comma-separated)')
-    .option('--sort <field>', 'sort by field (name, created, updated, used, performance)')
-    .option('--order <direction>', 'sort order (asc, desc)', 'desc')
-    .option('--limit <number>', 'limit number of results')
-    .option('--stats', 'show usage statistics')
-    .action(async (options) => {
-      try {
-        await initializeServices();
-        await handleListAgents(options);
-      } catch (error) {
-        Logger.error(`Failed to list agents: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
-
-  // Show agent command - Enhanced with comprehensive details
-  agent
-    .command('show <agentId>')
-    .description('Show comprehensive agent information and analytics')
-    .option('-j, --json', 'output as JSON')
-    .option('--config', 'show detailed configuration')
-    .option('--capabilities', 'show capabilities breakdown')
-    .option('--personality', 'show personality settings')
-    .option('--performance', 'show performance metrics')
-    .option('--history', 'show usage history')
-    .option('--export <file>', 'export agent configuration to file')
-    .action(async (agentId, options) => {
-      try {
-        await initializeServices();
-        await handleShowAgent(agentId, options);
-      } catch (error) {
-        Logger.error(`Failed to show agent: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
-
-  // Edit agent command - Enhanced with comprehensive editing
-  agent
-    .command('edit <agentId>')
-    .description('Edit agent configuration with guided wizard')
-    .option('-n, --name <name>', 'update agent name')
-    .option('-d, --description <description>', 'update description')
-    .option('-m, --model <model>', 'change AI model')
-    .option('-s, --status <status>', 'update status')
-    .option('-c, --config <file>', 'load configuration from JSON file')
-    .option('--capabilities', 'edit capabilities interactively')
-    .option('--personality', 'edit personality settings')
-    .option('--preferences', 'edit language and framework preferences')
-    .option('--instructions', 'edit custom instructions')
-    .option('--settings', 'edit model settings (temperature, tokens, etc.)')
-    .option('--interactive', 'full interactive editing wizard')
-    .action(async (agentId, options) => {
-      try {
-        await initializeServices();
-        await handleEditAgent(agentId, options);
-      } catch (error) {
-        Logger.error(`Agent editing failed: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
-
-  // Delete agent command - Enhanced with safety checks
-  agent
-    .command('delete <agentId>')
-    .alias('rm')
-    .description('Delete an agent with confirmation and backup options')
-    .option('-f, --force', 'force deletion without confirmation')
-    .option('--backup', 'create backup before deletion')
-    .option('--multiple <ids>', 'delete multiple agents (comma-separated IDs)')
-    .action(async (agentId, options) => {
-      try {
-        await initializeServices();
-        await handleDeleteAgent(agentId, options);
-      } catch (error) {
-        Logger.error(`Agent deletion failed: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
-
-  // Models command - Enhanced with comprehensive model information
-  agent
-    .command('models')
-    .description('List and compare available AI models with detailed information')
-    .option('-j, --json', 'output as JSON')
-    .option('-t, --table', 'display as formatted table')
-    .option('-p, --provider <provider>', 'filter by provider (openai, anthropic, google, ollama, etc.)')
-    .option('-c, --capabilities <caps>', 'filter by capabilities (code, chat, vision, reasoning)')
-    .option('-l, --local', 'show only local models')
-    .option('--cloud', 'show only cloud models')
-    .option('--available', 'show only available models')
-    .option('--pricing', 'show detailed pricing information')
-    .option('--performance', 'show performance metrics')
-    .option('--compare <models>', 'compare specific models (comma-separated)')
-    .option('--recommend <task>', 'get model recommendations for specific task')
-    .action(async (options) => {
-      try {
-        await initializeServices();
-        await handleListModels(options);
-      } catch (error) {
-        Logger.error(`Failed to list models: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
-
-  // Test agent command
-  agent
-    .command('test <agentId>')
-    .description('Test an agent with a sample prompt')
-    .option('-p, --prompt <prompt>', 'test prompt')
-    .option('-f, --file <file>', 'load prompt from file')
-    .option('--stream', 'stream response')
-    .action(async (agentId, options) => {
-      try {
-        await requireAuth();
-        await handleTestAgent(agentId, options);
-      } catch (error) {
-        Logger.error(`Agent test failed: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
-
-  // Clone agent command
-  agent
-    .command('clone <agentId>')
-    .description('Clone an existing agent')
-    .option('-n, --name <name>', 'name for cloned agent')
-    .option('--public', 'make clone public')
-    .action(async (agentId, options) => {
-      try {
-        await requireAuth();
-        await handleCloneAgent(agentId, options);
-      } catch (error) {
-        Logger.error(`Agent cloning failed: ${error instanceof Error ? error.message : error}`);
-        process.exitCode = 1;
-      }
-    });
+// Type definitions for agents
+interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  specialization: string;
+  capabilities: AgentCapabilities;
+  personality: AgentPersonality;
+  preferences: AgentPreferences;
+  status: 'active' | 'inactive' | 'archived';
+  created_at: Date;
+  updated_at: Date;
+  usage_stats: AgentUsageStats;
+  version: string;
 }
 
-async function handleCreateAgent(options: any): Promise<void> {
-  if (!agentManager) {
-    throw new Error('Agent manager not initialized');
-  }
-
-  console.log(
-    boxen(
-      chalk.cyan('🤖 Create AI Agent - Enhanced Configuration Wizard'),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-      }
-    )
-  );
-
-  let agentConfig: CreateAgentRequest;
-
-  if (options.config) {
-    // Load configuration from file
-    try {
-      const configData = await fs.readJson(options.config);
-      agentConfig = configData;
-    } catch (error) {
-      Logger.error(`Failed to load config file: ${error}`);
-      return;
-    }
-  } else if (options.template) {
-    // Use predefined template
-    agentConfig = getAgentTemplate(options.template);
-    
-    // Override with command line options
-    if (options.name) agentConfig.name = options.name;
-    if (options.description) agentConfig.description = options.description;
-    if (options.model) agentConfig.model = options.model;
-  } else if (options.interactive || !options.name) {
-    // Interactive creation wizard
-    agentConfig = await runInteractiveAgentCreation(options);
-  } else {
-    // Quick creation from command line options
-    agentConfig = {
-      name: options.name,
-      description: options.description || `${options.name} - AI coding assistant`,
-      model: options.model || 'gpt-4',
-      capabilities: {
-        general: {
-          codeGeneration: true,
-          codeReview: true,
-          debugging: true,
-          testing: true,
-          documentation: true
-        }
-      },
-      preferences: {
-        languages: [options.language || 'typescript'],
-        frameworks: [],
-        tools: []
-      },
-      personality: {
-        tone: PersonalityTone.PROFESSIONAL,
-        verbosity: VerbosityLevel.CONCISE,
-        formality: FormalityLevel.NEUTRAL
-      },
-      metadata: {
-        category: AgentCategory.GENERAL,
-        tags: [options.type || 'general'],
-        visibility: 'private'
-      }
-    };
-  }
-
-  const spinner = ora('Creating agent with enhanced configuration...').start();
-
-  try {
-    const agent = await agentManager.createAgent(agentConfig);
-    
-    spinner.succeed(chalk.green('Agent created successfully!'));
-    
-    // Display comprehensive agent information
-    displayAgentCreated(agent);
-
-    // Ask if user wants to test the agent
-    const testAgent = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'test',
-        message: 'Test the agent now?',
-        default: true,
-      },
-    ]);
-
-    if (testAgent.test) {
-      await handleTestAgent(agent.id, { prompt: 'Hello! Can you help me with a simple code example?' });
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Agent creation failed'));
-    Logger.error(`Error: ${error instanceof Error ? error.message : error}`);
-  }
+interface AgentCapabilities {
+  web_development: boolean;
+  mobile_development: boolean;
+  blockchain_development: boolean;
+  ai_ml_development: boolean;
+  backend_development: boolean;
+  devops_deployment: boolean;
+  security_auditing: boolean;
+  code_review: boolean;
+  documentation: boolean;
+  testing: boolean;
 }
 
-async function handleListAgents(options: any): Promise<void> {
-  if (!agentManager) {
-    throw new Error('Agent manager not initialized');
-  }
-
-  const spinner = ora('Fetching agents...').start();
-
-  try {
-    // Build filter from options
-    const filter: AgentListFilter = {};
-    if (options.status) {
-      filter.status = Array.isArray(options.status) ? options.status : [options.status];
-    }
-    if (options.category) {
-      filter.category = Array.isArray(options.category) ? options.category : [options.category];
-    }
-    if (options.search) {
-      filter.search = options.search;
-    }
-    if (options.tags) {
-      filter.tags = options.tags.split(',').map((t: string) => t.trim());
-    }
-    if (options.language) {
-      filter.languages = [options.language];
-    }
-    if (options.framework) {
-      filter.frameworks = [options.framework];
-    }
-    
-    // Build sort from options
-    const sort: AgentListSort = {
-      field: options.sort || 'updatedAt',
-      direction: options.order === 'asc' ? 'asc' : 'desc'
-    };
-    
-    const limit = options.limit ? parseInt(options.limit) : undefined;
-    
-    const agents = await agentManager.listAgents(filter, sort, limit);
-    
-    spinner.succeed(chalk.green(`Found ${agents.length} agent${agents.length !== 1 ? 's' : ''}`));
-    
-    if (agents.length === 0) {
-      console.log(chalk.yellow('No agents found matching your criteria.'));
-      console.log(chalk.gray('Create your first agent with: codecraft agent create'));
-      return;
-    }
-
-    if (options.json) {
-      console.log(JSON.stringify(agents, null, 2));
-      return;
-    }
-
-    if (options.table) {
-      displayAgentsTable(agents, options.stats);
-    } else {
-      displayAgentsList(agents, options.stats);
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Failed to fetch agents'));
-    throw error;
-  }
+interface AgentPersonality {
+  tone: 'professional' | 'casual' | 'friendly' | 'technical' | 'creative';
+  verbosity: 'concise' | 'detailed' | 'comprehensive';
+  formality: 'formal' | 'informal' | 'mixed';
+  approach: 'step_by_step' | 'big_picture' | 'problem_solving' | 'exploratory';
+  feedback_style: 'direct' | 'encouraging' | 'analytical' | 'collaborative';
 }
 
-async function handleShowAgent(agentId: string, options: any): Promise<void> {
-  if (!agentManager) {
-    throw new Error('Agent manager not initialized');
-  }
-
-  const spinner = ora('Fetching agent details...').start();
-
-  try {
-    const agent = await agentManager.getAgent(agentId);
-    
-    if (!agent) {
-      spinner.fail(chalk.red('Agent not found'));
-      console.log(chalk.red(`No agent found with ID: ${agentId}`));
-      return;
-    }
-
-    spinner.succeed(chalk.green('Agent details retrieved'));
-
-    if (options.json) {
-      console.log(JSON.stringify(agent, null, 2));
-      return;
-    }
-
-    // Basic agent information
-    console.log(
-      boxen(
-        chalk.white(`🤖 ${agent.name}\n`) +
-        chalk.gray(`ID: ${agent.id}\n`) +
-        chalk.gray(`Model: ${agent.model}\n`) +
-        chalk.gray(`Category: ${agent.metadata.category}\n`) +
-        chalk.gray(`Status: ${getStatusIcon(agent.status)} ${agent.status}\n`) +
-        chalk.gray(`Description: ${agent.description}\n`) +
-        chalk.gray(`Tags: ${agent.metadata.tags.join(', ') || 'None'}\n`) +
-        chalk.gray(`Created: ${agent.createdAt.toLocaleString()}\n`) +
-        chalk.gray(`Updated: ${agent.updatedAt.toLocaleString()}\n`) +
-        getVisibilityBadge(agent.metadata.visibility),
-        {
-          padding: 1,
-          borderStyle: 'round',
-          borderColor: 'cyan',
-          title: 'Agent Details',
-        }
-      )
-    );
-
-    // Show capabilities if requested
-    if (options.capabilities) {
-      displayCapabilitiesSection(agent);
-    }
-
-    // Show personality if requested
-    if (options.personality) {
-      displayPersonalitySection(agent);
-    }
-
-    // Show configuration if requested
-    if (options.config) {
-      displayConfigurationSection(agent);
-    }
-
-    // Show performance metrics if requested
-    if (options.performance) {
-      displayPerformanceSection(agent);
-    }
-
-    // Show usage history if requested
-    if (options.history) {
-      displayHistorySection(agent);
-    }
-
-    // Export agent configuration if requested
-    if (options.export) {
-      await exportAgentConfiguration(agent, options.export);
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Failed to fetch agent details'));
-    throw error;
-  }
+interface AgentPreferences {
+  preferred_languages: string[];
+  preferred_frameworks: string[];
+  coding_style: 'clean' | 'functional' | 'object_oriented' | 'minimalist';
+  test_coverage_preference: number;
+  documentation_level: 'minimal' | 'standard' | 'comprehensive';
+  security_focus: 'low' | 'medium' | 'high' | 'critical';
 }
 
-async function handleEditAgent(agentId: string, options: any): Promise<void> {
-  console.log(
-    boxen(
-      chalk.cyan(`🔧 Edit Agent: ${agentId}`),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-      }
-    )
-  );
+interface AgentUsageStats {
+  total_projects: number;
+  total_code_generated: number;
+  success_rate: number;
+  average_rating: number;
+  last_used: Date;
+}
 
-  // First fetch current agent details
-  const spinner = ora('Fetching current agent configuration...').start();
+interface CreateAgentRequest {
+  name: string;
+  description: string;
+  specialization: string;
+  capabilities: Partial<AgentCapabilities>;
+  personality?: Partial<AgentPersonality>;
+  preferences?: Partial<AgentPreferences>;
+}
+
+interface AgentListOptions {
+  specialization?: string;
+  status?: string;
+  sort?: 'name' | 'created' | 'usage' | 'rating';
+  limit?: number;
+}
+
+interface AgentSearchOptions {
+  query: string;
+  capabilities?: string[];
+  specialization?: string;
+}
+
+export function createAgentCommand(): Command {
+  const command = new Command('agent');
   
-  try {
-    const token = ConfigManager.get('auth.token');
-    const result = await AgentService.getAgent(token, agentId);
-    
-    if (!result.success) {
-      spinner.fail(chalk.red('Failed to fetch agent'));
-      console.log(chalk.red(result.error || 'Agent not found'));
-      return;
-    }
+  command
+    .description('Manage AI agents for code generation and assistance')
+    .addCommand(createCreateCommand())
+    .addCommand(createListCommand())
+    .addCommand(createShowCommand())
+    .addCommand(createUpdateCommand())
+    .addCommand(createDeleteCommand())
+    .addCommand(createSearchCommand())
+    .addCommand(createActivateCommand())
+    .addCommand(createDeactivateCommand())
+    .addCommand(createCloneCommand())
+    .addCommand(createExportCommand())
+    .addCommand(createImportCommand())
+    .addCommand(createStatsCommand());
 
-    spinner.succeed(chalk.green('Agent configuration loaded'));
-    
-    const currentAgent = result.agent;
-    let updates: any = {};
-
-    if (options.interactive || (!options.name && !options.description && !options.model)) {
-      updates = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'name',
-          message: 'Agent name:',
-          default: currentAgent.name,
-        },
-        {
-          type: 'input',
-          name: 'description',
-          message: 'Description:',
-          default: currentAgent.description,
-        },
-        {
-          type: 'list',
-          name: 'model',
-          message: 'AI model:',
-          default: currentAgent.model,
-          choices: [
-            { name: 'GPT-4 (OpenAI)', value: 'gpt-4' },
-            { name: 'GPT-3.5 Turbo (OpenAI)', value: 'gpt-3.5-turbo' },
-            { name: 'Claude 3 Opus (Anthropic)', value: 'claude-3-opus' },
-            { name: 'Claude 3 Sonnet (Anthropic)', value: 'claude-3-sonnet' },
-            { name: 'Claude 3 Haiku (Anthropic)', value: 'claude-3-haiku' },
-            { name: 'Gemini Pro (Google)', value: 'gemini-pro' },
-          ],
-        },
-        {
-          type: 'confirm',
-          name: 'public',
-          message: 'Make agent public?',
-          default: currentAgent.public,
-        },
-      ]);
-    } else {
-      if (options.name) updates.name = options.name;
-      if (options.description) updates.description = options.description;
-      if (options.model) updates.model = options.model;
-    }
-
-    // Remove undefined values
-    updates = Object.fromEntries(Object.entries(updates).filter(([_, v]) => v !== undefined));
-
-    if (Object.keys(updates).length === 0) {
-      console.log(chalk.yellow('No changes specified.'));
-      return;
-    }
-
-    const updateSpinner = ora('Updating agent...').start();
-
-    const updateResult = await AgentService.updateAgent(token, agentId, updates);
-    
-    if (updateResult.success) {
-      updateSpinner.succeed(chalk.green('Agent updated successfully!'));
-      
-      console.log(
-        boxen(
-          chalk.white(`✅ ${updateResult.agent.name} Updated\n`) +
-          Object.entries(updates).map(([key, value]) => 
-            chalk.gray(`${key}: ${value}`)
-          ).join('\n'),
-          {
-            padding: 1,
-            borderStyle: 'round',
-            borderColor: 'green',
-          }
-        )
-      );
-    } else {
-      updateSpinner.fail(chalk.red('Agent update failed'));
-      console.log(chalk.red(updateResult.error || 'Unknown error'));
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Agent update failed'));
-    throw error;
-  }
+  return command;
 }
 
-async function handleDeleteAgent(agentId: string, options: any): Promise<void> {
-  if (!options.force) {
-    const confirmed = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'delete',
-        message: `Are you sure you want to delete agent "${agentId}"?`,
-        default: false,
-      },
-    ]);
-
-    if (!confirmed.delete) {
-      console.log(chalk.yellow('Agent deletion cancelled.'));
-      return;
-    }
-  }
-
-  const spinner = ora('Deleting agent...').start();
-
-  try {
-    const token = ConfigManager.get('auth.token');
-    const result = await AgentService.deleteAgent(token, agentId);
-    
-    if (result.success) {
-      spinner.succeed(chalk.green('Agent deleted successfully!'));
-    } else {
-      spinner.fail(chalk.red('Agent deletion failed'));
-      console.log(chalk.red(result.error || 'Unknown error'));
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Agent deletion failed'));
-    throw error;
-  }
-}
-
-async function handleListModels(options: any): Promise<void> {
-  const spinner = ora('Fetching available models...').start();
-
-  try {
-    const result = await AgentService.listModels({
-      provider: options.provider,
-      includePricing: options.pricing,
-    });
-    
-    if (result.success) {
-      spinner.succeed(chalk.green(`Found ${result.models.length} models`));
+function createCreateCommand(): Command {
+  return new Command('create')
+    .description('Create a new AI agent')
+    .option('-n, --name <name>', 'Agent name')
+    .option('-d, --description <description>', 'Agent description')
+    .option('-s, --specialization <specialization>', 'Agent specialization')
+    .option('-i, --interactive', 'Interactive mode', false)
+    .option('--template <template>', 'Use predefined template')
+    .action(async (options) => {
+      const spinner = ora('Creating agent...').start();
       
-      if (options.json) {
-        console.log(JSON.stringify(result.models, null, 2));
-      } else {
-        const groupedModels = result.models.reduce((acc: any, model: any) => {
-          if (!acc[model.provider]) acc[model.provider] = [];
-          acc[model.provider].push(model);
-          return acc;
-        }, {});
+      try {
+        let agentData: CreateAgentRequest;
 
-        for (const [provider, models] of Object.entries(groupedModels)) {
-          console.log(
-            boxen(
-              chalk.white(`🤖 ${provider.toUpperCase()} Models\n`) +
-              (models as any[]).map((model: any) => 
-                chalk.cyan(`• ${model.name}\n`) +
-                chalk.gray(`  ID: ${model.id}\n`) +
-                chalk.gray(`  Context: ${model.contextLength || 'Unknown'} tokens\n`) +
-                (options.pricing && model.pricing ? 
-                  chalk.gray(`  Input: $${model.pricing.input}/1K tokens | Output: $${model.pricing.output}/1K tokens\n`) : ''
-                ) +
-                chalk.gray(`  ${model.description || 'No description'}`)
-              ).join('\n\n'),
-              {
-                padding: 1,
-                borderStyle: 'round',
-                borderColor: 'cyan',
-                title: provider,
-              }
-            )
-          );
+        if (options.interactive || !options.name) {
+          spinner.stop();
+          agentData = await promptForAgentCreation(options);
+          spinner.start('Creating agent...');
+        } else {
+          agentData = {
+            name: options.name,
+            description: options.description || '',
+            specialization: options.specialization || 'general',
+            capabilities: {}
+          };
         }
-      }
-    } else {
-      spinner.fail(chalk.red('Failed to fetch models'));
-      console.log(chalk.red(result.error || 'Unknown error'));
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Failed to fetch models'));
-    throw error;
-  }
-}
 
-async function handleTestAgent(agentId: string, options: any): Promise<void> {
-  let prompt = options.prompt;
-
-  if (options.file) {
-    const fs = require('fs-extra');
-    try {
-      prompt = await fs.readFile(options.file, 'utf8');
-    } catch (error) {
-      Logger.error(`Failed to read prompt file: ${error}`);
-      return;
-    }
-  }
-
-  if (!prompt) {
-    const response = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'prompt',
-        message: 'Test prompt:',
-        validate: (input) => input.length > 0 || 'Prompt cannot be empty',
-      },
-    ]);
-    prompt = response.prompt;
-  }
-
-  console.log(
-    boxen(
-      chalk.cyan(`🧪 Testing Agent: ${agentId}\n`) +
-      chalk.gray(`Prompt: ${prompt}`),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-      }
-    )
-  );
-
-  const spinner = ora('Generating response...').start();
-
-  try {
-    const token = ConfigManager.get('auth.token');
-    
-    if (options.stream) {
-      spinner.succeed(chalk.green('Starting stream...'));
-      console.log(chalk.white('\n📝 Agent Response:\n'));
-      
-      await AgentService.testAgentStream(token, agentId, prompt, (chunk: string) => {
-        process.stdout.write(chunk);
-      });
-      
-      console.log('\n');
-    } else {
-      const result = await AgentService.testAgent(token, agentId, prompt);
-      
-      if (result.success) {
-        spinner.succeed(chalk.green('Response generated'));
+        const agent = await createAgent(agentData);
         
-        console.log(
-          boxen(
-            chalk.white('📝 Agent Response\n') +
-            chalk.gray(result.response),
-            {
-              padding: 1,
-              borderStyle: 'round',
-              borderColor: 'green',
-              title: 'Response',
-            }
-          )
-        );
-
-        if (result.usage) {
-          console.log(
-            boxen(
-              chalk.white('📊 Usage\n') +
-              chalk.gray(`Tokens: ${result.usage.totalTokens}\n`) +
-              chalk.gray(`Response Time: ${result.usage.responseTime}ms\n`) +
-              chalk.gray(`Cost: $${result.usage.cost || 'N/A'}`),
-              {
-                padding: 1,
-                borderStyle: 'round',
-                borderColor: 'blue',
-                title: 'Usage',
-              }
-            )
-          );
-        }
-      } else {
-        spinner.fail(chalk.red('Test failed'));
-        console.log(chalk.red(result.error || 'Unknown error'));
+        spinner.succeed(chalk.green('Agent created successfully!'));
+        
+        displayAgentInfo(agent);
+        
+        Logger.info('Agent created', { agentId: agent.id, name: agent.name });
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to create agent'));
+        Logger.error('Agent creation failed', { error: error instanceof Error ? error.message : String(error) });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
       }
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Agent test failed'));
-    throw error;
-  }
-}
-
-async function handleCloneAgent(agentId: string, options: any): Promise<void> {
-  const spinner = ora('Cloning agent...').start();
-
-  try {
-    const token = ConfigManager.get('auth.token');
-    const result = await AgentService.cloneAgent(token, agentId, {
-      name: options.name,
-      public: options.public,
     });
-    
-    if (result.success) {
-      spinner.succeed(chalk.green('Agent cloned successfully!'));
-      
-      console.log(
-        boxen(
-          chalk.white(`🤖 ${result.agent.name}\n`) +
-          chalk.gray(`Original ID: ${agentId}\n`) +
-          chalk.gray(`Clone ID: ${result.agent.id}\n`) +
-          chalk.gray(`Status: ${result.agent.status}`),
-          {
-            padding: 1,
-            borderStyle: 'round',
-            borderColor: 'green',
-            title: 'Agent Cloned',
-          }
-        )
-      );
-    } else {
-      spinner.fail(chalk.red('Agent cloning failed'));
-      console.log(chalk.red(result.error || 'Unknown error'));
-    }
-  } catch (error) {
-    spinner.fail(chalk.red('Agent cloning failed'));
-    throw error;
-  }
 }
 
-async function runInteractiveAgentCreation(options: any): Promise<CreateAgentRequest> {
-  console.log(chalk.cyan('\n📋 Starting Enhanced Agent Creation Wizard\n'));
+function createListCommand(): Command {
+  return new Command('list')
+    .alias('ls')
+    .description('List all available agents')
+    .option('-s, --specialization <specialization>', 'Filter by specialization')
+    .option('--status <status>', 'Filter by status (active|inactive|archived)')
+    .option('--sort <sort>', 'Sort by (name|created|usage|rating)', 'name')
+    .option('-l, --limit <limit>', 'Limit number of results', '20')
+    .option('--json', 'Output as JSON', false)
+    .action(async (options) => {
+      const spinner = ora('Fetching agents...').start();
+      
+      try {
+        const listOptions: AgentListOptions = {
+          specialization: options.specialization,
+          status: options.status,
+          sort: options.sort as any,
+          limit: parseInt(options.limit)
+        };
 
-  // Step 1: Basic Information
-  const basicInfo = await inquirer.prompt([
+        const agents = await listAgents(listOptions);
+        
+        spinner.succeed(`Found ${agents.length} agents`);
+        
+        if (options.json) {
+          console.log(JSON.stringify(agents, null, 2));
+        } else {
+          displayAgentsList(agents);
+        }
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to fetch agents'));
+        Logger.error('Agent list failed', { error: error instanceof Error ? error.message : String(error) });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createShowCommand(): Command {
+  return new Command('show')
+    .alias('info')
+    .description('Show detailed information about an agent')
+    .argument('<agent-id>', 'Agent ID or name')
+    .option('--json', 'Output as JSON', false)
+    .action(async (agentId, options) => {
+      const spinner = ora('Fetching agent details...').start();
+      
+      try {
+        const agent = await getAgent(agentId);
+        
+        spinner.succeed('Agent details retrieved');
+        
+        if (options.json) {
+          console.log(JSON.stringify(agent, null, 2));
+        } else {
+          displayAgentDetails(agent);
+        }
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to fetch agent details'));
+        Logger.error('Agent show failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createUpdateCommand(): Command {
+  return new Command('update')
+    .description('Update an existing agent')
+    .argument('<agent-id>', 'Agent ID or name')
+    .option('-n, --name <name>', 'Update agent name')
+    .option('-d, --description <description>', 'Update agent description')
+    .option('-s, --specialization <specialization>', 'Update agent specialization')
+    .option('-i, --interactive', 'Interactive mode', false)
+    .action(async (agentId, options) => {
+      const spinner = ora('Updating agent...').start();
+      
+      try {
+        if (options.interactive) {
+          spinner.stop();
+          const updateData = await promptForAgentUpdate(agentId);
+          spinner.start('Updating agent...');
+          
+          const agent = await updateAgent(agentId, updateData);
+          spinner.succeed(chalk.green('Agent updated successfully!'));
+          displayAgentInfo(agent);
+        } else {
+          const updateData: Partial<CreateAgentRequest> = {};
+          if (options.name) updateData.name = options.name;
+          if (options.description) updateData.description = options.description;
+          if (options.specialization) updateData.specialization = options.specialization;
+          
+          const agent = await updateAgent(agentId, updateData);
+          spinner.succeed(chalk.green('Agent updated successfully!'));
+          displayAgentInfo(agent);
+        }
+        
+        Logger.info('Agent updated', { agentId });
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to update agent'));
+        Logger.error('Agent update failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createDeleteCommand(): Command {
+  return new Command('delete')
+    .alias('rm')
+    .description('Delete an agent')
+    .argument('<agent-id>', 'Agent ID or name')
+    .option('-f, --force', 'Force deletion without confirmation', false)
+    .action(async (agentId, options) => {
+      try {
+        if (!options.force) {
+          const { confirm } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'confirm',
+              message: `Are you sure you want to delete agent "${agentId}"?`,
+              default: false
+            }
+          ]);
+          
+          if (!confirm) {
+            console.log(chalk.yellow('Deletion cancelled'));
+            return;
+          }
+        }
+        
+        const spinner = ora('Deleting agent...').start();
+        
+        await deleteAgent(agentId);
+        
+        spinner.succeed(chalk.green('Agent deleted successfully'));
+        Logger.info('Agent deleted', { agentId });
+        
+      } catch (error) {
+        console.error(chalk.red('Failed to delete agent'));
+        Logger.error('Agent deletion failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createSearchCommand(): Command {
+  return new Command('search')
+    .description('Search for agents')
+    .argument('<query>', 'Search query')
+    .option('-c, --capabilities <capabilities>', 'Filter by capabilities (comma-separated)')
+    .option('-s, --specialization <specialization>', 'Filter by specialization')
+    .option('--json', 'Output as JSON', false)
+    .action(async (query, options) => {
+      const spinner = ora('Searching agents...').start();
+      
+      try {
+        const searchOptions: AgentSearchOptions = {
+          query,
+          capabilities: options.capabilities?.split(','),
+          specialization: options.specialization
+        };
+
+        const agents = await searchAgents(searchOptions);
+        
+        spinner.succeed(`Found ${agents.length} matching agents`);
+        
+        if (options.json) {
+          console.log(JSON.stringify(agents, null, 2));
+        } else {
+          displayAgentsList(agents);
+        }
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Search failed'));
+        Logger.error('Agent search failed', { error: error instanceof Error ? error.message : String(error), query });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createActivateCommand(): Command {
+  return new Command('activate')
+    .description('Activate an agent')
+    .argument('<agent-id>', 'Agent ID or name')
+    .action(async (agentId) => {
+      const spinner = ora('Activating agent...').start();
+      
+      try {
+        await updateAgentStatus(agentId, 'active');
+        
+        spinner.succeed(chalk.green('Agent activated successfully'));
+        Logger.info('Agent activated', { agentId });
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to activate agent'));
+        Logger.error('Agent activation failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createDeactivateCommand(): Command {
+  return new Command('deactivate')
+    .description('Deactivate an agent')
+    .argument('<agent-id>', 'Agent ID or name')
+    .action(async (agentId) => {
+      const spinner = ora('Deactivating agent...').start();
+      
+      try {
+        await updateAgentStatus(agentId, 'inactive');
+        
+        spinner.succeed(chalk.green('Agent deactivated successfully'));
+        Logger.info('Agent deactivated', { agentId });
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to deactivate agent'));
+        Logger.error('Agent deactivation failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createCloneCommand(): Command {
+  return new Command('clone')
+    .description('Clone an existing agent')
+    .argument('<agent-id>', 'Agent ID or name to clone')
+    .option('-n, --name <name>', 'Name for the cloned agent')
+    .action(async (agentId, options) => {
+      const spinner = ora('Cloning agent...').start();
+      
+      try {
+        const clonedAgent = await cloneAgent(agentId, options.name);
+        
+        spinner.succeed(chalk.green('Agent cloned successfully!'));
+        displayAgentInfo(clonedAgent);
+        
+        Logger.info('Agent cloned', { originalId: agentId, clonedId: clonedAgent.id });
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to clone agent'));
+        Logger.error('Agent cloning failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createExportCommand(): Command {
+  return new Command('export')
+    .description('Export agent configuration')
+    .argument('<agent-id>', 'Agent ID or name')
+    .option('-o, --output <file>', 'Output file path')
+    .action(async (agentId, options) => {
+      const spinner = ora('Exporting agent...').start();
+      
+      try {
+        const agent = await getAgent(agentId);
+        const exportData = await exportAgent(agent);
+        
+        const outputFile = options.output || `${agent.name.toLowerCase().replace(/\s+/g, '-')}-agent.json`;
+        await FileSystemUtils.writeFile(outputFile, JSON.stringify(exportData, null, 2));
+        
+        spinner.succeed(chalk.green(`Agent exported to ${outputFile}`));
+        Logger.info('Agent exported', { agentId, outputFile });
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to export agent'));
+        Logger.error('Agent export failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createImportCommand(): Command {
+  return new Command('import')
+    .description('Import agent configuration')
+    .argument('<file>', 'Agent configuration file')
+    .action(async (file) => {
+      const spinner = ora('Importing agent...').start();
+      
+      try {
+        const fileContent = await FileSystemUtils.readFile(file);
+        if (!fileContent) {
+          throw new Error('File is empty or could not be read');
+        }
+        const agentData = JSON.parse(fileContent);
+        
+        const agent = await importAgent(agentData);
+        
+        spinner.succeed(chalk.green('Agent imported successfully!'));
+        displayAgentInfo(agent);
+        
+        Logger.info('Agent imported', { agentId: agent.id, file });
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to import agent'));
+        Logger.error('Agent import failed', { error: error instanceof Error ? error.message : String(error), file });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+function createStatsCommand(): Command {
+  return new Command('stats')
+    .description('Show agent usage statistics')
+    .argument('[agent-id]', 'Agent ID or name (optional, shows all if not provided)')
+    .option('--json', 'Output as JSON', false)
+    .action(async (agentId, options) => {
+      const spinner = ora('Fetching statistics...').start();
+      
+      try {
+        const stats = agentId ? await getAgentStats(agentId) : await getAllAgentStats();
+        
+        spinner.succeed('Statistics retrieved');
+        
+        if (options.json) {
+          console.log(JSON.stringify(stats, null, 2));
+        } else {
+          displayAgentStats(stats, agentId);
+        }
+        
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to fetch statistics'));
+        Logger.error('Agent stats failed', { error: error instanceof Error ? error.message : String(error), agentId });
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    });
+}
+
+// Implementation functions
+async function promptForAgentCreation(options: any): Promise<CreateAgentRequest> {
+  const questions = [
     {
       type: 'input',
       name: 'name',
-      message: '👤 Agent name:',
+      message: 'Agent name:',
       default: options.name,
-      validate: (input) => {
-        if (input.length < 3) return 'Name must be at least 3 characters';
-        if (!/^[a-zA-Z0-9\s\-_]+$/.test(input)) return 'Name can only contain letters, numbers, spaces, hyphens, and underscores';
-        return true;
-      },
+      validate: (input: string) => input.trim().length > 0 || 'Name is required'
     },
     {
-      type: 'editor',
+      type: 'input',
       name: 'description',
-      message: '📝 Agent description (opens editor):',
-      default: options.description || 'An intelligent AI coding assistant specialized in...',
-      validate: (input) => input.length >= 10 || 'Description must be at least 10 characters',
-    }
-  ]);
-
-  // Step 2: Category and Specialization
-  const specialization = await inquirer.prompt([
+      message: 'Agent description:',
+      default: options.description
+    },
     {
       type: 'list',
-      name: 'category',
-      message: '🎯 Primary specialization category:',
+      name: 'specialization',
+      message: 'Agent specialization:',
       choices: [
-        { name: '🌐 Web Development - Frontend, backend, full-stack', value: AgentCategory.WEB },
-        { name: '📱 Mobile Development - iOS, Android, cross-platform', value: AgentCategory.MOBILE },
-        { name: '⛓️  Blockchain/Web3 - Smart contracts, DeFi, NFTs', value: AgentCategory.BLOCKCHAIN },
-        { name: '🧠 AI/ML Development - Machine learning, deep learning', value: AgentCategory.AI },
-        { name: '🔧 Backend Development - APIs, databases, microservices', value: AgentCategory.BACKEND },
-        { name: '☁️  DevOps/Cloud - Infrastructure, deployment, monitoring', value: AgentCategory.DEVOPS },
-        { name: '🎨 UI/UX Design - Design systems, prototyping', value: AgentCategory.DESIGN },
-        { name: '📊 Data Science - Analytics, visualization, modeling', value: AgentCategory.DATA },
-        { name: '🔒 Security - Cybersecurity, penetration testing', value: AgentCategory.SECURITY },
-        { name: '⚡ Performance - Optimization, profiling, scaling', value: AgentCategory.PERFORMANCE },
-        { name: '🏗️  General - Multi-purpose development assistant', value: AgentCategory.GENERAL },
+        'web_development',
+        'mobile_development',
+        'blockchain_development',
+        'ai_ml_development',
+        'backend_development',
+        'devops_deployment',
+        'security_auditing',
+        'general'
       ],
+      default: options.specialization || 'general'
     },
     {
       type: 'checkbox',
-      name: 'tags',
-      message: '🏷️  Additional tags (select all that apply):',
+      name: 'capabilities',
+      message: 'Select capabilities:',
       choices: [
-        'frontend', 'backend', 'fullstack', 'api', 'database', 'testing',
-        'security', 'performance', 'cloud', 'devops', 'mobile', 'web3',
-        'ai', 'ml', 'data', 'analytics', 'ui', 'ux', 'design'
-      ],
+        { name: 'Web Development', value: 'web_development' },
+        { name: 'Mobile Development', value: 'mobile_development' },
+        { name: 'Blockchain Development', value: 'blockchain_development' },
+        { name: 'AI/ML Development', value: 'ai_ml_development' },
+        { name: 'Backend Development', value: 'backend_development' },
+        { name: 'DevOps & Deployment', value: 'devops_deployment' },
+        { name: 'Security Auditing', value: 'security_auditing' },
+        { name: 'Code Review', value: 'code_review' },
+        { name: 'Documentation', value: 'documentation' },
+        { name: 'Testing', value: 'testing' }
+      ]
     }
-  ]);
+  ];
 
-  // Step 3: AI Model Selection
-  const availableModels = aiHub ? await aiHub.getAvailableModels() : [];
-  const modelChoices = availableModels.length > 0 
-    ? availableModels.map(model => ({
-        name: `${model.name} (${model.provider}) - ${model.description}`,
-        value: model.id
-      }))
-    : [
-        { name: 'GPT-4o (OpenAI) - Most capable, latest model', value: 'gpt-4o' },
-        { name: 'GPT-4 Turbo (OpenAI) - High capability, cost effective', value: 'gpt-4-turbo' },
-        { name: 'Claude 3.5 Sonnet (Anthropic) - Excellent reasoning', value: 'claude-3.5-sonnet' },
-        { name: 'Claude 3 Opus (Anthropic) - Most powerful', value: 'claude-3-opus' },
-        { name: 'Claude 3 Haiku (Anthropic) - Fast and efficient', value: 'claude-3-haiku' },
-        { name: 'Gemini Pro 1.5 (Google) - Multimodal capabilities', value: 'gemini-pro-1.5' },
-        { name: 'Qwen2.5-Coder:7B (Local/Ollama) - Code-focused, private', value: 'ollama/qwen2.5-coder:7b' },
-        { name: 'CodeLlama:13B (Local/Ollama) - Code generation, private', value: 'ollama/codellama:13b' },
-        { name: 'DeepSeek Coder:6.7B (Local/Ollama) - Fast coding, private', value: 'ollama/deepseek-coder:6.7b' },
-      ];
-
-  const modelSelection = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'model',
-      message: '🤖 Select AI model:',
-      default: options.model || 'claude-3.5-sonnet',
-      choices: modelChoices,
-    },
-    {
-      type: 'confirm',
-      name: 'configureAdvanced',
-      message: '⚙️  Configure advanced model settings?',
-      default: false,
-    }
-  ]);
-
-  let modelSettings = {
-    temperature: 0.7,
-    maxTokens: 2000,
-    topP: 1.0
-  };
-
-  if (modelSelection.configureAdvanced) {
-    const advancedSettings = await inquirer.prompt([
-      {
-        type: 'number',
-        name: 'temperature',
-        message: '🌡️  Temperature (creativity vs consistency, 0.0-1.0):',
-        default: 0.7,
-        validate: (input) => input >= 0 && input <= 1 || 'Must be between 0.0 and 1.0',
-      },
-      {
-        type: 'number',
-        name: 'maxTokens',
-        message: '📏 Maximum tokens per response:',
-        default: 2000,
-        validate: (input) => input > 100 && input <= 32000 || 'Must be between 100 and 32000',
-      }
-    ]);
-    modelSettings = { ...modelSettings, ...advancedSettings };
-  }
-
-  // Step 4: Capabilities Configuration
-  const capabilities = await configureCapabilities(specialization.category);
-
-  // Step 5: Language and Framework Preferences
-  const preferences = await configurePreferences();
-
-  // Step 6: Personality Configuration
-  const personality = await configurePersonality();
-
-  // Step 7: Custom Instructions
-  const instructions = await configureInstructions();
-
-  // Step 8: Final Configuration
-  const finalConfig = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'visibility',
-      message: '👁️  Agent visibility:',
-      default: 'private',
-      choices: [
-        { name: '🔒 Private - Only you can use this agent', value: 'private' },
-        { name: '🏢 Team - Team members can use this agent', value: 'team' },
-        { name: '🌐 Public - Anyone can discover and use this agent', value: 'public' },
-      ],
-    },
-    {
-      type: 'input',
-      name: 'version',
-      message: '🏷️  Initial version:',
-      default: '1.0.0',
-      validate: (input) => /^\d+\.\d+\.\d+$/.test(input) || 'Version must be in semver format (e.g., 1.0.0)',
-    }
-  ]);
-
-  // Construct the complete agent configuration
-  const agentConfig: CreateAgentRequest = {
-    name: basicInfo.name,
-    description: basicInfo.description,
-    model: modelSelection.model,
-    capabilities,
-    preferences,
-    personality,
-    instructions,
-    metadata: {
-      category: specialization.category,
-      tags: specialization.tags,
-      visibility: finalConfig.visibility,
-      version: finalConfig.version,
-      author: 'user'
-    },
-    settings: modelSettings
-  };
-
-  // Show configuration summary
-  displayConfigurationSummary(agentConfig);
-
-  const confirmation = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'create',
-      message: '✅ Create agent with this configuration?',
-      default: true,
-    }
-  ]);
-
-  if (!confirmation.create) {
-    throw new Error('Agent creation cancelled by user');
-  }
-
-  return agentConfig;
-}
-
-async function configureCapabilities(category: AgentCategory): Promise<any> {
-  console.log(chalk.cyan('\n🛠️  Configuring Agent Capabilities\n'));
-
-  const generalCapabilities = await inquirer.prompt([
-    {
-      type: 'checkbox',
-      name: 'general',
-      message: '⚙️  General capabilities:',
-      choices: [
-        { name: '💻 Code Generation - Write new code from scratch', value: 'codeGeneration', checked: true },
-        { name: '👁️  Code Review - Analyze and improve existing code', value: 'codeReview', checked: true },
-        { name: '🐛 Debugging - Find and fix code issues', value: 'debugging', checked: true },
-        { name: '🧪 Testing - Create and manage tests', value: 'testing', checked: true },
-        { name: '📚 Documentation - Generate docs and comments', value: 'documentation', checked: true },
-        { name: '🔄 Refactoring - Improve code structure', value: 'refactoring' },
-        { name: '🏗️  Architecture - Design system architecture', value: 'architecture' },
-        { name: '🔐 Security - Security analysis and hardening', value: 'security' },
-        { name: '⚡ Performance - Optimization and profiling', value: 'performance' },
-        { name: '🚀 Deployment - Deployment and DevOps tasks', value: 'deployment' },
-      ],
-    }
-  ]);
-
-  // Category-specific capabilities
-  let specificCapabilities = {};
+  const answers = await inquirer.prompt(questions);
   
-  if (category === AgentCategory.WEB) {
-    const webCapabilities = await inquirer.prompt([
-      {
-        type: 'checkbox',
-        name: 'frameworks',
-        message: '🌐 Web frameworks expertise:',
-        choices: [
-          'React', 'Vue.js', 'Angular', 'Svelte', 'Next.js', 'Nuxt.js',
-          'Express.js', 'Fastify', 'NestJS', 'Koa.js'
-        ],
-      },
-      {
-        type: 'checkbox',
-        name: 'features',
-        message: '✨ Web-specific features:',
-        choices: [
-          'PWA Development', 'SSR/SSG', 'Performance Optimization',
-          'SEO Optimization', 'Accessibility', 'Responsive Design'
-        ],
-      }
-    ]);
-    specificCapabilities = { web: { enabled: true, ...webCapabilities } };
-  }
-
-  // Similar for other categories...
-  
-  return {
-    general: generalCapabilities.general.reduce((acc: any, cap: string) => {
-      acc[cap] = true;
-      return acc;
-    }, {}),
-    ...specificCapabilities
-  };
-}
-
-async function configurePreferences(): Promise<any> {
-  console.log(chalk.cyan('\n🎯 Configuring Language & Framework Preferences\n'));
-
-  return await inquirer.prompt([
-    {
-      type: 'checkbox',
-      name: 'languages',
-      message: '💬 Preferred programming languages:',
-      choices: [
-        'TypeScript', 'JavaScript', 'Python', 'Java', 'C#', 'Go',
-        'Rust', 'C++', 'Swift', 'Kotlin', 'PHP', 'Ruby', 'Scala'
-      ],
-    },
-    {
-      type: 'checkbox',
-      name: 'tools',
-      message: '🔧 Preferred development tools:',
-      choices: [
-        'VS Code', 'IntelliJ', 'Vim/Neovim', 'Git', 'Docker',
-        'Kubernetes', 'AWS', 'Azure', 'GCP', 'Terraform'
-      ],
-    },
-    {
-      type: 'list',
-      name: 'codingStyle',
-      message: '📝 Coding style preference:',
-      choices: [
-        { name: 'Minimal - Clean and concise code', value: 'minimal' },
-        { name: 'Documented - Well-commented code', value: 'documented' },
-        { name: 'Verbose - Explicit and detailed code', value: 'verbose' },
-        { name: 'Enterprise - Enterprise-grade patterns', value: 'enterprise' }
-      ],
-    }
-  ]);
-}
-
-async function configurePersonality(): Promise<any> {
-  console.log(chalk.cyan('\n🎭 Configuring Agent Personality\n'));
-
-  return await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'tone',
-      message: '🗣️  Communication tone:',
-      choices: [
-        { name: '👔 Professional - Formal and business-like', value: PersonalityTone.PROFESSIONAL },
-        { name: '😊 Friendly - Warm and approachable', value: PersonalityTone.FRIENDLY },
-        { name: '🤝 Casual - Relaxed and informal', value: PersonalityTone.CASUAL },
-        { name: '🎓 Academic - Scholarly and detailed', value: PersonalityTone.ACADEMIC },
-        { name: '💡 Enthusiastic - Energetic and positive', value: PersonalityTone.ENTHUSIASTIC }
-      ],
-    },
-    {
-      type: 'list',
-      name: 'verbosity',
-      message: '📏 Response length preference:',
-      choices: [
-        { name: '📝 Concise - Short and to the point', value: VerbosityLevel.CONCISE },
-        { name: '📄 Detailed - Comprehensive explanations', value: VerbosityLevel.DETAILED },
-        { name: '📚 Verbose - Extensive documentation', value: VerbosityLevel.VERBOSE }
-      ],
-    },
-    {
-      type: 'list',
-      name: 'approach',
-      message: '🎯 Problem-solving approach:',
-      choices: [
-        { name: '⚡ Pragmatic - Practical, get-it-done solutions', value: ApproachStyle.PRAGMATIC },
-        { name: '🔬 Methodical - Systematic, step-by-step approach', value: ApproachStyle.METHODICAL },
-        { name: '💡 Creative - Innovative and unconventional solutions', value: ApproachStyle.CREATIVE },
-        { name: '🎓 Academic - Research-based, theoretical approach', value: ApproachStyle.ACADEMIC }
-      ],
-    }
-  ]);
-}
-
-async function configureInstructions(): Promise<any> {
-  console.log(chalk.cyan('\n📋 Configuring Custom Instructions\n'));
-
-  return await inquirer.prompt([
-    {
-      type: 'editor',
-      name: 'system',
-      message: '🤖 System prompt (defines agent behavior):',
-      default: 'You are an expert software developer and coding assistant. Always provide high-quality, production-ready code with proper error handling and best practices.',
-    },
-    {
-      type: 'editor',
-      name: 'context',
-      message: '📄 Additional context (optional):',
-      default: '',
-    },
-    {
-      type: 'input',
-      name: 'constraints',
-      message: '🚫 Constraints or limitations (comma-separated):',
-      filter: (input: string) => input.split(',').map(s => s.trim()).filter(Boolean),
-    }
-  ]);
-}
-
-function displayConfigurationSummary(config: CreateAgentRequest): void {
-  console.log(
-    boxen(
-      chalk.white('📋 Agent Configuration Summary\n\n') +
-      chalk.cyan('Basic Information:\n') +
-      chalk.gray(`• Name: ${config.name}\n`) +
-      chalk.gray(`• Model: ${config.model}\n`) +
-      chalk.gray(`• Category: ${config.metadata?.category}\n`) +
-      chalk.gray(`• Visibility: ${config.metadata?.visibility}\n\n`) +
-      chalk.cyan('Capabilities:\n') +
-      chalk.gray(`• General: ${Object.keys(config.capabilities?.general || {}).filter(k => (config.capabilities?.general as any)?.[k]).join(', ')}\n`) +
-      chalk.gray(`• Languages: ${config.preferences?.languages?.join(', ') || 'None specified'}\n`) +
-      chalk.gray(`• Personality: ${config.personality?.tone} / ${config.personality?.verbosity}\n`),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-        title: 'Configuration Summary'
-      }
-    )
-  );
-}
-
-function displayAgentCreated(agent: Agent): void {
-  console.log(
-    boxen(
-      chalk.white(`🤖 ${agent.name}\n`) +
-      chalk.gray(`ID: ${agent.id}\n`) +
-      chalk.gray(`Model: ${agent.model}\n`) +
-      chalk.gray(`Category: ${agent.metadata.category}\n`) +
-      chalk.gray(`Status: ${agent.status}\n`) +
-      chalk.gray(`Created: ${agent.createdAt.toLocaleString()}\n`) +
-      (agent.metadata.visibility === 'public' ? chalk.green('🌐 Public') : 
-       agent.metadata.visibility === 'team' ? chalk.yellow('🏢 Team') : 
-       chalk.blue('🔒 Private')),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'green',
-        title: 'Agent Created Successfully',
-      }
-    )
-  );
-}
-
-function getAgentTemplate(templateName: string): CreateAgentRequest {
-  const templates: Record<string, CreateAgentRequest> = {
-    'web-developer': {
-      name: 'Web Developer',
-      description: 'Full-stack web development specialist with expertise in modern frameworks and best practices.',
-      model: 'claude-3.5-sonnet',
-      capabilities: {
-        web: { enabled: true, frameworks: ['React', 'Next.js', 'Express.js'], features: ['SSR/SSG', 'Performance'] },
-        general: { codeGeneration: true, codeReview: true, debugging: true, testing: true }
-      },
-      preferences: {
-        languages: ['TypeScript', 'JavaScript'],
-        frameworks: ['React', 'Next.js', 'Express.js'],
-        tools: ['VS Code', 'Git', 'Docker']
-      },
-      personality: {
-        tone: PersonalityTone.PROFESSIONAL,
-        verbosity: VerbosityLevel.DETAILED,
-        approach: ApproachStyle.PRAGMATIC
-      },
-      metadata: {
-        category: AgentCategory.WEB,
-        tags: ['web', 'frontend', 'backend', 'fullstack'],
-        visibility: 'private'
-      }
-    },
-    'mobile-developer': {
-      name: 'Mobile Developer',
-      description: 'Cross-platform mobile development expert with React Native and native development experience.',
-      model: 'gpt-4o',
-      capabilities: {
-        mobile: { enabled: true, platforms: ['iOS', 'Android'], frameworks: ['React Native', 'Flutter'] },
-        general: { codeGeneration: true, codeReview: true, debugging: true, testing: true }
-      },
-      preferences: {
-        languages: ['TypeScript', 'Swift', 'Kotlin', 'Dart'],
-        frameworks: ['React Native', 'Flutter'],
-        tools: ['Xcode', 'Android Studio', 'VS Code']
-      },
-      personality: {
-        tone: PersonalityTone.FRIENDLY,
-        verbosity: VerbosityLevel.DETAILED,
-        approach: ApproachStyle.METHODICAL
-      },
-      metadata: {
-        category: AgentCategory.MOBILE,
-        tags: ['mobile', 'ios', 'android', 'cross-platform'],
-        visibility: 'private'
-      }
-    }
-  };
-
-  return templates[templateName] || templates['web-developer'];
-}
-
-function displayAgentsList(agents: Agent[], showStats: boolean): void {
-  for (const agent of agents) {
-    console.log(
-      boxen(
-        chalk.white(`🤖 ${agent.name}\n`) +
-        chalk.gray(`ID: ${agent.id}\n`) +
-        chalk.gray(`Model: ${agent.model}\n`) +
-        chalk.gray(`Category: ${agent.metadata.category}\n`) +
-        chalk.gray(`Status: ${getStatusIcon(agent.status)} ${agent.status}\n`) +
-        chalk.gray(`Description: ${agent.description}\n`) +
-        chalk.gray(`Tags: ${agent.metadata.tags.join(', ') || 'None'}\n`) +
-        (showStats ? displayPerformanceStats(agent) : '') +
-        chalk.gray(`Created: ${agent.createdAt.toLocaleDateString()} | `) +
-        chalk.gray(`Updated: ${agent.updatedAt.toLocaleDateString()}\n`) +
-        getVisibilityBadge(agent.metadata.visibility),
-        {
-          padding: 1,
-          borderStyle: 'round',
-          borderColor: getStatusColor(agent.status),
-          title: `Agent ${agent.id.substring(0, 8)}`
-        }
-      )
-    );
-  }
-}
-
-function displayAgentsTable(agents: Agent[], showStats: boolean): void {
-  const table = new Table({
-    head: [
-      chalk.cyan('Name'),
-      chalk.cyan('ID'),
-      chalk.cyan('Model'),
-      chalk.cyan('Category'),
-      chalk.cyan('Status'),
-      chalk.cyan('Performance'),
-      chalk.cyan('Updated')
-    ],
-    style: {
-      head: [],
-      border: []
-    }
+  const capabilities: Partial<AgentCapabilities> = {};
+  answers.capabilities.forEach((cap: string) => {
+    (capabilities as any)[cap] = true;
   });
 
-  for (const agent of agents) {
+  return {
+    name: answers.name,
+    description: answers.description,
+    specialization: answers.specialization,
+    capabilities
+  };
+}
+
+async function promptForAgentUpdate(agentId: string): Promise<Partial<CreateAgentRequest>> {
+  // Get current agent data
+  const currentAgent = await getAgent(agentId);
+  
+  const questions = [
+    {
+      type: 'input',
+      name: 'name',
+      message: 'Agent name:',
+      default: currentAgent.name
+    },
+    {
+      type: 'input',
+      name: 'description',
+      message: 'Agent description:',
+      default: currentAgent.description
+    },
+    {
+      type: 'list',
+      name: 'specialization',
+      message: 'Agent specialization:',
+      choices: [
+        'web_development',
+        'mobile_development',
+        'blockchain_development',
+        'ai_ml_development',
+        'backend_development',
+        'devops_deployment',
+        'security_auditing',
+        'general'
+      ],
+      default: currentAgent.specialization
+    }
+  ];
+
+  const answers = await inquirer.prompt(questions);
+  
+  return {
+    name: answers.name,
+    description: answers.description,
+    specialization: answers.specialization
+  };
+}
+
+// API functions
+async function createAgent(agentData: CreateAgentRequest): Promise<Agent> {
+  const response = await ApiClient.post('/agents', agentData);
+  return response.data;
+}
+
+async function listAgents(options: AgentListOptions): Promise<Agent[]> {
+  const queryParams = new URLSearchParams();
+  
+  if (options.specialization) queryParams.append('specialization', options.specialization);
+  if (options.status) queryParams.append('status', options.status);
+  if (options.sort) queryParams.append('sort', options.sort);
+  if (options.limit) queryParams.append('limit', options.limit.toString());
+  
+  const response = await ApiClient.get(`/agents?${queryParams.toString()}`);
+  return response.data;
+}
+
+async function getAgent(agentId: string): Promise<Agent> {
+  const response = await ApiClient.get(`/agents/${agentId}`);
+  return response.data;
+}
+
+async function updateAgent(agentId: string, updateData: Partial<CreateAgentRequest>): Promise<Agent> {
+  const response = await ApiClient.put(`/agents/${agentId}`, updateData);
+  return response.data;
+}
+
+async function deleteAgent(agentId: string): Promise<void> {
+  await ApiClient.delete(`/agents/${agentId}`);
+}
+
+async function searchAgents(options: AgentSearchOptions): Promise<Agent[]> {
+  const response = await ApiClient.post('/agents/search', options);
+  return response.data;
+}
+
+async function updateAgentStatus(agentId: string, status: 'active' | 'inactive'): Promise<void> {
+  await ApiClient.patch(`/agents/${agentId}/status`, { status });
+}
+
+async function cloneAgent(agentId: string, newName?: string): Promise<Agent> {
+  const response = await ApiClient.post(`/agents/${agentId}/clone`, { name: newName });
+  return response.data;
+}
+
+async function exportAgent(agent: Agent): Promise<any> {
+  return {
+    name: agent.name,
+    description: agent.description,
+    specialization: agent.specialization,
+    capabilities: agent.capabilities,
+    personality: agent.personality,
+    preferences: agent.preferences,
+    version: agent.version,
+    exported_at: new Date().toISOString()
+  };
+}
+
+async function importAgent(agentData: any): Promise<Agent> {
+  const createData: CreateAgentRequest = {
+    name: agentData.name,
+    description: agentData.description,
+    specialization: agentData.specialization,
+    capabilities: agentData.capabilities,
+    personality: agentData.personality,
+    preferences: agentData.preferences
+  };
+  
+  return await createAgent(createData);
+}
+
+async function getAgentStats(agentId: string): Promise<any> {
+  const response = await ApiClient.get(`/agents/${agentId}/stats`);
+  return response.data;
+}
+
+async function getAllAgentStats(): Promise<any> {
+  const response = await ApiClient.get('/agents/stats');
+  return response.data;
+}
+
+// Display functions
+function displayAgentInfo(agent: Agent): void {
+  const info = boxen(
+    `${chalk.bold.blue(agent.name)}\n` +
+    `${chalk.gray(agent.description)}\n\n` +
+    `${chalk.yellow('Specialization:')} ${agent.specialization}\n` +
+    `${chalk.yellow('Status:')} ${getStatusColor(agent.status)}\n` +
+    `${chalk.yellow('Version:')} ${agent.version}\n` +
+    `${chalk.yellow('Created:')} ${new Date(agent.created_at).toLocaleDateString()}`,
+    {
+      padding: 1,
+      borderColor: 'blue',
+      borderStyle: 'round'
+    }
+  );
+  
+  console.log(info);
+}
+
+function displayAgentsList(agents: Agent[]): void {
+  if (agents.length === 0) {
+    console.log(chalk.yellow('No agents found.'));
+    return;
+  }
+
+  const table = new Table({
+    head: [
+      chalk.blue('Name'),
+      chalk.blue('Specialization'),
+      chalk.blue('Status'),
+      chalk.blue('Projects'),
+      chalk.blue('Rating'),
+      chalk.blue('Last Used')
+    ],
+    colWidths: [20, 15, 10, 10, 8, 12]
+  });
+
+  agents.forEach(agent => {
     table.push([
       agent.name,
-      agent.id.substring(0, 12) + '...',
-      agent.model,
-      agent.metadata.category,
-      `${getStatusIcon(agent.status)} ${agent.status}`,
-      showStats ? `${agent.performance.successRate}% | ${agent.performance.totalRequests} req` : 'N/A',
-      agent.updatedAt.toLocaleDateString()
+      agent.specialization,
+      getStatusColor(agent.status),
+      agent.usage_stats.total_projects.toString(),
+      agent.usage_stats.average_rating.toFixed(1),
+      agent.usage_stats.last_used ? new Date(agent.usage_stats.last_used).toLocaleDateString() : 'Never'
     ]);
-  }
+  });
 
   console.log(table.toString());
 }
 
-function displayPerformanceStats(agent: Agent): string {
-  return chalk.gray(`Performance: ${agent.performance.successRate}% success | `) +
-         chalk.gray(`${agent.performance.totalRequests} requests | `) +
-         chalk.gray(`${agent.performance.averageResponseTime}ms avg\n`);
+function displayAgentDetails(agent: Agent): void {
+  console.log(boxen(
+    `${chalk.bold.blue(agent.name)}\n` +
+    `${chalk.gray(agent.description)}\n\n` +
+    `${chalk.yellow('ID:')} ${agent.id}\n` +
+    `${chalk.yellow('Specialization:')} ${agent.specialization}\n` +
+    `${chalk.yellow('Status:')} ${getStatusColor(agent.status)}\n` +
+    `${chalk.yellow('Version:')} ${agent.version}\n` +
+    `${chalk.yellow('Created:')} ${new Date(agent.created_at).toLocaleDateString()}\n` +
+    `${chalk.yellow('Updated:')} ${new Date(agent.updated_at).toLocaleDateString()}\n\n` +
+    `${chalk.bold('Capabilities:')}\n` +
+    Object.entries(agent.capabilities)
+      .filter(([_, enabled]) => enabled)
+      .map(([cap, _]) => `  • ${cap.replace(/_/g, ' ')}`)
+      .join('\n') + '\n\n' +
+    `${chalk.bold('Usage Statistics:')}\n` +
+    `  • Total Projects: ${agent.usage_stats.total_projects}\n` +
+    `  • Success Rate: ${(agent.usage_stats.success_rate * 100).toFixed(1)}%\n` +
+    `  • Average Rating: ${agent.usage_stats.average_rating.toFixed(1)}/5\n` +
+    `  • Last Used: ${agent.usage_stats.last_used ? new Date(agent.usage_stats.last_used).toLocaleDateString() : 'Never'}`,
+    {
+      padding: 1,
+      borderColor: 'blue',
+      borderStyle: 'round'
+    }
+  ));
 }
 
-function getStatusIcon(status: AgentStatus): string {
-  switch (status) {
-    case AgentStatus.ACTIVE: return '🟢';
-    case AgentStatus.INACTIVE: return '🔴';
-    case AgentStatus.ERROR: return '🔴';
-    case AgentStatus.MAINTENANCE: return '🟡';
-    default: return '⚪';
-  }
-}
-
-function getStatusColor(status: AgentStatus): string {
-  switch (status) {
-    case AgentStatus.ACTIVE: return 'green';
-    case AgentStatus.INACTIVE: return 'red';
-    case AgentStatus.ERROR: return 'red';
-    case AgentStatus.MAINTENANCE: return 'yellow';
-    default: return 'gray';
-  }
-}
-
-function getVisibilityBadge(visibility: string): string {
-  switch (visibility) {
-    case 'public': return chalk.green('🌐 Public');
-    case 'team': return chalk.yellow('🏢 Team');
-    case 'private': return chalk.blue('🔒 Private');
-    default: return chalk.gray('👁️  Unknown');
-  }
-}
-
-function displayCapabilitiesSection(agent: Agent): void {
-  const generalCaps = Object.entries(agent.capabilities.general || {})
-    .filter(([_, enabled]) => enabled)
-    .map(([cap]) => cap)
-    .join(', ');
-    
-  console.log(
-    boxen(
-      chalk.white('🛠️  Agent Capabilities\n\n') +
-      chalk.cyan('General Capabilities:\n') +
-      chalk.gray(`${generalCaps || 'None'}\n\n`) +
-      chalk.cyan('Specialized Capabilities:\n') +
-      (agent.capabilities.web?.enabled ? chalk.gray(`Web: ${agent.capabilities.web.frameworks?.join(', ') || 'General'}\n`) : '') +
-      (agent.capabilities.mobile?.enabled ? chalk.gray(`Mobile: ${agent.capabilities.mobile.platforms?.join(', ') || 'General'}\n`) : '') +
-      (agent.capabilities.blockchain?.enabled ? chalk.gray(`Blockchain: ${agent.capabilities.blockchain.networks?.join(', ') || 'General'}\n`) : '') +
-      (agent.capabilities.ai?.enabled ? chalk.gray(`AI/ML: ${agent.capabilities.ai.domains?.join(', ') || 'General'}\n`) : ''),
+function displayAgentStats(stats: any, agentId?: string): void {
+  if (agentId) {
+    // Single agent stats
+    console.log(boxen(
+      `${chalk.bold('Agent Statistics')}\n\n` +
+      `${chalk.yellow('Total Projects:')} ${stats.total_projects}\n` +
+      `${chalk.yellow('Code Generated:')} ${stats.total_code_generated} lines\n` +
+      `${chalk.yellow('Success Rate:')} ${(stats.success_rate * 100).toFixed(1)}%\n` +
+      `${chalk.yellow('Average Rating:')} ${stats.average_rating.toFixed(1)}/5\n` +
+      `${chalk.yellow('Last Used:')} ${stats.last_used ? new Date(stats.last_used).toLocaleDateString() : 'Never'}`,
       {
         padding: 1,
-        borderStyle: 'round',
-        borderColor: 'blue',
-        title: 'Capabilities'
-      }
-    )
-  );
-}
-
-function displayPersonalitySection(agent: Agent): void {
-  console.log(
-    boxen(
-      chalk.white('🎭 Agent Personality\n\n') +
-      chalk.cyan('Communication Style:\n') +
-      chalk.gray(`Tone: ${agent.personality.tone}\n`) +
-      chalk.gray(`Verbosity: ${agent.personality.verbosity}\n`) +
-      chalk.gray(`Formality: ${agent.personality.formality}\n`) +
-      chalk.gray(`Approach: ${agent.personality.approach}\n`) +
-      chalk.gray(`Feedback Style: ${agent.personality.feedback}\n`) +
-      chalk.gray(`Communication: ${agent.personality.communication}\n`) +
-      (agent.personality.customTraits?.length ? 
-        chalk.cyan(`\nCustom Traits:\n`) + chalk.gray(agent.personality.customTraits.join(', ')) : ''),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'magenta',
-        title: 'Personality'
-      }
-    )
-  );
-}
-
-function displayConfigurationSection(agent: Agent): void {
-  console.log(
-    boxen(
-      chalk.white('⚙️  Model Configuration\n\n') +
-      chalk.cyan('Model Settings:\n') +
-      chalk.gray(`Temperature: ${agent.settings.temperature}\n`) +
-      chalk.gray(`Max Tokens: ${agent.settings.maxTokens}\n`) +
-      chalk.gray(`Top P: ${agent.settings.topP}\n`) +
-      chalk.gray(`Response Format: ${agent.settings.responseFormat}\n`) +
-      chalk.gray(`Streaming: ${agent.settings.streaming ? 'Enabled' : 'Disabled'}\n`) +
-      chalk.gray(`Timeout: ${agent.settings.timeout}ms\n\n`) +
-      chalk.cyan('Instructions:\n') +
-      chalk.gray(`System: ${agent.instructions.system.substring(0, 100)}${agent.instructions.system.length > 100 ? '...' : ''}\n`) +
-      (agent.instructions.context ? chalk.gray(`Context: ${agent.instructions.context.substring(0, 100)}...\n`) : '') +
-      (agent.instructions.constraints?.length ? chalk.gray(`Constraints: ${agent.instructions.constraints.join(', ')}\n`) : ''),
-      {
-        padding: 1,
-        borderStyle: 'round',
-        borderColor: 'yellow',
-        title: 'Configuration'
-      }
-    )
-  );
-}
-
-function displayPerformanceSection(agent: Agent): void {
-  console.log(
-    boxen(
-      chalk.white('📊 Performance Metrics\n\n') +
-      chalk.cyan('Usage Statistics:\n') +
-      chalk.gray(`Total Requests: ${agent.performance.totalRequests}\n`) +
-      chalk.gray(`Success Rate: ${agent.performance.successRate}%\n`) +
-      chalk.gray(`Average Response Time: ${agent.performance.averageResponseTime}ms\n`) +
-      chalk.gray(`Average Tokens: ${agent.performance.averageTokens}\n`) +
-      chalk.gray(`Total Cost: $${agent.performance.totalCost}\n\n`) +
-      chalk.cyan('Quality Metrics:\n') +
-      chalk.gray(`User Ratings: ${agent.performance.ratings?.length || 0} reviews\n`) +
-      chalk.gray(`Last Evaluated: ${agent.performance.lastEvaluated ? new Date(agent.performance.lastEvaluated).toLocaleDateString() : 'Never'}\n`),
-      {
-        padding: 1,
-        borderStyle: 'round',
         borderColor: 'green',
-        title: 'Performance'
+        borderStyle: 'round'
       }
-    )
-  );
-}
-
-function displayHistorySection(agent: Agent): void {
-  console.log(
-    boxen(
-      chalk.white('📈 Usage History\n\n') +
-      chalk.cyan('Recent Activity:\n') +
-      chalk.gray(`Last Used: ${agent.lastUsed ? new Date(agent.lastUsed).toLocaleString() : 'Never'}\n`) +
-      chalk.gray(`Created: ${agent.createdAt.toLocaleString()}\n`) +
-      chalk.gray(`Last Updated: ${agent.updatedAt.toLocaleString()}\n\n`) +
-      chalk.cyan('Feedback Summary:\n') +
-      chalk.gray(`Total Feedback: ${agent.performance.feedback?.length || 0} items\n`) +
-      (agent.performance.feedback?.slice(0, 3).map((feedback: any, i: number) => 
-        chalk.gray(`${i + 1}. ${feedback.comment?.substring(0, 50)}...\n`)
-      ).join('') || chalk.gray('No feedback available\n')),
+    ));
+  } else {
+    // All agents stats
+    console.log(boxen(
+      `${chalk.bold('Overall Agent Statistics')}\n\n` +
+      `${chalk.yellow('Total Agents:')} ${stats.total_agents}\n` +
+      `${chalk.yellow('Active Agents:')} ${stats.active_agents}\n` +
+      `${chalk.yellow('Total Projects:')} ${stats.total_projects}\n` +
+      `${chalk.yellow('Total Code Generated:')} ${stats.total_code_generated} lines\n` +
+      `${chalk.yellow('Average Success Rate:')} ${(stats.average_success_rate * 100).toFixed(1)}%\n` +
+      `${chalk.yellow('Average Rating:')} ${stats.average_rating.toFixed(1)}/5`,
       {
         padding: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-        title: 'History'
+        borderColor: 'green',
+        borderStyle: 'round'
       }
-    )
-  );
-}
-
-async function exportAgentConfiguration(agent: Agent, filePath: string): Promise<void> {
-  try {
-    const exportData = {
-      version: '1.0',
-      exportDate: new Date().toISOString(),
-      agent: {
-        ...agent,
-        // Remove runtime data that shouldn't be exported
-        performance: undefined,
-        lastUsed: undefined
-      }
-    };
-    
-    await fs.writeJson(filePath, exportData, { spaces: 2 });
-    console.log(
-      boxen(
-        chalk.green(`✅ Agent configuration exported successfully!\n`) +
-        chalk.gray(`File: ${filePath}\n`) +
-        chalk.gray(`Size: ${JSON.stringify(exportData).length} bytes`),
-        {
-          padding: 1,
-          borderStyle: 'round',
-          borderColor: 'green',
-          title: 'Export Complete'
-        }
-      )
-    );
-  } catch (error) {
-    Logger.error(`Failed to export agent configuration: ${error}`);
+    ));
   }
 }
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'active':
+      return chalk.green(status);
+    case 'inactive':
+      return chalk.yellow(status);
+    case 'archived':
+      return chalk.gray(status);
+    default:
+      return status;
+  }
+}
+
+export { Agent, AgentCapabilities, AgentPersonality, AgentPreferences, CreateAgentRequest };

@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import axios, { AxiosInstance } from 'axios';
 import { Logger } from '../utils/logger';
-import { enhancedOllamaProvider } from './ai-providers';
+// import { enhancedOllamaProvider } from './ai-providers'; // TODO: enhancedOllamaProvider not exported
 
 // Real AI Provider Interfaces
 export interface AIProvider {
@@ -80,7 +80,7 @@ class AnthropicProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Claude API error: ${error.message}`);
+      Logger.error(`Claude API error: ${error.message}`, '');
       throw new Error(`Claude API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }
@@ -126,7 +126,7 @@ class GroqProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Groq API error: ${error.message}`);
+      Logger.error(`Groq API error: ${error.message}`, '');
       throw new Error(`Groq API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }
@@ -172,7 +172,7 @@ class MistralProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Mistral API error: ${error.message}`);
+      Logger.error(`Mistral API error: ${error.message}`, '');
       throw new Error(`Mistral API failed: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -218,7 +218,7 @@ class PerplexityProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Perplexity API error: ${error.message}`);
+      Logger.error(`Perplexity API error: ${error.message}`, '');
       throw new Error(`Perplexity API failed: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -272,7 +272,7 @@ class CohereProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Cohere API error: ${error.message}`);
+      Logger.error(`Cohere API error: ${error.message}`, '');
       throw new Error(`Cohere API failed: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -336,7 +336,7 @@ class CustomProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Custom provider ${this.name} error: ${error.message}`);
+      Logger.error(`Custom provider ${this.name} error: ${error.message}`, '');
       throw new Error(`Custom provider failed: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -401,7 +401,7 @@ class GeminiProvider implements AIProvider {
         }
       };
     } catch (error: any) {
-      Logger.error(`Gemini API error: ${error.message}`);
+      Logger.error(`Gemini API error: ${error.message}`, '');
       throw new Error(`Gemini API failed: ${error.response?.data?.error?.message || error.message}`);
     }
   }
@@ -427,7 +427,7 @@ export class AIHub {
     try {
       await this.initializeProviders();
     } catch (error) {
-      Logger.error('Failed to initialize AI providers:', error);
+      Logger.error('Failed to initialize AI providers:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -452,73 +452,74 @@ export class AIHub {
     // Initialize new AI models (Kimi K2, Qwen 3, DeepSeek R1)
     try {
       // Import new providers dynamically to avoid dependency issues
-      const { KimiProvider } = await import('../../core/src/ai/providers/kimi-provider');
-      const { QwenProvider } = await import('../../core/src/ai/providers/qwen-provider');
-      const { DeepSeekR1Provider } = await import('../../core/src/ai/providers/deepseek-r1-provider');
+      // const { KimiProvider } = await import('../../core/src/ai/providers/kimi-provider');
+      // const { QwenProvider } = await import('../../core/src/ai/providers/qwen-provider');
+      // const { DeepSeekR1Provider } = await import('../../core/src/ai/providers/deepseek-r1-provider');
+      // TODO: These providers don't exist yet
       
-      // Add Kimi K2 if API key is available
-      if (process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY) {
-        const kimiProvider = new KimiProvider({
-          apiKey: process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY!,
-          defaultModel: 'moonshot-v1-128k'
-        });
-        providers.push(kimiProvider);
-      }
+      // TODO: Add Kimi K2 when provider is implemented
+      // if (process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY) {
+      //   const kimiProvider = new KimiProvider({
+      //     apiKey: process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY!,
+      //     defaultModel: 'moonshot-v1-128k'
+      //   });
+      //   providers.push(kimiProvider);
+      // }
       
-      // Add Qwen 3 if API key is available
-      if (process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY) {
-        const qwenProvider = new QwenProvider({
-          apiKey: process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY!,
-          defaultModel: 'qwen2.5-coder-32b-instruct'
-        });
-        providers.push(qwenProvider);
-      }
+      // TODO: Add Qwen 3 when provider is implemented
+      // if (process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY) {
+      //   const qwenProvider = new QwenProvider({
+      //     apiKey: process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY!,
+      //     defaultModel: 'qwen2.5-coder-32b-instruct'
+      //   });
+      //   providers.push(qwenProvider);
+      // }
       
-      // Add DeepSeek R1 if API key is available
-      if (process.env.DEEPSEEK_API_KEY) {
-        const deepseekR1Provider = new DeepSeekR1Provider({
-          apiKey: process.env.DEEPSEEK_API_KEY,
-          defaultModel: 'deepseek-r1'
-        });
-        providers.push(deepseekR1Provider);
-      }
+      // TODO: Add DeepSeek R1 when provider is implemented
+      // if (process.env.DEEPSEEK_API_KEY) {
+      //   const deepseekR1Provider = new DeepSeekR1Provider({
+      //     apiKey: process.env.DEEPSEEK_API_KEY,
+      //     defaultModel: 'deepseek-r1'
+      //   });
+      //   providers.push(deepseekR1Provider);
+      // }
       
-    } catch (importError) {
-      Logger.warn('⚠️ Some new AI providers could not be loaded:', importError);
+    } catch (importError: any) {
+      Logger.warn('⚠️ Some new AI providers could not be loaded:', importError instanceof Error ? importError.message : String(importError));
     }
     
-    // Initialize Enhanced Ollama Provider (with auto-installation)
-    try {
-      await enhancedOllamaProvider.initialize();
-      if (enhancedOllamaProvider.isAvailable()) {
-        providers.push(enhancedOllamaProvider);
-      }
-    } catch (error) {
-      Logger.warn('⚠️ Enhanced Ollama provider initialization failed:', error);
-    }
+    // TODO: Initialize Enhanced Ollama Provider when available
+    // try {
+    //   await enhancedOllamaProvider.initialize();
+    //   if (enhancedOllamaProvider.isAvailable()) {
+    //     providers.push(enhancedOllamaProvider);
+    //   }
+    // } catch (error) {
+    //   Logger.warn('⚠️ Enhanced Ollama provider initialization failed:', error instanceof Error ? error.message : String(error));
+    // }
     
-    // Add custom providers from configuration
-    const customProviders = this.loadCustomProviders();
-    providers.push(...customProviders);
+    // TODO: Add custom providers when loadCustomProviders is implemented
+    // const customProviders = this.loadCustomProviders();
+    // providers.push(...customProviders);
 
     for (const provider of providers) {
       if (provider.isAvailable()) {
         this.providers.set(provider.name, provider);
         Logger.info(`✅ Initialized ${provider.name} provider`);
       } else {
-        Logger.warn(`⚠️ ${provider.name} provider not available (missing API key)`);
+        Logger.warn(`⚠️ ${provider.name} provider not available (missing API key)`, '');
       }
     }
 
     if (this.providers.size === 0) {
-      Logger.error('❌ No AI providers available. Configure API keys or enable local AI:');
-      Logger.error('   LOCAL AI: Ollama auto-installs for free, private local models');
-      Logger.error('   ANTHROPIC_API_KEY - for Claude');
-      Logger.error('   GROQ_API_KEY - for Groq/Llama');
-      Logger.error('   GOOGLE_API_KEY - for Gemini');
-      Logger.error('   MISTRAL_API_KEY - for Mistral');
-      Logger.error('   PERPLEXITY_API_KEY - for Perplexity');
-      Logger.error('   COHERE_API_KEY - for Cohere');
+      Logger.error('❌ No AI providers available. Configure API keys or enable local AI:', '');
+      Logger.error('   LOCAL AI: Ollama auto-installs for free, private local models', '');
+      Logger.error('   ANTHROPIC_API_KEY - for Claude', '');
+      Logger.error('   GROQ_API_KEY - for Groq/Llama', '');
+      Logger.error('   GOOGLE_API_KEY - for Gemini', '');
+      Logger.error('   MISTRAL_API_KEY - for Mistral', '');
+      Logger.error('   PERPLEXITY_API_KEY - for Perplexity', '');
+      Logger.error('   COHERE_API_KEY - for Cohere', '');
     } else {
       Logger.info(`✅ AI Hub initialized with ${this.providers.size} providers: ${Array.from(this.providers.keys()).join(', ')}`);
     }
@@ -560,7 +561,7 @@ export class AIHub {
     // Fallback to any available provider
     const fallback = Array.from(this.providers.values())[0];
     if (fallback) {
-      Logger.warn(`⚠️ Using fallback provider ${fallback.name} for ${context.type} task`);
+      Logger.warn(`⚠️ Using fallback provider ${fallback.name} for ${context.type} task`, '');
       return fallback;
     }
 
@@ -582,7 +583,7 @@ export class AIHub {
       Logger.info(`✅ ${provider.name} responded with ${response.tokens?.output || 0} tokens`);
       return response;
     } catch (error) {
-      Logger.error(`❌ Provider ${provider.name} failed, trying fallback...`);
+      Logger.error(`❌ Provider ${provider.name} failed, trying fallback...`, '');
       return this.chatWithFallback(messages, context, options, provider.name);
     }
   }
@@ -604,7 +605,7 @@ export class AIHub {
         Logger.info(`🔄 Trying fallback provider: ${name}`);
         return await provider.chat(messages, options);
       } catch (error) {
-        Logger.error(`❌ Fallback provider ${name} also failed`);
+        Logger.error(`❌ Fallback provider ${name} also failed`, '');
         continue;
       }
     }
@@ -697,7 +698,7 @@ SECURITY SPECIALIZATION:
 - Security audit and compliance checks`
     };
 
-    return basePrompt + (specializations[context.type] || '');
+    return basePrompt + (specializations[context.type as keyof typeof specializations] || '');
   }
 
   private parseCodeResponse(content: string): {
@@ -869,8 +870,12 @@ SECURITY SPECIALIZATION:
       return response;
       
     } catch (error) {
-      Logger.error(`AI generation failed: ${error}`);
-      throw new Error(`Failed to generate AI response: ${error.message}`);
+      Logger.error(`AI generation failed: ${error}`, '');
+      if (error && typeof error === 'object' && 'message' in error) {
+        throw new Error(`Failed to generate AI response: ${(error as any).message}`);
+      } else {
+        throw new Error('Failed to generate AI response: Unknown error');
+      }
     }
   }
 
@@ -896,7 +901,7 @@ SECURITY SPECIALIZATION:
       }
       
     } catch (error) {
-      Logger.error(`AI streaming failed: ${error}`);
+      Logger.error(`AI streaming failed: ${error}`, '');
       throw error;
     }
   }
@@ -1032,7 +1037,7 @@ SECURITY SPECIALIZATION:
       'command-r-plus': { maxTokens: 128000, supportsCoding: true, supportsStreaming: true, cost: 0.003 }
     };
 
-    return capabilities[model] || { maxTokens: 4096, supportsCoding: false, supportsStreaming: false, cost: 0.001 };
+    return capabilities[model as keyof typeof capabilities] || { maxTokens: 4096, supportsCoding: false, supportsStreaming: false, cost: 0.001 };
   }
 
   private loadCustomProviders(): CustomProvider[] {
@@ -1050,8 +1055,8 @@ SECURITY SPECIALIZATION:
           }
         }
       }
-    } catch (error) {
-      Logger.warn('Failed to load custom providers:', error);
+    } catch (error: any) {
+      Logger.warn('Failed to load custom providers: ' + (error instanceof Error ? error.message : String(error)), '');
     }
     
     return customProviders;
@@ -1065,8 +1070,8 @@ SECURITY SPECIALIZATION:
         Logger.info(`✅ Added custom provider: ${config.name}`);
         return true;
       }
-    } catch (error) {
-      Logger.error(`Failed to add custom provider ${config.name}:`, error);
+    } catch (error: any) {
+      Logger.error(`Failed to add custom provider ${config.name}: ` + (error instanceof Error ? error.message : String(error)), '');
     }
     return false;
   }

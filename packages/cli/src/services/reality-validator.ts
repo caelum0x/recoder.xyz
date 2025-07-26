@@ -2,7 +2,7 @@
  * Reality Validation System - Ensures generated code has actual functionality
  */
 
-import { Logger } from '@recoder/shared';
+import { GenerationResult, Logger } from '@recoder/shared';
 import fs from 'fs-extra';
 import path from 'path';
 import { glob } from 'glob';
@@ -77,6 +77,9 @@ export enum ValidationCategory {
 }
 
 export class RealityValidationSystem {
+  validateGeneration(result: GenerationResult) {
+    throw new Error('Method not implemented.');
+  }
   private rules: ValidationRule[] = [];
   private logger: Logger;
 

@@ -10,7 +10,7 @@ import ora from 'ora';
 import boxen from 'boxen';
 import { Logger } from '../../../shared/src/logger';
 import { AIRouter } from '../services/ai-router';
-import { AgentManager_Instance } from '../services/specialized-agents';
+//import { AgentManager_Instance } from '../services/specialized-agents';
 import { ConfigManager } from '../utils/config';
 import { AuthService } from '../services/auth';
 import fs from 'fs-extra';

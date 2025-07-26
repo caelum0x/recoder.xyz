@@ -389,7 +389,7 @@ export class DownloadManager extends EventEmitter {
 
           // Check for successful response
           if (res.statusCode < 200 || res.statusCode >= 300) {
-            reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`);
+            reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
             return;
           }
 

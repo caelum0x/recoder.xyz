@@ -35,7 +35,9 @@
       "Bash(curl:*)",
       "Bash(timeout 3 npm run dev)",
       "Bash(cp:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(sed:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   }

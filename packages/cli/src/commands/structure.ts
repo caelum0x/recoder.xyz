@@ -64,7 +64,7 @@ export function createStructureCommand(): Command {
       try {
         await handleStructureGeneration(options);
       } catch (error) {
-        console.error(chalk.red('❌ Structure generation failed:'), error.message);
+        console.error(chalk.red('❌ Structure generation failed:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
@@ -100,7 +100,7 @@ export function createStructureCommand(): Command {
     .command('analyze')
     .description('Analyze project structure and provide recommendations')
     .argument('[path]', 'Project path', '.')
-    .option('-d, --depth <depth>', 'Analysis depth', 3)
+    .option('-d, --depth <depth>', 'Analysis depth', '3')
     .option('--output <format>', 'Output format (json, yaml, markdown)', 'markdown')
     .action(async (projectPath: string, options: any) => {
       await handleStructureAnalysis(projectPath, options);
@@ -220,7 +220,7 @@ async function handleStructureGeneration(options: StructureCommandOptions): Prom
 
   } catch (error) {
     spinner.fail('Structure generation failed');
-    Logger.error('Structure generation error', { error: error.message, config });
+    Logger.error('Structure generation error', { error: error instanceof Error ? error.message : String(error), config });
     throw error;
   }
 }
@@ -298,7 +298,7 @@ async function handleStructureAnalysis(projectPath: string, options: any): Promi
 
   } catch (error) {
     spinner.fail('Analysis failed');
-    Logger.error('Structure analysis error', { error: error.message, projectPath });
+    Logger.error('Structure analysis error', { error: error instanceof Error ? error.message : String(error), projectPath });
     throw error;
   }
 }
@@ -387,7 +387,7 @@ async function handleStructureComparison(path1: string, path2: string, options: 
 
   } catch (error) {
     spinner.fail('Comparison failed');
-    Logger.error('Structure comparison error', { error: error.message, path1, path2 });
+    Logger.error('Structure comparison error', { error: error instanceof Error ? error.message : String(error), path1, path2 });
     throw error;
   }
 }
@@ -696,10 +696,11 @@ function displayValidationResults(result: any): void {
   if (result.issues.length > 0) {
     console.log(chalk.yellow('\n⚠️  Issues:'));
     result.issues.forEach((issue: any) => {
-      const color = issue.severity === 'critical' ? 'red' : 
-                   issue.severity === 'high' ? 'orange' :
-                   issue.severity === 'medium' ? 'yellow' : 'gray';
-      console.log(chalk[color as keyof typeof chalk](`  ${issue.severity.toUpperCase()}: ${issue.message}`));
+      const coloredText = issue.severity === 'critical' ? chalk.red(`  ${issue.severity.toUpperCase()}: ${issue.message}`) :
+                         issue.severity === 'high' ? chalk.yellow(`  ${issue.severity.toUpperCase()}: ${issue.message}`) :
+                         issue.severity === 'medium' ? chalk.yellow(`  ${issue.severity.toUpperCase()}: ${issue.message}`) : 
+                         chalk.gray(`  ${issue.severity.toUpperCase()}: ${issue.message}`);
+      console.log(coloredText);
       console.log(chalk.gray(`    Fix: ${issue.fix}`));
     });
   }
@@ -938,4 +939,3 @@ async function deleteTemplate(name: string): Promise<void> {
   }
 }
 
-export { createStructureCommand };
