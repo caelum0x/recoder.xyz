@@ -3,6 +3,157 @@
  * Core types for the project planning system that ensures real code generation
  */
 
+import { MonitoringConfig, RateLimitConfig } from "./ai-models";
+import { CodePattern, SecurityValidation } from "./code-generation";
+import { MonitoringConfiguration } from "./codeGeneration";
+import { DataSource } from "./planning";
+import { DataFlow, SecurityModel, FileStructure, AuthenticationConfig, RetryPolicy } from "./project";
+
+// Additional missing type definitions
+export interface ScalabilityPlan {
+  strategy: string;
+  metrics: string[];
+  thresholds: number[];
+  scaling_actions: string[];
+}
+
+export interface DeploymentStrategy {
+  type: string;
+  environment: string;
+  steps: string[];
+  rollback_plan: string;
+}
+
+export interface TechnologyStack {
+  frontend: string[];
+  backend: string[];
+  database: string[];
+  infrastructure: string[];
+  third_party: string[];
+  primary_language?: string;
+  framework?: string;
+  deployment_platform?: string;
+}
+
+export interface RealWorldConsideration {
+  type: string;
+  description: string;
+  impact: string;
+  mitigation: string[];
+}
+
+export interface ComponentConfiguration {
+  parameters: Record<string, any>;
+  environment_variables: Record<string, string>;
+  secrets: string[];
+  dependencies: string[];
+}
+
+export interface AuthenticationMethod {
+  type: string;
+  config: Record<string, any>;
+  security_level: string;
+}
+
+export interface RateLimitingConfig {
+  requests_per_minute: number;
+  burst_limit: number;
+  strategy: string;
+}
+
+export interface ValidationConfig {
+  schema: any;
+  rules: string[];
+  error_handling: string;
+}
+
+export interface EnvironmentVariable {
+  name: string;
+  value: string;
+  required: boolean;
+  sensitive: boolean;
+}
+
+export interface SecretConfig {
+  name: string;
+  source: string;
+  rotation_policy: string;
+}
+
+export interface DatabaseSchema {
+  name: string;
+  tables: string[];
+  relationships: string[];
+  constraints: string[];
+}
+
+export interface FallbackStrategy {
+  type: string;
+  conditions: string[];
+  actions: string[];
+}
+
+export interface TimeoutConfig {
+  connection_timeout: number;
+  request_timeout: number;
+  retry_timeout: number;
+}
+
+export interface CircuitBreakerConfig {
+  failure_threshold: number;
+  recovery_timeout: number;
+  half_open_max_calls: number;
+}
+
+export interface ServiceMonitoring {
+  health_check: string;
+  metrics: string[];
+  alerts: string[];
+  logs: string[];
+}
+
+export interface CostBenefitAnalysis {
+  benefits: string[];
+  costs: string[];
+  roi_calculation: string;
+  timeline: string;
+}
+
+export interface TestDataStrategy {
+  type: string;
+  generation_method: string;
+  volume: number;
+  privacy_level: string;
+}
+
+export interface ExternalDependencyStrategy {
+  dependency: string;
+  strategy: string;
+  fallback: string;
+  monitoring: string;
+}
+
+export interface PerformanceBenchmark {
+  metric: string;
+  target: number;
+  measurement_method: string;
+  frequency: string;
+}
+
+export interface EnvironmentConfiguration {
+  variables: Record<string, string>;
+  secrets: string[];
+  resources: string[];
+  networking: string[];
+}
+
+export interface AccessControl {
+  type: string;
+  permissions: string[];
+  restrictions: string[];
+  audit_trail: boolean;
+}
+
 export interface ProjectRequirement {
   id: string;
   type: 'functional' | 'non-functional' | 'integration' | 'business' | 'technical';
@@ -212,7 +363,7 @@ export interface AntiMockCheck {
 export interface RealWorldTest {
   name: string;
   description: string;
-  type: 'integration' | 'end_to_end' | 'performance' | 'security' | 'compliance' | 'user_acceptance';
+  type: 'integration' | 'end_to_end' | 'performance' | 'security' | 'compliance' | 'user_acceptance' | 'reliability';
   environment: 'development' | 'staging' | 'production';
   data_requirements: TestDataRequirement[];
   external_dependencies: string[];
@@ -514,7 +665,7 @@ export interface TaskValidationCriteria {
 
 export interface Deliverable {
   name: string;
-  type: 'code' | 'documentation' | 'configuration' | 'deployment' | 'test';
+  type: 'code' | 'documentation' | 'configuration' | 'deployment' | 'test' | 'infrastructure';
   description: string;
   acceptance_criteria: string[];
   quality_standards: string[];

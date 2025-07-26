@@ -202,6 +202,7 @@ export interface Tool {
 }
 
 export interface ModelResponse {
+  success: any;
   id: string;
   model: string;
   content: string;

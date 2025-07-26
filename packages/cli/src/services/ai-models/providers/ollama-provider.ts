@@ -36,7 +36,7 @@ export interface OllamaConfig extends ModelConfiguration {
 
 export class OllamaProvider extends BaseModelProvider {
   private client: AxiosInstance;
-  private config: OllamaConfig;
+  protected override config: OllamaConfig;
   private installedModels: Set<string> = new Set();
   private modelDownloads: Map<string, { progress: number; status: string }> = new Map();
 
@@ -150,7 +150,8 @@ export class OllamaProvider extends BaseModelProvider {
           cached: false,
           fallbackUsed: false
         },
-        error: modelError
+        error: modelError,
+        success: false
       };
     }
   }
@@ -294,7 +295,7 @@ export class OllamaProvider extends BaseModelProvider {
       this.modelDownloads.delete(modelName);
       this.emit('model-download-failed', { model: modelName, error });
       this.logger.error('Failed to install Ollama model', { modelName, error });
-      throw new Error(`Failed to install model ${modelName}: ${error.message}`);
+      throw new Error(`Failed to install model ${modelName}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -663,7 +664,8 @@ export class OllamaProvider extends BaseModelProvider {
       content,
       finishReason: data.done ? 'stop' : 'length',
       usage: tokenUsage,
-      metadata
+      metadata,
+      success: true
     };
   }
 
@@ -699,7 +701,8 @@ export class OllamaProvider extends BaseModelProvider {
       content,
       finishReason: 'stop',
       usage,
-      metadata
+      metadata,
+      success: true
     };
   }
 }

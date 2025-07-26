@@ -304,7 +304,7 @@ export class ProjectDetector {
       const configFiles: string[] = [];
 
       for (const pattern of config.patterns) {
-        if (pattern.exists) {
+        if ('exists' in pattern && pattern.exists) {
           const files = await FileSystemUtils.searchFiles(projectPath, {
             pattern: pattern.file,
             maxDepth: 3,
@@ -316,7 +316,7 @@ export class ProjectDetector {
           }
         }
 
-        if (pattern.contains) {
+        if ('contains' in pattern && pattern.contains) {
           const files = await FileSystemUtils.findInFiles(projectPath, pattern.contains[0], {
             pattern: pattern.file,
             maxDepth: 3,

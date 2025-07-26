@@ -81,6 +81,13 @@ export interface ErrorContext {
   timestamp?: Date;
   userId?: string;
   sessionId?: string;
+  httpStatus?: number;
+  path?: string;
+  attempts?: number;
+  validationErrors?: any[];
+  context?: string;
+  language?: string;
+  promise?: string;
 }
 
 export class RecoderError extends Error {
@@ -196,7 +203,7 @@ export class RecoderError extends Error {
     };
   }
 
-  public toString(): string {
+  public override toString(): string {
     return `${this.name} [${this.code}]: ${this.message}`;
   }
 }
@@ -334,7 +341,7 @@ export class ErrorHandler {
         code = ErrorCode.API_CONNECTION_FAILED;
     }
 
-    return new APIError(code, message, { ...context, httpStatus: status });
+    return new APIError(code, message, { ...context, details: { ...context.details, httpStatus: status } });
   }
 
   /**
@@ -368,7 +375,7 @@ export class ErrorHandler {
         code = ErrorCode.SYSTEM_ERROR;
     }
 
-    return new FileSystemError(code, message, { operation, path }, error);
+    return new FileSystemError(code, message, { operation, details: { path } }, error);
   }
 
   /**
@@ -498,7 +505,7 @@ export class AsyncErrorHandler {
       }
     }
 
-    throw ErrorHandler.handle(lastError!, { attempts: maxRetries + 1 });
+    throw ErrorHandler.handle(lastError!, { details: { attempts: maxRetries + 1 } });
   }
 
   /**
@@ -556,7 +563,7 @@ export class ValidationErrorBuilder {
   throw(): never {
     if (this.hasErrors()) {
       const message = this.errors.map(e => `${e.field}: ${e.message}`).join(', ');
-      throw new ValidationError(message, { validationErrors: this.errors });
+      throw new ValidationError(message, { details: { validationErrors: this.errors } });
     }
     throw new Error('No validation errors to throw');
   }
@@ -579,7 +586,7 @@ export function setupGlobalErrorHandling(): void {
       
       const error = reason instanceof Error ? reason : new Error(String(reason));
       const recoderError = ErrorHandler.handle(error, { 
-        context: 'unhandledRejection',
+        details: { context: 'unhandledRejection' },
         promise: promise.toString()
       });
       
@@ -592,7 +599,7 @@ export function setupGlobalErrorHandling(): void {
       console.error('Uncaught Exception:', error);
       
       const recoderError = ErrorHandler.handle(error, { 
-        context: 'uncaughtException'
+        details: { context: 'uncaughtException' }
       });
       
       // Could report to telemetry here

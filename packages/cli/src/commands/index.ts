@@ -4,7 +4,7 @@
 
 import { Command } from 'commander';
 import { setupAuthCommands } from './auth';
-import { setupAgentCommands } from './agent';
+//import { setupAgentCommands } from './agent';
 import { setupProjectCommands } from './project';
 import { setupChatCommands } from './chat';
 import { setupTemplateCommands } from './templates';

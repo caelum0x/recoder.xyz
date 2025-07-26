@@ -7,8 +7,12 @@ export class Logger {
     console.log(`[INFO] ${message}`);
   }
 
-  static error(message: string): void {
-    console.error(`[ERROR] ${message}`);
+  static error(message: string, context?: any): void {
+    if (context) {
+      console.error(`[ERROR] ${message}`, context);
+    } else {
+      console.error(`[ERROR] ${message}`);
+    }
   }
 
   static debug(message: string): void {
@@ -17,7 +21,11 @@ export class Logger {
     }
   }
 
-  static warn(message: string): void {
-    console.warn(`[WARN] ${message}`);
+  static warn(message: string, context?: any): void {
+    if (context) {
+      console.warn(`[WARN] ${message}`, context);
+    } else {
+      console.warn(`[WARN] ${message}`);
+    }
   }
 }

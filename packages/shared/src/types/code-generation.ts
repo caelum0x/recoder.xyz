@@ -3,6 +3,7 @@
  */
 
 import { Timestamp } from './common';
+import { SecurityRequirement } from './project';
 
 export enum GenerationType {
   GENERATE = 'generate',

@@ -76,7 +76,7 @@ export function createPlanCommand(): Command {
     .option('--environment <env>', 'Target environment (dev, staging, prod)')
     .option('--real-only', 'Ensure only real implementations, no mocks', true)
     .option('--anti-mock', 'Enable aggressive anti-mock validation', true)
-    .option('--quality <score>', 'Minimum quality score (0-100)', 80)
+    .option('--quality <score>', 'Minimum quality score (0-100)', '80')
     .option('--compliance <standards>', 'Compliance standards (comma-separated)')
     .option('--integrations <services>', 'Required integrations (comma-separated)')
     .option('--features <features>', 'Required features (comma-separated)')
@@ -98,7 +98,7 @@ export function createPlanCommand(): Command {
       try {
         await handlePlanCommand(description, options);
       } catch (error) {
-        console.error(chalk.red('❌ Planning failed:'), error.message);
+        console.error(chalk.red('❌ Planning failed:'), error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
@@ -126,7 +126,7 @@ export function createPlanCommand(): Command {
     .description('Validate a project plan')
     .argument('<planFile>', 'Plan file to validate')
     .option('--anti-mock', 'Enable anti-mock validation', true)
-    .option('--quality <score>', 'Minimum quality score', 80)
+    .option('--quality <score>', 'Minimum quality score', '80')
     .action(async (planFile: string, options: any) => {
       await handleValidateCommand(planFile, options);
     });
@@ -135,7 +135,7 @@ export function createPlanCommand(): Command {
     .command('analyze')
     .description('Analyze existing project structure')
     .argument('[projectPath]', 'Project directory to analyze', '.')
-    .option('-d, --depth <depth>', 'Analysis depth', 3)
+    .option('-d, --depth <depth>', 'Analysis depth', '3')
     .option('--generate-plan', 'Generate improvement plan', false)
     .action(async (projectPath: string, options: any) => {
       await handleAnalyzeCommand(projectPath, options);
@@ -156,7 +156,7 @@ export function createPlanCommand(): Command {
     .command('simulate')
     .description('Simulate plan execution')
     .argument('<planFile>', 'Plan file to simulate')
-    .option('--scenarios <count>', 'Number of scenarios to run', 1)
+    .option('--scenarios <count>', 'Number of scenarios to run', '1')
     .option('--monte-carlo', 'Use Monte Carlo simulation', false)
     .action(async (planFile: string, options: any) => {
       await handleSimulateCommand(planFile, options);
@@ -455,7 +455,7 @@ async function handleSimulateCommand(planFile: string, options: any): Promise<vo
     // Display risk factors
     if (simulationResult.risk_factors.length > 0) {
       console.log(chalk.yellow('\n⚠️ Risk Factors:'));
-      simulationResult.risk_factors.forEach(risk => {
+      simulationResult.risk_factors.forEach((risk: any) => {
         console.log(chalk.yellow(`  • ${risk.name}: ${(risk.probability * 100).toFixed(1)}% chance, ${risk.impact}/10 impact`));
       });
     }
@@ -463,7 +463,7 @@ async function handleSimulateCommand(planFile: string, options: any): Promise<vo
     // Display recommendations
     if (simulationResult.recommendations.length > 0) {
       console.log(chalk.green('\n💡 Recommendations:'));
-      simulationResult.recommendations.forEach(rec => {
+      simulationResult.recommendations.forEach((rec: any) => {
         console.log(chalk.green(`  • ${rec}`));
       });
     }
@@ -521,7 +521,7 @@ async function handleMonitorCommand(executionId: string, options: any): Promise<
           console.log(chalk.green('✅ Execution completed'));
         }
       } catch (error) {
-        console.error(chalk.red('❌ Monitoring error:'), error.message);
+        console.error(chalk.red('❌ Monitoring error:'), error instanceof Error ? error.message : String(error));
       }
     }, 5000);
 
@@ -648,7 +648,7 @@ async function buildPlanningContext(
     project_type: projectType,
     target_audience: 'general',
     business_goals: [],
-    technical_constraints: options.constraints ? options.constraints.split(',') : [],
+    technical_constraints: options.constraints || [],
     budget_constraints: options.budget ? [{
       category: 'development',
       limit: options.budget,
@@ -663,7 +663,7 @@ async function buildPlanningContext(
       dependencies: [],
       flexibility: 'flexible',
     }] : [],
-    compliance_requirements: options.compliance ? options.compliance.split(',') : [],
+    compliance_requirements: options.compliance || [],
     existing_systems: [],
     team_capabilities: [],
   };
@@ -793,6 +793,7 @@ async function executePlan(planningResult: any, options: PlanCommandOptions): Pr
       quality_gates: true,
       continuous_validation: true,
     },
+    auto_deploy_production: false,
   });
 
   const spinner = ora('Executing plan...').start();
@@ -936,4 +937,3 @@ async function deletePlanningTemplate(name: string): Promise<void> {
   // Implementation for deleting planning template
 }
 
-export { createPlanCommand };
