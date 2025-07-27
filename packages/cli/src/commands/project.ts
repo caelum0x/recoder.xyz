@@ -949,9 +949,9 @@ async function handleListProjects(options: any): Promise<void> {
     });
     
     if (result.success) {
-      spinner.succeed(chalk.green(`Found ${result.projects.length} projects`));
+      spinner.succeed(chalk.green(`Found ${result.projects?.length || 0} projects`));
       
-      if (result.projects.length === 0) {
+      if (!result.projects || result.projects.length === 0) {
         console.log(chalk.yellow('No projects found.'));
         console.log(chalk.gray('Create your first project with: recoder project init'));
         return;
@@ -963,7 +963,7 @@ async function handleListProjects(options: any): Promise<void> {
         console.log(
           boxen(
             chalk.white('📁 Your Projects\n') +
-            result.projects.map((project: any) => 
+            result.projects?.map((project: any) => 
               chalk.cyan(`• ${project.name}`) + chalk.gray(` (${project.id})\n`) +
               chalk.gray(`  Type: ${project.type} | Status: ${project.status}\n`) +
               chalk.gray(`  ${project.description}\n`) +

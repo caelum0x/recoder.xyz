@@ -250,7 +250,13 @@ async function handlePlanCommand(description: string, options: PlanCommandOption
 
   try {
     // Execute planning
-    const planningResult = await planner.planProject(projectDescription, projectType, context);
+    const projectRequirement = {
+      description: projectDescription,
+      type: projectType || 'web',
+      priority: 'high',
+      timeline: 'flexible'
+    } as any;
+    const planningResult = await planner.planProject(projectRequirement, projectType, context as any);
 
     planningSpinner.succeed('Project plan created successfully!');
 

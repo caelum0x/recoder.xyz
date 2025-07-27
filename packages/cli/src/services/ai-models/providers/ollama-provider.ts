@@ -8,6 +8,7 @@ import { promisify } from 'util';
 import fs from 'fs-extra';
 import path from 'path';
 import { BaseModelProvider } from '../base-provider';
+import { Logger } from '@recoder/shared';
 import {
   ModelMetadata,
   ModelRequest,
@@ -72,13 +73,13 @@ export class OllamaProvider extends BaseModelProvider {
         await this.installRecommendedModels();
       }
 
-      this.logger.info('Ollama provider initialized', { 
+      Logger.info('Ollama provider initialized', { 
         modelCount: models.length,
         models: models.map(m => m.id),
         installedModels: Array.from(this.installedModels)
       });
     } catch (error) {
-      this.logger.error('Failed to initialize Ollama provider', { error });
+      Logger.error('Failed to initialize Ollama provider', { error });
       throw error;
     }
   }
@@ -88,7 +89,7 @@ export class OllamaProvider extends BaseModelProvider {
       const response = await this.client.get('/api/version');
       return response.status === 200;
     } catch (error) {
-      this.logger.error('Ollama config validation failed', { error });
+      Logger.error('Ollama config validation failed', { error });
       return false;
     }
   }
@@ -112,9 +113,13 @@ export class OllamaProvider extends BaseModelProvider {
         isAvailable: this.installedModels.has(model.id)
       }));
     } catch (error) {
-      this.logger.error('Failed to fetch Ollama models', { error });
+      Logger.error('Failed to fetch Ollama models', { error });
       return [];
     }
+  }
+
+  getProvider(): ModelProvider {
+    return ModelProvider.OLLAMA;
   }
 
   async sendRequest(request: ModelRequest): Promise<ModelResponse> {
@@ -209,7 +214,7 @@ export class OllamaProvider extends BaseModelProvider {
                 return this.createFinalResponse(request, fullContent, totalTokens, startTime);
               }
             } catch (parseError) {
-              this.logger.warn('Failed to parse streaming chunk', { line, error: parseError });
+              Logger.warn('Failed to parse streaming chunk', { line, error: parseError });
             }
           }
         }
@@ -227,7 +232,7 @@ export class OllamaProvider extends BaseModelProvider {
       return;
     }
 
-    this.logger.info('Installing Ollama model', { modelName });
+    Logger.info('Installing Ollama model', { modelName });
     
     try {
       this.modelDownloads.set(modelName, { progress: 0, status: 'downloading' });
@@ -282,11 +287,11 @@ export class OllamaProvider extends BaseModelProvider {
                   this.models.set(modelName, model);
                 }
                 
-                this.logger.info('Ollama model installed successfully', { modelName });
+                Logger.info('Ollama model installed successfully', { modelName });
                 return;
               }
             } catch (parseError) {
-              this.logger.warn('Failed to parse download progress', { line, error: parseError });
+              Logger.warn('Failed to parse download progress', { line, error: parseError });
             }
           }
         }
@@ -294,7 +299,7 @@ export class OllamaProvider extends BaseModelProvider {
     } catch (error) {
       this.modelDownloads.delete(modelName);
       this.emit('model-download-failed', { model: modelName, error });
-      this.logger.error('Failed to install Ollama model', { modelName, error });
+      Logger.error('Failed to install Ollama model', { modelName, error });
       throw new Error(`Failed to install model ${modelName}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -314,10 +319,10 @@ export class OllamaProvider extends BaseModelProvider {
         this.models.set(modelName, model);
       }
       
-      this.logger.info('Ollama model uninstalled', { modelName });
+      Logger.info('Ollama model uninstalled', { modelName });
       this.emit('model-uninstalled', { model: modelName });
     } catch (error) {
-      this.logger.error('Failed to uninstall Ollama model', { modelName, error });
+      Logger.error('Failed to uninstall Ollama model', { modelName, error });
       throw error;
     }
   }
@@ -336,14 +341,14 @@ export class OllamaProvider extends BaseModelProvider {
   }
 
   private async installAndStartOllama(): Promise<void> {
-    this.logger.info('Installing Ollama...');
+    Logger.info('Installing Ollama...');
     
     try {
       // Check if Ollama is installed but not running
       try {
         await execAsync('ollama --version');
         // Ollama is installed, try to start it
-        this.logger.info('Starting Ollama service...');
+        Logger.info('Starting Ollama service...');
         spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' });
         
         // Wait for service to start
@@ -364,7 +369,7 @@ export class OllamaProvider extends BaseModelProvider {
         await execAsync('curl -fsSL https://ollama.ai/install.sh | sh');
       } else if (platform === 'win32') {
         // Windows - download installer
-        this.logger.warn('Please install Ollama manually from https://ollama.ai/download');
+        Logger.warn('Please install Ollama manually from https://ollama.ai/download');
         throw new Error('Automatic Ollama installation not supported on Windows');
       }
 
@@ -374,9 +379,9 @@ export class OllamaProvider extends BaseModelProvider {
       // Wait for service to start
       await this.waitForOllama();
       
-      this.logger.info('Ollama installed and started successfully');
+      Logger.info('Ollama installed and started successfully');
     } catch (error) {
-      this.logger.error('Failed to install Ollama', { error });
+      Logger.error('Failed to install Ollama', { error });
       throw error;
     }
   }
@@ -599,10 +604,10 @@ export class OllamaProvider extends BaseModelProvider {
     for (const modelName of recommendedModels) {
       if (!this.installedModels.has(modelName)) {
         try {
-          this.logger.info('Auto-installing recommended model', { modelName });
+          Logger.info('Auto-installing recommended model', { modelName });
           await this.installModel(modelName);
         } catch (error) {
-          this.logger.warn('Failed to auto-install recommended model', { modelName, error });
+          Logger.warn('Failed to auto-install recommended model', { modelName, error });
         }
       }
     }

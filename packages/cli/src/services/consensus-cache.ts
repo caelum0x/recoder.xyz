@@ -88,10 +88,10 @@ export class ConsensusCache {
   private precomputedPatterns: Map<string, PrecomputedPattern> = new Map();
   private adaptiveThresholds: Map<string, AdaptiveThreshold> = new Map();
   private config: CacheConfig;
-  private cacheFilePath: string;
-  private metricsFilePath: string;
-  private patternsFilePath: string;
-  private thresholdsFilePath: string;
+  private cacheFilePath: string = '';
+  private metricsFilePath: string = '';
+  private patternsFilePath: string = '';
+  private thresholdsFilePath: string = '';
 
   constructor(config?: Partial<CacheConfig>) {
     this.config = {

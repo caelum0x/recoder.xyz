@@ -31,7 +31,7 @@ const { validateRequestId } = require('./middleware/validation');
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env['PORT'] || 3001;
 
 // Middleware
 app.use(helmet({
@@ -51,7 +51,7 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env['CORS_ORIGIN'] || 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Request-ID']
@@ -67,12 +67,12 @@ app.use(validateRequestId);
 app.use('/api', apiLimiter);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (req: any, res: any) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env['NODE_ENV'] || 'development'
   });
 });
 
@@ -89,7 +89,7 @@ app.use('/api/models', modelRoutes);
 app.use('/api/billing', billingRoutes);
 
 // Legacy API endpoints for backward compatibility
-app.get('/api/v1/status', (req, res) => {
+app.get('/api/v1/status', (req: any, res: any) => {
   res.json({
     service: 'Craft Code API',
     version: '1.0.0',
@@ -99,7 +99,7 @@ app.get('/api/v1/status', (req, res) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use('*', (req: any, res: any) => {
   res.status(404).json({
     error: {
       message: 'Route not found',
@@ -110,7 +110,7 @@ app.use('*', (req, res) => {
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
+app.use((err: any, req: any, res: any, next: any) => {
   logger.error('Unhandled error:', {
     error: err.message,
     stack: err.stack,
@@ -121,7 +121,7 @@ app.use((err, req, res, next) => {
   });
 
   // Don't leak error details in production
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isDevelopment = process.env['NODE_ENV'] === 'development';
   
   res.status(err.status || 500).json({
     error: {
@@ -158,7 +158,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // Start server
 const server = app.listen(PORT, () => {
   logger.info(`Craft Code API server running on port ${PORT}`, {
-    environment: process.env.NODE_ENV || 'development',
+    environment: process.env['NODE_ENV'] || 'development',
     port: PORT
   });
 });

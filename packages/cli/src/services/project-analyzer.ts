@@ -78,11 +78,9 @@ async function findDirectories(dir: string, ignorePatterns: string[] = []): Prom
 }
 
 export class ProjectAnalyzer {
-  private logger: Logger;
   private analysisCache: Map<string, any> = new Map();
 
   constructor() {
-    this.logger = Logger.getInstance();
   }
 
   public async analyzeProject(rootPath: string): Promise<{
@@ -93,11 +91,11 @@ export class ProjectAnalyzer {
     const cacheKey = `project_${rootPath}`;
     
     if (this.analysisCache.has(cacheKey)) {
-      this.logger.debug('Using cached project analysis', { rootPath });
+      Logger.debug('Using cached project analysis', { rootPath });
       return this.analysisCache.get(cacheKey);
     }
 
-    this.logger.info('Starting comprehensive project analysis', { rootPath });
+    Logger.info('Starting comprehensive project analysis', { rootPath });
 
     const startTime = Date.now();
 
@@ -117,7 +115,7 @@ export class ProjectAnalyzer {
       this.analysisCache.set(cacheKey, analysis);
 
       const duration = Date.now() - startTime;
-      this.logger.info('Project analysis completed', {
+      Logger.info('Project analysis completed', {
         rootPath,
         duration,
         totalFiles: codebaseContext.existingCode.totalFiles,
@@ -126,13 +124,13 @@ export class ProjectAnalyzer {
 
       return analysis;
     } catch (error) {
-      this.logger.error('Project analysis failed', { rootPath, error });
+      Logger.error('Project analysis failed', { rootPath, error });
       throw error;
     }
   }
 
   private async analyzeProjectContext(rootPath: string): Promise<ProjectContext> {
-    this.logger.debug('Analyzing project context', { rootPath });
+    Logger.debug('Analyzing project context', { rootPath });
 
     const packageJsonPath = path.join(rootPath, 'package.json');
     let packageJson: any = {};
@@ -181,7 +179,7 @@ export class ProjectAnalyzer {
   }
 
   private async analyzeCodebaseContext(rootPath: string): Promise<CodebaseContext> {
-    this.logger.debug('Analyzing codebase context', { rootPath });
+    Logger.debug('Analyzing codebase context', { rootPath });
 
     const [fileStructure, existingCode, patterns, conventions, documentation] = await Promise.all([
       this.analyzeFileStructure(rootPath),
@@ -201,7 +199,7 @@ export class ProjectAnalyzer {
   }
 
   private async analyzeEnvironmentContext(rootPath: string): Promise<EnvironmentContext> {
-    this.logger.debug('Analyzing environment context', { rootPath });
+    Logger.debug('Analyzing environment context', { rootPath });
 
     // Read .nvmrc for Node version
     let nodeVersion: string | undefined;
@@ -341,7 +339,7 @@ export class ProjectAnalyzer {
         }
       });
     } catch (error) {
-      this.logger.warn('Failed to detect languages', { error });
+      Logger.warn('Failed to detect languages', { error });
     }
 
     return Array.from(languages);
@@ -458,7 +456,7 @@ export class ProjectAnalyzer {
       const dirs = await findDirectories(rootPath, ['node_modules', '.git', 'dist', 'build']);
       return dirs.map((dir: string) => dir.replace(/\/$/, ''));
     } catch (error) {
-      this.logger.warn('Failed to get directory structure', { error });
+      Logger.warn('Failed to get directory structure', { error });
       return [];
     }
   }
@@ -507,7 +505,7 @@ export class ProjectAnalyzer {
       patterns.push(...this.detectStructurePatterns(directories));
 
     } catch (error) {
-      this.logger.warn('Failed to analyze file structure', { error });
+      Logger.warn('Failed to analyze file structure', { error });
     }
 
     return {
@@ -691,7 +689,7 @@ export class ProjectAnalyzer {
         }
       }
     } catch (error) {
-      this.logger.warn('Failed to analyze existing code', { error });
+      Logger.warn('Failed to analyze existing code', { error });
     }
 
     // Convert maps to arrays
@@ -807,7 +805,7 @@ export class ProjectAnalyzer {
         quality = coverage > 80 ? 'excellent' : coverage > 60 ? 'good' : coverage > 30 ? 'fair' : 'poor';
       }
     } catch (error) {
-      this.logger.warn('Failed to analyze documentation', { error });
+      Logger.warn('Failed to analyze documentation', { error });
     }
 
     return {
@@ -942,7 +940,7 @@ export class ProjectAnalyzer {
 
   public clearCache(): void {
     this.analysisCache.clear();
-    this.logger.debug('Project analysis cache cleared');
+    Logger.debug('Project analysis cache cleared');
   }
 
   public getCacheStats(): { size: number; keys: string[] } {

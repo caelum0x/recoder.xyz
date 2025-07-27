@@ -409,7 +409,7 @@ export class AIRouterService {
   }
 
   private generateCostOptimizationTips(stats: any[]): string[] {
-    const tips = [];
+    const tips: string[] = [];
     
     const expensiveUsage = stats.filter(stat => stat.cost > 1).length;
     if (expensiveUsage > 0) {

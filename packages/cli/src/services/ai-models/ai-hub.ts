@@ -3,7 +3,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from '../../utils/logger';
 import {
   ModelRequest,
   ModelResponse,
@@ -58,7 +58,6 @@ export interface AIHubConfig {
 }
 
 export class AIModelHub extends EventEmitter {
-  private logger: Logger;
   private config: AIHubConfig;
   private providers: Map<ModelProvider, BaseModelProvider> = new Map();
   private router: ModelRouter;
@@ -68,7 +67,6 @@ export class AIModelHub extends EventEmitter {
 
   constructor(config: AIHubConfig) {
     super();
-    this.logger = Logger.getInstance();
     this.config = config;
     
     this.contextManager = new ContextManager();
@@ -83,7 +81,7 @@ export class AIModelHub extends EventEmitter {
       return;
     }
 
-    this.logger.info('Initializing AI Model Hub...');
+    Logger.info('Initializing AI Model Hub...');
 
     try {
       // Initialize providers
@@ -100,14 +98,11 @@ export class AIModelHub extends EventEmitter {
       
       this.initialized = true;
       
-      this.logger.info('AI Model Hub initialized successfully', {
-        providerCount: this.providers.size,
-        modelCount: this.getAllModels().length
-      });
+      Logger.info('AI Model Hub initialized successfully');
 
       this.emit('initialized');
     } catch (error) {
-      this.logger.error('Failed to initialize AI Model Hub', { error });
+      Logger.error('Failed to initialize AI Model Hub', { error });
       throw error;
     }
   }
@@ -372,7 +367,7 @@ export class AIModelHub extends EventEmitter {
   }
 
   public async destroy(): Promise<void> {
-    this.logger.info('Destroying AI Model Hub...');
+    Logger.info('Destroying AI Model Hub...');
     
     // Destroy all providers
     for (const provider of this.providers.values()) {
@@ -383,7 +378,7 @@ export class AIModelHub extends EventEmitter {
     this.removeAllListeners();
     this.initialized = false;
     
-    this.logger.info('AI Model Hub destroyed');
+    Logger.info('AI Model Hub destroyed');
   }
 
   private async initializeProviders(): Promise<void> {
@@ -395,9 +390,9 @@ export class AIModelHub extends EventEmitter {
         const openaiProvider = new OpenAIProvider(providers.openai);
         await openaiProvider.initialize();
         this.providers.set(ModelProvider.OPENAI, openaiProvider);
-        this.logger.info('OpenAI provider initialized');
+        Logger.info('OpenAI provider initialized');
       } catch (error) {
-        this.logger.warn('Failed to initialize OpenAI provider', { error: error instanceof Error ? error.message : String(error) });
+        Logger.warn('Failed to initialize OpenAI provider', { error: error instanceof Error ? error.message : String(error) });
       }
     }
 
@@ -407,9 +402,9 @@ export class AIModelHub extends EventEmitter {
         const anthropicProvider = new AnthropicProvider(providers.anthropic);
         await anthropicProvider.initialize();
         this.providers.set(ModelProvider.ANTHROPIC, anthropicProvider);
-        this.logger.info('Anthropic provider initialized');
+        Logger.info('Anthropic provider initialized');
       } catch (error) {
-        this.logger.warn('Failed to initialize Anthropic provider', { error: error instanceof Error ? error.message : String(error) });
+        Logger.warn('Failed to initialize Anthropic provider', { error: error instanceof Error ? error.message : String(error) });
       }
     }
 
@@ -419,7 +414,7 @@ export class AIModelHub extends EventEmitter {
         const ollamaProvider = new OllamaProvider(providers.ollama);
         await ollamaProvider.initialize();
         this.providers.set(ModelProvider.OLLAMA, ollamaProvider);
-        this.logger.info('Ollama provider initialized');
+        Logger.info('Ollama provider initialized');
         
         // Setup event forwarding for model downloads
         ollamaProvider.on('model-download-started', (data) => this.emit('model-download-started', data));
@@ -427,7 +422,7 @@ export class AIModelHub extends EventEmitter {
         ollamaProvider.on('model-download-completed', (data) => this.emit('model-download-completed', data));
         ollamaProvider.on('model-download-failed', (data) => this.emit('model-download-failed', data));
       } catch (error) {
-        this.logger.warn('Failed to initialize Ollama provider', { error: error instanceof Error ? error.message : String(error) });
+        Logger.warn('Failed to initialize Ollama provider', { error: error instanceof Error ? error.message : String(error) });
       }
     }
 

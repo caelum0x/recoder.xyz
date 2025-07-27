@@ -63,17 +63,15 @@ export interface ImportSuggestion {
 }
 
 export class DependencyManager {
-  private logger: Logger;
   private projectContext: ProjectContext | null = null;
   private dependencyGraph: DependencyGraph | null = null;
 
   constructor() {
-    this.logger = Logger.getInstance();
   }
 
   public async initialize(projectContext: ProjectContext): Promise<void> {
     this.projectContext = projectContext;
-    this.logger.info('Dependency manager initialized', { 
+    Logger.info('Dependency manager initialized', { 
       project: projectContext.name,
       packageManager: projectContext.packageManager 
     });
@@ -88,7 +86,7 @@ export class DependencyManager {
     configurationUpdates: any[];
     dependencyGraph: DependencyGraph;
   }> {
-    this.logger.info('Managing dependencies for generated files', { 
+    Logger.info('Managing dependencies for generated files', { 
       fileCount: generatedFiles.length 
     });
 
@@ -122,7 +120,7 @@ export class DependencyManager {
 
     const { packageManager, rootPath } = this.projectContext;
 
-    this.logger.info('Installing dependencies', { 
+    Logger.info('Installing dependencies', { 
       updates: packageUpdates.length,
       packageManager 
     });
@@ -147,7 +145,7 @@ export class DependencyManager {
       await this.removePackages(toRemove, packageManager, rootPath);
     }
 
-    this.logger.info('Dependency installation completed');
+    Logger.info('Dependency installation completed');
   }
 
   public async optimizeProjectDependencies(): Promise<{
@@ -160,7 +158,7 @@ export class DependencyManager {
       throw new Error('Project context not initialized');
     }
 
-    this.logger.info('Optimizing project dependencies');
+    Logger.info('Optimizing project dependencies');
 
     const result = {
       removedUnused: [] as string[],
@@ -194,7 +192,7 @@ export class DependencyManager {
     // Calculate bundle size reduction (simplified)
     result.bundleSizeReduction = (result.removedUnused.length * 50) + (result.updatedOutdated.length * 10);
 
-    this.logger.info('Dependency optimization completed', result);
+    Logger.info('Dependency optimization completed', result);
     return result;
   }
 
@@ -397,7 +395,7 @@ export class DependencyManager {
           }
         }
       } catch (error) {
-        this.logger.warn('Could not read package.json', { error });
+        Logger.warn('Could not read package.json', { error });
       }
     }
 
@@ -677,7 +675,7 @@ export class DependencyManager {
   private async validateDependencyGraph(graph: DependencyGraph): Promise<void> {
     // Report cycles
     if (graph.cycles.length > 0) {
-      this.logger.warn('Circular dependencies detected', { 
+      Logger.warn('Circular dependencies detected', { 
         cycles: graph.cycles.length,
         examples: graph.cycles.slice(0, 3)
       });
@@ -685,7 +683,7 @@ export class DependencyManager {
 
     // Report orphaned files
     if (graph.orphans.length > 0) {
-      this.logger.warn('Orphaned files detected', { 
+      Logger.warn('Orphaned files detected', { 
         orphans: graph.orphans.length,
         files: graph.orphans.slice(0, 5)
       });
@@ -694,7 +692,7 @@ export class DependencyManager {
     // Validate dependency levels
     const maxLevel = Math.max(...graph.nodes.map(n => n.level));
     if (maxLevel > 10) {
-      this.logger.warn('Deep dependency nesting detected', { maxLevel });
+      Logger.warn('Deep dependency nesting detected', { maxLevel });
     }
   }
 
@@ -790,7 +788,7 @@ export class DependencyManager {
       await this.runPackageCommand(packageManager, auditCommand, rootPath);
       return ['security-vulnerabilities-fixed'];
     } catch (error) {
-      this.logger.warn('Failed to fix security vulnerabilities', { error });
+      Logger.warn('Failed to fix security vulnerabilities', { error });
       return [];
     }
   }

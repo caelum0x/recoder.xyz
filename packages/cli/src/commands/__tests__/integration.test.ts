@@ -9,7 +9,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import { jest } from '@jest/globals';
 import { ConfigManager } from '../../utils/config';
-import { ApiClient } from '../../services/api';
+import { apiClient } from '../../services/api';
 
 const execAsync = promisify(exec);
 
@@ -25,7 +25,7 @@ describe('CLI Integration Tests', () => {
     ConfigManager.setConfigDir(path.join(testDir, '.recoder'));
     
     // Mock API responses for testing
-    jest.spyOn(ApiClient, 'getInstance').mockReturnValue({
+    jest.spyOn(apiClient, 'getInstance').mockReturnValue({
       healthCheck: jest.fn().mockResolvedValue({ success: true }),
       testConnection: jest.fn().mockResolvedValue(true),
       // Add more mocked methods as needed
@@ -322,7 +322,7 @@ describe('CLI Integration Tests', () => {
 
     test('should handle network errors gracefully', async () => {
       // Mock network failure
-      jest.spyOn(ApiClient, 'getInstance').mockReturnValue({
+      jest.spyOn(apiClient, 'getInstance').mockReturnValue({
         healthCheck: jest.fn().mockRejectedValue(new Error('Network error')),
         testConnection: jest.fn().mockResolvedValue(false),
       } as any);
@@ -572,7 +572,7 @@ describe('CLI Integration Test Utilities', () => {
 
   describe('Mock Validation', () => {
     test('should validate API mocks are working', () => {
-      const apiClient = ApiClient.getInstance();
+      const apiClient = apiClient.getInstance();
       expect(apiClient.healthCheck).toBeDefined();
       expect(apiClient.testConnection).toBeDefined();
     });

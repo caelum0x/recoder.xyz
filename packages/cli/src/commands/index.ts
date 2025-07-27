@@ -4,7 +4,7 @@
 
 import { Command } from 'commander';
 import { setupAuthCommands } from './auth';
-//import { setupAgentCommands } from './agent';
+// import { setupAgentCommands } from './agent'; // TODO: Fix agent command setup
 import { setupProjectCommands } from './project';
 import { setupChatCommands } from './chat';
 import { setupTemplateCommands } from './templates';
@@ -13,13 +13,15 @@ import { setupModelCommands } from './models';
 import { setupGenerateCommands } from './generate';
 import { createPlanCommand } from './plan';
 import { createStructureCommand } from './structure';
+import { routerCommand } from './router';
+import { ollamaCommand } from './ai/ollama-command';
 
 export function setupCommands(program: Command): void {
   // Authentication commands
   setupAuthCommands(program);
   
   // Agent management commands
-  setupAgentCommands(program);
+  // setupAgentCommands(program); // TODO: Fix agent command setup
   
   // Project commands
   setupProjectCommands(program);
@@ -44,6 +46,12 @@ export function setupCommands(program: Command): void {
   
   // Structure commands
   program.addCommand(createStructureCommand());
+  
+  // AI Router commands
+  routerCommand.register(program);
+  
+  // Ollama AI commands  
+  ollamaCommand.register(program);
 }
 
 export * from './auth';
@@ -56,3 +64,5 @@ export * from './models';
 export * from './generate';
 export * from './plan';
 export * from './structure';
+export * from './router';
+export * from './ai/ollama-command';

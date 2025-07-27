@@ -130,5 +130,8 @@ export type {
   OfflineStats
 } from './offline-manager';
 
+// Import for default export
+import { ollamaService } from './ollama-service';
+
 // Default export for convenience
 export default ollamaService;

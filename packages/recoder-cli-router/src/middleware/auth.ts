@@ -12,10 +12,11 @@ export const apiKeyAuth =
       return done();
     }
 
-    const authKey: string =
+    const authKey = 
       req.headers.authorization || req.headers["x-api-key"];
-    if (!authKey) {
-      reply.status(401).send("APIKEY is missing");
+    
+    if (!authKey || Array.isArray(authKey)) {
+      reply.status(401).send("APIKEY is missing or invalid");
       return;
     }
     let token = "";

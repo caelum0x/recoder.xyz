@@ -4,6 +4,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { BaseModelProvider } from '../base-provider';
+import { Logger } from '@recoder/shared';
 import {
   ModelMetadata,
   ModelRequest,
@@ -49,12 +50,12 @@ export class AnthropicProvider extends BaseModelProvider {
       const models = await this.loadClaudeModels();
       models.forEach(model => this.models.set(model.id, model));
       
-      this.logger.info('Anthropic provider initialized', { 
+      Logger.info('Anthropic provider initialized', { 
         modelCount: models.length,
         models: models.map(m => m.id)
       });
     } catch (error) {
-      this.logger.error('Failed to initialize Anthropic provider', { error });
+      Logger.error('Failed to initialize Anthropic provider', { error });
       throw error;
     }
   }
@@ -69,7 +70,7 @@ export class AnthropicProvider extends BaseModelProvider {
       });
       return response.status === 200;
     } catch (error) {
-      this.logger.error('Anthropic config validation failed', { error });
+      Logger.error('Anthropic config validation failed', { error });
       return false;
     }
   }
@@ -77,6 +78,10 @@ export class AnthropicProvider extends BaseModelProvider {
   async getAvailableModels(): Promise<ModelMetadata[]> {
     // Anthropic doesn't have a models endpoint, so we return our predefined models
     return this.loadClaudeModels();
+  }
+
+  getProvider(): ModelProvider {
+    return ModelProvider.ANTHROPIC;
   }
 
   async sendRequest(request: ModelRequest): Promise<ModelResponse> {
@@ -93,6 +98,7 @@ export class AnthropicProvider extends BaseModelProvider {
       const modelError = this.handleApiError(error, request.model);
       
       return {
+        success: false,
         id: request.id,
         model: request.model,
         content: '',
@@ -168,7 +174,7 @@ export class AnthropicProvider extends BaseModelProvider {
                 totalTokens = parsed.usage.output_tokens;
               }
             } catch (parseError) {
-              this.logger.warn('Failed to parse streaming chunk', { data, error: parseError });
+              Logger.warn('Failed to parse streaming chunk', { data, error: parseError });
             }
           }
         }
@@ -373,6 +379,7 @@ export class AnthropicProvider extends BaseModelProvider {
     };
 
     return {
+      success: true,
       id: request.id,
       model: request.model,
       content,
@@ -411,6 +418,7 @@ export class AnthropicProvider extends BaseModelProvider {
     };
 
     return {
+      success: true,
       id: request.id,
       model: request.model,
       content,

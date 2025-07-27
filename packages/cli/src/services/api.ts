@@ -346,7 +346,7 @@ class ApiClient {
       (config) => {
         // Add authentication headers if available
         const authHeaders = getAuthHeaders();
-        config.headers = { ...config.headers, ...authHeaders };
+        config.headers = { ...(config.headers as any), ...authHeaders };
 
         // Log requests in verbose mode
         if (ConfigManager.getPreference('verboseLogging')) {
@@ -844,7 +844,8 @@ class ApiClient {
 
   // Utility methods
   public isOnline(): boolean {
-    return navigator?.onLine ?? true;
+    // For Node.js environment, assume online
+    return true;
   }
 
   public async testConnection(): Promise<boolean> {
@@ -893,10 +894,11 @@ class ApiClient {
   }
 
   public async listProjects(filters?: { type?: string; framework?: string; language?: string; status?: string }): Promise<ApiResponse<ProjectData[]>> {
-    return this.getPaginated<ProjectData>('/projects', filters, {
+    const response = await this.getPaginated<ProjectData>('/projects', filters, {
       cache: true,
       cacheTTL: 180000 // 3 minutes
     });
+    return { ...response, data: response.data?.data || [] };
   }
 
   public async analyzeProject(projectId: string, options?: { depth?: number; includeTests?: boolean }): Promise<ApiResponse<any>> {
@@ -955,10 +957,11 @@ class ApiClient {
   }
 
   public async listAgents(filters?: { type?: string; status?: string }): Promise<ApiResponse<AgentData[]>> {
-    return this.getPaginated<AgentData>('/agents', filters, {
+    const response = await this.getPaginated<AgentData>('/agents', filters, {
       cache: true,
       cacheTTL: 180000
     });
+    return { ...response, data: response.data?.data || [] };
   }
 
   public async configureAgent(agentId: string, configuration: any): Promise<ApiResponse<AgentData>> {
@@ -1009,10 +1012,11 @@ class ApiClient {
   }
 
   public async listPlans(filters?: { project_id?: string; status?: string }): Promise<ApiResponse<PlanData[]>> {
-    return this.getPaginated<PlanData>('/planner/plans', filters, {
+    const response = await this.getPaginated<PlanData>('/planner/plans', filters, {
       cache: true,
       cacheTTL: 180000
     });
+    return { ...response, data: response.data?.data || [] };
   }
 
   public async executePlan(planId: string, options?: { dryRun?: boolean; environment?: string }): Promise<ApiResponse<any>> {
@@ -1096,18 +1100,20 @@ class ApiClient {
 
   public async getValidationHistory(projectId: string, type?: string): Promise<ApiResponse<ValidationResult[]>> {
     const params = type ? { type } : {};
-    return this.getPaginated<ValidationResult>(`/validation/history/${projectId}`, params, {
+    const response = await this.getPaginated<ValidationResult>(`/validation/history/${projectId}`, params, {
       cache: true,
       cacheTTL: 300000
     });
+    return { ...response, data: response.data?.data || [] };
   }
 
   // Template API Methods
   public async getTemplates(filters?: { category?: string; framework?: string; language?: string }): Promise<ApiResponse<TemplateData[]>> {
-    return this.getPaginated<TemplateData>('/templates', filters, {
+    const response = await this.getPaginated<TemplateData>('/templates', filters, {
       cache: true,
       cacheTTL: 600000 // 10 minutes
     });
+    return { ...response, data: response.data?.data || [] };
   }
 
   public async getTemplate(templateId: string): Promise<ApiResponse<TemplateData>> {
@@ -1148,10 +1154,11 @@ class ApiClient {
   }
 
   public async searchTemplates(query: string, filters?: any): Promise<ApiResponse<TemplateData[]>> {
-    return this.getPaginated<TemplateData>('/templates/search', { query, ...filters }, {
+    const response = await this.getPaginated<TemplateData>('/templates/search', { query, ...filters }, {
       cache: true,
       cacheTTL: 300000
     });
+    return { ...response, data: response.data?.data || [] };
   }
 
   // Structure API Methods
@@ -1223,10 +1230,9 @@ class ApiClient {
 }
 
 // Export singleton instance
-export const ApiClient = ApiClient.getInstance();
+export const apiClient = ApiClient.getInstance();
 
 // Export class for testing
-export { ApiClient as ApiClientClass };
+export { ApiClient };
 
-// Export types
-export type { RequestOptions, ApiResponse, PaginatedResponse };
+// Types are already exported above

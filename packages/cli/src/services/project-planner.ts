@@ -688,7 +688,7 @@ export class ProjectPlanner extends EventEmitter {
    */
   private async generateInfrastructureTasks(architecture: ArchitecturalPlan): Promise<any[]> {
     const techStack = architecture.technology_stack;
-    const tasks = [];
+    const tasks: any[] = [];
 
     // Database setup tasks
     tasks.push({
@@ -733,7 +733,7 @@ export class ProjectPlanner extends EventEmitter {
    */
   private generateRealDeliverables(architecture: ArchitecturalPlan): any[] {
     const techStack = architecture.technology_stack;
-    const deliverables = [];
+    const deliverables: any[] = [];
 
     // API Implementation
     const apiComponent = architecture.components.find(c => c.type === 'backend');
@@ -790,7 +790,7 @@ export class ProjectPlanner extends EventEmitter {
    * Generate REAL acceptance criteria based on actual functionality
    */
   private generateRealAcceptanceCriteria(architecture: ArchitecturalPlan): string[] {
-    const criteria = [];
+    const criteria: string[] = [];
     const components = architecture.components;
     
     // Database criteria
@@ -844,7 +844,7 @@ export class ProjectPlanner extends EventEmitter {
    * Generate REAL development tasks based on actual architecture and tech stack
    */
   private async generateDevelopmentTasks(architecture: ArchitecturalPlan): Promise<any[]> {
-    const tasks = [];
+    const tasks: any[] = [];
     const techStack = architecture.technology_stack;
     const components = architecture.components;
     
@@ -1162,7 +1162,7 @@ export class ProjectPlanner extends EventEmitter {
    * Generate REAL security implementation tasks based on actual security model and tech stack
    */
   private async generateSecurityTasks(securityModel: any, techStack: any): Promise<any[]> {
-    const tasks = [];
+    const tasks: any[] = [];
     
     // Authentication Implementation Tasks
     if (securityModel.authentication && securityModel.authentication !== 'none') {
@@ -1940,7 +1940,7 @@ export class ProjectPlanner extends EventEmitter {
    * Identify REAL risk factors based on actual technology choices and architecture
    */
   private identifyRealRiskFactors(architecture: ArchitecturalPlan, techStack: any): any[] {
-    const risks = [];
+    const risks: any[] = [];
     
     // Technology Stack Risks
     if (techStack.frontend?.includes('React')) {

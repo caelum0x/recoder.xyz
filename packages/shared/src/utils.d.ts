@@ -93,7 +93,7 @@ export declare class ObjectUtils {
     /**
      * Pick keys from object
      */
-    static pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K>;
+    static pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K>;
     /**
      * Omit keys from object
      */

@@ -64,7 +64,6 @@ export interface PerformanceMetrics {
 }
 
 export class UsageTracker {
-  private logger: Logger;
   private records: UsageRecord[] = [];
   private dataDir: string;
   private maxRecords: number = 10000;
@@ -72,7 +71,6 @@ export class UsageTracker {
   private saveTimer?: NodeJS.Timeout;
 
   constructor(dataDir?: string) {
-    this.logger = Logger.getInstance();
     this.dataDir = dataDir || path.join(process.cwd(), '.recoder', 'usage');
   }
 
@@ -81,7 +79,7 @@ export class UsageTracker {
     await this.loadRecords();
     this.startAutoSave();
     
-    this.logger.info('Usage tracker initialized', {
+    Logger.info('Usage tracker initialized', {
       dataDir: this.dataDir,
       recordCount: this.records.length
     });
@@ -97,7 +95,7 @@ export class UsageTracker {
       projectPath: request.context?.projectPath
     };
 
-    this.logger.debug('Request started', { requestId: request.id, model: request.model });
+    Logger.debug('Request started', { requestId: request.id, model: request.model });
   }
 
   public trackRequestComplete(request: ModelRequest, response: ModelResponse): void {
@@ -121,7 +119,7 @@ export class UsageTracker {
 
     this.addRecord(record);
     
-    this.logger.debug('Request completed', {
+    Logger.debug('Request completed', {
       requestId: request.id,
       model: response.model,
       tokens: record.tokens.total,
@@ -151,7 +149,7 @@ export class UsageTracker {
 
     this.addRecord(record);
     
-    this.logger.debug('Request failed', {
+    Logger.debug('Request failed', {
       requestId: request.id,
       model: request.model,
       error: record.error
@@ -395,7 +393,7 @@ export class UsageTracker {
       fs.writeFileSync(fullPath, csv);
     }
 
-    this.logger.info('Usage data exported', { format, recordCount: records.length, filePath: fullPath });
+    Logger.info('Usage data exported', { format, recordCount: records.length, filePath: fullPath });
     return fullPath;
   }
 
@@ -407,7 +405,7 @@ export class UsageTracker {
     await this.saveRecords();
     this.records = [];
     
-    this.logger.info('Usage tracker destroyed');
+    Logger.info('Usage tracker destroyed');
   }
 
   private addRecord(record: UsageRecord): void {
@@ -432,10 +430,10 @@ export class UsageTracker {
           record.timestamp = new Date(record.timestamp);
         });
         
-        this.logger.info('Usage records loaded', { count: this.records.length });
+        Logger.info('Usage records loaded', { count: this.records.length });
       }
     } catch (error) {
-      this.logger.warn('Failed to load usage records', { error });
+      Logger.warn('Failed to load usage records', { error });
       this.records = [];
     }
   }
@@ -453,16 +451,16 @@ export class UsageTracker {
       
       await fs.writeJson(recordsFile, data, { spaces: 2 });
       
-      this.logger.debug('Usage records saved', { count: this.records.length });
+      Logger.debug('Usage records saved', { count: this.records.length });
     } catch (error) {
-      this.logger.error('Failed to save usage records', { error });
+      Logger.error('Failed to save usage records', { error });
     }
   }
 
   private startAutoSave(): void {
     this.saveTimer = setInterval(() => {
       this.saveRecords().catch(error => {
-        this.logger.error('Auto-save failed', { error });
+        Logger.error('Auto-save failed', { error });
       });
     }, this.saveInterval);
   }

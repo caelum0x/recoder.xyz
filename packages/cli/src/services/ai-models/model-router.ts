@@ -49,7 +49,6 @@ export interface ModelScore {
 }
 
 export class ModelRouter extends EventEmitter {
-  private logger: Logger;
   private config: RouterConfig;
   private providers: Map<ModelProvider, BaseModelProvider> = new Map();
   private models: Map<string, ModelMetadata> = new Map();
@@ -58,7 +57,6 @@ export class ModelRouter extends EventEmitter {
 
   constructor(config: RouterConfig) {
     super();
-    this.logger = Logger.getInstance();
     this.config = config;
   }
 
@@ -70,7 +68,7 @@ export class ModelRouter extends EventEmitter {
       this.providers.set(providerType, provider);
       models.forEach(model => this.models.set(model.id, model));
       
-      this.logger.info('Provider added to router', { 
+      Logger.info('Provider added to router', { 
         provider: providerType, 
         modelCount: models.length 
       });
@@ -114,9 +112,9 @@ export class ModelRouter extends EventEmitter {
 
         return response;
       } catch (error) {
-        this.logger.warn('Primary model failed, trying fallbacks', { 
+        Logger.warn('Primary model failed, trying fallbacks', { 
           primaryModel, 
-          error: error.message 
+          error: error instanceof Error ? error.message : String(error)
         });
 
         // Try fallback models
@@ -149,9 +147,9 @@ export class ModelRouter extends EventEmitter {
 
             return response;
           } catch (fallbackError) {
-            this.logger.warn('Fallback model failed', { 
+            Logger.warn('Fallback model failed', { 
               fallbackModel, 
-              error: fallbackError.message 
+              error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
             });
           }
         }
@@ -159,9 +157,9 @@ export class ModelRouter extends EventEmitter {
         throw new Error('All models failed to process request');
       }
     } catch (error) {
-      this.logger.error('Request routing failed', { 
+      Logger.error('Request routing failed', { 
         requestId: request.id, 
-        error: error.message 
+        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }
@@ -187,11 +185,35 @@ export class ModelRouter extends EventEmitter {
         model: primaryModel
       });
 
+      let finalResult: ModelResponse | undefined;
+      
       for await (const chunk of stream) {
+        if ('finished' in chunk && chunk.finished) {
+          // This is the final result, not a streaming chunk
+          finalResult = chunk as any as ModelResponse;
+          break;
+        }
         yield chunk;
       }
 
-      return stream.return();
+      // Return the final result or create a default one
+      return finalResult || {
+        success: true,
+        id: request.id,
+        model: primaryModel,
+        content: '',
+        finishReason: 'stop',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        metadata: {
+          model: primaryModel,
+          provider: provider.getProvider(),
+          timestamp: new Date(),
+          responseTime: 0,
+          requestId: request.id,
+          cached: false,
+          fallbackUsed: false
+        }
+      };
     } catch (error) {
       // For streaming, we don't implement fallbacks as it's complex
       // Future enhancement could buffer and retry
@@ -215,7 +237,7 @@ export class ModelRouter extends EventEmitter {
       .slice(0, 5) // Top 5 candidates
       .map(s => s.model);
 
-    this.logger.debug('Model selection completed', {
+    Logger.debug('Model selection completed', {
       requestId: request.id,
       task: request.context?.task,
       selectedModels: sortedModels,
@@ -525,7 +547,7 @@ export class ModelRouter extends EventEmitter {
 
     for (const rule of sortedRules) {
       if (this.matchesCondition(rule.condition, context)) {
-        this.logger.debug('Routing rule matched', { 
+        Logger.debug('Routing rule matched', { 
           ruleId: rule.id, 
           ruleName: rule.name 
         });
@@ -641,7 +663,7 @@ export class ModelRouter extends EventEmitter {
     this.modelPerformance.set(modelId, current);
   }
 
-  public getPerformanceMetrics(modelId?: string): PerformanceMetrics | Map<string, PerformanceMetrics> {
+  public getPerformanceMetrics(modelId?: string): PerformanceMetrics | Map<string, PerformanceMetrics> | undefined {
     if (modelId) {
       return this.modelPerformance.get(modelId);
     }

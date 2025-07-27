@@ -408,7 +408,7 @@ export class OllamaCommand {
       console.log(chalk.blue('🤖 Ollama Chat\n'));
       console.log(chalk.gray(`User: ${prompt}`));
       
-      const messages = [{ role: 'user', content: prompt }];
+      const messages = [{ role: 'user' as const, content: prompt }];
       
       const response = await enhancedOllamaProvider.chat(messages, {
         model: options.model,
@@ -418,7 +418,7 @@ export class OllamaCommand {
       });
 
       console.log(chalk.green(`\nAssistant: ${response.content}`));
-      console.log(chalk.gray(`\nModel: ${response.model} | Tokens: ${response.tokens?.input}→${response.tokens?.output}`));
+      console.log(chalk.gray(`\nModel: ${response.model} | Tokens: ${(response as any).tokens?.input || 'N/A'}→${(response as any).tokens?.output || 'N/A'}`));
 
     } catch (error) {
       console.error(chalk.red('❌ Chat failed:'), error instanceof Error ? error.message : String(error));
@@ -453,8 +453,8 @@ export class OllamaCommand {
       }
 
       const messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Generate ${options.test ? 'code with tests' : 'code'} for: ${description}` }
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: `Generate ${options.test ? 'code with tests' : 'code'} for: ${description}` }
       ];
 
       // Prefer coding models
@@ -657,10 +657,10 @@ export class OllamaCommand {
         
         console.log(chalk.blue('🔧 Current Preferences:\n'));
         console.log(`   Max Model Size: ${chalk.cyan(preferences.maxModelSize + 'GB')}`);
-        console.log(`   Prefer Local Models: ${this.getBooleanColor(preferences.preferLocalModels)(preferences.preferLocalModels)}`);
-        console.log(`   Prefer Small Models: ${this.getBooleanColor(preferences.preferSmallModels)(preferences.preferSmallModels)}`);
-        console.log(`   Prioritize Accuracy: ${this.getBooleanColor(preferences.prioritizeAccuracy)(preferences.prioritizeAccuracy)}`);
-        console.log(`   Auto Install Models: ${this.getBooleanColor(preferences.autoInstallModels)(preferences.autoInstallModels)}`);
+        console.log(`   Prefer Local Models: ${this.getBooleanColor(preferences.preferLocalModels)(String(preferences.preferLocalModels))}`);
+        console.log(`   Prefer Small Models: ${this.getBooleanColor(preferences.preferSmallModels)(String(preferences.preferSmallModels))}`);
+        console.log(`   Prioritize Accuracy: ${this.getBooleanColor(preferences.prioritizeAccuracy)(String(preferences.prioritizeAccuracy))}`);
+        console.log(`   Auto Install Models: ${this.getBooleanColor(preferences.autoInstallModels)(String(preferences.autoInstallModels))}`);
         console.log(`   Update Frequency: ${chalk.cyan(preferences.updateFrequency)}`);
         
         if (preferences.preferredModels.length > 0) {
@@ -699,7 +699,7 @@ export class OllamaCommand {
         
         if (insights.recommendations.mostRecommendedModels.length > 0) {
           console.log(chalk.cyan('\n🏆 Most Recommended Models:'));
-          insights.recommendations.mostRecommendedModels.forEach((model, index) => {
+          insights.recommendations.mostRecommendedModels.forEach((model: any, index: number) => {
             console.log(`   ${index + 1}. ${chalk.green(model.model)} (${model.count} times)`);
           });
         }
@@ -819,7 +819,7 @@ export class OllamaCommand {
         
         if (session.errors.length > 0) {
           console.log(chalk.yellow('\n⚠️ Some updates had warnings:'));
-          session.errors.forEach(error => {
+          session.errors.forEach((error: any) => {
             console.log(`  • ${error.model}: ${error.error}`);
           });
         }
@@ -1051,7 +1051,7 @@ export class OllamaCommand {
       output: process.stdout
     });
 
-    const messages: Array<{ role: string; content: string }> = [];
+    const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
 
     const askQuestion = () => {
       rl.question(chalk.cyan('You: '), async (input: string) => {
@@ -1072,7 +1072,7 @@ export class OllamaCommand {
           return;
         }
 
-        messages.push({ role: 'user', content: input });
+        messages.push({ role: 'user' as const, content: input });
 
         try {
           const response = await enhancedOllamaProvider.chat(messages, {
@@ -1082,7 +1082,7 @@ export class OllamaCommand {
           });
 
           console.log(chalk.green(`Assistant: ${response.content}\n`));
-          messages.push({ role: 'assistant', content: response.content });
+          messages.push({ role: 'assistant' as const, content: response.content });
           
         } catch (error) {
           console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));

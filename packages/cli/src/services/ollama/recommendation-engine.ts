@@ -371,7 +371,7 @@ export class IntelligentRecommendationEngine extends EventEmitter {
     const privacyScore = this.scorePrivacyRequirements(model, context);
     totalScore += privacyScore * this.SCORING_WEIGHTS.privacy_requirements * 100;
 
-    if (context.privacyLevel === 'restricted' && model.isLocal) {
+    if (context.privacyLevel === 'restricted' && (model as any).isLocal) {
       reasons.push({
         type: 'privacy_requirement',
         weight: this.SCORING_WEIGHTS.privacy_requirements,
@@ -486,7 +486,7 @@ export class IntelligentRecommendationEngine extends EventEmitter {
     }
 
     // Local model preference
-    if (this.userPreferences.preferLocalModels && model.isLocal) {
+    if (this.userPreferences.preferLocalModels && (model as any).isLocal) {
       score += 0.2;
     }
 
@@ -532,13 +532,13 @@ export class IntelligentRecommendationEngine extends EventEmitter {
 
     if (context.budget === 'free-only') {
       // Only local models are free
-      score = model.isLocal ? 1 : 0;
+      score = (model as any).isLocal ? 1 : 0;
     } else if (context.budget === 'cost-conscious') {
       // Prefer free models, but allow paid ones
-      score = model.isLocal ? 1 : 0.3;
+      score = (model as any).isLocal ? 1 : 0.3;
     } else {
       // Budget flexible - slight preference for free
-      score = model.isLocal ? 0.8 : 0.6;
+      score = (model as any).isLocal ? 0.8 : 0.6;
     }
 
     return score;
@@ -554,7 +554,7 @@ export class IntelligentRecommendationEngine extends EventEmitter {
 
     const baseScore = privacyScores[context.privacyLevel] || 0.5;
     
-    if (model.isLocal) {
+    if ((model as any).isLocal) {
       return Math.min(1, baseScore + 0.3);
     } else {
       return context.privacyLevel === 'restricted' ? 0 : baseScore * 0.7;

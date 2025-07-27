@@ -32,10 +32,7 @@ export interface ConsoleReportOptions extends ReportOptions {
 }
 
 export class ValidationReporter {
-  private logger: Logger;
-
   constructor() {
-    this.logger = Logger.getInstance();
   }
 
   public async generateReport(
@@ -68,7 +65,7 @@ export class ValidationReporter {
     await fs.ensureDir(path.dirname(options.outputFile));
     await fs.writeFile(options.outputFile, content, 'utf8');
     
-    this.logger.info('Validation report saved', { 
+    Logger.info('Validation report saved', { 
       file: options.outputFile, 
       format: options.format 
     });

@@ -759,8 +759,8 @@ export class ProjectAnalyzer extends EventEmitter {
     // CLI applications
     const hasMainFunction = fileAnalyses.some(file => 
       file.features.includes('cli') || 
-      file.content?.includes('main(') ||
-      file.content?.includes('if __name__ == "__main__"')
+      (file as any).content?.includes('main(') ||
+      (file as any).content?.includes('if __name__ == "__main__"')
     );
     
     if (hasMainFunction) {
