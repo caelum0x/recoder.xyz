@@ -2,6 +2,7 @@
  * Code Generation Types and Interfaces
  */
 import { Timestamp } from './common';
+import { SecurityRequirement } from './project';
 export declare enum GenerationType {
     GENERATE = "generate",
     MODIFY = "modify",

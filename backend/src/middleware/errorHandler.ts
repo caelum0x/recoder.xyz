@@ -3,7 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger';
+const { logger } = require('../utils/logger');
 
 export interface APIError extends Error {
   status?: number;
@@ -77,7 +77,7 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isDevelopment = process.env['NODE_ENV'] === 'development';
   const status = error.status || 500;
   const code = error.code || 'INTERNAL_ERROR';
 

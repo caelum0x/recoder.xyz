@@ -6,7 +6,7 @@ const winston_1 = tslib_1.__importDefault(require("winston"));
 const chalk_1 = tslib_1.__importDefault(require("chalk"));
 // Create logger instance
 const logger = winston_1.default.createLogger({
-    level: process.env.LOG_LEVEL || 'info',
+    level: process.env['LOG_LEVEL'] || 'info',
     format: winston_1.default.format.combine(winston_1.default.format.timestamp(), winston_1.default.format.errors({ stack: true }), winston_1.default.format.json()),
     transports: [
         new winston_1.default.transports.Console({
@@ -15,6 +15,12 @@ const logger = winston_1.default.createLogger({
     ]
 });
 class Logger {
+    static getInstance() {
+        if (!Logger.instance) {
+            Logger.instance = new Logger();
+        }
+        return Logger.instance;
+    }
     static info(message, meta) {
         console.log(chalk_1.default.blue('ℹ'), message);
         if (meta)
@@ -36,11 +42,27 @@ class Logger {
             logger.info(message, meta);
     }
     static debug(message, meta) {
-        if (process.env.LOG_LEVEL === 'debug') {
+        if (process.env['LOG_LEVEL'] === 'debug') {
             console.log(chalk_1.default.gray('🐛'), message);
             if (meta)
                 logger.debug(message, meta);
         }
+    }
+    // Instance methods that delegate to static methods
+    info(message, meta) {
+        Logger.info(message, meta);
+    }
+    warn(message, meta) {
+        Logger.warn(message, meta);
+    }
+    error(message, meta) {
+        Logger.error(message, meta);
+    }
+    success(message, meta) {
+        Logger.success(message, meta);
+    }
+    debug(message, meta) {
+        Logger.debug(message, meta);
     }
 }
 exports.Logger = Logger;

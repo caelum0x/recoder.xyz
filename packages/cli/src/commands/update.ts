@@ -10,7 +10,7 @@ import ora from 'ora';
 import { AutoUpdater, UpdateOptions, UpdateProgress } from '../services/auto-updater';
 import { Logger } from '@recoder/shared';
 
-const logger = new Logger('UpdateCommand');
+// Use static Logger methods directly
 
 interface UpdateConfig {
   autoCheck: boolean;
@@ -19,6 +19,7 @@ interface UpdateConfig {
   channel: 'stable' | 'beta' | 'alpha';
   checkInterval: number;
   skipVersion?: string;
+  lastCheck?: string;
 }
 
 /**

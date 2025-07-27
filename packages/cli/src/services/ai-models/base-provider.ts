@@ -13,18 +13,17 @@ import {
   StreamingResponse,
   ModelError,
   ErrorType,
-  HealthStatus
+  HealthStatus,
+  ModelProvider
 } from '@recoder/shared/types/ai-models';
 
 export abstract class BaseModelProvider extends EventEmitter {
-  protected logger: Logger;
   protected config: ModelConfiguration;
   protected models: Map<string, ModelMetadata> = new Map();
   protected healthStatus: Map<string, ModelHealth> = new Map();
 
   constructor(config: ModelConfiguration) {
     super();
-    this.logger = Logger.getInstance();
     this.config = config;
     this.setupHealthMonitoring();
   }
@@ -35,6 +34,7 @@ export abstract class BaseModelProvider extends EventEmitter {
   abstract streamRequest(request: ModelRequest): AsyncGenerator<StreamingResponse, ModelResponse>;
   abstract validateConfig(): Promise<boolean>;
   abstract getAvailableModels(): Promise<ModelMetadata[]>;
+  abstract getProvider(): ModelProvider;
 
   // Common provider functionality
   public async isHealthy(modelId?: string): Promise<boolean> {
@@ -148,7 +148,7 @@ export abstract class BaseModelProvider extends EventEmitter {
         }
       };
     } catch (error) {
-      this.logger.error('Health check failed', { modelId, error });
+      Logger.error('Health check failed', { modelId, error });
       
       return {
         model: modelId,
@@ -199,7 +199,7 @@ export abstract class BaseModelProvider extends EventEmitter {
 
         this.emit('health-updated', { modelId, health });
       } catch (error) {
-        this.logger.error('Health check error', { modelId, error });
+        Logger.error('Health check error', { modelId, error });
       }
     }
   }

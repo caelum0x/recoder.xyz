@@ -79,7 +79,6 @@ export interface ContextMessage {
 }
 
 export class ContextManager {
-  private logger: Logger;
   private projectContexts: Map<string, ProjectContext> = new Map();
   private conversations: Map<string, ConversationContext> = new Map();
   private currentConversationId?: string;
@@ -87,15 +86,14 @@ export class ContextManager {
   private maxConversationHistory: number = 50; // messages
 
   constructor() {
-    this.logger = Logger.getInstance();
   }
 
   public async initialize(): Promise<void> {
-    this.logger.info('Context manager initialized');
+    Logger.info('Context manager initialized');
   }
 
   public async enhanceContext(context: RequestContext): Promise<RequestContext> {
-    const enhanced = { ...context };
+    const enhanced: any = { ...context };
 
     // Add project context if available
     if (context.projectPath) {
@@ -121,7 +119,7 @@ export class ContextManager {
       return cached;
     }
 
-    this.logger.info('Analyzing project context', { projectPath });
+    Logger.info('Analyzing project context', { projectPath });
     
     const context = await this.analyzeProject(projectPath);
     this.projectContexts.set(projectPath, context);
@@ -158,7 +156,7 @@ export class ContextManager {
     this.conversations.set(conversationId, conversation);
     this.currentConversationId = conversationId;
     
-    this.logger.info('Started new conversation', { conversationId, projectPath });
+    Logger.info('Started new conversation', { conversationId, projectPath });
     
     return conversationId;
   }
@@ -243,8 +241,8 @@ export class ContextManager {
         context.packageInfo = await fs.readJson(packageJsonPath);
         context.projectType = 'node';
         context.dependencies = [
-          ...Object.keys(context.packageInfo.dependencies || {}),
-          ...Object.keys(context.packageInfo.devDependencies || {})
+          ...Object.keys(context.packageInfo?.dependencies || {}),
+          ...Object.keys(context.packageInfo?.devDependencies || {})
         ];
       }
 
@@ -260,7 +258,7 @@ export class ContextManager {
       // Get git info if available
       context.gitInfo = await this.getGitInfo(projectPath);
       
-      this.logger.info('Project analysis completed', {
+      Logger.info('Project analysis completed', {
         projectPath,
         projectType: context.projectType,
         languages: context.languages,
@@ -268,7 +266,7 @@ export class ContextManager {
         fileCount: this.countFiles(context.fileStructure)
       });
     } catch (error) {
-      this.logger.warn('Project analysis failed', { projectPath, error });
+      Logger.warn('Project analysis failed', { projectPath, error });
     }
 
     return context;
@@ -570,7 +568,7 @@ export class ContextManager {
       metadata: {
         task: request.context?.task,
         model: request.model,
-        files: request.context?.files
+        files: (request.context as any)?.files
       }
     });
 

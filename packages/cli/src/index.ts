@@ -10,7 +10,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 // import figlet from 'figlet';
 import boxen from 'boxen';
-import { Logger } from './utils/logger';
+import { Logger } from '@recoder/shared';
 
 // Import unified ecosystem components
 import { cliConfig, UnifiedConfigManager } from '../../shared/src/config/unified-config';

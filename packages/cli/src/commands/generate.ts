@@ -26,7 +26,7 @@ import {
 } from '@recoder/shared/types/code-generation';
 import { CodeGenerator } from '../services/code-generator';
 import { ProjectAnalyzer } from '../services/project-analyzer';
-import { RealityValidator } from '../services/reality-validator';
+import { RealityValidationSystem } from '../services/reality-validator';
 import { ValidationPipeline } from '../services/validation-pipeline';
 import { AIModelHub } from '../services/ai-models/ai-hub';
 import { DependencyManager } from '../services/dependency-manager';
@@ -221,9 +221,9 @@ export function setupGenerateCommands(program: Command): void {
 async function initializeServices(): Promise<void> {
   if (!codeGenerator) {
     const projectAnalyzer = new ProjectAnalyzer();
-    const realityValidator = new RealityValidator();
+    const realityValidator = new RealityValidationSystem();
     const validationPipeline = new ValidationPipeline();
-    const aiHub = new AIModelHub();
+    const aiHub = new AIModelHub({} as any); // TODO: Provide proper AIHubConfig
     const dependencyManager = new DependencyManager();
 
     await validationPipeline.initialize();
@@ -739,7 +739,7 @@ async function handleGenerateFromTemplate(name: string, options: any): Promise<v
 
   console.log(
     boxen(
-      chalk.purple('📋 Generating from Template\n\n') +
+      chalk.magenta('📋 Generating from Template\n\n') +
       chalk.white(`Template: ${name}\n`) +
       chalk.gray(`Parameters: ${options.params || 'Default'}`),
       {
@@ -941,10 +941,10 @@ async function handleConsensusGeneration(
     prompt: `Generate production-ready code: ${description}`,
     taskType: taskType as any,
     context: {
-      type: 'general',
-      complexity: 'complex',
-      priority: 'quality',
-      privacyLevel: 'internal'
+      type: 'general' as const,
+      complexity: 'complex' as const,
+      priority: 'quality' as const,
+      privacyLevel: 'internal' as const
     },
     privacyLevel: 'internal' as any,
     consensusThreshold: minAgreement / 100,

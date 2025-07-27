@@ -37,7 +37,11 @@
       "Bash(cp:*)",
       "Bash(npx next:*)",
       "Bash(sed:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(ANTHROPIC_API_KEY=test npx tsx src/index.ts --help)",
+      "Bash(ANTHROPIC_API_KEY=test npx tsx src/index.ts router status)",
+      "Bash(grep:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

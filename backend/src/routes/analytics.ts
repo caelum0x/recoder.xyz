@@ -8,7 +8,7 @@ import { Logger } from '@recoder/shared';
 
 const router = Router();
 const analytics = new AnalyticsService();
-const logger = new Logger('AnalyticsAPI');
+const logger = Logger; // Use static Logger methods
 
 /**
  * Track download event
@@ -26,11 +26,11 @@ router.post('/download', async (req: Request, res: Response) => {
 
     await analytics.trackDownload(req, version, platform, arch, source);
     
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true });
     
   } catch (error) {
     logger.error('Failed to track download:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -50,11 +50,11 @@ router.post('/update-check', async (req: Request, res: Response) => {
 
     await analytics.trackUpdateCheck(req, req.body);
     
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true });
     
   } catch (error) {
     logger.error('Failed to track update check:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -89,11 +89,11 @@ router.post('/usage', async (req: Request, res: Response) => {
 
     await analytics.trackUsage(event);
     
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true });
     
   } catch (error) {
     logger.error('Failed to track usage:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -103,7 +103,7 @@ router.post('/usage', async (req: Request, res: Response) => {
  */
 router.get('/metrics', async (req: Request, res: Response) => {
   try {
-    const timeRange = req.query.timeRange as 'day' | 'week' | 'month' | 'year' || 'month';
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
     
     if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
       return res.status(400).json({
@@ -113,11 +113,11 @@ router.get('/metrics', async (req: Request, res: Response) => {
 
     const metrics = await analytics.getMetrics(timeRange);
     
-    res.json(metrics);
+    return res.json(metrics);
     
   } catch (error) {
     logger.error('Failed to get metrics:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -127,8 +127,8 @@ router.get('/metrics', async (req: Request, res: Response) => {
  */
 router.get('/report', async (req: Request, res: Response) => {
   try {
-    const timeRange = req.query.timeRange as 'day' | 'week' | 'month' | 'year' || 'month';
-    const format = req.query.format as 'json' | 'text' || 'json';
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
+    const format = req.query['format'] as 'json' | 'text' || 'json';
     
     if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
       return res.status(400).json({
@@ -139,10 +139,10 @@ router.get('/report', async (req: Request, res: Response) => {
     if (format === 'text') {
       const report = await analytics.generateReport(timeRange);
       res.setHeader('Content-Type', 'text/plain');
-      res.send(report);
+      return res.send(report);
     } else {
       const metrics = await analytics.getMetrics(timeRange);
-      res.json({
+      return res.json({
         generated: new Date().toISOString(),
         timeRange,
         metrics
@@ -151,7 +151,7 @@ router.get('/report', async (req: Request, res: Response) => {
     
   } catch (error) {
     logger.error('Failed to generate report:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -161,7 +161,7 @@ router.get('/report', async (req: Request, res: Response) => {
  */
 router.get('/public/downloads', async (req: Request, res: Response) => {
   try {
-    const timeRange = req.query.timeRange as 'day' | 'week' | 'month' | 'year' || 'month';
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
     const metrics = await analytics.getMetrics(timeRange);
     
     // Return only public-safe metrics
@@ -176,11 +176,11 @@ router.get('/public/downloads', async (req: Request, res: Response) => {
     
     // Cache for 1 hour
     res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.json(publicMetrics);
+    return res.json(publicMetrics);
     
   } catch (error) {
     logger.error('Failed to get public download stats:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -192,7 +192,7 @@ router.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || 'unknown',
+    version: process.env['npm_package_version'] || 'unknown',
   });
 });
 

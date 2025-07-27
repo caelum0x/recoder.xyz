@@ -4,6 +4,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { BaseModelProvider } from '../base-provider';
+import { Logger } from '@recoder/shared';
 import {
   ModelMetadata,
   ModelRequest,
@@ -51,12 +52,12 @@ export class OpenAIProvider extends BaseModelProvider {
       const models = await this.loadOpenAIModels();
       models.forEach(model => this.models.set(model.id, model));
       
-      this.logger.info('OpenAI provider initialized', { 
+      Logger.info('OpenAI provider initialized', { 
         modelCount: models.length,
         models: models.map(m => m.id)
       });
     } catch (error) {
-      this.logger.error('Failed to initialize OpenAI provider', { error });
+      Logger.error('Failed to initialize OpenAI provider', { error });
       throw error;
     }
   }
@@ -66,7 +67,7 @@ export class OpenAIProvider extends BaseModelProvider {
       const response = await this.client.get('/models');
       return response.status === 200;
     } catch (error) {
-      this.logger.error('OpenAI config validation failed', { error });
+      Logger.error('OpenAI config validation failed', { error });
       return false;
     }
   }
@@ -80,9 +81,13 @@ export class OpenAIProvider extends BaseModelProvider {
         .filter((model: any) => this.isSupportedModel(model.id))
         .map((model: any) => this.createModelMetadata(model));
     } catch (error) {
-      this.logger.error('Failed to fetch OpenAI models', { error });
+      Logger.error('Failed to fetch OpenAI models', { error });
       return [];
     }
+  }
+
+  getProvider(): ModelProvider {
+    return ModelProvider.OPENAI;
   }
 
   async sendRequest(request: ModelRequest): Promise<ModelResponse> {
@@ -99,6 +104,7 @@ export class OpenAIProvider extends BaseModelProvider {
       const modelError = this.handleApiError(error, request.model);
       
       return {
+        success: false,
         id: request.id,
         model: request.model,
         content: '',
@@ -171,7 +177,7 @@ export class OpenAIProvider extends BaseModelProvider {
                 totalTokens = parsed.usage.total_tokens;
               }
             } catch (parseError) {
-              this.logger.warn('Failed to parse streaming chunk', { data, error: parseError });
+              Logger.warn('Failed to parse streaming chunk', { data, error: parseError });
             }
           }
         }
@@ -466,6 +472,7 @@ export class OpenAIProvider extends BaseModelProvider {
     };
 
     return {
+      success: true,
       id: request.id,
       model: request.model,
       content: choice.message.content,
@@ -500,6 +507,7 @@ export class OpenAIProvider extends BaseModelProvider {
     };
 
     return {
+      success: true,
       id: request.id,
       model: request.model,
       content,

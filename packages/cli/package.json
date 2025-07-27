@@ -38,6 +38,7 @@
   "license": "MIT",
   "dependencies": {
     "@recoder/shared": "file:../shared",
+    "@recoder/cli-router": "file:../recoder-cli-router",
     "commander": "^11.1.0",
     "inquirer": "^9.2.12",
     "chalk": "^4.1.2",

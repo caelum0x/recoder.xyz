@@ -93,47 +93,23 @@ export class OllamaModelManager extends EventEmitter {
   private downloadQueue: string[] = [];
   private activeDownloads: Map<string, AbortController> = new Map();
 
-  // Curated model catalog with metadata
+  // Curated model catalog with metadata - Updated with modern models
   private readonly MODEL_CATALOG: ModelInfo[] = [
+    // 🚀 DEEPSEEK R1 - LATEST REASONING MODELS
     {
-      name: 'llama2',
+      name: 'deepseek-r1',
       tag: '7b',
-      fullName: 'llama2:7b',
-      description: 'Meta\'s Llama 2 7B model - excellent for general conversation and basic coding',
-      size: 3.8 * 1024 * 1024 * 1024, // 3.8GB
-      parameters: '7B',
-      architecture: 'llama2',
-      quantization: 'q4_0',
-      capabilities: [
-        { type: 'chat', proficiency: 'excellent' },
-        { type: 'code', proficiency: 'good', languages: ['python', 'javascript', 'bash'] },
-        { type: 'instruct', proficiency: 'excellent' }
-      ],
-      requirements: {
-        minRam: 8,
-        recommendedRam: 16,
-        minCpuCores: 4,
-        architecture: ['x64', 'arm64', 'apple_silicon'],
-        gpu: 'optional',
-        platforms: ['windows', 'macos', 'linux']
-      },
-      popularity: 95,
-      lastUpdated: new Date('2024-01-15'),
-      isInstalled: false
-    },
-    {
-      name: 'codellama',
-      tag: '7b',
-      fullName: 'codellama:7b',
-      description: 'Code Llama 7B - specialized for code generation and understanding',
-      size: 3.8 * 1024 * 1024 * 1024,
-      parameters: '7B',
-      architecture: 'codellama',
+      fullName: 'deepseek-r1:7b',
+      description: 'DeepSeek R1 7B - Advanced reasoning model with O3-level performance',
+      size: 4.1 * 1024 * 1024 * 1024,
+      parameters: '7b',
+      architecture: 'deepseek-r1',
       quantization: 'q4_0',
       capabilities: [
         { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c++'] },
-        { type: 'instruct', proficiency: 'good' },
-        { type: 'function-calling', proficiency: 'good' }
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
       ],
       requirements: {
         minRam: 8,
@@ -143,17 +119,320 @@ export class OllamaModelManager extends EventEmitter {
         gpu: 'recommended',
         platforms: ['windows', 'macos', 'linux']
       },
-      popularity: 88,
-      lastUpdated: new Date('2024-01-10'),
+      popularity: 98,
+      lastUpdated: new Date('2025-01-15'),
+      isInstalled: false
+    },
+    {
+      name: 'deepseek-r1',
+      tag: '32b',
+      fullName: 'deepseek-r1:32b',
+      description: 'DeepSeek R1 32B - Ultra-advanced reasoning for complex tasks',
+      size: 18.5 * 1024 * 1024 * 1024,
+      parameters: '32b',
+      architecture: 'deepseek-r1',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c++', 'solidity'] },
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 32,
+        recommendedRam: 64,
+        minCpuCores: 8,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'required',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 95,
+      lastUpdated: new Date('2025-01-15'),
+      isInstalled: false
+    },
+
+    // 🤖 QWEN 3 - LATEST ALIBABA MODELS
+    {
+      name: 'qwen3',
+      tag: '8b',
+      fullName: 'qwen3:8b',
+      description: 'Qwen 3 8B - Latest generation Alibaba model with exceptional capabilities',
+      size: 4.7 * 1024 * 1024 * 1024,
+      parameters: '8b',
+      architecture: 'qwen3',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java'] },
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 8,
+        recommendedRam: 16,
+        minCpuCores: 4,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'recommended',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 92,
+      lastUpdated: new Date('2025-01-10'),
+      isInstalled: false
+    },
+    {
+      name: 'qwen3',
+      tag: '14b',
+      fullName: 'qwen3:14b',
+      description: 'Qwen 3 14B - High-performance model for complex reasoning and coding',
+      size: 8.2 * 1024 * 1024 * 1024,
+      parameters: '14b',
+      architecture: 'qwen3',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c++'] },
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 16,
+        recommendedRam: 32,
+        minCpuCores: 6,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'recommended',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 90,
+      lastUpdated: new Date('2025-01-10'),
+      isInstalled: false
+    },
+
+    // 💻 QWEN 2.5 CODER - SPECIALIZED CODING MODELS
+    {
+      name: 'qwen2.5-coder',
+      tag: '7b',
+      fullName: 'qwen2.5-coder:7b',
+      description: 'Qwen 2.5 Coder 7B - Specialized for code generation, reasoning, and fixing',
+      size: 4.1 * 1024 * 1024 * 1024,
+      parameters: '7b',
+      architecture: 'qwen2.5-coder',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c++', 'solidity'] },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 8,
+        recommendedRam: 16,
+        minCpuCores: 4,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'recommended',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 94,
+      lastUpdated: new Date('2024-12-01'),
+      isInstalled: false
+    },
+    {
+      name: 'qwen2.5-coder',
+      tag: '32b',
+      fullName: 'qwen2.5-coder:32b',
+      description: 'Qwen 2.5 Coder 32B - Ultimate coding model for complex development tasks',
+      size: 18.8 * 1024 * 1024 * 1024,
+      parameters: '32b',
+      architecture: 'qwen2.5-coder',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c++', 'solidity', 'kotlin'] },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 32,
+        recommendedRam: 64,
+        minCpuCores: 8,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'required',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 89,
+      lastUpdated: new Date('2024-12-01'),
+      isInstalled: false
+    },
+
+    // 🦙 LLAMA 3.1 - META'S LATEST
+    {
+      name: 'llama3.1',
+      tag: '8b',
+      fullName: 'llama3.1:8b',
+      description: 'Meta Llama 3.1 8B - State-of-the-art open model with excellent performance',
+      size: 4.7 * 1024 * 1024 * 1024,
+      parameters: '8b',
+      architecture: 'llama3.1',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust'] },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 8,
+        recommendedRam: 16,
+        minCpuCores: 4,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'recommended',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 96,
+      lastUpdated: new Date('2024-07-01'),
+      isInstalled: false
+    },
+    {
+      name: 'llama3.1',
+      tag: '70b',
+      fullName: 'llama3.1:70b',
+      description: 'Meta Llama 3.1 70B - Powerful model for complex reasoning and coding tasks',
+      size: 40.2 * 1024 * 1024 * 1024,
+      parameters: '70b',
+      architecture: 'llama3.1',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c++'] },
+        { type: 'instruct', proficiency: 'excellent' },
+        { type: 'function-calling', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 64,
+        recommendedRam: 128,
+        minCpuCores: 12,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'required',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 85,
+      lastUpdated: new Date('2024-07-01'),
+      isInstalled: false
+    },
+
+    // 💎 GEMMA 3 - GOOGLE'S EFFICIENT MODELS
+    {
+      name: 'gemma3',
+      tag: '4b',
+      fullName: 'gemma3:4b',
+      description: 'Google Gemma 3 4B - Efficient model designed for everyday devices',
+      size: 2.3 * 1024 * 1024 * 1024,
+      parameters: '4b',
+      architecture: 'gemma3',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'chat', proficiency: 'good' },
+        { type: 'code', proficiency: 'good', languages: ['python', 'javascript'] },
+        { type: 'instruct', proficiency: 'good' }
+      ],
+      requirements: {
+        minRam: 4,
+        recommendedRam: 8,
+        minCpuCores: 2,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'optional',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 78,
+      lastUpdated: new Date('2024-10-01'),
+      isInstalled: false
+    },
+    {
+      name: 'gemma3',
+      tag: '27b',
+      fullName: 'gemma3:27b',
+      description: 'Google Gemma 3 27B - High-capability model running on single GPU',
+      size: 15.7 * 1024 * 1024 * 1024,
+      parameters: '27b',
+      architecture: 'gemma3',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go'] },
+        { type: 'instruct', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 24,
+        recommendedRam: 48,
+        minCpuCores: 8,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'recommended',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 82,
+      lastUpdated: new Date('2024-10-01'),
+      isInstalled: false
+    },
+
+    // ⚡ PHI 4 - MICROSOFT'S LATEST
+    {
+      name: 'phi4',
+      tag: '14b',
+      fullName: 'phi4:14b',
+      description: 'Microsoft Phi 4 14B - State-of-the-art compact model with excellent performance',
+      size: 8.1 * 1024 * 1024 * 1024,
+      parameters: '14b',
+      architecture: 'phi4',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'c#'] },
+        { type: 'instruct', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 16,
+        recommendedRam: 32,
+        minCpuCores: 6,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'recommended',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 87,
+      lastUpdated: new Date('2024-12-15'),
+      isInstalled: false
+    },
+
+    // 🔥 LEGACY POPULAR MODELS (Still Excellent)
+    {
+      name: 'qwen2.5',
+      tag: '7b',
+      fullName: 'qwen2.5:7b',
+      description: 'Qwen 2.5 7B - Reliable and proven model with 128K context',
+      size: 4.1 * 1024 * 1024 * 1024,
+      parameters: '7b',
+      architecture: 'qwen2.5',
+      quantization: 'q4_0',
+      capabilities: [
+        { type: 'chat', proficiency: 'excellent' },
+        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust'] },
+        { type: 'instruct', proficiency: 'excellent' }
+      ],
+      requirements: {
+        minRam: 8,
+        recommendedRam: 16,
+        minCpuCores: 4,
+        architecture: ['x64', 'arm64', 'apple_silicon'],
+        gpu: 'recommended',
+        platforms: ['windows', 'macos', 'linux']
+      },
+      popularity: 93,
+      lastUpdated: new Date('2024-10-01'),
       isInstalled: false
     },
     {
       name: 'mistral',
       tag: '7b',
       fullName: 'mistral:7b',
-      description: 'Mistral 7B - fast and efficient model with excellent instruction following',
+      description: 'Mistral 7B - Fast and efficient model with excellent instruction following',
       size: 4.1 * 1024 * 1024 * 1024,
-      parameters: '7B',
+      parameters: '7b',
       architecture: 'mistral',
       quantization: 'q4_0',
       capabilities: [
@@ -169,60 +448,8 @@ export class OllamaModelManager extends EventEmitter {
         gpu: 'optional',
         platforms: ['windows', 'macos', 'linux']
       },
-      popularity: 82,
+      popularity: 85,
       lastUpdated: new Date('2024-01-20'),
-      isInstalled: false
-    },
-    {
-      name: 'phi',
-      tag: '2.7b',
-      fullName: 'phi:2.7b',
-      description: 'Microsoft Phi 2.7B - compact model optimized for resource-constrained environments',
-      size: 1.6 * 1024 * 1024 * 1024,
-      parameters: '2.7B',
-      architecture: 'phi',
-      quantization: 'q4_0',
-      capabilities: [
-        { type: 'chat', proficiency: 'good' },
-        { type: 'code', proficiency: 'good', languages: ['python'] },
-        { type: 'instruct', proficiency: 'good' }
-      ],
-      requirements: {
-        minRam: 4,
-        recommendedRam: 8,
-        minCpuCores: 2,
-        architecture: ['x64', 'arm64', 'apple_silicon'],
-        gpu: 'optional',
-        platforms: ['windows', 'macos', 'linux']
-      },
-      popularity: 75,
-      lastUpdated: new Date('2024-01-25'),
-      isInstalled: false
-    },
-    {
-      name: 'llama2',
-      tag: '13b',
-      fullName: 'llama2:13b',
-      description: 'Meta\'s Llama 2 13B model - more capable but requires more resources',
-      size: 7.3 * 1024 * 1024 * 1024,
-      parameters: '13B',
-      architecture: 'llama2',
-      quantization: 'q4_0',
-      capabilities: [
-        { type: 'chat', proficiency: 'excellent' },
-        { type: 'code', proficiency: 'excellent', languages: ['python', 'javascript', 'typescript', 'go', 'rust'] },
-        { type: 'instruct', proficiency: 'excellent' }
-      ],
-      requirements: {
-        minRam: 16,
-        recommendedRam: 32,
-        minCpuCores: 6,
-        architecture: ['x64', 'arm64', 'apple_silicon'],
-        gpu: 'recommended',
-        platforms: ['windows', 'macos', 'linux']
-      },
-      popularity: 78,
-      lastUpdated: new Date('2024-01-15'),
       isInstalled: false
     }
   ];
@@ -293,7 +520,18 @@ export class OllamaModelManager extends EventEmitter {
         maxModels
       );
 
-      return intelligentRecommendations;
+      // Convert from recommendation-engine format to model-manager format
+      return intelligentRecommendations.map(rec => ({
+        model: rec.model,
+        score: rec.score,
+        reasons: rec.reasoning.map(r => r.description),
+        warnings: rec.warnings,
+        estimatedPerformance: {
+          tokensPerSecond: rec.estimatedPerformance.tokensPerSecond,
+          memoryUsage: rec.estimatedPerformance.memoryUsage,
+          cpuUsage: rec.estimatedPerformance.speedScore // Approximate CPU usage from speed score
+        }
+      }));
 
     } catch (error) {
       Logger.warn('Intelligent recommendations failed, falling back to basic scoring:', error);
@@ -477,7 +715,7 @@ export class OllamaModelManager extends EventEmitter {
         useCase: this.inferUseCaseFromProject(projectAnalysis),
         language: projectAnalysis.languages.map(l => l.name),
         framework: projectAnalysis.frameworks.map(f => f.name),
-        projectType: projectAnalysis.type,
+        projectType: projectAnalysis.type === 'data' ? 'api' : projectAnalysis.type as any,
         complexity: projectAnalysis.complexity.overall,
         priority: 'quality' as const,
         privacyLevel: 'internal' as const,
@@ -499,15 +737,22 @@ export class OllamaModelManager extends EventEmitter {
         5 // Get more recommendations for project-specific analysis
       );
 
-      // Enhance recommendations with project-specific insights
+      // Convert and enhance recommendations with project-specific insights
       return recommendations.map(rec => ({
-        ...rec,
-        usageContext: [
-          ...rec.usageContext,
-          `${projectAnalysis.name} project`,
-          ...projectAnalysis.languages.map(l => `${l.name} development`),
-          ...projectAnalysis.frameworks.map(f => `${f.name} applications`)
-        ]
+        model: rec.model,
+        score: rec.score,
+        reasons: [
+          ...rec.reasoning.map(r => r.description),
+          `Suitable for ${projectAnalysis.name} project`,
+          ...projectAnalysis.languages.map(l => `Good for ${l.name} development`),
+          ...projectAnalysis.frameworks.map(f => `Compatible with ${f.name}`)
+        ],
+        warnings: rec.warnings,
+        estimatedPerformance: {
+          tokensPerSecond: rec.estimatedPerformance.tokensPerSecond,
+          memoryUsage: rec.estimatedPerformance.memoryUsage,
+          cpuUsage: rec.estimatedPerformance.speedScore
+        }
       }));
 
     } catch (error) {
@@ -843,7 +1088,7 @@ export class OllamaModelManager extends EventEmitter {
         errorOutput += data.toString();
       });
 
-      process.on('close', (code) => {
+      process.on('close', (code: number) => {
         if (code === 0) {
           resolve(output);
         } else {
@@ -851,7 +1096,7 @@ export class OllamaModelManager extends EventEmitter {
         }
       });
 
-      process.on('error', (error) => {
+      process.on('error', (error: any) => {
         reject(error);
       });
     });

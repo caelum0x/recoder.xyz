@@ -34,7 +34,7 @@ export interface OllamaStatus {
 export class OllamaManager {
   private ollamaHost = 'http://localhost:11434';
   private configDir: string;
-  private modelsConfig: LocalModelConfig[];
+  private modelsConfig: LocalModelConfig[] = [];
 
   constructor() {
     this.configDir = path.join(os.homedir(), '.recoder', 'ollama');
@@ -150,7 +150,7 @@ export class OllamaManager {
       Logger.error('Ollama setup failed:', error);
       return { 
         success: false, 
-        message: `Setup failed: ${error.message}` 
+        message: `Setup failed: ${error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error)}` 
       };
     }
   }
@@ -196,7 +196,7 @@ export class OllamaManager {
     } catch (error) {
       return { 
         success: false, 
-        message: `Installation failed: ${error.message}` 
+        message: `Installation failed: ${error instanceof Error ? error.message : String(error)}` 
       };
     }
   }
@@ -261,7 +261,7 @@ export class OllamaManager {
     } catch (error) {
       return { 
         success: false, 
-        message: `Failed to install model: ${error.message}` 
+        message: `Failed to install model: ${error instanceof Error ? error.message : String(error)}` 
       };
     }
   }
@@ -274,7 +274,7 @@ export class OllamaManager {
     } catch (error) {
       return { 
         success: false, 
-        message: `Failed to remove model: ${error.message}` 
+        message: `Failed to remove model: ${error instanceof Error ? error.message : String(error)}` 
       };
     }
   }
@@ -289,7 +289,7 @@ export class OllamaManager {
 
       return response.data.response;
     } catch (error) {
-      throw new Error(`Ollama chat failed: ${error.message}`);
+      throw new Error(`Ollama chat failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -301,12 +301,12 @@ export class OllamaManager {
       
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to get model info: ${error.message}`);
+      throw new Error(`Failed to get model info: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   // Private helper methods
-  private async isOllamaInstalled(): boolean {
+  private async isOllamaInstalled(): Promise<boolean> {
     try {
       await execAsync('ollama --version');
       return true;
@@ -315,7 +315,7 @@ export class OllamaManager {
     }
   }
 
-  private async isOllamaRunning(): boolean {
+  private async isOllamaRunning(): Promise<boolean> {
     try {
       const response = await axios.get(`${this.ollamaHost}/api/version`, {
         timeout: 2000
@@ -405,7 +405,7 @@ export class OllamaManager {
     recommendations: string[];
   }> {
     const status = await this.getStatus();
-    const recommendations = [];
+    const recommendations: string[] = [];
 
     if (status.modelsInstalled.length === 0) {
       recommendations.push('No models installed. Run "recoder ollama install" to get started');

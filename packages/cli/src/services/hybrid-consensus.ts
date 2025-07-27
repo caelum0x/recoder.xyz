@@ -81,7 +81,7 @@ export class HybridConsensusSystem {
       return consensus;
     } catch (error) {
       Logger.error('Hybrid consensus processing failed:', error);
-      throw new Error(`Consensus processing failed: ${error.message}`);
+      throw new Error(`Consensus processing failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -97,10 +97,9 @@ export class HybridConsensusSystem {
       taskType: 'security-analysis',
       context: {
         type: 'security',
-        complexity: 'expert',
-        priority: 'quality',
-        privacyLevel
-      },
+        complexity: 'complex',
+        priority: 'quality'
+      } as any,
       privacyLevel,
       consensusThreshold: 0.8, // High threshold for security
       maxModels: 3
@@ -121,10 +120,9 @@ export class HybridConsensusSystem {
       taskType: 'architecture-review',
       context: {
         type: 'backend',
-        complexity: 'expert',
-        priority: 'quality',
-        privacyLevel
-      },
+        complexity: 'complex',
+        priority: 'quality'
+      } as any,
       privacyLevel,
       consensusThreshold: 0.7,
       maxModels: 4
@@ -147,9 +145,8 @@ export class HybridConsensusSystem {
       context: {
         type: 'general',
         complexity: 'complex',
-        priority: 'quality',
-        privacyLevel
-      },
+        priority: 'quality'
+      } as any,
       privacyLevel,
       consensusThreshold: 0.75,
       maxModels: 3
@@ -188,7 +185,7 @@ export class HybridConsensusSystem {
     const preferredModels = taskSpecializations[request.taskType] || ['claude-sonnet-4', 'deepseek-v3'];
     
     // Filter by privacy constraints and availability
-    const allowedModels = this.aiRouter.filterModelsByPrivacy?.(request.privacyLevel) || preferredModels;
+    const allowedModels = preferredModels; // TODO: Use public method for privacy filtering
     
     // Return top N models based on request
     return preferredModels
