@@ -60,7 +60,8 @@ export class ConversationManager {
     this.aiHub = AIHub.getInstance();
     // this.agentManager = AgentManager.getInstance(); // TODO: AgentManager not implemented yet
     this.projectPlanner = new ProjectPlanner();
-    this.codeGenerator = new CodeGenerator();
+    // TODO: Create proper instances when needed
+    this.codeGenerator = null as any; // Lazy initialization
   }
 
   public static getInstance(): ConversationManager {

@@ -6,7 +6,7 @@
 import { Logger } from '@recoder/shared';
 import { FileSystemUtils } from '../utils/filesystem';
 import { ValidationHelper } from '../utils/validation';
-import { ApiClient } from './api';
+import { apiClient } from './api';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';

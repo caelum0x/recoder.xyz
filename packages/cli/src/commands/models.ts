@@ -662,6 +662,7 @@ async function handleChatSession(modelName: string | undefined, options: any): P
         },
         context: {
           task: options.task as TaskType || TaskType.CHAT,
+          priority: 'quality' as any,
           privacyLevel: options.privacy as PrivacyLevel,
           projectPath: options.project
         }

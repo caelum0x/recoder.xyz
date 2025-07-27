@@ -38,7 +38,6 @@ import { AIModelHub } from './ai-models/ai-hub';
 import { DependencyManager } from './dependency-manager';
 
 export class CodeGenerator {
-  private logger: Logger;
   private projectAnalyzer: ProjectAnalyzer;
   private realityValidator: RealityValidationSystem;
   private validationPipeline: ValidationPipeline;
@@ -53,7 +52,6 @@ export class CodeGenerator {
     aiHub: AIModelHub,
     dependencyManager: DependencyManager
   ) {
-    this.logger = Logger.getInstance();
     this.projectAnalyzer = projectAnalyzer;
     this.realityValidator = realityValidator;
     this.validationPipeline = validationPipeline;
@@ -65,7 +63,7 @@ export class CodeGenerator {
     const startTime = Date.now();
     const resultId = this.generateResultId();
 
-    this.logger.info('Starting code generation', {
+    Logger.info('Starting code generation', {
       id: resultId,
       type: request.type,
       description: request.description
@@ -114,7 +112,7 @@ export class CodeGenerator {
       // Step 7: Determine final status
       result.status = this.determineFinalStatus(result);
 
-      this.logger.info('Code generation completed', {
+      Logger.info('Code generation completed', {
         id: resultId,
         status: result.status,
         filesGenerated: result.files.length,
@@ -132,7 +130,7 @@ export class CodeGenerator {
         recoverable: false
       });
 
-      this.logger.error('Code generation failed', { id: resultId, error });
+      Logger.error('Code generation failed', { id: resultId, error });
       return result;
     }
   }
@@ -151,7 +149,7 @@ export class CodeGenerator {
 
     this.activeSessions.set(sessionId, session);
 
-    this.logger.info('Interactive generation session started', {
+    Logger.info('Interactive generation session started', {
       sessionId,
       totalSteps: session.steps.length
     });
@@ -194,7 +192,7 @@ export class CodeGenerator {
   }
 
   private async analyzeProjectContext(context: any): Promise<void> {
-    this.logger.debug('Analyzing project context');
+    Logger.debug('Analyzing project context');
     
     // Verify project structure exists
     if (!await fs.pathExists(context.project?.rootPath)) {
@@ -230,7 +228,7 @@ export class CodeGenerator {
   }
 
   private async generateNewCode(request: GenerationRequest, preview = false): Promise<GeneratedFile[]> {
-    this.logger.debug('Generating new code', { description: request.description });
+    Logger.debug('Generating new code', { description: request.description });
 
     const prompt = this.buildGenerationPrompt(request);
     const response = await this.aiHub.sendRequest([
@@ -252,7 +250,7 @@ export class CodeGenerator {
   }
 
   private async modifyExistingCode(request: GenerationRequest, preview = false): Promise<GeneratedFile[]> {
-    this.logger.debug('Modifying existing code');
+    Logger.debug('Modifying existing code');
 
     // Read existing files that need modification
     const targetFiles = request.targets.files.filter(f => f.type === 'modify');
@@ -291,7 +289,7 @@ export class CodeGenerator {
   }
 
   private async refactorCode(request: GenerationRequest, preview = false): Promise<GeneratedFile[]> {
-    this.logger.debug('Refactoring code');
+    Logger.debug('Refactoring code');
 
     const refactorPrompt = this.buildRefactorPrompt(request);
     const response = await this.aiHub.sendRequest([
@@ -313,7 +311,7 @@ export class CodeGenerator {
   }
 
   private async fixCode(request: GenerationRequest, preview = false): Promise<GeneratedFile[]> {
-    this.logger.debug('Fixing code issues');
+    Logger.debug('Fixing code issues');
 
     const fixPrompt = this.buildFixPrompt(request);
     const response = await this.aiHub.sendRequest([
@@ -335,7 +333,7 @@ export class CodeGenerator {
   }
 
   private async optimizeCode(request: GenerationRequest, preview = false): Promise<GeneratedFile[]> {
-    this.logger.debug('Optimizing code performance');
+    Logger.debug('Optimizing code performance');
 
     const optimizePrompt = this.buildOptimizePrompt(request);
     const response = await this.aiHub.sendRequest([
@@ -357,7 +355,7 @@ export class CodeGenerator {
   }
 
   private async enforceRealFunctionality(result: GenerationResult): Promise<void> {
-    this.logger.debug('Enforcing real functionality');
+    Logger.debug('Enforcing real functionality');
 
     for (const file of result.files) {
       // Detect and replace mock implementations
@@ -504,7 +502,7 @@ Provide only the replacement line(s) of code:`;
     if (matches) {
       // Enhance each integration with real-world concerns
       // This is a simplified implementation - would be more comprehensive in practice
-      this.logger.debug('Enhanced external integration', { file: file.path, pattern: pattern.source });
+      Logger.debug('Enhanced external integration', { file: file.path, pattern: pattern.source });
     }
   }
 
@@ -518,7 +516,7 @@ Provide only the replacement line(s) of code:`;
       if (hasAsyncOperations) {
         // Add try-catch blocks around async operations
         // Implementation would be more complex
-        this.logger.debug('Added error handling', { file: file.path });
+        Logger.debug('Added error handling', { file: file.path });
       }
     }
   }
@@ -556,7 +554,7 @@ Provide only the replacement line(s) of code:`;
     for (const pattern of vulnerablePatterns) {
       if (pattern.test(file.content)) {
         // Add to warnings about potential SQL injection
-        this.logger.warn('Potential SQL injection vulnerability detected', { file: file.path });
+        Logger.warn('Potential SQL injection vulnerability detected', { file: file.path });
       }
     }
   }
@@ -571,7 +569,7 @@ Provide only the replacement line(s) of code:`;
 
     for (const pattern of performanceIssues) {
       if (pattern.test(file.content)) {
-        this.logger.warn('Potential database performance issue detected', { file: file.path });
+        Logger.warn('Potential database performance issue detected', { file: file.path });
       }
     }
   }
@@ -608,7 +606,7 @@ Provide only the replacement line(s) of code:`;
 
     Object.entries(securityChecks).forEach(([check, passed]) => {
       if (!passed) {
-        this.logger.warn(`API security check failed: ${check}`, { file: file.path });
+        Logger.warn(`API security check failed: ${check}`, { file: file.path });
       }
     });
   }
@@ -618,7 +616,7 @@ Provide only the replacement line(s) of code:`;
     const hasDocumentation = /swagger|openapi|@ApiOperation|@ApiResponse/gi.test(file.content);
     
     if (!hasDocumentation) {
-      this.logger.warn('API endpoints lack documentation', { file: file.path });
+      Logger.warn('API endpoints lack documentation', { file: file.path });
     }
   }
 
@@ -627,12 +625,12 @@ Provide only the replacement line(s) of code:`;
     const hasErrorHandling = /\.status\(4\d\d\)|\.status\(5\d\d\)|throw.*Error/gi.test(file.content);
     
     if (!hasErrorHandling) {
-      this.logger.warn('API endpoints lack proper error handling', { file: file.path });
+      Logger.warn('API endpoints lack proper error handling', { file: file.path });
     }
   }
 
   private async performRealityChecks(result: GenerationResult): Promise<void> {
-    this.logger.debug('Performing reality checks');
+    Logger.debug('Performing reality checks');
 
     const projectPath = result.request.context.project?.rootPath || '.';
     const realityResult = await this.realityValidator.validateProject(projectPath);
@@ -1234,7 +1232,7 @@ Provide real performance improvements with measurable benefits. Include performa
   private async writeFile(file: GeneratedFile): Promise<void> {
     await fs.ensureDir(path.dirname(file.path));
     await fs.writeFile(file.path, file.content, 'utf8');
-    this.logger.debug('File written', { path: file.path, size: file.size });
+    Logger.debug('File written', { path: file.path, size: file.size });
   }
 
   private createFilePreview(content: string): string {

@@ -5,7 +5,10 @@
 import chalk from 'chalk';
 import axios, { AxiosInstance } from 'axios';
 import { Logger } from '../utils/logger';
-// import { enhancedOllamaProvider } from './ai-providers'; // TODO: enhancedOllamaProvider not exported
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 // Real AI Provider Interfaces
 export interface AIProvider {

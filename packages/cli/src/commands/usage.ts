@@ -221,7 +221,7 @@ async function handleOptimizationTips(): Promise<void> {
   const tokenData = UsageTracker_Instance.getCurrentTokenData();
 
   // Analyze usage patterns
-  const tips = [];
+  const tips: Array<{type: string; tip: string; action: string}> = [];
 
   // Check model distribution
   const totalModelCosts = Object.values(costBreakdown.modelCosts).reduce((a, b) => a + b, 0);

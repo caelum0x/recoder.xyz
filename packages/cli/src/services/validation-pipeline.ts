@@ -35,21 +35,19 @@ import {
 } from '@recoder/shared/types/code-generation';
 
 export class ValidationPipeline {
-  private logger: Logger;
   private tempDir: string;
 
   constructor() {
-    this.logger = Logger.getInstance();
     this.tempDir = path.join(process.cwd(), '.recoder', 'validation-temp');
   }
 
   public async initialize(): Promise<void> {
     await fs.ensureDir(this.tempDir);
-    this.logger.info('Validation pipeline initialized', { tempDir: this.tempDir });
+    Logger.info('Validation pipeline initialized', { tempDir: this.tempDir });
   }
 
   public async validate(result: GenerationResult): Promise<ValidationResult> {
-    this.logger.info('Starting comprehensive validation', { 
+    Logger.info('Starting comprehensive validation', { 
       resultId: result.id,
       files: result.files.length 
     });
@@ -128,7 +126,7 @@ export class ValidationPipeline {
       // Calculate overall status
       validationResult.overall = this.calculateOverallStatus(validationResult);
 
-      this.logger.info('Validation completed', {
+      Logger.info('Validation completed', {
         resultId: result.id,
         overall: validationResult.overall,
         syntax: syntaxResult.status,
@@ -142,7 +140,7 @@ export class ValidationPipeline {
 
       return validationResult;
     } catch (error) {
-      this.logger.error('Validation pipeline failed', { error });
+      Logger.error('Validation pipeline failed', { error });
       validationResult.overall = ValidationStatus.FAILED;
       return validationResult;
     }
@@ -176,12 +174,12 @@ export class ValidationPipeline {
 
     await fs.writeJson(path.join(workspacePath, 'package.json'), packageJson, { spaces: 2 });
 
-    this.logger.debug('Created validation workspace', { workspaceId, workspacePath });
+    Logger.debug('Created validation workspace', { workspaceId, workspacePath });
     return workspacePath;
   }
 
   private async validateSyntax(files: GeneratedFile[], workspace: string): Promise<SyntaxValidation> {
-    this.logger.debug('Validating syntax');
+    Logger.debug('Validating syntax');
 
     const result: SyntaxValidation = {
       status: ValidationStatus.PASSED,
@@ -328,7 +326,7 @@ export class ValidationPipeline {
         });
       }
     } catch (error) {
-      this.logger.warn('Basic syntax check failed', { file: file.path, error });
+      Logger.warn('Basic syntax check failed', { file: file.path, error });
     }
   }
 
@@ -363,7 +361,7 @@ export class ValidationPipeline {
   }
 
   private async validateTypes(files: GeneratedFile[], workspace: string): Promise<TypeValidation> {
-    this.logger.debug('Validating types');
+    Logger.debug('Validating types');
 
     const result: TypeValidation = {
       status: ValidationStatus.PASSED,
@@ -417,7 +415,7 @@ export class ValidationPipeline {
 
       result.status = result.errors.length > 0 ? ValidationStatus.FAILED : ValidationStatus.PASSED;
     } catch (error) {
-      this.logger.warn('Type validation failed', { error });
+      Logger.warn('Type validation failed', { error });
       result.status = ValidationStatus.FAILED;
     }
 
@@ -489,7 +487,7 @@ export class ValidationPipeline {
   }
 
   private async validateSecurity(files: GeneratedFile[], workspace: string): Promise<SecurityValidation> {
-    this.logger.debug('Validating security');
+    Logger.debug('Validating security');
 
     const result: SecurityValidation = {
       status: ValidationStatus.PASSED,
@@ -661,7 +659,7 @@ export class ValidationPipeline {
   }
 
   private async validatePerformance(files: GeneratedFile[], workspace: string): Promise<PerformanceValidation> {
-    this.logger.debug('Validating performance');
+    Logger.debug('Validating performance');
 
     const result: PerformanceValidation = {
       status: ValidationStatus.PASSED,
@@ -798,7 +796,7 @@ export class ValidationPipeline {
   }
 
   private async validateFunctionality(files: GeneratedFile[], workspace: string): Promise<FunctionalityValidation> {
-    this.logger.debug('Validating functionality');
+    Logger.debug('Validating functionality');
 
     const result: FunctionalityValidation = {
       status: ValidationStatus.PASSED,
@@ -870,7 +868,7 @@ export class ValidationPipeline {
   }
 
   private async validateIntegration(files: GeneratedFile[], workspace: string): Promise<IntegrationValidation> {
-    this.logger.debug('Validating integration');
+    Logger.debug('Validating integration');
 
     const result: IntegrationValidation = {
       status: ValidationStatus.PASSED,
@@ -931,18 +929,18 @@ export class ValidationPipeline {
   private async cleanupValidationWorkspace(workspace: string): Promise<void> {
     try {
       await fs.remove(workspace);
-      this.logger.debug('Cleaned up validation workspace', { workspace });
+      Logger.debug('Cleaned up validation workspace', { workspace });
     } catch (error) {
-      this.logger.warn('Failed to cleanup validation workspace', { workspace, error });
+      Logger.warn('Failed to cleanup validation workspace', { workspace, error });
     }
   }
 
   public async cleanup(): Promise<void> {
     try {
       await fs.remove(this.tempDir);
-      this.logger.info('Validation pipeline cleanup completed');
+      Logger.info('Validation pipeline cleanup completed');
     } catch (error) {
-      this.logger.warn('Failed to cleanup validation pipeline', { error });
+      Logger.warn('Failed to cleanup validation pipeline', { error });
     }
   }
 }

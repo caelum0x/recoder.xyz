@@ -81,10 +81,8 @@ export class RealityValidationSystem {
     throw new Error('Method not implemented.');
   }
   private rules: ValidationRule[] = [];
-  private logger: Logger;
 
   constructor() {
-    this.logger = Logger.getInstance();
     this.initializeDefaultRules();
   }
 
@@ -98,7 +96,7 @@ export class RealityValidationSystem {
   }
 
   public async validateProject(projectPath: string, options: ValidationOptions = {}): Promise<ValidationReport> {
-    this.logger.info('Starting reality validation', { projectPath });
+    Logger.info('Starting reality validation', { projectPath });
 
     const context = await this.buildContext(projectPath, options);
     const applicableRules = this.filterRules(options);
@@ -135,7 +133,7 @@ export class RealityValidationSystem {
           report.fixes.push(...result.fixes);
         }
       } catch (error) {
-        this.logger.error('Rule execution failed', { rule: rule.id, error });
+        Logger.error('Rule execution failed', { rule: rule.id, error });
       }
     }
 
@@ -157,7 +155,7 @@ export class RealityValidationSystem {
       projectPath,
       files,
       packageJson,
-      env: process.env,
+      env: process.env as Record<string, string>,
       options
     };
   }
@@ -193,24 +191,41 @@ export class RealityValidationSystem {
       ...(options.skipFilePatterns || [])
     ];
 
-    const files = await glob(patterns, {
-      cwd: projectPath,
-      ignore,
-      absolute: true
-    });
-
-    if (options.maxFileSize) {
-      const filteredFiles = [];
-      for (const file of files) {
-        const stats = await fs.stat(file);
-        if (stats.size <= options.maxFileSize) {
-          filteredFiles.push(file);
+    try {
+      const fileMatches: string[] = [];
+      for (const pattern of patterns) {
+        try {
+          // Use sync glob for simplicity  
+          const globModule = await import('glob');
+          const matches = globModule.sync(pattern, { cwd: projectPath });
+          fileMatches.push(...matches.map(m => path.resolve(projectPath, m)));
+        } catch (error) {
+          Logger.warn(`Failed to process pattern ${pattern}:`, error);
+          continue;
         }
       }
-      return filteredFiles;
-    }
 
-    return files;
+      if (options.maxFileSize) {
+        const filteredFiles: string[] = [];
+        for (const file of fileMatches) {
+          try {
+            const stats = await fs.stat(file);
+            if (stats.size <= options.maxFileSize) {
+              filteredFiles.push(file);
+            }
+          } catch (error) {
+            // Skip files that can't be accessed
+            continue;
+          }
+        }
+        return filteredFiles;
+      }
+
+      return fileMatches;
+    } catch (error) {
+      Logger.warn('Failed to scan files:', error);
+      return [];
+    }
   }
 
   private filterRules(options: ValidationOptions): ValidationRule[] {
@@ -374,7 +389,7 @@ export class RealityValidationSystem {
             /return\s*null;\s*\/\/\s*TODO/i
           ];
 
-          const issues = [];
+          const issues: string[] = [];
 
           for (const file of context.files) {
             if (file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.jsx')) {
@@ -530,7 +545,7 @@ export class RealityValidationSystem {
             /API_BASE_URL.*example/i
           ];
 
-          const issues = [];
+          const issues: string[] = [];
 
           for (const file of context.files) {
             if (file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.jsx') || file.endsWith('.env')) {

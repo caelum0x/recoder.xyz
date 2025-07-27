@@ -9,7 +9,7 @@ import ora from 'ora';
 import boxen from 'boxen';
 import Table from 'cli-table3';
 import { Logger } from '@recoder/shared';
-import { ApiClient } from '../services/api';
+import { apiClient } from '../services/api';
 import { ValidationHelper } from '../utils/validation';
 import { FileSystemUtils } from '../utils/filesystem';
 
@@ -606,7 +606,7 @@ async function promptForAgentUpdate(agentId: string): Promise<Partial<CreateAgen
 
 // API functions
 async function createAgent(agentData: CreateAgentRequest): Promise<Agent> {
-  const response = await ApiClient.post('/agents', agentData);
+  const response = await apiClient.post('/agents', agentData);
   return response.data;
 }
 
@@ -618,35 +618,35 @@ async function listAgents(options: AgentListOptions): Promise<Agent[]> {
   if (options.sort) queryParams.append('sort', options.sort);
   if (options.limit) queryParams.append('limit', options.limit.toString());
   
-  const response = await ApiClient.get(`/agents?${queryParams.toString()}`);
+  const response = await apiClient.get(`/agents?${queryParams.toString()}`);
   return response.data;
 }
 
 async function getAgent(agentId: string): Promise<Agent> {
-  const response = await ApiClient.get(`/agents/${agentId}`);
+  const response = await apiClient.get(`/agents/${agentId}`);
   return response.data;
 }
 
 async function updateAgent(agentId: string, updateData: Partial<CreateAgentRequest>): Promise<Agent> {
-  const response = await ApiClient.put(`/agents/${agentId}`, updateData);
+  const response = await apiClient.put(`/agents/${agentId}`, updateData);
   return response.data;
 }
 
 async function deleteAgent(agentId: string): Promise<void> {
-  await ApiClient.delete(`/agents/${agentId}`);
+  await apiClient.delete(`/agents/${agentId}`);
 }
 
 async function searchAgents(options: AgentSearchOptions): Promise<Agent[]> {
-  const response = await ApiClient.post('/agents/search', options);
+  const response = await apiClient.post('/agents/search', options);
   return response.data;
 }
 
 async function updateAgentStatus(agentId: string, status: 'active' | 'inactive'): Promise<void> {
-  await ApiClient.patch(`/agents/${agentId}/status`, { status });
+  await apiClient.patch(`/agents/${agentId}/status`, { status });
 }
 
 async function cloneAgent(agentId: string, newName?: string): Promise<Agent> {
-  const response = await ApiClient.post(`/agents/${agentId}/clone`, { name: newName });
+  const response = await apiClient.post(`/agents/${agentId}/clone`, { name: newName });
   return response.data;
 }
 
@@ -677,12 +677,12 @@ async function importAgent(agentData: any): Promise<Agent> {
 }
 
 async function getAgentStats(agentId: string): Promise<any> {
-  const response = await ApiClient.get(`/agents/${agentId}/stats`);
+  const response = await apiClient.get(`/agents/${agentId}/stats`);
   return response.data;
 }
 
 async function getAllAgentStats(): Promise<any> {
-  const response = await ApiClient.get('/agents/stats');
+  const response = await apiClient.get('/agents/stats');
   return response.data;
 }
 

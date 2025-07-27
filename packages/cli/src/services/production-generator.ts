@@ -232,7 +232,7 @@ export class ProductionGenerator {
    * Generate files from backend plan
    */
   private generateFilesFromPlan(plan: any, request: GenerationRequest): Array<{ path: string; content: string; }> {
-    const files = [];
+    const files: Array<{ path: string; content: string; }> = [];
 
     // Generate basic project structure based on plan
     if (plan.phases) {

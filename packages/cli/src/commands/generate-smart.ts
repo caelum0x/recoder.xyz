@@ -10,7 +10,7 @@ import ora from 'ora';
 import boxen from 'boxen';
 import { Logger } from '../../../shared/src/logger';
 import { AIRouter } from '../services/ai-router';
-//import { AgentManager_Instance } from '../services/specialized-agents';
+import { AgentManager } from '../services/specialized-agents';
 import { ConfigManager } from '../utils/config';
 import { AuthService } from '../services/auth';
 import fs from 'fs-extra';
@@ -160,11 +160,11 @@ async function handleGenerate(request: string, options: GenerationOptions): Prom
     // Generate code using specialized agent
     const generationSpinner = ora('Generating your code...').start();
     
-    const agentResponse = await AgentManager_Instance.processRequest(
-      request,
-      options.agent,
-      { userTier: userInfo.plan }
-    );
+    const agentManager = new AgentManager();
+    const agentResponse = await agentManager.executeTask({
+      task: request,
+      context: { userTier: userInfo.plan }
+    } as any);
 
     generationSpinner.succeed(chalk.green('Code generation completed!'));
 
