@@ -1,12 +1,37 @@
+'use client';
+
 import Image from "next/image";
 import Link from "next/link";
+import { useState, useEffect, useRef } from "react";
 
 import GithubIcon from "@/components/icons/github-icon";
 import { getBrandConfig } from "@/lib/recoder-config";
+import { useAuth } from "@/lib/auth-context";
+import AuthModal from "@/components/auth/auth-modal";
+import UserDashboard from "@/components/auth/user-dashboard";
 
 const brandConfig = getBrandConfig();
 
 export default function Header() {
+  const { isAuthenticated } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [showUserDashboard, setShowUserDashboard] = useState(false);
+  const dashboardRef = useRef<HTMLDivElement>(null);
+
+  // Close dashboard when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dashboardRef.current && !dashboardRef.current.contains(event.target as Node)) {
+        setShowUserDashboard(false);
+      }
+    }
+
+    if (showUserDashboard) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showUserDashboard]);
+
   return (
     <header className="relative mx-auto flex w-full shrink-0 items-center justify-center py-6">
       <Link href="/" className="flex items-center gap-3">
@@ -56,6 +81,33 @@ export default function Header() {
           </div>
         </a>
 
+        {/* Authentication UI */}
+        {!isAuthenticated ? (
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            Sign In
+          </button>
+        ) : (
+          <div className="relative" ref={dashboardRef}>
+            <button
+              onClick={() => setShowUserDashboard(!showUserDashboard)}
+              className="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-200"
+            >
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              Connected
+            </button>
+            
+            {/* User dashboard dropdown */}
+            {showUserDashboard && (
+              <div className="absolute right-0 top-full mt-2 z-50">
+                <UserDashboard />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* CLI & Extension Links */}
         <div className="hidden items-center gap-2 lg:flex">
           <Link
@@ -74,6 +126,12 @@ export default function Header() {
           </Link>
         </div>
       </div>
+
+      {/* Authentication Modal */}
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+      />
     </header>
   );
 }

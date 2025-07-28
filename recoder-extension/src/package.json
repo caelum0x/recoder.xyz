@@ -287,6 +287,42 @@
 				"command": "recoder.ghost.goToPreviousSuggestion",
 				"title": "%ghost.commands.goToPreviousSuggestion%",
 				"category": "%configuration.title%"
+			},
+			{
+				"command": "recoder.showAuthMenu",
+				"title": "Authentication Menu",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(account)"
+			},
+			{
+				"command": "recoder.login",
+				"title": "Login",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(sign-in)"
+			},
+			{
+				"command": "recoder.register",
+				"title": "Register",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(person-add)"
+			},
+			{
+				"command": "recoder.logout",
+				"title": "Logout",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(sign-out)"
+			},
+			{
+				"command": "recoder.showStatus",
+				"title": "Show Account Status",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(info)"
+			},
+			{
+				"command": "recoder.syncSession",
+				"title": "Sync Session",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(sync)"
 			}
 		],
 		"keybindings": [
@@ -533,6 +569,11 @@
 					"type": "string",
 					"default": "",
 					"description": "%settings.autoImportSettingsPath.description%"
+				},
+				"recoder.backendUrl": {
+					"type": "string",
+					"default": "http://localhost:3001",
+					"description": "Backend URL for recoder.xyz authentication and session management"
 				}
 			}
 		},

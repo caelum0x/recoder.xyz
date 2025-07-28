@@ -44,6 +44,7 @@ import {
 import { initializeI18n } from "./i18n"
 import { registerGhostProvider } from "./services/ghost" // recoder_integration
 import { recoderAI } from "./services/ai/RecoderAIProvider" // recoder_ai_integration
+import { AuthCommands } from "./services/auth-commands" // recoder_auth_integration
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -55,6 +56,7 @@ import { recoderAI } from "./services/ai/RecoderAIProvider" // recoder_ai_integr
 
 let outputChannel: vscode.OutputChannel
 let extensionContext: vscode.ExtensionContext
+let authCommands: AuthCommands
 
 // This method is called when your extension is activated.
 // Your extension is activated the very first time the command is executed.
@@ -211,6 +213,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	registerCodeActions(context)
 	registerTerminalActions(context)
 
+	// Initialize recoder.xyz authentication system
+	authCommands = new AuthCommands(context) // recoder_auth_integration
+
 	// Allows other extensions to activate once Kilo Code is ready.
 	vscode.commands.executeCommand(`${Package.name}.activationCompleted`)
 
@@ -253,6 +258,12 @@ export async function activate(context: vscode.ExtensionContext) {
 // This method is called when your extension is deactivated.
 export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
+	
+	// Cleanup auth commands
+	if (authCommands) {
+		authCommands.dispose() // recoder_auth_integration
+	}
+	
 	await McpServerManager.cleanup(extensionContext)
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
