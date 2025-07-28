@@ -363,6 +363,129 @@ interface CustomProviderConfig {
   timeout?: number;
 }
 
+// Ollama Local Provider
+class OllamaProvider implements AIProvider {
+  name = 'ollama';
+  specialties = ['local-ai', 'privacy-first', 'offline-capable', 'code-generation'];
+  private baseUrl: string;
+
+  constructor() {
+    this.baseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      const http = require('http');
+      
+      // Convert messages to Ollama format
+      const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
+      
+      const requestData = JSON.stringify({
+        model: options.model || 'tinyllama:latest', // Use available lightweight model
+        prompt: prompt + '\nassistant:',
+        stream: false,
+        options: {
+          temperature: options.temperature || 0.7,
+          num_predict: options.maxTokens || 2000
+        }
+      });
+
+      const requestOptions = {
+        hostname: '127.0.0.1',
+        port: 11434,
+        path: '/api/generate',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestData)
+        },
+        timeout: options.timeout || 60000
+      };
+
+      const response: any = await new Promise((resolve, reject) => {
+        const req = http.request(requestOptions, (res: any) => {
+          let data = '';
+          res.on('data', (chunk: any) => data += chunk);
+          res.on('end', () => {
+            try {
+              if (res.statusCode === 200) {
+                resolve(JSON.parse(data));
+              } else {
+                reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+              }
+            } catch (error) {
+              reject(new Error(`Invalid JSON response: ${data}`));
+            }
+          });
+        });
+
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error('Request timeout'));
+        });
+
+        req.write(requestData);
+        req.end();
+      });
+
+      return {
+        content: response.response || '',
+        model: response.model || 'ollama-local',
+        provider: this.name,
+        tokens: {
+          input: response.prompt_eval_count || 0,
+          output: response.eval_count || 0
+        },
+        finishReason: response.done ? 'stop' : 'length'
+      };
+
+    } catch (error: any) {
+      Logger.error(`Ollama provider error: ${error.message}`, '');
+      
+      // Check if it's a connection error - Ollama might not be running
+      if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+        throw new Error('Ollama service not running. Run "recoder ollama install" to set up local AI.');
+      }
+      
+      throw new Error(`Ollama failed: ${error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    // Ollama doesn't require API keys, just needs to be running
+    return true;
+  }
+
+  async checkHealth(): Promise<boolean> {
+    try {
+      const http = require('http');
+      
+      return new Promise((resolve) => {
+        const req = http.request({
+          hostname: '127.0.0.1',
+          port: 11434,
+          path: '/api/tags',
+          method: 'GET',
+          timeout: 5000
+        }, (res: any) => {
+          resolve(res.statusCode === 200);
+        });
+
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => {
+          req.destroy();
+          resolve(false);
+        });
+        
+        req.end();
+      });
+    } catch (error) {
+      return false;
+    }
+  }
+}
+
 // Google Gemini Provider
 class GeminiProvider implements AIProvider {
   name = 'gemini';
@@ -444,6 +567,7 @@ export class AIHub {
   private async initializeProviders(): Promise<void> {
     // Initialize all AI providers including new models
     const providers = [
+      new OllamaProvider(),  // Prioritize local AI first
       new AnthropicProvider(),
       new GroqProvider(),
       new GeminiProvider(),

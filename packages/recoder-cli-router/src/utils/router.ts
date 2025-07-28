@@ -5,6 +5,7 @@ import {
 } from "@anthropic-ai/sdk/resources/messages";
 import { get_encoding } from "tiktoken";
 import { log } from "./log";
+import { routerBackendClient } from "../services/backend-client";
 
 const enc = get_encoding("cl100k_base");
 
@@ -96,9 +97,43 @@ const getUseModel = async (req: any, tokenCount: number, config: any) => {
   return config.Router!.default;
 };
 
-export const router = async (req: any, _res: any, config: any) => {
+export const router = async (req: any, res: any, config: any) => {
   const { messages, system = [], tools }: MessageCreateParamsBase = req.body;
+  
   try {
+    // Get prompt content for quota checking
+    let promptContent = '';
+    if (Array.isArray(messages) && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (typeof lastMessage.content === 'string') {
+        promptContent = lastMessage.content;
+      } else if (Array.isArray(lastMessage.content)) {
+        promptContent = lastMessage.content
+          .filter((part: any) => part.type === 'text')
+          .map((part: any) => part.text)
+          .join(' ');
+      }
+    }
+
+    // Check backend authentication and quota
+    const backendResult = await routerBackendClient.processRequest(
+      promptContent,
+      req.body.model || 'claude-3-5-sonnet',
+      'router'
+    );
+
+    if (!backendResult.allowed) {
+      log('Request blocked by quota system:', backendResult.sessionInfo);
+      res.status(429).send({
+        error: 'Quota exceeded',
+        message: 'Request quota has been exceeded. Please upgrade your plan or wait for reset.',
+        sessionInfo: backendResult.sessionInfo
+      });
+      return;
+    }
+
+    log('Processing request:', backendResult.sessionInfo);
+
     const tokenCount = calculateTokenCount(
       messages as MessageParam[],
       system,
@@ -118,6 +153,12 @@ export const router = async (req: any, _res: any, config: any) => {
       model = await getUseModel(req, tokenCount, config);
     }
     req.body.model = model;
+
+    // Add session info to headers for downstream processing
+    if (backendResult.sessionInfo) {
+      req.headers['x-recoder-session'] = backendResult.sessionInfo;
+    }
+
   } catch (error: any) {
     log("Error in router middleware:", error.message);
     req.body.model = config.Router!.default;

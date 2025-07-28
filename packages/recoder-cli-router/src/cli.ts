@@ -8,6 +8,7 @@ import { spawn } from "child_process";
 import { PID_FILE, REFERENCE_COUNT_FILE } from "./constants";
 import fs, { existsSync, readFileSync } from "fs";
 import {join} from "path";
+import { routerBackendClient } from "./services/backend-client";
 
 const command = process.argv[2];
 
@@ -20,12 +21,20 @@ Commands:
   restart       Restart server
   status        Show server status
   code          Execute claude command
+  auth          Manage authentication
   -v, version   Show version information
   -h, help      Show help information
+
+Auth Commands:
+  ccr auth login     Login to recoder.xyz
+  ccr auth register  Register new account
+  ccr auth status    Show auth status
+  ccr auth logout    Logout
 
 Example:
   ccr start
   ccr code "Write a Hello World"
+  ccr auth login
 `;
 
 async function waitForService(
@@ -45,6 +54,72 @@ async function waitForService(
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return false;
+}
+
+async function handleAuthCommand() {
+  const authCommand = process.argv[3];
+  
+  switch (authCommand) {
+    case 'login':
+      try {
+        const email = process.argv[4];
+        const password = process.argv[5];
+        
+        if (!email || !password) {
+          console.log('Usage: ccr auth login <email> <password>');
+          return;
+        }
+        
+        const session = await routerBackendClient.authenticate({ email, password });
+        console.log(`✅ Successfully logged in as ${session.email}`);
+        console.log(`📊 Plan: ${session.plan}`);
+        console.log(`📈 Quota: ${session.quotas.usedRequests}/${session.quotas.totalRequests}`);
+      } catch (error: any) {
+        console.error(`❌ Login failed: ${error.message}`);
+      }
+      break;
+      
+    case 'register':
+      try {
+        const email = process.argv[4];
+        const password = process.argv[5];
+        const name = process.argv[6];
+        
+        if (!email || !password || !name) {
+          console.log('Usage: ccr auth register <email> <password> <name>');
+          return;
+        }
+        
+        const session = await routerBackendClient.register({ email, password, name });
+        console.log(`✅ Successfully registered and logged in as ${session.email}`);
+        console.log(`📊 Plan: ${session.plan}`);
+      } catch (error: any) {
+        console.error(`❌ Registration failed: ${error.message}`);
+      }
+      break;
+      
+    case 'status':
+      const session = routerBackendClient.getCurrentSession();
+      if (session) {
+        console.log('🔐 Authentication Status: Logged in');
+        console.log(routerBackendClient.getSessionInfo());
+      } else {
+        console.log('📴 Authentication Status: Not logged in');
+      }
+      break;
+      
+    case 'logout':
+      try {
+        await routerBackendClient.logout();
+        console.log('👋 Successfully logged out');
+      } catch (error: any) {
+        console.error(`❌ Logout failed: ${error.message}`);
+      }
+      break;
+      
+    default:
+      console.log('Unknown auth command. Use: login, register, status, or logout');
+  }
 }
 
 async function main() {
@@ -73,6 +148,9 @@ async function main() {
         );
         cleanupPidFile();
       }
+      break;
+    case "auth":
+      await handleAuthCommand();
       break;
     case "status":
       await showStatus();

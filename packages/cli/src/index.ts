@@ -21,21 +21,23 @@ const VERSION = '1.0.0';
 
 // Import real AI services
 import { AIHub, TaskContext } from './services/ai-hub';
-import { ProductionGenerator, GenerationRequest } from './services/production-generator';
+import { productionEngineClient, CodeGenerationRequest } from './services/production-engine-client';
 import { RealityValidationSystem } from './services/reality-validator';
 import { AgentManager, AgentRequest } from './services/specialized-agents';
 import { ProjectContextAnalyzer } from './services/project-context';
+import { backendClient } from './services/backend-client';
 
 // Import commands
 import { createOllamaCommand } from './commands/ollama';
 import AICommandsRegistry from './commands/ai';
+import { createAuthCommand } from './commands/auth';
 
 // Production-ready command setup with unified configuration
 function setupProductionCommands(program: Command): void {
   const config = cliConfig();
   const sessionManager = cliSessionManager();
   const aiHub = AIHub.getInstance();
-  const generator = new ProductionGenerator();
+  // Production Engine Client for real code generation
   
   // Initialize package registry with core packages
   packageRegistry.registerCorePackages();
@@ -43,7 +45,7 @@ function setupProductionCommands(program: Command): void {
   const agentManager = new AgentManager();
   const contextAnalyzer = new ProjectContextAnalyzer();
 
-  // Generate command - REAL AI-powered code generation
+  // Generate command - REAL AI-powered code generation with backend integration
   program
     .command('generate')
     .alias('gen')
@@ -55,10 +57,32 @@ function setupProductionCommands(program: Command): void {
     .option('--validate', 'Validate generated code functionality', false)
     .action(async (description: string, options: any) => {
       console.log(chalk.cyan('\n🚀 RECODER - Production-Ready Code Generation\n'));
+      
+      // Check backend connection and user session
+      const isBackendAvailable = await backendClient.isBackendAvailable();
+      const userSession = backendClient.getCurrentSession();
+      
+      if (isBackendAvailable && userSession) {
+        console.log(chalk.green(`👤 Logged in as ${userSession.email} (${userSession.plan} plan)`));
+        console.log(chalk.gray(`📊 Quota: ${userSession.quotas.usedRequests}/${userSession.quotas.totalRequests} requests used\n`));
+        
+        // Check quota before proceeding
+        const hasQuota = await backendClient.checkQuota();
+        if (!hasQuota) {
+          console.log(chalk.red('❌ Request quota exceeded. Please upgrade your plan or wait for reset.'));
+          return;
+        }
+      } else if (isBackendAvailable && !userSession) {
+        console.log(chalk.yellow('⚠️ Not logged in. Run "recoder auth login" to sync across platforms and track usage.'));
+      } else {
+        console.log(chalk.gray('📴 Backend offline - running in local mode'));
+      }
+
       console.log(chalk.white(`Generating: ${description}`));
       console.log(chalk.gray(`Type: ${options.type} | Complexity: ${options.complexity}`));
       console.log(chalk.gray(`Output: ${options.output}\n`));
 
+      const startTime = Date.now();
       try {
         // Analyze project context first
         let projectContext;
@@ -93,29 +117,108 @@ function setupProductionCommands(program: Command): void {
         });
         console.log('');
 
-        // Generate the application
-        const request: GenerationRequest = {
+        // Generate the application using production engine
+        const request: CodeGenerationRequest = {
           description,
           type: options.type as any,
-          complexity: options.complexity as any,
+          framework: projectContext?.framework,
           features: [], // Could extract from description
-          outputDir: options.output,
-          realFunctionality: true
+          outputPath: options.output,
+          userId: userSession?.userId
         };
 
-        console.log(chalk.blue('🤖 AI is generating your application...'));
-        const result = await generator.generateApplication(request);
+        console.log(chalk.blue('🤖 Production engine is generating your application...'));
+        const result = await productionEngineClient.generateCode(request);
 
         if (result.success) {
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
           console.log(chalk.green(`\n✅ Generation completed! Created ${result.files.length} files.`));
           console.log(chalk.white('\n📁 Generated Files:'));
           result.files.forEach(file => {
             console.log(chalk.gray(`  • ${file.path}`));
           });
 
+          // Display security validation results
+          if (result.securityValidation) {
+            const security = result.securityValidation;
+            console.log(chalk.cyan('\n🔒 Security Validation:'));
+            
+            // Security score with color coding
+            const scoreColor = security.securityScore >= 80 ? chalk.green : 
+                              security.securityScore >= 60 ? chalk.yellow : chalk.red;
+            console.log(scoreColor(`  Security Score: ${security.securityScore}/100`));
+            
+            // Vulnerabilities
+            if (security.vulnerabilities.length > 0) {
+              const critical = security.vulnerabilities.filter(v => v.severity === 'critical').length;
+              const high = security.vulnerabilities.filter(v => v.severity === 'high').length;
+              const medium = security.vulnerabilities.filter(v => v.severity === 'medium').length;
+              const low = security.vulnerabilities.filter(v => v.severity === 'low').length;
+              
+              console.log(chalk.red(`  ⚠️ Vulnerabilities: ${security.vulnerabilities.length} total`));
+              if (critical > 0) console.log(chalk.red(`    • Critical: ${critical}`));
+              if (high > 0) console.log(chalk.yellow(`    • High: ${high}`));
+              if (medium > 0) console.log(chalk.white(`    • Medium: ${medium}`));
+              if (low > 0) console.log(chalk.gray(`    • Low: ${low}`));
+            } else {
+              console.log(chalk.green(`  ✅ No vulnerabilities detected`));
+            }
+            
+            // Secrets
+            if (security.secrets.length > 0) {
+              console.log(chalk.yellow(`  🔑 Secrets detected: ${security.secrets.length}`));
+            } else {
+              console.log(chalk.green(`  ✅ No secrets detected`));
+            }
+            
+            // Compliance issues
+            if (security.complianceIssues.length > 0) {
+              console.log(chalk.yellow(`  📋 Compliance issues: ${security.complianceIssues.length}`));
+            } else {
+              console.log(chalk.green(`  ✅ No compliance issues`));
+            }
+            
+            // Recommendations
+            if (security.recommendations.length > 0) {
+              console.log(chalk.cyan('\n💡 Security Recommendations:'));
+              security.recommendations.slice(0, 3).forEach(rec => {
+                const priorityColor = rec.priority === 'critical' ? chalk.red :
+                                    rec.priority === 'high' ? chalk.yellow : chalk.white;
+                console.log(priorityColor(`  • ${rec.title}: ${rec.description}`));
+              });
+            }
+          }
+
           if (result.instructions) {
             console.log(chalk.cyan('\n📋 Setup Instructions:'));
             console.log(chalk.white(result.instructions));
+          }
+
+          // Track usage in backend
+          if (isBackendAvailable) {
+            await backendClient.trackUsage({
+              platform: 'cli',
+              command: `generate ${options.type}`,
+              tokens: 1000, // Estimate based on generation complexity
+              model: 'recoder-ai',
+              timestamp: new Date()
+            });
+
+            // Save project to backend
+            await backendClient.saveProject({
+              name: description.substring(0, 50),
+              description,
+              type: options.type,
+              files: result.files,
+              metadata: {
+                complexity: options.complexity,
+                validated: options.validate,
+                duration,
+                generatedAt: new Date()
+              }
+            });
           }
 
           if (options.validate) {
@@ -493,6 +596,9 @@ Make this a production-ready plan that can actually be executed.`;
         Logger.error(`Context analysis failed: ${error.message}`);
       }
     });
+
+  // Add authentication commands for unified user management
+  program.addCommand(createAuthCommand());
 
   // Add Ollama management command (legacy)
   program.addCommand(createOllamaCommand());

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, ReactNode, useState } from "react";
+import { AuthProvider } from "../../lib/auth-context";
 
 export const Context = createContext<{
   streamPromise?: Promise<ReadableStream>;
@@ -13,6 +14,8 @@ export default function Providers({ children }: { children: ReactNode }) {
   const [streamPromise, setStreamPromise] = useState<Promise<ReadableStream>>();
 
   return (
-    <Context value={{ streamPromise, setStreamPromise }}>{children}</Context>
+    <AuthProvider>
+      <Context value={{ streamPromise, setStreamPromise }}>{children}</Context>
+    </AuthProvider>
   );
 }

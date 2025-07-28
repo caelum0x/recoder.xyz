@@ -8,14 +8,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { logger } from './utils/logger';
-import { RealCodeGenerator } from './generators/real-code-generator';
+import { realCodeGeneratorService } from './services/real-code-generator-service';
 import { ValidationService } from './services/validation-service';
 
 const app = express();
 const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
 
 // Services
-const codeGenerator = new RealCodeGenerator();
 const validationService = new ValidationService();
 
 // Middleware
@@ -53,74 +52,63 @@ app.get('/health', (req, res) => {
 app.post('/api/generate', async (req, res) => {
   try {
     const {
-      type,
       description,
-      requirements = [],
+      type,
       framework,
-      language = 'TypeScript',
+      features = [],
       outputPath = './generated',
-      realFunctionality = true,
-      testingRequired = true,
-      deploymentRequired = true
+      userId
     } = req.body;
 
     if (!type || !description) {
       return res.status(400).json({
-        error: {
-          message: 'Type and description are required',
-          code: 'MISSING_PARAMETERS'
-        }
+        success: false,
+        error: 'Type and description are required',
+        files: [],
+        instructions: ''
       });
     }
 
-    logger.info('Starting code generation', {
+    logger.info('Starting real code generation', {
       type,
       description: description.substring(0, 100),
-      requirements: requirements.length,
-      language,
-      framework
-    });
-
-    const startTime = Date.now();
-
-    const result = await codeGenerator.generateCode({
-      type,
-      description,
-      requirements,
       framework,
-      language,
-      outputPath,
-      realFunctionality,
-      testingRequired,
-      deploymentRequired
+      features: features.length,
+      userId
     });
 
-    const duration = Date.now() - startTime;
+    const request = {
+      description,
+      type,
+      framework,
+      features,
+      outputPath,
+      userId
+    };
 
-    logger.info('Code generation completed', {
+    const result = await realCodeGeneratorService.generateCode(request);
+
+    logger.info('Real code generation completed', {
       success: result.success,
       files: result.files.length,
-      tests: result.tests.length,
-      realityScore: result.realityScore,
-      duration
+      provider: result.metadata.provider,
+      generationTime: result.metadata.generationTime
     });
 
-    res.json({
-      success: true,
-      data: result,
-      meta: {
-        duration,
-        timestamp: new Date().toISOString()
-      }
-    });
+    res.json(result);
 
   } catch (error: any) {
-    logger.error('Code generation failed:', error);
+    logger.error('Real code generation failed:', error);
     res.status(500).json({
-      error: {
-        message: 'Code generation failed',
-        code: 'GENERATION_ERROR',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      success: false,
+      error: error.message,
+      files: [],
+      instructions: '',
+      metadata: {
+        provider: 'production-engine',
+        model: 'failed',
+        tokensUsed: 0,
+        generationTime: 0
       }
     });
   }
@@ -178,6 +166,24 @@ app.post('/api/validate', async (req, res) => {
         code: 'VALIDATION_ERROR',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       }
+    });
+  }
+});
+
+// Get available AI providers
+app.get('/api/providers', async (req, res) => {
+  try {
+    const providers = await realCodeGeneratorService.getAvailableProviders();
+    res.json({
+      success: true,
+      providers
+    });
+  } catch (error: any) {
+    logger.error('Failed to get providers:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      providers: []
     });
   }
 });
