@@ -3,7 +3,7 @@
  */
 
 import { Command } from 'commander';
-import { setupAuthCommands } from './auth';
+import setupAuthCommands from './auth';
 // import { setupAgentCommands } from './agent'; // TODO: Fix agent command setup
 import { setupProjectCommands } from './project';
 import { setupChatCommands } from './chat';
@@ -18,7 +18,7 @@ import { ollamaCommand } from './ai/ollama-command';
 
 export function setupCommands(program: Command): void {
   // Authentication commands
-  setupAuthCommands(program);
+  setupAuthCommands();
   
   // Agent management commands
   // setupAgentCommands(program); // TODO: Fix agent command setup

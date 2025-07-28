@@ -12,6 +12,7 @@ import {
   savePid,
 } from "./utils/processCheck";
 import { CONFIG_FILE } from "./constants";
+import { routerBackendClient } from "./services/backend-client";
 
 async function initializeClaudeConfig() {
   const homeDir = homedir();
@@ -47,6 +48,21 @@ async function run(options: RunOptions = {}) {
   await initializeClaudeConfig();
   await initDir();
   const config = await initConfig();
+
+  // Initialize backend client and check connection
+  console.log("🔗 Checking backend connection...");
+  const isBackendAvailable = await routerBackendClient.isBackendAvailable();
+  if (isBackendAvailable) {
+    const session = routerBackendClient.getCurrentSession();
+    if (session) {
+      console.log(`👤 Connected as ${session.email} (${session.plan} plan)`);
+      await routerBackendClient.updatePlatformStatus('router', true);
+    } else {
+      console.log("📴 Backend available but not authenticated");
+    }
+  } else {
+    console.log("📴 Backend not available - running in offline mode");
+  }
   let HOST = config.HOST;
 
   if (config.HOST && !config.APIKEY) {
@@ -62,14 +78,16 @@ async function run(options: RunOptions = {}) {
   savePid(process.pid);
 
   // Handle SIGINT (Ctrl+C) to clean up PID file
-  process.on("SIGINT", () => {
+  process.on("SIGINT", async () => {
     console.log("Received SIGINT, cleaning up...");
+    await routerBackendClient.updatePlatformStatus('router', false);
     cleanupPidFile();
     process.exit(0);
   });
 
   // Handle SIGTERM to clean up PID file
-  process.on("SIGTERM", () => {
+  process.on("SIGTERM", async () => {
+    await routerBackendClient.updatePlatformStatus('router', false);
     cleanupPidFile();
     process.exit(0);
   });
