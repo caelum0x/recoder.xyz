@@ -8,6 +8,7 @@
 import * as vscode from 'vscode';
 
 export interface RecoderAIConfig {
+  models: any;
   providers: {
     claude: {
       enabled: boolean;
@@ -27,6 +28,21 @@ export interface RecoderAIConfig {
     ollama: {
       enabled: boolean;
       baseUrl?: string;
+      models: string[];
+    };
+    huggingface: {
+      enabled: boolean;
+      apiKey?: string;
+      models: string[];
+    };
+    openrouter: {
+      enabled: boolean;
+      apiKey?: string;
+      models: string[];
+    };
+    together: {
+      enabled: boolean;
+      apiKey?: string;
       models: string[];
     };
   };
@@ -82,32 +98,88 @@ export class RecoderAIProvider {
     const config = vscode.workspace.getConfiguration('recoder');
     
     return {
-      providers: {
-        claude: {
-          enabled: !!config.get('apiKeys.anthropic') || !!process.env.ANTHROPIC_API_KEY,
-          apiKey: config.get('apiKeys.anthropic') || process.env.ANTHROPIC_API_KEY,
-          models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022']
-        },
-        groq: {
-          enabled: !!config.get('apiKeys.groq') || !!process.env.GROQ_API_KEY,
-          apiKey: config.get('apiKeys.groq') || process.env.GROQ_API_KEY,
-          models: ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant']
-        },
-        gemini: {
-          enabled: !!config.get('apiKeys.google') || !!process.env.GOOGLE_API_KEY,
-          apiKey: config.get('apiKeys.google') || process.env.GOOGLE_API_KEY,
-          models: ['gemini-2.0-flash-exp', 'gemini-1.5-pro']
-        },
-        ollama: {
-          enabled: !!config.get('apiKeys.ollama') || !!process.env.OLLAMA_BASE_URL,
-          baseUrl: config.get('apiKeys.ollama') || process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
-          models: ['llama3.2', 'codellama', 'deepseek-coder']
-        }
-      },
-      defaultProvider: config.get('defaultProvider') || 'claude',
-      qualityValidation: config.get('qualityValidation') !== false,
-      realCodeOnly: config.get('realCodeOnly') !== false
-    };
+  providers: {
+    claude: {
+      enabled: !!config.get('apiKeys.anthropic') || !!process.env.ANTHROPIC_API_KEY,
+      apiKey: config.get('apiKeys.anthropic') || process.env.ANTHROPIC_API_KEY,
+      models: ['claude-sonnet-4', 'claude-3.7-sonnet', 'claude-opus-4']
+    },
+    groq: {
+      enabled: !!config.get('apiKeys.groq') || !!process.env.GROQ_API_KEY,
+      apiKey: config.get('apiKeys.groq') || process.env.GROQ_API_KEY,
+      models: ['grok-4', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant']
+    },
+    gemini: {
+      enabled: !!config.get('apiKeys.google') || !!process.env.GOOGLE_API_KEY,
+      apiKey: config.get('apiKeys.google') || process.env.GOOGLE_API_KEY,
+      models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
+    },
+    ollama: {
+      enabled: !!config.get('apiKeys.ollama') || !!process.env.OLLAMA_BASE_URL,
+      baseUrl: config.get('apiKeys.ollama') || process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+      models: ['llama3.2', 'codellama', 'deepseek-coder']
+    },
+    huggingface: {
+      enabled: !!config.get('apiKeys.huggingface') || !!process.env.HUGGINGFACE_API_KEY,
+      apiKey: config.get('apiKeys.huggingface') || process.env.HUGGINGFACE_API_KEY,
+      models: ['mistral-large-2407', 'phi-3.5-mini-128k']
+    },
+    openrouter: {
+      enabled: !!config.get('apiKeys.openrouter') || !!process.env.OPENROUTER_API_KEY,
+      apiKey: config.get('apiKeys.openrouter') || process.env.OPENROUTER_API_KEY,
+      models: ['claude-sonnet-4', 'gemini-2.5-flash', 'gpt-4.1']
+    },
+    together: {
+      enabled: !!config.get('apiKeys.together') || !!process.env.TOGETHER_API_KEY,
+      apiKey: config.get('apiKeys.together') || process.env.TOGETHER_API_KEY,
+      models: ['shisa-v2-llama-3.3-70b', 'deephermes-3-mistral-24b']
+    }
+  },
+  defaultProvider: config.get('defaultProvider') || 'claude',
+  qualityValidation: config.get('qualityValidation') !== false,
+  realCodeOnly: config.get('realCodeOnly') !== false,
+  models: undefined,
+  providers: {
+    claude: {
+      enabled: false,
+      apiKey: undefined,
+      models: []
+    },
+    groq: {
+      enabled: false,
+      apiKey: undefined,
+      models: []
+    },
+    gemini: {
+      enabled: false,
+      apiKey: undefined,
+      models: []
+    },
+    ollama: {
+      enabled: false,
+      baseUrl: undefined,
+      models: []
+    },
+    huggingface: {
+      enabled: false,
+      apiKey: undefined,
+      models: []
+    },
+    openrouter: {
+      enabled: false,
+      apiKey: undefined,
+      models: []
+    },
+    together: {
+      enabled: false,
+      apiKey: undefined,
+      models: []
+    }
+  },
+  defaultProvider: '',
+  qualityValidation: false,
+  realCodeOnly: false
+};
   }
 
   /**
@@ -185,8 +257,8 @@ export class RecoderAIProvider {
       }
     }
 
-    // Default priority: Claude > Groq > Gemini > Ollama
-    const priorityOrder = ['claude', 'groq', 'gemini', 'ollama'];
+    // Updated priority: Claude > Gemini > Groq > OpenRouter > Together > HuggingFace > Ollama
+    const priorityOrder = ['claude', 'gemini', 'groq', 'openrouter', 'together', 'huggingface', 'ollama'];
     for (const provider of priorityOrder) {
       if (availableProviders.includes(provider)) {
         return provider;
@@ -211,6 +283,12 @@ export class RecoderAIProvider {
         return await this.callGemini(providerConfig as any, request);
       case 'ollama':
         return await this.callOllama(providerConfig as any, request);
+      case 'huggingface':
+        return await this.callHuggingFace(providerConfig as any, request);
+      case 'openrouter':
+        return await this.callOpenRouter(providerConfig as any, request);
+      case 'together':
+        return await this.callTogether(providerConfig as any, request);
       default:
         throw new Error(`Unknown provider: ${provider}`);
     }
@@ -281,11 +359,33 @@ export class RecoderAIProvider {
   }
 
   /**
-   * Call Gemini API (placeholder - implement based on actual API)
+   * Call Gemini API
    */
   private async callGemini(config: any, request: GenerationRequest): Promise<GenerationResult> {
-    // Placeholder implementation
-    throw new Error('Gemini integration coming soon');
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.models[0]}:generateContent?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: this.buildProductionPrompt(request)
+          }]
+        }],
+        generationConfig: {
+          temperature: request.options?.temperature || 0.2,
+          maxOutputTokens: request.options?.maxTokens || 4000
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return this.parseGeminiResponse(data, request);
   }
 
   /**
@@ -310,6 +410,196 @@ export class RecoderAIProvider {
 
     const data = await response.json();
     return this.parseOllamaResponse(data, request);
+  }
+
+  /**
+   * Parse Gemini API response
+   */
+  private parseGeminiResponse(data: any, request: GenerationRequest): GenerationResult {
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const code = this.extractCodeFromResponse(content);
+
+    return {
+      code,
+      explanation: this.extractExplanation(content),
+      confidence: 0.85,
+      provider: 'gemini',
+      model: 'gemini-2.5-flash',
+      metadata: {
+        language: request.context?.language || 'typescript',
+        dependencies: this.extractDependencies(code),
+        realFunctionality: true
+      }
+    };
+  }
+
+  /**
+   * Parse HuggingFace API response
+   */
+  private parseHuggingFaceResponse(data: any, request: GenerationRequest): GenerationResult {
+    const content = data.choices?.[0]?.message?.content || '';
+    const code = this.extractCodeFromResponse(content);
+
+    return {
+      code,
+      explanation: 'Code generation with HuggingFace models',
+      confidence: 0.8,
+      provider: 'huggingface',
+      model: 'mistral-large-2407',
+      metadata: {
+        language: request.context?.language || 'typescript',
+        dependencies: this.extractDependencies(code),
+        realFunctionality: true
+      }
+    };
+  }
+
+  /**
+   * Parse OpenRouter API response
+   */
+  private parseOpenRouterResponse(data: any, request: GenerationRequest): GenerationResult {
+    const content = data.choices?.[0]?.message?.content || '';
+    const code = this.extractCodeFromResponse(content);
+
+    return {
+      code,
+      explanation: 'Code generation via OpenRouter',
+      confidence: 0.9,
+      provider: 'openrouter',
+      model: 'claude-sonnet-4',
+      metadata: {
+        language: request.context?.language || 'typescript',
+        dependencies: this.extractDependencies(code),
+        realFunctionality: true
+      }
+    };
+  }
+
+  /**
+   * Parse Together API response
+   */
+  private parseTogetherResponse(data: any, request: GenerationRequest): GenerationResult {
+    const content = data.choices?.[0]?.message?.content || '';
+    const code = this.extractCodeFromResponse(content);
+
+    return {
+      code,
+      explanation: 'Code generation with Together AI',
+      confidence: 0.83,
+      provider: 'together',
+      model: 'shisa-v2-llama-3.3-70b',
+      metadata: {
+        language: request.context?.language || 'typescript',
+        dependencies: this.extractDependencies(code),
+        realFunctionality: true
+      }
+    };
+  }
+
+  /**
+   * Call HuggingFace API
+   */
+  private async callHuggingFace(config: any, request: GenerationRequest): Promise<GenerationResult> {
+    const response = await fetch(`https://api-inference.huggingface.co/models/${config.models[0]}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are Recoder, an AI that generates real, production-ready code. Never create mock implementations.'
+          },
+          {
+            role: 'user',
+            content: this.buildProductionPrompt(request)
+          }
+        ],
+        temperature: request.options?.temperature || 0.2,
+        max_tokens: request.options?.maxTokens || 4000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HuggingFace API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return this.parseHuggingFaceResponse(data, request);
+  }
+
+  /**
+   * Call OpenRouter API
+   */
+  private async callOpenRouter(config: any, request: GenerationRequest): Promise<GenerationResult> {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+        'HTTP-Referer': 'https://recoder.xyz',
+        'X-Title': 'Recoder AI'
+      },
+      body: JSON.stringify({
+        model: config.models[0],
+        messages: [
+          {
+            role: 'system',
+            content: 'You are Recoder, an AI that generates real, production-ready code. Never create mock implementations.'
+          },
+          {
+            role: 'user',
+            content: this.buildProductionPrompt(request)
+          }
+        ],
+        temperature: request.options?.temperature || 0.2,
+        max_tokens: request.options?.maxTokens || 4000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return this.parseOpenRouterResponse(data, request);
+  }
+
+  /**
+   * Call Together API
+   */
+  private async callTogether(config: any, request: GenerationRequest): Promise<GenerationResult> {
+    const response = await fetch('https://api.together.xyz/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.models[0],
+        messages: [
+          {
+            role: 'system',
+            content: 'You are Recoder, an AI that generates real, production-ready code. Never create mock implementations.'
+          },
+          {
+            role: 'user',
+            content: this.buildProductionPrompt(request)
+          }
+        ],
+        temperature: request.options?.temperature || 0.2,
+        max_tokens: request.options?.maxTokens || 4000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Together API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return this.parseTogetherResponse(data, request);
   }
 
   /**
@@ -353,7 +643,7 @@ ${request.options?.includeDocs ? '- Include detailed documentation' : ''}`;
       explanation: this.extractExplanation(content),
       confidence: 0.9,
       provider: 'claude',
-      model: 'claude-3-5-sonnet-20241022',
+      model: this.config.models[0],
       metadata: {
         language: request.context?.language || 'typescript',
         dependencies: this.extractDependencies(code),
