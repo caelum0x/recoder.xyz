@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 
 import { type ModelInfo, openAiModelInfoSaneDefaults } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
 
 import { ApiStream } from "../transform/stream"
@@ -182,7 +182,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 * @param content The content blocks to count tokens for
 	 * @returns A promise resolving to the token count
 	 */
-	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
+	override async countTokens(content: Array<Anthropic.Messages.MessageParam['content']>): Promise<number> {
 		// Convert Anthropic content blocks to a string for VSCode LM token counting
 		let textContent = ""
 

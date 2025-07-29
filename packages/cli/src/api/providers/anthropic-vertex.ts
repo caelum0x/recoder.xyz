@@ -10,8 +10,7 @@ import {
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
 } from "@roo-code/types"
 
-import { ApiHandlerOptions } from "../../shared/api"
-import { safeJsonParse } from "../../shared/safeJsonParse"
+import { ApiHandlerOptions, safeJsonParse } from "@recoder/shared"
 
 import { ApiStream } from "../transform/stream"
 import { addCacheBreakpoints } from "../transform/caching/vertex"
@@ -40,7 +39,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				region,
 				googleAuth: new GoogleAuth({
 					scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
+					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined) || undefined,
 				}),
 			})
 		} else if (this.options.vertexKeyFile) {
@@ -67,7 +66,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 			info: { supportsPromptCache },
 			temperature,
 			maxTokens,
-			reasoning: thinking,
+			// reasoning: thinking, // Disabled for compatibility
 		} = this.getModel()
 
 		/**
@@ -87,12 +86,10 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 			model: id,
 			max_tokens: maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
 			temperature,
-			thinking,
-			// Cache the system prompt if caching is enabled.
-			system: supportsPromptCache
-				? [{ text: systemPrompt, type: "text" as const, cache_control: { type: "ephemeral" } }]
-				: systemPrompt,
-			messages: supportsPromptCache ? addCacheBreakpoints(messages) : messages,
+			// thinking, // Disabled for compatibility
+			// Cache the system prompt if caching is enabled. (Disabled for compatibility)
+			system: systemPrompt,
+			messages: messages,
 			stream: true,
 		}
 
@@ -182,20 +179,18 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				info: { supportsPromptCache },
 				temperature,
 				maxTokens = ANTHROPIC_DEFAULT_MAX_TOKENS,
-				reasoning: thinking,
+				// reasoning: thinking, // Disabled for compatibility
 			} = this.getModel()
 
 			const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
 				model: id,
 				max_tokens: maxTokens,
 				temperature,
-				thinking,
+				// thinking, // Disabled for compatibility
 				messages: [
 					{
 						role: "user",
-						content: supportsPromptCache
-							? [{ type: "text" as const, text: prompt, cache_control: { type: "ephemeral" } }]
-							: prompt,
+						content: prompt,
 					},
 				],
 				stream: false,

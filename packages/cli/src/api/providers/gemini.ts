@@ -9,8 +9,8 @@ import type { JWTInput } from "google-auth-library"
 
 import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
-import { safeJsonParse } from "../../shared/safeJsonParse"
+import type { ApiHandlerOptions } from "@recoder/shared"
+import { safeJsonParse } from "@recoder/shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { ApiStream } from "../transform/stream"
@@ -167,7 +167,7 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 		}
 	}
 
-	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
+	override async countTokens(content: Array<Anthropic.Messages.MessageParam['content']>): Promise<number> {
 		try {
 			const { id: model } = this.getModel()
 

@@ -13,7 +13,7 @@ import type { ApiHandler, SingleCompletionHandler, ApiHandlerCreateMessageMetada
  * This processor does not directly call the API, but interacts with the model through human operations copy and paste.
  */
 export class HumanRelayHandler implements ApiHandler, SingleCompletionHandler {
-	countTokens(_content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
+	countTokens(_content: Array<Anthropic.Messages.MessageParam['content']>): Promise<number> {
 		return Promise.resolve(0)
 	}
 

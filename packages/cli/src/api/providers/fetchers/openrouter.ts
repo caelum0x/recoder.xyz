@@ -10,8 +10,8 @@ import {
 	anthropicModels,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../../shared/api"
-import { parseApiPrice } from "../../../shared/cost"
+import type { ApiHandlerOptions } from "../@recoder/shared"
+import { parseApiPrice } from "../@recoder/shared"
 
 /**
  * OpenRouterBaseModel

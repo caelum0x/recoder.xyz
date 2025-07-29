@@ -8,7 +8,7 @@ import dotenvx from "@dotenvx/dotenvx"
 
 import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 import { t } from "../../i18n"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
@@ -427,7 +427,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		}
 	}
 
-	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
+	override async countTokens(content: Array<Anthropic.Messages.MessageParam['content']>): Promise<number> {
 		// For OAuth/free tier, we can't use the token counting API
 		// Fall back to the base provider's tiktoken implementation
 		return super.countTokens(content)

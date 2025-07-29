@@ -614,10 +614,7 @@
 		"@mistralai/mistralai": "^1.3.6",
 		"@modelcontextprotocol/sdk": "^1.9.0",
 		"@qdrant/js-client-rest": "^1.14.0",
-		"@recoder/cloud": "workspace:^",
-		"@recoder/ipc": "workspace:^",
-		"@recoder/telemetry": "workspace:^",
-		"@recoder/types": "workspace:^",
+		
 		"@types/lodash.debounce": "^4.0.9",
 		"@vscode/codicons": "^0.0.36",
 		"async-mutex": "^0.5.0",
@@ -680,9 +677,7 @@
 		"zod": "^3.25.61"
 	},
 	"devDependencies": {
-		"@recoder/build": "workspace:^",
-		"@recoder/config-eslint": "workspace:^",
-		"@recoder/config-typescript": "workspace:^",
+		
 		"@types/clone-deep": "^4.0.4",
 		"@types/debug": "^4.1.12",
 		"@types/diff": "^5.2.1",

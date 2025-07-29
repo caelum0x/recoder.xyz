@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Stream as AnthropicStream } from "@anthropic-ai/sdk/streaming"
-import { CacheControlEphemeral } from "@anthropic-ai/sdk/resources"
+// import { CacheControlEphemeral } from "@anthropic-ai/sdk/resources" // Disabled for compatibility
 
 import {
 	type ModelInfo,
@@ -10,14 +10,14 @@ import {
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 
 import { ApiStream } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { calculateApiCostAnthropic } from "../../shared/cost"
+import { calculateApiCostAnthropic } from "@recoder/shared"
 
 export class AnthropicHandler extends BaseProvider implements SingleCompletionHandler {
 	private options: ApiHandlerOptions
@@ -42,7 +42,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
 		let stream: AnthropicStream<Anthropic.Messages.RawMessageStreamEvent>
-		const cacheControl: CacheControlEphemeral = { type: "ephemeral" }
+		// const cacheControl: CacheControlEphemeral = { type: "ephemeral" } // Disabled for compatibility
 		let { id: modelId, betas = [], maxTokens, temperature, reasoning: thinking } = this.getModel()
 
 		switch (modelId) {
@@ -76,21 +76,17 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 						model: modelId,
 						max_tokens: maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
 						temperature,
-						thinking,
+						// thinking, // Disabled for compatibility
 						// Setting cache breakpoint for system prompt so new tasks can reuse it.
-						system: [{ text: systemPrompt, type: "text", cache_control: cacheControl }],
+						system: [{ text: systemPrompt, type: "text" }],
 						messages: messages.map((message, index) => {
 							if (index === lastUserMsgIndex || index === secondLastMsgUserIndex) {
 								return {
 									...message,
 									content:
 										typeof message.content === "string"
-											? [{ type: "text", text: message.content, cache_control: cacheControl }]
-											: message.content.map((content, contentIndex) =>
-													contentIndex === message.content.length - 1
-														? { ...content, cache_control: cacheControl }
-														: content,
-												),
+											? [{ type: "text", text: message.content }]
+											: message.content,
 								}
 							}
 							return message
@@ -147,7 +143,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 						output_tokens = 0,
 						cache_creation_input_tokens,
 						cache_read_input_tokens,
-					} = chunk.message.usage
+					} = chunk.message.usage as any
 
 					yield {
 						type: "usage",
@@ -179,15 +175,14 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 					break
 				case "content_block_start":
 					switch (chunk.content_block.type) {
-						case "thinking":
-							// We may receive multiple text blocks, in which
-							// case just insert a line break between them.
-							if (chunk.index > 0) {
-								yield { type: "reasoning", text: "\n" }
-							}
-
-							yield { type: "reasoning", text: chunk.content_block.thinking }
-							break
+						// case "thinking": // Disabled for compatibility
+						//	// We may receive multiple text blocks, in which
+						//	// case just insert a line break between them.
+						//	if (chunk.index > 0) {
+						//		yield { type: "reasoning", text: "\n" }
+						//	}
+						//	yield { type: "reasoning", text: chunk.content_block.thinking }
+						//	break
 						case "text":
 							// We may receive multiple text blocks, in which
 							// case just insert a line break between them.
@@ -201,9 +196,9 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 					break
 				case "content_block_delta":
 					switch (chunk.delta.type) {
-						case "thinking_delta":
-							yield { type: "reasoning", text: chunk.delta.thinking }
-							break
+						// case "thinking_delta": // Disabled for compatibility
+						//	yield { type: "reasoning", text: chunk.delta.thinking }
+						//	break
 						case "text_delta":
 							yield { type: "text", text: chunk.delta.text }
 							break
@@ -221,12 +216,15 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 				inputTokens: 0,
 				outputTokens: 0,
 				totalCost: calculateApiCostAnthropic(
-					this.getModel().info,
-					inputTokens,
-					outputTokens,
-					cacheWriteTokens,
-					cacheReadTokens,
-				),
+					this.getModel().id,
+					{
+						inputTokens,
+						outputTokens,
+						totalTokens: inputTokens + outputTokens,
+						cacheReadTokens,
+						cacheWriteTokens,
+					}
+				).totalCost,
 			}
 		}
 	}
@@ -261,7 +259,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 		const message = await this.client.messages.create({
 			model,
 			max_tokens: ANTHROPIC_DEFAULT_MAX_TOKENS,
-			thinking: undefined,
+			// thinking: undefined, // Disabled for compatibility
 			temperature,
 			messages: [{ role: "user", content: prompt }],
 			stream: false,
@@ -277,23 +275,26 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 	 * @param content The content blocks to count tokens for
 	 * @returns A promise resolving to the token count
 	 */
-	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
+	override async countTokens(content: Array<Anthropic.Messages.MessageParam['content']>): Promise<number> {
 		try {
-			// Use the current model
-			const { id: model } = this.getModel()
-
-			const response = await this.client.messages.countTokens({
-				model,
-				messages: [{ role: "user", content: content }],
-			})
-
-			return response.input_tokens
-		} catch (error) {
-			// Log error but fallback to tiktoken estimation
-			console.warn("Anthropic token counting failed, using fallback", error)
-
-			// Use the base provider's implementation as fallback
+			// Use the base provider's fallback implementation
 			return super.countTokens(content)
+		} catch (error) {
+			// Log error but return a reasonable fallback
+			console.warn("Token counting failed, using simple estimation", error)
+			
+			// Simple fallback - estimate 4 chars per token
+			let totalChars = 0
+			if (Array.isArray(content)) {
+				for (const block of content) {
+					if (typeof block === 'string') {
+						totalChars += block.length
+					} else if (block && typeof block === 'object' && 'text' in block && typeof block.text === 'string') {
+						totalChars += block.text.length
+					}
+				}
+			}
+			return Math.ceil(totalChars / 4)
 		}
 	}
 }

@@ -1,4 +1,4 @@
-import { ApiHandlerOptions, ModelRecord } from "../../shared/api"
+import { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
 import { OpenRouterHandler } from "./openrouter"
 import { getModelParams } from "../transform/model-params"
 import { getModels } from "./fetchers/modelCache"

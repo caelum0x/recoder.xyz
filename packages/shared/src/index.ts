@@ -6,6 +6,16 @@ export { Logger } from './logger';
 export { RecoderError, ErrorCode, ErrorHandler } from './errors';
 export * from './types';
 
+// API and utility exports
+export * from './api';
+export * from './cost';
+export * from './safeJsonParse';
+export * from './vsCodeSelectorUtils';
+export * from './cerebras';
+export * from './reasoning';
+export * from './package';
+export * from './fireworks';
+
 // Constants with type aliases to avoid conflicts - export only what exists
 export {
   TEMPLATE_CATEGORIES,
