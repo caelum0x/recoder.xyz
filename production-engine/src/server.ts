@@ -10,12 +10,15 @@ import compression from 'compression';
 import { logger } from './utils/logger';
 import { realCodeGeneratorService } from './services/real-code-generator-service';
 import { ValidationService } from './services/validation-service';
+import { unifiedBackendAI } from './services/unified-backend-ai';
+import { AIHubService } from './services/ai-hub-service';
 
 const app = express();
 const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
 
 // Services
 const validationService = new ValidationService();
+const aiHubService = new AIHubService();
 
 // Middleware
 app.use(helmet());
@@ -285,12 +288,37 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
+// Initialize unified AI systems
+async function initializeAISystems() {
+  try {
+    logger.info('🤖 Initializing unified AI systems...');
+    
+    // Test unified backend AI system
+    const metrics = unifiedBackendAI.getProductionMetrics();
+    logger.info(`✅ Unified backend AI: ${metrics.handlers.length} providers available`);
+    
+    // Test legacy AI hub health
+    const health = await aiHubService.healthCheck();
+    const healthyProviders = Object.values(health.unified).filter(Boolean).length + 
+                            Object.values(health.legacy).filter(Boolean).length;
+    logger.info(`✅ AI Hub health: ${healthyProviders} providers healthy (${health.overall})`);
+    
+    logger.info('🚀 All AI systems initialized successfully');
+    
+  } catch (error) {
+    logger.error('⚠️ Failed to initialize AI systems:', error);
+  }
+}
+
 // Graceful shutdown
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   logger.info(`🚀 Production Engine running on port ${PORT}`, {
     environment: process.env.NODE_ENV || 'development',
     pid: process.pid
   });
+  
+  // Initialize AI systems after server starts
+  await initializeAISystems();
 });
 
 // Handle shutdown signals

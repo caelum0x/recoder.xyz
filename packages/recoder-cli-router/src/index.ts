@@ -13,6 +13,7 @@ import {
 } from "./utils/processCheck";
 import { CONFIG_FILE } from "./constants";
 import { routerBackendClient } from "./services/backend-client";
+import { unifiedRouterAI } from "./services/unified-router-ai";
 
 async function initializeClaudeConfig() {
   const homeDir = homedir();
@@ -48,6 +49,15 @@ async function run(options: RunOptions = {}) {
   await initializeClaudeConfig();
   await initDir();
   const config = await initConfig();
+
+  // Initialize unified router AI system
+  console.log("🤖 Initializing unified AI system...");
+  try {
+    const status = unifiedRouterAI.getRouterStatus();
+    console.log(`✅ Unified AI initialized with ${status.availableProviders.length} providers: ${status.availableProviders.join(', ')}`);
+  } catch (error) {
+    console.warn("⚠️ Failed to initialize unified AI system:", error);
+  }
 
   // Initialize backend client and check connection
   console.log("🔗 Checking backend connection...");

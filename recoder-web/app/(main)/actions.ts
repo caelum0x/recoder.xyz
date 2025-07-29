@@ -8,6 +8,9 @@ import {
 } from "@/lib/prompts";
 import { notFound } from "next/navigation";
 import Together from "together-ai";
+import { unifiedWebAI } from "@/lib/unified-web-ai";
+import { buildApiHandler } from "@/lib/api";
+import type { ProviderSettings } from "@/lib/api/providers/types";
 
 export async function createChat(
   prompt: string,
@@ -38,6 +41,64 @@ export async function createChat(
   }
 
   const together = new Together(options);
+
+  // Use extension's API folder for better provider support
+  async function callExtensionAPI(
+    messages: any[],
+    provider: string = 'openrouter',
+    model?: string
+  ) {
+    try {
+      const providerSettings: ProviderSettings = {
+        apiProvider: provider
+      };
+
+      // Add provider-specific settings
+      switch (provider) {
+        case 'openrouter':
+          providerSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY;
+          providerSettings.openRouterModelId = model || 'anthropic/claude-3.5-sonnet';
+          break;
+        case 'anthropic':
+          providerSettings.apiKey = process.env.ANTHROPIC_API_KEY;
+          providerSettings.apiModelId = model || 'claude-3-5-sonnet-20241022';
+          break;
+        case 'gemini':
+          providerSettings.geminiApiKey = process.env.GOOGLE_API_KEY;
+          providerSettings.geminiModelId = model || 'gemini-2.0-flash-exp';
+          break;
+        default:
+          // Fallback to Together for unsupported providers
+          throw new Error(`Provider ${provider} not configured`);
+      }
+
+      const handler = buildApiHandler(providerSettings);
+      
+      // Convert messages format
+      const systemPrompt = "You are a helpful assistant that generates real, working code.";
+      const userMessages = messages.map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content
+      }));
+
+      let fullContent = '';
+      const stream = handler.createMessage(systemPrompt, userMessages, {
+        taskId: `web-${Date.now()}`,
+        mode: 'web-generation'
+      });
+
+      for await (const chunk of stream) {
+        if (chunk.type === 'text') {
+          fullContent += chunk.text;
+        }
+      }
+
+      return fullContent;
+    } catch (error) {
+      console.error(`Extension API call failed for ${provider}:`, error);
+      throw error;
+    }
+  }
 
   async function fetchTitle() {
     const responseForChatTitle = await together.chat.completions.create({
