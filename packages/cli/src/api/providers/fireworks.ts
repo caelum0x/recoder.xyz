@@ -1,9 +1,9 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { ApiHandler, SingleCompletionHandler } from ".."
-import { ApiHandlerOptions, FireworksModelId, fireworksDefaultModelId, fireworksModels } from "../../shared/api"
+import { ApiHandlerOptions, FireworksModelId, fireworksDefaultModelId, fireworksModels } from "@recoder/shared"
 import { type ModelInfo } from "@roo-code/types"
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import { calculateApiCostOpenAI } from "@recoder/shared"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
@@ -180,7 +180,7 @@ export class FireworksHandler extends BaseProvider implements ApiHandler, Single
 		}
 	}
 
-	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
+	override async countTokens(content: Array<Anthropic.Messages.MessageParam['content']>): Promise<number> {
 		return super.countTokens(content)
 	}
 

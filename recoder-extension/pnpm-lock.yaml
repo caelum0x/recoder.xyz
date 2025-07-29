@@ -734,18 +734,6 @@ importers:
       '@qdrant/js-client-rest':
         specifier: ^1.14.0
         version: 1.14.1(typescript@5.8.3)
-      '@roo-code/cloud':
-        specifier: workspace:^
-        version: link:../packages/cloud
-      '@roo-code/ipc':
-        specifier: workspace:^
-        version: link:../packages/ipc
-      '@roo-code/telemetry':
-        specifier: workspace:^
-        version: link:../packages/telemetry
-      '@roo-code/types':
-        specifier: workspace:^
-        version: link:../packages/types
       '@types/lodash.debounce':
         specifier: ^4.0.9
         version: 4.0.9
@@ -927,15 +915,6 @@ importers:
         specifier: ^3.25.61
         version: 3.25.67
     devDependencies:
-      '@roo-code/build':
-        specifier: workspace:^
-        version: link:../packages/build
-      '@roo-code/config-eslint':
-        specifier: workspace:^
-        version: link:../packages/config-eslint
-      '@roo-code/config-typescript':
-        specifier: workspace:^
-        version: link:../packages/config-typescript
       '@types/clone-deep':
         specifier: ^4.0.4
         version: 4.0.4

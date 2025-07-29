@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ClaudeCodeHandler } from "../claude-code"
 import { runClaudeCode } from "../../../integrations/claude-code/run"
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "../@recoder/shared"
 import type { ClaudeCodeMessage } from "../../../integrations/claude-code/types"
 import type { ApiStreamUsageChunk } from "../../transform/stream"
 import type { Anthropic } from "@anthropic-ai/sdk"

@@ -49,7 +49,7 @@ export interface ProviderSettings {
 }
 
 export interface ModelInfo {
-  maxTokens?: number;
+  maxTokens?: number | null;
   contextWindow?: number;
   supportsImages?: boolean;
   supportsPromptCache?: boolean;

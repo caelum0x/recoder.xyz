@@ -11,6 +11,10 @@
     "target": "es2020",
     "baseUrl": ".",
     "noEmitOnError": false,
+    "noImplicitReturns": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strict": false,
     "paths": {
       "@recoder/shared": ["../shared/src"],
       "@recoder/shared/*": ["../shared/src/*"]
@@ -24,6 +28,7 @@
     "node_modules",
     "dist",
     "**/*.test.ts",
-    "**/*.spec.ts"
+    "**/*.spec.ts",
+    "../recoder-cli-router/**/*"
   ]
 }
