@@ -26,6 +26,7 @@ import { RealityValidationSystem } from './services/reality-validator';
 import { AgentManager, AgentRequest } from './services/specialized-agents';
 import { ProjectContextAnalyzer } from './services/project-context';
 import { backendClient } from './services/backend-client';
+import { unifiedAPI } from './services/unified-api-adapter';
 
 // Import commands
 import { createOllamaCommand } from './commands/ollama';
@@ -609,6 +610,9 @@ Make this a production-ready plan that can actually be executed.`;
 
 async function main() {
   try {
+    // Initialize unified API system
+    await unifiedAPI.initialize();
+    
     // Display Recoder banner
     console.log(
       chalk.cyan(

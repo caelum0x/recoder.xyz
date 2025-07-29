@@ -1,11 +1,12 @@
 /**
  * AI Hub Service for Production Engine
- * Orchestrates multiple AI providers for REAL code generation
+ * Orchestrates multiple AI providers for REAL code generation using unified backend AI
  */
 
 import { logger } from '../utils/logger';
 import axios, { AxiosInstance } from 'axios';
 import { enhancedOllamaIntegration } from './enhanced-ollama-integration';
+import { unifiedBackendAI, type ProductionContext, type BackendAIOptions, type BackendAIResponse } from './unified-backend-ai';
 
 export interface AIProvider {
   name: string;
@@ -36,6 +37,74 @@ export class AIHubService {
     }
   }
 
+  /**
+   * Generate production code using the unified backend AI system
+   */
+  async generateProductionCode(
+    prompt: string,
+    options: GenerationOptions
+  ): Promise<string> {
+    try {
+      // Map generation options to production context
+      const context: ProductionContext = {
+        type: options.type as ProductionContext['type'],
+        complexity: options.complexity as ProductionContext['complexity'],
+        environment: 'production',
+        requirements: {
+          realCode: true,
+          includeTests: true,
+          includeDocs: false,
+          securityAudit: options.complexity === 'high',
+          performanceOptimized: true
+        }
+      };
+
+      const backendOptions: BackendAIOptions = {
+        maxTokens: options.maxTokens,
+        temperature: options.temperature || 0.3,
+        priority: 'quality',
+        validationLevel: 'strict',
+        includeMetrics: true
+      };
+
+      logger.info(`🚀 Generating production code via unified backend AI`);
+      logger.info(`📋 Context: ${context.type} (${context.complexity})`);
+
+      const response: BackendAIResponse = await unifiedBackendAI.generateProductionCode(
+        prompt,
+        context,
+        backendOptions
+      );
+
+      // Log comprehensive results
+      logger.info(`✅ Production code generated successfully`);
+      logger.info(`🤖 Provider: ${response.provider} (${response.model})`);
+      logger.info(`📊 Tokens: ${response.tokens.input}→${response.tokens.output}`);
+      logger.info(`💰 Cost: $${response.cost?.toFixed(4) || '0.0000'}`);
+      
+      if (response.validationResults) {
+        logger.info(`🔍 Validation: Real=${response.validationResults.realFunctionality}, Security=${response.validationResults.securityScore}/10, Quality=${response.validationResults.qualityScore}/10`);
+        
+        if (response.validationResults.issues.length > 0) {
+          logger.warn(`⚠️ Issues found: ${response.validationResults.issues.join('; ')}`);
+        }
+      }
+
+      if (response.metrics) {
+        logger.info(`⏱️ Timing: ${response.metrics.totalTime}ms (${response.metrics.generationTime}ms gen + ${response.metrics.processingTime}ms val)`);
+      }
+
+      return response.content;
+
+    } catch (error: any) {
+      logger.error(`❌ Unified backend AI generation failed: ${error.message}`);
+      
+      // Fallback to legacy system
+      logger.info(`🔄 Attempting fallback to legacy providers...`);
+      return this.generateWithBestModel(prompt, options);
+    }
+  }
+
   private async initializeProviders() {
     // Initialize AI providers based on available API keys
     if (process.env.ANTHROPIC_API_KEY) {
@@ -49,6 +118,15 @@ export class AIHubService {
     }
     if (process.env.OPENAI_API_KEY) {
       this.providers.set('openai', new OpenAIProvider());
+    }
+    if (process.env.HUGGINGFACE_API_KEY) {
+      this.providers.set('huggingface', new HuggingFaceProvider());
+    }
+    if (process.env.OPENROUTER_API_KEY) {
+      this.providers.set('openrouter', new OpenRouterProvider());
+    }
+    if (process.env.TOGETHER_API_KEY) {
+      this.providers.set('together', new TogetherAIProvider());
     }
     
     // Always try to initialize Ollama for local AI capability
@@ -133,15 +211,15 @@ export class AIHubService {
   private selectBestProvider(type: string, complexity: string): AIProvider {
     // Smart provider selection based on task type and complexity
     const providerPriority = {
-      blockchain: ['claude', 'gemini', 'groq', 'openai'],
-      web: ['groq', 'claude', 'gemini', 'openai'],
-      backend: ['claude', 'groq', 'gemini', 'openai'],
-      mobile: ['groq', 'gemini', 'claude', 'openai'],
-      ai: ['claude', 'gemini', 'openai', 'groq'],
-      payments: ['claude', 'groq', 'gemini', 'openai']
+      blockchain: ['claude', 'openrouter', 'gemini', 'groq', 'together', 'huggingface'],
+      web: ['together', 'huggingface', 'groq', 'claude', 'openrouter', 'gemini'],
+      backend: ['together', 'huggingface', 'claude', 'groq', 'openrouter', 'gemini'],
+      mobile: ['together', 'huggingface', 'groq', 'gemini', 'claude', 'openrouter'],
+      ai: ['openrouter', 'claude', 'gemini', 'together', 'groq', 'huggingface'],
+      payments: ['claude', 'openrouter', 'groq', 'gemini', 'together', 'huggingface']
     };
 
-    const priorities = providerPriority[type] || ['claude', 'groq', 'gemini', 'openai'];
+    const priorities = providerPriority[type] || ['together', 'huggingface', 'claude', 'groq', 'openrouter', 'gemini'];
     
     for (const providerName of priorities) {
       const provider = this.providers.get(providerName);
@@ -168,6 +246,111 @@ export class AIHubService {
       }
     }
     return available;
+  }
+
+  /**
+   * Get comprehensive production metrics from unified backend AI
+   */
+  async getProductionMetrics(): Promise<{
+    unified: any;
+    legacy: string[];
+    status: 'healthy' | 'degraded' | 'unhealthy';
+  }> {
+    try {
+      // Get unified system metrics
+      const unifiedMetrics = unifiedBackendAI.getProductionMetrics();
+      
+      // Get legacy provider availability
+      const legacyProviders = await this.getAvailableProviders();
+      
+      // Overall status assessment
+      let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+      
+      if (unifiedMetrics.status === 'unhealthy' && legacyProviders.length === 0) {
+        overallStatus = 'unhealthy';
+      } else if (unifiedMetrics.status === 'degraded' || 
+                (unifiedMetrics.handlers.length === 0 && legacyProviders.length < 3)) {
+        overallStatus = 'degraded';
+      }
+
+      logger.info(`📊 Production Engine Status: ${overallStatus.toUpperCase()}`);
+      logger.info(`🔧 Unified handlers: ${unifiedMetrics.handlers.length}`);
+      logger.info(`🔄 Legacy providers: ${legacyProviders.length}`);
+      logger.info(`✅ Success rate: ${unifiedMetrics.metrics.successRate || 0}%`);
+
+      return {
+        unified: unifiedMetrics,
+        legacy: legacyProviders,
+        status: overallStatus
+      };
+
+    } catch (error: any) {
+      logger.error(`Failed to get production metrics: ${error.message}`);
+      return {
+        unified: null,
+        legacy: await this.getAvailableProviders(),
+        status: 'degraded'
+      };
+    }
+  }
+
+  /**
+   * Run comprehensive health check on all AI systems
+   */
+  async healthCheck(): Promise<{
+    unified: { [handler: string]: boolean };
+    legacy: { [provider: string]: boolean };
+    overall: 'healthy' | 'degraded' | 'unhealthy';
+  }> {
+    try {
+      logger.info(`🏥 Running comprehensive AI health check...`);
+
+      // Check unified system
+      const unifiedHealth = await unifiedBackendAI.healthCheck();
+      
+      // Check legacy providers
+      const legacyHealth: { [provider: string]: boolean } = {};
+      await this.ensureInitialized();
+      
+      for (const [name, provider] of this.providers) {
+        try {
+          legacyHealth[name] = await provider.isAvailable();
+        } catch (error) {
+          legacyHealth[name] = false;
+        }
+      }
+
+      // Calculate overall health
+      const unifiedHealthy = Object.values(unifiedHealth).filter(Boolean).length;
+      const legacyHealthy = Object.values(legacyHealth).filter(Boolean).length;
+      const totalHandlers = Object.keys(unifiedHealth).length + Object.keys(legacyHealth).length;
+      const totalHealthy = unifiedHealthy + legacyHealthy;
+
+      let overall: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+      if (totalHealthy === 0) {
+        overall = 'unhealthy';
+      } else if (totalHealthy < totalHandlers * 0.7) {
+        overall = 'degraded';
+      }
+
+      logger.info(`🏥 Health check complete: ${overall.toUpperCase()}`);
+      logger.info(`✅ Unified: ${unifiedHealthy}/${Object.keys(unifiedHealth).length} healthy`);
+      logger.info(`✅ Legacy: ${legacyHealthy}/${Object.keys(legacyHealth).length} healthy`);
+
+      return {
+        unified: unifiedHealth,
+        legacy: legacyHealth,
+        overall
+      };
+
+    } catch (error: any) {
+      logger.error(`Health check failed: ${error.message}`);
+      return {
+        unified: {},
+        legacy: {},
+        overall: 'unhealthy'
+      };
+    }
   }
 }
 
@@ -514,5 +697,163 @@ Context: ${JSON.stringify(options, null, 2)}`;
     } catch (error) {
       return false;
     }
+  }
+}
+
+// HuggingFace Provider for Production Engine
+class HuggingFaceProvider implements AIProvider {
+  name = 'huggingface';
+
+  async generateCode(prompt: string, options: any): Promise<string> {
+    try {
+      const response = await axios.post(`https://api-inference.huggingface.co/models/codellama/CodeLlama-7b-Instruct-hf`, {
+        inputs: `Generate REAL, PRODUCTION-READY code for: ${prompt}
+
+Requirements:
+- Must be fully functional, not placeholder code
+- Include actual implementations with real logic
+- Proper error handling and validation
+- Production-ready code quality
+
+Context: ${JSON.stringify(options, null, 2)}
+
+Code:`,
+        parameters: {
+          max_new_tokens: options.maxTokens || 8000,
+          temperature: 0.3,
+          return_full_text: false,
+          do_sample: true
+        },
+        options: {
+          wait_for_model: true
+        }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      let content = '';
+      if (Array.isArray(response.data) && response.data[0]?.generated_text) {
+        content = response.data[0].generated_text;
+      } else if (response.data?.generated_text) {
+        content = response.data.generated_text;
+      } else {
+        content = JSON.stringify(response.data);
+      }
+
+      logger.info(`HuggingFace generated ${content.length} characters of code`);
+      return content.trim();
+    } catch (error: any) {
+      logger.error(`HuggingFace API error: ${error.message}`);
+      throw new Error(`HuggingFace code generation failed: ${error.response?.data?.error || error.message}`);
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    return !!process.env.HUGGINGFACE_API_KEY;
+  }
+}
+
+// OpenRouter Provider for Production Engine
+class OpenRouterProvider implements AIProvider {
+  name = 'openrouter';
+
+  async generateCode(prompt: string, options: any): Promise<string> {
+    try {
+      const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: options.model || 'anthropic/claude-3.5-sonnet',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a senior software engineer who generates REAL, PRODUCTION-READY code. Never use placeholder or mock implementations.'
+          },
+          {
+            role: 'user',
+            content: `Generate REAL, WORKING code for: ${prompt}
+
+Requirements:
+- Must be fully functional, not placeholder code
+- Include actual implementations with real logic
+- Proper error handling and validation
+- Production-ready code quality
+
+Context: ${JSON.stringify(options, null, 2)}`
+          }
+        ],
+        max_tokens: options.maxTokens || 8000,
+        temperature: 0.3
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://recoder.xyz',
+          'X-Title': 'Recoder.xyz'
+        }
+      });
+
+      const content = response.data.choices[0].message.content;
+      logger.info(`OpenRouter generated ${content.length} characters of code`);
+      return content;
+    } catch (error: any) {
+      logger.error(`OpenRouter API error: ${error.message}`);
+      throw new Error(`OpenRouter code generation failed: ${error.response?.data?.error?.message || error.message}`);
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    return !!process.env.OPENROUTER_API_KEY;
+  }
+}
+
+// Together AI Provider for Production Engine
+class TogetherAIProvider implements AIProvider {
+  name = 'together';
+
+  async generateCode(prompt: string, options: any): Promise<string> {
+    try {
+      const response = await axios.post('https://api.together.xyz/v1/chat/completions', {
+        model: options.model || 'codellama/CodeLlama-34b-Instruct-hf',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a senior software engineer who generates REAL, PRODUCTION-READY code. Never use placeholder or mock implementations.'
+          },
+          {
+            role: 'user',
+            content: `Generate REAL, WORKING code for: ${prompt}
+
+Requirements:
+- Must be fully functional, not placeholder code
+- Include actual implementations with real logic
+- Proper error handling and validation
+- Production-ready code quality
+
+Context: ${JSON.stringify(options, null, 2)}`
+          }
+        ],
+        max_tokens: options.maxTokens || 8000,
+        temperature: 0.3,
+        top_p: 0.9,
+        repetition_penalty: 1.1
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.TOGETHER_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const content = response.data.choices[0].message.content;
+      logger.info(`Together AI generated ${content.length} characters of code`);
+      return content;
+    } catch (error: any) {
+      logger.error(`Together AI API error: ${error.message}`);
+      throw new Error(`Together AI code generation failed: ${error.response?.data?.error?.message || error.message}`);
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    return !!process.env.TOGETHER_API_KEY;
   }
 }

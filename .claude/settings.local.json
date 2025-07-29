@@ -41,7 +41,8 @@
       "Bash(ANTHROPIC_API_KEY=test npx tsx src/index.ts --help)",
       "Bash(ANTHROPIC_API_KEY=test npx tsx src/index.ts router status)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(xcopy:*)"
     ],
     "deny": []
   }

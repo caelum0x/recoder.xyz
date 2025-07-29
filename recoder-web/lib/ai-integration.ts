@@ -3,9 +3,11 @@
  * 
  * Multi-AI provider system with intelligent model selection,
  * real code generation, and integration with recoder.xyz CLI ecosystem.
+ * Now uses the unified API system from the extension.
  */
 
-import { WEB_PLATFORM_CONFIG, getProviderForUseCase, getAIProviders } from './recoder-config';
+import { buildApiHandler, type ApiHandler } from './api';
+import type { ProviderSettings } from './api/providers/types';
 
 export interface AIProvider {
   name: string;
@@ -309,6 +311,181 @@ class TogetherProvider implements AIProvider {
 }
 
 /**
+ * Hugging Face Provider
+ */
+class HuggingFaceProvider implements AIProvider {
+  name = 'huggingface';
+  models = ['codellama/CodeLlama-7b-Instruct-hf', 'codellama/CodeLlama-13b-Instruct-hf'];
+  useCases = ['open-source', 'cost-effective', 'code-generation'];
+
+  async generateCode(prompt: string, options: GenerationOptions): Promise<GenerationResult> {
+    if (!process.env.HUGGINGFACE_API_KEY) {
+      throw new Error('Hugging Face API key not configured');
+    }
+
+    try {
+      const response = await fetch(`https://api-inference.huggingface.co/models/${options.model || 'codellama/CodeLlama-7b-Instruct-hf'}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`
+        },
+        body: JSON.stringify({
+          inputs: `Generate REAL, PRODUCTION-READY code for: ${prompt}
+
+Requirements:
+- Must be fully functional, not placeholder code
+- Include actual implementations with real logic
+- Proper error handling and validation
+- Production-ready code quality
+
+Code:`,
+          parameters: {
+            max_new_tokens: options.maxTokens || 4000,
+            temperature: options.temperature || 0.3,
+            return_full_text: false,
+            do_sample: true
+          },
+          options: {
+            wait_for_model: true
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Hugging Face API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      let content = '';
+      if (Array.isArray(data) && data[0]?.generated_text) {
+        content = data[0].generated_text;
+      } else if (data?.generated_text) {
+        content = data.generated_text;
+      } else {
+        content = JSON.stringify(data);
+      }
+
+      return {
+        code: content.trim(),
+        explanation: 'Generated with Hugging Face open-source models',
+        confidence: 0.75,
+        provider: 'huggingface',
+        model: options.model || 'codellama/CodeLlama-7b-Instruct-hf',
+        tokens: {
+          input: Math.ceil(prompt.length / 4),
+          output: Math.ceil(content.length / 4)
+        },
+        metadata: {
+          language: options.language || 'typescript',
+          framework: options.framework,
+          dependencies: this.extractDependencies(content),
+          realFunctionality: true
+        }
+      };
+    } catch (error) {
+      throw new Error(`Hugging Face generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    return !!process.env.HUGGINGFACE_API_KEY;
+  }
+
+  private extractDependencies(code: string): string[] {
+    return [];
+  }
+}
+
+/**
+ * OpenRouter Provider
+ */
+class OpenRouterProvider implements AIProvider {
+  name = 'openrouter';
+  models = ['anthropic/claude-3.5-sonnet', 'openai/gpt-4', 'meta-llama/llama-3.1-405b'];
+  useCases = ['multi-model-access', 'cost-optimization', 'model-variety'];
+
+  async generateCode(prompt: string, options: GenerationOptions): Promise<GenerationResult> {
+    if (!process.env.OPENROUTER_API_KEY) {
+      throw new Error('OpenRouter API key not configured');
+    }
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://recoder.xyz',
+          'X-Title': 'Recoder.xyz'
+        },
+        body: JSON.stringify({
+          model: options.model || 'anthropic/claude-3.5-sonnet',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are Recoder, an AI that generates real, production-ready code. Never create mock implementations.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: options.temperature || 0.3,
+          max_tokens: options.maxTokens || 4000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenRouter API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+
+      return {
+        code: this.extractCodeFromResponse(content),
+        explanation: 'Generated via OpenRouter multi-model platform',
+        confidence: 0.85,
+        provider: 'openrouter',
+        model: options.model || 'anthropic/claude-3.5-sonnet',
+        tokens: {
+          input: data.usage?.prompt_tokens || 0,
+          output: data.usage?.completion_tokens || 0
+        },
+        metadata: {
+          language: options.language || 'typescript',
+          framework: options.framework,
+          dependencies: this.extractDependencies(content),
+          realFunctionality: true
+        }
+      };
+    } catch (error) {
+      throw new Error(`OpenRouter generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    return !!process.env.OPENROUTER_API_KEY;
+  }
+
+  private extractCodeFromResponse(response: string): string {
+    const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)\n```/g;
+    const matches = response.match(codeBlockRegex);
+    
+    if (matches && matches.length > 0) {
+      return matches[0].replace(/```(?:\w+)?\n/, '').replace(/\n```$/, '');
+    }
+    
+    return response;
+  }
+
+  private extractDependencies(code: string): string[] {
+    return [];
+  }
+}
+
+/**
  * Groq AI Provider  
  */
 class GroqProvider implements AIProvider {
@@ -413,6 +590,8 @@ export class IntelligentAIRouter {
     const claude = new ClaudeProvider();
     const groq = new GroqProvider();
     const together = new TogetherProvider();
+    const huggingface = new HuggingFaceProvider();
+    const openrouter = new OpenRouterProvider();
 
     if (await claude.isAvailable()) {
       this.providers.set('claude', claude);
@@ -424,6 +603,14 @@ export class IntelligentAIRouter {
     
     if (await together.isAvailable()) {
       this.providers.set('together', together);
+    }
+    
+    if (await huggingface.isAvailable()) {
+      this.providers.set('huggingface', huggingface);
+    }
+    
+    if (await openrouter.isAvailable()) {
+      this.providers.set('openrouter', openrouter);
     }
   }
 
@@ -521,12 +708,14 @@ export class IntelligentAIRouter {
     
     // Task-specific provider preferences
     const taskPreferences: { [key: string]: string[] } = {
-      'reasoning': ['together', 'claude', 'groq'],
-      'code-generation': ['together', 'groq', 'claude'],
-      'multi-model': ['together', 'claude', 'groq'],
-      'fast-generation': ['groq', 'together', 'claude'],
-      'complex-logic': ['claude', 'together', 'groq'],
-      'code-review': ['claude', 'together', 'groq']
+      'reasoning': ['together', 'claude', 'openrouter', 'groq', 'huggingface'],
+      'code-generation': ['together', 'huggingface', 'groq', 'claude', 'openrouter'],
+      'multi-model': ['openrouter', 'together', 'claude', 'groq', 'huggingface'],
+      'fast-generation': ['groq', 'together', 'huggingface', 'claude', 'openrouter'],
+      'complex-logic': ['claude', 'openrouter', 'together', 'groq', 'huggingface'],
+      'code-review': ['claude', 'openrouter', 'together', 'groq', 'huggingface'],
+      'open-source': ['huggingface', 'together', 'groq', 'claude', 'openrouter'],
+      'cost-effective': ['huggingface', 'together', 'groq', 'openrouter', 'claude']
     };
     
     const preferences = taskPreferences[taskType] || ['claude', 'together', 'groq'];
@@ -578,16 +767,71 @@ export class IntelligentAIRouter {
   }
 }
 
-// Export the main router instance
+// Import unified web AI system
+import { unifiedWebAI, generateWebCode, type WebGenerationOptions, type WebGenerationResult } from './unified-web-ai';
+
+// Legacy router for backward compatibility
 export const aiRouter = new IntelligentAIRouter();
 
-// Utility functions for the web platform
+// NEW: Enhanced utility functions using unified API
 export const generateCode = async (prompt: string, options?: GenerationOptions): Promise<GenerationResult> => {
-  return await aiRouter.generateCode(prompt, options);
+  try {
+    // Try unified API first
+    const webOptions: WebGenerationOptions = {
+      preferredProvider: options?.model ? getProviderFromModel(options.model) : undefined,
+      maxTokens: options?.maxTokens,
+      temperature: options?.temperature,
+      language: options?.language,
+      framework: options?.framework,
+      includeTests: options?.includeTests,
+      includeDocs: options?.includeDocs,
+      costOptimized: true
+    };
+
+    const webResult = await generateWebCode(prompt, webOptions);
+    
+    // Convert to legacy format
+    return {
+      code: webResult.code,
+      explanation: webResult.explanation,
+      confidence: 0.9,
+      provider: webResult.provider,
+      model: webResult.model,
+      tokens: webResult.tokens,
+      metadata: webResult.metadata
+    };
+    
+  } catch (error) {
+    console.warn('Unified API failed, falling back to legacy router:', error);
+    // Fallback to legacy router
+    return await aiRouter.generateCode(prompt, options);
+  }
+};
+
+export const generateCodeUnified = async (prompt: string, options?: WebGenerationOptions): Promise<WebGenerationResult> => {
+  return await generateWebCode(prompt, options);
 };
 
 export const getAvailableAIProviders = (): string[] => {
-  return aiRouter.getAvailableProviders();
+  const unifiedProviders = unifiedWebAI.getAvailableProviders().map(p => p.name);
+  const legacyProviders = aiRouter.getAvailableProviders();
+  
+  // Combine and deduplicate
+  return [...new Set([...unifiedProviders, ...legacyProviders])];
 };
 
-export default aiRouter;
+export const getProviderCapabilities = () => {
+  return unifiedWebAI.getAvailableProviders();
+};
+
+// Helper function to map models to providers
+function getProviderFromModel(model: string): string {
+  if (model.includes('claude')) return 'anthropic';
+  if (model.includes('gemini')) return 'gemini';
+  if (model.includes('llama') || model.includes('groq')) return 'groq';
+  return 'openrouter';
+}
+
+// Export both systems
+export { unifiedWebAI, aiRouter as legacyRouter };
+export default unifiedWebAI;
