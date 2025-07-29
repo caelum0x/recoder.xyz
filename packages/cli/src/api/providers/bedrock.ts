@@ -30,7 +30,7 @@ import { MultiPointStrategy } from "../transform/cache-strategy/multi-point-stra
 import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"
 import { convertToBedrockConverseMessages as sharedConverter } from "../transform/bedrock-converse-format"
 import { getModelParams } from "../transform/model-params"
-import { shouldUseReasoningBudget } from "../../shared/api"
+import { shouldUseReasoningBudget } from "@recoder/shared"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
 /************************************************************************************
@@ -180,7 +180,6 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 
 			if (!this.arnInfo.isValid) {
 				logger.error("Invalid ARN format", {
-					ctx: "bedrock",
 					errorMessage: this.arnInfo.errorMessage,
 				})
 
@@ -197,7 +196,6 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 				// Log a warning if there's a region mismatch between the ARN and the region selected by the user
 				// We will use the ARNs region, so execution can continue, but log an info statement.
 				logger.info(this.arnInfo.errorMessage, {
-					ctx: "bedrock",
 					selectedRegion: this.options.awsRegion,
 					arnRegion: this.arnInfo.region,
 				})
@@ -351,7 +349,6 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 				},
 			}
 			logger.info("Extended thinking enabled for Bedrock request", {
-				ctx: "bedrock",
 				modelId: modelConfig.id,
 				thinking: additionalModelRequestFields.thinking,
 			})
@@ -405,7 +402,6 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 					streamEvent = typeof chunk === "string" ? JSON.parse(chunk) : (chunk as unknown as StreamEvent)
 				} catch (e) {
 					logger.error("Failed to parse stream event", {
-						ctx: "bedrock",
 						error: e instanceof Error ? e : String(e),
 						chunk: typeof chunk === "string" ? chunk : "binary data",
 					})
@@ -464,8 +460,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 						}
 					} catch (error) {
 						logger.error("Error handling Bedrock invokedModelId", {
-							ctx: "bedrock",
-							error: error instanceof Error ? error : String(error),
+														error: error instanceof Error ? error : String(error),
 						})
 					} finally {
 						// eslint-disable-next-line no-unsafe-finally
@@ -658,8 +653,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 					return response.output.message.content[0].text
 				} catch (parseError) {
 					logger.error("Failed to parse Bedrock response", {
-						ctx: "bedrock",
-						error: parseError instanceof Error ? parseError : String(parseError),
+												error: parseError instanceof Error ? parseError : String(parseError),
 					})
 				}
 			}
@@ -1307,8 +1301,7 @@ Please check:
 		const logMethod = definition.logLevel
 		const contextName = isStreamContext ? "createMessage" : "completePrompt"
 		logger[logMethod](`${errorType} error in ${contextName}`, {
-			ctx: "bedrock",
-			customArn: this.options.awsCustomArn,
+						customArn: this.options.awsCustomArn,
 			errorType,
 			errorMessage: error instanceof Error ? error.message : String(error),
 			...(error instanceof Error && error.stack ? { errorStack: error.stack } : {}),

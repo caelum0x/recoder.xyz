@@ -4,7 +4,7 @@ import axios from "axios"
 
 import { type ModelInfo, openAiModelInfoSaneDefaults, LMSTUDIO_DEFAULT_TEMPERATURE } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 
 import { XmlMatcher } from "../../utils/xml-matcher"
 
