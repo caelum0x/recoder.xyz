@@ -1,7 +1,27 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import * as vscode from "vscode"
 
-import type { ModelInfo } from "@roo-code/types"
+// Conditionally import vscode only when available (VS Code extension context)
+let vscode: any;
+try {
+	vscode = require("vscode");
+} catch {
+	// vscode not available in CLI mode, use stub
+	vscode = {
+		window: {
+			showErrorMessage: () => {},
+			showInformationMessage: () => {},
+			showInputBox: () => Promise.resolve(""),
+		},
+		env: {
+			clipboard: {
+				writeText: () => Promise.resolve(),
+				readText: () => Promise.resolve(""),
+			},
+		},
+	};
+}
+
+import type { ModelInfo } from "@recoder/shared"
 
 import { getCommand } from "../../utils/commands"
 import { ApiStream } from "../transform/stream"

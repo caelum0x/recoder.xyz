@@ -1,4 +1,4 @@
-import { type ModelInfo, type ProviderSettings, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@roo-code/types"
+import { type ModelInfo, type ProviderSettings, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@recoder/shared"
 
 import {
 	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
@@ -80,7 +80,7 @@ export function getModelParams({
 	// Use the centralized logic for computing maxTokens
 	const maxTokens = getModelMaxOutputTokens({
 		modelId,
-		model,
+		model: model as any,
 		settings,
 		format,
 	})
@@ -89,25 +89,25 @@ export function getModelParams({
 	let reasoningBudget: ModelParams["reasoningBudget"] = undefined
 	let reasoningEffort: ModelParams["reasoningEffort"] = undefined
 
-	if (shouldUseReasoningBudget({ model, settings })) {
+	if (shouldUseReasoningBudget({ model: model as any, settings })) {
 		// If `customMaxThinkingTokens` is not specified use the default.
 		reasoningBudget = customMaxThinkingTokens ?? DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS
 
 		// Reasoning cannot exceed 80% of the `maxTokens` value.
 		// maxTokens should always be defined for reasoning budget models, but add a guard just in case
-		if (maxTokens && reasoningBudget > Math.floor(maxTokens * 0.8)) {
+		if (maxTokens && reasoningBudget && reasoningBudget > Math.floor(maxTokens * 0.8)) {
 			reasoningBudget = Math.floor(maxTokens * 0.8)
 		}
 
 		// Reasoning cannot be less than 1024 tokens.
-		if (reasoningBudget < 1024) {
+		if (reasoningBudget && reasoningBudget < 1024) {
 			reasoningBudget = 1024
 		}
 
 		// Let's assume that "Hybrid" reasoning models require a temperature of
 		// 1.0 since Anthropic does.
 		temperature = 1.0
-	} else if (shouldUseReasoningEffort({ model, settings })) {
+	} else if (shouldUseReasoningEffort({ model: model as any, settings })) {
 		// "Traditional" reasoning models use the `reasoningEffort` parameter.
 		reasoningEffort = customReasoningEffort ?? model.reasoningEffort
 	}
@@ -118,7 +118,7 @@ export function getModelParams({
 		return {
 			format,
 			...params,
-			reasoning: getAnthropicReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+			reasoning: getAnthropicReasoning({ model: model as any, reasoningBudget, reasoningEffort, settings }),
 		}
 	} else if (format === "openai") {
 		// Special case for o1 and o3-mini, which don't support temperature.
@@ -130,13 +130,13 @@ export function getModelParams({
 		return {
 			format,
 			...params,
-			reasoning: getOpenAiReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+			reasoning: getOpenAiReasoning({ model: model as any, reasoningBudget, reasoningEffort, settings }),
 		}
 	} else if (format === "gemini") {
 		return {
 			format,
 			...params,
-			reasoning: getGeminiReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+			reasoning: getGeminiReasoning({ model: model as any, reasoningBudget, reasoningEffort, settings }),
 		}
 	} else {
 		// Special case for o1-pro, which doesn't support temperature.
@@ -151,7 +151,7 @@ export function getModelParams({
 		return {
 			format,
 			...params,
-			reasoning: getOpenRouterReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+			reasoning: getOpenRouterReasoning({ model: model as any, reasoningBudget, reasoningEffort, settings }),
 		}
 	}
 }

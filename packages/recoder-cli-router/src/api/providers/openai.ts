@@ -10,9 +10,9 @@ import {
 	OPENAI_AZURE_AI_INFERENCE_PATH,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 
-import { XmlMatcher } from "../../utils/xml-matcher"
+import { XmlMatcher } from "@recoder/shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"

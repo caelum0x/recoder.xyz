@@ -49,7 +49,7 @@ export class AIResponseCache {
     
     if (this.options.enableDisk) {
       this.ensureCacheDir();
-      this.loadDiskCache();
+      this.loadDiskCache().catch(err => console.warn('Failed to load disk cache:', err));
     }
   }
 
@@ -247,7 +247,7 @@ export class AIResponseCache {
   /**
    * Load existing cache entries from disk on startup
    */
-  private loadDiskCache(): void {
+  private async loadDiskCache(): Promise<void> {
     try {
       const files = fs.readdirSync(this.cacheDir);
       let loaded = 0;
@@ -255,10 +255,10 @@ export class AIResponseCache {
       for (const file of files) {
         if (file.endsWith('.json')) {
           const key = file.replace('.json', '');
-          const entry = this.loadFromDisk(key);
+          const entry = await this.loadFromDisk(key);
           
           if (entry) {
-            this.memoryCache.set(key, entry as CacheEntry);
+            this.memoryCache.set(key, entry);
             loaded++;
           }
         }

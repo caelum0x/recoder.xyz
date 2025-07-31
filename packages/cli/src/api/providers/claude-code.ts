@@ -5,7 +5,7 @@ import {
 	claudeCodeModels,
 	type ModelInfo,
 	getClaudeCodeModelId,
-} from "@roo-code/types"
+} from "@recoder/shared"
 import { type ApiHandler } from ".."
 import { ApiStreamUsageChunk, type ApiStream } from "../transform/stream"
 import { runClaudeCode } from "../../integrations/claude-code/run"
@@ -36,7 +36,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 			systemPrompt,
 			messages: filteredMessages,
 			path: this.options.claudeCodePath,
-			modelId: getClaudeCodeModelId(modelId, useVertex),
+			modelId: getClaudeCodeModelId(modelId),
 			maxOutputTokens: this.options.claudeCodeMaxOutputTokens,
 		})
 

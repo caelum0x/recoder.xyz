@@ -7,7 +7,7 @@
 
 import { buildApiHandler, type ApiHandler } from '../api';
 import { routerBackendClient, type RequestUsage } from './backend-client';
-import type { ProviderSettings } from '../api/providers/types';
+import type { ApiHandlerOptions } from '@recoder/shared';
 
 export interface RouterAIOptions {
   preferredProvider?: string;
@@ -96,7 +96,7 @@ export class UnifiedRouterAI {
     try {
       const configs = this.buildRouterProviderConfigs();
       
-      for (const [name, settings] of configs) {
+      for (const [name, settings] of configs.entries()) {
         if (!this.config.providers[name]?.enabled) {
           console.log(`⏭️ Skipping disabled provider: ${name}`);
           continue;
@@ -122,13 +122,13 @@ export class UnifiedRouterAI {
   /**
    * Build provider configurations for router environment
    */
-  private buildRouterProviderConfigs(): Map<string, ProviderSettings> {
-    const configs = new Map<string, ProviderSettings>();
+  private buildRouterProviderConfigs(): Map<string, ApiHandlerOptions> {
+    const configs = new Map<string, ApiHandlerOptions>();
 
     // OpenRouter - best for routing diverse requests
     if (process.env.OPENROUTER_API_KEY) {
       configs.set('openrouter', {
-        apiProvider: 'openrouter',
+        apiProvider: 'openrouter' as const,
         openRouterApiKey: process.env.OPENROUTER_API_KEY,
         openRouterModelId: 'anthropic/claude-3.5-sonnet',
         openRouterUseMiddleOutTransform: true
@@ -137,7 +137,7 @@ export class UnifiedRouterAI {
 
     // Ollama - local, free, great for background tasks
     configs.set('ollama', {
-      apiProvider: 'ollama',
+      apiProvider: 'ollama' as const,
       ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
       ollamaModelId: 'llama3.2:latest'
     });
@@ -145,7 +145,7 @@ export class UnifiedRouterAI {
     // Anthropic - high quality for complex reasoning
     if (process.env.ANTHROPIC_API_KEY) {
       configs.set('anthropic', {
-        apiProvider: 'anthropic',
+        apiProvider: 'anthropic' as const,
         apiKey: process.env.ANTHROPIC_API_KEY,
         apiModelId: 'claude-3-5-sonnet-20241022'
       });
@@ -154,7 +154,7 @@ export class UnifiedRouterAI {
     // Gemini - excellent for long context
     if (process.env.GOOGLE_API_KEY) {
       configs.set('gemini', {
-        apiProvider: 'gemini',
+        apiProvider: 'gemini' as const,
         geminiApiKey: process.env.GOOGLE_API_KEY,
         geminiModelId: 'gemini-2.0-flash-exp'
       });
@@ -163,7 +163,7 @@ export class UnifiedRouterAI {
     // Groq - very fast for quick responses
     if (process.env.GROQ_API_KEY) {
       configs.set('groq', {
-        apiProvider: 'groq',
+        apiProvider: 'groq' as const,
         groqApiKey: process.env.GROQ_API_KEY,
         groqModelId: 'llama-3.1-70b-versatile'
       });

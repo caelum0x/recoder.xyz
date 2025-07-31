@@ -7,7 +7,7 @@
  */
 
 import { Logger } from '@recoder/shared';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'events'; 
 
 export interface BudgetLimit {
   id: string;
@@ -412,7 +412,7 @@ export class BudgetManager extends EventEmitter {
       // Update overall health (worst case)
       if (health === 'over_limit' || overallHealth === 'over_limit') {
         overallHealth = 'over_limit';
-      } else if (health === 'emergency' && overallHealth !== 'over_limit') {
+      } else if (health === 'emergency' && overallHealth !== 'over_limit' as any) {
         overallHealth = 'emergency';
       } else if (health === 'critical' && !['over_limit', 'emergency'].includes(overallHealth)) {
         overallHealth = 'critical';

@@ -8,7 +8,7 @@ import {
 	openAiModelInfoSaneDefaults,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 	OPENAI_AZURE_AI_INFERENCE_PATH,
-} from "@roo-code/types"
+} from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 
@@ -166,14 +166,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				isAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
 			)
 
-			const matcher = new XmlMatcher(
-				"think",
-				(chunk) =>
-					({
-						type: chunk.matched ? "reasoning" : "text",
-						text: chunk.data,
-					}) as const,
-			)
+			const matcher = new XmlMatcher()
 
 			let lastUsage
 
@@ -181,8 +174,10 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				const delta = chunk.choices[0]?.delta ?? {}
 
 				if (delta.content) {
-					for (const chunk of matcher.update(delta.content)) {
-						yield chunk
+					matcher.update(delta.content)
+					yield {
+						type: "text",
+						text: delta.content,
 					}
 				}
 
@@ -197,8 +192,12 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				}
 			}
 
-			for (const chunk of matcher.final()) {
-				yield chunk
+			const finalContent = matcher.final()
+			if (finalContent) {
+				yield {
+					type: "text",
+					text: finalContent,
+				}
 			}
 
 			if (lastUsage) {

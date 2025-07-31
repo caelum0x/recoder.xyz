@@ -2,7 +2,7 @@
 
 import { AwsBedrockHandler } from "../bedrock"
 import { BedrockRuntimeClient, ConverseStreamCommand } from "@aws-sdk/client-bedrock-runtime"
-import { logger } from "../../../utils/logging"
+import { Logger } from "../../../utils/logging"
 
 // Mock the AWS SDK
 vi.mock("@aws-sdk/client-bedrock-runtime")
@@ -30,8 +30,8 @@ describe("AwsBedrockHandler - Extended Thinking", () => {
 			send: mockSend,
 			config: { region: "us-east-1" },
 		}))
-		;(logger.info as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => {})
-		;(logger.error as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => {})
+		;(Logger.info as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => {})
+		;(Logger.error as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => {})
 	})
 
 	afterEach(() => {
@@ -173,7 +173,7 @@ describe("AwsBedrockHandler - Extended Thinking", () => {
 			}
 
 			// Verify logging
-			expect(logger.info).toHaveBeenCalledWith(
+			expect(Logger.info).toHaveBeenCalledWith(
 				expect.stringContaining("Extended thinking enabled"),
 				expect.objectContaining({
 					ctx: "bedrock",

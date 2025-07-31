@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import Cerebras from "@cerebras/cerebras_cloud_sdk"
 import { ApiHandlerOptions, CerebrasModelId, cerebrasDefaultModelId, cerebrasModels } from "@recoder/shared"
-import { ModelInfo } from "@roo-code/types"
+import { ModelInfo } from "@recoder/shared"
 import { ApiHandler } from "../index"
 import { ApiStream } from "../transform/stream"
 import { estimateTokenCount } from "../../utils/countTokens"

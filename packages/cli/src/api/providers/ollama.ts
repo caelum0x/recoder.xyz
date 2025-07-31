@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import { type ModelInfo, openAiModelInfoSaneDefaults, DEEP_SEEK_DEFAULT_TEMPERATURE } from "@roo-code/types"
+import { type ModelInfo, openAiModelInfoSaneDefaults, DEEP_SEEK_DEFAULT_TEMPERATURE } from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 
@@ -48,29 +48,28 @@ export class OllamaHandler extends BaseProvider implements SingleCompletionHandl
 			stream: true,
 			stream_options: { include_usage: true },
 		})
-		const matcher = new XmlMatcher(
-			"think",
-			(chunk) =>
-				({
-					type: chunk.matched ? "reasoning" : "text",
-					text: chunk.data,
-				}) as const,
-		)
+		const matcher = new XmlMatcher()
 		let lastUsage: CompletionUsage | undefined
 		for await (const chunk of stream) {
 			const delta = chunk.choices[0]?.delta
 
 			if (delta?.content) {
-				for (const matcherChunk of matcher.update(delta.content)) {
-					yield matcherChunk
+				matcher.update(delta.content)
+				yield {
+					type: "text",
+					text: delta.content,
 				}
 			}
 			if (chunk.usage) {
 				lastUsage = chunk.usage
 			}
 		}
-		for (const chunk of matcher.final()) {
-			yield chunk
+		const finalContent = matcher.final()
+		if (finalContent) {
+			yield {
+				type: "text",
+				text: finalContent,
+			}
 		}
 
 		if (lastUsage) {

@@ -1,8 +1,8 @@
 import axios from "axios"
 
-import type { ModelInfo } from "@roo-code/types"
+import type { ModelInfo } from "@recoder/shared"
 
-import { parseApiPrice } from "../@recoder/shared"
+import { parseApiPrice } from "@recoder/shared"
 
 export async function getRequestyModels(apiKey?: string): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
@@ -34,8 +34,7 @@ export async function getRequestyModels(apiKey?: string): Promise<Record<string,
 				supportsPromptCache: rawModel.supports_caching,
 				supportsImages: rawModel.supports_vision,
 				supportsComputerUse: rawModel.supports_computer_use,
-				supportsReasoningBudget: reasoningBudget,
-				supportsReasoningEffort: reasoningEffort,
+				supportsReasoningBudget: reasoningBudget || reasoningEffort,
 				inputPrice: parseApiPrice(rawModel.input_price),
 				outputPrice: parseApiPrice(rawModel.output_price),
 				description: rawModel.description,

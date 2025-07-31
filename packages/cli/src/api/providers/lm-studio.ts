@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import axios from "axios"
 
-import { type ModelInfo, openAiModelInfoSaneDefaults, LMSTUDIO_DEFAULT_TEMPERATURE } from "@roo-code/types"
+import { type ModelInfo, openAiModelInfoSaneDefaults, LMSTUDIO_DEFAULT_TEMPERATURE } from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 
@@ -64,7 +64,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 
 		let inputTokens = 0
 		try {
-			inputTokens = await this.countTokens([{ type: "text", text: systemPrompt }, ...toContentBlocks(messages)])
+			inputTokens = await this.countTokens([systemPrompt, toContentBlocks(messages)])
 		} catch (err) {
 			console.error("[LmStudio] Failed to count input tokens:", err)
 			inputTokens = 0
@@ -86,33 +86,32 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 
 			const results = await this.client.chat.completions.create(params)
 
-			const matcher = new XmlMatcher(
-				"think",
-				(chunk) =>
-					({
-						type: chunk.matched ? "reasoning" : "text",
-						text: chunk.data,
-					}) as const,
-			)
+			const matcher = new XmlMatcher()
 
 			for await (const chunk of results) {
 				const delta = chunk.choices[0]?.delta
 
 				if (delta?.content) {
 					assistantText += delta.content
-					for (const processedChunk of matcher.update(delta.content)) {
-						yield processedChunk
+					matcher.update(delta.content)
+					yield {
+						type: "text",
+						text: delta.content,
 					}
 				}
 			}
 
-			for (const processedChunk of matcher.final()) {
-				yield processedChunk
+			const finalContent = matcher.final()
+			if (finalContent) {
+				yield {
+					type: "text",
+					text: finalContent,
+				}
 			}
 
 			let outputTokens = 0
 			try {
-				outputTokens = await this.countTokens([{ type: "text", text: assistantText }])
+				outputTokens = await this.countTokens([assistantText])
 			} catch (err) {
 				console.error("[LmStudio] Failed to count output tokens:", err)
 				outputTokens = 0

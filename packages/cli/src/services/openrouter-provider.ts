@@ -142,7 +142,7 @@ export class OpenRouterProvider {
       'general': 'general'
     };
     
-    const modelTask = taskTypeMapping[context.type] || 'coding';
+    const modelTask = (taskTypeMapping[context.type] || 'coding') as 'coding' | 'reasoning' | 'analysis' | 'general';
     
     // Get best models from rankings
     const bestModels = modelSelector.getBestModelForTask(modelTask, {

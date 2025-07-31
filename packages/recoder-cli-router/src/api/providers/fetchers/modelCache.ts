@@ -2,20 +2,20 @@ import * as path from "path"
 import fs from "fs/promises"
 
 import NodeCache from "node-cache"
-import { safeWriteJson } from "../../../utils/safeWriteJson"
+import { safeWriteJson } from "@recoder/shared"
 
-import { ContextProxy } from "../../../core/config/ContextProxy"
-import { getCacheDirectoryPath } from "../../../utils/storage"
-import { RouterName, ModelRecord, cerebrasModels } from "../../../shared/api"
-import { fileExistsAtPath } from "../../../utils/fs"
+import { ContextProxy } from "@recoder/shared"
+import { getCacheDirectoryPath } from "@recoder/shared"
+import { RouterName, ModelRecord, cerebrasModels } from "@recoder/shared"
+import { fileExistsAtPath } from "@recoder/shared"
 
 import { getOpenRouterModels } from "./openrouter"
 import { getRequestyModels } from "./requesty"
 import { getGlamaModels } from "./glama"
 import { getUnboundModels } from "./unbound"
 import { getLiteLLMModels } from "./litellm"
-import { GetModelsOptions } from "../../../shared/api"
-import { getKiloBaseUriFromToken } from "../../../utils/kilocode-token"
+import { GetModelsOptions } from "@recoder/shared"
+import { getKiloBaseUriFromToken } from "@recoder/shared"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
 
@@ -101,9 +101,7 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				models = await getLMStudioModels(options.baseUrl)
 				break
 			default: {
-				// Ensures router is exhaustively checked if RouterName is a strict union
-				const exhaustiveCheck: never = provider
-				throw new Error(`Unknown provider: ${exhaustiveCheck}`)
+				throw new Error(`Unknown provider: ${provider}`)
 			}
 		}
 

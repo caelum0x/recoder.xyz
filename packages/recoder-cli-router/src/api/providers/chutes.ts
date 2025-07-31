@@ -2,8 +2,8 @@ import { DEEP_SEEK_DEFAULT_TEMPERATURE, type ChutesModelId, chutesDefaultModelId
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import type { ApiHandlerOptions } from "../../shared/api"
-import { XmlMatcher } from "../../utils/xml-matcher"
+import type { ApiHandlerOptions } from "@recoder/shared"
+import { XmlMatcher } from "@recoder/shared"
 import { convertToR1Format } from "../transform/r1-format"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
@@ -53,21 +53,32 @@ export class ChutesHandler extends BaseOpenAiCompatibleProvider<ChutesModelId> {
 				messages: convertToR1Format([{ role: "user", content: systemPrompt }, ...messages]),
 			})
 
-			const matcher = new XmlMatcher(
-				"think",
-				(chunk) =>
-					({
-						type: chunk.matched ? "reasoning" : "text",
-						text: chunk.data,
-					}) as const,
-			)
+			const matcher = new XmlMatcher()
 
 			for await (const chunk of stream) {
 				const delta = chunk.choices[0]?.delta
 
 				if (delta?.content) {
-					for (const processedChunk of matcher.update(delta.content)) {
-						yield processedChunk
+					const updatedChunks = matcher.update(delta.content)
+					if (updatedChunks !== undefined) {
+						// If updatedChunks is an array, iterate normally; if it's an async iterable, use for await
+						if (
+							updatedChunks &&
+							typeof updatedChunks === "object" &&
+							typeof updatedChunks[Symbol.asyncIterator] === "function"
+						) {
+							for await (const processedChunk of updatedChunks as AsyncIterable<any>) {
+								yield processedChunk
+							}
+						} else if (
+							updatedChunks &&
+							typeof updatedChunks === "object" &&
+							Symbol.iterator in Object(updatedChunks)
+						) {
+							for (const processedChunk of updatedChunks as Iterable<any>) {
+								yield processedChunk
+							}
+						}
 					}
 				}
 

@@ -1,7 +1,7 @@
 import { SystemContentBlock } from "@aws-sdk/client-bedrock-runtime"
 import { CacheStrategy } from "./base-strategy"
 import { CacheResult, CachePointPlacement } from "./types"
-import { logger } from "../../../utils/logging"
+import { Logger } from "../../../utils/logging"
 
 /**
  * Strategy for handling multiple cache points.
@@ -160,7 +160,7 @@ export class MultiPointStrategy extends CacheStrategy {
 
 				if (newMessagesTokens >= requiredTokenThreshold) {
 					// It's beneficial to combine cache points since new messages have significantly more tokens
-					logger.info("Combining cache points is beneficial", {
+					Logger.info("Combining cache points is beneficial", {
 						ctx: "cache-strategy",
 						newMessagesTokens,
 						smallestGap,
@@ -211,7 +211,7 @@ export class MultiPointStrategy extends CacheStrategy {
 				} else {
 					// It's not beneficial to combine cache points
 					// Keep all previous placements and don't add a new one for the new messages
-					logger.info("Combining cache points is not beneficial", {
+					Logger.info("Combining cache points is not beneficial", {
 						ctx: "cache-strategy",
 						newMessagesTokens,
 						smallestGap,

@@ -7,12 +7,13 @@ import {
 } from "@google/genai"
 import type { JWTInput } from "google-auth-library"
 
-import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
+import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 import { safeJsonParse } from "@recoder/shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
+import type { Part } from "@google/genai"
 import type { ApiStream } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
@@ -171,9 +172,15 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 		try {
 			const { id: model } = this.getModel()
 
+			// Convert the array of content items to individual parts
+			const allParts: Part[] = [];
+			for (const contentItem of content) {
+				allParts.push(...convertAnthropicContentToGemini(contentItem));
+			}
+			
 			const response = await this.client.models.countTokens({
 				model,
-				contents: convertAnthropicContentToGemini(content),
+				contents: [{ parts: allParts }],
 			})
 
 			if (response.totalTokens === undefined) {

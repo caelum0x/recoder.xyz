@@ -1,12 +1,12 @@
 // npx vitest run api/transform/__tests__/model-params.spec.ts
 
-import { type ModelInfo, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@roo-code/types"
+import { type ModelInfo, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@recoder/shared"
 
 import { getModelParams } from "../model-params"
 import {
 	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
 	DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS,
-} from "../@recoder/shared"
+} from "@recoder/shared"
 
 describe("getModelParams", () => {
 	const baseModel: ModelInfo = {
@@ -409,10 +409,10 @@ describe("getModelParams", () => {
 	})
 
 	describe("Reasoning Effort (Traditional reasoning models)", () => {
-		it("should handle supportsReasoningEffort with model reasoningEffort", () => {
+		it("should handle supportsReasoningBudget with model reasoningEffort", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "medium",
 			}
 
@@ -428,10 +428,10 @@ describe("getModelParams", () => {
 			expect(result.reasoning).toEqual({ reasoning_effort: "medium" })
 		})
 
-		it("should handle supportsReasoningEffort with settings reasoningEffort", () => {
+		it("should handle supportsReasoningBudget with settings reasoningEffort", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const result = getModelParams({
@@ -447,7 +447,7 @@ describe("getModelParams", () => {
 		it("should prefer settings reasoningEffort over model reasoningEffort", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "low",
 			}
 
@@ -461,10 +461,10 @@ describe("getModelParams", () => {
 			expect(result.reasoning).toEqual({ reasoning_effort: "high" })
 		})
 
-		it("should not use reasoning effort when supportsReasoningEffort is true but no effort is specified", () => {
+		it("should not use reasoning effort when supportsReasoningBudget is true but no effort is specified", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const result = getModelParams({
@@ -480,7 +480,7 @@ describe("getModelParams", () => {
 		it("should handle reasoning effort for openrouter format", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "medium",
 			}
 
@@ -497,7 +497,7 @@ describe("getModelParams", () => {
 		it("should not use reasoning effort for anthropic format", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "medium",
 			}
 
@@ -511,11 +511,11 @@ describe("getModelParams", () => {
 			expect(result.reasoning).toBeUndefined() // Anthropic doesn't support reasoning effort
 		})
 
-		it("should use reasoningEffort if supportsReasoningEffort is false but reasoningEffort is set", () => {
+		it("should use reasoningEffort if supportsReasoningBudget is false but reasoningEffort is set", () => {
 			const model: ModelInfo = {
 				...baseModel,
 				maxTokens: 8000,
-				supportsReasoningEffort: false,
+				supportsReasoningBudget: false,
 				reasoningEffort: "medium",
 			}
 
@@ -530,7 +530,7 @@ describe("getModelParams", () => {
 		})
 	})
 
-	describe("Hybrid reasoning models (supportsReasoningEffort)", () => {
+	describe("Hybrid reasoning models (supportsReasoningBudget)", () => {
 		const model: ModelInfo = {
 			...baseModel,
 			maxTokens: 8000,
@@ -566,7 +566,7 @@ describe("getModelParams", () => {
 			const model: ModelInfo = {
 				...baseModel,
 				supportsReasoningBudget: true,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "medium",
 			}
 
@@ -627,7 +627,7 @@ describe("getModelParams", () => {
 		it("should handle all reasoning effort values", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const efforts: Array<"low" | "medium" | "high"> = ["low", "medium", "high"]
@@ -650,7 +650,7 @@ describe("getModelParams", () => {
 				maxTokens: 16000,
 				maxThinkingTokens: 8000,
 				supportsReasoningBudget: true,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "low",
 			}
 
@@ -676,7 +676,7 @@ describe("getModelParams", () => {
 		it("should return correct reasoning format for openai with reasoning effort", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "medium",
 			}
 
@@ -692,7 +692,7 @@ describe("getModelParams", () => {
 		it("should return correct reasoning format for openrouter with reasoning effort", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "high",
 			}
 
@@ -723,7 +723,7 @@ describe("getModelParams", () => {
 		it("should return undefined reasoning for anthropic with reasoning effort", () => {
 			const model: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "medium",
 			}
 

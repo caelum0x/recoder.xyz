@@ -7,7 +7,7 @@
 
 import { Logger } from '@recoder/shared';
 import { EventEmitter } from 'events';
-import { NotificationService } from './notification-service';
+import { NotificationService } from './notification-service'; 
 import { EscalationPolicies } from './escalation-policies';
 
 export interface Alert {
@@ -564,7 +564,7 @@ export class AlertManager extends EventEmitter {
     }
   }
 
-  private async shouldSendNotification(alert: Alert): boolean {
+  private async shouldSendNotification(alert: Alert): Promise<boolean> {
     // Check if alert is suppressed
     if (alert.suppressedUntil && new Date() < alert.suppressedUntil) {
       return false;

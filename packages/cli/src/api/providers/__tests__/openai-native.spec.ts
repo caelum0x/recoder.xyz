@@ -3,7 +3,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
 import { OpenAiNativeHandler } from "../openai-native"
-import { ApiHandlerOptions } from "../@recoder/shared"
+import { ApiHandlerOptions } from "@recoder/shared"
 
 // Mock OpenAI client
 const mockCreate = vitest.fn()

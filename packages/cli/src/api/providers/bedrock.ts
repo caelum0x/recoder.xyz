@@ -21,7 +21,7 @@ import {
 	BEDROCK_MAX_TOKENS,
 	BEDROCK_DEFAULT_CONTEXT,
 	AWS_INFERENCE_PROFILE_MAPPING,
-} from "@roo-code/types"
+} from "@recoder/shared"
 
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
@@ -179,8 +179,8 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 			this.arnInfo = this.parseArn(this.options.awsCustomArn, region)
 
 			if (!this.arnInfo.isValid) {
-				logger.error("Invalid ARN format", {
-					errorMessage: this.arnInfo.errorMessage,
+				logger.error("Invalid ARN format", undefined, {
+					message: this.arnInfo.errorMessage,
 				})
 
 				// Throw a consistent error with a prefix that can be detected by callers
@@ -336,7 +336,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 		// shouldUseReasoningBudget(): Enabled through user settings (enableReasoningEffort = true)
 		const isThinkingExplicitlyEnabled = metadata?.thinking?.enabled
 		const isThinkingEnabledBySettings =
-			shouldUseReasoningBudget({ model: modelConfig.info, settings: this.options }) &&
+			shouldUseReasoningBudget(modelConfig.id) &&
 			modelConfig.reasoning &&
 			modelConfig.reasoningBudget
 
@@ -401,8 +401,8 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 				try {
 					streamEvent = typeof chunk === "string" ? JSON.parse(chunk) : (chunk as unknown as StreamEvent)
 				} catch (e) {
-					logger.error("Failed to parse stream event", {
-						error: e instanceof Error ? e : String(e),
+					logger.error("Failed to parse stream event", e instanceof Error ? e : undefined, {
+						message: e instanceof Error ? e.message : String(e),
 						chunk: typeof chunk === "string" ? chunk : "binary data",
 					})
 					continue
@@ -459,8 +459,8 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 							}
 						}
 					} catch (error) {
-						logger.error("Error handling Bedrock invokedModelId", {
-														error: error instanceof Error ? error : String(error),
+						logger.error("Error handling Bedrock invokedModelId", error instanceof Error ? error : undefined, {
+														message: error instanceof Error ? error.message : String(error),
 						})
 					} finally {
 						// eslint-disable-next-line no-unsafe-finally
@@ -610,7 +610,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 			// For completePrompt, thinking is typically not used, but we should still check
 			// if thinking was somehow enabled in the model config
 			const thinkingEnabled =
-				shouldUseReasoningBudget({ model: modelConfig.info, settings: this.options }) &&
+				shouldUseReasoningBudget(modelConfig.id) &&
 				modelConfig.reasoning &&
 				modelConfig.reasoningBudget
 
@@ -652,8 +652,8 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 				try {
 					return response.output.message.content[0].text
 				} catch (parseError) {
-					logger.error("Failed to parse Bedrock response", {
-												error: parseError instanceof Error ? parseError : String(parseError),
+					logger.error("Failed to parse Bedrock response", parseError instanceof Error ? parseError : undefined, {
+												message: parseError instanceof Error ? parseError.message : String(parseError),
 					})
 				}
 			}
@@ -852,7 +852,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 
 		// Remove AWS cross-region inference profile prefixes
 		// as defined in AWS_INFERENCE_PROFILE_MAPPING
-		for (const [_, inferenceProfile] of AWS_INFERENCE_PROFILE_MAPPING) {
+		for (const [_, inferenceProfile] of Object.entries(AWS_INFERENCE_PROFILE_MAPPING)) {
 			if (modelId.startsWith(inferenceProfile)) {
 				// Remove the inference profile prefix from the model ID
 				return modelId.substring(inferenceProfile.length)
@@ -1010,7 +1010,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 	private static getPrefixForRegion(region: string): string | undefined {
 		// Use AWS recommended inference profile prefixes
 		// Array is pre-sorted by pattern length (descending) to ensure more specific patterns match first
-		for (const [regionPattern, inferenceProfile] of AWS_INFERENCE_PROFILE_MAPPING) {
+		for (const [regionPattern, inferenceProfile] of Object.entries(AWS_INFERENCE_PROFILE_MAPPING)) {
 			if (region.startsWith(regionPattern)) {
 				return inferenceProfile
 			}
@@ -1021,7 +1021,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 
 	private static isSystemInferenceProfile(prefix: string): boolean {
 		// Check if the prefix is defined in AWS_INFERENCE_PROFILE_MAPPING
-		for (const [_, inferenceProfile] of AWS_INFERENCE_PROFILE_MAPPING) {
+		for (const [_, inferenceProfile] of Object.entries(AWS_INFERENCE_PROFILE_MAPPING)) {
 			if (prefix === inferenceProfile) {
 				return true
 			}
@@ -1300,13 +1300,19 @@ Please check:
 		const definition = AwsBedrockHandler.ERROR_TYPES[errorType]
 		const logMethod = definition.logLevel
 		const contextName = isStreamContext ? "createMessage" : "completePrompt"
-		logger[logMethod](`${errorType} error in ${contextName}`, {
-						customArn: this.options.awsCustomArn,
+		const errorInfo = {
+			arnUsed: this.options.awsCustomArn,
 			errorType,
 			errorMessage: error instanceof Error ? error.message : String(error),
 			...(error instanceof Error && error.stack ? { errorStack: error.stack } : {}),
 			...(this.client?.config?.region ? { clientRegion: this.client.config.region } : {}),
-		})
+		};
+		
+		if (logMethod === 'error') {
+			logger.error(`${errorType} error in ${contextName}`, error instanceof Error ? error : undefined, errorInfo);
+		} else {
+			logger[logMethod](`${errorType} error in ${contextName}`, errorInfo);
+		}
 
 		// Return appropriate response based on isStreamContext
 		if (isStreamContext) {
