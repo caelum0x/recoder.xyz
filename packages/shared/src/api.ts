@@ -6,15 +6,40 @@
 import { Anthropic } from "@anthropic-ai/sdk";
 
 export interface ModelInfo {
-  maxTokens: number;
-  contextWindow?: number;
+  maxTokens?: number;
+  contextWindow: number;
   supportsImages?: boolean;
   supportsTools?: boolean;
+  supportsPromptCache: boolean;
+  supportsComputerUse?: boolean;
+  supportsReasoningBudget?: boolean;
+  maxThinkingTokens?: number;
+  reasoningEffort?: "low" | "medium" | "high";
   description?: string;
   inputPricePerMillion?: number;
   outputPricePerMillion?: number;
   inputPrice?: number;
   outputPrice?: number;
+  cacheWritesPrice?: number;
+  cacheReadsPrice?: number;
+  supportedParameters?: string[];
+  preferredIndex?: number;
+  requiredReasoningBudget?: boolean;
+  pricing?: {
+    input: number;
+    output: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+  };
+  tiers?: Array<{
+    contextWindow: number;
+    inputPrice?: number;
+    outputPrice?: number;
+    cacheWritesPrice?: number;
+    cacheReadsPrice?: number;
+    name?: string;
+    maxTokens?: number;
+  }>;
 }
 
 export interface ApiHandlerOptions {
@@ -175,6 +200,8 @@ export interface GetModelsOptions {
   apiKey?: string;
   baseUrl?: string;
   timeout?: number;
+  provider?: RouterName;
+  kilocodeToken?: string;
 }
 
 export type RouterName = 
@@ -202,4 +229,5 @@ export type RouterName =
   | 'unbound'
   | 'human-relay'
   | 'fake-ai'
-  | 'vscode-lm';
+  | 'vscode-lm'
+  | 'kilocode-openrouter';

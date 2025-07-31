@@ -1,6 +1,6 @@
 // npx vitest run src/api/transform/__tests__/reasoning.spec.ts
 
-import type { ModelInfo, ProviderSettings } from "@roo-code/types"
+import type { ModelInfo, ProviderSettings } from "@recoder/shared"
 
 import {
 	getOpenRouterReasoning,
@@ -64,7 +64,7 @@ describe("reasoning.ts", () => {
 		it("should return reasoning effort params when model supports reasoning effort and has effort in settings", () => {
 			const modelWithSupported: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const settingsWithEffort: ProviderSettings = {
@@ -210,10 +210,10 @@ describe("reasoning.ts", () => {
 			expect(result).toBeUndefined()
 		})
 
-		it("should not use reasoning effort when supportsReasoningEffort is true but no effort is specified", () => {
+		it("should not use reasoning effort when supportsReasoningBudget is true but no effort is specified", () => {
 			const modelWithSupported: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const options = {
@@ -378,7 +378,7 @@ describe("reasoning.ts", () => {
 		it("should ignore reasoning effort capabilities for Anthropic", () => {
 			const modelWithEffort: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				reasoningEffort: "high",
 			}
 
@@ -402,7 +402,7 @@ describe("reasoning.ts", () => {
 		it("should return reasoning effort params when model supports reasoning effort and has effort in settings", () => {
 			const modelWithSupported: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const settingsWithEffort: ProviderSettings = {
@@ -438,10 +438,10 @@ describe("reasoning.ts", () => {
 			expect(result).toBeUndefined()
 		})
 
-		it("should return undefined when supportsReasoningEffort is true but no effort is specified", () => {
+		it("should return undefined when supportsReasoningBudget is true but no effort is specified", () => {
 			const modelWithSupported: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const options = {
@@ -549,10 +549,10 @@ describe("reasoning.ts", () => {
 			expect(openAiResult).toBeUndefined()
 		})
 
-		it("should handle model with supportsReasoningEffort across all providers", () => {
+		it("should handle model with supportsReasoningBudget across all providers", () => {
 			const modelWithSupported: ModelInfo = {
 				...baseModel,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 			}
 
 			const settingsWithEffort: ProviderSettings = {

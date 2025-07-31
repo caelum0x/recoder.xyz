@@ -157,101 +157,24 @@ export class NotificationService extends EventEmitter {
         id: 'slack_alert',
         name: 'Slack Alert Template',
         channel: 'slack',
-        alertTemplate: `🚨 *{{severity | upper}} Alert* 🚨
-
-*{{title}}*
-{{message}}
-
-📊 *Details:*
-• Model: {{modelName || 'N/A'}}
-• Provider: {{provider || 'N/A'}}
-• Source: {{source}}
-• Time: {{timestamp | formatDate}}
-
-{{#if data.errorRate}}• Error Rate: {{data.errorRate}}%{{/if}}
-{{#if data.latency}}• Latency: {{data.latency}}ms{{/if}}
-{{#if data.cost}}• Cost: ${{data.cost}}{{/if}}
-
-🔗 <{{dashboardUrl}}|View Dashboard>`,
-        resolutionTemplate: `✅ *Resolved* - {{title}}
-
-Resolved by: {{resolvedBy}}
-Resolution time: {{resolutionTime}} minutes
-{{#if resolutionNote}}Note: {{resolutionNote}}{{/if}}`,
+        alertTemplate: '🚨 *{{severity | upper}} Alert* 🚨\n\n*{{title}}*\n{{message}}\n\n📊 *Details:*\n• Model: {{modelName || \'N/A\'}}\n• Provider: {{provider || \'N/A\'}}\n• Source: {{source}}\n• Time: {{timestamp | formatDate}}\n\n{{#if data.errorRate}}• Error Rate: {{data.errorRate}}%{{/if}}\n{{#if data.latency}}• Latency: {{data.latency}}ms{{/if}}\n{{#if data.cost}}• Cost: ${{data.cost}}{{/if}}\n\n🔗 <{{dashboardUrl}}|View Dashboard>',
+        resolutionTemplate: '✅ *Resolved* - {{title}}\n\nResolved by: {{resolvedBy}}\nResolution time: {{resolutionTime}} minutes\n{{#if resolutionNote}}Note: {{resolutionNote}}{{/if}}',
         variables: ['severity', 'title', 'message', 'modelName', 'provider', 'source', 'timestamp', 'data', 'resolvedBy', 'resolutionTime', 'resolutionNote']
       },
       {
         id: 'email_alert',
         name: 'Email Alert Template',
         channel: 'email',
-        alertTemplate: `Subject: [{{severity | upper}}] {{title}}
-
-Alert Details:
---------------
-Severity: {{severity | upper}}
-Model: {{modelName || 'N/A'}}
-Provider: {{provider || 'N/A'}}
-Source: {{source}}
-Timestamp: {{timestamp | formatDate}}
-
-Description:
-{{message}}
-
-{{#if data}}
-Additional Data:
-{{#each data}}
-{{@key}}: {{this}}
-{{/each}}
-{{/if}}
-
-Dashboard: {{dashboardUrl}}
-
-This is an automated alert from Recoder Health Monitoring System.`,
-        resolutionTemplate: `Subject: [RESOLVED] {{title}}
-
-The following alert has been resolved:
-
-Alert: {{title}}
-Resolved by: {{resolvedBy}}
-Resolution time: {{resolutionTime}} minutes
-{{#if resolutionNote}}
-Resolution note: {{resolutionNote}}
-{{/if}}
-
-Original alert timestamp: {{timestamp | formatDate}}
-Resolved at: {{resolvedAt | formatDate}}
-
-This is an automated notification from Recoder Health Monitoring System.`,
+        alertTemplate: 'Subject: [{{severity | upper}}] {{title}}\n\nAlert Details:\n--------------\nSeverity: {{severity | upper}}\nModel: {{modelName || \'N/A\'}}\nProvider: {{provider || \'N/A\'}}\nSource: {{source}}\nTimestamp: {{timestamp | formatDate}}\n\nDescription:\n{{message}}\n\n{{#if data}}\nAdditional Data:\n{{#each data}}\n{{@key}}: {{this}}\n{{/each}}\n{{/if}}\n\nDashboard: {{dashboardUrl}}\n\nThis is an automated alert from Recoder Health Monitoring System.',
+        resolutionTemplate: 'Subject: [RESOLVED] {{title}}\n\nThe following alert has been resolved:\n\nAlert: {{title}}\nResolved by: {{resolvedBy}}\nResolution time: {{resolutionTime}} minutes\n{{#if resolutionNote}}\nResolution note: {{resolutionNote}}\n{{/if}}\n\nOriginal alert timestamp: {{timestamp | formatDate}}\nResolved at: {{resolvedAt | formatDate}}\n\nThis is an automated notification from Recoder Health Monitoring System.',
         variables: ['severity', 'title', 'message', 'modelName', 'provider', 'source', 'timestamp', 'data', 'resolvedBy', 'resolutionTime', 'resolutionNote', 'resolvedAt']
       },
       {
         id: 'webhook_alert',
         name: 'Webhook Alert Template',
         channel: 'webhook',
-        alertTemplate: `{
-  "alert_id": "{{id}}",
-  "type": "{{type}}",
-  "severity": "{{severity}}",
-  "title": "{{title}}",
-  "message": "{{message}}",
-  "source": "{{source}}",
-  "model_name": "{{modelName}}",
-  "provider": "{{provider}}",
-  "timestamp": "{{timestamp | iso}}",
-  "tags": {{tags | json}},
-  "data": {{data | json}},
-  "dashboard_url": "{{dashboardUrl}}"
-}`,
-        resolutionTemplate: `{
-  "alert_id": "{{id}}",
-  "type": "resolution",
-  "title": "{{title}}",
-  "resolved_by": "{{resolvedBy}}",
-  "resolved_at": "{{resolvedAt | iso}}",
-  "resolution_time_minutes": {{resolutionTime}},
-  "resolution_note": "{{resolutionNote}}",
-  "original_timestamp": "{{timestamp | iso}}"
-}`,
+        alertTemplate: '{\n  "alert_id": "{{id}}",\n  "type": "{{type}}",\n  "severity": "{{severity}}",\n  "title": "{{title}}",\n  "message": "{{message}}",\n  "source": "{{source}}",\n  "model_name": "{{modelName}}",\n  "provider": "{{provider}}",\n  "timestamp": "{{timestamp | iso}}",\n  "tags": {{tags | json}},\n  "data": {{data | json}},\n  "dashboard_url": "{{dashboardUrl}}"\n}',
+        resolutionTemplate: '{\n  "alert_id": "{{id}}",\n  "type": "resolution",\n  "title": "{{title}}",\n  "resolved_by": "{{resolvedBy}}",\n  "resolved_at": "{{resolvedAt | iso}}",\n  "resolution_time_minutes": {{resolutionTime}},\n  "resolution_note": "{{resolutionNote}}",\n  "original_timestamp": "{{timestamp | iso}}"\n}',
         variables: ['id', 'type', 'severity', 'title', 'message', 'source', 'modelName', 'provider', 'timestamp', 'tags', 'data', 'resolvedBy', 'resolvedAt', 'resolutionTime', 'resolutionNote']
       }
     ];

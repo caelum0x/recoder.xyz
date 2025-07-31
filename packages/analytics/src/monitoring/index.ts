@@ -20,7 +20,6 @@ export { EscalationPolicies, escalationPolicies } from './alerting/escalation-po
 
 // Types and interfaces
 export type {
-  ModelHealthMetrics,
   HealthStatus,
   ModelRecommendation,
   PredictiveAlert,
@@ -94,6 +93,14 @@ export async function initializeMonitoring(): Promise<void> {
   console.log('🚀 Initializing Recoder Model Health Monitoring System...');
 
   try {
+    // Import the singletons
+    const { modelHealthMonitor } = await import('./health-monitor');
+    const { availabilityChecker } = await import('./availability-checker');
+    const { latencyMonitor } = await import('./latency-monitor');
+    const { costTracker } = await import('./cost-tracker');
+    const { errorDetector } = await import('./error-detector');
+    const { alertManager } = await import('./alerting/alert-manager');
+
     // Start all monitoring components
     await Promise.all([
       modelHealthMonitor.startMonitoring(),
@@ -127,6 +134,14 @@ export async function shutdownMonitoring(): Promise<void> {
   console.log('🛑 Shutting down Model Health Monitoring System...');
 
   try {
+    // Import the singletons
+    const { modelHealthMonitor } = await import('./health-monitor');
+    const { availabilityChecker } = await import('./availability-checker');
+    const { latencyMonitor } = await import('./latency-monitor');
+    const { costTracker } = await import('./cost-tracker');
+    const { errorDetector } = await import('./error-detector');
+    const { alertManager } = await import('./alerting/alert-manager');
+
     // Stop all monitoring components
     await Promise.all([
       modelHealthMonitor.stopMonitoring(),
@@ -149,12 +164,18 @@ export async function shutdownMonitoring(): Promise<void> {
  * Get system-wide health summary
  */
 export async function getSystemHealthSummary(): Promise<{
-  overall: HealthStatus;
-  models: ModelHealthMetrics[];
+  overall: any;
+  models: any[];
   alerts: { active: number; critical: number };
   costs: { dailySpend: number; budgetStatus: string };
   availability: { average: number; regional: any[] };
 }> {
+  // Import the singletons
+  const { modelHealthMonitor } = await import('./health-monitor');
+  const { alertManager } = await import('./alerting/alert-manager');
+  const { costTracker } = await import('./cost-tracker');
+  const { availabilityChecker } = await import('./availability-checker');
+
   const overallHealth = await modelHealthMonitor.getOverallHealth();
   const allModelsHealth = await modelHealthMonitor.getAllModelsHealth();
   const activeAlerts = alertManager.getActiveAlerts();
@@ -184,10 +205,14 @@ export async function getSystemHealthSummary(): Promise<{
  * Quick health check for a specific model
  */
 export async function checkModelHealth(modelName: string): Promise<{
-  health: ModelHealthMetrics;
-  alerts: Alert[];
+  health: any;
+  alerts: any[];
   recommendations: string[];
 }> {
+  // Import the singletons
+  const { modelHealthMonitor } = await import('./health-monitor');
+  const { alertManager } = await import('./alerting/alert-manager');
+
   const health = await modelHealthMonitor.getHealthStatus(modelName);
   const alerts = alertManager.getActiveAlerts({ source: modelName });
   const recommendations: string[] = [];
@@ -206,14 +231,32 @@ export async function checkModelHealth(modelName: string): Promise<{
   return { health, alerts, recommendations };
 }
 
-// Export monitoring system singleton for direct access
+// Export monitoring system factory for lazy loading
 export const monitoringSystem = {
-  health: modelHealthMonitor,
-  availability: availabilityChecker,
-  latency: latencyMonitor,
-  cost: costTracker,
-  errors: errorDetector,
-  alerts: alertManager,
+  async getHealth() {
+    const { modelHealthMonitor } = await import('./health-monitor');
+    return modelHealthMonitor;
+  },
+  async getAvailability() {
+    const { availabilityChecker } = await import('./availability-checker');
+    return availabilityChecker;
+  },
+  async getLatency() {
+    const { latencyMonitor } = await import('./latency-monitor');
+    return latencyMonitor;
+  },
+  async getCost() {
+    const { costTracker } = await import('./cost-tracker');
+    return costTracker;
+  },
+  async getErrors() {
+    const { errorDetector } = await import('./error-detector');
+    return errorDetector;
+  },
+  async getAlerts() {
+    const { alertManager } = await import('./alerting/alert-manager');
+    return alertManager;
+  },
   
   // Convenience methods
   initialize: initializeMonitoring,

@@ -10,8 +10,7 @@ import {
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
 } from "@roo-code/types"
 
-import { ApiHandlerOptions } from "../../shared/api"
-import { safeJsonParse } from "../../shared/safeJsonParse"
+import { ApiHandlerOptions, safeJsonParse } from "@recoder/shared"
 
 import { ApiStream } from "../transform/stream"
 import { addCacheBreakpoints } from "../transform/caching/vertex"
@@ -40,7 +39,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				region,
 				googleAuth: new GoogleAuth({
 					scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
+					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined) ?? undefined,
 				}),
 			})
 		} else if (this.options.vertexKeyFile) {

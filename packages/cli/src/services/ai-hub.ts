@@ -12,7 +12,9 @@ import { aiCache, AIResponseCache } from './ai-cache';
 import { modelSelector, IntelligentModelSelector, ModelRanking, MODEL_RANKINGS } from './model-rankings';
 import { costEfficientRouter, TaskContext as CostTaskContext, CostOptimizationConfig } from './cost-efficient-router';
 import { unifiedAPI, UnifiedAPIAdapter, UnifiedAPIOptions } from './unified-api-adapter';
+import { packageIntegration, PackageIntegrationManager } from './package-integration';
 import { buildApiHandler } from '../api';
+import type { ApiHandler } from '../api';
 import type { AIMessage, ProviderSettings } from '../api/providers/types';
 
 const execAsync = promisify(exec);
@@ -785,9 +787,26 @@ export class AIHub {
   private static instance: AIHub;
 
   private constructor() {
+    this.initializePackageIntegrations();
     this.initializeProvidersAsync();
     this.initializeUnifiedApiHandlers();
     this.setupProviderPreferences();
+  }
+
+  private async initializePackageIntegrations(): Promise<void> {
+    try {
+      await packageIntegration.initialize();
+      
+      // Log integration status
+      const status = packageIntegration.getIntegrationStatus();
+      if (status.fullyIntegrated) {
+        Logger.info('✅ All package integrations initialized successfully');
+      } else {
+        Logger.warn(`⚠️ Partial integration: ${status.available.join(', ')}`);
+      }
+    } catch (error) {
+      Logger.error('Failed to initialize package integrations:', error);
+    }
   }
 
   private async initializeProvidersAsync(): Promise<void> {
@@ -811,9 +830,9 @@ export class AIHub {
       new OllamaProvider(),  // Prioritize local AI first
       new AnthropicProvider(), // Claude Sonnet 4 - Top performer
       new GeminiProvider(), // Gemini 2.5 Flash - High performance, free tier
-      new DeepSeekProvider(), // DeepSeek V3 - Free, high coding score
-      new QwenProvider(), // Qwen3 Coder - Free, perfect coding score
-      new KimiProvider(), // Kimi K2 - High performance
+      // new DeepSeekProvider(), // DeepSeek V3 - Free, high coding score (TODO: implement)
+      // new QwenProvider(), // Qwen3 Coder - Free, perfect coding score (TODO: implement)
+      // new KimiProvider(), // Kimi K2 - High performance (TODO: implement)
       new GroqProvider(), // Fast generation
       new MistralProvider(),
       new PerplexityProvider(),
@@ -919,7 +938,7 @@ export class AIHub {
       'general': 'general'
     };
     
-    const modelTask = taskTypeMapping[context.type as keyof typeof taskTypeMapping] || 'coding';
+    const modelTask = (taskTypeMapping[context.type as keyof typeof taskTypeMapping] || 'coding') as 'coding' | 'reasoning' | 'analysis' | 'general';
     
     // Get best models from rankings
     const bestModels = modelSelector.getBestModelForTask(modelTask, {
@@ -991,40 +1010,175 @@ export class AIHub {
   }
 
   /**
-   * Chat with AI using smart provider selection and caching
+   * Chat with AI using smart provider selection, caching, and full package integration
    */
   async chat(
     messages: any[], 
     context: TaskContext, 
     options: any = {}
   ): Promise<AIResponse> {
-    const provider = this.selectBestProvider(context);
+    // Step 1: Security integration - sanitize input
+    let sanitizedMessages = messages;
+    if (packageIntegration.security.isAvailable()) {
+      sanitizedMessages = messages.map(msg => ({
+        ...msg,
+        content: packageIntegration.security.sanitizePrompt(msg.content || '')
+      }));
+      
+      // Create audit trail
+      packageIntegration.security.createAuditTrail('ai_request', {
+        provider: context.type,
+        messageCount: messages.length,
+        context: context.type
+      });
+    }
+
+    // Step 2: Intelligence integration - optimize context
+    let optimizedContext = context;
+    if (packageIntegration.intelligence.isAvailable()) {
+      optimizedContext = packageIntegration.intelligence.optimizePerformance(context) || context;
+      
+      // Store context in memory for learning
+      packageIntegration.intelligence.manageContextMemory('store', {
+        context: optimizedContext,
+        messages: sanitizedMessages.slice(-2), // Store last 2 messages
+        timestamp: new Date().toISOString()
+      });
+
+      // Get AI recommendations for provider selection
+      const recommendations = packageIntegration.intelligence.getRecommendations({
+        context: optimizedContext,
+        previousProviders: Array.from(this.providers.keys())
+      });
+      
+      if (recommendations.length > 0) {
+        Logger.info(`🧠 Intelligence recommendations: ${recommendations.slice(0, 2).join(', ')}`);
+      }
+    }
+
+    // Step 3: Router integration - use recoder-code-router for optimal routing
+    let selectedProvider: AIProvider;
+    if (packageIntegration.router.isAvailable()) {
+      const routingCriteria = {
+        context: optimizedContext,
+        messages: sanitizedMessages,
+        options,
+        availableProviders: Array.from(this.providers.keys())
+      };
+      
+      const routerSuggestion = packageIntegration.router.selectOptimalProvider(routingCriteria);
+      if (routerSuggestion && this.providers.has(routerSuggestion)) {
+        selectedProvider = this.providers.get(routerSuggestion)!;
+        Logger.info(`🎯 Router selected: ${routerSuggestion}`);
+      } else {
+        selectedProvider = this.selectBestProvider(optimizedContext);
+        Logger.info(`🎯 Fallback selection: ${selectedProvider.name}`);
+      }
+    } else {
+      selectedProvider = this.selectBestProvider(optimizedContext);
+      Logger.info(`🎯 Standard selection: ${selectedProvider.name}`);
+    }
     
-    // Create cache key from messages
-    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+    // Create cache key from sanitized messages
+    const prompt = sanitizedMessages.map(m => `${m.role}: ${m.content}`).join('\n');
     
     // Check cache first
-    const cachedResponse = await aiCache.get(prompt, provider.name, options.model || 'default', options);
+    const cachedResponse = await aiCache.get(prompt, selectedProvider.name, options.model || 'default', options);
     if (cachedResponse && AIResponseCache.isCacheable(prompt, cachedResponse)) {
-      Logger.info(`🎯 Cache hit for ${provider.name} (saved API call)`);
+      Logger.info(`🎯 Cache hit for ${selectedProvider.name} (saved API call)`);
+      
+      // Track cache hit analytics
+      if (packageIntegration.analytics.isAvailable()) {
+        packageIntegration.analytics.trackUsage('cache_hit', {
+          provider: selectedProvider.name,
+          context: context.type,
+          tokensSaved: cachedResponse.length * 0.75 // Estimate
+        });
+      }
+      
       return {
         content: cachedResponse,
         model: options.model || 'default',
-        provider: provider.name,
+        provider: selectedProvider.name,
         tokens: { input: 0, output: 0 }, // Cached response, no tokens used
         finishReason: 'cached'
       };
     }
     
     try {
-      const response = await provider.chat(messages, options);
-      Logger.info(`✅ ${provider.name} responded with ${response.tokens?.output || 0} tokens`);
+      let response: AIResponse;
+      
+      // Step 4: Use router for actual request if available
+      if (packageIntegration.router.isAvailable()) {
+        const routerResponse = packageIntegration.router.routeRequest({
+          messages: sanitizedMessages,
+          provider: selectedProvider.name,
+          options
+        }, {
+          context: optimizedContext,
+          fallbackEnabled: true
+        });
+        
+        if (routerResponse) {
+          response = routerResponse;
+          Logger.info(`✅ Router handled request via ${selectedProvider.name}`);
+        } else {
+          // Fallback to direct provider call
+          response = await selectedProvider.chat(sanitizedMessages, options);
+          Logger.info(`✅ Direct call to ${selectedProvider.name} (router fallback)`);
+        }
+      } else {
+        // Direct provider call
+        response = await selectedProvider.chat(sanitizedMessages, options);
+        Logger.info(`✅ ${selectedProvider.name} responded with ${response.tokens?.output || 0} tokens`);
+      }
+      
+      // Step 5: Analytics integration - track usage and costs
+      if (packageIntegration.analytics.isAvailable()) {
+        packageIntegration.analytics.trackUsage('ai_request', {
+          provider: response.provider,
+          model: response.model,
+          inputTokens: response.tokens?.input || 0,
+          outputTokens: response.tokens?.output || 0,
+          context: context.type,
+          cached: false
+        });
+        
+        // Track cost optimization if applicable
+        const estimatedCost = this.calculateEstimatedCost(response);
+        if (estimatedCost > 0) {
+          const baseCost = estimatedCost * 1.2; // Assume 20% savings
+          packageIntegration.analytics.trackCostOptimization(
+            response.provider, 
+            baseCost - estimatedCost,
+            { model: response.model, context: context.type }
+          );
+        }
+      }
+      
+      // Step 6: Security integration - scan response for vulnerabilities
+      if (packageIntegration.security.isAvailable()) {
+        const vulnerabilities = packageIntegration.security.scanForVulnerabilities(response.content);
+        const secrets = packageIntegration.security.detectSecrets(response.content);
+        
+        if (vulnerabilities.length > 0 || secrets.length > 0) {
+          Logger.warn(`⚠️ Security scan found ${vulnerabilities.length} vulnerabilities, ${secrets.length} potential secrets`);
+          
+          // Create security audit trail
+          packageIntegration.security.createAuditTrail('security_scan', {
+            provider: response.provider,
+            vulnerabilities: vulnerabilities.length,
+            secrets: secrets.length,
+            responseLength: response.content.length
+          });
+        }
+      }
       
       // Cache the response if it's cacheable
       if (AIResponseCache.isCacheable(prompt, response.content)) {
         await aiCache.set(
           prompt, 
-          provider.name, 
+          selectedProvider.name, 
           response.model, 
           response.content,
           response.tokens || { input: 0, output: 0 },
@@ -1034,9 +1188,29 @@ export class AIHub {
       
       return response;
     } catch (error) {
-      Logger.error(`❌ Provider ${provider.name} failed, trying fallback...`, '');
-      return this.chatWithFallback(messages, context, options, provider.name);
+      Logger.error(`❌ Provider ${selectedProvider.name} failed, trying fallback...`, '');
+      
+      // Track failure analytics
+      if (packageIntegration.analytics.isAvailable()) {
+        packageIntegration.analytics.trackUsage('provider_failure', {
+          provider: selectedProvider.name,
+          context: context.type,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+      
+      return this.chatWithFallback(sanitizedMessages, optimizedContext, options, selectedProvider.name);
     }
+  }
+
+  /**
+   * Calculate estimated cost for analytics
+   */
+  private calculateEstimatedCost(response: AIResponse): number {
+    // Simple cost estimation - can be enhanced with actual provider pricing
+    const inputCost = (response.tokens?.input || 0) * 0.00001; // $0.01 per 1K tokens
+    const outputCost = (response.tokens?.output || 0) * 0.00003; // $0.03 per 1K tokens
+    return inputCost + outputCost;
   }
 
   /**
@@ -1439,7 +1613,7 @@ SECURITY SPECIALIZATION:
     cost: 'free' | 'paid' | 'mixed';
     available: boolean;
   }> {
-    const capabilities = unifiedAPI.getProviderCapabilities();
+    const capabilities = unifiedAPI.getAllProviders();
     const available = unifiedAPI.getAvailableProviders();
     
     return capabilities.map(provider => ({

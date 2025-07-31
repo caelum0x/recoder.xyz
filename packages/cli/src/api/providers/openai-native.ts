@@ -7,7 +7,7 @@ import {
 	OpenAiNativeModelId,
 	openAiNativeModels,
 	OPENAI_NATIVE_DEFAULT_TEMPERATURE,
-} from "@roo-code/types"
+} from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 
@@ -148,7 +148,16 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		const outputTokens = usage?.completion_tokens || 0
 		const cacheReadTokens = usage?.prompt_tokens_details?.cached_tokens || 0
 		const cacheWriteTokens = 0
-		const totalCost = calculateApiCostOpenAI(info, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
+		const costInfo = calculateApiCostOpenAI(
+			this.getModel().id,
+			{
+				inputTokens,
+				outputTokens,
+				totalTokens: inputTokens + outputTokens,
+				cacheReadTokens,
+				cacheWriteTokens
+			}
+		);
 		const nonCachedInputTokens = Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens)
 
 		yield {
@@ -157,7 +166,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 			outputTokens: outputTokens,
 			cacheWriteTokens: cacheWriteTokens,
 			cacheReadTokens: cacheReadTokens,
-			totalCost: totalCost,
+			totalCost: costInfo.totalCost,
 		}
 	}
 

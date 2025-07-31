@@ -1,4 +1,4 @@
-import { DEEP_SEEK_DEFAULT_TEMPERATURE, type ChutesModelId, chutesDefaultModelId, chutesModels } from "@roo-code/types"
+import { DEEP_SEEK_DEFAULT_TEMPERATURE, type ChutesModelId, chutesDefaultModelId, chutesModels } from "@recoder/shared"
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
@@ -53,21 +53,40 @@ export class ChutesHandler extends BaseOpenAiCompatibleProvider<ChutesModelId> {
 				messages: convertToR1Format([{ role: "user", content: systemPrompt }, ...messages]),
 			})
 
-			const matcher = new XmlMatcher(
-				"think",
-				(chunk) =>
-					({
-						type: chunk.matched ? "reasoning" : "text",
-						text: chunk.data,
-					}) as const,
-			)
+			const matcher = new XmlMatcher();
+			let buffer = '';
 
 			for await (const chunk of stream) {
 				const delta = chunk.choices[0]?.delta
 
 				if (delta?.content) {
-					for (const processedChunk of matcher.update(delta.content)) {
-						yield processedChunk
+					buffer += delta.content;
+					matcher.update(delta.content);
+					
+					// Simple processing - check if content contains thinking tags
+					if (buffer.includes('<think>') && buffer.includes('</think>')) {
+						const thinkingContent = XmlMatcher.extract(buffer, 'think');
+						if (thinkingContent) {
+							yield {
+								type: "reasoning",
+								text: thinkingContent,
+							} as const;
+						}
+						// Extract non-thinking content
+						const cleanContent = buffer.replace(/<think>.*?<\/think>/gs, '');
+						if (cleanContent.trim()) {
+							yield {
+								type: "text",
+								text: cleanContent,
+							} as const;
+						}
+						buffer = '';
+					} else {
+						// Regular text content
+						yield {
+							type: "text",
+							text: delta.content,
+						} as const;
 					}
 				}
 
@@ -81,8 +100,11 @@ export class ChutesHandler extends BaseOpenAiCompatibleProvider<ChutesModelId> {
 			}
 
 			// Process any remaining content
-			for (const processedChunk of matcher.final()) {
-				yield processedChunk
+			if (buffer.trim()) {
+				yield {
+					type: "text",
+					text: buffer,
+				} as const;
 			}
 		} else {
 			yield* super.createMessage(systemPrompt, messages)

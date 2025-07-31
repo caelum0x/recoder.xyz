@@ -27,6 +27,7 @@ export interface QualityMetrics {
   documentation: number;      // Documentation quality score (0-100)
   bestPractices: number;      // Adherence to best practices (0-100)
   overallScore: number;       // Weighted overall quality score (0-100)
+  [key: string]: number;      // Index signature for dynamic access
 }
 
 export interface QualityAssessmentRequest {
@@ -46,6 +47,7 @@ export interface QualityAssessmentRequest {
 export interface QualityAssessmentResult {
   requestId: string;
   metrics: QualityMetrics;
+  overallScore: number;       // Convenience accessor for metrics.overallScore
   details: {
     compilationErrors: CompilationError[];
     securityIssues: SecurityIssue[];
@@ -64,6 +66,7 @@ export interface QualityAssessmentResult {
     ranking: number;          // Current ranking (1 = best)
   };
   executionTime: number;      // Assessment time in ms
+  timestamp: Date;            // When the assessment was completed
   assessmentVersion: string;
 }
 
@@ -634,6 +637,8 @@ export class QualityAssessor extends EventEmitter {
     return {
       requestId: request.id,
       metrics,
+      overallScore: metrics.overallScore,
+      timestamp: new Date(),
       details: {
         compilationErrors: compilationResult.errors,
         securityIssues: securityResult.issues,

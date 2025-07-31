@@ -9,7 +9,7 @@
 import { Logger } from '@recoder/shared';
 import { EventEmitter } from 'events';
 import { QualityAssessmentResult } from './quality-assessor';
-
+ 
 export interface QualityTrend {
   id: string;
   modelName: string;

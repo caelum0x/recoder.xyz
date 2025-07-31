@@ -1,8 +1,8 @@
 // npx vitest run src/api/providers/__tests__/bedrock-custom-arn.spec.ts
 
 import { AwsBedrockHandler } from "../bedrock"
-import { ApiHandlerOptions } from "../../../shared/api"
-import { logger } from "../../../utils/logging"
+import { ApiHandlerOptions } from "@recoder/shared"
+import { Logger } from "../../../utils/logging"
 
 // Mock the logger
 vitest.mock("../../../utils/logging", () => ({
@@ -229,7 +229,7 @@ describe("Bedrock ARN Handling", () => {
 		})
 
 		it("should log region mismatch warning when ARN region differs from provided region", () => {
-			// Spy on logger.info which is called when there's a region mismatch
+			// Spy on Logger.info which is called when there's a region mismatch
 			const infoSpy = vitest.spyOn(logger, "info")
 
 			// Create handler with ARN region different from provided region

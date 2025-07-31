@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { GeminiCliHandler } from "../gemini-cli"
-import { geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
+import { geminiCliDefaultModelId, geminiCliModels } from "@recoder/shared"
 import * as fs from "fs/promises"
 import axios from "axios"
 

@@ -1,7 +1,41 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import * as vscode from "vscode"
 
-import { type ModelInfo, openAiModelInfoSaneDefaults } from "@roo-code/types"
+// Conditionally import vscode only when available (VS Code extension context)
+let vscode: any;
+try {
+	vscode = require("vscode");
+} catch {
+	// vscode not available in CLI mode, use stub with minimal interface
+	const LanguageModelError = class extends Error {
+		constructor(message: string, public code?: string) {
+			super(message);
+		}
+	};
+	
+	vscode = {
+		lm: {
+			selectChatModels: () => [],
+		},
+		LanguageModelChatMessageRole: {
+			User: 1,
+			Assistant: 2,
+		},
+		LanguageModelError,
+		LanguageModelErrorCode: {
+			Blocked: "blocked",
+			NoPermissions: "no-permissions",
+		},
+	};
+}
+
+// Type alias to avoid namespace issues
+type VSCodeLmChatModel = any;
+type VSCodeLmChatMessage = any;
+type VSCodeLmChatRequest = any;
+type VSCodeLmChatRequestOptions = any;
+type VSCodeLmChatResponse = any;
+
+import { type ModelInfo, openAiModelInfoSaneDefaults } from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
@@ -41,9 +75,9 @@ import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from ".
  */
 export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHandler {
 	protected options: ApiHandlerOptions
-	private client: vscode.LanguageModelChat | null
-	private disposable: vscode.Disposable | null
-	private currentRequestCancellation: vscode.CancellationTokenSource | null
+	private client: VSCodeLmChatModel | null
+	private disposable: any | null
+	private currentRequestCancellation: any | null
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -109,7 +143,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 * const selector = { vendor: "copilot", family: "gpt-4o" };
 	 * const chatClient = await createClient(selector);
 	 */
-	async createClient(selector: vscode.LanguageModelChatSelector): Promise<vscode.LanguageModelChat> {
+	async createClient(selector: any): Promise<VSCodeLmChatModel> {
 		try {
 			const models = await vscode.lm.selectChatModels(selector)
 
@@ -186,12 +220,18 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		// Convert Anthropic content blocks to a string for VSCode LM token counting
 		let textContent = ""
 
-		for (const block of content) {
-			if (block.type === "text") {
-				textContent += block.text || ""
-			} else if (block.type === "image") {
-				// VSCode LM doesn't support images directly, so we'll just use a placeholder
-				textContent += "[IMAGE]"
+		for (const item of content) {
+			if (typeof item === "string") {
+				textContent += item
+			} else if (Array.isArray(item)) {
+				for (const block of item) {
+					if (block.type === "text") {
+						textContent += block.text || ""
+					} else if (block.type === "image") {
+						// VSCode LM doesn't support images directly, so we'll just use a placeholder
+						textContent += "[IMAGE]"
+					}
+				}
 			}
 		}
 
@@ -201,7 +241,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	/**
 	 * Private implementation of token counting used internally by VsCodeLmHandler
 	 */
-	private async internalCountTokens(text: string | vscode.LanguageModelChatMessage): Promise<number> {
+	private async internalCountTokens(text: string | VSCodeLmChatMessage): Promise<number> {
 		// Check for required dependencies
 		if (!this.client) {
 			console.warn("Kilo Code <Language Model API>: No client available for token counting")
@@ -225,7 +265,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 			if (typeof text === "string") {
 				tokenCount = await this.client.countTokens(text, this.currentRequestCancellation.token)
-			} else if (text instanceof vscode.LanguageModelChatMessage) {
+			} else if (text && typeof text === 'object' && 'content' in text) {
 				// For chat messages, ensure we have content
 				if (!text.content || (Array.isArray(text.content) && text.content.length === 0)) {
 					console.debug("Kilo Code <Language Model API>: Empty chat message content")
@@ -251,7 +291,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			return tokenCount
 		} catch (error) {
 			// Handle specific error types
-			if (error instanceof vscode.CancellationError) {
+			if (error instanceof Error && error.name === 'CancellationError') {
 				console.debug("Kilo Code <Language Model API>: Token counting cancelled by user")
 				return 0
 			}
@@ -270,7 +310,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 	private async calculateTotalInputTokens(
 		systemPrompt: string,
-		vsCodeLmMessages: vscode.LanguageModelChatMessage[],
+		vsCodeLmMessages: VSCodeLmChatMessage[],
 	): Promise<number> {
 		const systemTokens: number = await this.internalCountTokens(systemPrompt)
 
@@ -287,7 +327,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		}
 	}
 
-	private async getClient(): Promise<vscode.LanguageModelChat> {
+	private async getClient(): Promise<VSCodeLmChatModel> {
 		if (!this.client) {
 			console.debug("Kilo Code <Language Model API>: Getting client with options:", {
 				vsCodeLmModelSelector: this.options.vsCodeLmModelSelector,
@@ -341,7 +381,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	): ApiStream {
 		// Ensure clean state before starting a new request
 		this.ensureCleanState()
-		const client: vscode.LanguageModelChat = await this.getClient()
+		const client: VSCodeLmChatModel = await this.getClient()
 
 		// Process messages
 		const cleanedMessages = messages.map((msg) => ({
@@ -350,13 +390,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		}))
 
 		// Convert Anthropic messages to VS Code LM messages
-		const vsCodeLmMessages: vscode.LanguageModelChatMessage[] = [
-			vscode.LanguageModelChatMessage.Assistant(systemPrompt),
+		const vsCodeLmMessages: VSCodeLmChatMessage[] = [
+			{ role: vscode.LanguageModelChatMessageRole.Assistant, content: systemPrompt },
 			...convertToVsCodeLmMessages(cleanedMessages),
 		]
 
 		// Initialize cancellation token for the request
-		this.currentRequestCancellation = new vscode.CancellationTokenSource()
+		this.currentRequestCancellation = vscode.CancellationTokenSource ? new vscode.CancellationTokenSource() : null
 
 		// Calculate input tokens before starting the stream
 		const totalInputTokens: number = await this.calculateTotalInputTokens(systemPrompt, vsCodeLmMessages)
@@ -366,14 +406,14 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		try {
 			// Create the response stream with minimal required options
-			const requestOptions: vscode.LanguageModelChatRequestOptions = {
+			const requestOptions: VSCodeLmChatRequestOptions = {
 				justification: `Kilo Code would like to use '${client.name}' from '${client.vendor}', Click 'Allow' to proceed.`,
 			}
 
 			// Note: Tool support is currently provided by the VSCode Language Model API directly
 			// Extensions can register tools using vscode.lm.registerTool()
 
-			const response: vscode.LanguageModelChatResponse = await client.sendRequest(
+			const response: VSCodeLmChatResponse = await client.sendRequest(
 				vsCodeLmMessages,
 				requestOptions,
 				this.currentRequestCancellation.token,
@@ -381,7 +421,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 			// Consume the stream and handle both text and tool call chunks
 			for await (const chunk of response.stream) {
-				if (chunk instanceof vscode.LanguageModelTextPart) {
+				if (chunk && chunk.constructor && chunk.constructor.name === 'LanguageModelTextPart') {
 					// Validate text part value
 					if (typeof chunk.value !== "string") {
 						console.warn("Kilo Code <Language Model API>: Invalid text part value received:", chunk.value)
@@ -393,7 +433,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						type: "text",
 						text: chunk.value,
 					}
-				} else if (chunk instanceof vscode.LanguageModelToolCallPart) {
+				} else if (chunk && chunk.constructor && chunk.constructor.name === 'LanguageModelToolCallPart') {
 					try {
 						// Validate tool call parameters
 						if (!chunk.name || typeof chunk.name !== "string") {
@@ -456,7 +496,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		} catch (error: unknown) {
 			this.ensureCleanState()
 
-			if (error instanceof vscode.CancellationError) {
+			if (error instanceof Error && error.name === 'CancellationError') {
 				throw new Error("Kilo Code <Language Model API>: Request cancelled by user")
 			}
 
@@ -525,9 +565,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		}
 
 		// Fallback when no client is available
-		const fallbackId = this.options.vsCodeLmModelSelector
-			? stringifyVsCodeLmModelSelector(this.options.vsCodeLmModelSelector)
-			: "vscode-lm"
+		const fallbackId = this.options.vsCodeLmModelSelector || "vscode-lm"
 
 		console.debug("Kilo Code <Language Model API>: No client available, using fallback model info")
 
@@ -544,13 +582,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		try {
 			const client = await this.getClient()
 			const response = await client.sendRequest(
-				[vscode.LanguageModelChatMessage.User(prompt)],
+				[{ role: vscode.LanguageModelChatMessageRole.User, content: prompt }],
 				{},
-				new vscode.CancellationTokenSource().token,
+				undefined, // cancellation token
 			)
 			let result = ""
 			for await (const chunk of response.stream) {
-				if (chunk instanceof vscode.LanguageModelTextPart) {
+				if (chunk && chunk.constructor && chunk.constructor.name === 'LanguageModelTextPart') {
 					result += chunk.value
 				}
 			}

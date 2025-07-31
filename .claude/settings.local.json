@@ -43,7 +43,12 @@
       "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(xcopy:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git clone:*)",
+      "Bash(/dev/null)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(mv:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

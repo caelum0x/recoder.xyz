@@ -2,7 +2,7 @@ import axios from "axios"
 
 import type { ModelInfo } from "@roo-code/types"
 
-import { parseApiPrice } from "../../../shared/cost"
+import { parseApiPrice } from "@recoder/shared"
 
 export async function getRequestyModels(apiKey?: string): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}

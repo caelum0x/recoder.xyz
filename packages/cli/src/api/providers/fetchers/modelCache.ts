@@ -4,10 +4,7 @@ import fs from "fs/promises"
 import NodeCache from "node-cache"
 import { safeWriteJson } from "../../../utils/safeWriteJson"
 
-import { ContextProxy } from "../../../core/config/ContextProxy"
-import { storage } from "../../../utils/storage"
-import { ModelRecord, cerebrasModels } from "@recoder/shared"
-import { pathExists } from "../../../utils/fs"
+import { ModelRecord, cerebrasModels, ContextProxy, getCacheDirectoryPath, fileExistsAtPath, getKiloBaseUriFromToken } from "@recoder/shared"
 
 import { getOpenRouterModels } from "./openrouter"
 import { getRequestyModels } from "./requesty"
@@ -81,6 +78,9 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				break
 			case "litellm":
 				// Type safety ensures apiKey and baseUrl are always provided for litellm
+				if (!options.apiKey || !options.baseUrl) {
+					throw new Error("LiteLLM requires both apiKey and baseUrl to be provided as strings.")
+				}
 				models = await getLiteLLMModels(options.apiKey, options.baseUrl)
 				break
 			// kilocode_change start
@@ -100,10 +100,33 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 			case "lmstudio":
 				models = await getLMStudioModels(options.baseUrl)
 				break
+			case "anthropic":
+			case "openai":
+			case "groq":
+			case "gemini":
+			case "huggingface":
+			case "together":
+			case "mistral":
+			case "deepseek":
+			case "xai":
+			case "bedrock":
+			case "vertex":
+			case "claude-code":
+			case "fireworks":
+			case "chutes":
+			case "human-relay":
+			case "fake-ai":
+			case "vscode-lm":
+				// These providers don't have dynamic model fetching, return empty models
+				models = {}
+				break
 			default: {
 				// Ensures router is exhaustively checked if RouterName is a strict union
-				const exhaustiveCheck: never = provider
-				throw new Error(`Unknown provider: ${exhaustiveCheck}`)
+				if (provider === undefined) {
+					throw new Error("Provider is undefined");
+				}
+				const exhaustiveCheck: never = provider as never;
+				throw new Error(`Unknown provider: ${exhaustiveCheck}`);
 			}
 		}
 

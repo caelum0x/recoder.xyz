@@ -116,11 +116,11 @@ export class RouterBackendClient {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({ message: undefined })) as { message?: string };
         throw new Error(errorData.message || `HTTP ${response.status}: Authentication failed`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { user: UserSession };
       this.currentSession = data.user;
       await this.saveSession();
       
@@ -147,11 +147,11 @@ export class RouterBackendClient {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({ message: undefined })) as { message?: string };
         throw new Error(errorData.message || `HTTP ${response.status}: Registration failed`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { user: UserSession };
       this.currentSession = data.user;
       await this.saveSession();
       
@@ -194,7 +194,7 @@ export class RouterBackendClient {
         return true;
       }
 
-      const quota = await response.json();
+      const quota = await response.json() as { totalRequests: number; usedRequests: number; resetDate: string };
       this.currentSession.quotas = quota;
       await this.saveSession();
 
@@ -280,7 +280,7 @@ export class RouterBackendClient {
         return this.currentSession;
       }
 
-      const data = await response.json();
+      const data = await response.json() as Partial<UserSession>;
       this.currentSession = { ...this.currentSession, ...data };
       await this.saveSession();
       

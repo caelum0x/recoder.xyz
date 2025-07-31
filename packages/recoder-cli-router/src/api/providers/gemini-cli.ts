@@ -4,12 +4,12 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import axios from "axios"
-import dotenvx from "@dotenvx/dotenvx"
+import * as dotenvx from "@dotenvx/dotenvx"
 
-import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
+import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
-import { t } from "../../i18n"
+import type { ApiHandlerOptions, GeminiCliModelId } from "@recoder/shared"
+import { geminiCliDefaultModelId, geminiCliModels, t } from "@recoder/shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { ApiStream } from "../transform/stream"
@@ -17,6 +17,7 @@ import { getModelParams } from "../transform/model-params"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { BaseProvider } from "./base-provider"
+import { ProviderLogger } from "../../utils/logger"
 
 // OAuth2 Configuration (from Cline implementation)
 const OAUTH_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
@@ -39,6 +40,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 	private authClient: OAuth2Client
 	private projectId: string | null = null
 	private credentials: OAuthCredentials | null = null
+	private logger = new ProviderLogger('GeminiCLI')
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -63,7 +65,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				})
 			}
 		} catch (error) {
-			throw new Error(t("common:errors.geminiCli.oauthLoadFailed", { error }))
+			throw new Error(t("common:errors.geminiCli.oauthLoadFailed"))
 		}
 	}
 
@@ -89,7 +91,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 					await fs.writeFile(credPath, JSON.stringify(this.credentials, null, 2))
 				}
 			} catch (error) {
-				throw new Error(t("common:errors.geminiCli.tokenRefreshFailed", { error }))
+				throw new Error(t("common:errors.geminiCli.tokenRefreshFailed"))
 			}
 		}
 	}
@@ -132,7 +134,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		// If we already have a project ID, use it
 		if (this.options.geminiCliProjectId) {
 			this.projectId = this.options.geminiCliProjectId
-			return this.projectId
+			return this.projectId!
 		}
 
 		// If we've already discovered it, return it
@@ -355,13 +357,9 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				throw new Error(t("common:errors.geminiCli.rateLimitExceeded"))
 			}
 			if (error.response?.status === 400) {
-				throw new Error(
-					t("common:errors.geminiCli.badRequest", {
-						details: JSON.stringify(error.response?.data) || error.message,
-					}),
-				)
+				throw new Error(t("common:errors.geminiCli.badRequest"))
 			}
-			throw new Error(t("common:errors.geminiCli.apiError", { error: error.message }))
+			throw new Error(t("common:errors.geminiCli.apiError"))
 		}
 	}
 
@@ -371,7 +369,14 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		const baseModelId = modelId?.endsWith(":thinking") ? modelId.replace(":thinking", "") : modelId
 		let id =
 			baseModelId && baseModelId in geminiCliModels ? (baseModelId as GeminiCliModelId) : geminiCliDefaultModelId
-		const info: ModelInfo = geminiCliModels[id]
+		// Type-safe model info conversion
+		const rawInfo = geminiCliModels[id]
+		const info: ModelInfo = {
+			...rawInfo,
+			supportedParameters: rawInfo.supportedParameters?.filter(param => 
+				['max_tokens', 'temperature', 'reasoning', 'include_reasoning'].includes(param)
+			) as any,
+		}
 		const params = getModelParams({ format: "gemini", modelId: id, model: info, settings: this.options })
 
 		// Return the cleaned model ID
@@ -421,7 +426,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 			return ""
 		} catch (error) {
 			if (error instanceof Error) {
-				throw new Error(t("common:errors.geminiCli.completionError", { error: error.message }))
+				throw new Error(t("common:errors.geminiCli.completionError"))
 			}
 			throw error
 		}

@@ -18,15 +18,22 @@ export function estimateTokenCount(content: Array<Anthropic.Messages.MessagePara
 
 	let totalTokens = 0
 
-	for (const block of content) {
-		if (typeof block === 'string') {
+	for (const item of content) {
+		if (typeof item === 'string') {
 			// Simple estimation: ~4 characters per token
-			totalTokens += Math.ceil(block.length / 4)
-		} else if (block.type === 'text') {
-			totalTokens += Math.ceil(block.text.length / 4)
-		} else if (block.type === 'image') {
-			// Fixed cost for images (rough estimate)
-			totalTokens += 1024
+			totalTokens += Math.ceil(item.length / 4)
+		} else if (Array.isArray(item)) {
+			// Handle array of content blocks
+			for (const block of item) {
+				if (typeof block === 'object' && block !== null) {
+					if ('type' in block && 'text' in block && block.type === 'text') {
+						totalTokens += Math.ceil((block.text as string).length / 4)
+					} else if ('type' in block && block.type === 'image') {
+						// Fixed cost for images (rough estimate)
+						totalTokens += 1024
+					}
+				}
+			}
 		}
 	}
 

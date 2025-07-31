@@ -26,6 +26,7 @@ export interface ErrorEvent {
     taskType?: string;
     httpStatus?: number;
     responseTime?: number;
+    loadLevel?: 'low' | 'medium' | 'high';
   };
   resolved: boolean;
   resolutionTime?: Date;
@@ -98,6 +99,7 @@ export interface ErrorMetrics {
   timeframe: string;
   totalErrors: number;
   errorRate: number;          // Percentage of requests that failed
+  rate: number;              // Alias for errorRate for backward compatibility
   errorsByType: Record<ErrorType, number>;
   mttr: number;              // Mean time to recovery (minutes)
   topErrors: Array<{
@@ -425,6 +427,7 @@ export class ErrorDetector extends EventEmitter {
       timeframe,
       totalErrors,
       errorRate,
+      rate: errorRate,  // Alias for backward compatibility
       errorsByType,
       mttr,
       topErrors,

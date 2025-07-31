@@ -7,7 +7,7 @@
 import { EventEmitter } from 'events';
 
 export interface MetricData {
-  name: string;
+  name: string; 
   value: number;
   unit: string;
   timestamp: number;
@@ -259,10 +259,13 @@ export class ProductionMonitoring extends EventEmitter {
         const startTime = Date.now();
         
         // Check web platform health endpoint
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const response = await fetch('https://web.recoder.xyz/api/health', {
           method: 'GET',
-          timeout: 5000
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
         
         const responseTime = Date.now() - startTime;
         

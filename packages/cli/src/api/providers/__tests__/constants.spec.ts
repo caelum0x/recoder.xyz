@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from "vitest"
 import { DEFAULT_HEADERS } from "../constants"
-import { Package } from "../../../shared/package"
+import { Package } from "@recoder/shared"
 
 describe("DEFAULT_HEADERS", () => {
 	it("should contain all required headers", () => {
@@ -53,7 +53,7 @@ describe("DEFAULT_HEADERS", () => {
 		})
 	})
 
-	it("should have exactly 3 headers", () => {
+	it("should have exactly 4 headers", () => {
 		const headerKeys = Object.keys(DEFAULT_HEADERS)
 		expect(headerKeys).toHaveLength(4)
 		expect(headerKeys).toEqual(["HTTP-Referer", "X-Title", "X-KiloCode-Version", "User-Agent"])

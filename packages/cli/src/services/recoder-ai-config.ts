@@ -338,11 +338,11 @@ export class RecoderAIConfigManager {
 
     // Log findings
     if (warnings.length > 0) {
-      Logger.warn('Configuration warnings:', warnings.join('; '));
+      Logger.warn('Configuration warnings: ' + warnings.join('; '));
     }
     
     if (recommendations.length > 0) {
-      Logger.info('Configuration recommendations:', recommendations.join('; '));
+      Logger.info('Configuration recommendations: ' + recommendations.join('; '));
     }
 
     Logger.info(`✅ Recoder AI configured: ${availableKeys.length} providers, $${this.settings.maxDailyCost} daily budget, quality threshold ${this.settings.qualityThreshold}`);
@@ -360,7 +360,7 @@ export class RecoderAIConfigManager {
    */
   updateSettings(updates: Partial<RecoderAISettings>): void {
     this.settings = { ...this.settings, ...updates };
-    Logger.info('Recoder AI settings updated:', Object.keys(updates).join(', '));
+    Logger.info('Recoder AI settings updated: ' + Object.keys(updates).join(', '));
   }
 
   /**

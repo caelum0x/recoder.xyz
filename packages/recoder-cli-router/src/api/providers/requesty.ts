@@ -3,8 +3,8 @@ import OpenAI from "openai"
 
 import { type ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@roo-code/types"
 
-import type { ApiHandlerOptions, ModelRecord } from "../../shared/api"
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
+import { calculateApiCostOpenAI } from "@recoder/shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
@@ -62,14 +62,22 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 		const id = this.options.requestyModelId ?? requestyDefaultModelId
 		const info = this.models[id] ?? requestyDefaultModelInfo
 
+		// Type-safe model info conversion
+		const modelInfo: ModelInfo = {
+			...info,
+			supportedParameters: info.supportedParameters?.filter(param => 
+				['max_tokens', 'temperature', 'reasoning', 'include_reasoning'].includes(param)
+			) as any,
+		}
+
 		const params = getModelParams({
 			format: "anthropic",
 			modelId: id,
-			model: info,
+			model: modelInfo,
 			settings: this.options,
 		})
 
-		return { id, info, ...params }
+		return { id, info: modelInfo, ...params }
 	}
 
 	protected processUsageMetrics(usage: any, modelInfo?: ModelInfo): ApiStreamUsageChunk {
@@ -79,7 +87,16 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 		const cacheWriteTokens = requestyUsage?.prompt_tokens_details?.caching_tokens || 0
 		const cacheReadTokens = requestyUsage?.prompt_tokens_details?.cached_tokens || 0
 		const totalCost = modelInfo
-			? calculateApiCostOpenAI(modelInfo, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
+			? calculateApiCostOpenAI(
+				modelInfo.description || "unknown",
+				{
+					inputTokens,
+					outputTokens,
+					totalTokens: inputTokens + outputTokens,
+					cacheWriteTokens,
+					cacheReadTokens,
+				}
+			).totalCost
 			: 0
 
 		return {

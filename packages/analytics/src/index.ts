@@ -29,6 +29,7 @@ export {
   createWebAnalytics,
   createExtensionAnalytics
 } from './tracking/usage-analytics';
+import { UsageAnalytics } from './tracking/usage-analytics';
 export type {
   AnalyticsEvent,
   UsageMetrics,
@@ -50,13 +51,13 @@ export class RecoderAnalytics {
       
       switch (platform) {
         case 'cli':
-          analytics = createCLIAnalytics();
+          analytics = UsageAnalytics.getInstance('cli');
           break;
         case 'web':
-          analytics = createWebAnalytics();
+          analytics = UsageAnalytics.getInstance('web');
           break;
         case 'extension':
-          analytics = createExtensionAnalytics();
+          analytics = UsageAnalytics.getInstance('extension');
           break;
         default:
           throw new Error(`Unsupported platform: ${platform}`);
@@ -75,6 +76,7 @@ export class RecoderAnalytics {
     const key = 'dashboard';
     
     if (!this.instances.has(key)) {
+      const { monitoringDashboard } = require('./dashboard/monitoring-dashboard');
       this.instances.set(key, monitoringDashboard);
     }
     
@@ -88,6 +90,7 @@ export class RecoderAnalytics {
     const key = 'monitoring';
     
     if (!this.instances.has(key)) {
+      const { productionMonitoring } = require('./monitoring/production-monitoring');
       this.instances.set(key, productionMonitoring);
     }
     
@@ -134,6 +137,8 @@ export class RecoderAnalytics {
   static shutdown() {
     // Stop monitoring
     try {
+      const { monitoringDashboard } = require('./dashboard/monitoring-dashboard');
+      const { productionMonitoring } = require('./monitoring/production-monitoring');
       monitoringDashboard.stop();
       productionMonitoring.stopMonitoring();
     } catch (error) {
@@ -145,6 +150,5 @@ export class RecoderAnalytics {
   }
 }
 
-// Convenience exports
-export { RecoderAnalytics };
+// Default export
 export default RecoderAnalytics;

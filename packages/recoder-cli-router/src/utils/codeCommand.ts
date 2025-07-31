@@ -9,7 +9,7 @@ import { readConfigFile } from ".";
 export async function executeCodeCommand(args: string[] = []) {
   // Set environment variables
   const config = await readConfigFile();
-  const env = {
+  const env: Record<string, string> = {
     ...process.env,
     ANTHROPIC_AUTH_TOKEN: "test",
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${config.PORT || 3456}`,

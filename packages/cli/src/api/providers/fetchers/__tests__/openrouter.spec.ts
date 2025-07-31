@@ -9,7 +9,7 @@ import {
 	OPEN_ROUTER_COMPUTER_USE_MODELS,
 	OPEN_ROUTER_REASONING_BUDGET_MODELS,
 	OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS,
-} from "@roo-code/types"
+} from "@recoder/shared"
 
 import { getOpenRouterModelEndpoints, getOpenRouterModels } from "../openrouter"
 
@@ -57,7 +57,7 @@ describe("OpenRouter API", () => {
 
 			expect(
 				Object.entries(models)
-					.filter(([_, model]) => model.supportsReasoningEffort)
+					.filter(([_, model]) => model.supportsReasoningBudget)
 					.map(([id, _]) => id)
 					.sort(),
 			).toEqual([
@@ -160,7 +160,7 @@ describe("OpenRouter API", () => {
 				description: expect.any(String),
 				supportsComputerUse: true,
 				supportsReasoningBudget: false,
-				supportsReasoningEffort: false,
+				supportsReasoningBudget: false,
 				supportedParameters: ["max_tokens", "temperature", "reasoning", "include_reasoning"],
 			})
 
@@ -177,7 +177,7 @@ describe("OpenRouter API", () => {
 				supportsComputerUse: true,
 				supportsReasoningBudget: true,
 				requiredReasoningBudget: true,
-				supportsReasoningEffort: true,
+				supportsReasoningBudget: true,
 				supportedParameters: ["max_tokens", "temperature", "reasoning", "include_reasoning"],
 			})
 
@@ -229,7 +229,7 @@ describe("OpenRouter API", () => {
 					cacheWritesPrice: 1.625,
 					cacheReadsPrice: 0.31,
 					description: undefined,
-					supportsReasoningEffort: undefined,
+					supportsReasoningBudget: undefined,
 					supportedParameters: undefined,
 				},
 				"Google AI Studio": {
@@ -243,7 +243,7 @@ describe("OpenRouter API", () => {
 					cacheWritesPrice: 1.625,
 					cacheReadsPrice: 0.31,
 					description: undefined,
-					supportsReasoningEffort: undefined,
+					supportsReasoningBudget: undefined,
 					supportedParameters: undefined,
 				},
 			})

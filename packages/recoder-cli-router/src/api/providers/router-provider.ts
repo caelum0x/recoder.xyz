@@ -2,7 +2,7 @@ import OpenAI from "openai"
 
 import type { ModelInfo } from "@roo-code/types"
 
-import { ApiHandlerOptions, RouterName, ModelRecord } from "../../shared/api"
+import { ApiHandlerOptions, RouterName, ModelRecord } from "@recoder/shared"
 
 import { BaseProvider } from "./base-provider"
 import { getModels } from "./fetchers/modelCache"
@@ -63,9 +63,23 @@ export abstract class RouterProvider extends BaseProvider {
 	override getModel(): { id: string; info: ModelInfo } {
 		const id = this.modelId ?? this.defaultModelId
 
-		return this.models[id]
-			? { id, info: this.models[id] }
-			: { id: this.defaultModelId, info: this.defaultModelInfo }
+		if (this.models[id]) {
+			const modelInfo: ModelInfo = {
+				...this.models[id],
+				supportedParameters: this.models[id].supportedParameters?.filter(param => 
+					['max_tokens', 'temperature', 'reasoning', 'include_reasoning'].includes(param)
+				) as any,
+			}
+			return { id, info: modelInfo }
+		} else {
+			const defaultInfo: ModelInfo = {
+				...this.defaultModelInfo,
+				supportedParameters: this.defaultModelInfo.supportedParameters?.filter(param => 
+					['max_tokens', 'temperature', 'reasoning', 'include_reasoning'].includes(param)
+				) as any,
+			}
+			return { id: this.defaultModelId, info: defaultInfo }
+		}
 	}
 
 	protected supportsTemperature(modelId: string): boolean {

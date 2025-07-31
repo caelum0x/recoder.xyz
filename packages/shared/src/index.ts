@@ -15,6 +15,16 @@ export * from './cerebras';
 export * from './reasoning';
 export * from './package';
 export * from './fireworks';
+export * from './bedrock-types';
+export * from './anthropic-types';  
+export * from './other-provider-types';
+export * from './file-utils';
+
+// Re-export specific items from @roo-code/types to avoid conflicts
+export type {
+  ModelInfo as RooModelInfo,
+  ProviderSettings as RooProviderSettings
+} from '@roo-code/types';
 
 // Constants with type aliases to avoid conflicts - export only what exists
 export {
