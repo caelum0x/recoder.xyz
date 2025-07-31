@@ -1,11 +1,11 @@
 // npx vitest run api/providers/__tests__/openai.spec.ts
 
 import { OpenAiHandler } from "../openai"
-import { ApiHandlerOptions } from "../@recoder/shared"
+import { ApiHandlerOptions } from "@recoder/shared"
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
-import { openAiModelInfoSaneDefaults } from "@roo-code/types"
-import { Package } from "../../../shared/package"
+import { openAiModelInfoSaneDefaults } from "@recoder/shared"
+import { Package } from "@recoder/shared"
 
 const mockCreate = vitest.fn()
 
@@ -169,7 +169,7 @@ describe("OpenAiHandler", () => {
 				openAiCustomModelInfo: {
 					contextWindow: 128_000,
 					supportsPromptCache: false,
-					supportsReasoningEffort: true,
+					supportsReasoningBudget: true,
 					reasoningEffort: "high",
 				},
 			}

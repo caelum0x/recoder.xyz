@@ -1,5 +1,42 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import * as vscode from "vscode"
+
+// Conditionally import vscode only when available (VS Code extension context)
+let vscode: any;
+try {
+	vscode = require("vscode");
+} catch {
+	// vscode not available in CLI mode, use comprehensive stub with all required classes
+	const LanguageModelTextPart = class {
+		constructor(public value: string) {}
+	};
+	
+	const LanguageModelToolResultPart = class {
+		constructor(public callId: string, public content: any[]) {}
+	};
+	
+	const LanguageModelToolCallPart = class {
+		constructor(public callId: string, public name: string, public input: any) {}
+	};
+	
+	vscode = {
+		LanguageModelTextPart,
+		LanguageModelToolResultPart,
+		LanguageModelToolCallPart,
+		LanguageModelChatMessage: {
+			User: (content: any) => ({ role: 1, content }),
+			Assistant: (content: any) => ({ role: 2, content }),
+		},
+		LanguageModelChatMessageRole: {
+			User: 1,
+			Assistant: 2,
+		},
+	};
+}
+
+// Type aliases to avoid namespace issues
+type VSCodeLmChatMessage = any;
+type VSCodeLmTextPart = any;
+type VSCodeLmMessageRole = any;
 
 /**
  * Safely converts a value into a plain object.
@@ -30,8 +67,8 @@ function asObjectSafe(value: any): object {
 
 export function convertToVsCodeLmMessages(
 	anthropicMessages: Anthropic.Messages.MessageParam[],
-): vscode.LanguageModelChatMessage[] {
-	const vsCodeLmMessages: vscode.LanguageModelChatMessage[] = []
+): VSCodeLmChatMessage[] {
+	const vsCodeLmMessages: VSCodeLmChatMessage[] = []
 
 	for (const anthropicMessage of anthropicMessages) {
 		// Handle simple string messages
@@ -67,7 +104,7 @@ export function convertToVsCodeLmMessages(
 					// Convert tool messages to ToolResultParts
 					...toolMessages.map((toolMessage) => {
 						// Process tool result content into TextParts
-						const toolContentParts: vscode.LanguageModelTextPart[] =
+						const toolContentParts: VSCodeLmTextPart[] =
 							typeof toolMessage.content === "string"
 								? [new vscode.LanguageModelTextPart(toolMessage.content)]
 								: (toolMessage.content?.map((part) => {
@@ -149,11 +186,11 @@ export function convertToVsCodeLmMessages(
 	return vsCodeLmMessages
 }
 
-export function convertToAnthropicRole(vsCodeLmMessageRole: vscode.LanguageModelChatMessageRole): string | null {
+export function convertToAnthropicRole(vsCodeLmMessageRole: VSCodeLmMessageRole): string | null {
 	switch (vsCodeLmMessageRole) {
-		case vscode.LanguageModelChatMessageRole.Assistant:
+		case 2: // Assistant role
 			return "assistant"
-		case vscode.LanguageModelChatMessageRole.User:
+		case 1: // User role
 			return "user"
 		default:
 			return null

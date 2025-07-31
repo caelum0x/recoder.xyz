@@ -2,6 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import {
+	type ModelInfo,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
 	OPENROUTER_DEFAULT_PROVIDER_NAME,
@@ -9,7 +10,7 @@ import {
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions, ModelRecord } from "../../shared/api"
+import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStreamChunk } from "../transform/stream"
@@ -218,15 +219,23 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 
 		const isDeepSeekR1 = id.startsWith("deepseek/deepseek-r1") || id === "perplexity/sonar-reasoning"
 
+		// Type-safe model info conversion
+		const modelInfo: ModelInfo = {
+			...info,
+			supportedParameters: info.supportedParameters?.filter(param => 
+				['max_tokens', 'temperature', 'reasoning', 'include_reasoning'].includes(param)
+			) as any,
+		}
+
 		const params = getModelParams({
 			format: "openrouter",
 			modelId: id,
-			model: info,
+			model: modelInfo,
 			settings: this.options,
 			defaultTemperature: isDeepSeekR1 ? DEEP_SEEK_DEFAULT_TEMPERATURE : 0,
 		})
 
-		return { id, info, topP: isDeepSeekR1 ? 0.95 : undefined, ...params }
+		return { id, info: modelInfo, topP: isDeepSeekR1 ? 0.95 : undefined, ...params }
 	}
 
 	async completePrompt(prompt: string) {

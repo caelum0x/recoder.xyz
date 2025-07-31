@@ -58,7 +58,6 @@ export interface ModelInfo {
   cacheWritesPrice?: number;
   cacheReadsPrice?: number;
   description?: string;
-  supportsReasoningEffort?: boolean;
   supportedParameters?: string[];
   preferredIndex?: number;
   supportsComputerUse?: boolean;

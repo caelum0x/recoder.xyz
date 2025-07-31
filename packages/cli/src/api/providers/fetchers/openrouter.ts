@@ -8,10 +8,10 @@ import {
 	OPEN_ROUTER_REASONING_BUDGET_MODELS,
 	OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS,
 	anthropicModels,
-} from "@roo-code/types"
+} from "@recoder/shared"
 
-import type { ApiHandlerOptions } from "../@recoder/shared"
-import { parseApiPrice } from "../@recoder/shared"
+import type { ApiHandlerOptions } from "@recoder/shared"
+import { parseApiPrice } from "@recoder/shared"
 
 /**
  * OpenRouterBaseModel
@@ -206,22 +206,22 @@ export const parseOpenRouterModel = ({
 		cacheWritesPrice,
 		cacheReadsPrice,
 		description: model.description,
-		supportsReasoningEffort: supportedParameters ? supportedParameters.includes("reasoning") : undefined,
+		supportsReasoningBudget: supportedParameters ? supportedParameters.includes("reasoning") : undefined,
 		supportedParameters: supportedParameters ? supportedParameters.filter(isModelParameter) : undefined,
 		preferredIndex: model.preferredIndex, // kilocode_change
 	}
 
 	// The OpenRouter model definition doesn't give us any hints about
 	// computer use, so we need to set that manually.
-	if (OPEN_ROUTER_COMPUTER_USE_MODELS.has(id)) {
+	if (OPEN_ROUTER_COMPUTER_USE_MODELS.includes(id)) {
 		modelInfo.supportsComputerUse = true
 	}
 
-	if (OPEN_ROUTER_REASONING_BUDGET_MODELS.has(id)) {
+	if (OPEN_ROUTER_REASONING_BUDGET_MODELS.includes(id)) {
 		modelInfo.supportsReasoningBudget = true
 	}
 
-	if (OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS.has(id)) {
+	if (OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS.includes(id)) {
 		modelInfo.requiredReasoningBudget = true
 	}
 
@@ -232,7 +232,7 @@ export const parseOpenRouterModel = ({
 	if (id === "anthropic/claude-3.7-sonnet") {
 		modelInfo.maxTokens = anthropicModels["claude-3-7-sonnet-20250219"].maxTokens
 		modelInfo.supportsReasoningBudget = false
-		modelInfo.supportsReasoningEffort = false
+		modelInfo.supportsReasoningBudget = false
 	}
 
 	if (id === "anthropic/claude-3.7-sonnet:thinking") {

@@ -32,6 +32,7 @@ import { unifiedAPI } from './services/unified-api-adapter';
 import { createOllamaCommand } from './commands/ollama';
 import AICommandsRegistry from './commands/ai';
 import { createAuthCommand } from './commands/auth';
+import { createIntegrationStatusCommand } from './commands/integration-status';
 
 // Production-ready command setup with unified configuration
 function setupProductionCommands(program: Command): void {
@@ -603,6 +604,9 @@ Make this a production-ready plan that can actually be executed.`;
 
   // Add Ollama management command (legacy)
   program.addCommand(createOllamaCommand());
+
+  // Add integration status command  
+  program.addCommand(createIntegrationStatusCommand());
   
   // Add unified AI commands with enhanced capabilities
   AICommandsRegistry.register(program);
@@ -610,8 +614,7 @@ Make this a production-ready plan that can actually be executed.`;
 
 async function main() {
   try {
-    // Initialize unified API system
-    await unifiedAPI.initialize();
+    // Initialize unified API system (happens in constructor)
     
     // Display Recoder banner
     console.log(

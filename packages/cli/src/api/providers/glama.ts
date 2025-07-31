@@ -2,9 +2,8 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import axios from "axios"
 import OpenAI from "openai"
 
-import { glamaDefaultModelId, glamaDefaultModelInfo, GLAMA_DEFAULT_TEMPERATURE } from "@roo-code/types"
+import { glamaDefaultModelId, glamaDefaultModelInfo, GLAMA_DEFAULT_TEMPERATURE } from "@recoder/shared"
 
-import { Package } from "../../shared/package"
 import { ApiHandlerOptions } from "@recoder/shared"
 
 import { ApiStream } from "../transform/stream"
@@ -13,6 +12,19 @@ import { addCacheBreakpoints } from "../transform/caching/anthropic"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { RouterProvider } from "./router-provider"
+
+// Handle Package import with fallback for dev mode
+let Package: { publisher: string; name: string };
+try {
+	Package = require("@recoder/shared").Package;
+} catch {
+	Package = { publisher: "recoder", name: "recoder-cli" };
+}
+
+// Ensure Package has required properties
+if (!Package || !Package.publisher || !Package.name) {
+	Package = { publisher: "recoder", name: "recoder-cli" };
+}
 
 const DEFAULT_HEADERS = {
 	"X-Glama-Metadata": JSON.stringify({

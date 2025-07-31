@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import { type ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@roo-code/types"
+import { type ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@recoder/shared"
 
 import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
 import { calculateApiCostOpenAI } from "@recoder/shared"
@@ -78,9 +78,19 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 		const outputTokens = requestyUsage?.completion_tokens || 0
 		const cacheWriteTokens = requestyUsage?.prompt_tokens_details?.caching_tokens || 0
 		const cacheReadTokens = requestyUsage?.prompt_tokens_details?.cached_tokens || 0
-		const totalCost = modelInfo
-			? calculateApiCostOpenAI(modelInfo, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
-			: 0
+		const costInfo = modelInfo
+			? calculateApiCostOpenAI(
+				this.getModel().id,
+				{
+					inputTokens,
+					outputTokens,
+					totalTokens: inputTokens + outputTokens,
+					cacheReadTokens,
+					cacheWriteTokens
+				}
+			)
+			: { totalCost: 0 };
+		const totalCost = costInfo.totalCost;
 
 		return {
 			type: "usage",

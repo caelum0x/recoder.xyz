@@ -11,7 +11,7 @@ import { AvailabilityChecker } from './availability-checker';
 import { LatencyMonitor } from './latency-monitor';
 import { CostTracker } from './cost-tracker';
 import { ErrorDetector } from './error-detector';
-import { AlertManager } from './alerting/alert-manager';
+import { AlertManager, AlertType, AlertSeverity } from './alerting/alert-manager'; 
 import { EventEmitter } from 'events';
 
 export interface HealthStatus {
@@ -63,12 +63,12 @@ export interface HealthConfiguration {
 }
 
 export class ModelHealthMonitor extends EventEmitter {
-  private modelTracker: ModelTracker;
-  private availabilityChecker: AvailabilityChecker;
-  private latencyMonitor: LatencyMonitor;
-  private costTracker: CostTracker;
-  private errorDetector: ErrorDetector;
-  private alertManager: AlertManager;
+  private modelTracker!: ModelTracker;
+  private availabilityChecker!: AvailabilityChecker;
+  private latencyMonitor!: LatencyMonitor;
+  private costTracker!: CostTracker;
+  private errorDetector!: ErrorDetector;
+  private alertManager!: AlertManager;
   
   private config: HealthConfiguration;
   private monitoringInterval: NodeJS.Timeout | null = null;
@@ -235,9 +235,9 @@ export class ModelHealthMonitor extends EventEmitter {
         throughput: this.calculateThroughput(latencyMetrics.avg),
         lastUpdated: new Date(),
         trends: {
-          latency: this.analyzeTrend(latencyMetrics.trend),
-          cost: this.analyzeTrend(costMetrics.trend),
-          quality: this.analyzeTrend(qualityScore > 0.8 ? 'stable' : 'degrading')
+          latency: this.mapTrendToExpected(this.analyzeTrend(latencyMetrics.trend || 'stable')),
+          cost: this.mapTrendToExpected(this.analyzeTrend(costMetrics.costTrend || 'stable')),
+          quality: this.mapTrendToExpected(this.analyzeTrend(qualityScore > 0.8 ? 'stable' : 'decreasing'))
         }
       };
 
@@ -467,8 +467,9 @@ export class ModelHealthMonitor extends EventEmitter {
       // Process alerts
       for (const alert of predictiveAlerts) {
         await this.alertManager.processAlert({
-          type: 'predictive',
-          severity: alert.severity,
+          type: AlertType.PREDICTIVE,
+          severity: AlertSeverity.HIGH,
+          source: 'health_monitor',
           modelName: alert.modelName,
           message: `Model ${alert.modelName} has ${(alert.probability * 100).toFixed(1)}% failure probability`,
           data: alert
@@ -492,8 +493,9 @@ export class ModelHealthMonitor extends EventEmitter {
     const alternatives = await this.recommendAlternatives(modelName);
     
     await this.alertManager.processAlert({
-      type: 'outage',
-      severity: 'critical',
+      type: AlertType.AVAILABILITY,
+      severity: AlertSeverity.CRITICAL,
+      source: 'health_monitor',
       modelName,
       message: `Model ${modelName} is unavailable`,
       data: { alternatives }
@@ -506,8 +508,9 @@ export class ModelHealthMonitor extends EventEmitter {
     Logger.warn(`Error spike detected for ${modelName}: ${(errorRate * 100).toFixed(1)}%`);
     
     await this.alertManager.processAlert({
-      type: 'error_spike',
-      severity: errorRate > 0.1 ? 'critical' : 'high',
+      type: AlertType.ERROR_RATE,
+      severity: errorRate > 0.1 ? AlertSeverity.CRITICAL : AlertSeverity.HIGH,
+      source: 'health_monitor',
       modelName,
       message: `High error rate detected: ${(errorRate * 100).toFixed(1)}%`,
       data: { errorRate }
@@ -520,8 +523,9 @@ export class ModelHealthMonitor extends EventEmitter {
     Logger.warn(`Latency spike detected for ${modelName}: ${latency}ms`);
     
     await this.alertManager.processAlert({
-      type: 'latency_spike',
-      severity: latency > 10000 ? 'high' : 'medium',
+      type: AlertType.LATENCY,
+      severity: latency > 10000 ? AlertSeverity.HIGH : AlertSeverity.MEDIUM,
+      source: 'health_monitor',
       modelName,
       message: `High latency detected: ${latency}ms`,
       data: { latency }
@@ -534,8 +538,9 @@ export class ModelHealthMonitor extends EventEmitter {
     Logger.warn(`Cost increase detected for ${modelName}: ${(increase * 100).toFixed(1)}%`);
     
     await this.alertManager.processAlert({
-      type: 'cost_increase',
-      severity: increase > 0.5 ? 'high' : 'medium',
+      type: AlertType.COST,
+      severity: increase > 0.5 ? AlertSeverity.HIGH : AlertSeverity.MEDIUM,
+      source: 'health_monitor',
       modelName,
       message: `Significant cost increase: ${(increase * 100).toFixed(1)}%`,
       data: { increase }
@@ -558,10 +563,21 @@ export class ModelHealthMonitor extends EventEmitter {
     return Math.round(60000 / avgLatency); // requests per minute
   }
 
-  private analyzeTrend(trend: any): 'improving' | 'degrading' | 'stable' {
-    if (typeof trend === 'string') return trend as any;
-    if (trend > 0.1) return 'improving';
-    if (trend < -0.1) return 'degrading';
+  private analyzeTrend(trend: any): 'increasing' | 'decreasing' | 'stable' {
+    if (typeof trend === 'string') {
+      // Convert from old naming to new naming
+      if (trend === 'improving') return 'increasing';
+      if (trend === 'degrading') return 'decreasing';
+      return trend as any;
+    }
+    if (trend > 0.1) return 'increasing';
+    if (trend < -0.1) return 'decreasing';
+    return 'stable';
+  }
+
+  private mapTrendToExpected(trend: 'increasing' | 'decreasing' | 'stable'): 'improving' | 'degrading' | 'stable' {
+    if (trend === 'increasing') return 'improving';
+    if (trend === 'decreasing') return 'degrading';
     return 'stable';
   }
 
@@ -596,7 +612,7 @@ export class ModelHealthMonitor extends EventEmitter {
     if (health.avgLatency > 5000) indicators.push('High latency');
     if (health.trends.latency === 'degrading') indicators.push('Degrading latency trend');
     if (health.trends.quality === 'degrading') indicators.push('Degrading quality');
-    if (health.trends.cost === 'increasing') indicators.push('Rising costs');
+    if (health.trends.cost === 'degrading') indicators.push('Rising costs');
     
     return indicators;
   }

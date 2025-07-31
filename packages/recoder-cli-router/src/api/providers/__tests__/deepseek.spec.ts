@@ -72,7 +72,7 @@ import type { Anthropic } from "@anthropic-ai/sdk"
 
 import { deepSeekDefaultModelId } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 
 import { DeepSeekHandler } from "../deepseek"
 

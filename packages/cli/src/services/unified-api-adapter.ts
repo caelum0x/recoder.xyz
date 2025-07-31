@@ -367,9 +367,9 @@ CORE PRINCIPLES:
   }
 
   /**
-   * Get provider capabilities
+   * Get all providers with their capabilities
    */
-  getProviderCapabilities(): Array<{
+  getAllProviders(): Array<{
     name: string;
     models: string[];
     capabilities: string[];

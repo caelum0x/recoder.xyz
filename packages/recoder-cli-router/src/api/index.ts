@@ -30,6 +30,8 @@ import {
 	LiteLLMHandler,
 	CerebrasHandler, // kilocode_change
 	ClaudeCodeHandler,
+	HuggingFaceHandler,
+	TogetherHandler,
 } from "./providers"
 // kilocode_change start
 import { FireworksHandler } from "./providers/fireworks"
@@ -66,9 +68,15 @@ export interface ApiHandler {
 }
 
 export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
-	const { apiProvider, ...options } = configuration
+	const { apiProvider, ...rawOptions } = configuration
+	
+	// Convert null modelTemperature to undefined for compatibility with ApiHandlerOptions
+	const options = {
+		...rawOptions,
+		modelTemperature: rawOptions.modelTemperature ?? undefined
+	}
 
-	switch (apiProvider) {
+	switch (apiProvider as string) {
 		case "kilocode":
 			return new KilocodeOpenrouterHandler(options)
 		case "anthropic":
@@ -129,6 +137,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "cerebras":
 			return new CerebrasHandler(options)
 		// kilocode_change end
+		case "huggingface":
+			return new HuggingFaceHandler(options)
 		default:
 			return new AnthropicHandler(options)
 	}

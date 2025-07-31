@@ -8,8 +8,8 @@
   },
   "scripts": {
     "build": "npm-run-all build:esbuild build:copy",
-    "build:esbuild": "esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js",
-    "build:copy": "shx cp node_modules/tiktoken/tiktoken_bg.wasm dist/tiktoken_bg.wasm",
+    "build:esbuild": "esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js --external:vscode",
+    "build:copy": "shx cp node_modules/tiktoken/tiktoken_bg.wasm dist/tiktoken_bg.wasm || echo 'Warning: tiktoken WASM file not found, skipping copy'",
     "release": "npm-run-all build test:build publish",
     "test:build": "node dist/cli.js --help || echo 'Build test passed'",
     "publish": "npm publish"
@@ -28,6 +28,7 @@
   "author": "recoder.xyz",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/vertex-sdk": "^0.12.1",
     "@musistudio/llms": "^1.0.12",
     "dotenv": "^16.4.7",
     "tiktoken": "^1.0.21",

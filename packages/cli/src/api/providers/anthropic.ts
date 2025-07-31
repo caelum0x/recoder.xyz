@@ -8,7 +8,7 @@ import {
 	anthropicDefaultModelId,
 	anthropicModels,
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
-} from "@roo-code/types"
+} from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 

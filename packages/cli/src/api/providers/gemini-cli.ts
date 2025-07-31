@@ -6,7 +6,7 @@ import * as os from "os"
 import axios from "axios"
 import dotenvx from "@dotenvx/dotenvx"
 
-import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
+import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 import { t } from "../../i18n"

@@ -1,8 +1,8 @@
 // npx vitest run src/api/providers/__tests__/bedrock-inference-profiles.spec.ts
 
-import { AWS_INFERENCE_PROFILE_MAPPING } from "@roo-code/types"
+import { AWS_INFERENCE_PROFILE_MAPPING } from "@recoder/shared"
 import { AwsBedrockHandler } from "../bedrock"
-import { ApiHandlerOptions } from "../@recoder/shared"
+import { ApiHandlerOptions } from "@recoder/shared"
 
 // Mock AWS SDK
 vitest.mock("@aws-sdk/client-bedrock-runtime", () => {

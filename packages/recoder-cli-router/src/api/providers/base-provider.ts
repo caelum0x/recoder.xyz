@@ -4,7 +4,7 @@ import type { ModelInfo } from "@roo-code/types"
 
 import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { ApiStream } from "../transform/stream"
-import { countTokens } from "../../utils/countTokens"
+import { countTokens } from "@recoder/shared"
 
 /**
  * Base class for API providers that implements common functionality.
@@ -30,6 +30,6 @@ export abstract class BaseProvider implements ApiHandler {
 			return 0
 		}
 
-		return countTokens(content, { useWorker: true })
+		return countTokens(content)
 	}
 }

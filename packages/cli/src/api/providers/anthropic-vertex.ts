@@ -8,7 +8,7 @@ import {
 	vertexDefaultModelId,
 	vertexModels,
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
-} from "@roo-code/types"
+} from "@recoder/shared"
 
 import { ApiHandlerOptions, safeJsonParse } from "@recoder/shared"
 

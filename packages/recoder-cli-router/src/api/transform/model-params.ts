@@ -6,7 +6,7 @@ import {
 	shouldUseReasoningBudget,
 	shouldUseReasoningEffort,
 	getModelMaxOutputTokens,
-} from "../../shared/api"
+} from "@recoder/shared"
 
 import {
 	type AnthropicReasoningParams,

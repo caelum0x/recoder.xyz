@@ -11,7 +11,7 @@ import { EventEmitter } from 'events';
 import { QualityAssessmentResult } from './quality-assessor';
 
 export interface ABTest {
-  id: string;
+  id: string; 
   name: string;
   description: string;
   status: 'draft' | 'running' | 'paused' | 'completed' | 'stopped';
@@ -896,7 +896,7 @@ export class ABTestingFramework extends EventEmitter {
     };
   }
 
-  private async shouldCompleteTest(test: ABTest): boolean {
+  private async shouldCompleteTest(test: ABTest): Promise<boolean> {
     // Check if test duration has passed
     if (test.endTime && new Date() > test.endTime) {
       return true;

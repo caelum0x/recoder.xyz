@@ -1,9 +1,9 @@
-import { ApiMessage } from "../../core/task-persistence/apiMessages"
+import { Anthropic } from "@anthropic-ai/sdk"
 
 import { ApiHandler } from "../index"
 
 /* Removes image blocks from messages if they are not supported by the Api Handler */
-export function maybeRemoveImageBlocks(messages: ApiMessage[], apiHandler: ApiHandler): ApiMessage[] {
+export function maybeRemoveImageBlocks(messages: Anthropic.Messages.MessageParam[], apiHandler: ApiHandler): Anthropic.Messages.MessageParam[] {
 	return messages.map((message) => {
 		// Handle array content (could contain image blocks).
 		let { content } = message

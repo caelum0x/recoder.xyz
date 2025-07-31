@@ -1,4 +1,4 @@
-import { deepSeekModels, deepSeekDefaultModelId } from "@roo-code/types"
+import { deepSeekModels, deepSeekDefaultModelId } from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "@recoder/shared"
 

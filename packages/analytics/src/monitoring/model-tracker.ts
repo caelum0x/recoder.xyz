@@ -8,7 +8,7 @@
 import { Logger } from '@recoder/shared';
 import { EventEmitter } from 'events';
 
-export interface ModelHealthMetrics {
+export interface ModelHealthMetrics { 
   modelName: string;
   provider: string;
   availability: number;        // % uptime (last 24h)
@@ -20,7 +20,7 @@ export interface ModelHealthMetrics {
   lastUpdated: Date;
   trends: {
     latency: 'improving' | 'degrading' | 'stable';
-    cost: 'increasing' | 'decreasing' | 'stable';
+    cost: 'improving' | 'degrading' | 'stable';
     quality: 'improving' | 'degrading' | 'stable';
   };
 }
@@ -417,12 +417,12 @@ export class ModelTracker extends EventEmitter {
 
     // Simplified trend analysis - in production, this would use more sophisticated algorithms
     const latencyTrend = await this.calculateTrendDirection(modelName, 'latency');
-    const costTrend = await this.calculateTrendDirection(modelName, 'cost');
+    const costTrendRaw = await this.calculateTrendDirection(modelName, 'cost');
     const qualityTrend = await this.calculateTrendDirection(modelName, 'quality');
 
     return {
       latency: latencyTrend,
-      cost: costTrend,
+      cost: costTrendRaw,
       quality: qualityTrend
     };
   }

@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import Cerebras from "@cerebras/cerebras_cloud_sdk"
 
-import { CerebrasModelId, cerebrasDefaultModelId, cerebrasModels } from "../@recoder/shared"
+import { CerebrasModelId, cerebrasDefaultModelId, cerebrasModels } from "@recoder/shared"
 import { CerebrasHandler } from "../cerebras"
 import type { Mock } from "vitest"
 
