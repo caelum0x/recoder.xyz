@@ -9,7 +9,7 @@ interface ProjectGoal {
     startDate: Date;
     targetDate: Date;
     achievedDate?: Date;
-    milestones: Milestone[];
+    milestones: Milestone[]; 
   };
   metrics: GoalMetric[];
   stakeholders: {
@@ -297,7 +297,7 @@ export class SuccessMetricsEngine {
             timestamp: metric.current.timestamp
           });
           metric.current = {
-            value,
+            value: value ?? 0,
             timestamp: new Date(),
             source: 'manual-update'
           };
@@ -310,8 +310,8 @@ export class SuccessMetricsEngine {
       for (const [milestoneId, progress] of Object.entries(updates.milestones)) {
         const milestone = goal.timeline.milestones.find(m => m.id === milestoneId);
         if (milestone) {
-          milestone.progress = progress;
-          if (progress >= 100 && milestone.status !== 'completed') {
+          milestone.progress = progress ?? 0;
+          if (typeof progress === 'number' && progress >= 100 && milestone.status !== 'completed') {
             milestone.status = 'completed';
             milestone.completedDate = new Date();
           }

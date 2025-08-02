@@ -74,7 +74,7 @@ import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { RooProtectedController } from "../protect/RooProtectedController"
 import { type AssistantMessageContent, parseAssistantMessage, presentAssistantMessage } from "../assistant-message"
 import { truncateConversationIfNeeded } from "../sliding-window"
-import { ClineProvider } from "../webview/ClineProvider"
+import { RecoderProvider } from "../webview/RecoderProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import { MultiFileSearchReplaceDiffStrategy } from "../diff/strategies/multi-file-search-replace"
 import { readApiMessages, saveApiMessages, readTaskMessages, saveTaskMessages, taskMetadata } from "../task-persistence"
@@ -117,7 +117,7 @@ export type ClineEvents = {
 
 export type TaskOptions = {
 	context: vscode.ExtensionContext // kilocode_change
-	provider: ClineProvider
+	provider: RecoderProvider
 	apiConfiguration: ProviderSettings
 	enableDiff?: boolean
 	enableCheckpoints?: boolean
@@ -149,7 +149,7 @@ export class Task extends EventEmitter<ClineEvents> {
 	readonly taskNumber: number
 	readonly workspacePath: string
 
-	providerRef: WeakRef<ClineProvider>
+	providerRef: WeakRef<RecoderProvider>
 	private readonly globalStoragePath: string
 	abort: boolean = false
 	didFinishAbortingStream = false

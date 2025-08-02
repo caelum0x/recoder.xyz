@@ -28,6 +28,22 @@ import { ProjectContextAnalyzer } from './services/project-context';
 import { backendClient } from './services/backend-client';
 import { unifiedAPI } from './services/unified-api-adapter';
 
+// Import integrated packages
+import { 
+  initializeMonitoring, 
+  getSystemHealthSummary, 
+  monitoringSystem,
+  productionMonitoring,
+  UsageAnalytics,
+  QualityAssessor,
+  ABTestingSystem 
+} from '@recoder/analytics';
+import { 
+  AIPromptSanitizer, 
+  CodeVulnerabilityScanner, 
+  SecurityMonitor 
+} from '@recoder/security';
+
 // Import commands
 import { createOllamaCommand } from './commands/ollama';
 import AICommandsRegistry from './commands/ai';
@@ -35,7 +51,7 @@ import { createAuthCommand } from './commands/auth';
 import { createIntegrationStatusCommand } from './commands/integration-status';
 
 // Production-ready command setup with unified configuration
-function setupProductionCommands(program: Command): void {
+async function setupProductionCommands(program: Command): Promise<void> {
   const config = cliConfig();
   const sessionManager = cliSessionManager();
   const aiHub = AIHub.getInstance();
@@ -46,6 +62,22 @@ function setupProductionCommands(program: Command): void {
   const validator = new RealityValidationSystem();
   const agentManager = new AgentManager();
   const contextAnalyzer = new ProjectContextAnalyzer();
+  
+  // Initialize integrated systems
+  const usageAnalytics = new UsageAnalytics();
+  const qualityAssessor = new QualityAssessor();
+  const abTestingSystem = new ABTestingSystem();
+  const promptSanitizer = new AIPromptSanitizer();
+  const vulnerabilityScanner = new CodeVulnerabilityScanner();
+  const securityMonitor = new SecurityMonitor();
+  
+  // Initialize monitoring system
+  try {
+    await initializeMonitoring();
+    Logger.info('Analytics and monitoring system initialized');
+  } catch (error) {
+    Logger.warn('Analytics system failed to initialize:', error);
+  }
 
   // Generate command - REAL AI-powered code generation with backend integration
   program
@@ -59,6 +91,18 @@ function setupProductionCommands(program: Command): void {
     .option('--validate', 'Validate generated code functionality', false)
     .action(async (description: string, options: any) => {
       console.log(chalk.cyan('\n🚀 RECODER - Production-Ready Code Generation\n'));
+      
+      // Track feature usage
+      await backendClient.trackFeatureUsage({
+        featureName: 'code_generation',
+        context: 'cli_generate',
+        metadata: {
+          type: options.type,
+          complexity: options.complexity,
+          hasValidation: options.validate,
+          description: description.substring(0, 100) // Truncate for privacy
+        }
+      });
       
       // Check backend connection and user session
       const isBackendAvailable = await backendClient.isBackendAvailable();
@@ -112,6 +156,15 @@ function setupProductionCommands(program: Command): void {
         // Select best agent for the task
         const bestAgent = agentManager.findBestAgent(description, projectContext);
         console.log(chalk.blue(`🎯 Selected ${bestAgent.capability.name} for this task`));
+        
+        // Sanitize the prompt for security
+        const sanitizationResult = promptSanitizer.sanitizePrompt(description);
+        if (sanitizationResult.threats.length > 0) {
+          console.log(chalk.yellow('🔒 Security warnings detected and handled'));
+          sanitizationResult.threats.forEach(threat => {
+            console.log(chalk.gray(`  • ${threat}`));
+          });
+        }
 
         console.log(chalk.green('✅ AI Providers:'));
         availableProviders.forEach(p => {
@@ -355,6 +408,27 @@ Make this a production-ready plan that can actually be executed.`;
           report.fixes.slice(0, 10).forEach((fix, i) => {
             console.log(chalk.white(`  ${i + 1}. ${fix}`));
           });
+        }
+        
+        // Perform additional security scan if score is low
+        if (report.summary.score < 70) {
+          console.log(chalk.yellow('\n🔒 Running additional security scan due to low validation score...'));
+          try {
+            const securityScan = await securityMonitor.generateSecurityReport(projectPath);
+            
+            if (securityScan.vulnerabilities.length > 0 || securityScan.secrets.length > 0) {
+              console.log(chalk.red(`\n⚠️ Security Issues Found:`));
+              if (securityScan.vulnerabilities.length > 0) {
+                console.log(chalk.red(`  • ${securityScan.vulnerabilities.length} vulnerabilities`));
+              }
+              if (securityScan.secrets.length > 0) {
+                console.log(chalk.yellow(`  • ${securityScan.secrets.length} exposed secrets`));
+              }
+              console.log(chalk.white('\nRun: recoder scan --deep for detailed security analysis'));
+            }
+          } catch (secError) {
+            console.log(chalk.gray('\n(Security scan failed - continuing with validation)'));
+          }
         }
 
       } catch (error: any) {
@@ -610,11 +684,271 @@ Make this a production-ready plan that can actually be executed.`;
   
   // Add unified AI commands with enhanced capabilities
   AICommandsRegistry.register(program);
+  
+  // Analytics and monitoring commands
+  program
+    .command('analytics')
+    .alias('stats')
+    .description('View system analytics and performance metrics')
+    .option('--health', 'Show system health status')
+    .option('--usage', 'Show usage statistics')
+    .option('--costs', 'Show cost analysis')
+    .option('--models', 'Show model performance metrics')
+    .action(async (options: any) => {
+      console.log(chalk.cyan('\\n📊 RECODER - Analytics Dashboard\\n'));
+      
+      try {
+        if (options.health) {
+          console.log(chalk.blue('🔍 Checking system health...'));
+          const healthSummary = await getSystemHealthSummary();
+          
+          const statusColor = healthSummary.overall.overall === 'healthy' ? chalk.green :
+                             healthSummary.overall.overall === 'degraded' ? chalk.yellow : chalk.red;
+          
+          console.log(chalk.white('\\n🏥 System Health Status:'));
+          console.log(statusColor(`  Overall: ${healthSummary.overall.overall.toUpperCase()}`));
+          console.log(chalk.white(`  Score: ${healthSummary.overall.score}/100`));
+          console.log(chalk.white(`  Active Models: ${healthSummary.overall.activeModels}`));
+          console.log(chalk.white(`  Healthy Models: ${healthSummary.overall.healthyModels}`));
+          if (healthSummary.overall.degradedModels > 0) {
+            console.log(chalk.yellow(`  Degraded Models: ${healthSummary.overall.degradedModels}`));
+          }
+          if (healthSummary.overall.criticalModels > 0) {
+            console.log(chalk.red(`  Critical Models: ${healthSummary.overall.criticalModels}`));
+          }
+          
+          console.log(chalk.cyan('\\n🚨 Active Alerts:'));
+          console.log(chalk.white(`  Total: ${healthSummary.alerts.active}`));
+          if (healthSummary.alerts.critical > 0) {
+            console.log(chalk.red(`  Critical: ${healthSummary.alerts.critical}`));
+          }
+          
+          console.log(chalk.cyan('\\n💰 Cost Summary:'));
+          console.log(chalk.white(`  Daily Spend: $${healthSummary.costs.dailySpend.toFixed(2)}`));
+          console.log(chalk.white(`  Budget Status: ${healthSummary.costs.budgetStatus}`));
+          
+          console.log(chalk.cyan('\\n🌐 Availability:'));
+          console.log(chalk.white(`  Average Uptime: ${healthSummary.availability.average.toFixed(1)}%`));
+        }
+        
+        if (options.models) {
+          console.log(chalk.blue('🤖 Analyzing model performance...'));
+          const healthSummary = await getSystemHealthSummary();
+          
+          console.log(chalk.cyan('\\n🤖 Model Performance:'));
+          healthSummary.models.slice(0, 10).forEach((model: any) => {
+            const statusIcon = model.availability > 0.95 ? '✅' :
+                              model.availability > 0.9 ? '⚠️' : '❌';
+            console.log(chalk.white(`  ${statusIcon} ${model.modelName}:`));
+            console.log(chalk.gray(`    Availability: ${(model.availability * 100).toFixed(1)}%`));
+            console.log(chalk.gray(`    Avg Latency: ${model.avgLatency.toFixed(0)}ms`));
+            console.log(chalk.gray(`    Error Rate: ${(model.errorRate * 100).toFixed(2)}%`));
+            console.log(chalk.gray(`    Quality Score: ${(model.qualityScore * 100).toFixed(0)}/100`));
+          });
+        }
+        
+        if (options.usage) {
+          console.log(chalk.blue('📈 Analyzing usage patterns...'));
+          const patterns = await usageAnalytics.getUsagePatterns();
+          
+          console.log(chalk.cyan('\\n📈 Usage Statistics:'));
+          console.log(chalk.white(`  Total Requests: ${patterns.totalRequests}`));
+          console.log(chalk.white(`  Success Rate: ${(patterns.successRate * 100).toFixed(1)}%`));
+          console.log(chalk.white(`  Avg Response Time: ${patterns.avgResponseTime}ms`));
+          
+          console.log(chalk.cyan('\\n🏆 Top Models:'));
+          patterns.topModels.forEach((model: any, i: number) => {
+            console.log(chalk.white(`  ${i + 1}. ${model.name}: ${model.usage} requests`));
+          });
+          
+          console.log(chalk.cyan('\\n📊 Peak Hours:'));
+          patterns.peakHours.forEach((hour: any) => {
+            console.log(chalk.white(`  ${hour.time}: ${hour.requests} requests`));
+          });
+        }
+        
+        if (options.costs) {
+          console.log(chalk.blue('💰 Analyzing cost breakdown...'));
+          const costAnalysis = await usageAnalytics.getCostAnalysis();
+          
+          console.log(chalk.cyan('\\n💰 Cost Analysis:'));
+          console.log(chalk.white(`  Total Spend (30d): $${costAnalysis.totalSpend.toFixed(2)}`));
+          console.log(chalk.white(`  Daily Average: $${costAnalysis.dailyAverage.toFixed(2)}`));
+          console.log(chalk.white(`  Cost Per Request: $${costAnalysis.costPerRequest.toFixed(4)}`));
+          
+          console.log(chalk.cyan('\\n📊 Cost by Provider:'));
+          costAnalysis.byProvider.forEach((provider: any) => {
+            console.log(chalk.white(`  ${provider.name}: $${provider.cost.toFixed(2)} (${provider.percentage.toFixed(1)}%)`));
+          });
+          
+          if (costAnalysis.recommendations.length > 0) {
+            console.log(chalk.cyan('\\n💡 Cost Optimization Recommendations:'));
+            costAnalysis.recommendations.slice(0, 3).forEach((rec: any, i: number) => {
+              console.log(chalk.yellow(`  ${i + 1}. ${rec.title}: Save $${rec.potentialSavings.toFixed(2)}/month`));
+              console.log(chalk.gray(`     ${rec.description}`));
+            });
+          }
+        }
+        
+        if (!options.health && !options.usage && !options.costs && !options.models) {
+          // Show general analytics overview
+          console.log(chalk.blue('📊 Loading analytics overview...'));
+          const healthSummary = await getSystemHealthSummary();
+          
+          console.log(chalk.green('\\n✅ Quick System Overview:'));
+          console.log(chalk.white(`  System Health: ${healthSummary.overall.overall.toUpperCase()}`));
+          console.log(chalk.white(`  Active Models: ${healthSummary.overall.activeModels}`));
+          console.log(chalk.white(`  Daily Spend: $${healthSummary.costs.dailySpend.toFixed(2)}`));
+          console.log(chalk.white(`  Active Alerts: ${healthSummary.alerts.active}`));
+          
+          console.log(chalk.cyan('\\n📋 Available Analytics Commands:'));
+          console.log(chalk.white('  recoder analytics --health    # Detailed health status'));
+          console.log(chalk.white('  recoder analytics --models    # Model performance metrics'));
+          console.log(chalk.white('  recoder analytics --usage     # Usage patterns and statistics'));
+          console.log(chalk.white('  recoder analytics --costs     # Cost analysis and optimization'));
+        }
+        
+      } catch (error: any) {
+        console.log(chalk.red(`\\n❌ Analytics failed: ${error.message}`));
+        Logger.error(`Analytics failed: ${error.message}`);
+      }
+    });
+  
+  // Security scanning command
+  program
+    .command('scan')
+    .alias('security')
+    .description('Security scanning and vulnerability assessment')
+    .argument('[path]', 'Path to scan (defaults to current directory)')
+    .option('--deep', 'Perform deep security analysis')
+    .option('--secrets', 'Scan for exposed secrets and credentials')
+    .option('--dependencies', 'Check dependencies for vulnerabilities')
+    .option('--compliance', 'Check compliance requirements')
+    .action(async (scanPath?: string, options?: any) => {
+      const targetPath = scanPath || process.cwd();
+      console.log(chalk.cyan('\\n🔒 RECODER - Security Scanner\\n'));
+      console.log(chalk.white(`Scanning: ${targetPath}\\n`));
+      
+      try {
+        console.log(chalk.blue('🔍 Initializing security scan...'));
+        
+        const scanOptions = {
+          deepScan: options.deep || false,
+          scanSecrets: options.secrets || true,
+          scanDependencies: options.dependencies || true,
+          checkCompliance: options.compliance || false
+        };
+        
+        const scanResult = await securityMonitor.generateSecurityReport(targetPath);
+        
+        // Display security score
+        const scoreColor = scanResult.securityScore >= 80 ? chalk.green :
+                          scanResult.securityScore >= 60 ? chalk.yellow : chalk.red;
+        console.log(chalk.white('\\n🛡️ Security Assessment:'));
+        console.log(scoreColor(`  Security Score: ${scanResult.securityScore}/100`));
+        
+        // Display vulnerabilities
+        if (scanResult.vulnerabilities.length > 0) {
+          const critical = scanResult.vulnerabilities.filter(v => v.severity === 'critical').length;
+          const high = scanResult.vulnerabilities.filter(v => v.severity === 'high').length;
+          const medium = scanResult.vulnerabilities.filter(v => v.severity === 'medium').length;
+          const low = scanResult.vulnerabilities.filter(v => v.severity === 'low').length;
+          
+          console.log(chalk.red(`\\n⚠️ Vulnerabilities Found: ${scanResult.vulnerabilities.length}`));
+          if (critical > 0) console.log(chalk.red(`  🔴 Critical: ${critical}`));
+          if (high > 0) console.log(chalk.yellow(`  🟡 High: ${high}`));
+          if (medium > 0) console.log(chalk.white(`  🟠 Medium: ${medium}`));
+          if (low > 0) console.log(chalk.gray(`  🟢 Low: ${low}`));
+          
+          // Show top vulnerabilities
+          console.log(chalk.cyan('\\n🔍 Top Vulnerabilities:'));
+          scanResult.vulnerabilities
+            .sort((a, b) => {
+              const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+              return severityOrder[b.severity] - severityOrder[a.severity];
+            })
+            .slice(0, 5)
+            .forEach((vuln, i) => {
+              const severityColor = vuln.severity === 'critical' ? chalk.red :
+                                   vuln.severity === 'high' ? chalk.yellow : chalk.white;
+              console.log(severityColor(`  ${i + 1}. [${vuln.severity.toUpperCase()}] ${vuln.title}`));
+              console.log(chalk.gray(`     File: ${vuln.location}`));
+              console.log(chalk.gray(`     ${vuln.description}`));
+            });
+        } else {
+          console.log(chalk.green('\\n✅ No vulnerabilities detected'));
+        }
+        
+        // Display secrets found
+        if (scanResult.secrets.length > 0) {
+          console.log(chalk.yellow(`\\n🔑 Exposed Secrets: ${scanResult.secrets.length}`));
+          scanResult.secrets.slice(0, 5).forEach((secret, i) => {
+            console.log(chalk.yellow(`  ${i + 1}. ${secret.type} in ${secret.file}:${secret.line}`));
+          });
+        } else {
+          console.log(chalk.green('\\n✅ No exposed secrets detected'));
+        }
+        
+        // Display compliance issues
+        if (scanResult.complianceIssues.length > 0) {
+          console.log(chalk.yellow(`\\n📋 Compliance Issues: ${scanResult.complianceIssues.length}`));
+          scanResult.complianceIssues.slice(0, 3).forEach((issue, i) => {
+            console.log(chalk.white(`  ${i + 1}. ${issue.rule}: ${issue.description}`));
+          });
+        } else {
+          console.log(chalk.green('\\n✅ No compliance issues detected'));
+        }
+        
+        // Display recommendations
+        if (scanResult.recommendations.length > 0) {
+          console.log(chalk.cyan('\\n💡 Security Recommendations:'));
+          scanResult.recommendations.slice(0, 5).forEach((rec, i) => {
+            const priorityColor = rec.priority === 'critical' ? chalk.red :
+                                rec.priority === 'high' ? chalk.yellow : chalk.white;
+            console.log(priorityColor(`  ${i + 1}. ${rec.title}`));
+            console.log(chalk.gray(`     ${rec.description}`));
+          });
+        }
+        
+        console.log(chalk.green('\\n🔒 Security scan completed!'));
+        
+      } catch (error: any) {
+        console.log(chalk.red(`\\n❌ Security scan failed: ${error.message}`));
+        Logger.error(`Security scan failed: ${error.message}`);
+      }
+    });
 }
 
 async function main() {
+  let analyticsSessionId: string | null = null;
+
   try {
     // Initialize unified API system (happens in constructor)
+    
+    // Start analytics session if user is authenticated
+    if (backendClient.isAuthenticated()) {
+      analyticsSessionId = await backendClient.startAnalyticsSession();
+      if (analyticsSessionId) {
+        Logger.debug('Analytics session started:', analyticsSessionId);
+      }
+    }
+
+    // Track CLI startup
+    if (analyticsSessionId) {
+      await backendClient.trackActivity({
+        sessionId: analyticsSessionId,
+        type: 'feature_use',
+        category: 'navigation',
+        action: 'cli_startup',
+        properties: {
+          version: VERSION,
+          platform: process.platform,
+          arch: process.arch,
+          nodeVersion: process.version,
+          args: process.argv.slice(2)
+        }
+      });
+    }
     
     // Display Recoder banner
     console.log(
@@ -663,7 +997,7 @@ async function main() {
       });
 
     // Setup production-ready AI commands
-    setupProductionCommands(program);
+    await setupProductionCommands(program);
 
     // Handle unknown commands
     program.on('command:*', (operands) => {
@@ -684,7 +1018,7 @@ async function main() {
     // Check if this looks like a natural language command
     const isNaturalLanguage = (
       (args.length === 1 && args[0].includes(' ') && !args[0].startsWith('-')) ||
-      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'context', 'help', 'version'].includes(args[0]))
+      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'context', 'analytics', 'scan', 'stats', 'security', 'help', 'version'].includes(args[0]))
     );
     
     if (isNaturalLanguage) {
@@ -709,7 +1043,7 @@ async function main() {
         const intentAnalysis = await aiHub.chat([
           {
             role: 'system',
-            content: 'You are a command interpreter for Recoder CLI. Analyze the user\'s natural language input and respond with the appropriate Recoder command. Available commands: generate, plan, validate, chat, agent, context. Respond with just the command and any necessary flags.'
+            content: 'You are a command interpreter for Recoder CLI. Analyze the user\'s natural language input and respond with the appropriate Recoder command. Available commands: generate, plan, validate, chat, agent, context, analytics, scan. Respond with just the command and any necessary flags.'
           },
           {
             role: 'user',
@@ -761,6 +1095,16 @@ async function main() {
   } catch (error) {
     Logger.error(`Command failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
+  } finally {
+    // End analytics session
+    if (analyticsSessionId) {
+      try {
+        await backendClient.endAnalyticsSession(analyticsSessionId);
+        Logger.debug('Analytics session ended');
+      } catch (error) {
+        Logger.warn('Failed to end analytics session:', error);
+      }
+    }
   }
 }
 

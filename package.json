@@ -15,7 +15,7 @@
     "install:root": "npm install",
     "install:packages": "npm-run-all install:cli install:shared install:backend install:engine",
     "install:cli": "cd packages/cli && npm install",
-    "install:shared": "cd packages/shared && npm install", 
+    "install:shared": "cd packages/shared && npm install",
     "install:backend": "cd backend && npm install",
     "install:engine": "cd production-engine && npm install",
     "build": "npm-run-all build:shared build:cli build:backend build:engine",
@@ -98,7 +98,9 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "fs-extra": "^11.2.0",
-    "ora": "^5.4.1"
+    "ora": "^5.4.1",
+    "redis": "^5.7.0",
+    "yjs": "^13.6.27"
   },
   "engines": {
     "node": ">=18.0.0",

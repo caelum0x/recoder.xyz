@@ -12,7 +12,7 @@ export interface OpenRouterConfig extends ProviderConfig {
   baseUrl?: string;
   siteName?: string;
   appName?: string;
-  defaultFallbacks?: boolean;
+  defaultFallbacks?: boolean; 
   costOptimization?: 'speed' | 'cost' | 'balanced';
 }
 
@@ -69,7 +69,7 @@ export interface OpenRouterResponse {
 }
 
 export class OpenRouterUnifiedProvider extends BaseAIProvider {
-  private config: OpenRouterConfig;
+  protected config: OpenRouterConfig;
   private baseUrl: string;
   private models: Map<string, OpenRouterModel> = new Map();
 
@@ -179,7 +179,7 @@ export class OpenRouterUnifiedProvider extends BaseAIProvider {
           finishReason: this.mapFinishReason(choice.finish_reason),
           confidence: this.calculateConfidence(choice, openRouterResponse.model),
           toolCalls: [],
-          routingDecision: routingDecision.rationale
+          cached: false
         }
       };
 
@@ -201,18 +201,11 @@ export class OpenRouterUnifiedProvider extends BaseAIProvider {
     rationale: string;
   } {
     const taskComplexity = this.assessTaskComplexity(request);
-    const userBudget = request.context?.budget || 'balanced';
+   // const userBudget = request.context?.budget || 'balanced';
     const requiresReasoning = this.requiresReasoning(request);
     const requiresCode = this.requiresCodeGeneration(request);
 
-    // Cost optimization routing based on your plan's $12-13 target per user
-    if (userBudget === 'cost-optimized' || request.context?.tier === 'free') {
-      return {
-        primaryModel: 'meta-llama/llama-3.3-70b-instruct',
-        fallbacks: ['qwen/qwen-3-coder-480b', 'moonshot/kimi-k2'],
-        rationale: 'Cost-optimized routing for budget-conscious users'
-      };
-    }
+   
 
     // Reasoning-heavy tasks -> DeepSeek R1
     if (requiresReasoning || taskComplexity === 'high') {
@@ -362,8 +355,8 @@ export class OpenRouterUnifiedProvider extends BaseAIProvider {
   /**
    * Format messages for OpenRouter API
    */
-  private formatMessages(request: AIRequest): any[] {
-    const messages = [];
+  private formatMessages(request: AIRequest): { role: string; content: string }[] {
+    const messages: { role: string; content: string }[] = [];
 
     // Add system prompt if provided
     if (request.options.systemPrompt) {
@@ -375,14 +368,16 @@ export class OpenRouterUnifiedProvider extends BaseAIProvider {
 
     // Add context messages if provided
     if (request.context?.previousMessages) {
-      messages.push(...request.context.previousMessages);
+      messages.push(...request.context.previousMessages as { role: string; content: string }[]);
     }
 
     // Add current prompt
-    messages.push({
-      role: 'user',
-      content: request.prompt
-    });
+    messages.push(
+      {
+        role: 'user',
+        content: request.prompt
+      }
+    );
 
     return messages;
   }
@@ -516,6 +511,20 @@ export class OpenRouterUnifiedProvider extends BaseAIProvider {
       suggestedActions: recommendations,
       projectedSavings
     };
+  }
+
+  /**
+   * Implements the abstract sendStreamingRequest method from BaseAIProvider.
+   */
+  async *sendStreamingRequest(request: AIRequest): AsyncGenerator<StreamChunk, AIResponse, any> {
+    // Basic implementation: fallback to non-streaming request and yield a single chunk.
+    const response = await this.sendRequest(request);
+    yield {
+      id: response.id,
+      delta: response.content,
+      isComplete: true
+    };
+    return response;
   }
 }
 

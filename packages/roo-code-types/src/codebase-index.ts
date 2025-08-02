@@ -15,13 +15,20 @@ export const CODEBASE_INDEX_DEFAULTS = {
 } as const
 
 /**
+ * EmbedderProvider
+ */
+export const embedderProviders = ["openai", "ollama", "openai-compatible", "gemini", "mistral"] as const
+export const embedderProviderSchema = z.enum(embedderProviders)
+export type EmbedderProvider = z.infer<typeof embedderProviderSchema>
+
+/**
  * CodebaseIndexConfig
  */
 
 export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexEnabled: z.boolean().optional(),
 	codebaseIndexQdrantUrl: z.string().optional(),
-	codebaseIndexEmbedderProvider: z.enum(["openai", "ollama", "openai-compatible", "gemini", "mistral"]).optional(),
+	codebaseIndexEmbedderProvider: embedderProviderSchema.optional(),
 	codebaseIndexEmbedderBaseUrl: z.string().optional(),
 	codebaseIndexEmbedderModelId: z.string().optional(),
 	codebaseIndexEmbedderModelDimension: z.number().optional(),

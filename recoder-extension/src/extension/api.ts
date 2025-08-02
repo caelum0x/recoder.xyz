@@ -21,21 +21,21 @@ import { IpcServer } from "@roo-code/ipc"
 
 import { Package } from "../shared/package"
 import { getWorkspacePath } from "../utils/path"
-import { ClineProvider } from "../core/webview/ClineProvider"
+import { RecoderProvider } from "../core/webview/RecoderProvider"
 import { openClineInNewTab } from "../activate/registerCommands"
 
 export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 	private readonly outputChannel: vscode.OutputChannel
-	private readonly sidebarProvider: ClineProvider
+	private readonly sidebarProvider: RecoderProvider
 	private readonly context: vscode.ExtensionContext
 	private readonly ipc?: IpcServer
-	private readonly taskMap = new Map<string, ClineProvider>()
+	private readonly taskMap = new Map<string, RecoderProvider>()
 	private readonly log: (...args: unknown[]) => void
 	private logfile?: string
 
 	constructor(
 		outputChannel: vscode.OutputChannel,
-		provider: ClineProvider,
+		provider: RecoderProvider,
 		socketPath?: string,
 		enableLogging = false,
 	) {
@@ -104,7 +104,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 		images?: string[]
 		newTab?: boolean
 	}) {
-		let provider: ClineProvider
+		let provider: RecoderProvider
 
 		if (newTab) {
 			await vscode.commands.executeCommand("workbench.action.files.revert")
@@ -213,7 +213,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 		return this.sidebarProvider.viewLaunched
 	}
 
-	private registerListeners(provider: ClineProvider) {
+	private registerListeners(provider: RecoderProvider) {
 		provider.on("clineCreated", (cline) => {
 			cline.on("taskStarted", async () => {
 				this.emit(RooCodeEventName.TaskStarted, cline.taskId)

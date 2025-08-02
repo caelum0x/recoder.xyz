@@ -12,7 +12,7 @@ import { AgentTool } from './agentic-workflow-engine';
 export interface KimiToolCall {
   id: string;
   type: 'function';
-  function: {
+  function: { 
     name: string;
     arguments: string;
   };
@@ -404,21 +404,20 @@ Start by understanding the requirements and creating a plan of action.`;
         temperature: 0.1,
         // Enable tool calling for Kimi K2
         tools: Array.from(this.tools.entries()).map(([name, tool]) => ({
-          type: 'function',
-          function: {
-            name,
-            description: tool.description,
-            parameters: tool.parameters
-          }
-        }))
+          name,
+          description: tool.description,
+          parameters: tool.parameters
+        })),
+        priority: ''
       },
-      metadata: { 
+      metadata: {
         taskType: 'agentic-workflow',
-        sessionId: session.id
+        sessionId: session.id,
+        userId: '',
+        timestamp: 0
       },
       context: {
-        previousMessages: this.buildMessageHistory(session),
-        toolsAvailable: true
+        previousMessages: this.buildMessageHistory(session)
       }
     };
 

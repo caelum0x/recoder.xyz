@@ -11,7 +11,7 @@ import { AIRequest, AIResponse } from '../ai/providers/base-provider';
 export interface UsageEvent {
   id: string;
   userId: string;
-  timestamp: Date;
+  timestamp: Date; 
   model: string;
   provider: string;
   cost: number;
@@ -71,9 +71,11 @@ export class UsageTracker extends EventEmitter {
     perRequestLimit: 0.50 // $0.50 per request limit
   };
 
-  constructor(private thresholds: CostThresholds = {}) {
+  private effectiveThresholds: CostThresholds;
+
+  constructor(thresholds?: Partial<CostThresholds>) {
     super();
-    this.thresholds = { ...this.defaultThresholds, ...thresholds };
+    this.effectiveThresholds = { ...this.defaultThresholds, ...thresholds };
     
     // Cleanup old events every hour
     setInterval(() => this.cleanupOldEvents(), 60 * 60 * 1000);
@@ -160,7 +162,7 @@ export class UsageTracker extends EventEmitter {
     // Assuming $20 monthly plan
     const monthlyRevenue = 20;
     const currentMargin = Math.max(0, (monthlyRevenue - monthly) / monthlyRevenue);
-    const isOverBudget = monthly > this.thresholds.monthlyLimit;
+    const isOverBudget = monthly > this.effectiveThresholds.monthlyLimit;
 
     return {
       daily,
@@ -376,50 +378,50 @@ export class UsageTracker extends EventEmitter {
     const summary = this.getCostSummary(userId);
     
     // Check per-request limit
-    if (event.cost > this.thresholds.perRequestLimit) {
+    if (event.cost > this.effectiveThresholds.perRequestLimit) {
       this.emit('threshold_exceeded', {
         userId,
         type: 'per_request',
-        threshold: this.thresholds.perRequestLimit,
+        threshold: this.effectiveThresholds.perRequestLimit,
         actual: event.cost,
         event
       });
     }
     
     // Check daily thresholds
-    if (summary.daily > this.thresholds.dailyWarning) {
+    if (summary.daily > this.effectiveThresholds.dailyWarning) {
       this.emit('threshold_warning', {
         userId,
         type: 'daily',
-        threshold: this.thresholds.dailyWarning,
+        threshold: this.effectiveThresholds.dailyWarning,
         actual: summary.daily
       });
     }
     
-    if (summary.daily > this.thresholds.dailyLimit) {
+    if (summary.daily > this.effectiveThresholds.dailyLimit) {
       this.emit('threshold_exceeded', {
         userId,
         type: 'daily',
-        threshold: this.thresholds.dailyLimit,
+        threshold: this.effectiveThresholds.dailyLimit,
         actual: summary.daily
       });
     }
     
     // Check monthly thresholds
-    if (summary.monthly > this.thresholds.monthlyWarning) {
+    if (summary.monthly > this.effectiveThresholds.monthlyWarning) {
       this.emit('threshold_warning', {
         userId,
         type: 'monthly',
-        threshold: this.thresholds.monthlyWarning,
+        threshold: this.effectiveThresholds.monthlyWarning,
         actual: summary.monthly
       });
     }
     
-    if (summary.monthly > this.thresholds.monthlyLimit) {
+    if (summary.monthly > this.effectiveThresholds.monthlyLimit) {
       this.emit('threshold_exceeded', {
         userId,
         type: 'monthly',
-        threshold: this.thresholds.monthlyLimit,
+        threshold: this.effectiveThresholds.monthlyLimit,
         actual: summary.monthly
       });
     }

@@ -12,7 +12,7 @@ export interface CacheEntry {
   id: string;
   request: AIRequest;
   response: AIResponse;
-  createdAt: Date;
+  createdAt: Date; 
   lastAccessed: Date;
   accessCount: number;
   cost: number;
@@ -292,7 +292,11 @@ export class ContextCacheManager {
     }
 
     // Cache if reasonable cost and size
-    return (response.usage.cost || 0) > 0.001 && response.content && response.content.length > 100;
+    return (
+      (response.usage.cost || 0) > 0.001 &&
+      typeof response.content === 'string' &&
+      response.content.length > 100
+    );
   }
 
   /**

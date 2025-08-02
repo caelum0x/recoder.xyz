@@ -14,7 +14,7 @@ import {
   PluginErrorCode,
   PluginEvent,
   PluginAnalytics,
-  PluginSecurity,
+  PluginSecurity, 
   PluginLogger,
   PluginStorage,
   PluginAPI,
@@ -22,6 +22,7 @@ import {
   PluginUI
 } from './types';
 import { PluginSandbox } from './sandbox';
+//import { PluginSandbox } from './sandbox';
 
 export class PluginLifecycleManager extends EventEmitter {
   private plugins: Map<string, LoadedPlugin> = new Map();
@@ -35,7 +36,14 @@ export class PluginLifecycleManager extends EventEmitter {
     private config: LifecycleConfig
   ) {
     super();
-    this.sandbox = new PluginSandbox(config.sandboxConfig);
+    this.sandbox = new PluginSandbox({
+      allowNetworkAccess: config.sandboxConfig.networkAccess,
+      allowFileSystemAccess: false,
+      allowShellAccess: false,
+      timeoutMs: config.sandboxConfig.timeout,
+      memoryLimitMB: config.sandboxConfig.memoryLimit,
+      cpuLimitPercent: 10
+    });
     this.setupCleanupHandlers();
   }
 
@@ -391,8 +399,9 @@ export class PluginLifecycleManager extends EventEmitter {
       
       return manifest;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       throw new PluginError(
-        `Failed to load plugin manifest: ${error.message}`,
+        `Failed to load plugin manifest: ${errorMessage}`,
         pluginPath,
         PluginErrorCode.INVALID_MANIFEST,
         error
@@ -459,8 +468,9 @@ export class PluginLifecycleManager extends EventEmitter {
       
       return plugin;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       throw new PluginError(
-        `Failed to load plugin module: ${error.message}`,
+        `Failed to load plugin module: ${errorMessage}`,
         manifest.name,
         PluginErrorCode.ACTIVATION_FAILED,
         error

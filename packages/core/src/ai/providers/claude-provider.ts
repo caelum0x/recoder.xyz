@@ -10,7 +10,7 @@ export interface ClaudeConfig extends ProviderConfig {
   apiKey: string;
   baseUrl?: string;
   defaultModel?: 'claude-sonnet-4' | 'claude-opus-4' | 'claude-3.7-sonnet' | 'claude-3.5-haiku';
-  anthropicVersion?: string;
+  anthropicVersion?: string; 
 }
 
 export interface ClaudeMessage {
@@ -86,7 +86,7 @@ export interface ClaudeStreamEvent {
 }
 
 export class ClaudeProvider extends BaseAIProvider {
-  private config: ClaudeConfig;
+  protected config: ClaudeConfig;
   private baseUrl: string;
 
   constructor(config: ClaudeConfig) {
@@ -124,7 +124,8 @@ export class ClaudeProvider extends BaseAIProvider {
           responseTime: Date.now() - startTime,
           finishReason: this.mapStopReason(claudeResponse.stop_reason),
           confidence: this.calculateConfidence(claudeResponse),
-          toolCalls: this.extractToolCalls(claudeResponse.content)
+          toolCalls: this.extractToolCalls(claudeResponse.content),
+          cached: false
         }
       };
 
@@ -189,7 +190,8 @@ export class ClaudeProvider extends BaseAIProvider {
               model: request.options.model || this.config.defaultModel || 'claude-sonnet-4',
               provider: this.providerId,
               responseTime: Date.now() - startTime,
-              finishReason: 'completed'
+              finishReason: 'completed',
+              cached: false
             },
             streaming: {
               isComplete: true,
@@ -364,7 +366,7 @@ export class ClaudeProvider extends BaseAIProvider {
   /**
    * Make streaming API request to Claude
    */
-  private async makeStreamingAPIRequest(endpoint: string, body: any): AsyncGenerator<string> {
+  private async makeStreamingAPIRequest(endpoint: string, body: any): Promise<AsyncGenerator<string, any, any>> {
     const url = `${this.baseUrl}${endpoint}`;
     
     const response = await fetch(url, {
@@ -390,26 +392,33 @@ export class ClaudeProvider extends BaseAIProvider {
     const decoder = new TextDecoder();
     let buffer = '';
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    async function* streamGenerator() {
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') return;
-            yield data;
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') return;
+              yield data;
+            }
           }
         }
+      } finally {
+        reader.releaseLock();
       }
-    } finally {
-      reader.releaseLock();
     }
+
+    return streamGenerator();
   }
 
   /**

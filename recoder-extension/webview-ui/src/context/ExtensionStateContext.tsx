@@ -32,7 +32,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setShowTaskTimeline: (value: boolean) => void // kilocode_change
 	hoveringTaskTimeline?: boolean // kilocode_change
 	setHoveringTaskTimeline: (value: boolean) => void // kilocode_change
-	systemNotificationsEnabled?: boolean // kilocode_change
+	systemNotificationsEnabled: boolean // kilocode_change
 	setSystemNotificationsEnabled: (value: boolean) => void // kilocode_change
 	didHydrateState: boolean
 	showWelcome: boolean
@@ -48,12 +48,16 @@ export interface ExtensionStateContextType extends ExtensionState {
 	localRules: ClineRulesToggles
 	globalWorkflows: ClineRulesToggles
 	localWorkflows: ClineRulesToggles
+	globalRulesToggles: ClineRulesToggles
+	localRulesToggles: ClineRulesToggles
+	globalWorkflowToggles: ClineRulesToggles
+	localWorkflowToggles: ClineRulesToggles
 	// kilocode_change start
 	organizationAllowList: OrganizationAllowList
 	cloudIsAuthenticated: boolean
 	sharingEnabled: boolean
 	maxConcurrentFileReads?: number
-	allowVeryLargeReads?: boolean // kilocode_change
+	allowVeryLargeReads: boolean // kilocode_change
 	mdmCompliant?: boolean
 	hasOpenedModeSelector: boolean // New property to track if user has opened mode selector
 	setHasOpenedModeSelector: (value: boolean) => void // Setter for the new property
@@ -122,11 +126,11 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setCustomSupportPrompts: (value: CustomSupportPrompts) => void
 	enhancementApiConfigId?: string
 	setEnhancementApiConfigId: (value: string) => void
-	commitMessageApiConfigId?: string // kilocode_change
+	commitMessageApiConfigId: string // kilocode_change
 	setCommitMessageApiConfigId: (value: string) => void // kilocode_change
-	autocompleteApiConfigId?: string // kilocode_change
+	autocompleteApiConfigId: string // kilocode_change
 	setAutocompleteApiConfigId: (value: string) => void // kilocode_change
-	ghostServiceSettings?: GhostServiceSettings // kilocode_change
+	ghostServiceSettings: GhostServiceSettings // kilocode_change
 	setGhostServiceSettings: (value: GhostServiceSettings) => void // kilocode_change
 	setExperimentEnabled: (id: ExperimentId, enabled: boolean) => void
 	setAutoApprovalEnabled: (value: boolean) => void
@@ -258,6 +262,11 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		},
 		codebaseIndexModels: { ollama: {}, openai: {} },
 		alwaysAllowUpdateTodoList: true,
+		systemNotificationsEnabled: false,
+		localWorkflowToggles: {},
+		globalRulesToggles: {},
+		localRulesToggles: {},
+		globalWorkflowToggles: {},
 	})
 
 	const [didHydrateState, setDidHydrateState] = useState(false)

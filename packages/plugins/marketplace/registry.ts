@@ -7,7 +7,7 @@ import {
   PluginMetadata,
   PluginCategory,
   PluginSearchOptions,
-  PluginSearchResult,
+  PluginSearchResult, 
   PluginManifest,
   PluginUpdate
 } from '../plugin-sdk/types';
@@ -125,7 +125,8 @@ export class PluginRegistry extends EventEmitter {
         hasMore: offset + limit < total
       };
     } catch (error) {
-      console.error('Plugin search failed:', error);
+      // Fix: error is unknown, so use type guard for .message
+      console.error('Plugin search failed:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -133,23 +134,23 @@ export class PluginRegistry extends EventEmitter {
   /**
    * Get detailed information about a specific plugin
    */
-  async getPlugin(pluginId: string): Promise<PluginMetadata | null> {
+  async getPlugin(pluginId: string): Promise<PluginMetadata | undefined> {
     try {
       // Try cache first
       let plugin = this.cache.get(pluginId);
       
+      // Fix: plugin can be null, but return type is PluginMetadata | undefined
       if (!plugin) {
-        // Fetch from remote if not in cache
-        plugin = await this.fetchPluginFromRemote(pluginId);
+        const remotePlugin = await this.fetchPluginFromRemote(pluginId);
+        plugin = remotePlugin === null ? undefined : remotePlugin;
         if (plugin) {
           await this.addToCache(plugin);
         }
       }
-
-      return plugin || null;
+      return plugin;
     } catch (error) {
       console.error(`Failed to get plugin ${pluginId}:`, error);
-      return null;
+      return undefined;
     }
   }
 
@@ -246,7 +247,8 @@ export class PluginRegistry extends EventEmitter {
           updates.push(update);
         }
       } catch (error) {
-        console.error(`Failed to check updates for ${installed.id}:`, error);
+        // Fix: error is unknown, so use type guard for .message
+        console.error(`Failed to check updates for ${installed.id}:`, error instanceof Error ? error.message : String(error));
       }
     }
 
@@ -303,8 +305,9 @@ export class PluginRegistry extends EventEmitter {
 
       console.log(`Registry synced: ${remotePlugins.length} plugins`);
     } catch (error) {
-      console.error('Failed to sync with remote registry:', error);
-      this.emit('syncFailed', { error: error.message });
+      // Fix: error is unknown, so use type guard for .message
+      console.error('Failed to sync with remote registry:', error instanceof Error ? error.message : String(error));
+      this.emit('syncFailed', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -350,7 +353,8 @@ export class PluginRegistry extends EventEmitter {
       this.lastSync = await this.storage.getLastSync();
       console.log(`Loaded ${cached.length} plugins from cache`);
     } catch (error) {
-      console.warn('Failed to load from cache:', error);
+      // Fix: error is unknown, so use type guard for .message
+      console.warn('Failed to load from cache:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -360,7 +364,8 @@ export class PluginRegistry extends EventEmitter {
         try {
           await this.syncWithRemote();
         } catch (error) {
-          console.error('Auto-sync failed:', error);
+          // Fix: error is unknown, so use type guard for .message
+          console.error('Auto-sync failed:', error instanceof Error ? error.message : String(error));
         }
       }, this.config.autoSyncInterval);
     }
@@ -554,7 +559,7 @@ export class PluginRegistry extends EventEmitter {
     if (!response.ok) {
       throw new Error(`Registry fetch failed: ${response.statusText}`);
     }
-    return await response.json();
+    return await response.json() as PluginMetadata[];
   }
 
   private async fetchPluginFromRemote(pluginId: string): Promise<PluginMetadata | null> {
@@ -563,9 +568,10 @@ export class PluginRegistry extends EventEmitter {
       if (!response.ok) {
         return null;
       }
-      return await response.json();
+      return await response.json() as PluginMetadata | null;
     } catch (error) {
-      console.error(`Failed to fetch plugin ${pluginId}:`, error);
+      // Fix: error is unknown, so use type guard for .message
+      console.error(`Failed to fetch plugin ${pluginId}:`, error instanceof Error ? error.message : String(error));
       return null;
     }
   }
@@ -586,8 +592,9 @@ export class PluginRegistry extends EventEmitter {
     try {
       const response = await fetch(`${this.config.registryUrl}/plugins/${pluginId}/breaking-changes?from=${fromVersion}&to=${toVersion}`);
       if (response.ok) {
+        // Fix: data is unknown, so cast to expected type
         const data = await response.json();
-        return data.hasBreakingChanges;
+        return (data as { hasBreakingChanges: boolean }).hasBreakingChanges;
       }
     } catch (error) {
       console.error(`Failed to check breaking changes for ${pluginId}:`, error);
@@ -599,8 +606,9 @@ export class PluginRegistry extends EventEmitter {
     try {
       const response = await fetch(`${this.config.registryUrl}/plugins/${pluginId}/size/${version}`);
       if (response.ok) {
+        // Fix: data is unknown, so cast to expected type
         const data = await response.json();
-        return data.size;
+        return (data as { size: number }).size;
       }
     } catch (error) {
       console.error(`Failed to get package size for ${pluginId}@${version}:`, error);
@@ -653,7 +661,8 @@ export class PluginRegistry extends EventEmitter {
    */
   async cleanup(): Promise<void> {
     if (this.syncInterval) {
-      clearInterval(this.syncInterval);
+      // Fix: NodeJS.Timer type for clearInterval
+      clearInterval(this.syncInterval as unknown as NodeJS.Timeout);
       this.syncInterval = null;
     }
 

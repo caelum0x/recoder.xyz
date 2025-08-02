@@ -6,7 +6,7 @@ import { CommandExecutionStatus, commandExecutionStatusSchema } from "@roo-code/
 
 import { ExtensionMessage } from "@roo/ExtensionMessage"
 import { safeJsonParse } from "@roo/safeJsonParse"
-import { COMMAND_OUTPUT_STRING } from "@roo/combineCommandSequences"
+import { COMMAND_OUTPUT_STRING } from "../../../../src/shared/combineCommandSequences"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

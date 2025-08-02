@@ -9,7 +9,7 @@ import { EventEmitter } from 'events';
 import { OpenRouterUnifiedProvider } from '../ai/providers/openrouter-unified-provider';
 import { AIRequest, AIResponse } from '../ai/providers/base-provider';
 
-export interface ReasoningStep {
+export interface ReasoningStep { 
   id: string;
   type: 'observation' | 'hypothesis' | 'analysis' | 'conclusion' | 'decision' | 'reflection';
   content: string;
@@ -250,23 +250,22 @@ Think deeply and show your work. Don't just give answers - show the thinking pro
       options: {
         model: 'deepseek/deepseek-r1',
         maxTokens: 4000,
-        temperature: 0.1, // Low temperature for consistent reasoning
-        // Enable reasoning mode for DeepSeek R1
-        reasoning: true,
-        step_by_step: true
+        temperature: 0.1,
+        priority: ''
       },
-      metadata: { 
+      metadata: {
         taskType: 'reasoning',
         sessionId: session.id,
-        approach: session.metadata.approach
+        userId: '',
+        timestamp: 0
       },
       context: {
-        domain: session.metadata.domain,
-        previousSteps: session.steps.map(step => ({
-          type: step.type,
-          content: step.content,
-          confidence: step.confidence
-        }))
+       // domain: session.metadata.domain,
+      // previousSteps: session.steps.map(step => ({
+      //   type: step.type,
+      //   content: step.content,
+      //   confidence: step.confidence
+      // }))
       }
     };
 
@@ -434,14 +433,15 @@ Continue with the same step format, building on the previous reasoning.`;
       const node: ReasoningNode = {
         id: step.id,
         label: `${step.type}: ${step.content.substring(0, 50)}...`,
-        type: step.type,
+        //type: step.type,
         position: {
           x: nodesAtLevel * nodeSpacing,
           y: currentLevel * levelHeight
         },
         connections: step.dependencies,
         confidence: step.confidence,
-        status: 'completed'
+        status: 'completed',
+        type: 'observation'
       };
       
       nodes.push(node);

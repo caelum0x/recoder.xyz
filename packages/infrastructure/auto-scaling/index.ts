@@ -154,7 +154,7 @@ interface ResourceMetrics {
 interface ScalingEvent {
   id: string;
   timestamp: Date;
-  type: 'scale-up' | 'scale-down' | 'scale-out' | 'scale-in';
+  type: 'scale-up' | 'scale-down' | 'scale-out' | 'scale-in' | 'resize';
   resource: string;
   trigger: string;
   policy: string;
@@ -537,7 +537,7 @@ export class AutoScaling {
       efficiency: {
         resourceUtilization: totalUtilization,
         wastedCapacity: Math.max(0, 100 - totalUtilization),
-        rightsizingOpportunities: this.recommendations.filter(r => r.type === 'cost-optimization').length,
+        rightSizingOpportunities: this.recommendations.filter(r => r.type === 'cost-optimization').length,
         costOptimizationPotential: await this.calculateCostOptimizationPotential()
       },
       predictions: {

@@ -12,8 +12,8 @@ try {
 	console.warn("Failed to load environment variables:", e)
 }
 
-import { CloudService } from "@recoder/cloud"
-import { TelemetryService, PostHogTelemetryClient } from "@recoder/telemetry"
+import { CloudService } from "@roo-code/cloud"
+import { TelemetryService, PostHogTelemetryClient } from "@roo-code/telemetry"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
 import { createOutputChannelLogger, createDualLogger } from "./utils/outputChannelLogger"
@@ -21,7 +21,7 @@ import { createOutputChannelLogger, createDualLogger } from "./utils/outputChann
 import { Package } from "./shared/package"
 import { formatLanguage } from "./shared/language"
 import { ContextProxy } from "./core/config/ContextProxy"
-import { ClineProvider } from "./core/webview/ClineProvider"
+import { RecoderProvider } from "./core/webview/RecoderProvider"
 import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
 import { McpServerManager } from "./services/mcp/McpServerManager"
@@ -45,6 +45,7 @@ import { initializeI18n } from "./i18n"
 import { registerGhostProvider } from "./services/ghost" // recoder_integration
 import { recoderAI } from "./services/ai/RecoderAIProvider" // recoder_ai_integration
 import { AuthCommands } from "./services/auth-commands" // recoder_auth_integration
+import { UnifiedAuthProvider } from "./services/unified-auth-provider" // recoder_unified_auth
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -57,12 +58,13 @@ import { AuthCommands } from "./services/auth-commands" // recoder_auth_integrat
 let outputChannel: vscode.OutputChannel
 let extensionContext: vscode.ExtensionContext
 let authCommands: AuthCommands
+let unifiedAuthProvider: UnifiedAuthProvider
 
 // This method is called when your extension is activated.
 // Your extension is activated the very first time the command is executed.
 export async function activate(context: vscode.ExtensionContext) {
 	extensionContext = context
-	outputChannel = vscode.window.createOutputChannel("Kilo-Code")
+	outputChannel = vscode.window.createOutputChannel("Recoder")
 	context.subscriptions.push(outputChannel)
 	outputChannel.appendLine(`${Package.name} extension activated - ${JSON.stringify(Package)}`)
 
@@ -83,7 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Initialize Roo Code Cloud service.
 	await CloudService.createInstance(context, {
-		stateChanged: () => ClineProvider.getVisibleInstance()?.postStateToWebview(),
+		stateChanged: () => RecoderProvider.getVisibleInstance()?.postStateToWebview(),
 		log: cloudLogger,
 	})
 
@@ -97,7 +99,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	TerminalRegistry.initialize()
 
 	// Get default commands from configuration.
-	const defaultCommands = vscode.workspace.getConfiguration(Package.name).get<string[]>("allowedCommands") || []
+	const defaultCommands = vscode.workspace.getConfiguration("recoder").get<string[]>("allowedCommands") || []
 
 	// Initialize global state if not already set.
 	if (!context.globalState.get("allowedCommands")) {
@@ -121,7 +123,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	}
 
-	const provider = new ClineProvider(context, outputChannel, "sidebar", contextProxy, codeIndexManager, mdmService)
+	const provider = new RecoderProvider(context, outputChannel, "sidebar", contextProxy, codeIndexManager, mdmService)
 	TelemetryService.instance.setProvider(provider)
 
 	if (codeIndexManager) {
@@ -129,24 +131,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(ClineProvider.sideBarId, provider, {
+		vscode.window.registerWebviewViewProvider(RecoderProvider.sideBarId, provider, {
 			webviewOptions: { retainContextWhenHidden: true },
 		}),
 	)
 
 	// kilocode_change start
 	if (!context.globalState.get("firstInstallCompleted")) {
-		outputChannel.appendLine("First installation detected, opening Kilo Code sidebar!")
+		outputChannel.appendLine("First installation detected, opening Recoder sidebar!")
 		try {
-			await vscode.commands.executeCommand("kilo-code.SidebarProvider.focus")
+			await vscode.commands.executeCommand("recoder-vscode.SidebarProvider.focus")
 
-			outputChannel.appendLine("Opening Kilo Code walkthrough")
+			outputChannel.appendLine("Opening Recoder walkthrough")
 
 			// this can crash, see:
 			// https://discord.com/channels/1349288496988160052/1395865796026040470
 			await vscode.commands.executeCommand(
 				"workbench.action.openWalkthrough",
-				"kilocode.kilo-code#kiloCodeWalkthrough",
+				"recoderxyz.recoder-vscode#recoderWalkthrough",
 				false,
 			)
 		} catch (error) {
@@ -213,10 +215,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	registerCodeActions(context)
 	registerTerminalActions(context)
 
-	// Initialize recoder.xyz authentication system
+	// Initialize recoder.xyz authentication systems
+	unifiedAuthProvider = new UnifiedAuthProvider(context) // recoder_unified_auth
 	authCommands = new AuthCommands(context) // recoder_auth_integration
 
-	// Allows other extensions to activate once Kilo Code is ready.
+	// Allows other extensions to activate once Recoder is ready.
 	vscode.commands.executeCommand(`${Package.name}.activationCompleted`)
 
 	// Implements the `RooCodeAPI` interface.
@@ -259,7 +262,10 @@ export async function activate(context: vscode.ExtensionContext) {
 export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 	
-	// Cleanup auth commands
+	// Cleanup auth systems
+	if (unifiedAuthProvider) {
+		unifiedAuthProvider.dispose() // recoder_unified_auth
+	}
 	if (authCommands) {
 		authCommands.dispose() // recoder_auth_integration
 	}

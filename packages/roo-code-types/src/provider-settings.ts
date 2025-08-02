@@ -244,6 +244,20 @@ const litellmSchema = baseProviderSettingsSchema.extend({
 	litellmUsePromptCache: z.boolean().optional(),
 })
 
+const kilocodeSchema = baseProviderSettingsSchema.extend({
+	kilocodeToken: z.string().optional(),
+	kilocodeModel: z.string().optional(),
+})
+
+const fireworksSchema = apiModelIdProviderModelSchema.extend({
+	fireworksApiKey: z.string().optional(),
+})
+
+const cerebrasSchema = apiModelIdProviderModelSchema.extend({
+	cerebrasApiKey: z.string().optional(),
+	cerebrasModelId: z.string().optional(),
+})
+
 const defaultSchema = z.object({
 	apiProvider: z.undefined(),
 })
@@ -274,6 +288,9 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	huggingFaceSchema.merge(z.object({ apiProvider: z.literal("huggingface") })),
 	chutesSchema.merge(z.object({ apiProvider: z.literal("chutes") })),
 	litellmSchema.merge(z.object({ apiProvider: z.literal("litellm") })),
+	kilocodeSchema.merge(z.object({ apiProvider: z.literal("kilocode") })),
+	fireworksSchema.merge(z.object({ apiProvider: z.literal("fireworks") })),
+	cerebrasSchema.merge(z.object({ apiProvider: z.literal("cerebras") })),
 	defaultSchema,
 ])
 
@@ -304,6 +321,9 @@ export const providerSettingsSchema = z.object({
 	...huggingFaceSchema.shape,
 	...chutesSchema.shape,
 	...litellmSchema.shape,
+	...kilocodeSchema.shape,
+	...fireworksSchema.shape,
+	...cerebrasSchema.shape,
 	...codebaseIndexProviderSchema.shape,
 })
 
@@ -322,6 +342,8 @@ export const MODEL_ID_KEYS: Partial<keyof ProviderSettings>[] = [
 	"requestyModelId",
 	"litellmModelId",
 	"huggingFaceModelId",
+	"kilocodeModel",
+	"cerebrasModelId",
 ]
 
 export const getModelId = (settings: ProviderSettings): string | undefined => {

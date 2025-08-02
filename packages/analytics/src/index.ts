@@ -150,5 +150,31 @@ export class RecoderAnalytics {
   }
 }
 
-// Default export
+// Quality assessment
+export { QualityAssessor, qualityAssessor } from './quality/quality-assessor';
+export type {
+  QualityMetrics,
+  QualityAssessmentRequest,
+  QualityAssessmentResult
+} from './quality/quality-assessor';
+
+// System monitoring
+export { 
+  initializeMonitoring, 
+  getSystemHealthSummary, 
+  monitoringSystem 
+} from './monitoring/index';
+
+// A/B Testing system placeholder - TODO: implement
+export class ABTestingSystem {
+  constructor() {
+    // Placeholder implementation
+  }
+  
+  async runTest(testId: string, variants: any[]): Promise<any> {
+    return { testId, winner: variants[0], confidence: 0.95 };
+  }
+}
+
+// Default export  
 export default RecoderAnalytics;

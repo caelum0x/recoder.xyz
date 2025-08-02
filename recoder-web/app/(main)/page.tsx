@@ -20,7 +20,7 @@ import Header from "@/components/header";
 import { useS3Upload } from "next-s3-upload";
 import UploadIcon from "@/components/icons/upload-icon";
 import { XCircleIcon } from "@heroicons/react/20/solid";
-import { MODELS, SUGGESTED_PROMPTS } from "@/lib/constants";
+import { MODELS, SUGGESTED_PROMPTS, AI_PROVIDERS } from "@/lib/constants";
 
 export default function Home() {
   const { setStreamPromise } = use(Context);
@@ -29,16 +29,51 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState(MODELS[0].value);
   const [quality, setQuality] = useState("high");
+  const [smartRouting, setSmartRouting] = useState(true);
+  const [recommendedModel, setRecommendedModel] = useState<string | null>(null);
+  const [aiProvider, setAiProvider] = useState("auto");
   const [screenshotUrl, setScreenshotUrl] = useState<string | undefined>(
     undefined,
   );
   const [screenshotLoading, setScreenshotLoading] = useState(false);
   const selectedModel = MODELS.find((m) => m.value === model);
+  const selectedProvider = selectedModel?.provider || "together";
+  const isUsingRecommended = smartRouting && recommendedModel === model;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isPending, startTransition] = useTransition();
 
   const { uploadToS3 } = useS3Upload();
+  
+  // Smart model recommendation based on prompt
+  const getSmartRecommendation = async (promptText: string) => {
+    if (!smartRouting || promptText.length < 10) return;
+    
+    try {
+      const response = await fetch('/api/smart-routing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: promptText,
+          preferences: {
+            speed: quality === 'low' ? 'fast' : 'balanced',
+            cost: 'medium'
+          }
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setRecommendedModel(result.recommendedModel);
+        if (aiProvider === 'auto') {
+          setModel(result.recommendedModel);
+        }
+      }
+    } catch (error) {
+      console.warn('Smart routing failed:', error);
+    }
+  };
+  
   const handleScreenshotUpload = async (event: any) => {
     if (prompt.length === 0) setPrompt("Build this");
     setQuality("low");
@@ -69,23 +104,32 @@ export default function Home() {
         <Header />
 
         <div className="mt-10 flex grow flex-col items-center px-4 lg:mt-16">
-          <a
-            className="mb-4 inline-flex shrink-0 items-center rounded-full border-[0.5px] bg-white px-7 py-2 text-xs text-gray-800 shadow-[0px_1px_1px_0px_rgba(0,0,0,0.25)] md:text-base"
-            href="https://togetherai.link/?utm_source=llamacoder&utm_medium=referral&utm_campaign=example-app"
-            target="_blank"
-          >
-            <span className="text-center">
-              Powered by <span className="font-semibold">Together AI</span>.
-              Used by
-              <span className="font-semibold"> 1.1M+ users. </span>
-            </span>
-          </a>
+          <div className="mb-4 flex flex-wrap justify-center gap-2">
+            <div className="inline-flex shrink-0 items-center rounded-full border-[0.5px] bg-white px-7 py-2 text-xs text-gray-800 shadow-[0px_1px_1px_0px_rgba(0,0,0,0.25)] md:text-base">
+              <span className="text-center">
+                Powered by <span className="font-semibold">Multi-AI Intelligence</span>
+              </span>
+            </div>
+            <div className="inline-flex shrink-0 items-center rounded-full border-[0.5px] bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 text-xs text-gray-700 shadow-[0px_1px_1px_0px_rgba(0,0,0,0.15)]">
+              <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1">
+                  🤖 Claude • ⚡ Groq • 🔥 Together • 🌍 OpenRouter
+                </span>
+              </span>
+            </div>
+          </div>
 
           <h1 className="mt-4 text-balance text-center text-4xl leading-none text-gray-700 md:text-[64px] lg:mt-8">
             Turn your <span className="text-blue-500">idea</span>
-            <br className="hidden md:block" /> into an{" "}
-            <span className="text-blue-500">app</span>
+            <br className="hidden md:block" /> into{" "}
+            <span className="bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
+              real apps
+            </span>
           </h1>
+          <p className="mt-4 text-center text-gray-600 max-w-2xl mx-auto">
+            AI that generates <strong>production-ready code</strong> with real functionality. 
+            Smart model routing automatically selects the best AI for your task.
+          </p>
 
           <form
             className="relative w-full max-w-2xl pt-6 lg:pt-12"
@@ -175,7 +219,13 @@ export default function Home() {
                       rows={1}
                       className="peer absolute inset-0 w-full resize-none bg-transparent p-3 placeholder-gray-500 focus-visible:outline-none disabled:opacity-50"
                       value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
+                      onChange={(e) => {
+                        setPrompt(e.target.value);
+                        // Trigger smart recommendation after user stops typing
+                        if (smartRouting && e.target.value.length > 10) {
+                          setTimeout(() => getSmartRecommendation(e.target.value), 1000);
+                        }
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && !event.shiftKey) {
                           event.preventDefault();
@@ -194,31 +244,78 @@ export default function Home() {
                       value={model}
                       onValueChange={setModel}
                     >
-                      <Select.Trigger className="inline-flex items-center gap-1 rounded-md p-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300">
+                      <Select.Trigger className={`inline-flex items-center gap-1 rounded-md p-1 text-sm hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300 ${
+                        isUsingRecommended ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:text-gray-700'
+                      }`}>
                         <Select.Value aria-label={model}>
-                          <span>{selectedModel?.label}</span>
+                          <span className="flex items-center gap-1">
+                            {isUsingRecommended && <span className="text-xs">🎯</span>}
+                            {selectedModel?.label}
+                            {selectedModel?.provider && (
+                              <span className="text-xs text-gray-500">({selectedModel.provider})</span>
+                            )}
+                          </span>
                         </Select.Value>
                         <Select.Icon>
                           <ChevronDownIcon className="size-3" />
                         </Select.Icon>
                       </Select.Trigger>
                       <Select.Portal>
-                        <Select.Content className="overflow-hidden rounded-md bg-white shadow ring-1 ring-black/5">
+                        <Select.Content className="overflow-hidden rounded-md bg-white shadow ring-1 ring-black/5 max-h-96 overflow-y-auto">
                           <Select.Viewport className="space-y-1 p-2">
-                            {MODELS.map((m) => (
-                              <Select.Item
-                                key={m.value}
-                                value={m.value}
-                                className="flex cursor-pointer items-center gap-1 rounded-md p-1 text-sm data-[highlighted]:bg-gray-100 data-[highlighted]:outline-none"
-                              >
-                                <Select.ItemText className="inline-flex items-center gap-2 text-gray-500">
-                                  {m.label}
-                                </Select.ItemText>
-                                <Select.ItemIndicator>
-                                  <CheckIcon className="size-3 text-blue-600" />
-                                </Select.ItemIndicator>
-                              </Select.Item>
-                            ))}
+                            {/* Smart Routing Toggle */}
+                            <div className="px-2 py-1 border-b border-gray-200 mb-2">
+                              <label className="flex items-center gap-2 text-xs text-gray-600">
+                                <input
+                                  type="checkbox"
+                                  checked={smartRouting}
+                                  onChange={(e) => {
+                                    setSmartRouting(e.target.checked);
+                                    if (e.target.checked && prompt.length > 10) {
+                                      getSmartRecommendation(prompt);
+                                    }
+                                  }}
+                                  className="rounded"
+                                />
+                                🧠 Smart AI Selection
+                              </label>
+                            </div>
+                            
+                            {/* Group models by provider */}
+                            {Object.entries(AI_PROVIDERS).map(([providerId, provider]) => {
+                              const providerModels = MODELS.filter(m => m.provider === providerId);
+                              if (providerModels.length === 0 || !provider.available) return null;
+                              
+                              return (
+                                <div key={providerId}>
+                                  <div className="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-50 rounded">
+                                    {provider.name} {!provider.available && '(Unavailable)'}
+                                  </div>
+                                  {providerModels.map((m) => (
+                                    <Select.Item
+                                      key={m.value}
+                                      value={m.value}
+                                      className="flex cursor-pointer items-center gap-1 rounded-md p-1 text-sm data-[highlighted]:bg-gray-100 data-[highlighted]:outline-none ml-2"
+                                    >
+                                      <Select.ItemText className="inline-flex items-center gap-2 text-gray-500 flex-1">
+                                        <div className="flex flex-col">
+                                          <span className="flex items-center gap-1">
+                                            {m.value === recommendedModel && smartRouting && <span className="text-xs">🎯</span>}
+                                            {m.label}
+                                          </span>
+                                          {m.description && (
+                                            <span className="text-xs text-gray-400">{m.description}</span>
+                                          )}
+                                        </div>
+                                      </Select.ItemText>
+                                      <Select.ItemIndicator>
+                                        <CheckIcon className="size-3 text-blue-600" />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                  ))}
+                                </div>
+                              );
+                            })}
                           </Select.Viewport>
                           <Select.ScrollDownButton />
                           <Select.Arrow />
@@ -322,16 +419,48 @@ export default function Home() {
                 )}
               </div>
               <div className="mt-4 flex w-full flex-wrap justify-center gap-3">
-                {SUGGESTED_PROMPTS.map((v) => (
-                  <button
-                    key={v.title}
-                    type="button"
-                    onClick={() => setPrompt(v.description)}
-                    className="rounded bg-gray-200 px-2.5 py-1.5 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300"
-                  >
-                    {v.title}
-                  </button>
-                ))}
+                {SUGGESTED_PROMPTS.map((v) => {
+                  const isComplex = (v as any).complexity === 'complex';
+                  const recommendedModelInfo = MODELS.find(m => m.value === (v as any).recommendedModel);
+                  
+                  return (
+                    <button
+                      key={v.title}
+                      type="button"
+                      onClick={() => {
+                        setPrompt(v.description);
+                        if (smartRouting && (v as any).recommendedModel) {
+                          setModel((v as any).recommendedModel);
+                          setRecommendedModel((v as any).recommendedModel);
+                        }
+                      }}
+                      className={`rounded px-2.5 py-1.5 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300 ${
+                        isComplex ? 'bg-gradient-to-r from-purple-200 to-blue-200 border border-purple-300' : 'bg-gray-200'
+                      }`}
+                      title={recommendedModelInfo ? `Recommended: ${recommendedModelInfo.label}` : undefined}
+                    >
+                      <span className="flex items-center gap-1">
+                        {isComplex && <span className="text-xs">✨</span>}
+                        {v.title}
+                        {recommendedModelInfo && (
+                          <span className="text-xs text-gray-500">({recommendedModelInfo.provider})</span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              
+              {/* Templates Link */}
+              <div className="mt-6 text-center">
+                <Link
+                  href="/templates"
+                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-100 to-blue-100 px-4 py-2 text-sm font-medium text-purple-700 hover:from-purple-200 hover:to-blue-200 transition-all duration-200 border border-purple-200"
+                >
+                  <span>🎨</span>
+                  Browse Templates & Components
+                  <span>→</span>
+                </Link>
               </div>
             </Fieldset>
           </form>

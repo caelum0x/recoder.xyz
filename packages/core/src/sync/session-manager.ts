@@ -9,7 +9,7 @@ import { EventEmitter } from 'events';
 import { WebSocket, WebSocketServer } from 'ws';
 import Redis from 'redis';
 
-export interface UserSession {
+export interface UserSession { 
   sessionId: string;
   userId: string;
   platform: 'cli' | 'vscode' | 'web' | 'api';
@@ -28,6 +28,7 @@ export interface UserSession {
 }
 
 export interface SessionState {
+  lastActivity: any;
   currentProject?: {
     path: string;
     name: string;
@@ -209,7 +210,8 @@ export class SessionManager extends EventEmitter {
           preferredProvider: 'claude',
           fallbackProviders: ['groq', 'gemini'],
           customSettings: {}
-        }
+        },
+        lastActivity: undefined
       }
     };
 
@@ -476,7 +478,7 @@ export class SessionManager extends EventEmitter {
       }
 
       // Also store in Redis for offline sync
-      await this.redis.lpush(`sync:${session.sessionId}`, JSON.stringify(event));
+      await this.redis.lPush(`sync:${session.sessionId}`, JSON.stringify(event));
       await this.redis.expire(`sync:${session.sessionId}`, 24 * 60 * 60); // 24 hours
     }
   }
@@ -548,7 +550,7 @@ export class SessionManager extends EventEmitter {
       });
       
       // Also add to user's session list
-      await this.redis.sadd(`user_sessions:${session.userId}`, session.sessionId);
+      await this.redis.sAdd(`user_sessions:${session.userId}`, session.sessionId);
     } catch (error) {
       console.error('Failed to persist session:', error);
     }
@@ -559,7 +561,7 @@ export class SessionManager extends EventEmitter {
    */
   private async persistChatMessage(message: ChatMessage): Promise<void> {
     try {
-      await this.redis.lpush(`chat:${message.sessionId}`, JSON.stringify(message));
+      await this.redis.lPush(`chat:${message.sessionId}`, JSON.stringify(message));
       await this.redis.expire(`chat:${message.sessionId}`, 90 * 24 * 60 * 60); // 90 days
     } catch (error) {
       console.error('Failed to persist chat message:', error);

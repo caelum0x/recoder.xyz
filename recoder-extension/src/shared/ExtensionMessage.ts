@@ -220,7 +220,6 @@ export type ExtensionState = Pick<
 	| "allowedMaxRequests"
 	| "browserToolEnabled"
 	| "browserViewportSize"
-	| "showAutoApproveMenu" // kilocode_change
 	| "screenshotQuality"
 	| "remoteBrowserEnabled"
 	| "remoteBrowserHost"
@@ -234,7 +233,6 @@ export type ExtensionState = Pick<
 	// | "showRooIgnoredFiles" // Optional in GlobalSettings, required here.
 	// | "maxReadFileLine" // Optional in GlobalSettings, required here.
 	| "maxConcurrentFileReads" // Optional in GlobalSettings, required here.
-	| "allowVeryLargeReads" // kilocode_change
 	| "terminalOutputLineLimit"
 	| "terminalShellIntegrationTimeout"
 	| "terminalShellIntegrationDisabled"
@@ -258,19 +256,11 @@ export type ExtensionState = Pick<
 	| "customModePrompts"
 	| "customSupportPrompts"
 	| "enhancementApiConfigId"
-	| "localWorkflowToggles" // kilocode_change
-	| "globalRulesToggles" // kilocode_change
-	| "localRulesToggles" // kilocode_change
-	| "globalWorkflowToggles" // kilocode_change
-	| "commitMessageApiConfigId" // kilocode_change
-	| "autocompleteApiConfigId" // kilocode_change
-	| "ghostServiceSettings" // kilocode_change
 	| "condensingApiConfigId"
 	| "customCondensingPrompt"
 	| "codebaseIndexConfig"
 	| "codebaseIndexModels"
 	| "profileThresholds"
-	| "systemNotificationsEnabled" // kilocode_change
 > & {
 	version: string
 	clineMessages: ClineMessage[]
@@ -323,6 +313,17 @@ export type ExtensionState = Pick<
 	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
 	profileThresholds: Record<string, number>
 	hasOpenedModeSelector: boolean
+	
+	// Extension-specific fields not in GlobalSettings
+	commitMessageApiConfigId: string // kilocode_change
+	autocompleteApiConfigId: string // kilocode_change
+	ghostServiceSettings: any // kilocode_change
+	allowVeryLargeReads: boolean // kilocode_change
+	systemNotificationsEnabled: boolean // kilocode_change
+	localWorkflowToggles: any // kilocode_change
+	globalRulesToggles: any // kilocode_change
+	localRulesToggles: any // kilocode_change
+	globalWorkflowToggles: any // kilocode_change
 }
 
 export interface ClineSayTool {

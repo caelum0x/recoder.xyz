@@ -38,7 +38,7 @@ import {
 } from "@src/components/ui"
 import { AlertTriangle } from "lucide-react"
 import { useRooPortal } from "@src/components/ui/hooks/useRooPortal"
-import type { EmbedderProvider } from "@roo/embeddingModels"
+import type { EmbedderProvider } from "@roo-code/types"
 import type { IndexingStatus } from "@roo/ExtensionMessage"
 import { CODEBASE_INDEX_DEFAULTS } from "@roo-code/types"
 

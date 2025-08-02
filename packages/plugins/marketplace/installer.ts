@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as tar from 'tar';
 import * as semver from 'semver';
-import {
+import { 
   PluginMetadata,
   PluginManifest,
   PluginInstallOptions,
@@ -75,7 +75,9 @@ export class PluginInstaller extends EventEmitter {
       return result;
 
     } catch (error) {
-      this.handleInstallError(pluginId, error);
+      // Fix: error is unknown, so use type guard for .message
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.handleInstallError(pluginId, errorMessage);
       throw error;
     }
   }
@@ -153,7 +155,9 @@ export class PluginInstaller extends EventEmitter {
       };
 
     } catch (error) {
-      this.emit('uninstallFailed', { pluginId, error: error.message });
+      // Fix: error is unknown, so use type guard for .message
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.emit('uninstallFailed', { pluginId, error: errorMessage });
       throw error;
     }
   }
@@ -215,7 +219,7 @@ export class PluginInstaller extends EventEmitter {
           success: false,
           fromVersion: plugin.version,
           toVersion: plugin.version,
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         });
       }
     }
@@ -342,9 +346,10 @@ export class PluginInstaller extends EventEmitter {
       };
 
     } catch (error) {
+      // Fix: error is unknown, so use type guard for .message
       return {
         valid: false,
-        errors: [`Verification failed: ${error.message}`]
+        errors: [`Verification failed: ${error instanceof Error ? error.message : String(error)}`]
       };
     }
   }
@@ -375,12 +380,16 @@ export class PluginInstaller extends EventEmitter {
               await this.repairPlugin(pluginId);
               results.repairedPlugins.push(pluginId);
             } catch (repairError) {
-              results.errors.push(`Failed to repair ${pluginId}: ${repairError.message}`);
+              // Fix: repairError is unknown, so use type guard for .message
+              const repairErrorMessage = repairError instanceof Error ? repairError.message : String(repairError);
+              results.errors.push(`Failed to repair ${pluginId}: ${repairErrorMessage}`);
             }
           }
         }
       } catch (error) {
-        results.errors.push(`Failed to verify ${pluginId}: ${error.message}`);
+        // Fix: error is unknown, so use type guard for .message
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        results.errors.push(`Failed to verify ${pluginId}: ${errorMessage}`);
       }
     }
 
@@ -496,14 +505,15 @@ export class PluginInstaller extends EventEmitter {
       };
 
     } catch (error) {
+      // Fix: error is unknown, so use type guard for .message
       progress.status = InstallStatus.FAILED;
-      progress.error = error.message;
+      progress.error = error instanceof Error ? error.message : String(error);
       progress.completedAt = new Date();
 
       this.emit('installFailed', {
         taskId: task.id,
         pluginId: task.pluginId,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       });
 
       throw error;
@@ -518,8 +528,9 @@ export class PluginInstaller extends EventEmitter {
       if (!response.ok) {
         return null;
       }
-      return await response.json();
+      return await response.json() as PluginMetadata;
     } catch (error) {
+      // Fix: error is unknown, so use type guard for .message
       console.error(`Failed to fetch metadata for ${pluginId}:`, error);
       return null;
     }

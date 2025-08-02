@@ -10,7 +10,7 @@ interface AIUsageCost {
   totalTokens: number;
   cost: {
     inputCost: number;
-    outputCost: number;
+    outputCost: number; 
     totalCost: number;
     currency: string;
   };
@@ -291,7 +291,12 @@ export class CostOptimizationEngine {
     includeOptimizations?: boolean;
   }): Promise<{
     totalCost: number;
-    breakdown: Record<string, number>;
+    breakdown: {
+      byModel: Record<string, { cost: number; tokens: number; requests: number }>;
+      byProvider: Record<string, { cost: number; tokens: number; requests: number }>;
+      byFeature: Record<string, { cost: number; tokens: number; requests: number }>;
+      byOperation: Record<string, { cost: number; tokens: number; requests: number }>;
+    };
     trends: Array<{
       period: string;
       cost: number;
@@ -789,8 +794,8 @@ export class CostOptimizationEngine {
     return optimizations;
   }
 
-  private groupCostsBy<T>(costs: AIUsageCost[], keyFn: string | ((cost: AIUsageCost) => T)): Record<string, number> {
-    const groups: Record<string, number> = {};
+  private groupCostsBy<T>(costs: AIUsageCost[], keyFn: string | ((cost: AIUsageCost) => T)): Record<string, { cost: number; tokens: number; requests: number }> {
+    const groups: Record<string, { cost: number; tokens: number; requests: number }> = {};
     
     costs.forEach(cost => {
       let key: string;
@@ -800,7 +805,12 @@ export class CostOptimizationEngine {
         key = String(keyFn(cost));
       }
       
-      groups[key] = (groups[key] || 0) + cost.cost.totalCost;
+      if (!groups[key]) {
+        groups[key] = { cost: 0, tokens: 0, requests: 0 };
+      }
+      groups[key].cost += cost.cost.totalCost;
+      groups[key].tokens += cost.totalTokens;
+      groups[key].requests += 1;
     });
     
     return groups;

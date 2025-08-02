@@ -1,6 +1,6 @@
 import type { ClineMessage } from "@roo-code/types"
-import { combineApiRequests } from "@roo/combineApiRequests"
-import { combineCommandSequences } from "@roo/combineCommandSequences"
+import { combineApiRequests } from "../../../../src/shared/combineApiRequests"
+import { combineCommandSequences } from "../../../../src/shared/combineCommandSequences"
 import { shouldShowInTimeline } from "../messageColors"
 
 /**

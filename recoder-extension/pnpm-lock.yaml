@@ -915,6 +915,21 @@ importers:
         specifier: ^3.25.61
         version: 3.25.67
     devDependencies:
+      '@roo-code/build':
+        specifier: workspace:^
+        version: link:../packages/build
+      '@roo-code/cloud':
+        specifier: workspace:^
+        version: link:../packages/cloud
+      '@roo-code/ipc':
+        specifier: workspace:^
+        version: link:../packages/ipc
+      '@roo-code/telemetry':
+        specifier: workspace:^
+        version: link:../packages/telemetry
+      '@roo-code/types':
+        specifier: workspace:^
+        version: link:../packages/types
       '@types/clone-deep':
         specifier: ^4.0.4
         version: 4.0.4

@@ -13,7 +13,7 @@ export interface AgentTool {
   name: string;
   description: string;
   parameters: {
-    type: 'object';
+    type: 'object'; 
     properties: Record<string, any>;
     required: string[];
   };
@@ -104,12 +104,18 @@ Provide a structured analysis including:
         const response = await this.provider.sendRequest({
           id: `analysis_${Date.now()}`,
           prompt: analysisPrompt,
-          options: { 
+          options: {
             model: 'moonshot/kimi-k2', // Use Kimi K2 for analysis
             maxTokens: 2000,
-            temperature: 0.1
+            temperature: 0.1,
+            priority: ''
           },
-          metadata: { taskType: 'code-analysis' },
+          metadata: {
+            taskType: 'code-analysis',
+            userId: '',
+            sessionId: '',
+            timestamp: 0
+          },
           context: {}
         });
 
@@ -181,12 +187,18 @@ Provide comprehensive information including:
         const response = await this.provider.sendRequest({
           id: `research_${Date.now()}`,
           prompt: researchPrompt,
-          options: { 
+          options: {
             model: 'moonshot/kimi-k2', // Kimi K2 excellent for research
             maxTokens: 3000,
-            temperature: 0.2
+            temperature: 0.2,
+            priority: ''
           },
-          metadata: { taskType: 'research' },
+          metadata: {
+            taskType: 'research',
+            userId: '',
+            sessionId: '',
+            timestamp: 0
+          },
           context: {}
         });
 
@@ -242,12 +254,18 @@ Provide:
         const response = await this.provider.sendRequest({
           id: `decision_${Date.now()}`,
           prompt: decisionPrompt,
-          options: { 
+          options: {
             model: 'deepseek/deepseek-r1', // DeepSeek R1 for reasoning
             maxTokens: 2000,
-            temperature: 0.1
+            temperature: 0.1,
+            priority: ''
           },
-          metadata: { taskType: 'decision-making' },
+          metadata: {
+            taskType: 'decision-making',
+            userId: '',
+            sessionId: '',
+            timestamp: 0
+          },
           context: {}
         });
 
@@ -314,12 +332,18 @@ Provide complete, working code with explanations.`;
         const response = await this.provider.sendRequest({
           id: `codegen_${Date.now()}`,
           prompt: codePrompt,
-          options: { 
+          options: {
             model: 'qwen/qwen-3-coder-480b', // Qwen 3 Coder for code generation
             maxTokens: 4000,
-            temperature: 0.1
+            temperature: 0.1,
+            priority: ''
           },
-          metadata: { taskType: 'code-generation' },
+          metadata: {
+            taskType: 'code-generation',
+            userId: '',
+            sessionId: '',
+            timestamp: 0
+          },
           context: {}
         });
 
@@ -427,12 +451,18 @@ Provide a JSON response with this structure:
     const response = await this.provider.sendRequest({
       id: `planning_${Date.now()}`,
       prompt: planningPrompt,
-      options: { 
+      options: {
         model: 'moonshot/kimi-k2', // Kimi K2 for planning
         maxTokens: 2000,
-        temperature: 0.2
+        temperature: 0.2,
+        priority: ''
       },
-      metadata: { taskType: 'workflow-planning' },
+      metadata: {
+        taskType: 'workflow-planning',
+        userId: '',
+        sessionId: '',
+        timestamp: 0
+      },
       context: {}
     });
 
@@ -581,8 +611,16 @@ Perform the analysis requested and provide insights.`;
     const response = await this.provider.sendRequest({
       id: `analysis_${Date.now()}`,
       prompt: analysisPrompt,
-      options: { model, maxTokens: 2000, temperature: 0.1 },
-      metadata: { taskType: 'analysis' },
+      options: {
+        model, maxTokens: 2000, temperature: 0.1,
+        priority: ''
+      },
+      metadata: {
+        taskType: 'analysis',
+        userId: '',
+        sessionId: '',
+        timestamp: 0
+      },
       context: {}
     });
 
@@ -659,8 +697,16 @@ Provide your decision with clear rationale.`;
     const response = await this.provider.sendRequest({
       id: `decision_${Date.now()}`,
       prompt: decisionPrompt,
-      options: { model, maxTokens: 1500, temperature: 0.1 },
-      metadata: { taskType: 'decision' },
+      options: {
+        model, maxTokens: 1500, temperature: 0.1,
+        priority: ''
+      },
+      metadata: {
+        taskType: 'decision',
+        userId: '',
+        sessionId: '',
+        timestamp: 0
+      },
       context: {}
     });
 
@@ -697,8 +743,16 @@ Generate the requested content/code. Ensure it's production-ready and follows be
     const response = await this.provider.sendRequest({
       id: `generation_${Date.now()}`,
       prompt: generationPrompt,
-      options: { model, maxTokens: 3000, temperature: 0.1 },
-      metadata: { taskType: 'generation' },
+      options: {
+        model, maxTokens: 3000, temperature: 0.1,
+        priority: ''
+      },
+      metadata: {
+        taskType: 'generation',
+        userId: '',
+        sessionId: '',
+        timestamp: 0
+      },
       context: {}
     });
 
@@ -733,8 +787,16 @@ Provide validation results and recommendations.`;
     const response = await this.provider.sendRequest({
       id: `validation_${Date.now()}`,
       prompt: validationPrompt,
-      options: { model, maxTokens: 2000, temperature: 0.1 },
-      metadata: { taskType: 'validation' },
+      options: {
+        model, maxTokens: 2000, temperature: 0.1,
+        priority: ''
+      },
+      metadata: {
+        taskType: 'validation',
+        userId: '',
+        sessionId: '',
+        timestamp: 0
+      },
       context: {}
     });
 

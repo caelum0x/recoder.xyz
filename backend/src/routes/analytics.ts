@@ -1,13 +1,15 @@
 /**
- * Analytics API routes for download tracking and metrics
+ * Analytics API routes for download tracking and comprehensive usage metrics
  */
 
 import { Router, Request, Response } from 'express';
 import { AnalyticsService } from '../services/analytics';
+import { UsageAnalyticsEngine } from '@recoder/analytics/usage-analytics';
 import { Logger } from '@recoder/shared';
 
 const router = Router();
 const analytics = new AnalyticsService();
+const usageAnalytics = new UsageAnalyticsEngine();
 const logger = Logger; // Use static Logger methods
 
 /**
@@ -185,6 +187,336 @@ router.get('/public/downloads', async (req: Request, res: Response) => {
 });
 
 /**
+ * Start user session
+ * POST /api/analytics/session/start
+ */
+router.post('/session/start', async (req: Request, res: Response) => {
+  try {
+    const { userId, deviceId, platform, device, location, network, metadata } = req.body;
+    
+    if (!userId || !deviceId || !platform) {
+      return res.status(400).json({
+        error: 'Missing required fields: userId, deviceId, platform'
+      });
+    }
+
+    const session = await usageAnalytics.startUserSession({
+      userId,
+      deviceId,
+      platform,
+      device: device || { type: 'desktop', os: 'unknown' },
+      location,
+      network,
+      metadata: metadata || {}
+    });
+    
+    return res.json({ sessionId: session.id, success: true });
+    
+  } catch (error) {
+    logger.error('Failed to start session:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * End user session
+ * POST /api/analytics/session/end
+ */
+router.post('/session/end', async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({
+        error: 'Missing required field: sessionId'
+      });
+    }
+
+    await usageAnalytics.endUserSession(sessionId);
+    
+    return res.json({ success: true });
+    
+  } catch (error) {
+    logger.error('Failed to end session:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Track user activity
+ * POST /api/analytics/activity
+ */
+router.post('/activity', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, userId, type, category, action, target, properties } = req.body;
+    
+    if (!sessionId || !userId || !type || !category || !action) {
+      return res.status(400).json({
+        error: 'Missing required fields: sessionId, userId, type, category, action'
+      });
+    }
+
+    await usageAnalytics.trackUserActivity({
+      sessionId,
+      userId,
+      type,
+      category,
+      action,
+      target,
+      properties: properties || {}
+    });
+    
+    return res.json({ success: true });
+    
+  } catch (error) {
+    logger.error('Failed to track activity:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Track feature usage
+ * POST /api/analytics/feature
+ */
+router.post('/feature', async (req: Request, res: Response) => {
+  try {
+    const { userId, featureName, context, sessionId, platform, metadata } = req.body;
+    
+    if (!userId || !featureName) {
+      return res.status(400).json({
+        error: 'Missing required fields: userId, featureName'
+      });
+    }
+
+    await usageAnalytics.trackFeatureUsage({
+      userId,
+      featureName,
+      context: context || 'unknown',
+      sessionId,
+      platform: platform || 'web',
+      metadata: metadata || {}
+    });
+    
+    return res.json({ success: true });
+    
+  } catch (error) {
+    logger.error('Failed to track feature usage:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Track AI usage
+ * POST /api/analytics/ai
+ */
+router.post('/ai', async (req: Request, res: Response) => {
+  try {
+    const { userId, model, provider, prompt, completion, metadata } = req.body;
+    
+    if (!userId || !model || !provider) {
+      return res.status(400).json({
+        error: 'Missing required fields: userId, model, provider'
+      });
+    }
+
+    await usageAnalytics.trackAIUsage({
+      userId,
+      model,
+      provider,
+      prompt,
+      completion,
+      metadata: metadata || {}
+    });
+    
+    return res.json({ success: true });
+    
+  } catch (error) {
+    logger.error('Failed to track AI usage:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get comprehensive usage analytics
+ * GET /api/analytics/usage-stats?timeRange=month&userId=123
+ */
+router.get('/usage-stats', async (req: Request, res: Response) => {
+  try {
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
+    const userId = req.query['userId'] as string;
+    
+    if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
+      return res.status(400).json({
+        error: 'Invalid timeRange. Must be one of: day, week, month, year'
+      });
+    }
+
+    const stats = await usageAnalytics.getUserAnalytics(userId, timeRange);
+    
+    return res.json(stats);
+    
+  } catch (error) {
+    logger.error('Failed to get usage statistics:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get feature analytics
+ * GET /api/analytics/features?timeRange=month
+ */
+router.get('/features', async (req: Request, res: Response) => {
+  try {
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
+    
+    if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
+      return res.status(400).json({
+        error: 'Invalid timeRange. Must be one of: day, week, month, year'
+      });
+    }
+
+    const analytics = await usageAnalytics.getFeatureAnalytics(timeRange);
+    
+    return res.json(analytics);
+    
+  } catch (error) {
+    logger.error('Failed to get feature analytics:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get AI analytics
+ * GET /api/analytics/ai-usage?timeRange=month
+ */
+router.get('/ai-usage', async (req: Request, res: Response) => {
+  try {
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
+    
+    if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
+      return res.status(400).json({
+        error: 'Invalid timeRange. Must be one of: day, week, month, year'
+      });
+    }
+
+    const analytics = await usageAnalytics.getAIAnalytics(timeRange);
+    
+    return res.json(analytics);
+    
+  } catch (error) {
+    logger.error('Failed to get AI analytics:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get business metrics
+ * GET /api/analytics/business?timeRange=month
+ */
+router.get('/business', async (req: Request, res: Response) => {
+  try {
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
+    
+    if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
+      return res.status(400).json({
+        error: 'Invalid timeRange. Must be one of: day, week, month, year'
+      });
+    }
+
+    const metrics = await usageAnalytics.getBusinessMetrics(timeRange);
+    
+    return res.json(metrics);
+    
+  } catch (error) {
+    logger.error('Failed to get business metrics:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get real-time analytics
+ * GET /api/analytics/realtime
+ */
+router.get('/realtime', async (req: Request, res: Response) => {
+  try {
+    const realtime = await usageAnalytics.getRealTimeMetrics();
+    
+    return res.json(realtime);
+    
+  } catch (error) {
+    logger.error('Failed to get real-time analytics:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Generate insights and recommendations
+ * GET /api/analytics/insights?timeRange=month
+ */
+router.get('/insights', async (req: Request, res: Response) => {
+  try {
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
+    
+    if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
+      return res.status(400).json({
+        error: 'Invalid timeRange. Must be one of: day, week, month, year'
+      });
+    }
+
+    const insights = await usageAnalytics.generateInsights(timeRange);
+    
+    return res.json(insights);
+    
+  } catch (error) {
+    logger.error('Failed to generate insights:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Export analytics data
+ * GET /api/analytics/export?format=csv&timeRange=month
+ */
+router.get('/export', async (req: Request, res: Response) => {
+  try {
+    const format = req.query['format'] as 'csv' | 'json' | 'excel' || 'json';
+    const timeRange = req.query['timeRange'] as 'day' | 'week' | 'month' | 'year' || 'month';
+    
+    if (!['csv', 'json', 'excel'].includes(format)) {
+      return res.status(400).json({
+        error: 'Invalid format. Must be one of: csv, json, excel'
+      });
+    }
+
+    if (!['day', 'week', 'month', 'year'].includes(timeRange)) {
+      return res.status(400).json({
+        error: 'Invalid timeRange. Must be one of: day, week, month, year'
+      });
+    }
+
+    const exportData = await usageAnalytics.exportData(format, timeRange);
+    
+    // Set appropriate headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="analytics-${timeRange}.${format}"`);
+    
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      return res.send(JSON.stringify(exportData, null, 2));
+    } else if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      return res.send(exportData);
+    } else {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      return res.send(exportData);
+    }
+    
+  } catch (error) {
+    logger.error('Failed to export analytics data:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * Health check endpoint
  * GET /api/analytics/health
  */
@@ -193,6 +525,10 @@ router.get('/health', (req: Request, res: Response) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: process.env['npm_package_version'] || 'unknown',
+    services: {
+      analytics: 'operational',
+      usageAnalytics: 'operational'
+    }
   });
 });
 
