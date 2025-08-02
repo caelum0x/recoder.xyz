@@ -54,7 +54,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		try {
 			// Listen for model changes and reset client
-			this.disposable = vscode.workspace.onDidChangeConfiguration((event) => {
+			this.disposable = vscode.workspace.onDidChangeConfiguration((event: { affectsConfiguration: (arg0: string) => any }) => {
 				if (event.affectsConfiguration("lm")) {
 					try {
 						this.client = null
@@ -126,7 +126,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				family: "lm",
 				version: "1.0",
 				maxInputTokens: 8192,
-				sendRequest: async (_messages, _options, _token) => {
+				sendRequest: async (_messages: any, _options: any, _token: any) => {
 					// Provide a minimal implementation
 					return {
 						stream: (async function* () {
@@ -227,7 +227,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				tokenCount = await this.client.countTokens(text, this.currentRequestCancellation.token)
 			} else if (text instanceof vscode.LanguageModelChatMessage) {
 				// For chat messages, ensure we have content
-				if (!text.content || (Array.isArray(text.content) && text.content.length === 0)) {
+				if (!(text as any).content || (Array.isArray((text as any).content) && (text as any).content.length === 0)) {
 					console.debug("Kilo Code <Language Model API>: Empty chat message content")
 					return 0
 				}
@@ -351,8 +351,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		// Convert Anthropic messages to VS Code LM messages
 		const vsCodeLmMessages: vscode.LanguageModelChatMessage[] = [
-			vscode.LanguageModelChatMessage.Assistant(systemPrompt),
-			...convertToVsCodeLmMessages(cleanedMessages),
+			new vscode.LanguageModelChatMessage(vscode.LanguageModelChatMessageRole.User, systemPrompt),
+			...(convertToVsCodeLmMessages(cleanedMessages) as any),
 		]
 
 		// Initialize cancellation token for the request
@@ -570,7 +570,7 @@ const VSCODE_LM_STATIC_BLACKLIST: string[] = ["claude-3.7-sonnet", "claude-3.7-s
 export async function getVsCodeLmModels() {
 	try {
 		const models = (await vscode.lm.selectChatModels({})) || []
-		return models.filter((model) => !VSCODE_LM_STATIC_BLACKLIST.includes(model.id))
+		return models.filter((model: { id: string }) => !VSCODE_LM_STATIC_BLACKLIST.includes(model.id))
 	} catch (error) {
 		console.error(
 			`Error fetching VS Code LM models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,

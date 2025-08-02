@@ -23,5 +23,6 @@ export { RequestyHandler } from "./requesty"
 export { TogetherHandler } from "./together"
 export { UnboundHandler } from "./unbound"
 export { VertexHandler } from "./vertex"
-export { VsCodeLmHandler } from "./vscode-lm"
+// VS Code provider only available in VS Code extension context
+// export { VsCodeLmHandler } from "./vscode-lm"
 export { XAIHandler } from "./xai"

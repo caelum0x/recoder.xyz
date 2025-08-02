@@ -19,7 +19,7 @@ import {
 	OpenAiNativeHandler,
 	DeepSeekHandler,
 	MistralHandler,
-	VsCodeLmHandler,
+	// VsCodeLmHandler, // Excluded for CLI build
 	UnboundHandler,
 	RequestyHandler,
 	HumanRelayHandler,
@@ -110,7 +110,7 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "deepseek":
 			return new DeepSeekHandler(options)
 		case "vscode-lm":
-			return new VsCodeLmHandler(options)
+			throw new Error("VS Code LM provider is not available in CLI context")
 		case "mistral":
 			return new MistralHandler(options)
 		case "unbound":

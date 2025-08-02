@@ -14,7 +14,7 @@
 		"node": "20.19.2"
 	},
 	"author": {
-		"name": "Recoder.xyz",
+		"name": "recoder.xyz",
 		"email": "hello@recoder.xyz",
 		"url": "https://recoder.xyz"
 	},
@@ -50,8 +50,7 @@
 		"recoder.xyz"
 	],
 	"activationEvents": [
-		"onLanguage",
-		"onStartupFinished"
+		"*"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
@@ -113,8 +112,7 @@
 					"id": "recoder-ActivityBar",
 					"title": "%views.activitybar.title%",
 					"icon": "assets/icons/recoder.png",
-					"darkIcon": "assets/icons/recoder-dark.png",
-					"when": "isMac"
+					"darkIcon": "assets/icons/recoder-dark.png"
 				}
 			]
 		},
@@ -122,7 +120,7 @@
 			"recoder-ActivityBar": [
 				{
 					"type": "webview",
-					"id": "recoder.SidebarProvider",
+					"id": "recoder-vscode.SidebarProvider",
 					"name": "%views.sidebar.name%"
 				}
 			]
@@ -323,6 +321,18 @@
 				"title": "Sync Session",
 				"category": "Recoder.xyz Auth",
 				"icon": "$(sync)"
+			},
+			{
+				"command": "recoder.showUnifiedAuth",
+				"title": "Unified Authentication",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(shield)"
+			},
+			{
+				"command": "recoder.authenticateWithVSCode",
+				"title": "Authenticate with VS Code",
+				"category": "Recoder.xyz Auth",
+				"icon": "$(vscode)"
 			}
 		],
 		"keybindings": [
@@ -677,7 +687,11 @@
 		"zod": "^3.25.61"
 	},
 	"devDependencies": {
-		
+		"@roo-code/build": "workspace:^",
+		"@roo-code/cloud": "workspace:^",
+		"@roo-code/ipc": "workspace:^",
+		"@roo-code/telemetry": "workspace:^",
+		"@roo-code/types": "workspace:^",
 		"@types/clone-deep": "^4.0.4",
 		"@types/debug": "^4.1.12",
 		"@types/diff": "^5.2.1",

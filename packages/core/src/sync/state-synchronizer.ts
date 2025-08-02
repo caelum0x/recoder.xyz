@@ -9,7 +9,7 @@ import { EventEmitter } from 'events';
 import { WebSocket } from 'ws';
 import Redis from 'redis';
 import { SessionManager, UserSession, SyncEvent } from './session-manager';
-
+ 
 export interface StateChange {
   id: string;
   sessionId: string;
@@ -53,7 +53,7 @@ export interface SyncConflict {
   localValue: any;
   remoteValue: any;
   timestamp: Date;
-  resolution?: 'local' | 'remote' | 'merged' | 'manual';
+  resolution?: 'local' | 'remote' | 'merged' | 'manual' | 'custom';
   resolvedValue?: any;
 }
 
@@ -273,7 +273,7 @@ export class StateSynchronizer extends EventEmitter {
       } catch (error) {
         // Fallback to Redis queue
         console.warn(`Direct sync failed for ${session.sessionId}, using Redis queue`);
-        await this.redis.lpush(`sync_queue:${session.sessionId}`, payload);
+        await this.redis.lPush(`sync_queue:${session.sessionId}`, payload);
       }
     }
   }
@@ -459,7 +459,7 @@ export class StateSynchronizer extends EventEmitter {
   private async applyLocalChange(change: StateChange): Promise<void> {
     // This would integrate with the actual application state management
     // For now, we'll store it in Redis for persistence
-    await this.redis.lpush(`changes:${change.sessionId}`, JSON.stringify(change));
+    await this.redis.lPush(`changes:${change.sessionId}`, JSON.stringify(change));
     await this.redis.expire(`changes:${change.sessionId}`, 24 * 60 * 60); // 24 hours
   }
 

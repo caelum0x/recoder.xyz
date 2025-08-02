@@ -14,7 +14,7 @@ export interface GroqConfig extends ProviderConfig {
 
 export interface GroqMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string; 
 }
 
 export interface GroqRequestBody {
@@ -99,7 +99,7 @@ export interface GroqStreamChunk {
 }
 
 export class GroqProvider extends BaseAIProvider {
-  private config: GroqConfig;
+  protected config: GroqConfig;
   private baseUrl: string;
 
   constructor(config: GroqConfig) {
@@ -142,7 +142,8 @@ export class GroqProvider extends BaseAIProvider {
           responseTime: Date.now() - startTime,
           finishReason: this.mapFinishReason(choice.finish_reason),
           confidence: this.calculateConfidence(choice),
-          toolCalls: this.extractToolCalls(choice.message.tool_calls || [])
+          toolCalls: this.extractToolCalls(choice.message.tool_calls || []),
+          cached: false
         }
       };
 
@@ -213,7 +214,8 @@ export class GroqProvider extends BaseAIProvider {
           model: request.options.model || this.config.defaultModel || 'llama-3.3-70b-versatile',
           provider: this.providerId,
           responseTime: Date.now() - startTime,
-          finishReason: this.mapFinishReason(finishReason)
+          finishReason: this.mapFinishReason(finishReason),
+          cached: false
         },
         streaming: {
           isComplete: true,
@@ -409,7 +411,7 @@ export class GroqProvider extends BaseAIProvider {
   /**
    * Make streaming API request to Groq
    */
-  private async makeStreamingAPIRequest(endpoint: string, body: any): AsyncGenerator<string> {
+  private async* makeStreamingAPIRequest(endpoint: string, body: any): AsyncGenerator<string, any, any> {
     const url = `${this.baseUrl}${endpoint}`;
     
     const response = await fetch(url, {
@@ -446,7 +448,7 @@ export class GroqProvider extends BaseAIProvider {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
-            if (data === '[DONE]') return;
+            if (data === '[DONE]') return undefined;
             yield data;
           }
         }
@@ -454,6 +456,8 @@ export class GroqProvider extends BaseAIProvider {
     } finally {
       reader.releaseLock();
     }
+    // Explicitly return to satisfy AsyncGenerator return type
+    return;
   }
 
   /**

@@ -40,6 +40,7 @@ describe("experiments", () => {
 				autocomplete: false,
 				powerSteering: false,
 				multiFileApplyDiff: false,
+				preventFocusDisruption: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.POWER_STEERING)).toBe(false)
 		})
@@ -49,6 +50,7 @@ describe("experiments", () => {
 				autocomplete: true,
 				powerSteering: true,
 				multiFileApplyDiff: false,
+				preventFocusDisruption: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.POWER_STEERING)).toBe(true)
 		})
@@ -58,6 +60,7 @@ describe("experiments", () => {
 				autocomplete: false,
 				powerSteering: false,
 				multiFileApplyDiff: false,
+				preventFocusDisruption: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.POWER_STEERING)).toBe(false)
 		})

@@ -13,7 +13,7 @@ import GroqProvider, { GroqConfig } from './providers/groq-provider';
 import GeminiProvider, { GeminiConfig } from './providers/gemini-provider';
 import KimiProvider, { KimiConfig } from './providers/kimi-provider';
 import QwenProvider, { QwenConfig } from './providers/qwen-provider';
-import DeepSeekR1Provider, { DeepSeekR1Config } from './providers/deepseek-r1-provider';
+import DeepSeekR1Provider, { DeepSeekR1Config } from './providers/deepseek-r1-provider'; 
 
 export interface OrchestratorConfig {
   providers: {
@@ -257,7 +257,7 @@ export class AIOrchestrator extends EventEmitter {
       for await (const chunk of streamGenerator) {
         if ('content' in chunk) {
           // Final response
-          const generationResult = this.processResult(chunk as AIResponse, routingResult, startTime, requestId);
+          const generationResult = this.processResult(chunk as unknown as AIResponse, routingResult, startTime, requestId);
           this.metrics.successfulRequests++;
           this.activeRequests.delete(requestId);
           return generationResult;
@@ -426,7 +426,8 @@ export class AIOrchestrator extends EventEmitter {
         temperature: request.options?.temperature || 0.7,
         streaming,
         systemPrompt: request.options?.systemPrompt || this.buildSystemPrompt(request),
-        tools: request.options?.tools
+        tools: request.options?.tools,
+        priority: ''
       },
       metadata: {
         userId: request.user.id,

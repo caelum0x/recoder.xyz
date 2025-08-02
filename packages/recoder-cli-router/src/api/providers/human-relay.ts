@@ -1,5 +1,28 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import * as vscode from "vscode"
+// Conditional import for VS Code
+let vscode: any = null;
+try {
+	// This will only work in VS Code extension context
+	vscode = require("vscode");
+} catch (error) {
+	// In CLI context, provide fallback implementations
+	vscode = {
+		env: {
+			clipboard: {
+				writeText: async (text: string) => {
+					console.log("📋 Copy to clipboard (CLI fallback):", text.substring(0, 100) + "...");
+					return Promise.resolve();
+				}
+			}
+		},
+		commands: {
+			executeCommand: (command: string, ...args: any[]) => {
+				console.log("🔧 Execute command (CLI fallback):", command, args);
+				return Promise.resolve();
+			}
+		}
+	};
+}
 
 import type { ModelInfo } from "@roo-code/types"
 

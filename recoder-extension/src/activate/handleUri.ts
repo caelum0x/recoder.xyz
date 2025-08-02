@@ -2,12 +2,12 @@ import * as vscode from "vscode"
 
 import { CloudService } from "@roo-code/cloud"
 
-import { ClineProvider } from "../core/webview/ClineProvider"
+import { RecoderProvider } from "../core/webview/RecoderProvider"
 
 export const handleUri = async (uri: vscode.Uri) => {
 	const path = uri.path
 	const query = new URLSearchParams(uri.query.replace(/\+/g, "%2B"))
-	const visibleProvider = ClineProvider.getVisibleInstance()
+	const visibleProvider = RecoderProvider.getVisibleInstance()
 
 	if (!visibleProvider) {
 		return

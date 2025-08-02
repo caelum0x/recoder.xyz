@@ -250,6 +250,15 @@ describe("mergeExtensionState", () => {
 			sharingEnabled: false,
 			profileThresholds: {},
 			hasOpenedModeSelector: false, // Add the new required property
+			commitMessageApiConfigId: "",
+			autocompleteApiConfigId: "",
+			ghostServiceSettings: {},
+			allowVeryLargeReads: false,
+			systemNotificationsEnabled: false,
+			localWorkflowToggles: {},
+			globalRulesToggles: {},
+			localRulesToggles: {},
+			globalWorkflowToggles: {},
 		}
 
 		const prevState: ExtensionState = {
@@ -268,6 +277,7 @@ describe("mergeExtensionState", () => {
 				disableCompletionCommand: false,
 				concurrentFileReads: true,
 				multiFileApplyDiff: true,
+				preventFocusDisruption: false,
 			} as Record<ExperimentId, boolean>,
 		}
 
@@ -285,6 +295,7 @@ describe("mergeExtensionState", () => {
 			disableCompletionCommand: false,
 			concurrentFileReads: true,
 			multiFileApplyDiff: true,
+			preventFocusDisruption: false,
 		})
 	})
 })

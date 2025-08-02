@@ -48,7 +48,19 @@
       "Bash(/dev/null)",
       "Bash(echo \"Exit code: $?\")",
       "Bash(mv:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(pnpm run check-types:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pntml build:*)",
+      "Bash(pnpm bundle:*)",
+      "Bash(pnpm install:*)",
+      "Bash(code:*)",
+      "Bash(pnpm vsix:*)",
+      "Bash(psql:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }

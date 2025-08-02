@@ -88,7 +88,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 
 			const matcher = new XmlMatcher(
 				"think",
-				(chunk) =>
+				(chunk: { matched: any; data: any }) =>
 					({
 						type: chunk.matched ? "reasoning" : "text",
 						text: chunk.data,

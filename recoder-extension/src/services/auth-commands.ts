@@ -5,13 +5,22 @@
 
 import * as vscode from 'vscode';
 import { ExtensionBackendClient } from './backend-client';
+import { UnifiedAuthProvider } from './unified-auth-provider';
 
 export class AuthCommands {
   private backendClient: ExtensionBackendClient;
   private statusBarItem: vscode.StatusBarItem;
+  private unifiedAuthProvider: UnifiedAuthProvider | null = null;
 
   constructor(context: vscode.ExtensionContext) {
     this.backendClient = new ExtensionBackendClient(context);
+    
+    // Get unified auth provider if available
+    try {
+      this.unifiedAuthProvider = new UnifiedAuthProvider(context);
+    } catch (error) {
+      console.warn('Unified auth provider not available:', error);
+    }
     
     // Create status bar item
     this.statusBarItem = vscode.window.createStatusBarItem(
@@ -71,6 +80,15 @@ export class AuthCommands {
     context.subscriptions.push(
       vscode.commands.registerCommand('recoder.syncSession', () => this.syncSession())
     );
+
+    // Enhanced auth commands with unified auth
+    context.subscriptions.push(
+      vscode.commands.registerCommand('recoder.showUnifiedAuth', () => this.showUnifiedAuthMenu())
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('recoder.authenticateWithVSCode', () => this.authenticateWithVSCode())
+    );
   }
 
   private async showAuthMenu(): Promise<void> {
@@ -121,7 +139,7 @@ export class AuthCommands {
           action: 'logout'
         }
       ], {
-        placeHolder: 'Recoder.xyz Account'
+        placeHolder: 'recoder.xyz Account'
       });
 
       switch (action?.action) {
@@ -411,10 +429,105 @@ export class AuthCommands {
   }
 
   /**
+   * Show unified authentication menu with multiple methods
+   */
+  private async showUnifiedAuthMenu(): Promise<void> {
+    if (!this.unifiedAuthProvider) {
+      vscode.window.showErrorMessage('Unified authentication not available');
+      return;
+    }
+
+    const method = await vscode.window.showQuickPick([
+      {
+        label: '$(globe) OAuth (Browser)',
+        description: 'Sign in through your browser with GitHub or Google',
+        detail: 'Most secure and convenient method',
+        method: 'oauth'
+      },
+      {
+        label: '$(device-mobile) Device Flow',
+        description: 'Use a code to authorize this device',
+        detail: 'Perfect for secure or restricted environments',
+        method: 'device'
+      },
+      {
+        label: '$(key) API Key',
+        description: 'Use an existing API key',
+        detail: 'For automation and programmatic access',
+        method: 'apikey'
+      },
+      {
+        label: '$(account) VS Code Native',
+        description: 'Use VS Code built-in authentication',
+        detail: 'Integrate with VS Code account system',
+        method: 'vscode'
+      }
+    ], {
+      placeHolder: 'Choose authentication method for Recoder',
+      ignoreFocusOut: true
+    });
+
+    if (!method) return;
+
+    try {
+      switch (method.method) {
+        case 'oauth':
+        case 'device':
+        case 'apikey':
+          await this.unifiedAuthProvider.createSession(['basic', 'generate']);
+          break;
+        case 'vscode':
+          await this.authenticateWithVSCode();
+          break;
+      }
+
+      this.updateStatusBar();
+      vscode.window.showInformationMessage('✅ Successfully authenticated with Recoder!');
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Authentication failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Authenticate using VS Code's built-in authentication
+   */
+  private async authenticateWithVSCode(): Promise<void> {
+    try {
+      // Try to get a session with the unified auth provider
+      const sessions = await this.unifiedAuthProvider?.getSessions(['basic']);
+      
+      if (sessions && sessions.length > 0) {
+        vscode.window.showInformationMessage(`Already authenticated as ${sessions[0].account.label}`);
+        return;
+      }
+
+      // Create new session
+      const session = await this.unifiedAuthProvider?.createSession(['basic', 'generate']);
+      
+      if (session) {
+        vscode.window.showInformationMessage(`✅ Authenticated as ${session.account.label}`);
+        this.updateStatusBar();
+      }
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`VS Code authentication failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get current unified session
+   */
+  async getCurrentUnifiedSession() {
+    return await this.unifiedAuthProvider?.getCurrentSession();
+  }
+
+  /**
    * Dispose of resources
    */
   dispose(): void {
     this.statusBarItem.dispose();
+    if (this.unifiedAuthProvider) {
+      this.unifiedAuthProvider.dispose();
+    }
   }
 }
 

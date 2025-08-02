@@ -8,14 +8,91 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// NextAuth required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  username      String?   @unique
+  bio           String?
+  location      String?
+  company       String?
+  blog          String?
+  publicRepos   Int?
+  followers     Int?
+  following     Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Enhanced security fields
+  mfaEnabled    Boolean   @default(false)
+  totpSecret    String?
+  backupCodes   String[]  @default([])
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+
+  accounts      Account[]
+  sessions      Session[]
+  chats         Chat[]
+  generatedApps GeneratedApp[]
+  settings      UserSettings?
+  usage         UsageStats[]
+  userSessions  UserSession[]
+  apiKeys       ApiKey[]
+  auditLogs     AuditLog[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Enhanced application models
 model GeneratedApp {
   id        String   @id @default(nanoid(5))
   model     String
   prompt    String
   code      String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  metadata  Json?    // Store additional generation metadata
+  isPublic  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@index([id])
+  @@index([userId])
 }
 
 model Chat {
@@ -26,8 +103,13 @@ model Chat {
   title             String
   llamaCoderVersion String    @default("v2")
   shadcn            Boolean
+  userId            String?
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isPublic          Boolean   @default(false)
   messages          Message[]
   createdAt         DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Message {
@@ -37,7 +119,134 @@ model Message {
   chatId    String
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   position  Int
+  metadata  Json?    // Store generation metadata (model, tokens, cost, etc.)
   createdAt DateTime @default(now())
 
   @@index([chatId])
+}
+
+// User preferences and settings
+model UserSettings {
+  id          String @id @default(cuid())
+  userId      String @unique
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferences Json   // Theme, default model, code style, etc.
+  limits      Json   // Usage limits and quotas
+  apiKeys     Json?  // Encrypted user API keys
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Usage tracking and analytics
+model UsageStats {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime @default(now()) @db.Date
+  generationsUsed Int      @default(0)
+  tokensUsed      Int      @default(0)
+  modelsUsed      Json     // Track which models were used
+  costAccrued     Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+// Unified Authentication Models
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  deviceId     String
+  platform     String   // 'web', 'cli', 'extension', 'router'
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  scopes       String[]
+  expiresAt    DateTime
+  riskLevel    String   @default("low") // 'low', 'medium', 'high', 'critical'
+  metadata     Json
+  createdAt    DateTime @default(now())
+  lastUsed     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([expiresAt])
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  keyId       String   @unique
+  userId      String
+  name        String
+  hashedKey   String
+  scopes      String[]
+  restrictions Json // IP whitelist, rate limits, platform restrictions, expiry
+  lastUsed    DateTime?
+  createdAt   DateTime @default(now())
+  active      Boolean  @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([keyId])
+  @@index([active])
+}
+
+model DeviceFlow {
+  id           String    @id @default(cuid())
+  deviceCode   String    @unique
+  userCode     String    @unique
+  userId       String?
+  status       String    @default("pending") // 'pending', 'authorized', 'denied', 'expired'
+  accessToken  String?   @db.Text
+  refreshToken String?   @db.Text
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  @@index([deviceCode])
+  @@index([userCode])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String   // 'login', 'logout', 'token_refresh', 'api_key_used', etc.
+  platform    String?  // 'web', 'cli', 'extension', 'router'
+  ip          String?
+  userAgent   String?  @db.Text
+  success     Boolean
+  riskLevel   String?  // 'low', 'medium', 'high', 'critical'
+  metadata    Json
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([riskLevel])
+}
+
+model SecurityEvent {
+  id          String   @id @default(cuid())
+  userId      String?
+  eventType   String   // 'suspicious_login', 'multiple_failures', 'mfa_bypass_attempt'
+  severity    String   // 'low', 'medium', 'high', 'critical'
+  description String   @db.Text
+  ip          String?
+  userAgent   String?  @db.Text
+  resolved    Boolean  @default(false)
+  metadata    Json
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([createdAt])
+  @@index([resolved])
 }

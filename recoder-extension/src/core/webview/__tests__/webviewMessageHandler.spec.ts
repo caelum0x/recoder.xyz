@@ -4,14 +4,14 @@ import type { Mock } from "vitest"
 vi.mock("../../../api/providers/fetchers/modelCache")
 
 import { webviewMessageHandler } from "../webviewMessageHandler"
-import type { ClineProvider } from "../ClineProvider"
+import type { RecoderProvider } from "../RecoderProvider"
 import { getModels } from "../../../api/providers/fetchers/modelCache"
 import type { ModelRecord } from "../../../shared/api"
 
 const mockGetModels = getModels as Mock<typeof getModels>
 
-// Mock ClineProvider
-const mockClineProvider = {
+// Mock RecoderProvider
+const mockRecoderProvider = {
 	getState: vi.fn(),
 	postMessageToWebview: vi.fn(),
 	customModesManager: {
@@ -35,7 +35,7 @@ const mockClineProvider = {
 	getCurrentCline: vi.fn(),
 	getTaskWithId: vi.fn(),
 	initClineWithHistoryItem: vi.fn(),
-} as unknown as ClineProvider
+} as unknown as RecoderProvider
 
 import { t } from "../../../i18n"
 
@@ -97,7 +97,7 @@ vi.mock("../../../utils/globalContext")
 describe("webviewMessageHandler - requestRouterModels", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockRecoderProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				openRouterApiKey: "openrouter-key",
 				requestyApiKey: "requesty-key",
@@ -127,7 +127,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockRecoderProvider, {
 			type: "requestRouterModels",
 		})
 
@@ -143,7 +143,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		})
 
 		// Verify response was sent
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "routerModels",
 			routerModels: {
 				openrouter: mockModels,
@@ -151,7 +151,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				glama: mockModels,
 				unbound: mockModels,
 				litellm: mockModels,
-				"kilocode-openrouter": mockModels,
+				"recoder-openrouter": mockModels,
 				ollama: {},
 				lmstudio: {},
 			},
@@ -159,7 +159,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 	})
 
 	it("handles LiteLLM models with values from message when config is missing", async () => {
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockRecoderProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				openRouterApiKey: "openrouter-key",
 				requestyApiKey: "requesty-key",
@@ -180,7 +180,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockRecoderProvider, {
 			type: "requestRouterModels",
 			values: {
 				litellmApiKey: "message-litellm-key",
@@ -197,7 +197,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 	})
 
 	it("skips LiteLLM when both config and message values are missing", async () => {
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockRecoderProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				openRouterApiKey: "openrouter-key",
 				requestyApiKey: "requesty-key",
@@ -218,7 +218,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockRecoderProvider, {
 			type: "requestRouterModels",
 			// No values provided
 		})
@@ -231,7 +231,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		)
 
 		// Verify response includes empty object for LiteLLM
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "routerModels",
 			routerModels: {
 				openrouter: mockModels,
@@ -239,7 +239,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				glama: mockModels,
 				unbound: mockModels,
 				litellm: {},
-				"kilocode-openrouter": mockModels,
+				"recoder-openrouter": mockModels,
 				ollama: {},
 				lmstudio: {},
 			},
@@ -262,15 +262,15 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockResolvedValueOnce(mockModels) // glama
 			.mockRejectedValueOnce(new Error("Unbound API error")) // unbound
-			.mockResolvedValueOnce(mockModels) // kilocode-openrouter
+			.mockResolvedValueOnce(mockModels) // recoder-openrouter
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockRecoderProvider, {
 			type: "requestRouterModels",
 		})
 
 		// Verify successful providers are included
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "routerModels",
 			routerModels: {
 				openrouter: mockModels,
@@ -278,28 +278,28 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				glama: mockModels,
 				unbound: {},
 				litellm: {},
-				"kilocode-openrouter": mockModels,
+				"recoder-openrouter": mockModels,
 				ollama: {},
 				lmstudio: {},
 			},
 		})
 
 		// Verify error messages were sent for failed providers
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Requesty API error",
 			values: { provider: "requesty" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Unbound API error",
 			values: { provider: "unbound" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "LiteLLM connection failed",
@@ -314,43 +314,43 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockRejectedValueOnce(new Error("Glama API error")) // glama
 			.mockRejectedValueOnce(new Error("Unbound API error")) // unbound
-			.mockResolvedValueOnce({}) // kilocode-openrouter - Success
+			.mockResolvedValueOnce({}) // recoder-openrouter - Success
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockRecoderProvider, {
 			type: "requestRouterModels",
 		})
 
 		// Verify error handling for different error types
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Structured error message",
 			values: { provider: "openrouter" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Requesty API error",
 			values: { provider: "requesty" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Glama API error",
 			values: { provider: "glama" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Unbound API error",
 			values: { provider: "unbound" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "LiteLLM connection failed",
@@ -362,7 +362,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		const mockModels: ModelRecord = {}
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockRecoderProvider, {
 			type: "requestRouterModels",
 			values: {
 				litellmApiKey: "message-key",
@@ -391,7 +391,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 		const slug = "test-project-mode"
 		const rulesFolderPath = path.join("/mock/workspace", ".roo", `rules-${slug}`)
 
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockRecoderProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Project Mode",
 				slug,
@@ -401,13 +401,13 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockRecoderProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockRecoderProvider, { type: "deleteCustomMode", slug })
 
 		// The confirmation dialog is now handled in the webview, so we don't expect showInformationMessage to be called
 		expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockRecoderProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).toHaveBeenCalledWith(rulesFolderPath, { recursive: true, force: true })
 	})
 
@@ -416,7 +416,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 		const homeDir = os.homedir()
 		const rulesFolderPath = path.join(homeDir, ".roo", `rules-${slug}`)
 
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockRecoderProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Global Mode",
 				slug,
@@ -426,19 +426,19 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockRecoderProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockRecoderProvider, { type: "deleteCustomMode", slug })
 
 		// The confirmation dialog is now handled in the webview, so we don't expect showInformationMessage to be called
 		expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockRecoderProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).toHaveBeenCalledWith(rulesFolderPath, { recursive: true, force: true })
 	})
 
 	it("should only delete the mode when rules folder does not exist", async () => {
 		const slug = "test-mode-no-rules"
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockRecoderProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Mode No Rules",
 				slug,
@@ -448,13 +448,13 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(false)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockRecoderProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockRecoderProvider, { type: "deleteCustomMode", slug })
 
 		// The confirmation dialog is now handled in the webview, so we don't expect showInformationMessage to be called
 		expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockRecoderProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).not.toHaveBeenCalled()
 	})
 
@@ -463,7 +463,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 		const rulesFolderPath = path.join("/mock/workspace", ".roo", `rules-${slug}`)
 		const error = new Error("Permission denied")
 
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockRecoderProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Mode Error",
 				slug,
@@ -473,12 +473,12 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockRecoderProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 		vi.mocked(fs.rm).mockRejectedValue(error)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockRecoderProvider, { type: "deleteCustomMode", slug })
 
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockRecoderProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).toHaveBeenCalledWith(rulesFolderPath, { recursive: true, force: true })
 		// Verify error message is shown to the user
 		expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
@@ -488,7 +488,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			}),
 		)
 		// No error response is sent anymore - we just continue with deletion
-		expect(mockClineProvider.postMessageToWebview).not.toHaveBeenCalled()
+		expect(mockRecoderProvider.postMessageToWebview).not.toHaveBeenCalled()
 	})
 })
 
@@ -496,25 +496,25 @@ describe("webviewMessageHandler - message dialog preferences", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		// Mock a current Cline instance
-		vi.mocked(mockClineProvider.getCurrentCline).mockReturnValue({
+		vi.mocked(mockRecoderProvider.getCurrentCline).mockReturnValue({
 			taskId: "test-task-id",
 			apiConversationHistory: [],
 			clineMessages: [],
 		} as any)
 		// Reset getValue mock
-		vi.mocked(mockClineProvider.contextProxy.getValue).mockReturnValue(false)
+		vi.mocked(mockRecoderProvider.contextProxy.getValue).mockReturnValue(false)
 	})
 
 	describe("deleteMessage", () => {
 		it("should always show dialog for delete confirmation", async () => {
-			vi.mocked(mockClineProvider.getCurrentCline).mockReturnValue({} as any) // Mock current cline exists
+			vi.mocked(mockRecoderProvider.getCurrentCline).mockReturnValue({} as any) // Mock current cline exists
 
-			await webviewMessageHandler(mockClineProvider, {
+			await webviewMessageHandler(mockRecoderProvider, {
 				type: "deleteMessage",
 				value: 123456789, // Changed from messageTs to value
 			})
 
-			expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+			expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 				type: "showDeleteMessageDialog",
 				messageTs: 123456789,
 			})
@@ -523,15 +523,15 @@ describe("webviewMessageHandler - message dialog preferences", () => {
 
 	describe("submitEditedMessage", () => {
 		it("should always show dialog for edit confirmation", async () => {
-			vi.mocked(mockClineProvider.getCurrentCline).mockReturnValue({} as any) // Mock current cline exists
+			vi.mocked(mockRecoderProvider.getCurrentCline).mockReturnValue({} as any) // Mock current cline exists
 
-			await webviewMessageHandler(mockClineProvider, {
+			await webviewMessageHandler(mockRecoderProvider, {
 				type: "submitEditedMessage",
 				value: 123456789, // messageTs as number
 				editedMessageContent: "edited content", // text content in editedMessageContent field
 			})
 
-			expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+			expect(mockRecoderProvider.postMessageToWebview).toHaveBeenCalledWith({
 				type: "showEditMessageDialog",
 				messageTs: 123456789,
 				text: "edited content",

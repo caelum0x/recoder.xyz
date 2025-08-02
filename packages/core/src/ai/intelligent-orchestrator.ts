@@ -14,7 +14,7 @@ export interface UserUsageProfile {
   tier: 'free' | 'pro' | 'enterprise';
   monthlyBudget: number;
   currentSpend: number;
-  requestCount: number;
+  requestCount: number; 
   preferences: {
     prioritizeSpeed: boolean;
     prioritizeCost: boolean;

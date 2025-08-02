@@ -10,7 +10,7 @@ import type { ClineMessage } from "@roo-code/types"
 // import { Mode } from "@roo/modes" // kilocode_change
 
 import { ClineApiReqInfo, ClineAskUseMcpServer, ClineSayTool } from "@roo/ExtensionMessage"
-import { COMMAND_OUTPUT_STRING } from "@roo/combineCommandSequences"
+import { COMMAND_OUTPUT_STRING } from "../../../../src/shared/combineCommandSequences"
 import { safeJsonParse } from "@roo/safeJsonParse"
 import { FollowUpData, SuggestionItem } from "@roo-code/types"
 

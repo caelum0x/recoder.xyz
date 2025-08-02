@@ -13,7 +13,7 @@ export interface DeepSeekR1Config extends ProviderConfig {
   defaultModel?: 'deepseek-r1' | 'deepseek-r1-distill-llama-70b' | 'deepseek-r1-distill-qwen-32b';
 }
 
-export interface DeepSeekMessage {
+export interface DeepSeekMessage { 
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
@@ -75,7 +75,7 @@ export interface DeepSeekStreamResponse {
 }
 
 export class DeepSeekR1Provider extends BaseAIProvider {
-  private config: DeepSeekR1Config;
+  protected config: DeepSeekR1Config;
   private baseUrl: string;
 
   constructor(config: DeepSeekR1Config) {
@@ -124,7 +124,7 @@ export class DeepSeekR1Provider extends BaseAIProvider {
           finishReason: this.mapFinishReason(choice.finish_reason),
           confidence: this.calculateConfidence(choice),
           toolCalls: [],
-          cacheHit: deepseekResponse.usage.prompt_cache_hit_tokens ? 
+          cached: deepseekResponse.usage.prompt_cache_hit_tokens ? 
             deepseekResponse.usage.prompt_cache_hit_tokens > 0 : false
         }
       };
@@ -216,7 +216,8 @@ export class DeepSeekR1Provider extends BaseAIProvider {
           model: request.options.model || this.config.defaultModel || 'deepseek-r1',
           provider: this.providerId,
           responseTime: Date.now() - startTime,
-          finishReason: this.mapFinishReason(finishReason)
+          finishReason: this.mapFinishReason(finishReason),
+          cached: false
         },
         streaming: {
           isComplete: true,
@@ -456,7 +457,7 @@ ${content}`;
   /**
    * Make streaming API request to DeepSeek R1
    */
-  private async makeStreamingAPIRequest(endpoint: string, body: DeepSeekRequestBody): AsyncGenerator<string> {
+  private async *makeStreamingAPIRequest(endpoint: string, body: DeepSeekRequestBody): AsyncGenerator<string, any, any> {
     const url = `${this.baseUrl}${endpoint}`;
     
     const response = await fetch(url, {

@@ -1,5 +1,69 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import * as vscode from "vscode"
+// Conditional import for VS Code - fallback for CLI context
+declare namespace vscode {
+	export class LanguageModelChatMessage {
+		role: LanguageModelChatMessageRole;
+		content: string | (LanguageModelTextPart | LanguageModelToolResultPart | LanguageModelToolCallPart)[];
+		name: string | undefined;
+		constructor(role: any, content: any);
+		static Assistant(content: any): LanguageModelChatMessage;
+		static User(content: any): LanguageModelChatMessage;
+		static System(content: any): LanguageModelChatMessage;
+	}
+	export class LanguageModelTextPart {
+		constructor(text: string);
+	}
+	export class LanguageModelToolResultPart {
+		constructor(callId: string, content: any[]);
+	}
+	export class LanguageModelToolCallPart {
+		constructor(id: string, name: string, parameters: any);
+	}
+	export enum LanguageModelChatMessageRole {
+		Assistant = 1,
+		User = 2
+	}
+}
+
+let vsCodeModule: any = null;
+try {
+	vsCodeModule = require("vscode");
+	// Use the real vscode module if available
+	(globalThis as any).vscode = vsCodeModule;
+} catch (error) {
+	// Fallback implementations for CLI context
+	const LanguageModelChatMessage = class {
+		constructor(public role: any, public content: any) {}
+		static Assistant(content: any) { return new LanguageModelChatMessage(1, content); }
+		static User(content: any) { return new LanguageModelChatMessage(2, content); }
+		static System(content: any) { return new LanguageModelChatMessage(0, content); }
+	};
+	
+	const LanguageModelTextPart = class {
+		constructor(public text: string) {}
+	};
+	
+	const LanguageModelToolResultPart = class {
+		constructor(public callId: string, public content: any[]) {}
+	};
+	
+	const LanguageModelToolCallPart = class {
+		constructor(public id: string, public name: string, public parameters: any) {}
+	};
+	
+	const LanguageModelChatMessageRole = {
+		Assistant: 1,
+		User: 2
+	};
+	
+	(globalThis as any).vscode = {
+		LanguageModelChatMessage,
+		LanguageModelTextPart,
+		LanguageModelToolResultPart,
+		LanguageModelToolCallPart,
+		LanguageModelChatMessageRole
+	};
+}
 
 /**
  * Safely converts a value into a plain object.

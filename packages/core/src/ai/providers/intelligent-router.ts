@@ -13,7 +13,7 @@ export interface RoutingRequest {
     type: 'code-generation' | 'security-audit' | 'ui-components' | 'analysis' | 'debugging' | 'documentation';
     complexity: 'simple' | 'moderate' | 'complex' | 'enterprise';
     language?: string;
-    framework?: string;
+    framework?: string; 
     domain?: string;
   };
   context: {
@@ -164,37 +164,27 @@ export class IntelligentRouter extends EventEmitter {
     analysis: TaskAnalysis
   ): Promise<AIModelPerformance[]> {
     const allModels = Array.from(providerRegistry.getAllModels().values()).flat();
-    
-    const candidates = [];
-    
+    const candidates: AIModelPerformance[] = [];
     for (const model of allModels) {
       // Check user tier restrictions
       if (!this.checkUserTierAccess(model, request.user.tier)) continue;
-      
       // Check budget constraints
       if (request.preferences.maxCost && model.costPerToken > request.preferences.maxCost) continue;
-      
       // Check response time requirements
       if (request.preferences.maxResponseTime && model.averageResponseTime > request.preferences.maxResponseTime) continue;
-      
       // Check capability requirements
       if (request.preferences.requiresStreaming && !model.supportsStreaming) continue;
       if (request.preferences.requiresImages && !model.supportsImages) continue;
-      
       // Check token requirements
       if (analysis.tokenEstimate > model.maxTokens) continue;
-      
       // Check availability
       const availability = await providerRegistry.getModelAvailability(model.modelId);
       if (!availability.available) continue;
-      
       // Check specialty match
       const specialtyMatch = this.calculateSpecialtyMatch(model, analysis.specialRequirements);
       if (specialtyMatch < 0.3) continue; // Minimum specialty match threshold
-      
       candidates.push(model);
     }
-
     return candidates.sort((a, b) => b.qualityScore - a.qualityScore);
   }
 
@@ -525,22 +515,22 @@ export class IntelligentRouter extends EventEmitter {
   ): string {
     const reasons = [];
     
-    reasons.push(`Selected ${model.displayName} for ${request.task.type} task`);
+    //reasons.push(`Selected ${model.displayName} for ${request.task.type} task`);
     
     if (model.specialties.some(s => analysis.specialRequirements.includes(s))) {
-      reasons.push(`Model specializes in required areas: ${model.specialties.join(', ')}`);
+   //   reasons.push(`Model specializes in required areas: ${model.specialties.join(', ')}`);
     }
     
     if (request.preferences.priority === 'quality' && model.tier === 'flagship') {
-      reasons.push('Flagship model chosen for quality priority');
+     // reasons.push('Flagship model chosen for quality priority');
     }
     
     if (request.preferences.priority === 'speed' && model.averageResponseTime < 1000) {
-      reasons.push('Fast response time matches speed priority');
+     // reasons.push('Fast response time matches speed priority');
     }
     
     if (request.preferences.priority === 'cost' && model.costPerToken < 0.001) {
-      reasons.push('Low cost model selected for budget optimization');
+    //  reasons.push('Low cost model selected for budget optimization');
     }
     
     return reasons.join('. ');

@@ -5,6 +5,8 @@
 
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
+import WebSocket, { WebSocketServer } from 'ws';
+import * as Y from 'yjs';
 
 export class RealTimeSyncManager extends EventEmitter {
   private server?: WebSocketServer;
@@ -12,7 +14,7 @@ export class RealTimeSyncManager extends EventEmitter {
   private userConnections: Map<string, UserConnection> = new Map();
   private documentProviders: Map<string, Y.Doc> = new Map();
   private conflictResolver: ConflictResolver;
-  private permissions: PermissionManager;
+  private permissions: PermissionManager; 
 
   constructor(private config: RealTimeSyncConfig) {
     super();

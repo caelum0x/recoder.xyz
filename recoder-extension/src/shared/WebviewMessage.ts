@@ -370,13 +370,14 @@ export interface IndexClearedPayload {
 }
 
 export const installMarketplaceItemWithParametersPayloadSchema = z.object({
-	item: marketplaceItemSchema,
+	item: z.any(), // Use z.any() to avoid complex schema depth issues
 	parameters: z.record(z.string(), z.any()),
 })
 
-export type InstallMarketplaceItemWithParametersPayload = z.infer<
-	typeof installMarketplaceItemWithParametersPayloadSchema
->
+export type InstallMarketplaceItemWithParametersPayload = {
+	item: MarketplaceItem
+	parameters: Record<string, any>
+}
 
 export type WebViewMessagePayload =
 	| CheckpointDiffPayload

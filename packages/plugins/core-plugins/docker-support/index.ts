@@ -7,22 +7,44 @@ import { EventEmitter } from 'events';
 import { spawn, exec } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import {
+import { 
   Plugin,
   PluginContext,
   PluginMetadata,
   WorkspaceAPI,
-  PluginUI
+  PluginUI,
+  Project,
+  PluginCapabilities,
+  PluginConfiguration,
+  PluginCategory
 } from '../../plugin-sdk/types';
 
 export default class DockerSupportPlugin implements Plugin {
+  capabilities!: PluginCapabilities;
+  //capabilities: PluginCapabilities;
+  configuration?: PluginConfiguration | undefined;
+  onActivate?(context: PluginContext): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onDeactivate?(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onProjectClose?(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onFileCreate?(path: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onFileDelete?(path: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
   metadata: PluginMetadata = {
     id: '@craft-code/docker-support',
     name: 'Docker Support',
     version: '1.0.0',
     author: 'Craft Code Team',
     description: 'Docker container management and development integration',
-    category: 'containers',
+    //category: 'devops',
     tags: ['docker', 'containers', 'devops', 'deployment'],
     keywords: ['docker', 'container', 'image', 'compose', 'build'],
     publishedAt: new Date(),
@@ -30,7 +52,13 @@ export default class DockerSupportPlugin implements Plugin {
     downloads: 0,
     rating: { average: 0, count: 0 },
     repository: 'https://github.com/craft-code/docker-support',
-    homepage: 'https://craft-code.dev/plugins/docker-support'
+    homepage: 'https://craft-code.dev/plugins/docker-support',
+    license: '',
+    engines: {
+      craftCode: '',
+      node: ''
+    },
+    category: PluginCategory.AI_INTEGRATION
   };
 
   private context!: PluginContext;
@@ -146,7 +174,8 @@ export default class DockerSupportPlugin implements Plugin {
   /**
    * Handle project open events
    */
-  async onProjectOpen(projectPath: string): Promise<void> {
+  async onProjectOpen(project: Project): Promise<void> {
+    const projectPath = project.path;
     this.context.logger.info('Project opened, checking for Docker files:', projectPath);
     
     const hasDockerfile = await this.hasDockerfile(projectPath);
@@ -160,13 +189,15 @@ export default class DockerSupportPlugin implements Plugin {
   /**
    * Handle file change events
    */
-  async onFileChange(filePath: string, changeType: 'create' | 'modify' | 'delete'): Promise<void> {
-    const fileName = path.basename(filePath);
-    
+  async onFileChange(pathArg: string, ...args: any[]): Promise<void> {
+    const fileName = path.basename(pathArg);
+    // Determine changeType if provided
+    const changeType = args[0] as 'create' | 'modify' | 'delete' | undefined;
+
     // Watch for Docker-related file changes
     if (fileName === 'Dockerfile' || fileName === 'docker-compose.yml' || fileName === 'docker-compose.yaml') {
       await this.updateDockerPanel();
-      this.context.logger.info('Docker configuration file changed:', fileName);
+      this.context.logger.info('Docker configuration file changed:', fileName, changeType);
     }
   }
 
@@ -178,14 +209,15 @@ export default class DockerSupportPlugin implements Plugin {
       id: 'docker-explorer',
       title: 'Docker',
       icon: 'package',
-      location: 'sidebar'
+      position: 'left'
     });
 
     // Create Docker terminal
     this.dockerTerminal = this.context.ui.createTerminal({
       id: 'docker-terminal',
       title: 'Docker Terminal',
-      shellPath: this.context.config.dockerPath || 'docker'
+      shellPath: this.context.config.dockerPath || 'docker',
+      name: ''
     });
 
     await this.updateDockerPanel();
@@ -630,7 +662,7 @@ export default class DockerSupportPlugin implements Plugin {
             reject(new Error(stderr || error.message));
           } else {
             if (this.context.config.showContainerLogs) {
-              this.context.ui.appendOutput(stdout);
+              this.context.ui.appendOutput(stdout, 'Docker');
             }
             resolve();
           }
@@ -642,7 +674,8 @@ export default class DockerSupportPlugin implements Plugin {
   private async promptForImageName(): Promise<string | null> {
     return this.context.ui.showInputDialog({
       title: 'Pull Docker Image',
-      placeholder: 'Enter image name (e.g., nginx:latest)...'
+      placeholder: 'Enter image name (e.g., nginx:latest)...',
+      multiline: false
     });
   }
 }

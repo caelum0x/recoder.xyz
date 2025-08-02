@@ -69,7 +69,7 @@ export interface KimiStreamResponse {
 }
 
 export class KimiProvider extends BaseAIProvider {
-  private config: KimiConfig;
+  protected config: KimiConfig;
   private baseUrl: string;
 
   constructor(config: KimiConfig) {
@@ -117,12 +117,13 @@ export class KimiProvider extends BaseAIProvider {
           responseTime: Date.now() - startTime,
           finishReason: this.mapFinishReason(choice.finish_reason),
           confidence: this.calculateConfidence(choice),
-          toolCalls: []
+          toolCalls: [],
+          cached: false
         }
       };
 
       this.trackRequestComplete(request, aiResponse);
-      return aiResponse;
+      return aiResponse; 
 
     } catch (error) {
       this.trackRequestError(request, error as Error);
@@ -200,7 +201,8 @@ export class KimiProvider extends BaseAIProvider {
           model: request.options.model || this.config.defaultModel || 'moonshot-v1-8k',
           provider: this.providerId,
           responseTime: Date.now() - startTime,
-          finishReason: this.mapFinishReason(finishReason)
+          finishReason: this.mapFinishReason(finishReason),
+          cached: false
         },
         streaming: {
           isComplete: true,
@@ -380,7 +382,7 @@ export class KimiProvider extends BaseAIProvider {
   /**
    * Make streaming API request to Kimi
    */
-  private async makeStreamingAPIRequest(endpoint: string, body: KimiRequestBody): AsyncGenerator<string> {
+  private async *makeStreamingAPIRequest(endpoint: string, body: KimiRequestBody): AsyncGenerator<string, any, any> {
     const url = `${this.baseUrl}${endpoint}`;
     
     const response = await fetch(url, {

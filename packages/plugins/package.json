@@ -1,0 +1,30 @@
+{
+  "name": "@recoder/plugins",
+  "version": "1.0.0",
+  "description": "Plugin system for Recoder.xyz extensibility",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@recoder/shared": "file:../shared",
+    "events": "^3.3.0",
+    "fs-extra": "^11.1.1",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.3",
+    "@types/node": "^20.8.0",
+    "@types/tar": "^6.1.13",
+    "typescript": "^5.2.2"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "author": "Recoder Team",
+  "license": "MIT"
+}
