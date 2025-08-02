@@ -19,7 +19,7 @@ import * as vscode from "vscode"
 import { z } from "zod"
 import { t } from "../../i18n"
 
-import { ClineProvider } from "../../core/webview/ClineProvider"
+import { RecoderProvider } from "../../core/webview/RecoderProvider"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import {
 	McpResource,
@@ -125,7 +125,7 @@ const McpSettingsSchema = z.object({
 })
 
 export class McpHub {
-	private providerRef: WeakRef<ClineProvider>
+	private providerRef: WeakRef<RecoderProvider>
 	private disposables: vscode.Disposable[] = []
 	private settingsWatcher?: vscode.FileSystemWatcher
 	private fileWatchers: Map<string, FSWatcher[]> = new Map()
@@ -137,7 +137,7 @@ export class McpHub {
 	private refCount: number = 0 // Reference counter for active clients
 	private configChangeDebounceTimers: Map<string, NodeJS.Timeout> = new Map()
 
-	constructor(provider: ClineProvider) {
+	constructor(provider: RecoderProvider) {
 		this.providerRef = new WeakRef(provider)
 		this.watchMcpSettingsFile()
 		this.watchProjectMcpFile().catch(console.error)
@@ -146,7 +146,7 @@ export class McpHub {
 		this.initializeProjectMcpServers()
 	}
 	/**
-	 * Registers a client (e.g., ClineProvider) using this hub.
+	 * Registers a client (e.g., RecoderProvider) using this hub.
 	 * Increments the reference count.
 	 */
 	public registerClient(): void {
@@ -1228,7 +1228,7 @@ export class McpHub {
 		})
 
 		// Send sorted servers to webview
-		const targetProvider: ClineProvider | undefined = this.providerRef.deref()
+		const targetProvider: RecoderProvider | undefined = this.providerRef.deref()
 
 		if (targetProvider) {
 			const serversToSend = sortedConnections.map((connection) => connection.server)

@@ -14,8 +14,16 @@ export interface AIRequest {
     projectContext?: string;
     codeContext?: string;
     userPreferences?: Record<string, any>;
+    toolsAvailable?: boolean;
+    taskId?: string; // Optional, for tracking specific tasks
+    taskComplexity?: 'low' | 'medium' | 'high'; // Optional, can be used for custom task handling
+    taskType?: string; // Optional, can be used for custom task handling
+    //userPreferences?: Record<string, any>; // Optional, for user-specific preferences
+    additionalMetadata?: Record<string, any>; // For custom metadata
+    [key: string]: any; // Allow additional properties for flexibility
   };
   options: {
+    priority: string;
     model?: string;
     maxTokens?: number;
     temperature?: number;
@@ -28,7 +36,14 @@ export interface AIRequest {
     sessionId: string;
     taskType: string;
     timestamp: number;
+    toolsAvailable?: boolean;
   };
+  toolsAvailable?: boolean;
+  taskComplexity?: 'low' | 'medium' | 'high';
+  taskType?: string; // Optional, can be used for custom task handling
+  userPreferences?: Record<string, any>;
+  additionalMetadata?: Record<string, any>; // For custom metadata
+  [key: string]: any; // Allow additional properties for flexibility
 }
 
 export interface AIResponse {
@@ -41,6 +56,7 @@ export interface AIResponse {
     cost: number;
   };
   metadata: {
+    cached: boolean;
     model: string;
     provider: string;
     responseTime: number;
@@ -76,6 +92,10 @@ export interface ToolCall {
   name: string;
   arguments: Record<string, any>;
   result?: any;
+  function?: {
+    name: string;
+    arguments: string;
+  };
 }
 
 export interface StreamChunk {

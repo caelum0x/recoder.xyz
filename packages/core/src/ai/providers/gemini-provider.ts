@@ -10,7 +10,7 @@ export interface GeminiConfig extends ProviderConfig {
   apiKey: string;
   baseUrl?: string;
   defaultModel?: 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'gemini-2.0-flash' | 'gemini-2.5-flash-lite';
-}
+} 
 
 export interface GeminiMessage {
   role: 'user' | 'model';
@@ -105,7 +105,7 @@ export interface GeminiStreamResponse {
 }
 
 export class GeminiProvider extends BaseAIProvider {
-  private config: GeminiConfig;
+  protected config: GeminiConfig;
   private baseUrl: string;
 
   constructor(config: GeminiConfig) {
@@ -156,7 +156,8 @@ export class GeminiProvider extends BaseAIProvider {
           responseTime: Date.now() - startTime,
           finishReason: this.mapFinishReason(candidate.finish_reason),
           confidence: this.calculateConfidence(candidate),
-          toolCalls: this.extractToolCalls(candidate.content.parts)
+          toolCalls: this.extractToolCalls(candidate.content.parts),
+          cached: false
         }
       };
 
@@ -231,7 +232,8 @@ export class GeminiProvider extends BaseAIProvider {
           model: model,
           provider: this.providerId,
           responseTime: Date.now() - startTime,
-          finishReason: this.mapFinishReason(finishReason)
+          finishReason: this.mapFinishReason(finishReason),
+          cached: false
         },
         streaming: {
           isComplete: true,
@@ -464,13 +466,13 @@ export class GeminiProvider extends BaseAIProvider {
   /**
    * Make streaming API request to Gemini
    */
-  private async makeStreamingAPIRequest(endpoint: string, body: any): AsyncGenerator<string> {
+  private async makeStreamingAPIRequest(endpoint: string, body: any): Promise<AsyncGenerator<string, any, any>> {
     const url = `${this.baseUrl}${endpoint}`;
     const queryParams = new URLSearchParams({ 
       key: this.config.apiKey,
       alt: 'sse'
     });
-    
+
     const response = await fetch(`${url}?${queryParams}`, {
       method: 'POST',
       headers: {
@@ -492,26 +494,34 @@ export class GeminiProvider extends BaseAIProvider {
     const decoder = new TextDecoder();
     let buffer = '';
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    // Wrap the streaming logic in an async generator function and return it
+    async function* streamGenerator() {
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') return;
-            yield data;
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') return;
+              yield data;
+            }
           }
         }
+      } finally {
+        reader.releaseLock();
       }
-    } finally {
-      reader.releaseLock();
     }
+
+    return streamGenerator();
   }
 
   /**

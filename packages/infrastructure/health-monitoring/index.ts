@@ -436,11 +436,20 @@ export class HealthMonitoring {
       message: h.message
     }));
 
-    const incidents = service.incidents.filter(i => {
-      if (!timeRange) return true;
-      return i.startTime >= timeRange.start && 
-             (i.endTime ? i.endTime <= timeRange.end : true);
-    });
+    const incidents = service.incidents
+      .filter(i => {
+        if (!timeRange) return true;
+        return i.startTime >= timeRange.start && 
+               (i.endTime ? i.endTime <= timeRange.end : true);
+      })
+      .map(i => ({
+        id: i.id,
+        start: i.startTime,
+        end: i.endTime,
+        duration: i.duration,
+        severity: String(i.severity),
+        description: i.description
+      }));
 
     // Calculate metrics for the time range
     const totalChecks = history.length;
@@ -835,7 +844,7 @@ export class HealthMonitoring {
       const incident = {
         id: this.generateIncidentId(),
         startTime: new Date(),
-        severity: service.checks.consecutiveFailures > 5 ? 'critical' : 'medium' as const,
+        severity: (service.checks.consecutiveFailures > 5 ? 'critical' : 'medium') as 'low' | 'medium' | 'high' | 'critical',
         description: `Service ${serviceName} is unhealthy: ${result.message}`
       };
       
@@ -922,7 +931,7 @@ export class HealthMonitoring {
 
     return deps.dependsOn.map(depName => ({
       name: depName,
-      status: 'unknown',
+      status: 'degraded',
       impact: deps.criticality
     }));
   }

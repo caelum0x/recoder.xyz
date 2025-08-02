@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
-import { ClineProvider } from "../../webview/ClineProvider"
+import { RecoderProvider } from "../../webview/RecoderProvider"
 import { t } from "../../../i18n"
 import { WebviewMessage } from "../../../shared/WebviewMessage"
 import { Task } from "../../task/Task"
@@ -24,7 +24,7 @@ const deleteMessagesForResend = async (cline: Task, originalMessageIndex: number
 
 // Helper function to encapsulate the common sequence of actions for resending a message
 const resendMessageSequence = async (
-	provider: ClineProvider,
+	provider: RecoderProvider,
 	taskId: string,
 	originalMessageIndex: number,
 	originalMessageTimestamp: number,
@@ -67,7 +67,7 @@ const resendMessageSequence = async (
 	return true
 }
 
-export const editMessageHandler = async (provider: ClineProvider, message: WebviewMessage) => {
+export const editMessageHandler = async (provider: RecoderProvider, message: WebviewMessage) => {
 	if (!message.values?.ts || !message.values?.text) {
 		return
 	}

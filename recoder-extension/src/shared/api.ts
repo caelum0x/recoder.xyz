@@ -119,7 +119,7 @@ const routerNames = [
 	"glama",
 	"unbound",
 	"litellm",
-	"kilocode-openrouter",
+	"recoder-openrouter",
 	"ollama",
 	"lmstudio",
 ] as const
@@ -222,7 +222,7 @@ export type GetModelsOptions =
 	| { provider: "requesty"; apiKey?: string }
 	| { provider: "unbound"; apiKey?: string }
 	| { provider: "litellm"; apiKey: string; baseUrl: string }
-	| { provider: "kilocode-openrouter"; kilocodeToken?: string } // kilocode_change
+	| { provider: "recoder-openrouter"; kilocodeToken?: string } // kilocode_change
 	| { provider: "cerebras"; cerebrasApiKey?: string } // kilocode_change
 	| { provider: "ollama"; baseUrl?: string }
 	| { provider: "lmstudio"; baseUrl?: string }

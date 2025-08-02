@@ -14,12 +14,21 @@ import dynamic from "next/dynamic";
 const CodeRunner = dynamic(() => import("@/components/code-runner"), {
   ssr: false,
 });
+const EnhancedCodeRunner = dynamic(() => import("@/components/enhanced-code-runner"), {
+  ssr: false,
+});
+const DeploymentPipeline = dynamic(() => import("@/components/deployment-pipeline"), {
+  ssr: false,
+});
 const SyntaxHighlighter = dynamic(
   () => import("@/components/syntax-highlighter"),
   {
     ssr: false,
   },
 );
+const CodeEditorWorkspace = dynamic(() => import("@/components/code-editor-workspace"), {
+  ssr: false,
+});
 
 export default function CodeViewer({
   chat,
@@ -36,7 +45,7 @@ export default function CodeViewer({
   message?: Message;
   onMessageChange: (v: Message) => void;
   activeTab: string;
-  onTabChange: (v: "code" | "preview") => void;
+  onTabChange: (v: "code" | "preview" | "deploy") => void;
   onClose: () => void;
   onRequestFix: (e: string) => void;
 }) {
@@ -73,6 +82,108 @@ export default function CodeViewer({
       : undefined;
 
   const [refresh, setRefresh] = useState(0);
+  const [useEnhancedRunner, setUseEnhancedRunner] = useState(true);
+  const [useCodeEditor, setUseCodeEditor] = useState(true);
+  const [deploymentStatus, setDeploymentStatus] = useState<"idle" | "deploying" | "deployed">("idle");
+
+  // Analyze code to determine capabilities
+  const analyzeCodeCapabilities = (codeContent: string) => {
+    const hasDatabase = /database|prisma|mongoose|sequelize|db\./i.test(codeContent);
+    const hasAPI = /fetch|axios|api|endpoint|\/api/i.test(codeContent);
+    const hasAuth = /auth|login|session|jwt|token/i.test(codeContent);
+    const isReactApp = /react|jsx|tsx|component/i.test(codeContent) || language.includes('react');
+    
+    return {
+      hasDatabase,
+      hasAPI,
+      hasAuth,
+      realFunctionality: hasDatabase || hasAPI || hasAuth,
+      framework: isReactApp ? 'react' : language === 'javascript' ? 'vanilla' : 'react'
+    };
+  };
+
+  const codeCapabilities = analyzeCodeCapabilities(code);
+  const projectName = title || `${chat.title.slice(0, 20)}-v${currentVersion + 1}`;
+
+  const handleDeployment = (projectFiles: any) => {
+    setDeploymentStatus("deploying");
+    // Simulate deployment process
+    setTimeout(() => {
+      setDeploymentStatus("deployed");
+    }, 3000);
+  };
+
+  // Convert single code block to file structure
+  const createFileStructure = (codeContent: string, fileName: string, lang: string) => {
+    const files = [{
+      id: "main-file",
+      name: fileName || `main.${lang === 'typescript' ? 'tsx' : lang === 'javascript' ? 'jsx' : lang}`,
+      type: "file" as const,
+      content: codeContent,
+      language: lang === 'typescript' ? 'typescript' : lang === 'javascript' ? 'javascript' : lang,
+    }];
+
+    // Add common supporting files based on framework detection
+    if (codeCapabilities.framework === 'react') {
+      files.push({
+        id: "package-json",
+        name: "package.json",
+        type: "file" as const,
+        language: "json",
+        content: `{
+  "name": "${projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"${codeCapabilities.hasDatabase ? ',\n    "prisma": "^5.0.0"' : ''}${codeCapabilities.hasAuth ? ',\n    "next-auth": "^4.0.0"' : ''}
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+}`,
+      });
+
+      if (codeCapabilities.hasDatabase) {
+        files.push({
+          id: "prisma-schema",
+          name: "prisma/schema.prisma",
+          type: "file" as const,
+          language: "prisma",
+          content: `// Auto-generated database schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}`,
+        });
+      }
+    }
+
+    return files;
+  };
+
+  const editorFiles = createFileStructure(code, title, language);
 
   return (
     <>
@@ -87,6 +198,15 @@ export default function CodeViewer({
           <span>
             {title} v{currentVersion + 1}
           </span>
+          <label className="flex items-center gap-2 text-xs bg-gray-100 px-2 py-1 rounded">
+            <input
+              type="checkbox"
+              checked={useCodeEditor}
+              onChange={(e) => setUseCodeEditor(e.target.checked)}
+              className="rounded"
+            />
+            Enhanced Editor
+          </label>
         </div>
         {layout === "tabbed" && (
           <div className="rounded-lg border-2 border-gray-300 p-1">
@@ -104,6 +224,13 @@ export default function CodeViewer({
             >
               Preview
             </button>
+            <button
+              onClick={() => onTabChange("deploy")}
+              data-active={activeTab === "deploy" ? true : undefined}
+              className="inline-flex h-7 w-16 items-center justify-center rounded text-xs font-medium data-[active]:bg-blue-500 data-[active]:text-white"
+            >
+              Deploy
+            </button>
           </div>
         )}
       </div>
@@ -111,45 +238,128 @@ export default function CodeViewer({
       {layout === "tabbed" ? (
         <div className="flex grow flex-col overflow-y-auto bg-white">
           {activeTab === "code" ? (
-            <StickToBottom
-              className="relative grow overflow-hidden"
-              resize="smooth"
-              initial={streamAppIsGenerating ? "smooth" : false}
-            >
-              <StickToBottom.Content>
-                <SyntaxHighlighter code={code} language={language} />
-              </StickToBottom.Content>
-            </StickToBottom>
-          ) : (
+            useCodeEditor ? (
+              <div className="flex-1 overflow-hidden">
+                <CodeEditorWorkspace
+                  initialFiles={editorFiles}
+                  onFilesChange={(files) => {
+                    // Handle file changes - could sync back to chat
+                    console.log("Files changed:", files);
+                  }}
+                  onRun={(files) => {
+                    // Handle code execution
+                    console.log("Running code:", files);
+                  }}
+                  onDeploy={(files) => {
+                    handleDeployment(files);
+                  }}
+                  height="100%"
+                />
+              </div>
+            ) : (
+              <StickToBottom
+                className="relative grow overflow-hidden"
+                resize="smooth"
+                initial={streamAppIsGenerating ? "smooth" : false}
+              >
+                <StickToBottom.Content>
+                  <SyntaxHighlighter code={code} language={language} />
+                </StickToBottom.Content>
+              </StickToBottom>
+            )
+          ) : activeTab === "preview" ? (
             <>
               {language && (
                 <div className="flex h-full items-center justify-center">
+                  {useEnhancedRunner ? (
+                    <EnhancedCodeRunner
+                      initialCode={code}
+                      language={language}
+                      framework={codeCapabilities.framework}
+                      metadata={codeCapabilities}
+                      onCodeChange={() => {}}
+                      onDeploy={handleDeployment}
+                      key={refresh}
+                    />
+                  ) : (
+                    <CodeRunner
+                      onRequestFix={onRequestFix}
+                      language={language}
+                      code={code}
+                      key={refresh}
+                    />
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex h-full items-center justify-center p-4">
+              <DeploymentPipeline
+                projectFiles={{}}
+                projectName={projectName}
+                metadata={codeCapabilities}
+                onDeploymentComplete={(url, details) => {
+                  console.log('Deployment completed:', url, details);
+                  setDeploymentStatus("deployed");
+                }}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex grow flex-col bg-white">
+          <div className="h-1/2 overflow-y-auto">
+            {useCodeEditor ? (
+              <CodeEditorWorkspace
+                initialFiles={editorFiles}
+                onFilesChange={(files) => {
+                  console.log("Files changed:", files);
+                }}
+                onRun={(files) => {
+                  console.log("Running code:", files);
+                }}
+                onDeploy={(files) => {
+                  handleDeployment(files);
+                }}
+                height="100%"
+              />
+            ) : (
+              <SyntaxHighlighter code={code} language={language} />
+            )}
+          </div>
+          <div className="flex h-1/2 flex-col">
+            <div className="border-t border-gray-300 px-4 py-4 flex items-center justify-between">
+              <span>Output</span>
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={useEnhancedRunner}
+                  onChange={(e) => setUseEnhancedRunner(e.target.checked)}
+                  className="rounded"
+                />
+                Enhanced Mode
+              </label>
+            </div>
+            <div className="flex grow items-center justify-center border-t">
+              {!streamAppIsGenerating && (
+                useEnhancedRunner ? (
+                  <EnhancedCodeRunner
+                    initialCode={code}
+                    language={language}
+                    framework={codeCapabilities.framework}
+                    metadata={codeCapabilities}
+                    onCodeChange={() => {}}
+                    onDeploy={handleDeployment}
+                    key={refresh}
+                  />
+                ) : (
                   <CodeRunner
                     onRequestFix={onRequestFix}
                     language={language}
                     code={code}
                     key={refresh}
                   />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="flex grow flex-col bg-white">
-          <div className="h-1/2 overflow-y-auto">
-            <SyntaxHighlighter code={code} language={language} />
-          </div>
-          <div className="flex h-1/2 flex-col">
-            <div className="border-t border-gray-300 px-4 py-4">Output</div>
-            <div className="flex grow items-center justify-center border-t">
-              {!streamAppIsGenerating && (
-                <CodeRunner
-                  onRequestFix={onRequestFix}
-                  language={language}
-                  code={code}
-                  key={refresh}
-                />
+                )
               )}
             </div>
           </div>

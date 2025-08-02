@@ -33,7 +33,7 @@ import {
 } from "./providers"
 // kilocode_change start
 import { FireworksHandler } from "./providers/fireworks"
-import { KilocodeOpenrouterHandler } from "./providers/kilocode-openrouter"
+import { RecoderOpenrouterHandler } from "./providers/recoder-openrouter"
 // kilocode_change end
 
 export interface SingleCompletionHandler {

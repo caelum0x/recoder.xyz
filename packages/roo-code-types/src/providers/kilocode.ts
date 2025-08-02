@@ -40,6 +40,7 @@ export const kilocodeModels: Record<KilocodeModelId, z.infer<typeof modelInfoSch
     inputPrice: 5.0,
     outputPrice: 15.0,
     supportsImages: true,
+    supportsPromptCache: false,
   },
   "gpt-4o-mini": {
     contextWindow: 128000,
@@ -47,6 +48,7 @@ export const kilocodeModels: Record<KilocodeModelId, z.infer<typeof modelInfoSch
     inputPrice: 0.15,
     outputPrice: 0.6,
     supportsImages: true,
+    supportsPromptCache: false,
   },
 }
 

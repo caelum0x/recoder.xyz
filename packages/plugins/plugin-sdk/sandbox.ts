@@ -8,12 +8,13 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { EventEmitter } from 'events';
 import {
-  LoadedPlugin,
+  //LoadedPlugin,
   PluginSecurity,
   SandboxConfig,
   PluginError,
-  PluginErrorCode
+  PluginErrorCode 
 } from './types';
+import { LoadedPlugin } from './lifecycle';
 
 export class PluginSandbox {
   private workers: Map<string, SandboxWorker> = new Map();
@@ -60,8 +61,11 @@ export class PluginSandbox {
       return context;
     } catch (error) {
       context.state = SandboxState.ERROR;
+      const errorMessage = typeof error === 'object' && error !== null && 'message' in error
+        ? (error as { message: string }).message
+        : String(error);
       throw new PluginError(
-        `Failed to create sandbox context: ${error.message}`,
+        `Failed to create sandbox context: ${errorMessage}`,
         plugin.id,
         PluginErrorCode.SANDBOX_VIOLATION,
         error
@@ -226,7 +230,7 @@ export class PluginSandbox {
       global.__plugin = plugin;
     `);
     
-    runInContext(initScript, context);
+    initScript.runInContext(context);
     
     return context;
   }
@@ -312,8 +316,17 @@ export class PluginSandbox {
   }
 
   private createSecureFetch(security: PluginSecurity): typeof fetch {
-    return async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
+    return async (input: string | URL | Request, init?: RequestInit) => {
+      let url: string;
+      if (typeof input === 'string') {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.toString();
+      } else if (input instanceof Request) {
+        url = input.url;
+      } else {
+        throw new Error('Invalid input type for fetch');
+      }
       
       // Check allowed domains
       if (security.trustedDomains) {
@@ -412,7 +425,7 @@ export class PluginSandbox {
       })()
     `);
 
-    const result = runInContext(script, context.vmContext!, { timeout });
+    const result = script.runInContext(context.vmContext!, { timeout });
     return await result;
   }
 

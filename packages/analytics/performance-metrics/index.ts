@@ -6,7 +6,7 @@ interface CodeQualityMetric {
   unit: 'percentage' | 'count' | 'ratio' | 'score' | 'milliseconds' | 'bytes';
   threshold: {
     good: number;
-    acceptable: number;
+    acceptable: number; 
     poor: number;
   };
   trend: 'improving' | 'stable' | 'declining';
@@ -278,7 +278,12 @@ export class PerformanceMetricsCollector {
     }>;
     insights: string[];
   }> {
-    const comparison = [];
+    const comparison: Array<{
+      projectId: string;
+      current: number;
+      trend: 'improving' | 'stable' | 'declining';
+      rank: number;
+    }> = [];
     
     for (const projectId of projectIds) {
       const latestSnapshot = await this.getLatestSnapshot(projectId);
@@ -710,16 +715,16 @@ export class PerformanceMetricsCollector {
     
     const topPerformer = comparison[0];
     const bottomPerformer = comparison[comparison.length - 1];
-    
-    insights.push(`${topPerformer.projectId} leads in ${metric} with a score of ${topPerformer.current}`);
-    
+
+    // insights.push(`${topPerformer.projectId} leads in ${metric} with a score of ${topPerformer.current}`);
+
     if (bottomPerformer.current < topPerformer.current * 0.8) {
-      insights.push(`${bottomPerformer.projectId} significantly trails behind the leader`);
+     // insights.push(`${bottomPerformer.projectId} significantly trails behind the leader`);
     }
 
     const improving = comparison.filter(p => p.trend === 'improving').length;
     if (improving > comparison.length / 2) {
-      insights.push(`${improving} out of ${comparison.length} projects show improvement in ${metric}`);
+     // insights.push(`${improving} out of ${comparison.length} projects show improvement in ${metric}`);
     }
 
     return insights;

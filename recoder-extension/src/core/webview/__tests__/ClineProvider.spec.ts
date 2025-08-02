@@ -1,4 +1,4 @@
-// npx vitest core/webview/__tests__/ClineProvider.spec.ts
+// npx vitest core/webview/__tests__/RecoderProvider.spec.ts
 
 import Anthropic from "@anthropic-ai/sdk"
 import * as vscode from "vscode"
@@ -20,7 +20,7 @@ import { ContextProxy } from "../../config/ContextProxy"
 import { Task, TaskOptions } from "../../task/Task"
 import { safeWriteJson } from "../../../utils/safeWriteJson"
 
-import { ClineProvider } from "../ClineProvider"
+import { RecoderProvider } from "../RecoderProvider"
 
 // Mock setup must come before imports
 vi.mock("../../prompts/sections/custom-instructions")
@@ -342,10 +342,10 @@ afterAll(() => {
 	vi.restoreAllMocks()
 })
 
-describe("ClineProvider", () => {
+describe("RecoderProvider", () => {
 	let defaultTaskOptions: TaskOptions
 
-	let provider: ClineProvider
+	let provider: RecoderProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel
 	let mockWebviewView: vscode.WebviewView
@@ -428,7 +428,7 @@ describe("ClineProvider", () => {
 			onDidChangeVisibility: vi.fn().mockImplementation(() => ({ dispose: vi.fn() })),
 		} as unknown as vscode.WebviewView
 
-		provider = new ClineProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
+		provider = new RecoderProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
 
 		defaultTaskOptions = {
 			context: mockContext,
@@ -455,11 +455,11 @@ describe("ClineProvider", () => {
 	})
 
 	test("constructor initializes correctly", () => {
-		expect(provider).toBeInstanceOf(ClineProvider)
+		expect(provider).toBeInstanceOf(RecoderProvider)
 		// Since getVisibleInstance returns the last instance where view.visible is true
 		// @ts-ignore - accessing private property for testing
 		provider.view = mockWebviewView
-		expect(ClineProvider.getVisibleInstance()).toBe(provider)
+		expect(RecoderProvider.getVisibleInstance()).toBe(provider)
 	})
 
 	test("resolveWebviewView sets up webview correctly", async () => {
@@ -474,7 +474,7 @@ describe("ClineProvider", () => {
 	})
 
 	test("resolveWebviewView sets up webview correctly in development mode even if local server is not running", async () => {
-		provider = new ClineProvider(
+		provider = new RecoderProvider(
 			{ ...mockContext, extensionMode: vscode.ExtensionMode.Development },
 			mockOutputChannel,
 			"sidebar",
@@ -1159,7 +1159,7 @@ describe("ClineProvider", () => {
 		} as unknown as vscode.ExtensionContext
 
 		// Create new provider with updated mock context
-		provider = new ClineProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
+		provider = new RecoderProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
 		await provider.resolveWebviewView(mockWebviewView)
 		const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as any).mock.calls[0][0]
 
@@ -1965,7 +1965,7 @@ describe("ClineProvider", () => {
 })
 
 describe("Project MCP Settings", () => {
-	let provider: ClineProvider
+	let provider: RecoderProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel
 	let mockWebviewView: vscode.WebviewView
@@ -2021,7 +2021,7 @@ describe("Project MCP Settings", () => {
 			onDidChangeVisibility: vi.fn(),
 		} as unknown as vscode.WebviewView
 
-		provider = new ClineProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
+		provider = new RecoderProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
 	})
 
 	test.skip("handles openProjectMcpSettings message", async () => {
@@ -2106,7 +2106,7 @@ describe("Project MCP Settings", () => {
 })
 
 describe.skip("ContextProxy integration", () => {
-	let provider: ClineProvider
+	let provider: RecoderProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel
 	let mockContextProxy: any
@@ -2135,7 +2135,7 @@ describe.skip("ContextProxy integration", () => {
 
 		mockOutputChannel = { appendLine: vi.fn() } as unknown as vscode.OutputChannel
 		mockContextProxy = new ContextProxy(mockContext)
-		provider = new ClineProvider(mockContext, mockOutputChannel, "sidebar", mockContextProxy)
+		provider = new RecoderProvider(mockContext, mockOutputChannel, "sidebar", mockContextProxy)
 	})
 
 	test("updateGlobalState uses contextProxy", async () => {
@@ -2174,7 +2174,7 @@ vi.mock("../../../api/providers/fetchers/modelCache", () => ({
 describe.skip("getTelemetryProperties", () => {
 	// kilocode_change: skip suite
 	let defaultTaskOptions: TaskOptions
-	let provider: ClineProvider
+	let provider: RecoderProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel
 	let mockCline: any
@@ -2206,7 +2206,7 @@ describe.skip("getTelemetryProperties", () => {
 		} as unknown as vscode.ExtensionContext
 
 		mockOutputChannel = { appendLine: vi.fn() } as unknown as vscode.OutputChannel
-		provider = new ClineProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
+		provider = new RecoderProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
 
 		defaultTaskOptions = {
 			context: mockContext,
@@ -2334,8 +2334,8 @@ describe.skip("getTelemetryProperties", () => {
 	})
 })
 
-describe("ClineProvider - Router Models", () => {
-	let provider: ClineProvider
+describe("RecoderProvider - Router Models", () => {
+	let provider: RecoderProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel
 	let mockWebviewView: vscode.WebviewView
@@ -2398,7 +2398,7 @@ describe("ClineProvider - Router Models", () => {
 			TelemetryService.createInstance([])
 		}
 
-		provider = new ClineProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
+		provider = new RecoderProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
 	})
 
 	test("handles requestRouterModels with successful responses", async () => {
@@ -2457,7 +2457,7 @@ describe("ClineProvider - Router Models", () => {
 				glama: mockModels,
 				unbound: mockModels,
 				litellm: mockModels,
-				"kilocode-openrouter": mockModels,
+				"recoder-openrouter": mockModels,
 				ollama: {},
 				lmstudio: {},
 			},
@@ -2490,7 +2490,7 @@ describe("ClineProvider - Router Models", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty fail
 			.mockResolvedValueOnce(mockModels) // glama success
 			.mockRejectedValueOnce(new Error("Unbound API error")) // unbound fail
-			.mockRejectedValueOnce(new Error("Kilocode-OpenRouter API error")) // kilocode-openrouter fail
+			.mockRejectedValueOnce(new Error("Kilocode-OpenRouter API error")) // recoder-openrouter fail
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm fail
 
 		await messageHandler({ type: "requestRouterModels" })
@@ -2506,7 +2506,7 @@ describe("ClineProvider - Router Models", () => {
 				ollama: {},
 				lmstudio: {},
 				litellm: {},
-				"kilocode-openrouter": {},
+				"recoder-openrouter": {},
 			},
 		})
 
@@ -2529,7 +2529,7 @@ describe("ClineProvider - Router Models", () => {
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Kilocode-OpenRouter API error",
-			values: { provider: "kilocode-openrouter" },
+			values: { provider: "recoder-openrouter" },
 		})
 
 		expect(mockPostMessage).toHaveBeenCalledWith({
@@ -2622,7 +2622,7 @@ describe("ClineProvider - Router Models", () => {
 				glama: mockModels,
 				unbound: mockModels,
 				litellm: {},
-				"kilocode-openrouter": mockModels,
+				"recoder-openrouter": mockModels,
 				ollama: {},
 				lmstudio: {},
 			},
@@ -2630,8 +2630,8 @@ describe("ClineProvider - Router Models", () => {
 	})
 })
 
-describe("ClineProvider - Comprehensive Edit/Delete Edge Cases", () => {
-	let provider: ClineProvider
+describe("RecoderProvider - Comprehensive Edit/Delete Edge Cases", () => {
+	let provider: RecoderProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel
 	let mockWebviewView: vscode.WebviewView
@@ -2700,7 +2700,7 @@ describe("ClineProvider - Comprehensive Edit/Delete Edge Cases", () => {
 			onDidChangeVisibility: vi.fn().mockImplementation(() => ({ dispose: vi.fn() })),
 		} as unknown as vscode.WebviewView
 
-		provider = new ClineProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
+		provider = new RecoderProvider(mockContext, mockOutputChannel, "sidebar", new ContextProxy(mockContext))
 
 		defaultTaskOptions = {
 			context: mockContext,

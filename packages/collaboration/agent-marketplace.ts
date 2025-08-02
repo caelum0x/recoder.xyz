@@ -713,7 +713,8 @@ export class AgentMarketplace {
         requirements: {
           minCraftCodeVersion: '1.0.0',
           dependencies: [],
-          permissions: ['read-files']
+          permissions: ['read-files'],
+          resources: {}
         }
       }
     ];

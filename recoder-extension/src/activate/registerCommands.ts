@@ -5,7 +5,7 @@ import type { CommandId } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 
 import { getCommand } from "../utils/commands"
-import { ClineProvider } from "../core/webview/ClineProvider"
+import { RecoderProvider } from "../core/webview/RecoderProvider"
 import { exportSettings } from "../core/config/importExport" // kilocode_change
 import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
@@ -18,10 +18,10 @@ import { MdmService } from "../services/mdm/MdmService"
 import { t } from "../i18n"
 
 /**
- * Helper to get the visible ClineProvider instance or log if not found.
+ * Helper to get the visible RecoderProvider instance or log if not found.
  */
-export function getVisibleProviderOrLog(outputChannel: vscode.OutputChannel): ClineProvider | undefined {
-	const visibleProvider = ClineProvider.getVisibleInstance()
+export function getVisibleProviderOrLog(outputChannel: vscode.OutputChannel): RecoderProvider | undefined {
+	const visibleProvider = RecoderProvider.getVisibleInstance()
 	if (!visibleProvider) {
 		outputChannel.appendLine("Cannot find any visible Kilo Code instances.")
 		return undefined
@@ -60,7 +60,7 @@ export function setPanel(
 export type RegisterCommandOptions = {
 	context: vscode.ExtensionContext
 	outputChannel: vscode.OutputChannel
-	provider: ClineProvider
+	provider: RecoderProvider
 }
 
 export const registerCommands = (options: RegisterCommandOptions) => {
@@ -271,7 +271,7 @@ export const openClineInNewTab = async ({ context, outputChannel }: Omit<Registe
 		mdmService = undefined
 	}
 
-	const tabProvider = new ClineProvider(context, outputChannel, "editor", contextProxy, codeIndexManager, mdmService)
+	const tabProvider = new RecoderProvider(context, outputChannel, "editor", contextProxy, codeIndexManager, mdmService)
 	const lastCol = Math.max(...vscode.window.visibleTextEditors.map((editor) => editor.viewColumn || 0))
 
 	// Check if there are any visible text editors, otherwise open a new group
@@ -284,7 +284,7 @@ export const openClineInNewTab = async ({ context, outputChannel }: Omit<Registe
 
 	const targetCol = hasVisibleEditors ? Math.max(lastCol + 1, 1) : vscode.ViewColumn.Two
 
-	const newPanel = vscode.window.createWebviewPanel(ClineProvider.tabPanelId, "Kilo Code", targetCol, {
+	const newPanel = vscode.window.createWebviewPanel(RecoderProvider.tabPanelId, "Kilo Code", targetCol, {
 		enableScripts: true,
 		retainContextWhenHidden: true,
 		localResourceRoots: [context.extensionUri],

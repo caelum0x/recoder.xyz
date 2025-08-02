@@ -11,7 +11,7 @@ interface MentorshipProgram {
   mentorships: Map<string, Mentorship>;
   curriculum: Curriculum;
   settings: ProgramSettings;
-  metrics: ProgramMetrics;
+  metrics: ProgramMetrics; 
   metadata: {
     createdAt: Date;
     updatedAt: Date;
@@ -1544,7 +1544,7 @@ export class MentorshipSystem {
 // Supporting classes
 class MatchingAlgorithm {
   async findMatches(participant: Participant, program: MentorshipProgram): Promise<Array<{userId: string, score: number}>> {
-    const matches = [];
+    const matches: Array<{userId: string, score: number}> = [];
     const targetRole = participant.role === 'mentor' ? 'mentee' : 'mentor';
     
     for (const [userId, otherParticipant] of program.participants) {

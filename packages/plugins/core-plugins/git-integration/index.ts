@@ -10,19 +10,40 @@ import * as fs from 'fs/promises';
 import {
   Plugin,
   PluginContext,
-  PluginMetadata,
+  PluginMetadata, 
   WorkspaceAPI,
-  PluginUI
+  PluginUI,
+  PluginCapabilities,
+  PluginConfiguration,
+  PluginCategory,
+  Project
 } from '../../plugin-sdk/types';
 
 export default class GitIntegrationPlugin implements Plugin {
+  capabilities!: PluginCapabilities;
+  configuration?: PluginConfiguration | undefined;
+  onActivate?(context: PluginContext): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onDeactivate?(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onProjectClose?(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onFileCreate?(path: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  onFileDelete?(path: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
   metadata: PluginMetadata = {
     id: '@craft-code/git-integration',
     name: 'Git Integration',
     version: '1.0.0',
     author: 'Craft Code Team',
     description: 'Comprehensive Git version control integration',
-    category: 'version-control',
+    //category: 'version-control',
     tags: ['git', 'version-control', 'scm'],
     keywords: ['git', 'version', 'control', 'commit', 'branch'],
     publishedAt: new Date(),
@@ -30,7 +51,13 @@ export default class GitIntegrationPlugin implements Plugin {
     downloads: 0,
     rating: { average: 0, count: 0 },
     repository: 'https://github.com/craft-code/git-integration',
-    homepage: 'https://craft-code.dev/plugins/git-integration'
+    homepage: 'https://craft-code.dev/plugins/git-integration',
+    license: '',
+    engines: {
+      craftCode: '',
+      node: ''
+    },
+    category: PluginCategory.AI_INTEGRATION
   };
 
   private context!: PluginContext;
@@ -131,7 +158,8 @@ export default class GitIntegrationPlugin implements Plugin {
   /**
    * Handle project open events
    */
-  async onProjectOpen(projectPath: string): Promise<void> {
+  async onProjectOpen(project: Project): Promise<void> {
+    const projectPath = project.path;
     this.context.logger.info('Project opened, checking for Git repository:', projectPath);
     
     const isGitRepo = await this.isGitRepository(projectPath);
@@ -143,9 +171,9 @@ export default class GitIntegrationPlugin implements Plugin {
   /**
    * Handle file change events
    */
-  async onFileChange(filePath: string, changeType: 'create' | 'modify' | 'delete'): Promise<void> {
+  async onFileChange(path: string): Promise<void> {
     // Update git status when files change
-    await this.gitMonitor.checkFileStatus(filePath);
+    await this.gitMonitor.checkFileStatus(path);
     await this.updateGitPanel();
   }
 
@@ -154,7 +182,12 @@ export default class GitIntegrationPlugin implements Plugin {
   private async setupUI(): Promise<void> {
     // Create status bar item
     if (this.context.config.showBranchInStatusBar) {
-      this.statusBarItem = this.context.ui.createStatusBarItem('git-branch');
+      this.statusBarItem = this.context.ui.createStatusBarItem({
+        id: 'git-branch',
+        text: '',
+        alignment: 'left',
+        priority: 0
+      });
       this.statusBarItem.text = '$(git-branch) main';
       this.statusBarItem.tooltip = 'Current Git branch';
       this.statusBarItem.command = 'git.branch';
@@ -166,7 +199,7 @@ export default class GitIntegrationPlugin implements Plugin {
       id: 'git-explorer',
       title: 'Git',
       icon: 'git-branch',
-      location: 'sidebar'
+      position: 'left'
     });
 
     await this.updateGitPanel();

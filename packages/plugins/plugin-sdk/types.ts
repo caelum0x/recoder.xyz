@@ -1,7 +1,7 @@
 /**
  * Core plugin interface definitions for the Craft Code extensibility framework
  */
-
+import * as React from 'react';
 export interface PluginMetadata {
   id: string;
   name: string;
@@ -45,7 +45,8 @@ export enum PluginCategory {
   UTILITIES = 'utilities',
   THEMES = 'themes',
   LANGUAGES = 'languages',
-  FRAMEWORKS = 'frameworks'
+  FRAMEWORKS = 'frameworks',
+  CONTAINERS = 'containers'
 }
 
 export interface PluginPricing {
@@ -152,6 +153,7 @@ export interface Webhook {
 }
 
 export interface WorkspaceAPI {
+  rootPath: string;
   getProject(): Promise<Project | null>;
   createFile(path: string, content: string): Promise<void>;
   readFile(path: string): Promise<string>;
@@ -190,12 +192,24 @@ export interface FileWatcher {
 }
 
 export interface PluginUI {
+  showInputDialog(arg0: { title: string; placeholder: string; multiline: boolean; }): string | PromiseLike<string | null> | null;
   showNotification(options: NotificationOptions): void;
   showModal(options: ModalOptions): Promise<any>;
   registerCommand(command: PluginCommand): void;
   registerView(view: PluginView): void;
   registerStatusBarItem(item: StatusBarItem): void;
   registerContextMenuItem(item: ContextMenuItem): void;
+  
+  // Additional UI methods
+  createPanel(options: PanelOptions): Panel;
+  createStatusBarItem(options: StatusBarItemOptions): StatusBarItem;
+  showQuickPick<T>(items: QuickPickItem<T>[], options?: QuickPickOptions): Promise<T | null>;
+  showConfirmDialog(options: ConfirmDialogOptions): Promise<boolean>;
+  showOutput(channel: string): void;
+  appendOutput(channel: string, text: string): void;
+  showProgress(options: ProgressOptions): Progress;
+  hideProgress(progress: Progress): void;
+  createTerminal(options: TerminalOptions): Terminal;
 }
 
 export interface NotificationOptions {
@@ -247,6 +261,85 @@ export interface ContextMenuItem {
   command: string;
   when?: string; // Context expression
   group?: string;
+}
+
+// Additional UI interfaces
+export interface PanelOptions {
+  id: string;
+  title: string;
+  icon?: string;
+  position: 'left' | 'right' | 'bottom';
+  width?: number;
+  height?: number;
+  content?: React.ComponentType;
+}
+
+export interface Panel {
+  id: string;
+  show(): void;
+  hide(): void;
+  dispose(): void;
+}
+
+export interface StatusBarItemOptions {
+  id: string;
+  text: string;
+  tooltip?: string;
+  command?: string;
+  alignment: 'left' | 'right';
+  priority: number;
+}
+
+export interface QuickPickItem<T = any> {
+  label: string;
+  title?: string; // Alias for label for backward compatibility
+  description?: string;
+  detail?: string;
+  value: T;
+}
+
+export interface QuickPickOptions {
+  title?: string;
+  placeholder?: string;
+  canPickMany?: boolean;
+  ignoreFocusOut?: boolean;
+}
+
+export interface ConfirmDialogOptions {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  confirmText?: string; // Alias for confirmLabel
+  cancelLabel?: string;
+  type?: 'info' | 'warning' | 'error';
+}
+
+export interface ProgressOptions {
+  title: string;
+  cancellable?: boolean;
+  location?: 'notification' | 'window' | 'source-control';
+}
+
+export interface Progress {
+  report(value: { message?: string; increment?: number }): void;
+  cancel(): void;
+}
+
+export interface TerminalOptions {
+  id?: string;
+  name: string;
+  title?: string; // Alias for name
+  cwd?: string;
+  env?: Record<string, string>;
+  shellPath?: string;
+  shellArgs?: string[];
+}
+
+export interface Terminal {
+  sendText(text: string, addNewLine?: boolean): void;
+  show(preserveFocus?: boolean): void;
+  hide(): void;
+  dispose(): void;
 }
 
 export interface PluginHooks {
@@ -324,10 +417,17 @@ export interface KeybindingContribution {
   win?: string;
 }
 
-export interface PluginError extends Error {
-  pluginId: string;
-  code: PluginErrorCode;
-  details?: any;
+export class PluginError extends Error {
+  constructor(
+    message: string,
+    public pluginId: string,
+    public code: PluginErrorCode,
+    public details?: any
+  ) {
+    super(message);
+    this.name = 'PluginError';
+    Object.setPrototypeOf(this, PluginError.prototype);
+  }
 }
 
 export enum PluginErrorCode {

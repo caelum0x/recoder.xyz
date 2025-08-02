@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import PlausibleProvider from "next-plausible";
 import { getBrandConfig } from "../lib/recoder-config";
+import AuthProvider from "@/components/auth-provider";
+import { AnalyticsProvider } from "@/components/providers/analytics-provider";
 import "./globals.css";
 
 const brandConfig = getBrandConfig();
@@ -45,8 +47,13 @@ export default function RootLayout({
       <head>
         <PlausibleProvider domain="web.recoder.xyz" />
       </head>
-
-      {children}
+      <body className="h-full">
+        <AuthProvider>
+          <AnalyticsProvider>
+            {children}
+          </AnalyticsProvider>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

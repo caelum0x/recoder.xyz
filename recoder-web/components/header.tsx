@@ -3,34 +3,37 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
+import { User, Settings, LogOut, Plus, History, Zap, Palette } from "lucide-react";
 
 import GithubIcon from "@/components/icons/github-icon";
 import { getBrandConfig } from "@/lib/recoder-config";
-import { useAuth } from "@/lib/auth-context";
-import AuthModal from "@/components/auth/auth-modal";
-import UserDashboard from "@/components/auth/user-dashboard";
 
 const brandConfig = getBrandConfig();
 
 export default function Header() {
-  const { isAuthenticated } = useAuth();
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [showUserDashboard, setShowUserDashboard] = useState(false);
-  const dashboardRef = useRef<HTMLDivElement>(null);
+  const { data: session, status } = useSession();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close dashboard when clicking outside
+  // Close menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dashboardRef.current && !dashboardRef.current.contains(event.target as Node)) {
-        setShowUserDashboard(false);
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
       }
     }
 
-    if (showUserDashboard) {
+    if (showUserMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showUserDashboard]);
+  }, [showUserMenu]);
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: "/" });
+    setShowUserMenu(false);
+  };
 
   return (
     <header className="relative mx-auto flex w-full shrink-0 items-center justify-center py-6">
@@ -82,30 +85,129 @@ export default function Header() {
         </a>
 
         {/* Authentication UI */}
-        {!isAuthenticated ? (
+        {status === "loading" ? (
+          <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
+        ) : session ? (
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-200"
+            >
+              {session.user?.image ? (
+                <Image
+                  src={session.user.image}
+                  alt={session.user.name || "User"}
+                  width={20}
+                  height={20}
+                  className="rounded-full"
+                />
+              ) : (
+                <User className="w-4 h-4" />
+              )}
+              <span className="hidden sm:block">
+                {session.user?.name || session.user?.email?.split('@')[0] || 'User'}
+              </span>
+            </button>
+            
+            {/* User menu dropdown */}
+            {showUserMenu && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                {/* User Info */}
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    {session.user?.image ? (
+                      <Image
+                        src={session.user.image}
+                        alt={session.user.name || "User"}
+                        width={40}
+                        height={40}
+                        className="rounded-full"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-white" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {session.user?.name || "User"}
+                      </p>
+                      <p className="text-sm text-gray-600 truncate">
+                        {session.user?.email}
+                      </p>
+                      {session.user?.username && (
+                        <p className="text-xs text-gray-500">
+                          @{session.user.username}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Menu Items */}
+                <div className="py-2">
+                  <Link
+                    href="/"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <Plus className="w-4 h-4" />
+                    New Chat
+                  </Link>
+                  <Link
+                    href="/chats"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <History className="w-4 h-4" />
+                    Chat History
+                  </Link>
+                  <Link
+                    href="/dashboard"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <Zap className="w-4 h-4" />
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/templates"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <Palette className="w-4 h-4" />
+                    Templates
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </Link>
+                </div>
+
+                {/* Sign Out */}
+                <div className="border-t border-gray-100 pt-2">
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
           <button
-            onClick={() => setIsAuthModalOpen(true)}
+            onClick={() => signIn()}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             Sign In
           </button>
-        ) : (
-          <div className="relative" ref={dashboardRef}>
-            <button
-              onClick={() => setShowUserDashboard(!showUserDashboard)}
-              className="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-200"
-            >
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              Connected
-            </button>
-            
-            {/* User dashboard dropdown */}
-            {showUserDashboard && (
-              <div className="absolute right-0 top-full mt-2 z-50">
-                <UserDashboard />
-              </div>
-            )}
-          </div>
         )}
 
         {/* CLI & Extension Links */}
@@ -127,11 +229,6 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Authentication Modal */}
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={() => setIsAuthModalOpen(false)} 
-      />
     </header>
   );
 }

@@ -23,7 +23,7 @@ export default function PageClient({ chat }: { chat: Chat }) {
   const [isShowingCodeViewer, setIsShowingCodeViewer] = useState(
     chat.messages.some((m) => m.role === "assistant"),
   );
-  const [activeTab, setActiveTab] = useState<"code" | "preview">("preview");
+  const [activeTab, setActiveTab] = useState<"code" | "preview" | "deploy">("preview");
   const router = useRouter();
   const isHandlingStreamRef = useRef(false);
   const [activeMessage, setActiveMessage] = useState(

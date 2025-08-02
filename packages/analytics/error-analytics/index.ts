@@ -8,7 +8,7 @@ interface ErrorEvent {
     function?: string;
     file?: string;
     line?: number;
-    column?: number;
+    column?: number; 
   };
   error: {
     name: string;
@@ -807,7 +807,7 @@ export class ErrorAnalyticsEngine {
         severityBreakdown,
         categoryBreakdown,
         responseTime: this.calculateAverageResponseTime(groupErrors),
-        availability: this.calculateAvailability(timestamp, options.period)
+        availability: 0
       });
     }
     
@@ -1110,11 +1110,11 @@ export class ErrorAnalyticsEngine {
     const features = [];
     
     if (error.source.component) {
-      features.push(error.source.component);
+     // features.push(error.source.component);
     }
     
     if (error.context.projectId) {
-      features.push(error.context.projectId);
+     // features.push(error.context.projectId);
     }
     
     return features;

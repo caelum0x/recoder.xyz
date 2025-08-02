@@ -19,7 +19,7 @@ import { CloudService } from "@roo-code/cloud"
 import { TelemetryService } from "@roo-code/telemetry"
 import { type ApiMessage } from "../task-persistence/apiMessages"
 
-import { ClineProvider } from "./ClineProvider"
+import { RecoderProvider } from "./RecoderProvider"
 import { changeLanguage, t } from "../../i18n"
 import { Package } from "../../shared/package"
 import { RouterName, toRouterName, ModelRecord } from "../../shared/api"
@@ -62,7 +62,7 @@ import { MarketplaceManager, MarketplaceItemType } from "../../services/marketpl
 import { setPendingTodoList } from "../tools/updateTodoListTool"
 
 export const webviewMessageHandler = async (
-	provider: ClineProvider,
+	provider: RecoderProvider,
 	message: WebviewMessage,
 	marketplaceManager?: MarketplaceManager,
 ) => {
@@ -537,7 +537,7 @@ export const webviewMessageHandler = async (
 				glama: {},
 				unbound: {},
 				litellm: {},
-				"kilocode-openrouter": {}, // kilocode_change
+				"recoder-openrouter": {}, // kilocode_change
 				ollama: {},
 				lmstudio: {},
 			}
@@ -567,8 +567,8 @@ export const webviewMessageHandler = async (
 				{ key: "glama", options: { provider: "glama" } },
 				{ key: "unbound", options: { provider: "unbound", apiKey: apiConfiguration.unboundApiKey } },
 				{
-					key: "kilocode-openrouter",
-					options: { provider: "kilocode-openrouter", kilocodeToken: apiConfiguration.kilocodeToken },
+					key: "recoder-openrouter",
+					options: { provider: "recoder-openrouter", kilocodeToken: apiConfiguration.kilocodeToken },
 				},
 			]
 			// kilocode_change end

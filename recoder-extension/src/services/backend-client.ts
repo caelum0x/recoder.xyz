@@ -394,7 +394,7 @@ export class ExtensionBackendClient {
     }
 
     statusBarItem.text = `${icon} ${usedRequests}/${totalRequests}`;
-    statusBarItem.tooltip = `Recoder.xyz - ${this.currentSession.email}\n` +
+    statusBarItem.tooltip = `recoder.xyz - ${this.currentSession.email}\n` +
       `Plan: ${this.currentSession.plan.toUpperCase()}\n` +
       `Quota: ${usedRequests}/${totalRequests} requests (${percentage}%)\n` +
       `Resets: ${new Date(this.currentSession.quotas.resetDate).toLocaleDateString()}\n\n` +

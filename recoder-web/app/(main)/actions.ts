@@ -11,6 +11,8 @@ import Together from "together-ai";
 import { unifiedWebAI } from "@/lib/unified-web-ai";
 import { buildApiHandler } from "@/lib/api";
 import type { ProviderSettings } from "@/lib/api/providers/types";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export async function createChat(
   prompt: string,
@@ -18,6 +20,9 @@ export async function createChat(
   quality: "high" | "low",
   screenshotUrl: string | undefined,
 ) {
+  // Get the current session to associate chat with user
+  const session = await getServerSession(authOptions);
+  
   const prisma = getPrisma();
   const chat = await prisma.chat.create({
     data: {
@@ -26,6 +31,7 @@ export async function createChat(
       prompt,
       title: "",
       shadcn: true,
+      userId: session?.user?.id || null, // Associate with authenticated user
     },
   });
 
@@ -245,12 +251,20 @@ export async function createMessage(
   text: string,
   role: "assistant" | "user",
 ) {
+  // Get the current session to verify chat ownership
+  const session = await getServerSession(authOptions);
+  
   const prisma = getPrisma();
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
     include: { messages: true },
   });
   if (!chat) notFound();
+  
+  // Verify that the user owns this chat (or it's anonymous)
+  if (chat.userId && chat.userId !== session?.user?.id) {
+    throw new Error("Unauthorized: You can only access your own chats");
+  }
 
   const maxPosition = Math.max(...chat.messages.map((m) => m.position));
 
@@ -264,4 +278,97 @@ export async function createMessage(
   });
 
   return newMessage;
+}
+
+export async function getUserChats(limit: number = 10) {
+  // Get the current session
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.id) {
+    return [];
+  }
+  
+  const prisma = getPrisma();
+  const chats = await prisma.chat.findMany({
+    where: {
+      userId: session.user.id,
+    },
+    include: {
+      messages: {
+        take: 1,
+        orderBy: {
+          position: 'desc'
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: limit
+  });
+  
+  return chats;
+}
+
+export async function getUserStats() {
+  // Get the current session
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.id) {
+    return {
+      generationsToday: 0,
+      generationsTotal: 0,
+      tokensUsed: 0,
+      favoriteModel: "claude-3-5-sonnet-20241022",
+      averageQuality: "high",
+      deploymentsCount: 0,
+      chatsCount: 0,
+    };
+  }
+  
+  const prisma = getPrisma();
+  
+  // Get basic chat counts
+  const totalChats = await prisma.chat.count({
+    where: { userId: session.user.id }
+  });
+  
+  // Get today's chats
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todaysChats = await prisma.chat.count({
+    where: {
+      userId: session.user.id,
+      createdAt: {
+        gte: today
+      }
+    }
+  });
+  
+  // Get favorite model (most used)
+  const modelStats = await prisma.chat.groupBy({
+    by: ['model'],
+    where: { userId: session.user.id },
+    _count: {
+      model: true
+    },
+    orderBy: {
+      _count: {
+        model: 'desc'
+      }
+    },
+    take: 1
+  });
+  
+  const favoriteModel = modelStats[0]?.model || "claude-3-5-sonnet-20241022";
+  
+  return {
+    generationsToday: todaysChats,
+    generationsTotal: totalChats,
+    tokensUsed: totalChats * 2500, // Rough estimate
+    favoriteModel,
+    averageQuality: "high",
+    deploymentsCount: Math.floor(totalChats * 0.3), // Rough estimate
+    chatsCount: totalChats,
+  };
 }

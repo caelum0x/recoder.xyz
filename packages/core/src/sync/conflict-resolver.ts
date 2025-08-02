@@ -13,7 +13,7 @@ export interface ConflictContext {
   conflictId: string;
   sessionId: string;
   userId: string;
-  path: string;
+  path: string; 
   conflictType: 'value' | 'structure' | 'code' | 'preference' | 'permission';
   severity: 'low' | 'medium' | 'high' | 'critical';
   localChange: StateChange;
@@ -551,7 +551,7 @@ export class ConflictResolver extends EventEmitter {
       {
         name: 'manual-resolution',
         description: 'Require user intervention',
-        applicableTypes: ['critical', 'permission', 'code', 'structure', 'value', 'preference'],
+        applicableTypes: ['permission', 'code', 'structure', 'value', 'preference'],
         priority: 10,
         requiresUserInput: true,
         autoApplicable: false,
@@ -603,7 +603,6 @@ export class ConflictResolver extends EventEmitter {
   private groupRelatedConflicts(conflicts: SyncConflict[]): SyncConflict[][] {
     // Group conflicts by path prefix
     const groups = new Map<string, SyncConflict[]>();
-    
     for (const conflict of conflicts) {
       const pathPrefix = conflict.path.split('.')[0];
       if (!groups.has(pathPrefix)) {
@@ -611,7 +610,6 @@ export class ConflictResolver extends EventEmitter {
       }
       groups.get(pathPrefix)!.push(conflict);
     }
-    
     return Array.from(groups.values());
   }
 
@@ -688,7 +686,7 @@ Respond in JSON format with: { "resolvedValue": ..., "reasoning": "...", "confid
   }
 
   private async generateAlternatives(context: ConflictContext, appliedStrategy: ResolutionStrategy): Promise<Array<{strategy: string; value: any; confidence: number}>> {
-    const alternatives = [];
+    const alternatives: Array<{strategy: string; value: any; confidence: number}> = [];
     
     // Always provide the option to use either original value
     alternatives.push({

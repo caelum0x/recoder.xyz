@@ -15,7 +15,7 @@ export interface QwenConfig extends ProviderConfig {
 
 export interface QwenMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string; 
 }
 
 export interface QwenRequestBody {
@@ -70,7 +70,7 @@ export interface QwenStreamResponse {
 }
 
 export class QwenProvider extends BaseAIProvider {
-  private config: QwenConfig;
+  protected config: QwenConfig;
   private baseUrl: string;
 
   constructor(config: QwenConfig) {
@@ -118,7 +118,8 @@ export class QwenProvider extends BaseAIProvider {
           responseTime: Date.now() - startTime,
           finishReason: this.mapFinishReason(choice.finish_reason),
           confidence: this.calculateConfidence(choice),
-          toolCalls: []
+          toolCalls: [],
+          cached: false
         }
       };
 
@@ -201,7 +202,8 @@ export class QwenProvider extends BaseAIProvider {
           model: request.options.model || this.config.defaultModel || 'qwen2.5-coder-32b-instruct',
           provider: this.providerId,
           responseTime: Date.now() - startTime,
-          finishReason: this.mapFinishReason(finishReason)
+          finishReason: this.mapFinishReason(finishReason),
+          cached: false
         },
         streaming: {
           isComplete: true,
@@ -433,7 +435,7 @@ export class QwenProvider extends BaseAIProvider {
   /**
    * Make streaming API request to Qwen
    */
-  private async makeStreamingAPIRequest(endpoint: string, body: QwenRequestBody): AsyncGenerator<string> {
+  private async *makeStreamingAPIRequest(endpoint: string, body: QwenRequestBody): AsyncGenerator<string, any, any> {
     const url = `${this.baseUrl}${endpoint}`;
     
     const response = await fetch(url, {
