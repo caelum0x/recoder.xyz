@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { toolGroupsSchema } from "./tool.js"
+import { toolGroupsSchema } from "./tool"
 
 /**
  * GroupOptions

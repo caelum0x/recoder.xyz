@@ -1,0 +1,192 @@
+{
+  "name": "Recoder.xyz Cloudflare Configuration",
+  "description": "Production CDN and security configuration for Recoder.xyz platform",
+  "zones": [
+    {
+      "name": "recoder.xyz",
+      "settings": {
+        "always_use_https": "on",
+        "automatic_https_rewrites": "on",
+        "brotli": "on",
+        "browser_cache_ttl": 31536000,
+        "cache_level": "aggressive",
+        "development_mode": "off",
+        "edge_cache_ttl": 7776000,
+        "email_obfuscation": "on",
+        "hotlink_protection": "on",
+        "ip_geolocation": "on",
+        "ipv6": "on",
+        "minify": {
+          "css": "on",
+          "html": "on",
+          "js": "on"
+        },
+        "mirage": "on",
+        "opportunistic_encryption": "on",
+        "polish": "lossless",  
+        "rocket_loader": "on",
+        "security_level": "medium",
+        "ssl": "flexible",
+        "tls_1_3": "on",
+        "waf": "on",
+        "webp": "on"
+      },
+      "page_rules": [
+        {
+          "targets": [
+            {
+              "target": "url",
+              "constraint": {
+                "operator": "matches",
+                "value": "web.recoder.xyz/api/*"
+              }
+            }
+          ],
+          "actions": [
+            {
+              "id": "cache_level",
+              "value": "bypass"
+            },
+            {
+              "id": "edge_cache_ttl",
+              "value": 0
+            }
+          ],
+          "priority": 1,
+          "status": "active"
+        },
+        {
+          "targets": [
+            {
+              "target": "url", 
+              "constraint": {
+                "operator": "matches",
+                "value": "web.recoder.xyz/_next/static/*"
+              }
+            }
+          ],
+          "actions": [
+            {
+              "id": "cache_level",
+              "value": "cache_everything"
+            },
+            {
+              "id": "edge_cache_ttl",
+              "value": 31536000
+            },
+            {
+              "id": "browser_cache_ttl",
+              "value": 31536000
+            }
+          ],
+          "priority": 2,
+          "status": "active"
+        },
+        {
+          "targets": [
+            {
+              "target": "url",
+              "constraint": {
+                "operator": "matches", 
+                "value": "*.recoder.xyz/*"
+              }
+            }
+          ],
+          "actions": [
+            {
+              "id": "always_use_https",
+              "value": "on"
+            },
+            {
+              "id": "security_level",
+              "value": "medium"
+            }
+          ],
+          "priority": 3,
+          "status": "active"
+        }
+      ],
+      "firewall_rules": [
+        {
+          "filter": {
+            "expression": "(cf.threat_score gt 14 and cf.threat_score lt 50) or (cf.bot_management.score lt 30)"
+          },
+          "action": "challenge",
+          "description": "Challenge suspicious traffic"
+        },
+        {
+          "filter": {
+            "expression": "cf.threat_score gt 50 or cf.bot_management.score lt 10"
+          },
+          "action": "block",
+          "description": "Block high-risk traffic"
+        },
+        {
+          "filter": {
+            "expression": "http.request.uri.path contains \"/api/\" and http.request.method eq \"POST\" and rate(5m) gt 30"
+          },
+          "action": "block",
+          "description": "Rate limit API POST requests"
+        }
+      ],
+      "workers": [
+        {
+          "name": "recoder-edge-cache",
+          "script": "edge-cache-worker.js",
+          "routes": [
+            "web.recoder.xyz/*"
+          ]
+        },
+        {
+          "name": "recoder-auth-validator", 
+          "script": "auth-validator-worker.js",
+          "routes": [
+            "web.recoder.xyz/api/auth/*"
+          ]
+        }
+      ]
+    }
+  ],
+  "dns_records": [
+    {
+      "type": "A",
+      "name": "web",
+      "content": "104.21.0.0",
+      "ttl": 300,
+      "proxied": true
+    },
+    {
+      "type": "A", 
+      "name": "api",
+      "content": "104.21.0.1",
+      "ttl": 300,
+      "proxied": true
+    },
+    {
+      "type": "A",
+      "name": "cli",
+      "content": "104.21.0.2", 
+      "ttl": 300,
+      "proxied": true
+    },
+    {
+      "type": "CNAME",
+      "name": "www",
+      "content": "web.recoder.xyz",
+      "ttl": 300,
+      "proxied": true
+    },
+    {
+      "type": "TXT",
+      "name": "_dmarc",
+      "content": "v=DMARC1; p=quarantine; rua=mailto:dmarc@recoder.xyz",
+      "ttl": 300
+    },
+    {
+      "type": "TXT", 
+      "name": "recoder.xyz",
+      "content": "v=spf1 include:_spf.google.com ~all",
+      "ttl": 300
+    }
+  ]
+}

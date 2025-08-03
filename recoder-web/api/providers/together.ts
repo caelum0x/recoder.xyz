@@ -1,5 +1,5 @@
 import type { ModelInfo } from "@roo-code/types"
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared/api"
 import { BaseOpenAiCompatibleProvider } from "./base-openai-compatible-provider"
 
 const TOGETHER_MODELS = {

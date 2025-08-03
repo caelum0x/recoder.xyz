@@ -1,0 +1,46 @@
+# NPM Package Ignore File
+# Files and folders to exclude from the NPM package
+
+# Source files (include only built dist)
+src/
+**/tsconfig.json
+**/tsconfig.*.json
+
+# Development files
+.env*
+*.env
+.vscode/
+.idea/
+
+# Test files
+**/*.test.*
+**/*.spec.*
+coverage/
+jest.config.*
+
+# Build artifacts not needed
+.turbo/
+.esbuild/
+node_modules/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Config files
+.eslintrc.*
+.prettierrc*
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/

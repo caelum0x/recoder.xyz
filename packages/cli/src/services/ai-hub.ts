@@ -1056,27 +1056,54 @@ export class AIHub {
       }
     }
 
-    // Step 3: Router integration - use recoder-code-router for optimal routing
+    // Step 3: CLI Router integration - use recoder-cli-router for optimal routing
     let selectedProvider: AIProvider;
-    if (packageIntegration.router.isAvailable()) {
-      const routingCriteria = {
-        context: optimizedContext,
-        messages: sanitizedMessages,
-        options,
-        availableProviders: Array.from(this.providers.keys())
+    let routerResponse = null;
+    
+    // Try to use CLI Router for intelligent model selection
+    try {
+      const axios = require('axios');
+      const routerEndpoint = process.env.CLI_ROUTER_ENDPOINT || 'http://127.0.0.1:3456/api/router/select';
+      
+      const promptContent = sanitizedMessages.map(m => m.content).join(' ');
+      const routerRequest = {
+        prompt: promptContent,
+        taskType: optimizedContext.type.replace('-', '_').toUpperCase(),
+        context: {
+          complexity: optimizedContext.complexity,
+          language: 'typescript',
+          framework: options.framework || 'general'
+        },
+        priority: optimizedContext.priority,
+        preferredProviders: Array.from(this.providers.keys())
       };
       
-      const routerSuggestion = packageIntegration.router.selectOptimalProvider(routingCriteria);
-      if (routerSuggestion && this.providers.has(routerSuggestion)) {
-        selectedProvider = this.providers.get(routerSuggestion)!;
-        Logger.info(`🎯 Router selected: ${routerSuggestion}`);
+      const response = await axios.post(routerEndpoint, routerRequest, {
+        timeout: 3000,
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.data.success && response.data.selectedModel) {
+        routerResponse = response.data;
+        const suggestedProvider = response.data.provider.name;
+        
+        if (this.providers.has(suggestedProvider)) {
+          selectedProvider = this.providers.get(suggestedProvider)!;
+          Logger.info(`🎯 CLI Router selected: ${suggestedProvider} (${response.data.selectedModel.displayName})`);
+          Logger.info(`💡 Reasoning: ${response.data.reasoning}`);
+          Logger.info(`💰 Estimated cost: $${response.data.estimatedCost.toFixed(4)}`);
+        } else {
+          selectedProvider = this.selectBestProvider(optimizedContext);
+          Logger.info(`⚠️ Router suggested unavailable provider ${suggestedProvider}, using fallback: ${selectedProvider.name}`);
+        }
       } else {
         selectedProvider = this.selectBestProvider(optimizedContext);
-        Logger.info(`🎯 Fallback selection: ${selectedProvider.name}`);
+        Logger.info(`🎯 CLI Router failed, using standard selection: ${selectedProvider.name}`);
       }
-    } else {
+    } catch (routerError: any) {
+      // CLI Router not available, use standard selection
       selectedProvider = this.selectBestProvider(optimizedContext);
-      Logger.info(`🎯 Standard selection: ${selectedProvider.name}`);
+      Logger.debug(`CLI Router unavailable (${routerError.message}), using standard selection: ${selectedProvider.name}`);
     }
     
     // Create cache key from sanitized messages

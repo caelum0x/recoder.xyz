@@ -6,7 +6,8 @@
  * Now uses the unified API system from the extension.
  */
 
-import { buildApiHandler, type ApiHandler } from './api';
+// Use dynamic import for server-only API handlers
+import type { ApiHandler } from './api';
 import type { ProviderSettings } from './api/providers/types';
 
 export interface AIProvider {

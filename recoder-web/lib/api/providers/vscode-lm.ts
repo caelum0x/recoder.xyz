@@ -3,8 +3,8 @@ import * as vscode from "vscode"
 
 import { type ModelInfo, openAiModelInfoSaneDefaults } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
-import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
+import type { ApiHandlerOptions } from "@recoder/shared"
+import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "@recoder/shared"
 
 import { ApiStream } from "../transform/stream"
 import { convertToVsCodeLmMessages } from "../transform/vscode-lm-format"

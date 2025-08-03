@@ -1,4 +1,4 @@
-import { Package } from "../../shared/package"
+import { Package } from "@recoder/shared"
 
 export const DEFAULT_HEADERS = {
 	"HTTP-Referer": "https://kilocode.ai",

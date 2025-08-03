@@ -22,7 +22,7 @@ import { IpcServer } from "@roo-code/ipc"
 import { Package } from "../shared/package"
 import { getWorkspacePath } from "../utils/path"
 import { RecoderProvider } from "../core/webview/RecoderProvider"
-import { openClineInNewTab } from "../activate/registerCommands"
+import { openRecoderInNewTab } from "../activate/registerCommands"
 
 export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 	private readonly outputChannel: vscode.OutputChannel
@@ -51,7 +51,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 				console.log(args)
 			}
 
-			this.logfile = path.join(os.tmpdir(), "kilo-code-messages.log")
+			this.logfile = path.join(os.tmpdir(), "recoder-messages.log")
 		} else {
 			this.log = () => {}
 		}
@@ -110,7 +110,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 			await vscode.commands.executeCommand("workbench.action.files.revert")
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors")
 
-			provider = await openClineInNewTab({ context: this.context, outputChannel: this.outputChannel })
+			provider = await openRecoderInNewTab({ context: this.context, outputChannel: this.outputChannel })
 			this.registerListeners(provider)
 		} else {
 			await vscode.commands.executeCommand(`${Package.name}.SidebarProvider.focus`)
@@ -144,25 +144,25 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 			}
 		}
 
-		await provider.removeClineFromStack()
+		await provider.removeRecoderFromStack()
 		await provider.postStateToWebview()
 		await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 		await provider.postMessageToWebview({ type: "invoke", invoke: "newChat", text, images })
 
-		const cline = await provider.initClineWithTask(text, images, undefined, {
+		const recoder = await provider.initRecoderWithTask(text, images, undefined, {
 			consecutiveMistakeLimit: Number.MAX_SAFE_INTEGER,
 		})
 
-		if (!cline) {
+		if (!recoder) {
 			throw new Error("Failed to create task due to policy restrictions")
 		}
 
-		return cline.taskId
+		return recoder.taskId
 	}
 
 	public async resumeTask(taskId: string): Promise<void> {
 		const { historyItem } = await this.sidebarProvider.getTaskWithId(taskId)
-		await this.sidebarProvider.initClineWithHistoryItem(historyItem)
+		await this.sidebarProvider.initRecoderWithHistoryItem(historyItem)
 		await this.sidebarProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 	}
 
@@ -214,58 +214,58 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 	}
 
 	private registerListeners(provider: RecoderProvider) {
-		provider.on("clineCreated", (cline) => {
-			cline.on("taskStarted", async () => {
-				this.emit(RooCodeEventName.TaskStarted, cline.taskId)
-				this.taskMap.set(cline.taskId, provider)
-				await this.fileLog(`[${new Date().toISOString()}] taskStarted -> ${cline.taskId}\n`)
+		provider.on("recoderCreated", (recoder) => {
+			recoder.on("taskStarted", async () => {
+				this.emit(RooCodeEventName.TaskStarted, recoder.taskId)
+				this.taskMap.set(recoder.taskId, provider)
+				await this.fileLog(`[${new Date().toISOString()}] taskStarted -> ${recoder.taskId}\n`)
 			})
 
-			cline.on("message", async (message) => {
-				this.emit(RooCodeEventName.Message, { taskId: cline.taskId, ...message })
+			recoder.on("message", async (message) => {
+				this.emit(RooCodeEventName.Message, { taskId: recoder.taskId, ...message })
 
 				if (message.message.partial !== true) {
 					await this.fileLog(`[${new Date().toISOString()}] ${JSON.stringify(message.message, null, 2)}\n`)
 				}
 			})
 
-			cline.on("taskModeSwitched", (taskId, mode) => this.emit(RooCodeEventName.TaskModeSwitched, taskId, mode))
+			recoder.on("taskModeSwitched", (taskId, mode) => this.emit(RooCodeEventName.TaskModeSwitched, taskId, mode))
 
-			cline.on("taskAskResponded", () => this.emit(RooCodeEventName.TaskAskResponded, cline.taskId))
+			recoder.on("taskAskResponded", () => this.emit(RooCodeEventName.TaskAskResponded, recoder.taskId))
 
-			cline.on("taskAborted", () => {
-				this.emit(RooCodeEventName.TaskAborted, cline.taskId)
-				this.taskMap.delete(cline.taskId)
+			recoder.on("taskAborted", () => {
+				this.emit(RooCodeEventName.TaskAborted, recoder.taskId)
+				this.taskMap.delete(recoder.taskId)
 			})
 
-			cline.on("taskCompleted", async (_, tokenUsage, toolUsage) => {
+			recoder.on("taskCompleted", async (_, tokenUsage, toolUsage) => {
 				let isSubtask = false
 
-				if (cline.rootTask != undefined) {
+				if (recoder.rootTask != undefined) {
 					isSubtask = true
 				}
 
-				this.emit(RooCodeEventName.TaskCompleted, cline.taskId, tokenUsage, toolUsage, { isSubtask: isSubtask })
-				this.taskMap.delete(cline.taskId)
+				this.emit(RooCodeEventName.TaskCompleted, recoder.taskId, tokenUsage, toolUsage, { isSubtask: isSubtask })
+				this.taskMap.delete(recoder.taskId)
 
 				await this.fileLog(
-					`[${new Date().toISOString()}] taskCompleted -> ${cline.taskId} | ${JSON.stringify(tokenUsage, null, 2)} | ${JSON.stringify(toolUsage, null, 2)}\n`,
+					`[${new Date().toISOString()}] taskCompleted -> ${recoder.taskId} | ${JSON.stringify(tokenUsage, null, 2)} | ${JSON.stringify(toolUsage, null, 2)}\n`,
 				)
 			})
 
-			cline.on("taskSpawned", (childTaskId) => this.emit(RooCodeEventName.TaskSpawned, cline.taskId, childTaskId))
-			cline.on("taskPaused", () => this.emit(RooCodeEventName.TaskPaused, cline.taskId))
-			cline.on("taskUnpaused", () => this.emit(RooCodeEventName.TaskUnpaused, cline.taskId))
+			recoder.on("taskSpawned", (childTaskId) => this.emit(RooCodeEventName.TaskSpawned, recoder.taskId, childTaskId))
+			recoder.on("taskPaused", () => this.emit(RooCodeEventName.TaskPaused, recoder.taskId))
+			recoder.on("taskUnpaused", () => this.emit(RooCodeEventName.TaskUnpaused, recoder.taskId))
 
-			cline.on("taskTokenUsageUpdated", (_, usage) =>
-				this.emit(RooCodeEventName.TaskTokenUsageUpdated, cline.taskId, usage),
+			recoder.on("taskTokenUsageUpdated", (_, usage) =>
+				this.emit(RooCodeEventName.TaskTokenUsageUpdated, recoder.taskId, usage),
 			)
 
-			cline.on("taskToolFailed", (taskId, tool, error) =>
+			recoder.on("taskToolFailed", (taskId, tool, error) =>
 				this.emit(RooCodeEventName.TaskToolFailed, taskId, tool, error),
 			)
 
-			this.emit(RooCodeEventName.TaskCreated, cline.taskId)
+			this.emit(RooCodeEventName.TaskCreated, recoder.taskId)
 		})
 	}
 

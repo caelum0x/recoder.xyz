@@ -23,7 +23,7 @@ import { t } from "../i18n"
 export function getVisibleProviderOrLog(outputChannel: vscode.OutputChannel): RecoderProvider | undefined {
 	const visibleProvider = RecoderProvider.getVisibleInstance()
 	if (!visibleProvider) {
-		outputChannel.appendLine("Cannot find any visible Kilo Code instances.")
+		outputChannel.appendLine("Cannot find any visible Recoder instances.")
 		return undefined
 	}
 	return visibleProvider
@@ -94,7 +94,7 @@ const getCommandsMap = ({ context, outputChannel }: RegisterCommandOptions): Rec
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		await visibleProvider.removeClineFromStack()
+		await visibleProvider.removeRecoderFromStack()
 		await visibleProvider.postStateToWebview()
 		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 	},
@@ -123,9 +123,9 @@ const getCommandsMap = ({ context, outputChannel }: RegisterCommandOptions): Rec
 	popoutButtonClicked: () => {
 		TelemetryService.instance.captureTitleButtonClicked("popout")
 
-		return openClineInNewTab({ context, outputChannel })
+		return openRecoderInNewTab({ context, outputChannel })
 	},
-	openInNewTab: () => openClineInNewTab({ context, outputChannel }),
+	openInNewTab: () => openRecoderInNewTab({ context, outputChannel }),
 	settingsButtonClicked: () => {
 		const visibleProvider = getVisibleProviderOrLog(outputChannel)
 
@@ -150,6 +150,15 @@ const getCommandsMap = ({ context, outputChannel }: RegisterCommandOptions): Rec
 
 		visibleProvider.postMessageToWebview({ type: "action", action: "historyButtonClicked" })
 	},
+	sidebarProviderFocus: () => {
+		// Focus the sidebar provider view
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+		if (visibleProvider) {
+			// Make sure the view is visible and focused
+			visibleProvider.view?.show(true)
+			return focusPanel()
+		}
+	},
 	// kilocode_change begin
 	profileButtonClicked: () => {
 		const visibleProvider = getVisibleProviderOrLog(outputChannel)
@@ -161,7 +170,7 @@ const getCommandsMap = ({ context, outputChannel }: RegisterCommandOptions): Rec
 		visibleProvider.postMessageToWebview({ type: "action", action: "profileButtonClicked" })
 	},
 	helpButtonClicked: () => {
-		vscode.env.openExternal(vscode.Uri.parse("https://kilocode.ai"))
+		vscode.env.openExternal(vscode.Uri.parse("https://recoder.xyz"))
 	},
 	// kilocode_change end
 	marketplaceButtonClicked: () => {
@@ -222,14 +231,14 @@ const getCommandsMap = ({ context, outputChannel }: RegisterCommandOptions): Rec
 	}, // kilocode_change begin
 	focusChatInput: async () => {
 		try {
-			await vscode.commands.executeCommand("kilo-code.SidebarProvider.focus")
+			await vscode.commands.executeCommand("recoder-vscode.SidebarProvider.focus")
 			await delay(100)
 
 			let visibleProvider = getVisibleProviderOrLog(outputChannel)
 
 			if (!visibleProvider) {
 				// If still no visible provider, try opening in a new tab
-				const tabProvider = await openClineInNewTab({ context, outputChannel })
+				const tabProvider = await openRecoderInNewTab({ context, outputChannel })
 				await delay(100)
 				visibleProvider = tabProvider
 			}
@@ -254,7 +263,7 @@ const getCommandsMap = ({ context, outputChannel }: RegisterCommandOptions): Rec
 	// kilocode_change end
 })
 
-export const openClineInNewTab = async ({ context, outputChannel }: Omit<RegisterCommandOptions, "provider">) => {
+export const openRecoderInNewTab = async ({ context, outputChannel }: Omit<RegisterCommandOptions, "provider">) => {
 	// (This example uses webviewProvider activation event which is necessary to
 	// deserialize cached webview, but since we use retainContextWhenHidden, we
 	// don't need to use that event).
@@ -284,7 +293,7 @@ export const openClineInNewTab = async ({ context, outputChannel }: Omit<Registe
 
 	const targetCol = hasVisibleEditors ? Math.max(lastCol + 1, 1) : vscode.ViewColumn.Two
 
-	const newPanel = vscode.window.createWebviewPanel(RecoderProvider.tabPanelId, "Kilo Code", targetCol, {
+	const newPanel = vscode.window.createWebviewPanel(RecoderProvider.tabPanelId, "Recoder", targetCol, {
 		enableScripts: true,
 		retainContextWhenHidden: true,
 		localResourceRoots: [context.extensionUri],
@@ -294,8 +303,8 @@ export const openClineInNewTab = async ({ context, outputChannel }: Omit<Registe
 	setPanel(newPanel, "tab")
 
 	newPanel.iconPath = {
-		light: vscode.Uri.joinPath(context.extensionUri, "assets", "icons", "kilo-light.svg"),
-		dark: vscode.Uri.joinPath(context.extensionUri, "assets", "icons", "kilo-dark.svg"),
+		light: vscode.Uri.joinPath(context.extensionUri, "assets", "icons", "recoder-light.svg"),
+		dark: vscode.Uri.joinPath(context.extensionUri, "assets", "icons", "recoder-dark.svg"),
 	}
 
 	await tabProvider.resolveWebviewView(newPanel)

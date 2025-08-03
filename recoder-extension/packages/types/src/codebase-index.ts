@@ -39,6 +39,11 @@ export const codebaseIndexConfigSchema = z.object({
 export type CodebaseIndexConfig = z.infer<typeof codebaseIndexConfigSchema>
 
 /**
+ * EmbedderProvider type extracted from the schema
+ */
+export type EmbedderProvider = "openai" | "ollama" | "openai-compatible" | "gemini"
+
+/**
  * CodebaseIndexModels
  */
 

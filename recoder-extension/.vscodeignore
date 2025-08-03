@@ -1,0 +1,53 @@
+# VS Code Extension Ignore File
+# Files and folders to exclude from the extension package
+
+# Source files
+src/**
+**/tsconfig.json
+**/tsconfig.*.json
+.vscode-test/**
+.vscode/**
+
+# Build files
+.turbo/
+.esbuild/
+node_modules/**
+.env*
+*.env
+
+# Development files
+**/*.ts
+**/*.map
+**/*.log
+.eslintrc.*
+.prettierrc*
+.gitignore
+.github/**
+
+# Test files
+**/test/**
+**/*.test.*
+**/*.spec.*
+coverage/
+
+# Documentation (keep only essential)
+CONTRIBUTING.md
+docs/**
+
+# NPM files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/

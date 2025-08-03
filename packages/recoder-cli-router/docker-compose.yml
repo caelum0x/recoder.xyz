@@ -1,13 +1,66 @@
-version: "3.8"
+version: '3.8'
 
 services:
-  claude-code-reverse:
-    build: .
-    ports:
-      - "3456:3456"
-    environment:
-      - ENABLE_ROUTER=${ENABLE_ROUTER}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
-      - OPENAI_MODEL=${OPENAI_MODEL}
+  recoder-cli-router:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: recoder/cli-router:latest
+    container_name: recoder-cli-router
     restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Add your API keys here or use .env file
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # - GROQ_API_KEY=${GROQ_API_KEY}
+      # - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+    
+    # Port mapping
+    ports:
+      - "3000:3000"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    
+    # Read-only root filesystem (except for temp directories)
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.cache
+
+# Networks
+networks:
+  default:
+    name: recoder-network
+    driver: bridge

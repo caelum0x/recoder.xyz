@@ -395,7 +395,7 @@ export class RouterBackendClient {
   /**
    * Process LLM request with quota checking and usage tracking
    */
-  async processRequest(prompt: string, model: string, command: string = 'code'): Promise<{ allowed: boolean; sessionInfo?: string }> {
+  async processRequest(prompt: string, model: string, command: string = 'code'): Promise<{ allowed: boolean; sessionInfo?: UserSession | string }> {
     const sessionInfo = this.getSessionInfo();
     
     // Check quota if authenticated
@@ -420,7 +420,7 @@ export class RouterBackendClient {
 
     return { 
       allowed: true, 
-      sessionInfo: this.isAuthenticated() ? `✅ ${sessionInfo}` : '📴 Offline mode'
+      sessionInfo: this.isAuthenticated() ? this.currentSession : '📴 Offline mode'
     };
   }
 }
