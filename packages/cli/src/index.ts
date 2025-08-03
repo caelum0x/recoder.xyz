@@ -49,6 +49,9 @@ import { createOllamaCommand } from './commands/ollama';
 import AICommandsRegistry from './commands/ai';
 import { createAuthCommand } from './commands/auth';
 import { createIntegrationStatusCommand } from './commands/integration-status';
+import { createWebCommand } from './commands/web';
+import { createAssistantCommand } from './commands/assistant';
+import { createPluginsCommand } from './commands/plugins';
 
 // Production-ready command setup with unified configuration
 async function setupProductionCommands(program: Command): Promise<void> {
@@ -681,6 +684,11 @@ Make this a production-ready plan that can actually be executed.`;
 
   // Add integration status command  
   program.addCommand(createIntegrationStatusCommand());
+  
+  // Add web ecosystem commands
+  program.addCommand(createWebCommand());
+  program.addCommand(createAssistantCommand());
+  program.addCommand(createPluginsCommand());
   
   // Add unified AI commands with enhanced capabilities
   AICommandsRegistry.register(program);

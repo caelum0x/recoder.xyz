@@ -1,4 +1,4 @@
-import type { ModelInfo } from "../model.js"
+import type { ModelInfo } from "../model"
 
 // https://glama.ai/models
 export const glamaDefaultModelId = "anthropic/claude-3-7-sonnet"

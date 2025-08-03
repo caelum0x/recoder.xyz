@@ -132,6 +132,11 @@
 				"icon": "$(add)"
 			},
 			{
+				"command": "recoder-vscode.SidebarProvider.focus",
+				"title": "Focus Recoder Sidebar",
+				"category": "Recoder"
+			},
+			{
 				"command": "recoder.mcpButtonClicked",
 				"title": "%command.mcpServers.title%",
 				"icon": "$(server)"
@@ -289,49 +294,49 @@
 			{
 				"command": "recoder.showAuthMenu",
 				"title": "Authentication Menu",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(account)"
 			},
 			{
 				"command": "recoder.login",
 				"title": "Login",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(sign-in)"
 			},
 			{
 				"command": "recoder.register",
 				"title": "Register",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(person-add)"
 			},
 			{
 				"command": "recoder.logout",
 				"title": "Logout",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(sign-out)"
 			},
 			{
 				"command": "recoder.showStatus",
 				"title": "Show Account Status",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(info)"
 			},
 			{
 				"command": "recoder.syncSession",
 				"title": "Sync Session",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(sync)"
 			},
 			{
 				"command": "recoder.showUnifiedAuth",
 				"title": "Unified Authentication",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(shield)"
 			},
 			{
 				"command": "recoder.authenticateWithVSCode",
 				"title": "Authenticate with VS Code",
-				"category": "Recoder.xyz Auth",
+				"category": "recoder.xyz Auth",
 				"icon": "$(vscode)"
 			}
 		],
@@ -429,69 +434,69 @@
 				{
 					"command": "recoder.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "view == recoder.SidebarProvider"
+					"when": "view == recoder-vscode.SidebarProvider"
 				},
 				{
 					"command": "recoder.mcpButtonClicked",
 					"group": "navigation@2",
-					"when": "view == recoder.SidebarProvider"
+					"when": "view == recoder-vscode.SidebarProvider"
 				},
 				{
 					"command": "recoder.historyButtonClicked",
 					"group": "navigation@3",
-					"when": "view == recoder.SidebarProvider"
+					"when": "view == recoder-vscode.SidebarProvider"
 				},
 				{
 					"command": "recoder.profileButtonClicked",
 					"group": "navigation@4",
-					"when": "view == recoder.SidebarProvider"
+					"when": "view == recoder-vscode.SidebarProvider"
 				},
 				{
 					"command": "recoder.settingsButtonClicked",
 					"group": "navigation@5",
-					"when": "view == recoder.SidebarProvider"
+					"when": "view == recoder-vscode.SidebarProvider"
 				},
 				{
 					"command": "recoder.popoutButtonClicked",
 					"group": "navigation@6",
-					"when": "view == recoder.SidebarProvider"
+					"when": "view == recoder-vscode.SidebarProvider"
 				},
 				{
 					"command": "recoder.helpButtonClicked",
 					"group": "navigation@8",
-					"when": "false && view == recoder.SidebarProvider"
+					"when": "false && view == recoder-vscode.SidebarProvider"
 				}
 			],
 			"editor/title": [
 				{
 					"command": "recoder.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "activeWebviewPanelId == recoder.TabPanelProvider"
+					"when": "activeWebviewPanelId == recoder-vscode.TabPanelProvider"
 				},
 				{
 					"command": "recoder.mcpButtonClicked",
 					"group": "navigation@2",
-					"when": "activeWebviewPanelId == recoder.TabPanelProvider"
+					"when": "activeWebviewPanelId == recoder-vscode.TabPanelProvider"
 				},
 				{
 					"command": "recoder.historyButtonClicked",
 					"group": "navigation@3",
-					"when": "activeWebviewPanelId == recoder.TabPanelProvider"
+					"when": "activeWebviewPanelId == recoder-vscode.TabPanelProvider"
 				},
 				{
 					"command": "recoder.popoutButtonClicked",
 					"group": "navigation@4",
-					"when": "activeWebviewPanelId == recoder.TabPanelProvider"
+					"when": "activeWebviewPanelId == recoder-vscode.TabPanelProvider"
 				},
 				{
 					"command": "recoder.settingsButtonClicked",
 					"group": "navigation@5",
-					"when": "activeWebviewPanelId == recoder.TabPanelProvider"
+					"when": "activeWebviewPanelId == recoder-vscode.TabPanelProvider"
 				},
 				{
 					"command": "recoder.helpButtonClicked",
 					"group": "navigation@6",
-					"when": "activeWebviewPanelId == recoder.TabPanelProvider"
+					"when": "activeWebviewPanelId == recoder-vscode.TabPanelProvider"
 				}
 			],
 			"scm/input": [
@@ -624,7 +629,7 @@
 		"@mistralai/mistralai": "^1.3.6",
 		"@modelcontextprotocol/sdk": "^1.9.0",
 		"@qdrant/js-client-rest": "^1.14.0",
-		
+		"@recoder/unified-auth": "workspace:^",
 		"@types/lodash.debounce": "^4.0.9",
 		"@vscode/codicons": "^0.0.36",
 		"async-mutex": "^0.5.0",

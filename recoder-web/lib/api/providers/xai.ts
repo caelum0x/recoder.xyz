@@ -3,7 +3,7 @@ import OpenAI from "openai"
 
 import { type XAIModelId, xaiDefaultModelId, xaiModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 
 import { ApiStream } from "../transform/stream"
 import { convertToOpenAiMessages } from "../transform/openai-format"

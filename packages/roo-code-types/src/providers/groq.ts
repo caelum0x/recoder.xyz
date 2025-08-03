@@ -1,4 +1,4 @@
-import type { ModelInfo } from "../model.js"
+import type { ModelInfo } from "../model"
 
 // https://console.groq.com/docs/models
 export type GroqModelId =

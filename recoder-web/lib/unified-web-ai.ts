@@ -5,7 +5,8 @@
  * providing cost-efficient AI routing for web-based code generation.
  */
 
-import { buildApiHandler, type ApiHandler } from './api';
+// Use dynamic import for server-only API handlers
+import type { ApiHandler } from './api';
 import type { ProviderSettings, AIMessage, TaskContext } from './api/providers/types';
 
 export interface WebGenerationOptions {
@@ -56,6 +57,7 @@ export class UnifiedWebAI {
       
       for (const [name, settings] of configs) {
         try {
+          const { buildApiHandler } = await import('./api');
           const handler = buildApiHandler(settings);
           this.handlers.set(name, handler);
           console.log(`✅ Initialized ${name} web handler`);

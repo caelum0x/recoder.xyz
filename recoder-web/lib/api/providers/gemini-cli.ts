@@ -4,11 +4,11 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import axios from "axios"
-import dotenvx from "@dotenvx/dotenvx"
+// Note: dotenvx causes client-side build issues, using process.env directly
 
 import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@recoder/shared"
 import { t } from "../../i18n"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
@@ -142,17 +142,12 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 
 		// Lookup for the project id from the env variable
 		// with a fallback to a default project ID (can be anything for personal OAuth)
-		const envPath = this.options.geminiCliOAuthPath || path.join(os.homedir(), ".gemini", ".env")
+		// Note: using process.env directly instead of dotenvx to avoid client-side bundle issues
+		const googleCloudProject = process.env.GOOGLE_CLOUD_PROJECT
 
-		const { parsed, error } = dotenvx.config({ path: envPath })
-
-		if (error) {
-			console.warn("[GeminiCLI] .env file not found or invalid format, proceeding with default project ID")
-		}
-
-		// If the project ID was in the .env file, use it and return early.
-		if (parsed?.GOOGLE_CLOUD_PROJECT) {
-			this.projectId = parsed.GOOGLE_CLOUD_PROJECT
+		// If the project ID was in the env, use it and return early.
+		if (googleCloudProject) {
+			this.projectId = googleCloudProject
 			return this.projectId
 		}
 

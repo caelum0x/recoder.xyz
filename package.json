@@ -4,7 +4,9 @@
   "description": "AI-powered development platform with production-ready code generation",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "recoder-web",
+    "recoder-chat"
   ],
   "scripts": {
     "setup": "node scripts/setup-manual.js",
@@ -26,11 +28,13 @@
     "build:engine": "cd production-engine && npm run build",
     "build:web": "cd packages/web && npm run build || echo 'Web build not configured'",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:engine\" --names \"backend,engine\" --prefix-colors \"blue,green\"",
-    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:engine\" \"npm run dev:cli\" \"npm run dev:web\" --names \"backend,engine,cli,web\" --prefix-colors \"blue,green,cyan,magenta\"",
+    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:engine\" \"npm run dev:cli\" \"npm run dev:web\" \"npm run dev:chat\" \"npm run dev:main\" --names \"backend,engine,cli,web,chat,main\" --prefix-colors \"blue,green,cyan,magenta,yellow,red\"",
     "dev:cli": "cd packages/cli && npm run dev",
     "dev:backend": "cd backend && npm run dev || node src/server.js",
     "dev:engine": "cd production-engine && npm run dev || node src/server.js",
-    "dev:web": "cd packages/web && npm run dev",
+    "dev:web": "cd recoder-web && npm run dev",
+    "dev:chat": "cd recoder-chat && pnpm run dev",
+    "dev:main": "next dev --port 3003",
     "start": "concurrently \"npm run start:backend\" \"npm run start:engine\"",
     "start:backend": "cd backend && npm start || node src/server.js",
     "start:engine": "cd production-engine && npm start || node dist/server.js",
@@ -100,7 +104,17 @@
     "fs-extra": "^11.2.0",
     "ora": "^5.4.1",
     "redis": "^5.7.0",
-    "yjs": "^13.6.27"
+    "yjs": "^13.6.27",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.446.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.2",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.4.1"
   },
   "engines": {
     "node": ">=18.0.0",
