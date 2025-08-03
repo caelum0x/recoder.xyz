@@ -1,15 +1,19 @@
 /**
- * Craft Code Backend API Server
- * Enhanced planning and production code generation
+ * Recoder Backend API Server
+ * Enhanced with comprehensive performance optimization and monitoring
  */
 
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-const compression = require('compression');
-const morgan = require('morgan');
 const dotenv = require('dotenv');
+const rateLimit = require('express-rate-limit');
 const { logger } = require('./utils/logger');
+
+// Import performance systems
+import { performanceMiddleware, middlewareStacks } from '@recoder/performance/middleware/performance-middleware';
+import { performanceMonitor } from '@recoder/performance/monitoring/performance-monitor';
+import { redisCache } from '@recoder/performance/caching/redis-cache';
+import { cdnManager } from '@recoder/performance/cdn/cdn-manager';
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -33,47 +37,98 @@ dotenv.config();
 const app = express();
 const PORT = process.env['PORT'] || 3001;
 
-// Middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
+// Performance and optimization middleware stack
+const performanceStack = middlewareStacks.full({
+  compressionOptions: {
+    level: 6,
+    threshold: 1024
   },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
+  securityOptions: {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.recoder.xyz"],
+        scriptSrc: ["'self'", "https://cdn.recoder.xyz"],
+        imgSrc: ["'self'", "data:", "https:", "https://cdn.recoder.xyz"],
+        connectSrc: ["'self'", "https://api.recoder.xyz"],
+        fontSrc: ["'self'", "https://cdn.recoder.xyz"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    }
   }
-}));
+});
+
+// Apply performance middleware stack
+performanceStack.forEach(middleware => {
+  app.use(middleware);
+});
 
 app.use(cors({
-  origin: process.env['CORS_ORIGIN'] || 'http://localhost:3000',
+  origin: [
+    'https://recoder.xyz',
+    'https://www.recoder.xyz',
+    'https://web.recoder.xyz',
+    'https://chat.recoder.xyz',
+    'https://cli.recoder.xyz',
+    'https://api.recoder.xyz',
+    process.env['CORS_ORIGIN'] || 'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002'
+  ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Request-ID']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Request-ID', 'X-Client-Version']
 }));
 
-app.use(compression());
+// Note: compression and helmet are already handled by performance stack above
+
 app.use(morgan('combined', { stream: logger.stream }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Global middleware
 app.use(validateRequestId);
-app.use('/api', apiLimiter);
 
-// Health check endpoint
-app.get('/health', (req: any, res: any) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    environment: process.env['NODE_ENV'] || 'development'
-  });
+// Performance-aware rate limiting
+app.use('/api', performanceMiddleware.createRateLimitMiddleware({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Higher limit with performance optimizations
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => `rate-limit:${req.ip}:${req.get('User-Agent')?.slice(0, 50) || 'unknown'}`
+}));
+
+// Enhanced health check endpoint with performance metrics
+app.get('/health', performanceMiddleware.createHealthCheckMiddleware());
+
+// Performance metrics endpoint
+app.get('/metrics', async (req: any, res: any) => {
+  try {
+    const metrics = performanceMonitor.getMetrics();
+    const summary = performanceMonitor.getPerformanceSummary();
+    const cacheHealth = await redisCache.getHealthStatus();
+    
+    res.json({
+      performance: {
+        status: summary.status,
+        score: summary.score,
+        activeAlerts: summary.activeAlerts,
+        metrics: {
+          responseTime: metrics.responseTime,
+          throughput: metrics.throughput,
+          system: metrics.system,
+          errors: metrics.errors
+        }
+      },
+      cache: cacheHealth,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch metrics' });
+  }
 });
 
 // API routes
@@ -109,8 +164,11 @@ app.use('*', (req: any, res: any) => {
   });
 });
 
-// Global error handler
+// Global error handler with performance tracking
 app.use((err: any, req: any, res: any, next: any) => {
+  // Track error in performance monitor
+  performanceMonitor.recordError(err.code || 'INTERNAL_ERROR');
+  
   logger.error('Unhandled error:', {
     error: err.message,
     stack: err.stack,
@@ -132,38 +190,144 @@ app.use((err: any, req: any, res: any, next: any) => {
   });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  process.exit(0);
-});
+// Initialize performance systems
+async function initializePerformanceSystems() {
+  try {
+    logger.info('Initializing performance systems...');
+    
+    // Set up performance monitoring event listeners
+    performanceMonitor.on('alertCreated', (alert) => {
+      logger.warn('Performance alert created:', {
+        type: alert.type,
+        category: alert.category,
+        message: alert.message,
+        value: alert.value,
+        threshold: alert.threshold
+      });
+    });
+    
+    performanceMonitor.on('alertResolved', (alert) => {
+      logger.info('Performance alert resolved:', {
+        type: alert.type,
+        category: alert.category,
+        message: alert.message
+      });
+    });
+    
+    // Set up cache event listeners
+    redisCache.on('connected', () => {
+      logger.info('Redis cache connected successfully');
+    });
+    
+    redisCache.on('error', (error) => {
+      logger.error('Redis cache error:', error);
+    });
+    
+    // Set up CDN event listeners
+    cdnManager.on('uploadSuccess', (result) => {
+      logger.info('CDN upload successful:', {
+        key: result.key,
+        provider: result.provider,
+        size: result.size
+      });
+    });
+    
+    cdnManager.on('uploadFallback', ({ result, fallbackProvider }) => {
+      logger.warn('CDN fallback used:', {
+        key: result.key,
+        fallbackProvider,
+        originalProvider: 'primary'
+      });
+    });
+    
+    logger.info('Performance systems initialized successfully');
+  } catch (error) {
+    logger.error('Failed to initialize performance systems:', error);
+  }
+}
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
+// Graceful shutdown with cleanup
+async function gracefulShutdown(signal: string) {
+  logger.info(`${signal} received, shutting down gracefully`);
+  
+  try {
+    // Stop performance monitoring
+    performanceMonitor.stop();
+    
+    // Close cache connections
+    await redisCache.close();
+    
+    // Stop CDN manager
+    cdnManager.stop();
+    
+    logger.info('Performance systems shut down successfully');
+  } catch (error) {
+    logger.error('Error during performance systems shutdown:', error);
+  }
+  
   process.exit(0);
-});
+}
 
-// Uncaught exception handler
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Enhanced error handlers with performance tracking
 process.on('uncaughtException', (err) => {
+  performanceMonitor.recordError('UNCAUGHT_EXCEPTION');
   logger.error('Uncaught exception:', err);
   process.exit(1);
 });
 
-// Unhandled rejection handler
 process.on('unhandledRejection', (reason, promise) => {
+  performanceMonitor.recordError('UNHANDLED_REJECTION');
   logger.error('Unhandled rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
 
-// Start server
-const server = app.listen(PORT, () => {
-  logger.info(`Craft Code API server running on port ${PORT}`, {
-    environment: process.env['NODE_ENV'] || 'development',
-    port: PORT
-  });
-});
+// Start server with performance initialization
+async function startServer() {
+  try {
+    // Initialize performance systems first
+    await initializePerformanceSystems();
+    
+    const server = app.listen(PORT, () => {
+      logger.info(`Recoder API server running on port ${PORT}`, {
+        environment: process.env['NODE_ENV'] || 'development',
+        port: PORT,
+        features: {
+          caching: 'Redis',
+          cdn: 'Multi-provider',
+          monitoring: 'Real-time',
+          compression: 'Enabled',
+          security: 'Enhanced'
+        }
+      });
+      
+      // Log performance system status
+      setTimeout(async () => {
+        const summary = performanceMonitor.getPerformanceSummary();
+        const cacheHealth = await redisCache.getHealthStatus();
+        
+        logger.info('Performance systems status:', {
+          performanceScore: summary.score,
+          cacheConnected: cacheHealth.connected,
+          cacheHitRate: `${cacheHealth.hitRate.toFixed(1)}%`,
+          activeAlerts: summary.activeAlerts
+        });
+      }, 5000);
+    });
 
-// Increase timeout for long-running operations
-server.timeout = 300000; // 5 minutes
+    // Increase timeout for long-running operations
+    server.timeout = 300000; // 5 minutes
+    
+    return server;
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Start the server
+startServer();
 
 module.exports = app;

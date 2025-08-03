@@ -1462,7 +1462,7 @@ export const webviewMessageHandler = async (
 			} else if (answer === discordText) {
 				await vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/fxrhCFGhkP"))
 			} else if (answer === customerSupport) {
-				await vscode.env.openExternal(vscode.Uri.parse("https://kilocode.ai/support"))
+				await vscode.env.openExternal(vscode.Uri.parse("https://recoder.xyz/support"))
 			}
 			break
 		}
@@ -2009,7 +2009,7 @@ export const webviewMessageHandler = async (
 				}
 
 				// Changed to /api/profile
-				const response = await axios.get("https://kilocode.ai/api/profile", {
+				const response = await axios.get("https://recoder.xyz/api/profile", {
 					headers: {
 						Authorization: `Bearer ${kilocodeToken}`,
 						"Content-Type": "application/json",
@@ -2046,7 +2046,7 @@ export const webviewMessageHandler = async (
 					break
 				}
 
-				const response = await axios.get("https://kilocode.ai/api/profile/balance", {
+				const response = await axios.get("https://recoder.xyz/api/profile/balance", {
 					// Original path for balance
 					headers: {
 						Authorization: `Bearer ${kilocodeToken}`,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getApiProtocol } from "../provider-settings.js"
+import { getApiProtocol } from "../provider-settings"
 
 describe("getApiProtocol", () => {
 	describe("Anthropic-style providers", () => {

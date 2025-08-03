@@ -60,7 +60,14 @@
       "Bash(npx prisma migrate dev:*)",
       "Bash(npx prisma:*)",
       "WebFetch(domain:localhost)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(pnpm run:*)",
+      "Bash(for file in *.ts)",
+      "Bash(do sed -i '' 's|from \"\"../model\\.js\"\"|from \"\"../model\"\"|g' \"$file\")",
+      "Bash(done)",
+      "Bash(chmod:*)",
+      "Bash(ANTHROPIC_API_KEY=test npx tsx src/index.ts)",
+      "Bash(ANTHROPIC_API_KEY=test npx tsx src/cli.ts status)"
     ],
     "deny": []
   }

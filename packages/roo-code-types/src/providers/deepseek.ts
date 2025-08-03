@@ -1,4 +1,4 @@
-import type { ModelInfo } from "../model.js"
+import type { ModelInfo } from "../model"
 
 // https://platform.deepseek.com/docs/api
 export type DeepSeekModelId = keyof typeof deepSeekModels

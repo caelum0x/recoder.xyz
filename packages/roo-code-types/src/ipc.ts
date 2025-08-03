@@ -1,8 +1,8 @@
 import { z } from "zod"
 
-import { clineMessageSchema, tokenUsageSchema } from "./message.js"
-import { toolNamesSchema, toolUsageSchema } from "./tool.js"
-import { rooCodeSettingsSchema } from "./global-settings.js"
+import { clineMessageSchema, tokenUsageSchema } from "./message"
+import { toolNamesSchema, toolUsageSchema } from "./tool"
+import { rooCodeSettingsSchema } from "./global-settings"
 
 /**
  * isSubtaskSchema

@@ -3,13 +3,14 @@ import OpenAI from "openai"
 
 import type { ModelInfo } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+//mport type { ApiHandlerOptions } from "@recoder/shared/api"
 import { ApiStream } from "../transform/stream"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"
+import { ApiHandlerOptions } from "@recoder/shared"
 
 type BaseOpenAiCompatibleProviderOptions<ModelName extends string> = ApiHandlerOptions & {
 	providerName: string

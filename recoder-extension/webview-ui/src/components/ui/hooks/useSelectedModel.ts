@@ -231,9 +231,9 @@ function getSelectedModel({
 		// kilocode_change begin
 		case "kilocode": {
 			// Use the fetched models from routerModels
-			if (routerModels["kilocode-openrouter"] && apiConfiguration.kilocodeModel) {
+			if (routerModels["recoder-openrouter"] && apiConfiguration.kilocodeModel) {
 				// Find the model in the fetched models
-				const modelEntries = Object.entries(routerModels["kilocode-openrouter"])
+				const modelEntries = Object.entries(routerModels["recoder-openrouter"])
 
 				const selectedModelId = apiConfiguration.kilocodeModel.toLowerCase()
 
@@ -259,7 +259,7 @@ function getSelectedModel({
 			// Fallback to anthropic model if no match found
 			return {
 				id: "anthropic/claude-3.7-sonnet",
-				info: routerModels["kilocode-openrouter"]["anthropic/claude-3.7-sonnet"],
+				info: routerModels["recoder-openrouter"]["anthropic/claude-3.7-sonnet"],
 			}
 		}
 		// kilocode_change end

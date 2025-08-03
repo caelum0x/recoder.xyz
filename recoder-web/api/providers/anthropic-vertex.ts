@@ -10,8 +10,8 @@ import {
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
 } from "@roo-code/types"
 
-import { ApiHandlerOptions } from "../../shared/api"
-import { safeJsonParse } from "../../shared/safeJsonParse"
+import { ApiHandlerOptions } from "@recoder/shared/api"
+import { safeJsonParse } from "@recoder/shared/safeJsonParse"
 
 import { ApiStream } from "../transform/stream"
 import { addCacheBreakpoints } from "../transform/caching/vertex"

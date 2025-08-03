@@ -1,4 +1,4 @@
-import type { ModelInfo } from "../model.js"
+import type { ModelInfo } from "../model"
 
 // https://llm.chutes.ai/v1 (OpenAI compatible)
 export type ChutesModelId =

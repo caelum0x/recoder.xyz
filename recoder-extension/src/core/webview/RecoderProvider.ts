@@ -81,7 +81,7 @@ import { OpenRouterHandler } from "../../api/providers" // kilocode_change
  */
 
 export type RecoderProviderEvents = {
-	clineCreated: [cline: Task]
+	recoderCreated: [cline: Task]
 }
 
 class OrganizationAllowListViolationError extends Error {
@@ -181,9 +181,9 @@ export class RecoderProvider
 		}
 	}
 
-	// Removes and destroys the top Cline instance (the current finished task),
+	// Removes and destroys the top Recoder instance (the current finished task),
 	// activating the previous one (resuming the parent task).
-	async removeClineFromStack() {
+	async removeRecoderFromStack() {
 		if (this.clineStack.length === 0) {
 			return
 		}
@@ -234,7 +234,7 @@ export class RecoderProvider
 	async finishSubTask(lastMessage: string) {
 		console.log(`[subtasks] finishing subtask ${lastMessage}`)
 		// remove the last cline instance from the stack (this is the finished sub task)
-		await this.removeClineFromStack()
+		await this.removeRecoderFromStack()
 		// resume the last cline instance in the stack (if it exists - this is the 'parent' calling task)
 		await this.getCurrentCline()?.resumePausedTask(lastMessage)
 	}
@@ -242,7 +242,7 @@ export class RecoderProvider
 	// Clear the current task without treating it as a subtask
 	// This is used when the user cancels a task that is not a subtask
 	async clearTask() {
-		await this.removeClineFromStack()
+		await this.removeRecoderFromStack()
 	}
 
 	/*
@@ -261,7 +261,7 @@ export class RecoderProvider
 
 	async dispose() {
 		this.log("Disposing RecoderProvider...")
-		await this.removeClineFromStack()
+		await this.removeRecoderFromStack()
 		this.log("Cleared task")
 
 		if (this.view && "dispose" in this.view) {
@@ -352,7 +352,7 @@ export class RecoderProvider
 			return
 		}
 
-		await visibleProvider.initClineWithTask(prompt)
+		await visibleProvider.initRecoderWithTask(prompt)
 	}
 
 	public static async handleTerminalAction(
@@ -377,7 +377,7 @@ export class RecoderProvider
 		}
 
 		try {
-			await visibleProvider.initClineWithTask(prompt)
+			await visibleProvider.initRecoderWithTask(prompt)
 		} catch (error) {
 			if (error instanceof OrganizationAllowListViolationError) {
 				// Errors from terminal commands seem to get swallowed / ignored.
@@ -515,13 +515,13 @@ export class RecoderProvider
 		this.webviewDisposables.push(configDisposable)
 
 		// If the extension is starting a new session, clear previous task state.
-		await this.removeClineFromStack()
+		await this.removeRecoderFromStack()
 
 		this.log("Webview view resolved")
 	}
 
 	public async initClineWithSubTask(parent: Task, task?: string, images?: string[]) {
-		return this.initClineWithTask(task, images, parent)
+		return this.initRecoderWithTask(task, images, parent)
 	}
 
 	// When initializing a new task, (not from history but from a tool command
@@ -530,7 +530,7 @@ export class RecoderProvider
 	// from the stack and the caller is resumed in this way we can have a chain
 	// of tasks, each one being a sub task of the previous one until the main
 	// task is finished.
-	public async initClineWithTask(
+	public async initRecoderWithTask(
 		task?: string,
 		images?: string[],
 		parentTask?: Task,
@@ -568,7 +568,7 @@ export class RecoderProvider
 			rootTask: this.clineStack.length > 0 ? this.clineStack[0] : undefined,
 			parentTask,
 			taskNumber: this.clineStack.length + 1,
-			onCreated: (cline) => this.emit("clineCreated", cline),
+			onCreated: (cline) => this.emit("recoderCreated", cline),
 			...options,
 		})
 
@@ -581,8 +581,8 @@ export class RecoderProvider
 		return cline
 	}
 
-	public async initClineWithHistoryItem(historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task }) {
-		await this.removeClineFromStack()
+	public async initRecoderWithHistoryItem(historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task }) {
+		await this.removeRecoderFromStack()
 
 		const {
 			apiConfiguration,
@@ -605,7 +605,7 @@ export class RecoderProvider
 			rootTask: historyItem.rootTask,
 			parentTask: historyItem.parentTask,
 			taskNumber: historyItem.number,
-			onCreated: (cline) => this.emit("clineCreated", cline),
+			onCreated: (cline) => this.emit("recoderCreated", cline),
 		})
 
 		await this.addClineToStack(cline)
@@ -1013,7 +1013,7 @@ export class RecoderProvider
 		}
 
 		// Clears task again, so we need to abortTask manually above.
-		await this.initClineWithHistoryItem({ ...historyItem, rootTask, parentTask })
+		await this.initRecoderWithHistoryItem({ ...historyItem, rootTask, parentTask })
 	}
 
 	async updateCustomInstructions(instructions?: string) {
@@ -1202,7 +1202,7 @@ export class RecoderProvider
 		if (id !== this.getCurrentCline()?.taskId) {
 			// Non-current task.
 			const { historyItem } = await this.getTaskWithId(id)
-			await this.initClineWithHistoryItem(historyItem) // Clears existing task.
+			await this.initRecoderWithHistoryItem(historyItem) // Clears existing task.
 		}
 
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -1877,7 +1877,7 @@ export class RecoderProvider
 		await this.providerSettingsManager.resetAllConfigs()
 		await this.customModesManager.resetCustomModes()
 
-		await this.removeClineFromStack()
+		await this.removeRecoderFromStack()
 		await this.postStateToWebview()
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 	}
@@ -2133,7 +2133,7 @@ export class RecoderProvider
 Here is the project's README to help you get started:\n\n${mcpDetails.readmeContent}\n${mcpDetails.llmsInstallationContent}`
 
 			// Initialize task and show chat view
-			await this.initClineWithTask(task)
+			await this.initRecoderWithTask(task)
 			await this.postMessageToWebview({
 				type: "action",
 				action: "chatButtonClicked",
