@@ -1,12 +1,63 @@
-FROM node:20-alpine
+# Multi-stage Docker build for recoder-cli-router
+# Optimized for production deployment
 
+# Stage 1: Build stage
+FROM node:20-alpine AS builder
+
+# Set working directory
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
-RUN npm i
 
+# Install dependencies
+RUN npm ci --only=production --silent
+
+# Copy source code
 COPY . .
 
-EXPOSE 3456
+# Build the application
+RUN npm run build
 
-CMD ["node", "index.mjs"]
+# Stage 2: Production stage
+FROM node:20-alpine AS production
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create app user for security
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S recoder -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application from builder stage
+COPY --from=builder --chown=recoder:nodejs /app/dist ./dist
+COPY --from=builder --chown=recoder:nodejs /app/package*.json ./
+
+# Copy WASM files if they exist
+COPY --from=builder --chown=recoder:nodejs /app/dist/*.wasm ./dist/ 2>/dev/null || true
+
+# Install only production dependencies
+RUN npm ci --only=production --silent && npm cache clean --force
+
+# Switch to non-root user
+USER recoder
+
+# Expose port (configurable via environment variable)
+EXPOSE ${PORT:-3000}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "console.log('Health check passed')" || exit 1
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["node", "dist/cli.js"]

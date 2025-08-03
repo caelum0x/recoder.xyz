@@ -1,1 +1,1 @@
-export const getKiloCodeApiUrl = () => "https://kilocode.ai"
+export const getRecoderApiUrl = () => "https://recoder.xyz"

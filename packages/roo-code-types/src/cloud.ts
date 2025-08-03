@@ -1,7 +1,7 @@
 import { z } from "zod"
 
-import { globalSettingsSchema } from "./global-settings.js"
-import { mcpMarketplaceItemSchema } from "./marketplace.js"
+import { globalSettingsSchema } from "./global-settings"
+import { mcpMarketplaceItemSchema } from "./marketplace"
 
 /**
  * CloudUserInfo

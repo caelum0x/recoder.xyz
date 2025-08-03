@@ -9,7 +9,7 @@ import {
 import { notFound } from "next/navigation";
 import Together from "together-ai";
 import { unifiedWebAI } from "@/lib/unified-web-ai";
-import { buildApiHandler } from "@/lib/api";
+// Use dynamic import for server-only API handlers
 import type { ProviderSettings } from "@/lib/api/providers/types";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -78,6 +78,7 @@ export async function createChat(
           throw new Error(`Provider ${provider} not configured`);
       }
 
+      const { buildApiHandler } = await import("@/lib/api");
       const handler = buildApiHandler(providerSettings);
       
       // Convert messages format

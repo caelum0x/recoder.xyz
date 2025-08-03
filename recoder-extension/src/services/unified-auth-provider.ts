@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import { createPlatformAuth } from '@recoder/unified-auth';
 
 export interface UnifiedSession {
   userId: string;
@@ -41,6 +42,7 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
   private _sessionChangeEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
   private _disposable: vscode.Disposable;
   private _sessions: Map<string, UnifiedSession> = new Map();
+  private _unifiedAuth: ReturnType<typeof createPlatformAuth>;
 
   constructor(private context: vscode.ExtensionContext) {
     this._disposable = vscode.Disposable.from(
@@ -51,6 +53,12 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
         { supportsMultipleAccounts: false }
       )
     );
+
+    // Initialize unified auth for extension platform
+    this._unifiedAuth = createPlatformAuth('extension', {
+      apiUrl: vscode.workspace.getConfiguration('recoder').get('backendUrl') || 'https://api.recoder.xyz',
+      clientId: UnifiedAuthProvider.CLIENT_ID,
+    });
 
     // Load existing sessions from secret storage
     this.loadSessions();
@@ -72,39 +80,63 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
   }
 
   /**
-   * Create session - implements multiple auth methods
+   * Create session - implements multiple auth methods using unified auth
    */
   async createSession(scopes: string[]): Promise<vscode.AuthenticationSession> {
-    const authMethod = await this.selectAuthMethod();
-    
-    let session: UnifiedSession;
-    
-    switch (authMethod) {
-      case 'oauth':
-        session = await this.authenticateWithOAuth(scopes);
-        break;
-      case 'device':
-        session = await this.authenticateWithDeviceFlow(scopes);
-        break;
-      case 'apikey':
-        session = await this.authenticateWithAPIKey(scopes);
-        break;
-      default:
+    try {
+      // Check if already authenticated
+      const existingSession = await this._unifiedAuth.auth.getCurrentSession();
+      if (existingSession) {
+        const unifiedSession = this.convertToUnifiedSession(existingSession);
+        await this.storeSession(unifiedSession);
+        this._sessions.set(unifiedSession.userId, unifiedSession);
+        return this.toVSCodeSession(unifiedSession);
+      }
+
+      // Show authentication method selection
+      const authMethod = await this.selectAuthMethod();
+      if (authMethod === 'cancelled') {
         throw new Error('Authentication cancelled');
+      }
+
+      let credentials: any;
+      
+      switch (authMethod) {
+        case 'oauth':
+          credentials = await this.promptForOAuthCredentials();
+          break;
+        case 'device':
+          credentials = await this.promptForDeviceFlow();
+          break;
+        case 'apikey':
+          credentials = await this.promptForAPIKey();
+          break;
+        default:
+          throw new Error('Invalid authentication method');
+      }
+
+      // Use unified auth to login
+      const { session } = await this._unifiedAuth.auth.login(credentials);
+      
+      // Convert to unified session format
+      const unifiedSession = this.convertToUnifiedSession(session);
+      
+      // Store session
+      await this.storeSession(unifiedSession);
+      this._sessions.set(unifiedSession.userId, unifiedSession);
+
+      // Notify VS Code of session change
+      this._sessionChangeEmitter.fire({
+        added: [this.toVSCodeSession(unifiedSession)],
+        removed: [],
+        changed: []
+      });
+
+      return this.toVSCodeSession(unifiedSession);
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Authentication failed: ${error.message}`);
+      throw error;
     }
-
-    // Store session
-    await this.storeSession(session);
-    this._sessions.set(session.userId, session);
-
-    // Notify VS Code of session change
-    this._sessionChangeEmitter.fire({
-      added: [this.toVSCodeSession(session)],
-      removed: [],
-      changed: []
-    });
-
-    return this.toVSCodeSession(session);
   }
 
   /**
@@ -115,11 +147,11 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
       .find(s => this.getSessionId(s) === sessionId);
 
     if (session) {
-      // Revoke session on backend
+      // Use unified auth to logout
       try {
-        await this.revokeSession(session);
+        await this._unifiedAuth.auth.logout();
       } catch (error) {
-        console.warn('Failed to revoke session on backend:', error);
+        console.warn('Failed to logout from unified auth:', error);
       }
 
       // Remove from local storage
@@ -133,6 +165,81 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
         changed: []
       });
     }
+  }
+
+  /**
+   * Convert unified auth session to local format
+   */
+  private convertToUnifiedSession(session: any): UnifiedSession {
+    return {
+      userId: session.userId,
+      email: session.email,
+      name: session.username || session.email,
+      platform: 'extension',
+      accessToken: '', // Will be handled by unified auth
+      refreshToken: '',
+      scopes: ['basic', 'generate'],
+      expiresAt: session.expiresAt,
+      riskLevel: 'low',
+      metadata: session.metadata || {}
+    };
+  }
+
+  /**
+   * Prompt for OAuth credentials
+   */
+  private async promptForOAuthCredentials(): Promise<any> {
+    // For OAuth, we might redirect to browser
+    const email = await vscode.window.showInputBox({
+      prompt: 'Enter your email for OAuth authentication',
+      placeHolder: 'email@example.com',
+      validateInput: (value) => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(value) ? null : 'Please enter a valid email address';
+      }
+    });
+
+    if (!email) throw new Error('Email is required');
+
+    const password = await vscode.window.showInputBox({
+      prompt: 'Enter your password',
+      password: true
+    });
+
+    if (!password) throw new Error('Password is required');
+
+    return { email, password };
+  }
+
+  /**
+   * Prompt for device flow authentication
+   */
+  private async promptForDeviceFlow(): Promise<any> {
+    // For device flow, we'll use email/password for now
+    // In a real implementation, this would initiate device flow
+    return await this.promptForOAuthCredentials();
+  }
+
+  /**
+   * Prompt for API key
+   */
+  private async promptForAPIKey(): Promise<any> {
+    const apiKey = await vscode.window.showInputBox({
+      prompt: 'Enter your Recoder API key',
+      placeholder: 'rcd_xxxxxxxx_xxxxxxxx...',
+      password: true,
+      validateInput: (value) => {
+        if (!value) return 'API key is required';
+        if (!value.startsWith('rcd_')) return 'Invalid API key format';
+        if (value.length < 40) return 'API key is too short';
+        return null;
+      }
+    });
+
+    if (!apiKey) throw new Error('API key is required');
+
+    // For API key auth, we'll use a mock email
+    return { email: 'api@recoder.xyz', password: apiKey };
   }
 
   /**
@@ -521,8 +628,26 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
    * Public utility methods for extension
    */
   async getCurrentSession(): Promise<UnifiedSession | null> {
+    // First check unified auth
+    try {
+      const session = await this._unifiedAuth.auth.getCurrentSession();
+      if (session) {
+        return this.convertToUnifiedSession(session);
+      }
+    } catch (error) {
+      console.warn('Failed to get current session from unified auth:', error);
+    }
+
+    // Fallback to local sessions
     const sessions = Array.from(this._sessions.values());
     return sessions.length > 0 ? sessions[0] : null;
+  }
+
+  /**
+   * Get the unified auth instance for direct access
+   */
+  getUnifiedAuth() {
+    return this._unifiedAuth;
   }
 
   async refreshSession(session: UnifiedSession): Promise<UnifiedSession | null> {

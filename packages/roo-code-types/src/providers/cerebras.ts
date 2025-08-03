@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { modelInfoSchema } from "../model.js"
+import { modelInfoSchema } from "../model"
 
 /**
  * Cerebras provider types and models

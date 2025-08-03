@@ -32,7 +32,7 @@ export function createAuthCommand(): Command {
         // Check if already logged in
         if (backendClient.isAuthenticated()) {
           const session = backendClient.getCurrentSession() || backendClient.getUnifiedSession();
-          const email = session?.email || 'authenticated user';
+          const email = ('email' in session! && session.email) || 'authenticated user';
           console.log(chalk.yellow(`Already logged in as ${email}`));
           console.log(chalk.gray('Run "recoder auth logout" to logout first\n'));
           return;

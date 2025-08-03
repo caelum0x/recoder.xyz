@@ -1,4 +1,4 @@
-import type { ModelInfo } from "../model.js"
+import type { ModelInfo } from "../model"
 
 export const unboundDefaultModelId = "anthropic/claude-3-7-sonnet-20250219"
 

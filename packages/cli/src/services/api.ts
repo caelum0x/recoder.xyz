@@ -1,6 +1,6 @@
 /**
  * Enhanced API client for backend communication with comprehensive error handling
- * Provides type-safe methods for interacting with CodeCraft backend services
+ * Provides type-safe methods for interacting with Recoder backend services
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';

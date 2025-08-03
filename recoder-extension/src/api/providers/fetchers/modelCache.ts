@@ -15,7 +15,7 @@ import { getGlamaModels } from "./glama"
 import { getUnboundModels } from "./unbound"
 import { getLiteLLMModels } from "./litellm"
 import { GetModelsOptions } from "../../../shared/api"
-import { getKiloBaseUriFromToken } from "../../../utils/kilocode-token"
+import { getRecoderBaseUriFromToken } from "../../../utils/kilocode-token"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
 
@@ -86,7 +86,7 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 			// kilocode_change start
 			case "recoder-openrouter":
 				models = await getOpenRouterModels({
-					openRouterBaseUrl: getKiloBaseUriFromToken(options.kilocodeToken ?? "") + "/api/openrouter",
+					openRouterBaseUrl: getRecoderBaseUriFromToken(options.kilocodeToken ?? "") + "/api/openrouter",
 					headers: { Authorization: `Bearer ${options.kilocodeToken}` },
 				})
 				break

@@ -1,5 +1,5 @@
-import type { ModelInfo } from "../model.js"
-import { anthropicModels } from "./anthropic.js"
+import type { ModelInfo } from "../model"
+import { anthropicModels } from "./anthropic"
 
 // Regex pattern to match 8-digit date at the end of model names
 const VERTEX_DATE_PATTERN = /-(\d{8})$/

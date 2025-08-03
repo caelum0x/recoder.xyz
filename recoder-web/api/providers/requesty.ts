@@ -3,8 +3,8 @@ import OpenAI from "openai"
 
 import { type ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@roo-code/types"
 
-import type { ApiHandlerOptions, ModelRecord } from "../../shared/api"
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared/api"
+import { calculateApiCostOpenAI } from "@recoder/shared/cost"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"

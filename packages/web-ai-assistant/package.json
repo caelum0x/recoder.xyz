@@ -1,0 +1,44 @@
+{
+  "name": "@recoder/web-ai-assistant",
+  "version": "1.0.0",
+  "description": "Advanced AI assistant for web development with intelligent completion, refactoring, and analysis",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "keywords": [
+    "ai",
+    "coding-assistant",
+    "code-completion",
+    "refactoring", 
+    "analysis",
+    "web-development"
+  ],
+  "author": "recoder.xyz",
+  "license": "MIT",
+  "dependencies": {
+    "@recoder/cross-platform-sync": "file:../cross-platform-sync",
+    "@recoder/ai-context": "file:../ai-context"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}

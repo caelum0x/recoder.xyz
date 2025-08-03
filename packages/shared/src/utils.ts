@@ -986,3 +986,4 @@ export function parseApiPrice(priceStr: string): number {
   const match = priceStr.match(/\$?([\d.]+)/);
   return match ? parseFloat(match[1]) : 0;
 }
+

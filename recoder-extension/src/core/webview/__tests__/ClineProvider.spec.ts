@@ -599,8 +599,8 @@ describe("RecoderProvider", () => {
 		// get the stack size before the abort call
 		const stackSizeBeforeAbort = provider.getClineStackSize()
 
-		// call the removeClineFromStack method so it will call the current cline abort and remove it from the stack
-		await provider.removeClineFromStack()
+		// call the removeRecoderFromStack method so it will call the current cline abort and remove it from the stack
+		await provider.removeRecoderFromStack()
 
 		// get the stack size after the abort call
 		const stackSizeAfterAbort = provider.getClineStackSize()
