@@ -1,7 +1,7 @@
 const { BaseValidator } = require('./baseValidator');
 const { logger } = require('../utils/logger');
 
-class APIValidator extends BaseValidator {
+class ApiValidator extends BaseValidator {
   constructor(options = {}) {
     super(options);
     this.registerAPIRules();
@@ -767,4 +767,4 @@ class APIValidator extends BaseValidator {
   }
 }
 
-module.exports = { APIValidator };
+module.exports = { ApiValidator };

@@ -4,8 +4,8 @@
   "description": "Production Code Engine - Ensures real functionality and production readiness",
   "main": "src/server.js",
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
+    "dev": "npx tsx src/minimal-server.ts",
+    "start": "npx tsx src/minimal-server.ts",
     "build": "npm run test",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
