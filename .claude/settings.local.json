@@ -79,7 +79,10 @@
       "Bash(git checkout:*)",
       "Bash(timeout:*)",
       "Bash(SKIP_ENV_VALIDATION=true pnpm build --no-lint)",
-      "Bash(PORT=3003 npx tsx src/simple-server.ts)"
+      "Bash(PORT=3003 npx tsx src/simple-server.ts)",
+      "Bash(PORT=3004 npx tsx src/server.ts)",
+      "Bash(PORT=3005 npm start)",
+      "Bash(PORT=3003 node:*)"
     ],
     "deny": []
   }
