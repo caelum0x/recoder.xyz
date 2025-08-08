@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 import { AuthClient } from './auth-client';
 import { WebSocketClient } from './websocket-client';
 import { SyncClient } from './sync-client';
+import { AIClient } from './ai-client';
 import axios, { AxiosInstance } from 'axios';
 
 export interface RecoderSDKConfig {
@@ -60,19 +61,20 @@ export class RecoderSDK extends EventEmitter {
   public auth: AuthClient;
   public websocket?: WebSocketClient;
   public sync?: SyncClient;
+  public ai: AIClient;
 
   constructor(config: RecoderSDKConfig) {
     super();
 
     this.config = {
-      baseURL: 'http://localhost:3001',
-      webSocketURL: 'http://localhost:3001',
+      baseURL: config.baseURL || 'http://localhost:3001',
+      webSocketURL: config.webSocketURL || 'http://localhost:3001',
       platform: config.platform,
       deviceName: config.deviceName || `${config.platform}-${Date.now()}`,
-      enableWebSocket: true,
-      enableAutoSync: true,
-      debug: false,
-      ...config
+      enableWebSocket: config.enableWebSocket ?? true,
+      enableAutoSync: config.enableAutoSync ?? true,
+      apiKey: config.apiKey || '',
+      debug: config.debug || false
     };
 
     // Initialize API client
@@ -86,6 +88,13 @@ export class RecoderSDK extends EventEmitter {
 
     // Initialize auth client
     this.auth = new AuthClient(this.config.baseURL);
+
+    // Initialize AI client
+    this.ai = new AIClient(this.auth, {
+      platform: this.config.platform,
+      baseURL: this.config.baseURL,
+      routingStrategy: 'balanced'
+    });
 
     // Setup API interceptors
     this.setupAPIInterceptors();
@@ -181,6 +190,23 @@ export class RecoderSDK extends EventEmitter {
         this.emit('syncError', data);
       });
     }
+
+    // Forward AI events
+    this.ai.on('requestStarted', (data) => {
+      this.emit('aiRequestStarted', data);
+    });
+
+    this.ai.on('responseReceived', (data) => {
+      this.emit('aiResponseReceived', data);
+    });
+
+    this.ai.on('requestFailed', (data) => {
+      this.emit('aiRequestFailed', data);
+    });
+
+    this.ai.on('providerError', (data) => {
+      this.emit('aiProviderError', data);
+    });
   }
 
   private async onAuthenticated(): Promise<void> {
@@ -394,7 +420,8 @@ export class RecoderSDK extends EventEmitter {
       autoSyncEnabled: this.sync?.autoSyncEnabled || false,
       platform: this.config.platform,
       user: this.auth.getUser(),
-      device: this.auth.getDeviceInfo()
+      device: this.auth.getDeviceInfo(),
+      ai: this.ai.getStatus()
     };
   }
 
