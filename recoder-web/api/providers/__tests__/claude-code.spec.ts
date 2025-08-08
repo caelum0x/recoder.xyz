@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest"
 import { ClaudeCodeHandler } from "../claude-code"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "../../../lib/shared"
 import { ClaudeCodeMessage } from "../../../integrations/claude-code/types"
 
 // Mock the runClaudeCode function

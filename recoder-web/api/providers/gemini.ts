@@ -9,8 +9,8 @@ import type { JWTInput } from "google-auth-library"
 
 import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "@recoder/shared/api"
-import { safeJsonParse } from "@recoder/shared/safeJsonParse"
+import type { ApiHandlerOptions } from "../../lib/shared"
+import { safeJsonParse } from "../../lib/shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { ApiStream } from "../transform/stream"
@@ -43,7 +43,7 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 					project,
 					location,
 					googleAuthOptions: {
-						credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
+						credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, {} as JWTInput),
 					},
 				})
 			: this.options.vertexKeyFile

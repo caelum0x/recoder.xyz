@@ -7,7 +7,8 @@ import {
 	Message,
 	SystemContentBlock,
 } from "@aws-sdk/client-bedrock-runtime"
-import { fromIni } from "@aws-sdk/credential-providers"
+// Browser-safe: AWS credential providers not available in browser
+// import { fromIni } from "@aws-sdk/credential-providers"
 import { Anthropic } from "@anthropic-ai/sdk"
 
 import {
@@ -30,7 +31,7 @@ import { MultiPointStrategy } from "../transform/cache-strategy/multi-point-stra
 import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"
 import { convertToBedrockConverseMessages as sharedConverter } from "../transform/bedrock-converse-format"
 import { getModelParams } from "../transform/model-params"
-import { shouldUseReasoningBudget } from "@recoder/shared"
+import { shouldUseReasoningBudget } from "../../shared"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
 /************************************************************************************
@@ -223,11 +224,9 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 		}
 
 		if (this.options.awsUseProfile && this.options.awsProfile) {
-			// Use profile-based credentials if enabled and profile is set
-			clientConfig.credentials = fromIni({
-				profile: this.options.awsProfile,
-				ignoreCache: true,
-			})
+			// Browser-safe: Profile-based credentials not supported in browser environment
+			// Use direct credentials instead or configure AWS credentials externally
+			console.warn('AWS profile-based credentials not supported in browser environment. Use access keys instead.');
 		} else if (this.options.awsAccessKey && this.options.awsSecretKey) {
 			// Use direct credentials if provided
 			clientConfig.credentials = {

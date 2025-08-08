@@ -10,8 +10,8 @@ import {
 	anthropicModels,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../../shared/api"
-import { parseApiPrice } from "../../../shared/cost"
+import type { ApiHandlerOptions } from "../../../lib/shared"
+import { parseApiPrice } from "../../../lib/shared/cost"
 
 /**
  * OpenRouterBaseModel
@@ -208,7 +208,7 @@ export const parseOpenRouterModel = ({
 		description: model.description,
 		supportsReasoningEffort: supportedParameters ? supportedParameters.includes("reasoning") : undefined,
 		supportedParameters: supportedParameters ? supportedParameters.filter(isModelParameter) : undefined,
-		preferredIndex: model.preferredIndex, // kilocode_change
+		preferredIndex: model.preferredIndex ?? undefined, // kilocode_change
 	}
 
 	// The OpenRouter model definition doesn't give us any hints about

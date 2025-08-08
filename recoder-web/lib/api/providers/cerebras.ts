@@ -1,10 +1,10 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import Cerebras from "@cerebras/cerebras_cloud_sdk"
 import { CerebrasModelId, cerebrasDefaultModelId, cerebrasModels, ModelInfo } from "@roo-code/types"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "../../shared"
 import { ApiHandler } from "../index"
 import { ApiStream } from "../transform/stream"
-import { countTokens } from "@recoder/shared"
+import { countTokens } from "../../shared"
 
 export class CerebrasHandler implements ApiHandler {
 	private options: ApiHandlerOptions

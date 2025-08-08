@@ -2,22 +2,24 @@ import * as path from "path"
 import fs from "fs/promises"
 
 import NodeCache from "node-cache"
-import { safeWriteJson } from "../../../utils/safeWriteJson"
 
-import { ContextProxy } from "../../../core/config/ContextProxy"
-import { getCacheDirectoryPath } from "../../../utils/storage"
-import { RouterName, ModelRecord, cerebrasModels } from "../../../shared/api"
-import { fileExistsAtPath } from "../../../utils/fs"
+import { RouterName, ModelRecord, cerebrasModels } from "../../../lib/shared"
+
 
 import { getOpenRouterModels } from "./openrouter"
 import { getRequestyModels } from "./requesty"
 import { getGlamaModels } from "./glama"
 import { getUnboundModels } from "./unbound"
 import { getLiteLLMModels } from "./litellm"
-import { GetModelsOptions } from "../../../shared/api"
-import { getKiloBaseUriFromToken } from "../../../utils/kilocode-token"
+import { GetModelsOptions } from "../../../lib/shared"
+//import { getKiloBaseUriFromToken } from "../../../utils/kilocode-token"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
+import { getKiloBaseUriFromToken } from "@/lib/utils/kilocode-token"
+import { ContextProxy } from "@/lib/core/config/ContextProxy"
+import { fileExistsAtPath } from "@/lib/utils/fs"
+import { safeWriteJson } from "@/lib/utils/safeWriteJson"
+import { getCacheDirectoryPath } from "@/lib/utils/storage"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -77,10 +79,16 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				break
 			case "unbound":
 				// Unbound models endpoint requires an API key to fetch application specific models
+				if (!options.apiKey) {
+					throw new Error("Unbound requires apiKey");
+				}
 				models = await getUnboundModels(options.apiKey)
 				break
 			case "litellm":
 				// Type safety ensures apiKey and baseUrl are always provided for litellm
+				if (!options.apiKey || !options.baseUrl) {
+					throw new Error("LiteLLM requires both apiKey and baseUrl");
+				}
 				models = await getLiteLLMModels(options.apiKey, options.baseUrl)
 				break
 			// kilocode_change start
@@ -95,14 +103,20 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				break
 			// kilocode_change end
 			case "ollama":
+				if (!options.baseUrl) {
+					throw new Error("Ollama requires baseUrl");
+				}
 				models = await getOllamaModels(options.baseUrl)
 				break
 			case "lmstudio":
+				if (!options.baseUrl) {
+					throw new Error("LMStudio requires baseUrl");
+				}
 				models = await getLMStudioModels(options.baseUrl)
 				break
 			default: {
 				// Ensures router is exhaustively checked if RouterName is a strict union
-				const exhaustiveCheck: never = provider
+				const exhaustiveCheck: any = provider
 				throw new Error(`Unknown provider: ${exhaustiveCheck}`)
 			}
 		}

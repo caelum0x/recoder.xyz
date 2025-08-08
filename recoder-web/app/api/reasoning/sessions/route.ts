@@ -5,13 +5,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { activeSessions } from '../start/route';
+// In-memory sessions storage - replace with database in production
+const activeSessions = new Map();
 
 interface ReasoningNode {
   id: string;
   label: string;
   type: 'observation' | 'hypothesis' | 'analysis' | 'conclusion' | 'decision';
-  position: { x: number; y: number };
+  position: { x: number; y: number }; 
   connections: string[];
   confidence: number;
   status: 'active' | 'completed' | 'discarded';
@@ -129,7 +130,7 @@ function generateFlowChart(steps: any[]): ReasoningNode[] {
     const stepsOfType = stepsByType.get(type) || [];
     if (stepsOfType.length === 0) return;
     
-    stepsOfType.forEach((step, indexInType) => {
+    stepsOfType.forEach((step: { id: any; content: string; type: any; dependencies: any; confidence: any; }, indexInType: number) => {
       const x = 50 + (indexInType * horizontalSpacing);
       const y = currentY;
       

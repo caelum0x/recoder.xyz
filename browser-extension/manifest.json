@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Recoder.xyz Local AI Bridge",
+  "version": "1.0.0",
+  "description": "Connect www.recoder.xyz to your local AI models (Ollama/LM Studio) seamlessly",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "background"
+  ],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "https://recoder.xyz/*",
+    "https://www.recoder.xyz/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://recoder.xyz/*",
+        "https://www.recoder.xyz/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Recoder Local AI"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["bridge.js"],
+      "matches": ["https://recoder.xyz/*", "https://www.recoder.xyz/*"]
+    }
+  ]
+}

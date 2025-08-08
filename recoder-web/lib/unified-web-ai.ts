@@ -1,6 +1,7 @@
 /**
  * Unified Web AI Integration for Recoder.xyz
  * 
+ * LOCAL-FIRST PRIORITY: Free local AI (Ollama/LM Studio) → Cloud APIs
  * Integrates the extension's proven API system with the web platform,
  * providing cost-efficient AI routing for web-based code generation.
  */
@@ -8,10 +9,17 @@
 // Use dynamic import for server-only API handlers
 import type { ApiHandler } from './api';
 import type { ProviderSettings, AIMessage, TaskContext } from './api/providers/types';
+import { 
+  getLocalFirstWebProvider, 
+  getWebProviderStatus, 
+  getWebSetupInstructions,
+  hasAnyWebProvider,
+  getWebProviderRecommendation
+} from './api/providers/local-first-web-ai';
 
 export interface WebGenerationOptions {
   preferredProvider?: string;
-  maxTokens?: number;  
+  maxTokens?: number;   
   temperature?: number;
   language?: string;
   framework?: string;
@@ -21,6 +29,7 @@ export interface WebGenerationOptions {
 }
 
 export interface WebGenerationResult {
+  confidence: number;
   code: string;
   explanation?: string;
   provider: string;
@@ -57,9 +66,9 @@ export class UnifiedWebAI {
       
       for (const [name, settings] of configs) {
         try {
-          const { buildApiHandler } = await import('./api');
+          const { buildApiHandler } = await import('./api/index-browser');
           const handler = buildApiHandler(settings);
-          this.handlers.set(name, handler);
+          this.handlers.set(name, handler as any); // Type assertion for browser/main ApiHandler compatibility
           console.log(`✅ Initialized ${name} web handler`);
         } catch (error) {
           console.warn(`⚠️ Failed to initialize ${name}:`, error);
@@ -75,14 +84,30 @@ export class UnifiedWebAI {
   }
 
   /**
-   * Build provider configurations for web environment
+   * Build provider configurations with LOCAL-FIRST priority
    */
   private buildWebProviderConfigs(): Map<string, ProviderSettings> {
     const configs = new Map<string, ProviderSettings>();
 
-    // OpenRouter - unified access (RECOMMENDED for web)
+    // 🆓 PRIORITY 1: Local AI (FREE)
+    const localProvider = getLocalFirstWebProvider('web');
+    if (localProvider) {
+      configs.set('local-first', localProvider);
+    }
+
+    // 🚀 PRIORITY 2: Get specialized providers for different tasks
+    const taskTypes = ['backend', 'mobile', 'blockchain', 'security'] as const;
+    for (const taskType of taskTypes) {
+      const provider = getLocalFirstWebProvider(taskType);
+      if (provider && provider.apiProvider !== localProvider?.apiProvider) {
+        configs.set(`${taskType}-specialized`, provider);
+      }
+    }
+
+    // 🔧 FALLBACK: Legacy configurations (maintained for compatibility)
+    // OpenRouter - unified access
     if (process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY) {
-      configs.set('openrouter', {
+      configs.set('openrouter-fallback', {
         apiProvider: 'openrouter',
         openRouterApiKey: process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY,
         openRouterModelId: 'anthropic/claude-3.5-sonnet',
@@ -92,7 +117,7 @@ export class UnifiedWebAI {
 
     // Direct Anthropic (server-side only)
     if (process.env.ANTHROPIC_API_KEY) {
-      configs.set('anthropic', {
+      configs.set('anthropic-fallback', {
         apiProvider: 'anthropic',
         apiKey: process.env.ANTHROPIC_API_KEY,
         apiModelId: 'claude-3-5-sonnet-20241022'
@@ -101,7 +126,7 @@ export class UnifiedWebAI {
 
     // Google Gemini
     if (process.env.NEXT_PUBLIC_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY) {
-      configs.set('gemini', {
+      configs.set('gemini-fallback', {
         apiProvider: 'gemini',
         geminiApiKey: process.env.NEXT_PUBLIC_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY,
         geminiModelId: 'gemini-2.0-flash-exp'
@@ -110,7 +135,7 @@ export class UnifiedWebAI {
 
     // Groq
     if (process.env.NEXT_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY) {
-      configs.set('groq', {
+      configs.set('groq-fallback', {
         apiProvider: 'groq',
         groqApiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY,
         groqModelId: 'llama-3.1-70b-versatile'
@@ -174,6 +199,7 @@ export class UnifiedWebAI {
       modelUsed = modelInfo.id;
 
       return {
+        confidence: 1, // Default confidence value, adjust as needed
         code: this.extractCodeFromResponse(fullContent),
         explanation: this.extractExplanation(fullContent),
         provider: handlerName,
@@ -240,25 +266,25 @@ export class UnifiedWebAI {
   }
 
   /**
-   * Select optimal provider for web use case
+   * Select optimal provider for web use case with LOCAL-FIRST priority
    */
   private selectWebOptimalProvider(context: TaskContext, options: WebGenerationOptions): string {
     if (options.preferredProvider && this.handlers.has(options.preferredProvider)) {
       return options.preferredProvider;
     }
 
-    // Web-optimized provider preferences
-    const webPreferences = {
-      'web': ['openrouter', 'gemini', 'groq', 'anthropic'],
-      'backend': ['openrouter', 'anthropic', 'groq', 'gemini'],
-      'mobile': ['openrouter', 'gemini', 'groq', 'anthropic'],
-      'blockchain': ['openrouter', 'anthropic', 'gemini', 'groq'],
-      'security': ['openrouter', 'anthropic', 'gemini', 'groq'],
-      'devops': ['openrouter', 'groq', 'gemini', 'anthropic'],
-      'general': ['openrouter', 'gemini', 'groq', 'anthropic']
+    // LOCAL-FIRST preferences (FREE models prioritized)
+    const localFirstPreferences = {
+      'web': ['local-first', 'backend-specialized', 'openrouter-fallback', 'groq-fallback', 'gemini-fallback', 'anthropic-fallback'],
+      'backend': ['backend-specialized', 'local-first', 'openrouter-fallback', 'anthropic-fallback', 'groq-fallback', 'gemini-fallback'],
+      'mobile': ['mobile-specialized', 'local-first', 'openrouter-fallback', 'gemini-fallback', 'groq-fallback', 'anthropic-fallback'],
+      'blockchain': ['blockchain-specialized', 'local-first', 'openrouter-fallback', 'anthropic-fallback', 'gemini-fallback', 'groq-fallback'],
+      'security': ['security-specialized', 'local-first', 'openrouter-fallback', 'anthropic-fallback', 'gemini-fallback', 'groq-fallback'],
+      'devops': ['local-first', 'openrouter-fallback', 'groq-fallback', 'gemini-fallback', 'anthropic-fallback'],
+      'general': ['local-first', 'openrouter-fallback', 'gemini-fallback', 'groq-fallback', 'anthropic-fallback']
     };
 
-    const preferences = webPreferences[context.type] || webPreferences.web;
+    const preferences = localFirstPreferences[context.type] || localFirstPreferences.web;
     
     for (const providerName of preferences) {
       if (this.handlers.has(providerName)) {
@@ -278,6 +304,9 @@ export class UnifiedWebAI {
     userMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
   } {
     const systemPrompt = `You are Recoder, an AI specialized in generating REAL, PRODUCTION-READY web applications. Never create mock implementations.
+
+🆓 LOCAL-FIRST AI APPROACH:
+This system prioritizes FREE local AI models (Ollama/LM Studio) over expensive cloud APIs to make AI-powered development accessible to everyone. When users have local AI available, they get unlimited usage at zero cost.
 
 WEB DEVELOPMENT PRINCIPLES:
 1. Generate complete, working React/Next.js components
@@ -303,7 +332,10 @@ QUALITY STANDARDS:
 - Implement loading and error states
 - Use TypeScript interfaces for all props
 - Follow React best practices and hooks rules
-- Include proper SEO meta tags for pages`;
+- Include proper SEO meta tags for pages
+
+💡 COST-CONSCIOUS DEVELOPMENT:
+Generate efficient, optimized code that works well with both free local models and premium cloud APIs. Focus on clarity and maintainability to get maximum value from AI assistance.`;
 
     const userMessages = [
       {
@@ -441,25 +473,53 @@ Provide the response in this format:
   }
 
   /**
-   * Get available providers for web
+   * Get available providers for web with LOCAL-FIRST priority display
    */
   getAvailableProviders(): Array<{
     name: string;
     available: boolean;
     models: string[];
     cost: 'free' | 'paid' | 'mixed';
+    priority: number;
   }> {
+    const status = getWebProviderStatus();
+    
     const providers = [
-      { name: 'openrouter', cost: 'mixed' as const, models: ['claude-3.5-sonnet', 'gemini-2.0-flash', 'gpt-4'] },
-      { name: 'anthropic', cost: 'paid' as const, models: ['claude-3.5-sonnet'] },
-      { name: 'gemini', cost: 'mixed' as const, models: ['gemini-2.0-flash-exp'] },
-      { name: 'groq', cost: 'mixed' as const, models: ['llama-3.1-70b-versatile'] }
+      // LOCAL (FREE) - Highest Priority
+      { name: 'ollama', cost: 'free' as const, models: ['qwen2.5-coder:7b', 'codellama:13b', 'mistral:7b'], priority: 1, available: status.local.ollama },
+      { name: 'lm-studio', cost: 'free' as const, models: ['local-model'], priority: 2, available: status.local.lmstudio },
+      
+      // CLOUD (MIXED/PAID) - Lower Priority
+      { name: 'openrouter', cost: 'mixed' as const, models: ['claude-3.5-sonnet', 'gemini-2.0-flash', 'gpt-4'], priority: 3, available: status.cloud.openrouter },
+      { name: 'groq', cost: 'mixed' as const, models: ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant'], priority: 4, available: status.cloud.groq },
+      { name: 'gemini', cost: 'mixed' as const, models: ['gemini-2.0-flash-exp'], priority: 5, available: status.cloud.gemini },
+      { name: 'anthropic', cost: 'paid' as const, models: ['claude-3.5-sonnet'], priority: 6, available: status.cloud.anthropic },
+      { name: 'openai', cost: 'paid' as const, models: ['gpt-4o', 'gpt-4o-mini'], priority: 7, available: status.cloud.openai },
+      { name: 'xai', cost: 'paid' as const, models: ['grok-2-vision', 'grok-2'], priority: 8, available: status.cloud.xai }
     ];
 
-    return providers.map(provider => ({
-      ...provider,
-      available: this.handlers.has(provider.name)
-    }));
+    return providers.sort((a, b) => a.priority - b.priority);
+  }
+
+  /**
+   * Get setup instructions for users
+   */
+  getSetupInstructions(): string {
+    return getWebSetupInstructions();
+  }
+
+  /**
+   * Get provider recommendation for task
+   */
+  getProviderRecommendation(taskType: string = 'web') {
+    return getWebProviderRecommendation(taskType);
+  }
+
+  /**
+   * Check if any provider is available
+   */
+  hasProviders(): boolean {
+    return hasAnyWebProvider();
   }
 }
 

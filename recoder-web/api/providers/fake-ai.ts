@@ -3,7 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@roo-code/types"
 
 import type { ApiHandler, SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import type { ApiHandlerOptions } from "@recoder/shared/api"
+import type { ApiHandlerOptions } from "../../lib/shared"
 import { ApiStream } from "../transform/stream"
 
 interface FakeAI {
