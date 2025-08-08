@@ -148,7 +148,7 @@ export default App;`,
       type,
       content: type === "file" ? "" : undefined,
       children: type === "folder" ? [] : undefined,
-      parent: parentId,
+      parent: parentId ?? undefined,
     };
 
     if (parentId) {

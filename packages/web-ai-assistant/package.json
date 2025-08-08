@@ -26,8 +26,6 @@
   "author": "recoder.xyz",
   "license": "MIT",
   "dependencies": {
-    "@recoder/cross-platform-sync": "file:../cross-platform-sync",
-    "@recoder/ai-context": "file:../ai-context"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

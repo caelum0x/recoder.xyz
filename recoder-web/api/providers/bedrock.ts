@@ -25,12 +25,12 @@ import {
 
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
-import { logger } from "../../utils/logging"
+import { logger } from "../../lib/utils/logging"
 import { MultiPointStrategy } from "../transform/cache-strategy/multi-point-strategy"
 import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"
 import { convertToBedrockConverseMessages as sharedConverter } from "../transform/bedrock-converse-format"
 import { getModelParams } from "../transform/model-params"
-import { shouldUseReasoningBudget } from "@recoder/shared/api"
+import { shouldUseReasoningBudget } from "../../lib/shared"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
 /************************************************************************************
@@ -338,7 +338,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 		// shouldUseReasoningBudget(): Enabled through user settings (enableReasoningEffort = true)
 		const isThinkingExplicitlyEnabled = metadata?.thinking?.enabled
 		const isThinkingEnabledBySettings =
-			shouldUseReasoningBudget({ model: modelConfig.info, settings: this.options }) &&
+			shouldUseReasoningBudget(modelConfig.id) &&
 			modelConfig.reasoning &&
 			modelConfig.reasoningBudget
 
@@ -615,7 +615,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 			// For completePrompt, thinking is typically not used, but we should still check
 			// if thinking was somehow enabled in the model config
 			const thinkingEnabled =
-				shouldUseReasoningBudget({ model: modelConfig.info, settings: this.options }) &&
+				shouldUseReasoningBudget(modelConfig.id) &&
 				modelConfig.reasoning &&
 				modelConfig.reasoningBudget
 

@@ -608,10 +608,7 @@ export function EnhancedMonacoEditor({
           cursorBlinking: 'blink',
           cursorSmoothCaretAnimation: 'on',
           smoothScrolling: true,
-          codeLens: editorSettings.enableCodeLens,
-          lightbulb: {
-            enabled: true
-          }
+          codeLens: editorSettings.enableCodeLens
         }}
       />
 

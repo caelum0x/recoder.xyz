@@ -25,6 +25,7 @@ import {
   Play,
   Eye,
   Heart,
+  X,
 } from "lucide-react";
 
 interface Component {

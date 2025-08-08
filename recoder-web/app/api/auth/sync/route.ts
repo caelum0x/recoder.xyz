@@ -1,6 +1,6 @@
 // Session sync API endpoint for Recoder Web
 import { NextRequest } from 'next/server';
-import { handleSessionSync } from '../../../../lib/session-sync';
+import { handleSessionSync } from '@/lib/session-sync';
 
 export async function GET(request: NextRequest) {
   return handleSessionSync(request);

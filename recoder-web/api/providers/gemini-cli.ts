@@ -8,8 +8,8 @@ import dotenvx from "@dotenvx/dotenvx"
 
 import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "@recoder/shared/api"
-import { t } from "../../i18n"
+import type { ApiHandlerOptions } from "../../lib/shared"
+import { t } from "../../lib/i18n"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { ApiStream } from "../transform/stream"
@@ -63,7 +63,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				})
 			}
 		} catch (error) {
-			throw new Error(t("common:errors.geminiCli.oauthLoadFailed", { error }))
+			throw new Error(t("common:errors.geminiCli.oauthLoadFailed"))
 		}
 	}
 
@@ -89,7 +89,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 					await fs.writeFile(credPath, JSON.stringify(this.credentials, null, 2))
 				}
 			} catch (error) {
-				throw new Error(t("common:errors.geminiCli.tokenRefreshFailed", { error }))
+				throw new Error(t("common:errors.geminiCli.tokenRefreshFailed"))
 			}
 		}
 	}
@@ -132,7 +132,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		// If we already have a project ID, use it
 		if (this.options.geminiCliProjectId) {
 			this.projectId = this.options.geminiCliProjectId
-			return this.projectId
+			return this.projectId!
 		}
 
 		// If we've already discovered it, return it
@@ -355,13 +355,9 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				throw new Error(t("common:errors.geminiCli.rateLimitExceeded"))
 			}
 			if (error.response?.status === 400) {
-				throw new Error(
-					t("common:errors.geminiCli.badRequest", {
-						details: JSON.stringify(error.response?.data) || error.message,
-					}),
-				)
+				throw new Error(t("common:errors.geminiCli.badRequest"))
 			}
-			throw new Error(t("common:errors.geminiCli.apiError", { error: error.message }))
+			throw new Error(t("common:errors.geminiCli.apiError"))
 		}
 	}
 
@@ -421,7 +417,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 			return ""
 		} catch (error) {
 			if (error instanceof Error) {
-				throw new Error(t("common:errors.geminiCli.completionError", { error: error.message }))
+				throw new Error(t("common:errors.geminiCli.completionError"))
 			}
 			throw error
 		}

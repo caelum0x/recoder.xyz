@@ -1,0 +1,29 @@
+packages:
+  # Core packages
+  - "packages/*"
+  
+  # Platform applications  
+  - "recoder-web"
+  - "recoder-chat"
+  - "recoder-chat-mobile"
+  - "recoder-desktop"
+  - "recoder-extension"
+  - "browser-extension"
+  
+  # Backend services
+  - "backend"
+  - "production-engine"
+  
+  # Deployment and scripts
+  - "scripts"
+  - "deployment"
+
+# Exclude specific directories that shouldn't be treated as packages
+exclude:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/.next/**" 
+  - "**/build/**"
+  - "**/coverage/**"
+  - "**/.turbo/**"
+  - "**/.nx/**"

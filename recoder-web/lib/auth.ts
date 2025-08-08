@@ -10,7 +10,7 @@ import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import DiscordProvider from "next-auth/providers/discord"; 
 import CredentialsProvider from "next-auth/providers/credentials";
-import { userDb, subscriptionDb, usageDb, PlanType } from "../../lib/database";
+import { userDb, subscriptionDb, usageDb, PlanType } from "./database";
 import { compare, hash } from 'bcryptjs';
 
 // Extended types for our unified application
@@ -104,7 +104,7 @@ export const authOptions: NextAuthOptions = {
           id: profile.id,
           name: profile.username,
           email: profile.email,
-          image: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null,
+          image: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : undefined,
           plan: 'FREE' as PlanType,
           emailVerified: profile.verified,
           username: profile.username,
@@ -181,7 +181,6 @@ export const authOptions: NextAuthOptions = {
   ],
   pages: {
     signIn: "/auth/signin",
-    signUp: "/auth/signup",
     error: "/auth/error",
     verifyRequest: "/auth/verify-request",
     newUser: "/onboarding",
@@ -233,7 +232,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.plan = user.plan;
-        token.emailVerified = user.emailVerified;
+        token.emailVerified = !!user.emailVerified;
         token.username = user.username;
         token.bio = user.bio;
         token.location = user.location;

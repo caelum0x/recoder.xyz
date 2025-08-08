@@ -18,7 +18,7 @@ export interface UnifiedSession {
   userId: string;
   platform: 'web' | 'cli' | 'extension' | 'router';
   deviceId?: string;
-  accessToken: string;
+  accessToken: string; 
   refreshToken: string;
   scopes: string[];
   expiresAt: Date;
@@ -251,7 +251,13 @@ export class UnifiedAuthService {
       }
       
       // Check expiration
-      if (storedKey.restrictions.expiresAt && storedKey.restrictions.expiresAt < new Date()) {
+      if (
+        storedKey.restrictions &&
+        typeof storedKey.restrictions === 'object' &&
+        'expiresAt' in storedKey.restrictions &&
+        storedKey.restrictions.expiresAt &&
+        new Date(storedKey.restrictions.expiresAt as string) < new Date()
+      ) {
         return { valid: false };
       }
       
@@ -447,7 +453,8 @@ export class UnifiedAuthService {
    * Setup TOTP for MFA
    */
   async setupTOTP(userId: string): Promise<{ secret: string; qrCode: string; backupCodes: string[] }> {
-    const secret = crypto.randomBytes(20).toString('base32');
+    // Use hex encoding for the secret, or use a base32 library if base32 is required
+    const secret = crypto.randomBytes(20).toString('hex');
     const user = await prisma.user.findUnique({ where: { id: userId } });
     
     if (!user) {

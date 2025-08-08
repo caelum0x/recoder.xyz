@@ -2,10 +2,10 @@ import OpenAI from "openai"
 
 import type { ModelInfo } from "@roo-code/types"
 
-import { ApiHandlerOptions, RouterName, ModelRecord } from "@recoder/shared"
+import { ApiHandlerOptions, RouterName, ModelRecord } from "../../shared"
 
 import { BaseProvider } from "./base-provider"
-import { getModels } from "./fetchers/modelCache"
+import { getModels } from "./fetchers/modelCache-browser"
 
 import { DEFAULT_HEADERS } from "./constants"
 

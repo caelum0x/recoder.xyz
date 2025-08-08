@@ -1,12 +1,12 @@
-import { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
+import { ApiHandlerOptions, ModelRecord } from "../../shared"
 import { OpenRouterHandler } from "./openrouter"
 import { getModelParams } from "../transform/model-params"
-import { getModels } from "./fetchers/modelCache"
+import { getModels } from "./fetchers/modelCache-browser"
 import { DEEP_SEEK_DEFAULT_TEMPERATURE, kilocodeDefaultModelId } from "@roo-code/types"
 import { getKiloBaseUriFromToken } from "../../utils/kilocode-token"
 import { ApiHandlerCreateMessageMetadata } from ".."
 import OpenAI from "openai"
-import { getModelEndpoints } from "./fetchers/modelEndpointCache"
+import { getModelEndpoints } from "./fetchers/modelEndpointCache-browser"
 
 /**
  * A custom OpenRouter handler that overrides the getModel function

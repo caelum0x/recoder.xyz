@@ -17,7 +17,7 @@ class ClientSafeLogger implements Logger {
     if (this.isServer) {
       // On server side, try to use winston logger from shared package
       try {
-        const { Logger } = require('@recoder/shared');
+        const { Logger } = require('../shared');
         const logger = new Logger('recoder-web');
         logger.info(message, ...args);
       } catch {
@@ -31,7 +31,7 @@ class ClientSafeLogger implements Logger {
   warn(message: string, ...args: any[]): void {
     if (this.isServer) {
       try {
-        const { Logger } = require('@recoder/shared');
+        const { Logger } = require('../shared');
         const logger = new Logger('recoder-web');
         logger.warn(message, ...args);
       } catch {
@@ -45,7 +45,7 @@ class ClientSafeLogger implements Logger {
   error(message: string, ...args: any[]): void {
     if (this.isServer) {
       try {
-        const { Logger } = require('@recoder/shared');
+        const { Logger } = require('../shared');
         const logger = new Logger('recoder-web');
         logger.error(message, ...args);
       } catch {
@@ -59,7 +59,7 @@ class ClientSafeLogger implements Logger {
   debug(message: string, ...args: any[]): void {
     if (this.isServer) {
       try {
-        const { Logger } = require('@recoder/shared');
+        const { Logger } = require('../shared');
         const logger = new Logger('recoder-web');
         logger.debug(message, ...args);
       } catch {

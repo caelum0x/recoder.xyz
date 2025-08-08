@@ -10,7 +10,7 @@ import {
 	anthropicModels,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "../../../shared"
 import { parseApiPrice } from "../../../shared/cost"
 
 /**

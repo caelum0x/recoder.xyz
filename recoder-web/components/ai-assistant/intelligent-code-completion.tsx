@@ -47,7 +47,7 @@ export function IntelligentCodeCompletion({
 
   const aiAssistant = useRef<WebAIAssistant | null>(null);
   const completionRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize AI Assistant
   useEffect(() => {

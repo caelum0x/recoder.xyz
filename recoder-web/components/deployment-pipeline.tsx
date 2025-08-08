@@ -4,10 +4,9 @@ import React, { useState, useEffect } from "react";
 import { 
   CloudIcon, 
   ServerIcon, 
-  GithubIcon, 
   CheckIcon, 
   ExternalLinkIcon,
-  RefreshIcon,
+  RefreshCw as RefreshIcon,
   AlertCircleIcon,
   SettingsIcon,
   DatabaseIcon,

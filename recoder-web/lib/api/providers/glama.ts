@@ -4,8 +4,8 @@ import OpenAI from "openai"
 
 import { glamaDefaultModelId, glamaDefaultModelInfo, GLAMA_DEFAULT_TEMPERATURE } from "@roo-code/types"
 
-import { Package } from "@recoder/shared"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { Package } from "../../shared"
+import { ApiHandlerOptions } from "../../shared"
 
 import { ApiStream } from "../transform/stream"
 import { convertToOpenAiMessages } from "../transform/openai-format"

@@ -36,6 +36,7 @@
     "@codesandbox/sandpack-react": "^2.19.10",
     "@codesandbox/sandpack-themes": "^2.0.21",
     "@codesandbox/sdk": "^0.3.0",
+    "@colors/colors": "^1.6.0",
     "@conform-to/zod": "^1.2.2",
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.2.0",
@@ -57,6 +58,7 @@
     "@recoder/web-ai-assistant": "file:../packages/web-ai-assistant",
     "@tailwindcss/typography": "^0.5.15",
     "@types/bcryptjs": "^2.4.6",
+    "@types/pg": "^8.15.5",
     "@vercel/og": "^0.6.4",
     "bcryptjs": "^3.0.2",
     "chart.js": "^4.5.0",
@@ -70,6 +72,7 @@
     "next-plausible": "^3.12.4",
     "next-s3-upload": "^0.3.4",
     "next-themes": "^0.4.6",
+    "pg": "^8.16.3",
     "prismjs": "^1.30.0",
     "react": "^19",
     "react-chartjs-2": "^5.3.0",
@@ -87,6 +90,7 @@
     "together-ai": "^0.11.1",
     "use-stick-to-bottom": "^1.0.43",
     "vaul": "^1.1.2",
+    "winston": "^3.17.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
