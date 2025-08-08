@@ -1,0 +1,26 @@
+/**
+ * XML matching utilities for production engine
+ */
+
+export function extractXmlContent(xml: string, tag: string): string | null {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
+  const match = xml.match(regex);
+  return match ? match[1].trim() : null;
+}
+
+export function hasXmlTag(xml: string, tag: string): boolean {
+  const regex = new RegExp(`<${tag}[^>]*>`, 'i');
+  return regex.test(xml);
+}
+
+export function extractAllXmlContent(xml: string, tag: string): string[] {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+  const matches = [];
+  let match;
+  
+  while ((match = regex.exec(xml)) !== null) {
+    matches.push(match[1].trim());
+  }
+  
+  return matches;
+}
