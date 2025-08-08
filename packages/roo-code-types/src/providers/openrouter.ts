@@ -1,6 +1,8 @@
 import type { ModelInfo } from "../model"
 
 // https://openrouter.ai/models?order=newest&supported_parameters=tools
+// Updated with latest top-performing models based on leaderboard data:
+// #1 Claude Sonnet 4 (57% usage), #3 Gemini 2.5 Flash (331% growth), #6 DeepSeek V3, #16 Qwen3 Coder
 export const openRouterDefaultModelId = "anthropic/claude-sonnet-4"
 
 export const openRouterDefaultModelInfo: ModelInfo = {
@@ -14,7 +16,7 @@ export const openRouterDefaultModelInfo: ModelInfo = {
 	cacheWritesPrice: 3.75,
 	cacheReadsPrice: 0.3,
 	description:
-		"Claude 3.7 Sonnet is an advanced large language model with improved reasoning, coding, and problem-solving capabilities. It introduces a hybrid reasoning approach, allowing users to choose between rapid responses and extended, step-by-step processing for complex tasks. The model demonstrates notable improvements in coding, particularly in front-end development and full-stack updates, and excels in agentic workflows, where it can autonomously navigate multi-step processes. Claude 3.7 Sonnet maintains performance parity with its predecessor in standard mode while offering an extended reasoning mode for enhanced accuracy in math, coding, and instruction-following tasks. Read more at the [blog post here](https://www.anthropic.com/news/claude-3-7-sonnet)",
+		"Claude Sonnet 4 is the #1 most popular model on OpenRouter with 57% usage share. Advanced reasoning, coding, and problem-solving with hybrid reasoning approach. Excellent for complex development tasks, agentic workflows, and multi-step processes. Supports computer use and vision capabilities. Read more at [Anthropic's blog](https://www.anthropic.com/news/claude-sonnet-4).",
 }
 
 export const OPENROUTER_DEFAULT_PROVIDER_NAME = "[default]"
@@ -48,6 +50,8 @@ export const OPEN_ROUTER_PROMPT_CACHING_MODELS = new Set([
 	"google/gemini-2.0-flash-001",
 	"google/gemini-flash-1.5",
 	"google/gemini-flash-1.5-8b",
+	"qwen/qwen-2.5-coder-32b-instruct",
+	"deepseek/deepseek-v3",
 ])
 
 // https://www.anthropic.com/news/3-5-models-and-computer-use
@@ -83,8 +87,36 @@ export const OPEN_ROUTER_REASONING_BUDGET_MODELS = new Set([
 	"google/gemini-2.5-flash-preview-05-20",
 	"google/gemini-2.5-flash",
 	"google/gemini-2.5-flash-lite-preview-06-17",
+	"deepseek/deepseek-v3",
+	"qwen/qwen-2.5-coder-32b-instruct",
 	// Also include the models that require the reasoning budget to be enabled
 	// even though `OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS` takes precedence.
 	"anthropic/claude-3.7-sonnet:thinking",
 	"google/gemini-2.5-flash-preview-05-20:thinking",
 ])
+
+// Top-performing model configurations based on OpenRouter leaderboard
+export const OPENROUTER_TOP_MODELS = {
+	"anthropic/claude-sonnet-4": {
+		ranking: 1,
+		usageShare: "57%",
+		specialty: "Most popular, general purpose, coding",
+		description: "#1 most used model. Excellent for complex reasoning and coding tasks."
+	},
+	"google/gemini-2.5-flash": {
+		ranking: 3,
+		growth: "331%",
+		specialty: "Fastest growing, multimodal, speed",
+		description: "#3 fastest growing model. Great for rapid development and multimodal tasks."
+	},
+	"deepseek/deepseek-v3": {
+		ranking: 6,
+		specialty: "Best reasoning, math, complex logic",
+		description: "#6 best reasoning model. Rivals GPT-4 performance at lower cost."
+	},
+	"qwen/qwen-2.5-coder-32b-instruct": {
+		ranking: 16,
+		specialty: "Code specialist, programming tasks",
+		description: "#16 specialized coding model. Optimized for software development."
+	}
+} as const

@@ -2,7 +2,7 @@ import axios from "axios"
 
 import { LITELLM_COMPUTER_USE_MODELS } from "@roo-code/types"
 
-import type { ModelRecord } from "../../../shared/api"
+import type { ModelRecord } from "../../../lib/shared"
 
 import { DEFAULT_HEADERS } from "../constants"
 /**
@@ -17,7 +17,7 @@ export async function getLiteLLMModels(apiKey: string, baseUrl: string): Promise
 	try {
 		const headers: Record<string, string> = {
 			"Content-Type": "application/json",
-			...DEFAULT_HEADERS,
+			...(DEFAULT_HEADERS as Record<string, string>),
 		}
 
 		if (apiKey) {

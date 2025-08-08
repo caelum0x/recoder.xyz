@@ -1,0 +1,80 @@
+{
+  "name": "recoder-desktop",
+  "version": "1.0.0",
+  "description": "Recoder.xyz Desktop App - Direct Local AI Access",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build-mac": "electron-builder --mac",
+    "build-win": "electron-builder --win",
+    "build-linux": "electron-builder --linux",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "keywords": [
+    "recoder",
+    "ai",
+    "coding",
+    "ollama",
+    "local-ai",
+    "desktop"
+  ],
+  "author": "Recoder.xyz",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.1",
+    "@ai-sdk/groq": "^2.0.2",
+    "@ai-sdk/openai": "^2.0.4",
+    "@ai-sdk/xai": "^2.0.2",
+    "ai": "^5.0.5",
+    "axios": "^1.11.0",
+    "electron-updater": "^6.1.7"
+  },
+  "build": {
+    "appId": "xyz.recoder.desktop",
+    "productName": "Recoder Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "entitlements": "assets/entitlements.mac.plist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png",
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "recoder-xyz",
+      "repo": "recoder-desktop"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/recoder-xyz/recoder-desktop.git"
+  }
+}

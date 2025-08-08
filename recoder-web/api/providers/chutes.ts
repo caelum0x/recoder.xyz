@@ -2,8 +2,8 @@ import { DEEP_SEEK_DEFAULT_TEMPERATURE, type ChutesModelId, chutesDefaultModelId
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import type { ApiHandlerOptions } from "@recoder/shared/api"
-import { XmlMatcher } from "../../utils/xml-matcher"
+import type { ApiHandlerOptions } from "../../lib/shared"
+import { XmlMatcher } from "../../lib/utils/xml-matcher"
 import { convertToR1Format } from "../transform/r1-format"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"

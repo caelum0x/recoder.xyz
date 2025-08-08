@@ -1,8 +1,9 @@
-import { Package } from "@recoder/shared/package"
+// Import from the shared utilities which has the Package export
+import { Package } from "../../lib/shared"
 
 export const DEFAULT_HEADERS = {
-	"HTTP-Referer": "https://kilocode.ai",
-	"X-Title": "Kilo Code",
-	"X-KiloCode-Version": Package.version,
-	"User-Agent": `Kilo-Code/${Package.version}`,
+	"HTTP-Referer": "https://recoder.xyz",
+	"X-Title": "Recoder",
+	"X-Recoder-Version": Package.version || "1.0.0",
+	"User-Agent": `Recoder/${Package.version || "1.0.0"}`,
 }

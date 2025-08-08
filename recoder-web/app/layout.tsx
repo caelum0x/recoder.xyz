@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import PlausibleProvider from "next-plausible";
 import { getBrandConfig } from "../lib/recoder-config";
-import AuthProvider from "@/components/auth-provider";
 import { AnalyticsProvider } from "@/components/providers/analytics-provider";
+import AuthProvider from "@/lib/auth/auth-context";
 import "./globals.css";
 
 const brandConfig = getBrandConfig();

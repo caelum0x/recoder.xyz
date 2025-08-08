@@ -3,8 +3,8 @@ import OpenAI from "openai"
 
 import { type ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@roo-code/types"
 
-import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
-import { calculateApiCostOpenAI } from "@recoder/shared"
+import type { ApiHandlerOptions, ModelRecord } from "../../shared"
+import { calculateApiCostOpenAI } from "../../shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
@@ -12,7 +12,7 @@ import { getModelParams } from "../transform/model-params"
 import { AnthropicReasoningParams } from "../transform/reasoning"
 
 import { DEFAULT_HEADERS } from "./constants"
-import { getModels } from "./fetchers/modelCache"
+import { getModels } from "./fetchers/modelCache-browser"
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
@@ -79,7 +79,7 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 		const cacheWriteTokens = requestyUsage?.prompt_tokens_details?.caching_tokens || 0
 		const cacheReadTokens = requestyUsage?.prompt_tokens_details?.cached_tokens || 0
 		const totalCost = modelInfo
-			? calculateApiCostOpenAI(modelInfo, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
+			? calculateApiCostOpenAI(inputTokens + outputTokens, modelInfo.description || 'unknown')
 			: 0
 
 		return {

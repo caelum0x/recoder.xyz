@@ -6,9 +6,9 @@ import Together from "together-ai";
 
 export async function POST(req: Request) {
   const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-  const adapter = new PrismaNeon(neon);
+  const adapter = new PrismaNeon(neon as any); // Type assertion for Neon Pool compatibility
   const prisma = new PrismaClient({ adapter });
-  const { messageId, model } = await req.json();
+  const { messageId, model } = await req.json(); 
 
   const message = await prisma.message.findUnique({
     where: { id: messageId },

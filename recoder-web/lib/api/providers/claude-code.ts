@@ -12,7 +12,7 @@ import { runClaudeCode } from "../../integrations/claude-code/run"
 import { filterMessagesForClaudeCode } from "../../integrations/claude-code/message-filter"
 import { BaseProvider } from "./base-provider"
 import { t } from "../../i18n"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "../../shared"
 
 export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 	private options: ApiHandlerOptions

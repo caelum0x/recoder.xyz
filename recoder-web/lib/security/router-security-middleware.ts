@@ -89,11 +89,11 @@ export function initializeRouterSecurity(config?: Partial<RouterSecurityConfig>)
     securityService = new RouterSecurityService(finalConfig);
     
     // Set up event listeners
-    securityService.on('securityEvent', (event) => {
+    securityService.on('securityEvent', (event: { type: any; severity: any; details: any; }) => {
       console.warn('[Security]', event.type, event.severity, event.details);
     });
 
-    securityService.on('ipBanned', (ip) => {
+    securityService.on('ipBanned', (ip: any) => {
       console.error('[Security] IP Banned:', ip);
     });
 
@@ -132,8 +132,8 @@ function getRealIP(request: NextRequest): string {
     return cfConnectingIP;
   }
   
-  // Fallback to remote address
-  return request.ip || '127.0.0.1';
+  // Fallback to localhost if no IP header is found
+  return '127.0.0.1';
 }
 
 /**

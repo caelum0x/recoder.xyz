@@ -91,7 +91,7 @@ export function RealTimeCodeAnalysis({
   const [filteredCategory, setFilteredCategory] = useState<string>('all');
 
   const aiAssistant = useRef<WebAIAssistant | null>(null);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize AI Assistant
   useEffect(() => {

@@ -95,7 +95,18 @@ const nextConfig: NextConfig = {
     "jws",
     "jwa",
     "@recoder/shared",
-    "winston"
+    "winston",
+    "next-auth",
+    "next-auth/providers",
+    "next-auth/core",
+    "oauth",
+    "preact",
+    "preact-render-to-string",
+    "openid-client",
+    "oidc-token-hash",
+    "jose",
+    "bcryptjs",
+    "nodemailer"
   ],
   webpack: (config, options) => {
     // Handle edge runtime
@@ -110,9 +121,31 @@ const nextConfig: NextConfig = {
 
     // Only apply client-side exclusions
     if (!options.isServer) {
-      // Exclude @recoder/shared and winston completely from client bundle
+      // Exclude server-only packages completely from client bundle
       config.externals = config.externals || [];
-      config.externals.push('@recoder/shared', 'winston', '@colors/colors');
+      config.externals.push(
+        '@recoder/shared', 
+        'winston', 
+        '@colors/colors',
+        'next-auth',
+        'next-auth/providers',
+        'next-auth/core',
+        'oauth',
+        'preact',
+        'preact-render-to-string',
+        'openid-client',
+        'oidc-token-hash',
+        'jose',
+        'bcryptjs',
+        'nodemailer',
+        'google-auth-library',
+        'gaxios',
+        'agent-base',
+        'https-proxy-agent',
+        '@anthropic-ai/vertex-sdk',
+        'gcp-metadata',
+        'gtoken'
+      );
       
       // Node.js polyfills
       config.resolve.fallback = {
@@ -136,6 +169,8 @@ const nextConfig: NextConfig = {
         zlib: false,
         constants: false,
         assert: false,
+        net: false,
+        tls: false,
       };
     }
 

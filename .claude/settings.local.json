@@ -67,7 +67,19 @@
       "Bash(done)",
       "Bash(chmod:*)",
       "Bash(ANTHROPIC_API_KEY=test npx tsx src/index.ts)",
-      "Bash(ANTHROPIC_API_KEY=test npx tsx src/cli.ts status)"
+      "Bash(ANTHROPIC_API_KEY=test npx tsx src/cli.ts status)",
+      "Bash(timeout 30s npm run build)",
+      "Bash(gtimeout:*)",
+      "Bash(pnpm add:*)",
+      "Bash(SKIP_ENV_VALIDATION=true pnpm build)",
+      "Bash(timeout 30 pnpm build --no-lint)",
+      "Bash(./status.sh)",
+      "Bash(pnpm -w run dev:all)",
+      "Bash(test:*)",
+      "Bash(git checkout:*)",
+      "Bash(timeout:*)",
+      "Bash(SKIP_ENV_VALIDATION=true pnpm build --no-lint)",
+      "Bash(PORT=3003 npx tsx src/simple-server.ts)"
     ],
     "deny": []
   }

@@ -4,6 +4,16 @@
   "description": "Shared types, utilities, and configurations for Recoder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "browser": "dist/index-browser.js",
+  "exports": {
+    ".": {
+      "browser": "./dist/index-browser.js",
+      "node": "./dist/index.js",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
@@ -26,15 +36,15 @@
   "author": "Recoder Team",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.51.0",
+    "@roo-code/types": "file:../roo-code-types",
     "axios": "^1.6.2",
-    "joi": "^17.11.0",
-    "winston": "^3.11.0",
     "chalk": "^4.1.2",
     "fs-extra": "^11.2.0",
+    "joi": "^17.11.0",
     "lodash": "^4.17.21",
     "uuid": "^9.0.1",
-    "@roo-code/types": "file:../roo-code-types",
-    "@anthropic-ai/sdk": "^0.51.0"
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

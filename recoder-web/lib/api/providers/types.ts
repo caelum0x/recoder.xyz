@@ -2,8 +2,38 @@
  * Shared types for AI providers across the recoder ecosystem
  */
 
+export type ApiProvider = 
+  | "anthropic" 
+  | "openai" 
+  | "gemini" 
+  | "openrouter" 
+  | "claude-code" 
+  | "glama" 
+  | "bedrock" 
+  | "vertex" 
+  | "ollama" 
+  | "vscode-lm" 
+  | "lmstudio"
+  | "gemini-cli" 
+  | "openai-native" 
+  | "mistral" 
+  | "deepseek" 
+  | "xai" 
+  | "cerebras" 
+  | "fireworks" 
+  | "together" 
+  | "groq" 
+  | "chutes" 
+  | "requesty" 
+  | "unbound" 
+  | "litellm" 
+  | "fake-ai" 
+  | "human-relay" 
+  | "anthropic-vertex"
+  | "kilocode";
+
 export interface ProviderSettings {
-  apiProvider: string;
+  apiProvider: ApiProvider;
   
   // Generic API settings
   apiKey?: string;
@@ -49,18 +79,18 @@ export interface ProviderSettings {
 }
 
 export interface ModelInfo {
-  maxTokens?: number;
-  contextWindow?: number;
+  maxTokens?: number | null;
+  contextWindow?: number | null;
   supportsImages?: boolean;
   supportsPromptCache?: boolean;
-  inputPrice?: number;
-  outputPrice?: number;
-  cacheWritesPrice?: number;
-  cacheReadsPrice?: number;
+  inputPrice?: number | null;
+  outputPrice?: number | null;
+  cacheWritesPrice?: number | null;
+  cacheReadsPrice?: number | null;
   description?: string;
   supportsReasoningEffort?: boolean;
   supportedParameters?: string[];
-  preferredIndex?: number;
+  preferredIndex?: number | null;
   supportsComputerUse?: boolean;
   supportsReasoningBudget?: boolean;
   requiredReasoningBudget?: boolean;

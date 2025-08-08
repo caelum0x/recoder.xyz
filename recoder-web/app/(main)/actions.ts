@@ -10,9 +10,8 @@ import { notFound } from "next/navigation";
 import Together from "together-ai";
 import { unifiedWebAI } from "@/lib/unified-web-ai";
 // Use dynamic import for server-only API handlers
-import type { ProviderSettings } from "@/lib/api/providers/types";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth/server-auth";
+import { callExtensionAPI } from "@/lib/server-api";
 
 export async function createChat(
   prompt: string,
@@ -21,7 +20,7 @@ export async function createChat(
   screenshotUrl: string | undefined,
 ) {
   // Get the current session to associate chat with user
-  const session = await getServerSession(authOptions);
+  const session = await requireAuth().catch(() => null);
   
   const prisma = getPrisma();
   const chat = await prisma.chat.create({
@@ -48,64 +47,7 @@ export async function createChat(
 
   const together = new Together(options);
 
-  // Use extension's API folder for better provider support
-  async function callExtensionAPI(
-    messages: any[],
-    provider: string = 'openrouter',
-    model?: string
-  ) {
-    try {
-      const providerSettings: ProviderSettings = {
-        apiProvider: provider
-      };
-
-      // Add provider-specific settings
-      switch (provider) {
-        case 'openrouter':
-          providerSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY;
-          providerSettings.openRouterModelId = model || 'anthropic/claude-3.5-sonnet';
-          break;
-        case 'anthropic':
-          providerSettings.apiKey = process.env.ANTHROPIC_API_KEY;
-          providerSettings.apiModelId = model || 'claude-3-5-sonnet-20241022';
-          break;
-        case 'gemini':
-          providerSettings.geminiApiKey = process.env.GOOGLE_API_KEY;
-          providerSettings.geminiModelId = model || 'gemini-2.0-flash-exp';
-          break;
-        default:
-          // Fallback to Together for unsupported providers
-          throw new Error(`Provider ${provider} not configured`);
-      }
-
-      const { buildApiHandler } = await import("@/lib/api");
-      const handler = buildApiHandler(providerSettings);
-      
-      // Convert messages format
-      const systemPrompt = "You are a helpful assistant that generates real, working code.";
-      const userMessages = messages.map(msg => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content
-      }));
-
-      let fullContent = '';
-      const stream = handler.createMessage(systemPrompt, userMessages, {
-        taskId: `web-${Date.now()}`,
-        mode: 'web-generation'
-      });
-
-      for await (const chunk of stream) {
-        if (chunk.type === 'text') {
-          fullContent += chunk.text;
-        }
-      }
-
-      return fullContent;
-    } catch (error) {
-      console.error(`Extension API call failed for ${provider}:`, error);
-      throw error;
-    }
-  }
+  // Use extension's API folder for better provider support (now imported from server-api)
 
   async function fetchTitle() {
     const responseForChatTitle = await together.chat.completions.create({
@@ -253,7 +195,7 @@ export async function createMessage(
   role: "assistant" | "user",
 ) {
   // Get the current session to verify chat ownership
-  const session = await getServerSession(authOptions);
+  const session = await requireAuth().catch(() => null);
   
   const prisma = getPrisma();
   const chat = await prisma.chat.findUnique({
@@ -283,7 +225,7 @@ export async function createMessage(
 
 export async function getUserChats(limit: number = 10) {
   // Get the current session
-  const session = await getServerSession(authOptions);
+  const session = await requireAuth().catch(() => null);
   
   if (!session?.user?.id) {
     return [];
@@ -313,7 +255,7 @@ export async function getUserChats(limit: number = 10) {
 
 export async function getUserStats() {
   // Get the current session
-  const session = await getServerSession(authOptions);
+  const session = await requireAuth().catch(() => null);
   
   if (!session?.user?.id) {
     return {

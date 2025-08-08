@@ -64,17 +64,18 @@ class InMemoryDatabase {
         return Object.entries(options.where).every(([key, value]) => {
           if (typeof value === 'object' && value !== null) {
             // Handle operators like { $like: 'pattern' }, { $gt: 10 }, etc.
-            if (value.$like) {
-              return record[key]?.toString().toLowerCase().includes(value.$like.toLowerCase());
+            const valueObj = value as any;
+            if (valueObj.$like) {
+              return record[key]?.toString().toLowerCase().includes(valueObj.$like.toLowerCase());
             }
-            if (value.$gt) {
-              return record[key] > value.$gt;
+            if (valueObj.$gt) {
+              return record[key] > valueObj.$gt;
             }
-            if (value.$lt) {
-              return record[key] < value.$lt;
+            if (valueObj.$lt) {
+              return record[key] < valueObj.$lt;
             }
-            if (value.$in) {
-              return value.$in.includes(record[key]);
+            if (valueObj.$in) {
+              return valueObj.$in.includes(record[key]);
             }
           }
           return record[key] === value;

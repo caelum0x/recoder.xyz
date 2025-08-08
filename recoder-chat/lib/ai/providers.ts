@@ -1,37 +1,38 @@
-import {
-  customProvider,
-  extractReasoningMiddleware,
-  wrapLanguageModel,
-} from 'ai';
-import { xai } from '@ai-sdk/xai';
-import {
-  artifactModel,
-  chatModel,
-  reasoningModel,
-  titleModel,
-} from './models.test';
-import { isTestEnvironment } from '../constants';
+/**
+ * AI Providers - Now with Local-First Priority!
+ * 🆓 FREE: Ollama, LM Studio (local models)
+ * 💰 PREMIUM: Claude, Groq, OpenAI, xAI (cloud APIs)
+ */
 
-export const myProvider = isTestEnvironment
-  ? customProvider({
-      languageModels: {
-        'chat-model': chatModel,
-        'chat-model-reasoning': reasoningModel,
-        'title-model': titleModel,
-        'artifact-model': artifactModel,
-      },
-    })
-  : customProvider({
-      languageModels: {
-        'chat-model': xai('grok-2-vision-1212'),
-        'chat-model-reasoning': wrapLanguageModel({
-          model: xai('grok-3-mini-beta'),
-          middleware: extractReasoningMiddleware({ tagName: 'think' }),
-        }),
-        'title-model': xai('grok-2-1212'),
-        'artifact-model': xai('grok-2-1212'),
-      },
-      imageModels: {
-        'small-model': xai.imageModel('grok-2-image'),
-      },
-    });
+import { localAI } from './local-first-providers';
+import { chatModel, titleModel, reasoningModel, artifactModel } from './models';
+
+// Export the local-first provider
+export const myProvider = {
+  chat: chatModel,
+  title: titleModel,
+  reasoning: reasoningModel,
+  artifact: artifactModel,
+};
+
+// Export utility functions for the UI
+export function getProviderStatus() {
+  return localAI.testConnections();
+}
+
+export function getSetupInstructions() {
+  return {
+    ollama: {
+      name: 'Ollama',
+      url: 'https://ollama.ai',
+      install: 'Download and install Ollama',
+      setup: ['Run: ollama pull qwen2.5-coder:7b', 'Start: ollama serve'],
+    },
+    lmStudio: {
+      name: 'LM Studio',
+      url: 'https://lmstudio.ai',
+      install: 'Download and install LM Studio',
+      setup: ['Load a model', 'Start the local server'],
+    },
+  };
+}

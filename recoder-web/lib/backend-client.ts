@@ -17,7 +17,7 @@ export interface UserSession {
     resetDate: string;
   };
   platforms: {
-    cli: boolean;
+    cli: boolean; 
     web: boolean;
     extension: boolean;
     router: boolean;
@@ -107,13 +107,15 @@ export class WebBackendClient {
   /**
    * Authenticate user with email/password or token
    */
-  async authenticate(credentials: { email: string; password: string } | { token: string }): Promise<UserSession> {
+  async authenticate(credentials: { email: string; password: string } | { token: string }): Promise<UserSession | null> {
     try {
       const response = await this.client.post('/api/auth/login', credentials);
       this.currentSession = response.data.user;
       this.saveSession();
       
-      console.log(`✅ Authenticated as ${this.currentSession.email}`);
+      if (this.currentSession) {
+        console.log(`✅ Authenticated as ${this.currentSession.email}`);
+      }
       return this.currentSession;
     } catch (error: any) {
       throw new Error(`Authentication failed: ${error.response?.data?.message || error.message}`);
@@ -123,13 +125,15 @@ export class WebBackendClient {
   /**
    * Register new user
    */
-  async register(userData: { email: string; password: string; name: string }): Promise<UserSession> {
+  async register(userData: { email: string; password: string; name: string }): Promise<UserSession | null> {
     try {
       const response = await this.client.post('/api/auth/register', userData);
       this.currentSession = response.data.user;
       this.saveSession();
       
-      console.log(`✅ Registered and authenticated as ${this.currentSession.email}`);
+      if (this.currentSession) {
+        console.log(`✅ Registered and authenticated as ${this.currentSession.email}`);
+      }
       return this.currentSession;
     } catch (error: any) {
       throw new Error(`Registration failed: ${error.response?.data?.message || error.message}`);

@@ -1,65 +1,82 @@
-import { withAuth } from "next-auth/middleware";
-import { routerSecurityMiddleware } from "./lib/security/router-security-middleware";
+import { NextRequest, NextResponse } from 'next/server';
+import { ServerAuth } from './lib/auth/server-auth';
+import { routerSecurityMiddleware } from './lib/security/router-security-middleware';
 
-export default withAuth(
-  async function middleware(req) {
-    // Apply router security middleware first
-    const securityResponse = await routerSecurityMiddleware(req, {
-      enableThreatDetection: true,
-      enableRateLimiting: true,
-      enableAnomalyDetection: true,
-      maxRequestsPerMinute: 60,
-      maxRequestsPerHour: 1000,
-      maxFailedAttemptsBeforeBan: 5,
-      banDurationMinutes: 60,
-      enableGeoBlocking: false,
-      suspiciousPatterns: [],
-      allowedCountries: [],
-      blockedIPs: []
-    });
+export async function middleware(request: NextRequest) {
+  // Apply router security middleware first
+  const securityResponse = await routerSecurityMiddleware(request, {
+    enableThreatDetection: true,
+    enableRateLimiting: true,
+    enableAnomalyDetection: true,
+    maxRequestsPerMinute: 60,
+    maxRequestsPerHour: 1000,
+    maxFailedAttemptsBeforeBan: 5,
+    banDurationMinutes: 60,
+    enableGeoBlocking: false,
+    suspiciousPatterns: [],
+    allowedCountries: [],
+    blockedIPs: []
+  });
 
-    // If security middleware blocked the request, return its response
-    if (securityResponse.status === 403) {
-      return securityResponse;
-    }
-
-    // Continue with NextAuth middleware logic
+  // If security middleware blocked the request, return its response
+  if (securityResponse.status === 403) {
     return securityResponse;
-  },
-  {
-    callbacks: {
-      authorized: ({ token, req }) => {
-        // Allow access to auth pages without authentication
-        if (req.nextUrl.pathname.startsWith("/auth/")) {
-          return true;
-        }
-        
-        // Protect admin pages - require authentication and admin role
-        if (req.nextUrl.pathname.startsWith("/admin/")) {
-          return !!token && token.email === "admin@recoder.xyz";
-        }
-        
-        // Protect dashboard and settings pages
-        if (
-          req.nextUrl.pathname.startsWith("/dashboard") ||
-          req.nextUrl.pathname.startsWith("/settings") ||
-          req.nextUrl.pathname.startsWith("/profile")
-        ) {
-          return !!token;
-        }
-        
-        // Allow chat creation for authenticated users (optional protection)
-        // Uncomment the lines below to require authentication for chat creation
-        // if (req.nextUrl.pathname.startsWith("/chat/")) {
-        //   return !!token;
-        // }
-        
-        // Allow access to all other pages
-        return true;
-      },
-    },
   }
-);
+
+  const response = NextResponse.next();
+  
+  // Add security headers
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-Content-Type-Options', 'nosniff'); 
+  response.headers.set('Referrer-Policy', 'origin-when-cross-origin');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  
+  // Handle authentication for protected routes
+  const pathname = request.nextUrl.pathname;
+  
+  // Public routes that don't require authentication
+  const publicRoutes = ['/login', '/register', '/api/auth/login', '/api/auth/register', '/', '/pricing'];
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
+  
+  // API routes that require authentication
+  const protectedApiRoutes = ['/api/chat', '/api/user', '/api/projects'];
+  const isProtectedApi = protectedApiRoutes.some(route => pathname.startsWith(route));
+  
+  // Dashboard and app routes that require authentication
+  const protectedRoutes = ['/dashboard', '/settings', '/agents', '/templates', '/admin'];
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  
+  if (isProtectedRoute || isProtectedApi) {
+    const session = await ServerAuth.validateSession(request);
+    
+    if (!session) {
+      // Redirect to login for protected routes
+      if (isProtectedRoute) {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('callbackUrl', pathname);
+        return NextResponse.redirect(loginUrl);
+      }
+      
+      // Return 401 for protected API routes
+      if (isProtectedApi) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      }
+    }
+    
+    // Check admin access
+    if (pathname.startsWith('/admin') && session?.user.email !== 'admin@recoder.xyz') {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+    
+    // Add session info to headers for server components
+    if (session) {
+      response.headers.set('X-User-Id', session.user.id);
+      response.headers.set('X-User-Plan', session.user.plan);
+    }
+  }
+  
+  return response;
+}
 
 export const config = {
   matcher: [

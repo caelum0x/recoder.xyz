@@ -3,7 +3,7 @@ import OpenAI from "openai"
 
 import { type ModelInfo, openAiModelInfoSaneDefaults, DEEP_SEEK_DEFAULT_TEMPERATURE } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "../../shared"
 
 import { XmlMatcher } from "../../utils/xml-matcher"
 
