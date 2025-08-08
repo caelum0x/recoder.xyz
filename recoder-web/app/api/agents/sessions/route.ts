@@ -77,7 +77,7 @@ const generateMockSessions = () => {
       timestamp: index <= currentStepIndex ? new Date(startTime.getTime() + index * 2 * 60 * 1000).toISOString() : undefined
     }));
     
-    const reasoning = [];
+    const reasoning: string[] = [];
     steps.forEach((step, index) => {
       if (step.status === 'completed' || step.status === 'running') {
         reasoning.push(`${step.status === 'completed' ? 'Completed' : 'Starting'} step: ${step.description}`);

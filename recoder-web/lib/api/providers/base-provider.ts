@@ -4,7 +4,7 @@ import type { ModelInfo } from "@roo-code/types"
 
 import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { ApiStream } from "../transform/stream"
-import { countTokens } from "@recoder/shared"
+import { countTokens } from "../../shared"
 
 /**
  * Base class for API providers that implements common functionality.

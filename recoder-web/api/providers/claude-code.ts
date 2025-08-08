@@ -8,11 +8,11 @@ import {
 } from "@roo-code/types"
 import { type ApiHandler } from ".."
 import { ApiStreamUsageChunk, type ApiStream } from "../transform/stream"
-import { runClaudeCode } from "../../integrations/claude-code/run"
-import { filterMessagesForClaudeCode } from "../../integrations/claude-code/message-filter"
+import { runClaudeCode } from "../../lib/integrations/claude-code/run"
+import { filterMessagesForClaudeCode } from "../../lib/integrations/claude-code/message-filter"
 import { BaseProvider } from "./base-provider"
-import { t } from "../../i18n"
-import { ApiHandlerOptions } from "@recoder/shared/api"
+import { t } from "../../lib/i18n"
+import { ApiHandlerOptions } from "../../lib/shared"
 
 export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 	private options: ApiHandlerOptions
@@ -68,7 +68,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 				continue
 			}
 
-			if (chunk.type === "assistant" && "message" in chunk) {
+			if (chunk.type === "assistant" && "message" in chunk && chunk.message) {
 				const message = chunk.message
 
 				if (message.stop_reason !== null) {
@@ -106,7 +106,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 						case "thinking":
 							yield {
 								type: "reasoning",
-								text: content.thinking || "",
+								text: (content as any).thinking || "",
 							}
 							break
 						case "redacted_thinking":
@@ -123,15 +123,15 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 
 				usage.inputTokens += message.usage.input_tokens
 				usage.outputTokens += message.usage.output_tokens
-				usage.cacheReadTokens = (usage.cacheReadTokens || 0) + (message.usage.cache_read_input_tokens || 0)
+				usage.cacheReadTokens = (usage.cacheReadTokens || 0) + ((message.usage as any).cache_read_input_tokens || 0)
 				usage.cacheWriteTokens =
-					(usage.cacheWriteTokens || 0) + (message.usage.cache_creation_input_tokens || 0)
+					(usage.cacheWriteTokens || 0) + ((message.usage as any).cache_creation_input_tokens || 0)
 
 				continue
 			}
 
 			if (chunk.type === "result" && "result" in chunk) {
-				usage.totalCost = isPaidUsage ? chunk.total_cost_usd : 0
+				usage.totalCost = isPaidUsage ? (chunk as any).total_cost_usd || 0 : 0
 
 				yield usage
 			}

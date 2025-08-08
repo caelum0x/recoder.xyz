@@ -1,9 +1,9 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { ApiHandler, SingleCompletionHandler } from ".."
-import { ApiHandlerOptions, FireworksModelId, fireworksDefaultModelId, fireworksModels } from "@recoder/shared"
+import { ApiHandlerOptions, FireworksModelId, fireworksDefaultModelId, fireworksModels } from "../../shared"
 import { type ModelInfo } from "@roo-code/types"
-import { calculateApiCostOpenAI } from "@recoder/shared"
+import { calculateApiCostOpenAI } from "../../shared"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
@@ -110,9 +110,8 @@ export class FireworksHandler extends BaseProvider implements ApiHandler, Single
 						inputTokens: chunk.usage.prompt_tokens || 0,
 						outputTokens: chunk.usage.completion_tokens || 0,
 						totalCost: calculateApiCostOpenAI(
-							model.info,
-							chunk.usage.prompt_tokens || 0,
-							chunk.usage.completion_tokens || 0,
+							(chunk.usage.prompt_tokens || 0) + (chunk.usage.completion_tokens || 0),
+							model.id
 						),
 					}
 				}

@@ -9,7 +9,7 @@ import {
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
+import type { ApiHandlerOptions, ModelRecord } from "../../shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStreamChunk } from "../transform/stream"
@@ -19,8 +19,8 @@ import { addCacheBreakpoints as addGeminiCacheBreakpoints } from "../transform/c
 import type { OpenRouterReasoningParams } from "../transform/reasoning"
 import { getModelParams } from "../transform/model-params"
 
-import { getModels } from "./fetchers/modelCache"
-import { getModelEndpoints } from "./fetchers/modelEndpointCache"
+import { getModels } from "./fetchers/modelCache-browser"
+import { getModelEndpoints } from "./fetchers/modelEndpointCache-browser"
 
 import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"

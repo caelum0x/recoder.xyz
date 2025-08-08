@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Sandpack, SandpackProvider, SandpackLayout, SandpackCodeEditor, SandpackPreview } from "@codesandbox/sandpack-react";
 import { amethyst, githubLight } from "@codesandbox/sandpack-themes";
-import { PlayIcon, DatabaseIcon, ServerIcon, RefreshIcon, DownloadIcon, DeployIcon } from "lucide-react";
+import { PlayIcon, DatabaseIcon, ServerIcon, RefreshCw as RefreshIcon, DownloadIcon, RocketIcon as DeployIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 
 interface EnhancedCodeRunnerProps {
@@ -635,10 +635,10 @@ auth.getCurrentUser();
           files={files}
           theme={theme === "dark" ? amethyst : githubLight}
           options={{
-            showLineNumbers: true,
-            showInlineErrors: true,
-            wrapContent: true,
-            editorHeight: 400,
+            //showLineNumbers: true,
+            //showInlineErrors: true,
+            //wrapContent: true,
+           // editorHeight: 400,
             autorun: true,
             autoReload: true,
             bundlerURL: undefined, // Use default bundler

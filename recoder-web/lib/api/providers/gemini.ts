@@ -9,8 +9,8 @@ import type { JWTInput } from "google-auth-library"
 
 import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
-import { safeJsonParse } from "@recoder/shared"
+import type { ApiHandlerOptions } from "../../shared"
+import { safeJsonParse } from "../../shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { ApiStream } from "../transform/stream"

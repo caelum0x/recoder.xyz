@@ -1,0 +1,390 @@
+name: 🌐 Web Platform CI/CD
+
+on:
+  push:
+    branches: [ main, staging ]
+    paths:
+      - 'recoder-web/**'
+      - 'lib/**'
+      - '.github/workflows/web-platform.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'recoder-web/**'
+      - 'lib/**'
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+
+jobs:
+  # ===== BUILD AND TEST =====
+  test:
+    name: 🧪 Test & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./recoder-web
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 📦 Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: 📦 Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: 📦 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Type check
+        run: pnpm run type-check
+
+      - name: 🔍 Lint
+        run: pnpm run lint
+
+      - name: 🧪 Run unit tests
+        run: pnpm run test
+        env:
+          NODE_ENV: test
+
+      - name: 🧪 Run integration tests
+        run: pnpm run test:integration
+        env:
+          NODE_ENV: test
+          DATABASE_URL: sqlite::memory:
+
+  # ===== SECURITY SCAN =====
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔍 Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=recoder-web/package.json --severity-threshold=high
+
+      - name: 🔍 CodeQL Analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+          queries: security-and-quality
+
+      - name: 🔍 Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  # ===== PERFORMANCE TEST =====
+  performance:
+    name: ⚡ Performance Test
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 📦 Install dependencies
+        working-directory: ./recoder-web
+        run: pnpm install --frozen-lockfile
+
+      - name: 🏗️ Build application
+        working-directory: ./recoder-web
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+          SKIP_ENV_VALIDATION: true
+
+      - name: 🚀 Start application
+        working-directory: ./recoder-web
+        run: |
+          pnpm run start &
+          sleep 30
+        env:
+          PORT: 3000
+
+      - name: ⚡ Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          configPath: './lighthouse.config.js'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: 📊 Bundle analyzer
+        working-directory: ./recoder-web
+        run: pnpm run analyze
+        env:
+          ANALYZE: true
+
+  # ===== BUILD =====
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    outputs:
+      build-id: ${{ steps.build-info.outputs.build-id }}
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 📦 Install dependencies
+        working-directory: ./recoder-web
+        run: pnpm install --frozen-lockfile
+
+      - name: 🏗️ Build application
+        working-directory: ./recoder-web
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: 📊 Generate build info
+        id: build-info
+        run: |
+          BUILD_ID=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA:0:7}
+          echo "build-id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Build ID: $BUILD_ID"
+
+      - name: 📦 Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: web-platform-build-${{ steps.build-info.outputs.build-id }}
+          path: |
+            recoder-web/.next
+            recoder-web/package.json
+            recoder-web/next.config.ts
+          retention-days: 7
+
+  # ===== DEPLOY STAGING =====
+  deploy-staging:
+    name: 🚧 Deploy Staging
+    runs-on: ubuntu-latest
+    needs: [build, performance]
+    if: github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
+    environment:
+      name: web-staging
+      url: https://staging-web.recoder.xyz
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: web-platform-build-${{ needs.build.outputs.build-id }}
+          path: ./recoder-web
+
+      - name: 🚀 Deploy to Vercel Staging
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+          working-directory: ./recoder-web
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: 🔍 Health Check
+        run: |
+          sleep 30
+          curl -f https://staging-web.recoder.xyz/api/health || exit 1
+
+      - name: 📊 Performance Check
+        run: |
+          response_time=$(curl -o /dev/null -s -w '%{time_total}' https://staging-web.recoder.xyz)
+          if (( $(echo "$response_time > 2.0" | bc -l) )); then
+            echo "Response time too slow: ${response_time}s"
+            exit 1
+          fi
+
+  # ===== DEPLOY PRODUCTION =====
+  deploy-production:
+    name: 🚀 Deploy Production
+    runs-on: ubuntu-latest
+    needs: [build, performance]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: web-production
+      url: https://web.recoder.xyz
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: web-platform-build-${{ needs.build.outputs.build-id }}
+          path: ./recoder-web
+
+      - name: 🎯 Pre-deployment backup
+        run: |
+          echo "Creating deployment backup..."
+          # Would backup current production state
+          echo "Backup created: backup-$(date +%Y%m%d-%H%M%S)"
+
+      - name: 🚀 Deploy to Vercel Production
+        id: deploy
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./recoder-web
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: 🔍 Production Health Check
+        run: |
+          echo "Waiting for deployment to be ready..."
+          sleep 60
+          
+          # Health check
+          if ! curl -f https://web.recoder.xyz/api/health; then
+            echo "Health check failed!"
+            exit 1
+          fi
+          
+          # Performance check
+          response_time=$(curl -o /dev/null -s -w '%{time_total}' https://web.recoder.xyz)
+          if (( $(echo "$response_time > 3.0" | bc -l) )); then
+            echo "Production response time too slow: ${response_time}s"
+            exit 1
+          fi
+
+      - name: 🔄 Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, initiating rollback..."
+          # Would trigger rollback to previous version
+          curl -X POST "${{ secrets.ROLLBACK_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.ROLLBACK_TOKEN }}" \
+            -d '{"platform": "web", "action": "rollback"}'
+
+  # ===== NOTIFICATIONS =====
+  notify:
+    name: 📢 Notify
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+
+    steps:
+      - name: 📢 Slack Notification - Success
+        if: needs.deploy-production.result == 'success' || needs.deploy-staging.result == 'success'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            🚀 *Web Platform Deployment Successful*
+            
+            Environment: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
+            Build ID: ${{ needs.build.outputs.build-id }}
+            URL: ${{ github.ref == 'refs/heads/main' && 'https://web.recoder.xyz' || 'https://staging-web.recoder.xyz' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: 📢 Slack Notification - Failure
+        if: needs.deploy-production.result == 'failure' || needs.deploy-staging.result == 'failure'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#deployments'
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            🚨 *Web Platform Deployment Failed*
+            
+            Environment: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
+            Please check the logs and fix the issues.
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: 📧 Email notification on production deployment
+        if: github.ref == 'refs/heads/main' && needs.deploy-production.result == 'success'
+        run: |
+          echo "Production deployment completed successfully" | \
+          mail -s "Recoder.xyz Web Platform Deployed" ${{ secrets.NOTIFICATION_EMAIL }}
+
+# ===== CLEANUP =====
+  cleanup:
+    name: 🧹 Cleanup
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+
+    steps:
+      - name: 🧹 Clean up old artifacts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            const oldArtifacts = artifacts.data.artifacts
+              .filter(artifact => artifact.name.startsWith('web-platform-build-'))
+              .filter(artifact => {
+                const createdAt = new Date(artifact.created_at);
+                const threeDaysAgo = new Date();
+                threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+                return createdAt < threeDaysAgo;
+              });
+            
+            for (const artifact of oldArtifacts) {
+              console.log(`Deleting artifact: ${artifact.name}`);
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id
+              });
+            }

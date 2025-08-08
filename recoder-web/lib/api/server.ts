@@ -7,13 +7,13 @@
 export async function createApiHandler(provider: string, settings: any) {
   const { buildApiHandler } = await import('./index');
   return buildApiHandler({
-    provider: provider as any,
-    settings,
+    apiProvider: provider as any,
+   // settings,
   });
 }
 
 export async function getProviderInfo(provider: string) {
-  switch (provider) {
+  switch (provider) { 
     case 'anthropic':
       const { AnthropicHandler } = await import('./providers/anthropic');
       return AnthropicHandler;

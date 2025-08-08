@@ -1,6 +1,6 @@
 import { type ModelInfo, type VertexModelId, vertexDefaultModelId, vertexModels } from "@roo-code/types"
 
-import type { ApiHandlerOptions } from "@recoder/shared/api"
+import type { ApiHandlerOptions } from "../../lib/shared"
 
 import { getModelParams } from "../transform/model-params"
 

@@ -3,7 +3,7 @@ import { Mistral } from "@mistralai/mistralai"
 
 import { type MistralModelId, mistralDefaultModelId, mistralModels, MISTRAL_DEFAULT_TEMPERATURE } from "@roo-code/types"
 
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "../../shared"
 
 import { convertToMistralMessages } from "../transform/mistral-format"
 import { ApiStream } from "../transform/stream"

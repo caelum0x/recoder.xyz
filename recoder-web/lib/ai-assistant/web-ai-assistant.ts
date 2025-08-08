@@ -4,8 +4,11 @@
  */
 
 import { unifiedWebAI, type WebGenerationOptions } from '../unified-web-ai';
-import { CrossPlatformHub } from '@recoder/cross-platform-sync';
+//import { CrossPlatformHub } from '@recoder/cross-platform-sync';
 import { EventEmitter } from 'events';
+
+// TODO: Import from @recoder/cross-platform-sync when available
+type CrossPlatformHub = any;
 
 export interface AIAssistantConfig {
   // Cross-platform Integration
@@ -159,28 +162,18 @@ export class WebAIAssistant extends EventEmitter {
         ...config.crossPlatform
       },
       ai: {
-        defaultModel: 'claude-3-sonnet',
-        fallbackModels: ['gemini-2.0-flash', 'groq-llama'],
-        maxContextTokens: 8000,
-        temperature: 0.1,
-        enableStreaming: true,
-        ...config.ai
+        ...config.ai,
+        defaultModel: config.ai.defaultModel ?? 'claude-3-sonnet',
+        temperature: config.ai.temperature ?? 0.1,
+        fallbackModels: config.ai.fallbackModels ?? ['gemini-2.0-flash', 'groq-llama']
       },
       features: {
-        codeCompletion: true,
-        inlineRefactoring: true,
-        smartSuggestions: true,
-        contextAwareness: true,
-        realTimeAnalysis: true,
-        collaborativeEditing: false,
         ...config.features
       },
       performance: {
-        completionDebounceMs: 150,
-        analysisThrottleMs: 500,
-        cacheTimeout: 300000, // 5 minutes
-        maxConcurrentRequests: 3,
-        ...config.performance
+        ...config.performance,
+        cacheTimeout: config.performance?.cacheTimeout ?? 300000, // 5 minutes
+        maxConcurrentRequests: config.performance?.maxConcurrentRequests ?? 3
       }
     };
   }
@@ -249,7 +242,7 @@ export class WebAIAssistant extends EventEmitter {
 
     } catch (error) {
       console.error('❌ Failed to initialize Web AI Assistant:', error);
-      this.emit('error', { type: 'initialization_failed', error: error.message });
+      this.emit('error', { type: 'initialization_failed', error: (error instanceof Error ? error.message : String(error)) });
       throw error;
     }
   }
@@ -258,14 +251,14 @@ export class WebAIAssistant extends EventEmitter {
     const hub = this.config.crossPlatform!.hub!;
 
     // Listen for context updates from other platforms
-    hub.on('aiContextUpdated', (context) => {
+    hub.on('aiContextUpdated', (context: any) => {
       if (this.config.crossPlatform!.syncContext) {
         this.updateContextFromRemote(context);
       }
     });
 
     // Listen for preference updates
-    hub.on('settingsUpdated', (settings) => {
+    hub.on('settingsUpdated', (settings: { aiPreferences: any; }) => {
       if (this.config.crossPlatform!.syncPreferences && settings.aiPreferences) {
         this.updatePreferencesFromRemote(settings.aiPreferences);
       }

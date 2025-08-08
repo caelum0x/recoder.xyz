@@ -13,7 +13,7 @@ interface ReasoningRequest {
   options?: {
     maxSteps?: number;
     domain?: string;
-    complexity?: 'low' | 'medium' | 'high';
+    complexity?: 'low' | 'medium' | 'high'; 
   };
 }
 
@@ -122,7 +122,7 @@ async function simulateReasoningProcess(sessionId: string) {
       // Create reasoning step
       const step: ReasoningStep = {
         id: `step_${i + 1}`,
-        type: stepTemplate.type,
+        type: stepTemplate.type as ReasoningStep['type'],
         content: generateStepContent(stepTemplate, session.problem, session.goal, i),
         confidence: calculateStepConfidence(stepTemplate.type, i, reasoningTemplate.steps.length),
         timestamp: new Date().toISOString(),
@@ -396,4 +396,4 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000); // Run cleanup every 30 minutes
 
-export { activeSessions };
+// Note: activeSessions is only used internally in this route handler

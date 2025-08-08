@@ -4,7 +4,7 @@ import type { GenerateContentConfig } from "@google/genai"
 
 import type { ModelInfo, ProviderSettings } from "@roo-code/types"
 
-import { shouldUseReasoningBudget, shouldUseReasoningEffort } from "@recoder/shared"
+import { shouldUseReasoningBudget, shouldUseReasoningEffort } from "../../shared"
 
 type ReasoningEffort = "low" | "medium" | "high"
 

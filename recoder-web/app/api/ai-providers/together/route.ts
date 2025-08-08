@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const responseStream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of stream) {
+          for await (const chunk of stream as any) {
             const content = chunk.choices?.[0]?.delta?.content;
             if (content) {
               controller.enqueue(new TextEncoder().encode(JSON.stringify({

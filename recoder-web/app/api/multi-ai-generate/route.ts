@@ -2,12 +2,14 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { Pool } from "@neondatabase/serverless";
 import { z } from "zod";
-import { generateCodeUnified } from "@/lib/ai-integration";
+import { generateWebCode } from "@/lib/unified-web-ai";
+import type { WebGenerationOptions, WebGenerationResult } from "@/lib/unified-web-ai";
 import { NextRequest } from "next/server";
+import { generateCodeUnified } from "@/lib/ai-integration";
 
 // Request schema validation
 const generateRequestSchema = z.object({
-  messageId: z.string(),
+  messageId: z.string(), 
   prompt: z.string(),
   model: z.string().optional(),
   provider: z.string().optional(),
@@ -26,7 +28,7 @@ const generateRequestSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-    const adapter = new PrismaNeon(neon);
+    const adapter = new PrismaNeon(neon as any); // Type assertion for Neon Pool compatibility
     const prisma = new PrismaClient({ adapter });
     
     const body = await req.json();
@@ -143,7 +145,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-    const adapter = new PrismaNeon(neon);
+    const adapter = new PrismaNeon(neon as any); // Type assertion for Neon Pool compatibility
     const prisma = new PrismaClient({ adapter });
 
     const message = await prisma.message.findUnique({
@@ -167,11 +169,9 @@ export async function GET(req: NextRequest) {
         // Start generation process
         generateCodeUnified(message.content, {
           preferredProvider: model ? getProviderFromModel(model) : undefined,
-          model,
           maxTokens: 8000,
           temperature: 0.2,
-          realCode: true,
-          streaming: true
+          //streaming: true
         }).then(result => {
           // Send final result
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({

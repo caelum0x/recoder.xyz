@@ -4,7 +4,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import { RequestyHandler } from "../requesty"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "../../../lib/shared"
 import { Package } from "../../../shared/package"
 
 const mockCreate = vitest.fn()

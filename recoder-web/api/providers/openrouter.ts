@@ -9,7 +9,7 @@ import {
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 } from "@roo-code/types"
 
-import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared/api"
+import type { ApiHandlerOptions, ModelRecord } from "../../lib/shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStreamChunk } from "../transform/stream"
@@ -143,11 +143,10 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			...(transforms && { transforms }),
 			...(reasoning && { reasoning }),
 		}
-		let stream
-		stream = await this.client.chat.completions.create(
+		const stream = await this.client.chat.completions.create(
 			completionParams,
 			this.customRequestOptions(metadata), // kilocode_change
-		)
+		) as AsyncIterable<any>
 
 		let lastUsage: CompletionUsage | undefined = undefined
 

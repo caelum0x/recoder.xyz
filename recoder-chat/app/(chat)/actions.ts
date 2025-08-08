@@ -1,6 +1,6 @@
 'use server';
 
-import { generateText, type UIMessage } from 'ai';
+import { type UIMessage } from 'ai';
 import { cookies } from 'next/headers';
 import {
   deleteMessagesByChatIdAfterTimestamp,
@@ -20,15 +20,16 @@ export async function generateTitleFromUserMessage({
 }: {
   message: UIMessage;
 }) {
-  const { text: title } = await generateText({
-    model: myProvider.languageModel('title-model'),
-    system: `\n
-    - you will generate a short title based on the first message a user begins a conversation with
-    - ensure it is not more than 80 characters long
-    - the title should be a summary of the user's message
-    - do not use quotes or colons`,
-    prompt: JSON.stringify(message),
-  });
+  const titleModel = await myProvider.title();
+  const { text: title } = await titleModel.generateText(`
+    Generate a short title (max 80 characters) based on this message:
+    ${JSON.stringify(message)}
+    
+    Rules:
+    - Keep it under 80 characters
+    - Make it a summary of the user's message
+    - Don't use quotes or colons
+  `);
 
   return title;
 }
