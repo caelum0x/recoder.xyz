@@ -1,0 +1,14 @@
+# Recoder.xyz Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: recoder-production
+  labels:
+    name: recoder-production
+    app: recoder
+    environment: production
+  annotations:
+    description: "Production namespace for Recoder.xyz AI development platform"
+    owner: "recoder-team"
+    created: "2025-01-08"
+    version: "v2.0"

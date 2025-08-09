@@ -1,0 +1,66 @@
+{
+  "manifest_version": 2,
+  "name": "Recoder.xyz AI Code Assistant",
+  "version": "2.0.0",
+  "description": "AI-powered development companion with local AI, GitHub integration, and real-time code assistance",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "contextMenus",
+    "clipboardWrite",
+    "http://localhost:*/*",
+    "https://recoder.xyz/*",
+    "https://www.recoder.xyz/*",
+    "https://github.com/*",
+    "https://api.github.com/*",
+    "https://gist.github.com/*"
+  ],
+
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://recoder.xyz/*",
+        "https://www.recoder.xyz/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": ["github-integration.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Recoder AI Assistant"
+  },
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "web_accessible_resources": [
+    "bridge.js",
+    "github-bridge.js"
+  ],
+
+  "applications": {
+    "gecko": {
+      "id": "recoder-ai-assistant@recoder.xyz",
+      "strict_min_version": "109.0"
+    }
+  }
+}
