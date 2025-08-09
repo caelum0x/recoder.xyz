@@ -43,7 +43,7 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 					project,
 					location,
 					googleAuthOptions: {
-						credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
+						credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, {} as JWTInput),
 					},
 				})
 			: this.options.vertexKeyFile
@@ -210,7 +210,7 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 		// If there's tiered pricing then adjust the input and output token prices
 		// based on the input tokens used.
 		if (info.tiers) {
-			const tier = info.tiers.find((tier) => inputTokens <= tier.contextWindow)
+			const tier = info.tiers.find((tier: { contextWindow: number }) => inputTokens <= tier.contextWindow)
 
 			if (tier) {
 				inputPrice = tier.inputPrice ?? inputPrice

@@ -50,7 +50,11 @@ export function convertToOpenAiMessages(
 										toolResultImages.push(part)
 										return "(see following user message for image)"
 									}
-									return part.text
+									if (part.type === "text") {
+										return part.text
+									}
+									// For SearchResultBlockParam or other types, return an empty string or handle accordingly
+									return ""
 								})
 								.join("\n") ?? ""
 					}

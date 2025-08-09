@@ -6,7 +6,7 @@ import * as os from "os"
 import axios from "axios"
 import dotenvx from "@dotenvx/dotenvx"
 
-import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
+import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../lib/shared"
 import { t } from "../../lib/i18n"
@@ -366,8 +366,8 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		// Handle :thinking suffix before checking if model exists
 		const baseModelId = modelId?.endsWith(":thinking") ? modelId.replace(":thinking", "") : modelId
 		let id =
-			baseModelId && baseModelId in geminiCliModels ? (baseModelId as GeminiCliModelId) : geminiCliDefaultModelId
-		const info: ModelInfo = geminiCliModels[id]
+			baseModelId && baseModelId in geminiModels ? (baseModelId as GeminiModelId) : geminiDefaultModelId
+		const info: ModelInfo = geminiModels[id]
 		const params = getModelParams({ format: "gemini", modelId: id, model: info, settings: this.options })
 
 		// Return the cleaned model ID

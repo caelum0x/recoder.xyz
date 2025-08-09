@@ -7,10 +7,11 @@ import sanitize from "sanitize-filename"
 
 import { ContextProxy } from "../../../core/config/ContextProxy"
 import { getCacheDirectoryPath } from "../../../utils/storage"
-import { RouterName, ModelRecord } from "../../../shared/api"
+//import { RouterName, ModelRecord } from "../../../shared/api"
 import { fileExistsAtPath } from "../../../utils/fs"
 
 import { getOpenRouterModelEndpoints } from "./openrouter"
+import { RouterName, ModelRecord } from "@/lib/shared"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 

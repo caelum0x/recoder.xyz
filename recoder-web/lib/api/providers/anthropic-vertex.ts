@@ -40,7 +40,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				region,
 				googleAuth: new GoogleAuth({
 					scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
+					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, {} as JWTInput),
 				}),
 			})
 		} else if (this.options.vertexKeyFile) {

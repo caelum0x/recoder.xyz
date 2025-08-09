@@ -6,7 +6,7 @@ import { safeWriteJson } from "../../../utils/safeWriteJson"
 
 import { ContextProxy } from "../../../core/config/ContextProxy"
 import { getCacheDirectoryPath } from "../../../utils/storage"
-import { RouterName, ModelRecord, cerebrasModels } from "../../../shared/api"
+//import { RouterName, ModelRecord, cerebrasModels } from "../../../shared/api"
 import { fileExistsAtPath } from "../../../utils/fs"
 
 import { getOpenRouterModels } from "./openrouter"
@@ -14,10 +14,11 @@ import { getRequestyModels } from "./requesty"
 import { getGlamaModels } from "./glama"
 import { getUnboundModels } from "./unbound"
 import { getLiteLLMModels } from "./litellm"
-import { GetModelsOptions } from "../../../shared/api"
+//import { GetModelsOptions } from "../../../shared/api"
 import { getKiloBaseUriFromToken } from "../../../utils/kilocode-token"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
+import { RouterName, ModelRecord, GetModelsOptions, cerebrasModels } from "@/lib/shared"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -47,7 +48,12 @@ export /*kilocode_change*/ async function readModels(router: RouterName): Promis
  * @returns The models from the cache or the fetched models.
  */
 export const getModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
-	const { provider } = options
+	const provider = options.provider as RouterName
+
+	// Provider is required for model fetching
+	if (!provider) {
+		throw new Error("Provider is required to fetch models")
+	}
 
 	// kilocode_change start: cacheKey
 	const cacheKey = JSON.stringify(options)
@@ -81,19 +87,8 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				break
 			case "litellm":
 				// Type safety ensures apiKey and baseUrl are always provided for litellm
-				models = await getLiteLLMModels(options.apiKey, options.baseUrl)
+				models = await getLiteLLMModels(options.apiKey || "", options.baseUrl || "")
 				break
-			// kilocode_change start
-			case "kilocode-openrouter":
-				models = await getOpenRouterModels({
-					openRouterBaseUrl: getKiloBaseUriFromToken(options.kilocodeToken ?? "") + "/api/openrouter",
-					headers: { Authorization: `Bearer ${options.kilocodeToken}` },
-				})
-				break
-			case "cerebras":
-				models = cerebrasModels
-				break
-			// kilocode_change end
 			case "ollama":
 				models = await getOllamaModels(options.baseUrl)
 				break

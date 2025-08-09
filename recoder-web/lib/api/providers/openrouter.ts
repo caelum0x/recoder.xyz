@@ -152,27 +152,33 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		let lastUsage: CompletionUsage | undefined = undefined
 
 		try {
-			for await (const chunk of stream) {
-				// OpenRouter returns an error object instead of the OpenAI SDK throwing an error.
-				if ("error" in chunk) {
-					const error = chunk.error as { message?: string; code?: number }
-					console.error(`OpenRouter API Error: ${error?.code} - ${error?.message}`)
-					throw new Error(`OpenRouter API Error ${error?.code}: ${error?.message}`)
-				}
+			// Type guard to check if stream is actually a Stream type
+			if ('controller' in stream) {
+				// This is a Stream, so we can iterate over it
+				for await (const chunk of stream as any) {
+					// OpenRouter returns an error object instead of the OpenAI SDK throwing an error.
+					if ("error" in chunk) {
+						const error = chunk.error as { message?: string; code?: number }
+						console.error(`OpenRouter API Error: ${error?.code} - ${error?.message}`)
+						throw new Error(`OpenRouter API Error ${error?.code}: ${error?.message}`)
+					}
 
-				const delta = chunk.choices[0]?.delta
+					const delta = chunk.choices[0]?.delta
 
-				if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
-					yield { type: "reasoning", text: delta.reasoning }
-				}
+					if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
+						yield { type: "reasoning", text: delta.reasoning }
+					}
 
-				if (delta?.content) {
-					yield { type: "text", text: delta.content }
-				}
+					if (delta?.content) {
+						yield { type: "text", text: delta.content }
+					}
 
-				if (chunk.usage) {
-					lastUsage = chunk.usage
+					if (chunk.usage) {
+						lastUsage = chunk.usage
+					}
 				}
+			} else {
+				throw new Error('Expected stream response but received non-stream response');
 			}
 		} catch (error) {
 			let errorMessage = makeOpenRouterErrorReadable(error)
