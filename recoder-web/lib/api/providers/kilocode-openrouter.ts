@@ -2,11 +2,14 @@ import { ApiHandlerOptions, ModelRecord } from "../../shared"
 import { OpenRouterHandler } from "./openrouter"
 import { getModelParams } from "../transform/model-params"
 import { getModels } from "./fetchers/modelCache-browser"
-import { DEEP_SEEK_DEFAULT_TEMPERATURE, kilocodeDefaultModelId } from "@roo-code/types"
-import { getKiloBaseUriFromToken } from "../../utils/kilocode-token"
+import { DEEP_SEEK_DEFAULT_TEMPERATURE } from "@roo-code/types"
+import { getKiloBaseUriFromToken } from "../../utils/kilocode-token" 
 import { ApiHandlerCreateMessageMetadata } from ".."
 import OpenAI from "openai"
 import { getModelEndpoints } from "./fetchers/modelEndpointCache-browser"
+
+// Define kilocodeDefaultModelId locally for web environment
+const kilocodeDefaultModelId = "claude-3-5-sonnet-20241022"
 
 /**
  * A custom OpenRouter handler that overrides the getModel function

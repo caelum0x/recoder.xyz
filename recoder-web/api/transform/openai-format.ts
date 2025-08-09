@@ -50,7 +50,15 @@ export function convertToOpenAiMessages(
 										toolResultImages.push(part)
 										return "(see following user message for image)"
 									}
-									return part.text
+									// Handle different content block types
+									if (part.type === "text") {
+										return part.text
+									}
+									if ('text' in part) {
+										return part.text
+									}
+									// For search results or other types, return a fallback
+									return JSON.stringify(part)
 								})
 								.join("\n") ?? ""
 					}

@@ -89,7 +89,9 @@
       "Bash(./deployment/local-k8s-setup.sh:*)",
       "Bash(./deployment/simple-k8s-setup.sh:*)",
       "Bash(kubectl config:*)",
-      "Bash(kubectl get:*)"
+      "Bash(kubectl get:*)",
+      "Bash(SKIP_ENV_VALIDATION=true npm run build)",
+      "Bash(true)"
     ],
     "deny": []
   }

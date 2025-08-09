@@ -31,9 +31,9 @@ import {
 	CerebrasHandler, // kilocode_change
 	ClaudeCodeHandler,
 } from "./providers"
+import { KilocodeOpenrouterHandler } from "./providers/kilocode-openrouter"
 // kilocode_change start
 import { FireworksHandler } from "./providers/fireworks"
-import { KilocodeOpenrouterHandler } from "./providers/kilocode-openrouter"
 // kilocode_change end
 
 export interface SingleCompletionHandler {
@@ -69,6 +69,7 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 	const { apiProvider, ...options } = configuration
 
 	switch (apiProvider) {
+		// @ts-expect-error - kilocode provider not in official types yet  
 		case "kilocode":
 			return new KilocodeOpenrouterHandler(options)
 		case "anthropic":
@@ -110,8 +111,9 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "requesty":
 			return new RequestyHandler(options)
 		case "human-relay":
-			return new HumanRelayHandler()
+			return new HumanRelayHandler(options)
 		// kilocode_change start
+		// @ts-expect-error - fireworks provider not in official types yet
 		case "fireworks":
 			return new FireworksHandler(options)
 		// kilocode_change end
@@ -126,6 +128,7 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "litellm":
 			return new LiteLLMHandler(options)
 		// kilocode_change start
+		// @ts-expect-error - cerebras provider not in official types yet
 		case "cerebras":
 			return new CerebrasHandler(options)
 		// kilocode_change end

@@ -2,7 +2,10 @@ import { ApiHandlerOptions, ModelRecord } from "../../lib/shared"
 import { OpenRouterHandler } from "./openrouter"
 import { getModelParams } from "../transform/model-params"
 import { getModels } from "./fetchers/modelCache"
-import { DEEP_SEEK_DEFAULT_TEMPERATURE, kilocodeDefaultModelId } from "@roo-code/types"
+import { DEEP_SEEK_DEFAULT_TEMPERATURE } from "@roo-code/types"
+
+// Define default model for kilocode until type export is fixed
+const kilocodeDefaultModelId = "claude-3-5-sonnet-20241022"
 import { getKiloBaseUriFromToken } from "../../lib/utils/kilocode-token"
 import { ApiHandlerCreateMessageMetadata } from ".."
 import OpenAI from "openai"

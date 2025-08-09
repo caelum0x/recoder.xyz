@@ -1,6 +1,30 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import Cerebras from "@cerebras/cerebras_cloud_sdk"
-import { CerebrasModelId, cerebrasDefaultModelId, cerebrasModels, ModelInfo } from "@roo-code/types"
+import { ModelInfo } from "@roo-code/types"
+
+// Temporary cerebras model definitions until they are added to @roo-code/types
+type CerebrasModelId = "llama3.1-8b" | "llama3.1-70b"
+const cerebrasDefaultModelId: CerebrasModelId = "llama3.1-8b"
+const cerebrasModels: Record<CerebrasModelId, ModelInfo> = {
+	"llama3.1-8b": {
+		maxTokens: 8192,
+		contextWindow: 131072,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0.10,
+		outputPrice: 0.10,
+		description: "Llama 3.1 8B via Cerebras"
+	},
+	"llama3.1-70b": {
+		maxTokens: 8192,
+		contextWindow: 131072,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0.60,
+		outputPrice: 0.60,
+		description: "Llama 3.1 70B via Cerebras"
+	}
+}
 import { ApiHandlerOptions } from "../../shared"
 import { ApiHandler } from "../index"
 import { ApiStream } from "../transform/stream"

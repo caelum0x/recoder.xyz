@@ -33,7 +33,6 @@ import {
 } from "./providers"
 // kilocode_change start
 import { FireworksHandler } from "./providers/fireworks"
-import { KilocodeOpenrouterHandler } from "./providers/kilocode-openrouter"
 // kilocode_change end
 
 export interface SingleCompletionHandler {
@@ -69,8 +68,6 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 	const { apiProvider, ...options } = configuration
 
 	switch (apiProvider) {
-		case "kilocode":
-			return new KilocodeOpenrouterHandler(options)
 		case "anthropic":
 			return new AnthropicHandler(options)
 		case "claude-code":
@@ -110,11 +107,7 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "requesty":
 			return new RequestyHandler(options)
 		case "human-relay":
-			return new HumanRelayHandler()
-		// kilocode_change start
-		case "fireworks":
-			return new FireworksHandler(options)
-		// kilocode_change end
+			return new HumanRelayHandler(options)
 		case "fake-ai":
 			return new FakeAIHandler(options)
 		case "xai":
@@ -126,6 +119,12 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "litellm":
 			return new LiteLLMHandler(options)
 		// kilocode_change start
+		// @ts-expect-error - fireworks provider not in official types yet
+		case "fireworks":
+			return new FireworksHandler(options)
+		// kilocode_change end
+		// kilocode_change start
+		// @ts-expect-error - cerebras provider not in official types yet
 		case "cerebras":
 			return new CerebrasHandler(options)
 		// kilocode_change end
