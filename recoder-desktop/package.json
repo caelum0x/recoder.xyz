@@ -12,6 +12,14 @@
     "build-linux": "electron-builder --linux",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
+    "dist-mac": "electron-builder --mac",
+    "dist-win": "electron-builder --win",
+    "dist-linux": "electron-builder --linux",
+    "dist-all": "electron-builder --mac --win --linux",
+    "release": "electron-builder --publish=always",
+    "release-mac": "electron-builder --mac --publish=always",
+    "release-win": "electron-builder --win --publish=always",
+    "release-linux": "electron-builder --linux --publish=always",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
@@ -41,37 +49,115 @@
     "appId": "xyz.recoder.desktop",
     "productName": "Recoder Desktop",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "assets"
     },
     "files": [
       "src/**/*",
       "assets/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!node_modules/.cache",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/",
+        "to": "assets/",
+        "filter": ["**/*"]
+      }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "assets/icon.icns",
-      "hardenedRuntime": true,
-      "entitlements": "assets/entitlements.mac.plist"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "assets/icon.png",
-      "category": "Development"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Recoder Desktop",
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        },
+        {
+          "target": "rpm",
+          "arch": ["x64"]
+        },
+        {
+          "target": "tar.gz",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Development",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "synopsis": "AI-powered development companion",
+      "description": "Recoder Desktop provides seamless access to local AI models (Ollama, LM Studio) and cloud AI providers for enhanced development productivity."
+    },
+    "deb": {
+      "depends": ["gconf2", "gconf-service", "libnotify4", "libappindicator1", "libxtst6", "libnss3"]
+    },
+    "rpm": {
+      "depends": ["libnotify", "libappindicator", "libXtst"]
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "publish": {
       "provider": "github",
       "owner": "recoder-xyz",
-      "repo": "recoder-desktop"
-    }
+      "repo": "recoder-desktop",
+      "releaseType": "release"
+    },
+    "compression": "maximum",
+    "removePackageScripts": true
   },
   "repository": {
     "type": "git",

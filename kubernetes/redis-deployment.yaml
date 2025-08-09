@@ -1,0 +1,130 @@
+# Redis Cache Deployment
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: recoder-redis-pvc
+  namespace: recoder-production
+  labels:
+    app: recoder-redis
+    tier: cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recoder-redis
+  namespace: recoder-production
+  labels:
+    app: recoder-redis
+    tier: cache
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: recoder-redis
+      tier: cache
+  template:
+    metadata:
+      labels:
+        app: recoder-redis
+        tier: cache
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+          - redis-server
+          - /etc/redis/redis.conf
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: recoder-redis-secret
+              key: REDIS_PASSWORD
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+          readOnly: true
+        livenessProbe:
+          exec:
+            command:
+              - redis-cli
+              - --raw
+              - incr
+              - ping
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          exec:
+            command:
+              - redis-cli
+              - --raw
+              - incr
+              - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: recoder-redis-pvc
+      - name: redis-config
+        configMap:
+          name: recoder-redis-config
+          items:
+          - key: redis.conf
+            path: redis.conf
+      securityContext:
+        fsGroup: 999
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recoder-redis
+  namespace: recoder-production
+  labels:
+    app: recoder-redis
+    tier: cache
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+  selector:
+    app: recoder-redis
+    tier: cache

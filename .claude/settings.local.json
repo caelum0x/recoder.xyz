@@ -82,7 +82,9 @@
       "Bash(PORT=3003 npx tsx src/simple-server.ts)",
       "Bash(PORT=3004 npx tsx src/server.ts)",
       "Bash(PORT=3005 npm start)",
-      "Bash(PORT=3003 node:*)"
+      "Bash(PORT=3003 node:*)",
+      "Bash(docker-compose:*)",
+      "Bash(zip:*)"
     ],
     "deny": []
   }
