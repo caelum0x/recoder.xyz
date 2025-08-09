@@ -18,12 +18,7 @@ import { getLMStudioModels } from "./lmstudio"
 const memoryCache = new Map<string, { data: ModelRecord; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-// Browser-safe cache key generator
-function getKiloBaseUriFromToken(token: string): string {
-  return token ? 'https://kilocode.co' : ''; // Placeholder implementation
-}
-
-// Browser-safe cache operations
+// Browser-safe cache operations (stubs for compatibility)
 export async function writeModels(router: RouterName, data: ModelRecord): Promise<void> {
   // Browser-safe: Store in memory only
   const cacheKey = `${router}_models`;
@@ -47,7 +42,12 @@ export async function readModels(router: RouterName): Promise<ModelRecord | unde
  * Browser-safe version using only in-memory cache.
  */
 export const getModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
-  const { provider } = options;
+  const provider = options.provider as RouterName
+
+  // Provider is required for model fetching
+  if (!provider) {
+    throw new Error("Provider is required to fetch models")
+  }
 
   const cacheKey = JSON.stringify(options);
   const cached = memoryCache.get(cacheKey);
@@ -77,16 +77,7 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
         models = await getUnboundModels(options.apiKey);
         break;
       case "litellm":
-        models = await getLiteLLMModels(options.apiKey, options.baseUrl);
-        break;
-      case "kilocode-openrouter":
-        models = await getOpenRouterModels({
-          openRouterBaseUrl: getKiloBaseUriFromToken(options.kilocodeToken ?? "") + "/api/openrouter",
-          headers: { Authorization: `Bearer ${options.kilocodeToken}` },
-        });
-        break;
-      case "cerebras":
-        models = cerebrasModels;
+        models = await getLiteLLMModels(options.apiKey || "", options.baseUrl || "");
         break;
       case "ollama":
         models = await getOllamaModels(options.baseUrl);
