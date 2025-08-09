@@ -119,12 +119,10 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "litellm":
 			return new LiteLLMHandler(options)
 		// kilocode_change start
-		// @ts-expect-error - fireworks provider not in official types yet
 		case "fireworks":
 			return new FireworksHandler(options)
 		// kilocode_change end
 		// kilocode_change start
-		// @ts-expect-error - cerebras provider not in official types yet
 		case "cerebras":
 			return new CerebrasHandler(options)
 		// kilocode_change end

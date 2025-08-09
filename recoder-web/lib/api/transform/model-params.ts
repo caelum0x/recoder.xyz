@@ -109,7 +109,9 @@ export function getModelParams({
 		temperature = 1.0
 	} else if (shouldUseReasoningEffort({ model, settings })) {
 		// "Traditional" reasoning models use the `reasoningEffort` parameter.
-		reasoningEffort = customReasoningEffort ?? model.reasoningEffort
+		// Filter out "minimal" as it's not supported in this implementation
+		const validCustomEffort = customReasoningEffort && customReasoningEffort !== "minimal" ? customReasoningEffort : undefined
+		reasoningEffort = validCustomEffort ?? model.reasoningEffort
 	}
 
 	const params: BaseModelParams = { maxTokens, temperature, reasoningEffort, reasoningBudget }
