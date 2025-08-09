@@ -61,17 +61,17 @@ export const getLocalFirstWebProvider = (taskType?: 'web' | 'backend' | 'mobile'
       apiKey: 'ollama',
       ollamaBaseUrl: ollamaConfig.baseURL,
       ollamaModelId: getOptimalOllamaModel(type),
-      ollamaUseMiddleOutTransform: true
+      // ollamaUseMiddleOutTransform: true
     };
-  }
+  } 
 
   if (isLMStudioAvailable()) {
     return {
       apiProvider: 'lmstudio',
-      lmStudioApiKey: 'lmstudio',
-      lmStudioBaseUrl: lmStudioConfig.baseURL,
-      lmStudioModelId: 'local-model', // User's loaded model
-      lmStudioUseMiddleOutTransform: true
+      //lmStudioApiKey: 'lmstudio',
+      //lmStudioBaseUrl: lmStudioConfig.baseURL,
+      //lmStudioModelId: 'local-model', // User's loaded model
+      //lmStudioUseMiddleOutTransform: true
     };
   }
 
@@ -124,7 +124,7 @@ export const getLocalFirstWebProvider = (taskType?: 'web' | 'backend' | 'mobile'
     return {
       apiProvider: 'xai',
       apiKey: process.env.XAI_API_KEY,
-      xaiModelId: 'grok-2-vision-1212'
+      //xaiModelId: 'grok-2-vision-1212'
     };
   }
 

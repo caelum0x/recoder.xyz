@@ -19,7 +19,7 @@ export async function callExtensionAPI(
 ) {
   try {
     const providerSettings: ProviderSettings = {
-      apiProvider: provider
+      apiProvider: provider as ProviderSettings['apiProvider']
     };
 
     // Add provider-specific settings

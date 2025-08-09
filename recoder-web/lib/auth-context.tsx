@@ -62,12 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       const session = await webBackendClient.authenticate(credentials);
+      if (!session) {
+        throw new Error('Authentication failed: session is null');
+      }
       setUser(session);
       
       // Mark web platform as active
       await webBackendClient.updatePlatformStatus('web', true);
       
-      return session;
+      return session as UserSession;
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
@@ -80,6 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       const session = await webBackendClient.register(userData);
+      if (!session) {
+        throw new Error('Registration failed: session is null');
+      }
       setUser(session);
       
       // Mark web platform as active

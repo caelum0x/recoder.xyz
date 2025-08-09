@@ -2,11 +2,11 @@ import type { Anthropic } from "@anthropic-ai/sdk"
 import { OAuth2Client } from "google-auth-library"
 import * as fs from "fs/promises"
 import * as path from "path"
-import * as os from "os"
+import * as os from "os" 
 import axios from "axios"
 // Note: dotenvx causes client-side build issues, using process.env directly
 
-import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
+import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../shared"
 import { t } from "../../i18n"
@@ -63,7 +63,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				})
 			}
 		} catch (error) {
-			throw new Error(t("common:errors.geminiCli.oauthLoadFailed", { error }))
+			throw new Error(t("common:errors.geminiCli.oauthLoadFailed"))
 		}
 	}
 
@@ -89,7 +89,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 					await fs.writeFile(credPath, JSON.stringify(this.credentials, null, 2))
 				}
 			} catch (error) {
-				throw new Error(t("common:errors.geminiCli.tokenRefreshFailed", { error }))
+				throw new Error(t("common:errors.geminiCli.tokenRefreshFailed"))
 			}
 		}
 	}
@@ -132,12 +132,12 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		// If we already have a project ID, use it
 		if (this.options.geminiCliProjectId) {
 			this.projectId = this.options.geminiCliProjectId
-			return this.projectId
+			return this.projectId!
 		}
 
 		// If we've already discovered it, return it
 		if (this.projectId) {
-			return this.projectId
+			return this.projectId!
 		}
 
 		// Lookup for the project id from the env variable
@@ -350,13 +350,9 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				throw new Error(t("common:errors.geminiCli.rateLimitExceeded"))
 			}
 			if (error.response?.status === 400) {
-				throw new Error(
-					t("common:errors.geminiCli.badRequest", {
-						details: JSON.stringify(error.response?.data) || error.message,
-					}),
-				)
+				throw new Error(t("common:errors.geminiCli.badRequest"))
 			}
-			throw new Error(t("common:errors.geminiCli.apiError", { error: error.message }))
+			throw new Error(t("common:errors.geminiCli.apiError"))
 		}
 	}
 
@@ -365,8 +361,8 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		// Handle :thinking suffix before checking if model exists
 		const baseModelId = modelId?.endsWith(":thinking") ? modelId.replace(":thinking", "") : modelId
 		let id =
-			baseModelId && baseModelId in geminiCliModels ? (baseModelId as GeminiCliModelId) : geminiCliDefaultModelId
-		const info: ModelInfo = geminiCliModels[id]
+			baseModelId && baseModelId in geminiModels ? (baseModelId as GeminiModelId) : geminiDefaultModelId
+		const info: ModelInfo = geminiModels[id]
 		const params = getModelParams({ format: "gemini", modelId: id, model: info, settings: this.options })
 
 		// Return the cleaned model ID
@@ -416,7 +412,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 			return ""
 		} catch (error) {
 			if (error instanceof Error) {
-				throw new Error(t("common:errors.geminiCli.completionError", { error: error.message }))
+				throw new Error(t("common:errors.geminiCli.completionError"))
 			}
 			throw error
 		}

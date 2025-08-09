@@ -71,7 +71,7 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 			if (chunk.type === "assistant" && "message" in chunk) {
 				const message = chunk.message
 
-				if (message.stop_reason !== null) {
+				if (message && message.stop_reason !== null) {
 					const content = "text" in message.content[0] ? message.content[0] : undefined
 
 					const isError = content && content.text.startsWith(`API Error`)
@@ -95,37 +95,43 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 					}
 				}
 
-				for (const content of message.content) {
-					switch (content.type) {
-						case "text":
-							yield {
-								type: "text",
-								text: content.text,
-							}
-							break
-						case "thinking":
-							yield {
-								type: "reasoning",
-								text: content.thinking || "",
-							}
-							break
-						case "redacted_thinking":
-							yield {
-								type: "reasoning",
-								text: "[Redacted thinking block]",
-							}
-							break
-						case "tool_use":
-							console.error(`tool_use is not supported yet. Received: ${JSON.stringify(content)}`)
-							break
+				if (message && message.content) {
+					for (const content of message.content) {
+						switch (content.type) {
+							case "text":
+								yield {
+									type: "text",
+									text: content.text,
+								}
+								break
+							case "thinking":
+								yield {
+									type: "reasoning",
+									text: (content as any).thinking || "",
+								}
+								break
+							case "redacted_thinking":
+								yield {
+									type: "reasoning",
+									text: "[Redacted thinking block]",
+								}
+								break
+							case "tool_use":
+								console.error(`tool_use is not supported yet. Received: ${JSON.stringify(content)}`)
+								break
+						}
 					}
 				}
 
-				usage.inputTokens += message.usage.input_tokens
-				usage.outputTokens += message.usage.output_tokens
-				usage.cacheReadTokens = (usage.cacheReadTokens || 0) + (message.usage.cache_read_input_tokens || 0)
-				usage.cacheWriteTokens =
-					(usage.cacheWriteTokens || 0) + (message.usage.cache_creation_input_tokens || 0)
+				if (message && message.usage) {
+					usage.inputTokens += message.usage.input_tokens
+					usage.outputTokens += message.usage.output_tokens
+					// Handle cache tokens with proper type checking
+					const usageWithCache = message.usage as any
+					usage.cacheReadTokens = (usage.cacheReadTokens || 0) + (usageWithCache.cache_read_input_tokens || 0)
+					usage.cacheWriteTokens =
+						(usage.cacheWriteTokens || 0) + (usageWithCache.cache_creation_input_tokens || 0)
+				}
 
 				continue
 			}

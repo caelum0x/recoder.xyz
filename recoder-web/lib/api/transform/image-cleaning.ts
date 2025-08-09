@@ -1,5 +1,6 @@
-import { ApiMessage } from "../../core/task-persistence/apiMessages"
+//import { ApiMessage } from "../../core/task-persistence/apiMessages"
 
+import { ApiMessage } from "@/lib/shared"
 import { ApiHandler } from "../index"
 
 /* Removes image blocks from messages if they are not supported by the Api Handler */

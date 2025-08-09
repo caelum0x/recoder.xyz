@@ -147,6 +147,9 @@ const nextConfig: NextConfig = {
         'gtoken'
       );
       
+      // Exclude VS Code specific modules from web build
+      config.externals.push('vscode');
+      
       // Node.js polyfills
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -169,8 +172,6 @@ const nextConfig: NextConfig = {
         zlib: false,
         constants: false,
         assert: false,
-        net: false,
-        tls: false,
       };
     }
 
