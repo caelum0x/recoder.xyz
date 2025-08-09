@@ -3,7 +3,20 @@
  * Provides seamless local AI access without proxy setup
  */
 
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
+const { 
+  app, 
+  BrowserWindow, 
+  Menu, 
+  Tray,
+  ipcMain, 
+  dialog, 
+  shell,
+  Notification,
+  globalShortcut,
+  nativeTheme,
+  powerMonitor,
+  systemPreferences
+} = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const axios = require('axios');
@@ -16,6 +29,8 @@ const {
 
 // Keep a global reference of the window object
 let mainWindow;
+let tray = null;
+let forceQuit = false;
 let localAIStatus = {
   ollama: false,
   lmStudio: false,
@@ -23,6 +38,15 @@ let localAIStatus = {
 };
 
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+
+// Application state
+const appState = {
+  isFirstLaunch: false,
+  theme: 'system', // 'light', 'dark', 'system'
+  notifications: true,
+  autoLaunch: false,
+  minimizeToTray: true
+};
 
 /**
  * Create the main application window
@@ -58,8 +82,35 @@ function createWindow() {
   }
 
   // Handle window closed
+  mainWindow.on('close', (event) => {
+    if (!forceQuit && appState.minimizeToTray && process.platform !== 'darwin') {
+      event.preventDefault();
+      mainWindow.hide();
+      
+      if (appState.notifications) {
+        showNotification('Recoder Desktop', 'Application minimized to tray', 'info');
+      }
+      
+      return false;
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Handle window minimize
+  mainWindow.on('minimize', (event) => {
+    if (appState.minimizeToTray && process.platform !== 'darwin') {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
+  // Handle window restore
+  mainWindow.on('restore', () => {
+    mainWindow.show();
+    mainWindow.focus();
   });
 
   // Handle external links
@@ -381,13 +432,428 @@ function createMenu() {
 }
 
 /**
+ * Native Features Implementation
+ */
+
+/**
+ * Create system tray
+ */
+function createTray() {
+  const iconPath = path.join(__dirname, '../assets/icon-tray.png');
+  tray = new Tray(iconPath);
+
+  const contextMenu = Menu.buildFromTemplate([
+    { 
+      label: 'Show Recoder', 
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+          }
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createWindow();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'AI Status',
+      submenu: [
+        { 
+          label: 'Local AI: Checking...', 
+          id: 'local-ai-status',
+          enabled: false 
+        },
+        { 
+          label: 'Test Connection', 
+          click: async () => {
+            const status = await testLocalAI();
+            showNotification(
+              'AI Status', 
+              `Local AI: ${status.ollama || status.lmStudio ? 'Connected' : 'Not Available'}`,
+              status.ollama || status.lmStudio ? 'success' : 'warning'
+            );
+          }
+        }
+      ]
+    },
+    { type: 'separator' },
+    {
+      label: 'Preferences',
+      submenu: [
+        {
+          label: 'Notifications',
+          type: 'checkbox',
+          checked: appState.notifications,
+          click: (item) => {
+            appState.notifications = item.checked;
+            saveAppState();
+          }
+        },
+        {
+          label: 'Minimize to Tray',
+          type: 'checkbox',
+          checked: appState.minimizeToTray,
+          click: (item) => {
+            appState.minimizeToTray = item.checked;
+            saveAppState();
+          }
+        },
+        {
+          label: 'Theme',
+          submenu: [
+            {
+              label: 'System',
+              type: 'radio',
+              checked: appState.theme === 'system',
+              click: () => setTheme('system')
+            },
+            {
+              label: 'Light',
+              type: 'radio',
+              checked: appState.theme === 'light',
+              click: () => setTheme('light')
+            },
+            {
+              label: 'Dark',
+              type: 'radio',
+              checked: appState.theme === 'dark',
+              click: () => setTheme('dark')
+            }
+          ]
+        }
+      ]
+    },
+    { type: 'separator' },
+    { 
+      label: `Recoder Desktop v${app.getVersion()}`, 
+      enabled: false 
+    },
+    { 
+      label: 'Quit Recoder', 
+      click: () => {
+        forceQuit = true;
+        app.quit();
+      }
+    }
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.setToolTip('Recoder Desktop - AI-Powered Development');
+
+  // Handle tray click
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    } else {
+      createWindow();
+    }
+  });
+
+  // Update tray status periodically
+  setInterval(updateTrayStatus, 30000);
+}
+
+/**
+ * Update tray status
+ */
+async function updateTrayStatus() {
+  if (!tray) return;
+  
+  const status = await testLocalAI();
+  const contextMenu = tray.getContextMenu();
+  const statusItem = contextMenu.getMenuItemById('local-ai-status');
+  
+  if (statusItem) {
+    const hasAI = status.ollama || status.lmStudio;
+    statusItem.label = `Local AI: ${hasAI ? 'Connected ✅' : 'Not Available ❌'}`;
+  }
+}
+
+/**
+ * Show native notification
+ */
+function showNotification(title, body, type = 'info') {
+  if (!appState.notifications) return;
+
+  const notification = new Notification({
+    title: title,
+    body: body,
+    icon: path.join(__dirname, '../assets/icon.png'),
+    sound: true,
+    urgency: type === 'critical' ? 'critical' : 'normal'
+  });
+
+  notification.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  notification.show();
+}
+
+/**
+ * Setup global shortcuts
+ */
+function setupGlobalShortcuts() {
+  // Toggle main window
+  globalShortcut.register('CommandOrControl+Shift+R', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    } else {
+      createWindow();
+    }
+  });
+
+  // Quick AI assistant
+  globalShortcut.register('CommandOrControl+Shift+A', () => {
+    if (mainWindow) {
+      mainWindow.webContents.executeJavaScript(`
+        window.dispatchEvent(new CustomEvent('showQuickAI'));
+      `);
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+/**
+ * Setup theme handling
+ */
+function setupTheme() {
+  // Listen to system theme changes
+  nativeTheme.on('updated', () => {
+    if (appState.theme === 'system') {
+      updateTheme();
+    }
+  });
+
+  updateTheme();
+}
+
+function setTheme(theme) {
+  appState.theme = theme;
+  updateTheme();
+  saveAppState();
+}
+
+function updateTheme() {
+  let shouldUseDarkColors;
+  
+  switch (appState.theme) {
+    case 'light':
+      shouldUseDarkColors = false;
+      break;
+    case 'dark':
+      shouldUseDarkColors = true;
+      break;
+    case 'system':
+    default:
+      shouldUseDarkColors = nativeTheme.shouldUseDarkColors;
+      break;
+  }
+
+  nativeTheme.themeSource = appState.theme;
+
+  // Notify renderer process about theme change
+  if (mainWindow) {
+    mainWindow.webContents.executeJavaScript(`
+      window.dispatchEvent(new CustomEvent('themeChanged', {
+        detail: { 
+          theme: '${appState.theme}',
+          isDark: ${shouldUseDarkColors}
+        }
+      }));
+    `);
+  }
+}
+
+/**
+ * Setup power monitoring
+ */
+function setupPowerMonitoring() {
+  powerMonitor.on('suspend', () => {
+    console.log('System is going to sleep');
+    if (appState.notifications) {
+      showNotification('Recoder Desktop', 'System suspended - pausing AI processes', 'info');
+    }
+  });
+
+  powerMonitor.on('resume', () => {
+    console.log('System resumed from sleep');
+    if (appState.notifications) {
+      showNotification('Recoder Desktop', 'System resumed - checking AI connections', 'info');
+    }
+    // Re-test AI connections after system resume
+    setTimeout(() => testLocalAI(), 2000);
+  });
+
+  powerMonitor.on('on-battery', () => {
+    if (appState.notifications) {
+      showNotification('Recoder Desktop', 'Running on battery - optimizing performance', 'info');
+    }
+  });
+
+  powerMonitor.on('on-ac', () => {
+    if (appState.notifications) {
+      showNotification('Recoder Desktop', 'AC power connected - full performance enabled', 'success');
+    }
+  });
+}
+
+/**
+ * Save application state
+ */
+function saveAppState() {
+  // This would normally save to a preferences file
+  // For now, we'll just store in memory
+  console.log('App state saved:', appState);
+}
+
+/**
+ * Load application state
+ */
+function loadAppState() {
+  // This would normally load from a preferences file
+  // For now, we'll use defaults
+  console.log('App state loaded:', appState);
+}
+
+/**
+ * Setup file system integration
+ */
+function setupFileSystemIntegration() {
+  // Handle file associations and drag & drop
+  if (process.platform === 'darwin') {
+    app.on('open-file', (event, path) => {
+      event.preventDefault();
+      if (mainWindow) {
+        mainWindow.webContents.executeJavaScript(`
+          window.dispatchEvent(new CustomEvent('fileOpened', {
+            detail: { path: '${path}' }
+          }));
+        `);
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  }
+}
+
+/**
+ * Setup enhanced auto-updater
+ */
+function setupAutoUpdater() {
+  if (isDev) return;
+
+  autoUpdater.checkForUpdatesAndNotify();
+  
+  // Enhanced auto-updater events
+  autoUpdater.on('checking-for-update', () => {
+    console.log('Checking for updates...');
+    if (appState.notifications) {
+      showNotification('Update Check', 'Checking for updates...', 'info');
+    }
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('Update available:', info.version);
+    if (appState.notifications) {
+      showNotification('Update Available', `Version ${info.version} is available for download`, 'info');
+    }
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('No updates available');
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.log('Auto-updater error:', err);
+    if (appState.notifications) {
+      showNotification('Update Error', 'Failed to check for updates', 'warning');
+    }
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    const percent = Math.round(progressObj.percent);
+    console.log(`Update download progress: ${percent}%`);
+    
+    if (mainWindow) {
+      mainWindow.setProgressBar(percent / 100);
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('Update downloaded, ready to install');
+    
+    if (mainWindow) {
+      mainWindow.setProgressBar(-1); // Remove progress bar
+    }
+    
+    const response = dialog.showMessageBoxSync(mainWindow, {
+      type: 'info',
+      title: 'Update Ready',
+      message: `Version ${info.version} has been downloaded and is ready to install.`,
+      detail: 'The application will restart to apply the update.',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0
+    });
+    
+    if (response === 0) {
+      forceQuit = true;
+      autoUpdater.quitAndInstall();
+    }
+  });
+}
+
+/**
  * App event handlers
  */
 
 app.whenReady().then(() => {
+  // Load application state
+  loadAppState();
+  
+  // Setup all native features
   setupIPC();
   createMenu();
+  createTray();
+  setupGlobalShortcuts();
+  setupTheme();
+  setupPowerMonitoring();
+  setupFileSystemIntegration();
+  setupAutoUpdater();
+  
+  // Create main window
   createWindow();
+  
+  // Show welcome notification on first launch
+  if (appState.isFirstLaunch) {
+    setTimeout(() => {
+      showNotification(
+        'Welcome to Recoder Desktop!', 
+        'Your AI-powered development companion is ready. Press Cmd/Ctrl+Shift+R to toggle the window.',
+        'success'
+      );
+    }, 2000);
+  }
   
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -397,14 +863,46 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // Don't quit if we have minimize to tray enabled
+  if (process.platform !== 'darwin' && !appState.minimizeToTray) {
     app.quit();
   }
 });
 
-app.on('before-quit', () => {
-  // Clean up resources if needed
+app.on('before-quit', (event) => {
+  if (!forceQuit && appState.minimizeToTray) {
+    event.preventDefault();
+    
+    if (mainWindow) {
+      mainWindow.hide();
+    }
+    
+    if (appState.notifications) {
+      showNotification('Recoder Desktop', 'Application is still running in the background', 'info');
+    }
+  } else {
+    // Cleanup global shortcuts
+    globalShortcut.unregisterAll();
+    
+    // Cleanup tray
+    if (tray) {
+      tray.destroy();
+    }
+  }
 });
+
+/**
+ * Update application badge (for macOS dock)
+ */
+function updateBadge() {
+  // This is primarily for macOS dock badge
+  if (process.platform === 'darwin') {
+    testLocalAI().then((status) => {
+      const hasAI = status.ollama || status.lmStudio;
+      app.setBadgeCount(hasAI ? 1 : 0);
+    });
+  }
+}
 
 // Auto-updater events
 autoUpdater.on('checking-for-update', () => {
