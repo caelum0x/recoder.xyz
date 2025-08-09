@@ -1,78 +1,37 @@
-FROM node:20
+FROM node:20-bullseye
 
-ARG TZ
-ENV TZ="$TZ"
+# Install system dependencies
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get -y install --no-install-recommends \
+        git \
+        curl \
+        wget \
+        gnupg \
+        ca-certificates \
+        build-essential \
+        python3 \
+        python3-pip \
+        vim \
+        jq \
+        zip \
+        unzip
 
-# Install basic development tools and iptables/ipset
-RUN apt update && apt install -y less \
-  git \
-  procps \
-  sudo \
-  fzf \
-  zsh \
-  man-db \
-  unzip \
-  gnupg2 \
-  gh \
-  iptables \
-  ipset \
-  iproute2 \
-  dnsutils \
-  aggregate \
-  jq
+# Install global npm packages
+RUN npm install -g \
+    typescript \
+    ts-node \
+    prettier \
+    eslint \
+    nodemon
 
-# Ensure default node user has access to /usr/local/share
-RUN mkdir -p /usr/local/share/npm-global && \
-  chown -R node:node /usr/local/share
+# Clean up
+RUN apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
-ARG USERNAME=node
-
-# Persist bash history.
-RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
-  && mkdir /commandhistory \
-  && touch /commandhistory/.bash_history \
-  && chown -R $USERNAME /commandhistory
-
-# Set `DEVCONTAINER` environment variable to help with orientation
-ENV DEVCONTAINER=true
-
-# Create workspace and config directories and set permissions
-RUN mkdir -p /workspace /home/node/.claude && \
-  chown -R node:node /workspace /home/node/.claude
-
+# Set working directory
 WORKDIR /workspace
 
-RUN ARCH=$(dpkg --print-architecture) && \
-  wget "https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_${ARCH}.deb" && \
-  sudo dpkg -i "git-delta_0.18.2_${ARCH}.deb" && \
-  rm "git-delta_0.18.2_${ARCH}.deb"
-
-# Set up non-root user
 USER node
 
-# Install global packages
-ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
-ENV PATH=$PATH:/usr/local/share/npm-global/bin
+EXPOSE 3000 3001 3002 3003
 
-# Set the default shell to zsh rather than sh
-ENV SHELL=/bin/zsh
-
-# Default powerline10k theme
-RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v1.2.0/zsh-in-docker.sh)" -- \
-  -p git \
-  -p fzf \
-  -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
-  -a "source /usr/share/doc/fzf/examples/completion.zsh" \
-  -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
-  -x
-
-# Install Claude
-RUN npm install -g @anthropic-ai/claude-code
-
-# Copy and set up firewall script
-COPY init-firewall.sh /usr/local/bin/
-USER root
-RUN chmod +x /usr/local/bin/init-firewall.sh && \
-  echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
-  chmod 0440 /etc/sudoers.d/node-firewall
-USER node
+CMD ["sleep", "infinity"]
