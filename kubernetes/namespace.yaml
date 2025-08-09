@@ -1,14 +1,35 @@
-# Recoder.xyz Kubernetes Namespace
 apiVersion: v1
 kind: Namespace
 metadata:
   name: recoder-production
   labels:
-    name: recoder-production
-    app: recoder
-    environment: production
-  annotations:
-    description: "Production namespace for Recoder.xyz AI development platform"
-    owner: "recoder-team"
-    created: "2025-01-08"
-    version: "v2.0"
+    app.kubernetes.io/name: recoder-xyz
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: recoder-platform
+    app.kubernetes.io/managed-by: kubernetes
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: recoder-development
+  labels:
+    app.kubernetes.io/name: recoder-xyz
+    app.kubernetes.io/instance: development
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: recoder-platform
+    app.kubernetes.io/managed-by: kubernetes
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: recoder-staging
+  labels:
+    app.kubernetes.io/name: recoder-xyz
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: recoder-platform
+    app.kubernetes.io/managed-by: kubernetes
