@@ -1,52 +1,68 @@
 {
-  "name": "Claude Code Sandbox",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "args": {
-      "TZ": "${localEnv:TZ:America/Los_Angeles}"
+  "name": "Recoder.xyz Development Environment",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "development",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true"
+    },
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "version": "latest",
+      "helm": "latest",
+      "minikube": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "installDirectlyFromGitHubRelease": true
     }
   },
-  "runArgs": [
-    "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW"
-  ],
+
   "customizations": {
     "vscode": {
       "extensions": [
-        "dbaeumer.vscode-eslint",
+        "ms-vscode.vscode-typescript-next",
         "esbenp.prettier-vscode",
-        "eamodio.gitlens"
+        "ms-vscode.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "ms-vscode-remote.remote-containers",
+        "GitHub.copilot",
+        "ms-vscode.docker",
+        "redhat.vscode-yaml",
+        "humao.rest-client",
+        "formulahendry.auto-rename-tag",
+        "christian-kohler.path-intellisense",
+        "ms-vscode.vscode-json"
       ],
       "settings": {
+        "typescript.preferences.quoteStyle": "single",
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.codeActionsOnSave": {
-          "source.fixAll.eslint": "explicit"
-        },
-        "terminal.integrated.defaultProfile.linux": "zsh",
-        "terminal.integrated.profiles.linux": {
-          "bash": {
-            "path": "bash",
-            "icon": "terminal-bash"
-          },
-          "zsh": {
-            "path": "zsh"
-          }
+          "source.fixAll.eslint": true
         }
       }
     }
   },
-  "remoteUser": "node",
-  "mounts": [
-    "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"
+
+  "forwardPorts": [
+    3000,  
+    3001,  
+    3002,  
+    3003,  
+    8080,  
+    9090,  
+    3100,  
+    5432,  
+    6379   
   ],
-  "remoteEnv": {
-    "NODE_OPTIONS": "--max-old-space-size=4096",
-    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
-    "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
-  },
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
-  "workspaceFolder": "/workspace",
-  "postCreateCommand": "sudo /usr/local/bin/init-firewall.sh"
+
+  "postCreateCommand": "npm install && cd packages/cli && npm install",
+  "remoteUser": "node"
 }

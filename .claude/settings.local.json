@@ -84,7 +84,12 @@
       "Bash(PORT=3005 npm start)",
       "Bash(PORT=3003 node:*)",
       "Bash(docker-compose:*)",
-      "Bash(zip:*)"
+      "Bash(zip:*)",
+      "Bash(./master-deploy.sh)",
+      "Bash(./deployment/local-k8s-setup.sh:*)",
+      "Bash(./deployment/simple-k8s-setup.sh:*)",
+      "Bash(kubectl config:*)",
+      "Bash(kubectl get:*)"
     ],
     "deny": []
   }
