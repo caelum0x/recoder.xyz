@@ -1,5 +1,8 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
+
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+/* eslint-disable @next/next/no-img-element */
 
 import Fieldset from "@/components/fieldset";
 import ArrowRightIcon from "@/components/icons/arrow-right";

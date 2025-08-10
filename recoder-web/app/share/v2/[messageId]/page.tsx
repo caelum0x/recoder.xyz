@@ -1,3 +1,5 @@
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
 import CodeRunner from "@/components/code-runner";
 import { getPrisma } from "@/lib/prisma";
 import { extractFirstCodeBlock } from "@/lib/utils";
