@@ -1,12 +1,15 @@
 "use client";
 
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/lib/auth/auth-context";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Check, AlertCircle, Smartphone, Monitor, Terminal, Code } from "lucide-react";
 
 export default function DeviceAuthorizationPage() {
-  const { data: session, status } = useSession();
+  const { user, loading } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [userCode, setUserCode] = useState(searchParams.get('user_code') || '');
@@ -15,11 +18,11 @@ export default function DeviceAuthorizationPage() {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!user && !loading) {
       // Redirect to sign in with return URL
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
+      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.href)}`);
     }
-  }, [status, router]);
+  }, [user, loading, router]);
 
   const handleAuthorizeDevice = async () => {
     if (!userCode.trim()) {
@@ -61,7 +64,7 @@ export default function DeviceAuthorizationPage() {
     return cleaned.length > 4 ? `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}` : cleaned;
   };
 
-  if (status === 'loading') {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -69,7 +72,7 @@ export default function DeviceAuthorizationPage() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return null; // Will redirect to sign in
   }
 
@@ -122,13 +125,13 @@ export default function DeviceAuthorizationPage() {
               {/* User Info */}
               <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                 <img
-                  src={session.user?.image || '/default-avatar.png'}
+                  src={user?.image || '/default-avatar.png'}
                   alt="Profile"
                   className="h-10 w-10 rounded-full"
                 />
                 <div>
-                  <p className="font-medium text-gray-900">{session.user?.name}</p>
-                  <p className="text-sm text-gray-600">{session.user?.email}</p>
+                  <p className="font-medium text-gray-900">{user?.name}</p>
+                  <p className="text-sm text-gray-600">{user?.email}</p>
                 </div>
               </div>
 

@@ -1,5 +1,8 @@
 'use client';
 
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+
 import { useState } from 'react';
 import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard';
 import { Button } from '@/components/ui/button';

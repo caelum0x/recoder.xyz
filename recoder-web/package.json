@@ -27,7 +27,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && prisma migrate deploy && NEXT_PRIVATE_SKIP_STATIC_GENERATION=1 next build",
     "start": "next start",
     "lint": "next lint && tsc --noEmit --noUnusedLocals"
   },

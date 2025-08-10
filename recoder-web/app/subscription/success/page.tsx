@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useAuth } from "@/lib/auth/auth-context";
 import { Check, Sparkles, Zap, Shield } from 'lucide-react';
 
-export default function SubscriptionSuccessPage() {
-  const { data: session } = useSession();
+function SubscriptionSuccessContent() {
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const planId = searchParams.get('plan');
   const [plan, setPlan] = useState<any>(null);
@@ -66,9 +68,9 @@ export default function SubscriptionSuccessPage() {
             Your subscription has been activated successfully
           </p>
           
-          {session?.user && (
+          {user && (
             <p className="text-gray-500">
-              Logged in as {session.user.email}
+              Logged in as {user.email}
             </p>
           )}
         </div>
@@ -178,5 +180,13 @@ export default function SubscriptionSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SubscriptionSuccessPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center px-4"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>}>
+      <SubscriptionSuccessContent />
+    </Suspense>
   );
 }

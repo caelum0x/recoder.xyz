@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, ReactNode } from 'react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from "@/lib/auth/auth-context";
 import analytics from '@/lib/analytics';
 
 interface AnalyticsContextType {
@@ -27,14 +27,14 @@ interface AnalyticsProviderProps {
 }
 
 export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
-  const { data: session } = useSession();
+  const { user } = useAuth();
 
   useEffect(() => {
     // Set user ID when session is available
-    if (session?.user?.id) {
-      analytics.setUserId(session.user.id);
+    if (user?.id) {
+      analytics.setUserId(user.id);
     }
-  }, [session]);
+  }, [user]);
 
   useEffect(() => {
     // Track initial page view

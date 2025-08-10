@@ -1,9 +1,12 @@
+'use client';
+
 /**
  * Security Dashboard
  * Admin interface for monitoring and managing router security
  */
 
-'use client';
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

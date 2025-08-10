@@ -1,3 +1,5 @@
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
 /**
  * Pricing Page for Recoder.xyz
  * 

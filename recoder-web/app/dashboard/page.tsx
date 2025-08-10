@@ -1,6 +1,9 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+
+import { useAuth } from "@/lib/auth/auth-context";
 import { useState, useEffect } from "react";
 import { redirect } from "next/navigation";
 import { getUserChats, getUserStats } from "@/app/(main)/actions";
@@ -47,7 +50,7 @@ interface UsageStats {
 }
 
 export default function Dashboard() {
-  const { data: session, status } = useSession();
+  const { user, session, loading } = useAuth();
   const [stats, setStats] = useState<UserStats>({
     generationsToday: 0,
     generationsTotal: 0,
@@ -63,18 +66,18 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      redirect("/auth/signin");
+    if (!user && !loading) {
+      redirect("/login");
     }
-  }, [status]);
+  }, [user, loading]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (user) {
       fetchUserStats();
       fetchRecentChats();
       loadDashboardData();
     }
-  }, [session]);
+  }, [user]);
 
   const fetchUserStats = async () => {
     try {
@@ -146,7 +149,7 @@ export default function Dashboard() {
     return 'bg-green-500';
   };
 
-  if (status === "loading" || isLoading) {
+  if (loading || isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -154,7 +157,7 @@ export default function Dashboard() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return null; // Will redirect
   }
 
@@ -182,10 +185,10 @@ export default function Dashboard() {
               }`}>
                 {currentPlan} Plan
               </span>
-              {session.user?.image ? (
+              {user?.image ? (
                 <Image
-                  src={session.user.image}
-                  alt={session.user.name || "User"}
+                  src={user.image}
+                  alt={user.name || "User"}
                   width={40}
                   height={40}
                   className="rounded-full"
@@ -196,8 +199,8 @@ export default function Dashboard() {
                 </div>
               )}
               <div>
-                <p className="font-medium text-gray-900">{session.user?.name}</p>
-                <p className="text-sm text-gray-600">{session.user?.email}</p>
+                <p className="font-medium text-gray-900">{user?.name}</p>
+                <p className="text-sm text-gray-600">{user?.email}</p>
               </div>
             </div>
           </div>
@@ -208,7 +211,7 @@ export default function Dashboard() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Welcome back, {session.user?.name?.split(' ')[0] || 'User'}! 👋
+            Welcome back, {user?.name?.split(' ')[0] || 'User'}! 👋
           </h2>
           <p className="text-gray-600">
             Manage your AI development workspace and access all Recoder products.
@@ -522,7 +525,7 @@ export default function Dashboard() {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Email</label>
-                  <p className="text-sm text-gray-900 mt-1">{session?.user?.email}</p>
+                  <p className="text-sm text-gray-900 mt-1">{user?.email}</p>
                 </div>
                 
                 <div>

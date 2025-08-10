@@ -1,3 +1,5 @@
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
 import { getPrisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { cache } from "react";

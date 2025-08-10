@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useAuth } from "@/lib/auth/auth-context";
 import { User, Settings, LogOut, Plus, History, Zap, Palette } from "lucide-react";
 
 import GithubIcon from "@/components/icons/github-icon";
@@ -12,7 +12,7 @@ import { getBrandConfig } from "@/lib/recoder-config";
 const brandConfig = getBrandConfig();
 
 export default function Header() {
-  const { data: session, status } = useSession();
+  const { user, loading, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -30,9 +30,10 @@ export default function Header() {
     }
   }, [showUserMenu]);
 
-  const handleSignOut = () => {
-    signOut({ callbackUrl: "/" });
+  const handleSignOut = async () => {
+    await logout();
     setShowUserMenu(false);
+    window.location.href = "/";
   };
 
   return (
@@ -85,18 +86,18 @@ export default function Header() {
         </a>
 
         {/* Authentication UI */}
-        {status === "loading" ? (
+        {loading ? (
           <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
-        ) : session ? (
+        ) : user ? (
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-200"
             >
-              {session.user?.image ? (
+              {user?.image ? (
                 <Image
-                  src={session.user.image}
-                  alt={session.user.name || "User"}
+                  src={user.image}
+                  alt={user.name || "User"}
                   width={20}
                   height={20}
                   className="rounded-full"
@@ -105,7 +106,7 @@ export default function Header() {
                 <User className="w-4 h-4" />
               )}
               <span className="hidden sm:block">
-                {session.user?.name || session.user?.email?.split('@')[0] || 'User'}
+                {user?.name || user?.email?.split('@')[0] || 'User'}
               </span>
             </button>
             
@@ -115,10 +116,10 @@ export default function Header() {
                 {/* User Info */}
                 <div className="px-4 py-3 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    {session.user?.image ? (
+                    {user?.image ? (
                       <Image
-                        src={session.user.image}
-                        alt={session.user.name || "User"}
+                        src={user.image}
+                        alt={user.name || "User"}
                         width={40}
                         height={40}
                         className="rounded-full"
@@ -130,16 +131,11 @@ export default function Header() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 truncate">
-                        {session.user?.name || "User"}
+                        {user?.name || "User"}
                       </p>
                       <p className="text-sm text-gray-600 truncate">
-                        {session.user?.email}
+                        {user?.email}
                       </p>
-                      {session.user?.username && (
-                        <p className="text-xs text-gray-500">
-                          @{session.user.username}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -202,12 +198,12 @@ export default function Header() {
             )}
           </div>
         ) : (
-          <button
-            onClick={() => signIn()}
+          <Link
+            href="/login"
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             Sign In
-          </button>
+          </Link>
         )}
 
         {/* CLI & Extension Links */}
