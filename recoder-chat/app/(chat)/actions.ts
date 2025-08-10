@@ -1,6 +1,6 @@
 'use server';
 
-import { type UIMessage } from 'ai';
+import { type UIMessage, generateText } from 'ai';
 import { cookies } from 'next/headers';
 import {
   deleteMessagesByChatIdAfterTimestamp,
@@ -20,18 +20,28 @@ export async function generateTitleFromUserMessage({
 }: {
   message: UIMessage;
 }) {
-  const titleModel = await myProvider.title();
-  const { text: title } = await titleModel.generateText(`
-    Generate a short title (max 80 characters) based on this message:
-    ${JSON.stringify(message)}
-    
-    Rules:
-    - Keep it under 80 characters
-    - Make it a summary of the user's message
-    - Don't use quotes or colons
-  `);
+  try {
+    const titleModel = await myProvider.title();
+    const { text: title } = await generateText({
+      model: titleModel,
+      prompt: `Generate a short title (max 80 characters) based on this message:
+      ${JSON.stringify(message)}
+      
+      Rules:
+      - Keep it under 80 characters
+      - Make it a summary of the user's message
+      - Don't use quotes or colons`
+    });
 
-  return title;
+    return title;
+  } catch (error) {
+    // Fallback title if generation fails
+    console.error('Title generation failed:', error);
+    const messageContent = message.content || 'New Chat';
+    return typeof messageContent === 'string' 
+      ? messageContent.substring(0, 80)
+      : 'New Chat';
+  }
 }
 
 export async function deleteTrailingMessages({ id }: { id: string }) {

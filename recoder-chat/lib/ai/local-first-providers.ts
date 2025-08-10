@@ -151,52 +151,161 @@ export class LocalAIProvider {
 // Export singleton instance
 export const localAI = new LocalAIProvider();
 
-// Export model functions for compatibility
+// Export model functions for compatibility with AI SDK
 export async function getLocalChatModel() {
   return {
-    generateText: async (prompt: string, options: any = {}) => {
-      const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
-      const response = await localAI.smartGenerate(messages, options);
-      return { text: response.content };
+    provider: 'local-ai',
+    modelId: 'local-chat',
+    specificationVersion: 'v2' as const,
+    supportedUrls: {},
+    doGenerate: async (params: any) => {
+      const { messages, ...options } = params;
+      const chatMessages: ChatMessage[] = messages.map((msg: any) => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      const response = await localAI.smartGenerate(chatMessages, options);
+      
+      return {
+        content: [{ type: 'text' as const, text: response.content }],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop' as const,
+        warnings: []
+      };
+    },
+    doStream: async function* (params: any) {
+      const { messages, ...options } = params;
+      const chatMessages: ChatMessage[] = messages.map((msg: any) => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      try {
+        const response = await localAI.smartGenerate(chatMessages, options);
+        
+        // Stream the response word by word for better UX
+        const words = response.content.split(' ');
+        let accumulated = '';
+        
+        for (const word of words) {
+          accumulated += (accumulated ? ' ' : '') + word;
+          yield {
+            type: 'text-delta',
+            textDelta: word + ' '
+          };
+          await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for streaming effect
+        }
+        
+        yield {
+          type: 'finish',
+          finishReason: 'stop' as const,
+          usage: { inputTokens: 0, outputTokens: words.length, totalTokens: words.length }
+        };
+      } catch (error) {
+        yield {
+          type: 'error',
+          error: error instanceof Error ? error : new Error('Generation failed')
+        };
+      }
     }
   };
 }
 
 export async function getLocalTitleModel() {
   return {
-    generateText: async (prompt: string, options: any = {}) => {
-      const messages: ChatMessage[] = [
+    provider: 'local-ai',
+    modelId: 'local-title',
+    specificationVersion: 'v2' as const,
+    supportedUrls: {},
+    doGenerate: async (params: any) => {
+      const { prompt } = params;
+      const titleMessages: ChatMessage[] = [
         { role: 'system', content: 'Generate a short, concise title for the following content.' },
         { role: 'user', content: prompt }
       ];
-      const response = await localAI.smartGenerate(messages, { ...options, maxTokens: 50 });
-      return { text: response.content };
+      
+      const response = await localAI.smartGenerate(titleMessages, { maxTokens: 50 });
+      
+      return {
+        content: [{ type: 'text' as const, text: response.content }],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop' as const,
+        warnings: []
+      };
+    },
+    doStream: async function* (params: any) {
+      const { prompt } = params;
+      const titleMessages: ChatMessage[] = [
+        { role: 'system', content: 'Generate a short, concise title for the following content.' },
+        { role: 'user', content: prompt }
+      ];
+      
+      try {
+        const response = await localAI.smartGenerate(titleMessages, { maxTokens: 50 });
+        
+        yield {
+          type: 'text-delta',
+          textDelta: response.content
+        };
+        
+        yield {
+          type: 'finish',
+          finishReason: 'stop' as const,
+          usage: { inputTokens: 0, outputTokens: 10, totalTokens: 10 }
+        };
+      } catch (error) {
+        yield {
+          type: 'error',
+          error: error instanceof Error ? error : new Error('Generation failed')
+        };
+      }
     }
   };
 }
 
 export async function getLocalReasoningModel() {
   return {
-    generateText: async (prompt: string, options: any = {}) => {
-      const messages: ChatMessage[] = [
+    provider: 'local-ai',
+    modelId: 'local-reasoning',
+    doGenerate: async (params: any) => {
+      const { messages, ...options } = params;
+      const reasoningMessages: ChatMessage[] = [
         { role: 'system', content: 'Think step by step and provide detailed reasoning.' },
-        { role: 'user', content: prompt }
+        ...messages.map((msg: any) => ({ role: msg.role, content: msg.content }))
       ];
-      const response = await localAI.smartGenerate(messages, options);
-      return { text: response.content };
+      
+      const response = await localAI.smartGenerate(reasoningMessages, options);
+      
+      return {
+        content: [{ type: 'text' as const, text: response.content }],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop' as const,
+        warnings: []
+      };
     }
   };
 }
 
 export async function getLocalArtifactModel() {
   return {
-    generateText: async (prompt: string, options: any = {}) => {
-      const messages: ChatMessage[] = [
+    provider: 'local-ai',
+    modelId: 'local-artifact',
+    doGenerate: async (params: any) => {
+      const { messages, ...options } = params;
+      const artifactMessages: ChatMessage[] = [
         { role: 'system', content: 'Generate clean, production-ready code without explanations.' },
-        { role: 'user', content: prompt }
+        ...messages.map((msg: any) => ({ role: msg.role, content: msg.content }))
       ];
-      const response = await localAI.smartGenerate(messages, options);
-      return { text: response.content };
+      
+      const response = await localAI.smartGenerate(artifactMessages, options);
+      
+      return {
+        content: [{ type: 'text' as const, text: response.content }],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop' as const,
+        warnings: []
+      };
     }
   };
 }
