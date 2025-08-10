@@ -1,3 +1,5 @@
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { cache } from "react";

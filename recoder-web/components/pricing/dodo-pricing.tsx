@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from "@/lib/auth/auth-context";
 import { Check, Star, Zap, Shield, Sparkles } from 'lucide-react';
 
 interface Plan {
@@ -16,7 +16,7 @@ interface Plan {
 }
 
 export default function DodoPayPricing() {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState<string | null>(null);
@@ -40,9 +40,9 @@ export default function DodoPayPricing() {
   };
 
   const handleSubscribe = async (planId: string) => {
-    if (!session) {
+    if (!user) {
       // Redirect to login
-      window.location.href = '/auth/signin?callbackUrl=/pricing';
+      window.location.href = '/login?callbackUrl=/pricing';
       return;
     }
 
