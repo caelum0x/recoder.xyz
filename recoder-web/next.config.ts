@@ -83,6 +83,16 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Disable static generation for pages using auth context to avoid SSR issues  
+  output: 'standalone',
+  trailingSlash: false,
+  // Disable static optimization to prevent SSR issues with auth context
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+      static: 0,
+    },
+  },
   serverExternalPackages: [
     "@codesandbox/sdk",
     "google-auth-library",

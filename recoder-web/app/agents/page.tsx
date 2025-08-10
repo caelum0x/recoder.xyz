@@ -6,6 +6,9 @@
 
 import AgenticWorkflowInterface from '@/components/agents/agentic-workflow-interface';
 
+// Force dynamic rendering to avoid SSR issues with auth context
+export const dynamic = 'force-dynamic';
+
 export default function AgentsPage() {
   return (
     <div className="container mx-auto px-4 py-8">

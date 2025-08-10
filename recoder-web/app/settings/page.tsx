@@ -1,6 +1,9 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+
+import { useAuth } from "@/lib/auth/auth-context";
 import { useState, useEffect } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -21,7 +24,7 @@ interface UserSettings {
 }
 
 export default function Settings() {
-  const { data: session, status } = useSession();
+  const { user, loading } = useAuth();
   const [settings, setSettings] = useState<UserSettings>({
     theme: "light",
     defaultModel: "claude-3-5-sonnet-20241022",
@@ -36,16 +39,16 @@ export default function Settings() {
   const [saveMessage, setSaveMessage] = useState("");
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      redirect("/auth/signin");
+    if (!user && !loading) {
+      redirect("/login");
     }
-  }, [status]);
+  }, [user, loading]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (user) {
       loadUserSettings();
     }
-  }, [session]);
+  }, [user]);
 
   const loadUserSettings = async () => {
     try {
@@ -109,7 +112,7 @@ export default function Settings() {
     }));
   };
 
-  if (status === "loading") {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -117,7 +120,7 @@ export default function Settings() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return null; // Will redirect
   }
 
@@ -176,10 +179,10 @@ export default function Settings() {
             </div>
             <div className="p-6">
               <div className="flex items-center gap-4">
-                {session.user?.image ? (
+                {user?.image ? (
                   <Image
-                    src={session.user.image}
-                    alt={session.user.name || "User"}
+                    src={user.image}
+                    alt={user.name || "User"}
                     width={64}
                     height={64}
                     className="rounded-full"
@@ -190,11 +193,8 @@ export default function Settings() {
                   </div>
                 )}
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900">{session.user?.name}</h3>
-                  <p className="text-gray-600">{session.user?.email}</p>
-                  {session.user?.username && (
-                    <p className="text-sm text-gray-500">@{session.user.username}</p>
-                  )}
+                  <h3 className="text-lg font-medium text-gray-900">{user?.name}</h3>
+                  <p className="text-gray-600">{user?.email}</p>
                 </div>
               </div>
             </div>
