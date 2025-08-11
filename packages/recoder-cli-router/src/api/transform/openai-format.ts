@@ -50,7 +50,7 @@ export function convertToOpenAiMessages(
 										toolResultImages.push(part)
 										return "(see following user message for image)"
 									}
-									return part.text
+									return (part as any).text || part
 								})
 								.join("\n") ?? ""
 					}

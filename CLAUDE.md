@@ -1,241 +1,304 @@
-# CLAUDE.md - Recoder.xyz Project Context
+# CLAUDE.md
 
-> 🤖 **For Claude Code CLI**: Essential context for understanding the recoder.xyz codebase and development approach.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 📋 Table of Contents
+## 📋 Project Overview
 
-1. [🎯 Project Overview](#-project-overview)
-2. [🏗️ Architecture](#-architecture) 
-3. [🧠 AI Integration](#-ai-integration)
-4. [🤖 Agent System](#-agent-system)
-5. [💻 CLI Interface](#-cli-interface)
-6. [🔄 Development Workflow](#-development-workflow)
-7. [🔒 Security](#-security)
-8. [📚 Development Guide](#-development-guide)
-9. [🔗 Quick Links](#-quick-links)
-
----
-
-## 🎯 Project Overview
-
-### Vision
-**Recoder.xyz** is a superior AI-powered development CLI that generates **REAL, PRODUCTION-READY CODE** - not mock implementations.
+**Recoder.xyz** is an AI-powered development CLI that generates **REAL, PRODUCTION-READY CODE** - not mock implementations. It's a comprehensive development ecosystem with multiple platforms and specialized AI agents.
 
 ### Core Mission
 - **Real Functionality First**: Every generated line must work in production
-- **Multi-AI Intelligence**: Claude + Groq + Gemini + Ollama (not OpenAI for coding)
+- **Multi-AI Intelligence**: Claude + Groq + Gemini + Ollama + OpenAI with smart routing
 - **Developer Productivity**: 10x speed without sacrificing quality
 - **Enterprise Ready**: Security, compliance, scalability built-in
 
-### Key Differentiators
-Unlike GitHub Copilot, claude-cli, openai-cli, gemini-cli:
-- ✅ **Real database operations** with actual CRUD
-- ✅ **Real blockchain contracts** that deploy and execute  
-- ✅ **Real payment processing** through Stripe/PayPal
-- ✅ **Real AI integrations** with working APIs
-- ✅ **Real deployment pipelines** with Docker/Kubernetes
-
----
-
 ## 🏗️ Architecture
 
-### Project Structure
+### High-Level Structure
+This is a monorepo using pnpm workspace with the following key components:
+
 ```
 recoder.xyz/
-├── packages/cli/           # Main CLI (your primary focus)
-├── packages/shared/        # Shared types and utilities
-├── backend/               # API server
-├── production-engine/     # Code validation
-├── examples/             # Real working examples
-├── claude-cli/           # Reference (git clone)
-├── openai-cli/           # Reference (git clone)
-└── gemini-cli/           # Reference (git clone)
+├── packages/                    # Core packages (pnpm workspace)
+│   ├── cli/                    # Main CLI interface (@recoder/cli)
+│   ├── shared/                 # Shared utilities and types
+│   ├── recoder-cli-router/     # AI model routing system
+│   ├── analytics/              # Usage analytics and monitoring
+│   ├── intelligence/           # Adaptive AI learning
+│   ├── security/               # Security scanning and protection
+│   └── plugins/                # Plugin system
+├── backend/                    # API server (Express.js + TypeScript)
+├── production-engine/          # Real code generation service
+├── recoder-web/               # Next.js web application
+├── recoder-chat/              # AI chat interface (Next.js)
+├── recoder-extension/         # VS Code extension
+├── recoder-desktop/           # Electron desktop app
+├── recoder-chat-mobile/       # React Native mobile app
+└── browser-extension/         # Browser extension
 ```
 
-### Core Components
-- **CLI Package**: Main developer interface
-- **AI Hub**: Multi-provider orchestration  
-- **Agent Manager**: Specialized AI agents
-- **Production Engine**: Real functionality validation
-- **Security Layer**: Prompt sanitization, vulnerability scanning
+### Key Services
+- **Backend API** (port 3001): User management, project storage, billing
+- **Production Engine** (port 3002): Real code generation and validation
+- **CLI**: Primary developer interface with natural language processing
+- **Web Platforms**: Multiple web interfaces for different use cases
 
----
+## 🛠️ Development Commands
 
-## 🧠 AI Integration
-
-### Smart Model Selection
-```typescript
-// How recoder connects to AI APIs
-const aiProviders = {
-  claude: new AnthropicAPI(process.env.ANTHROPIC_API_KEY),    // Complex logic
-  groq: new GroqAPI(process.env.GROQ_API_KEY),              // Fast coding
-  gemini: new GoogleGenAIAPI(process.env.GOOGLE_API_KEY),   // Multimodal
-  ollama: new OllamaAPI(process.env.OLLAMA_BASE_URL),       // Local/privacy
-  openai: new OpenAIAPI(process.env.OPENAI_API_KEY)         // Backup only
-};
-```
-
-### Model Specialization
-- **Claude**: Blockchain, security, complex reasoning
-- **Groq**: React/Next.js, rapid prototyping, API endpoints
-- **Gemini**: Large codebases, multimodal, documentation
-- **Ollama**: Private projects, custom models, offline
-- **OpenAI**: Limited use (poor at coding tasks)
-
----
-
-## 🤖 Agent System
-
-### Built-in Agents
+### Setup & Installation
 ```bash
-# Specialized agents for different domains
-🔗 Blockchain Agent  - Solana, Ethereum, DeFi
-🌐 Web Agent        - React, Next.js, Vue
-📱 Mobile Agent     - React Native, Flutter
-🤖 AI Agent         - OpenAI, RAG, ML pipelines
-⚙️ Backend Agent    - APIs, databases, microservices
-🔒 Security Agent   - Vulnerability scanning, audits
-🚀 DevOps Agent     - Docker, Kubernetes, CI/CD
+# Quick setup (recommended for development)
+npm run setup
+
+# Full setup with all features
+npm run setup:full
+
+# Install all dependencies across workspace
+pnpm install --recursive
 ```
 
-### Agent Collaboration
+### Development
 ```bash
-recoder "build a social media app"
-# → Web Agent: React frontend
-# → Backend Agent: Node.js API  
-# → Mobile Agent: React Native app
-# → Security Agent: Authentication
-# → DevOps Agent: Docker deployment
+# Start all services (backend + production engine + web apps)
+npm run dev:all
+
+# Individual services
+npm run dev:backend      # Backend API (port 3001)
+npm run dev:engine       # Production engine (port 3002) 
+npm run dev:cli          # CLI in watch mode
+npm run dev:web          # Web platform
+npm run dev:chat         # Chat platform
+npm run dev:mobile       # Mobile app (Expo)
+npm run dev:desktop      # Desktop app
 ```
 
-### Custom Agents
-Users can create domain-specific agents conversationally:
+### Building
 ```bash
-recoder "create a cybersecurity agent focused on smart contracts"
+# Build everything
+npm run build
+
+# Build specific components
+npm run build:cli        # CLI package
+npm run build:backend    # Backend API
+npm run build:engine     # Production engine
+npm run build:web        # Web applications
+npm run build:extension  # VS Code extension (creates VSIX)
 ```
 
----
-
-## 💻 CLI Interface
-
-### Primary Interface (Conversational)
+### Testing
 ```bash
-# Natural language commands (like Claude Code CLI)
+# Run all tests
+npm run test
+
+# Test specific areas
+npm run test:cli
+npm run test:backend
+npm run test:integration
+```
+
+### Linting & Type Checking
+```bash
+# Lint all code
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+
+# TypeScript type checking
+npm run typecheck
+```
+
+### Production
+```bash
+# Production build
+npm run production
+
+# Docker containers
+npm run docker:build
+npm run docker:up
+```
+
+## 🔧 Key Technologies
+
+### Core Stack
+- **Language**: TypeScript (primary), JavaScript (legacy)
+- **Package Manager**: pnpm with workspaces
+- **Build System**: Native TypeScript compilation + custom scripts
+- **Runtime**: Node.js 18+
+
+### Backend Services
+- **API Server**: Express.js with TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Caching**: Redis
+- **Authentication**: JWT + OAuth providers
+- **Security**: Helmet, CORS, rate limiting
+
+### Frontend Platforms
+- **Web**: Next.js 15 with React 19
+- **Chat**: Next.js with AI streaming
+- **Mobile**: React Native with Expo
+- **Desktop**: Electron
+- **Extension**: VS Code extension API
+
+### AI Integration
+- **Providers**: Anthropic (Claude), Groq, Google (Gemini), OpenAI, Ollama
+- **Routing**: Intelligent model selection based on task type
+- **Local AI**: Ollama integration for privacy-focused development
+- **Caching**: Response caching and consensus systems
+
+## 🚀 CLI Usage Patterns
+
+The CLI supports both traditional commands and natural language:
+
+### Natural Language (Primary Interface)
+```bash
 recoder "build a Solana DEX with real token swapping"
-recoder "add authentication to my existing project"
-recoder "deploy this to production with monitoring"
-
-# Interactive mode
-recoder
-> I want to build a photo app with filters
-🤖 Great! Let me ask a few questions...
+recoder "add authentication to my React app"
+recoder "deploy this to AWS with monitoring"
 ```
 
-### Project Context Understanding
+### Traditional Commands
 ```bash
-# Recoder automatically reads:
-📁 knowledge.md - Project docs, architecture, conventions  
-📁 recoder.md - AI preferences, agent configurations
-📁 package.json - Dependencies, scripts, metadata
-📁 README.md - Project overview
-
-# Example analysis:
-🤖 "I've analyzed your Solana DeFi project. Based on knowledge.md,
-   I see you're using Anchor with yield farming. From recoder.md,
-   I'll use Claude for security audits and Groq for UI components."
+recoder generate "description" --type web --validate
+recoder plan "project description" --detailed
+recoder validate ./my-project --fix
+recoder chat --model claude-3-sonnet
+recoder agent "create smart contract" --consensus
 ```
 
-### Traditional Commands (Secondary)
+## 🔒 Security & Quality
+
+### Built-in Security Features
+- AI prompt sanitization to prevent injection attacks
+- Code vulnerability scanning with SAST/DAST
+- Secret detection and redaction
+- Real-time security monitoring
+- Compliance checking (GDPR, SOC 2, HIPAA)
+
+### Code Quality Standards
+- **Real Functionality**: All generated code must work in production
+- **Type Safety**: Full TypeScript implementation across codebase
+- **Testing**: Comprehensive test coverage required
+- **Performance**: Production-grade optimization
+
+## 💡 Development Guidelines
+
+### Working with AI Systems
+1. **Multi-Model Strategy**: Different AI providers excel at different tasks
+   - Claude: Complex reasoning, security, blockchain
+   - Groq: Fast React/Next.js development
+   - Gemini: Large codebase analysis, multimodal
+   - Ollama: Local/private development
+
+2. **Context Awareness**: CLI reads project configuration files:
+   - `knowledge.md`: Project documentation and conventions
+   - `recoder.md`: AI preferences and agent configuration
+   - `package.json`: Dependencies and scripts
+   - `README.md`: Project overview
+
+### Code Generation Philosophy
+1. **Real Over Pretty**: Working functionality trumps elegant code
+2. **Production First**: Code must be immediately deployable
+3. **Security by Default**: Assume hostile input, build defensively
+4. **Validation Required**: All generated code goes through reality validation
+
+### Common Development Tasks
+
+#### Adding New AI Provider
+1. Add provider implementation in `packages/cli/src/api/providers/`
+2. Update router configuration in `packages/recoder-cli-router/`
+3. Add tests in corresponding `__tests__/` directory
+4. Update documentation
+
+#### Adding New Command
+1. Create command file in `packages/cli/src/commands/`
+2. Register in main CLI entry point (`packages/cli/src/index.ts`)
+3. Add help documentation and examples
+4. Include in test suite
+
+#### Working with Backend API
+- Backend runs on port 3001 by default
+- API routes are in `backend/src/routes/`
+- Authentication required for most endpoints
+- Rate limiting and validation middleware included
+
+#### Debugging Tips
+- Use `--verbose` flag for detailed logging
+- Check service health: `npm run health`
+- View analytics: `recoder analytics --health`
+- Monitor performance: `curl http://localhost:3001/metrics`
+
+## 📊 Monitoring & Analytics
+
+### Available Metrics
+- System health and performance scores
+- AI model usage and performance
+- Cost analysis and optimization
+- Security scan results
+- User activity and patterns
+
+### Health Checks
 ```bash
-recoder generate "description" --agent blockchain-expert
-recoder plan "project description" --detailed  
-recoder validate --test-real-functionality
-recoder agent create custom-name --specialization domain
+# Overall system health
+npm run health
+
+# Individual service health
+curl http://localhost:3001/health  # Backend
+curl http://localhost:3002/health  # Production Engine
 ```
 
----
+## 🔄 Deployment
 
-## 🔄 Development Workflow
+### Local Development
+All services can run locally with hot reload enabled through the `npm run dev:all` command.
 
-### 1. Planning Phase
+### Production Deployment
+- Docker Compose configuration available
+- Kubernetes manifests in `deployment/kubernetes/`
+- Environment variables required for AI API keys
+- Redis and PostgreSQL dependencies
+
+### Environment Configuration
+Key environment variables:
 ```bash
-recoder "plan a web3 explorer using solana web3.js and next.js"
+# AI Providers
+ANTHROPIC_API_KEY=sk-ant-...
+GROQ_API_KEY=gsk_...
+GOOGLE_API_KEY=AIza...
+OPENAI_API_KEY=sk-...
 
-🎯 Planning Phase (Claude-3-Sonnet):
-• Architecture analysis
-• Technology stack selection  
-• Development phases
-• Risk assessment
+# Services
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+NODE_ENV=development|production
 ```
 
-### 2. Code Generation
+## ⚠️ Important Notes
+
+### Build Status Issues
+From the init analysis, be aware that:
+1. ✅ recoder-web - Builds successfully 
+2. ✅ recoder-chat - Builds successfully 
+3. ✅ recoder-extension - Builds successfully (creates VSIX)
+4. ❌ backend - Has TypeScript compilation errors 
+5. ❌ production-engine - Has missing jest dependency
+
+When working on backend or production-engine, may need to:
 ```bash
-🚀 Building Phase:
-🔧 Blockchain Agent (Claude): Solana integration logic
-⚡ Web Agent (Groq): Next.js components  
-🎨 UI Agent (Groq): Responsive interface
-
-Result: Production-ready application
+cd backend && npm install && npm run build
+cd production-engine && npm install jest && npm run build
 ```
 
-### 3. Validation & Deployment
-- Real functionality testing
-- Security vulnerability scanning
-- Performance optimization
-- Production deployment setup
+### Performance Considerations
+- Use `pnpm` instead of `npm` for faster installs
+- Services are designed to run concurrently
+- AI model responses are cached for performance
+- Database queries use connection pooling
 
----
+### Testing Strategy
+- Unit tests for individual packages
+- Integration tests for API endpoints  
+- End-to-end tests for CLI workflows
+- Security tests for AI prompt handling
 
-## 🔒 Security
-
-### AI Security Measures
-- **Prompt Injection Protection**: Input sanitization
-- **Data Leakage Prevention**: Sensitive data redaction
-- **Code Vulnerability Scanning**: Real-time SAST/DAST
-- **Audit Trails**: Complete security event logging
-
-### Enterprise Compliance
-- **GDPR**: User data protection
-- **SOC 2 Type II**: Enterprise security standards
-- **HIPAA**: Healthcare data protection
-- **Custom Compliance**: Industry-specific requirements
-
----
-
-## 📚 Development Guide
-
-### Code Philosophy
-1. **Real Functionality Over Pretty Code**: Working trumps elegant
-2. **Multi-AI Intelligence**: Use best model for each task
-3. **Security First**: Assume hostile input
-4. **Production Ready**: Immediate deployment capability
-
-### Key Files
-```typescript
-// Core CLI files to understand:
-packages/cli/src/commands/generate.ts    // Main generation
-packages/cli/src/services/ai-hub.ts      // AI orchestration  
-packages/cli/src/services/code-generator.ts  // Production code
-packages/cli/src/services/reality-validator.ts  // Validation
-
-// Backend files:
-backend/src/generators/productionGenerator.js  // Code generation
-backend/src/validators/integrationValidator.js // Integration tests
-
-// Security files:
-packages/security/src/ai-prompt-sanitizer.ts   // Input protection
-packages/security/src/code-vulnerability-scanner.ts // Security scans
-```
-
-### Contributing Guidelines
-1. **Understand "Real Code" Philosophy**: No mock implementations
-2. **Respect Multi-AI Architecture**: Smart model routing
-3. **Maintain Security Standards**: Prompt sanitization required
-4. **Follow Validation Patterns**: Test real functionality
-5. **Optimize Performance**: Efficient API usage
-
----
-
-
-
-**Ready to build the future of AI-powered development? Let's make recoder.xyz the tool every developer reaches for.** 🚀
+This codebase prioritizes real functionality over mock implementations, with a focus on production-ready code generation through intelligent AI orchestration.

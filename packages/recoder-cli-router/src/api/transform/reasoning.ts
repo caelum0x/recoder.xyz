@@ -6,7 +6,7 @@ import type { ModelInfo, ProviderSettings } from "@roo-code/types"
 
 import { shouldUseReasoningBudget, shouldUseReasoningEffort } from "@recoder/shared"
 
-type ReasoningEffort = "low" | "medium" | "high"
+type ReasoningEffort = "minimal" | "low" | "medium" | "high"
 
 export type OpenRouterReasoningParams = {
 	effort?: ReasoningEffort
