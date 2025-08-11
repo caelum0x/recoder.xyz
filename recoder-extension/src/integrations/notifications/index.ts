@@ -65,7 +65,7 @@ async function showLinuxNotification(options: NotificationOptions): Promise<void
 
 export async function showSystemNotification(options: NotificationOptions): Promise<void> {
 	try {
-		const { title = "Kilo Code", message } = options
+		const { title = "Recoder", message } = options
 
 		if (!message) {
 			throw new Error("Message is required")
