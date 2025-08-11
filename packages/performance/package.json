@@ -1,0 +1,11 @@
+{
+  "name": "@recoder/performance",
+  "version": "1.0.0",
+  "main": "index.js",
+  "exports": {
+    "./middleware/performance-middleware": "./middleware/performance-middleware.ts",
+    "./monitoring/performance-monitor": "./monitoring/performance-monitor.ts", 
+    "./caching/redis-cache": "./caching/redis-cache.ts",
+    "./cdn/cdn-manager": "./cdn/cdn-manager.ts"
+  }
+}

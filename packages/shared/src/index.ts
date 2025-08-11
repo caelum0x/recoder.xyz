@@ -20,6 +20,10 @@ export * from './anthropic-types';
 export * from './other-provider-types';
 export * from './file-utils';
 
+// OAuth and Auth exports
+export { OAuthHandler, OAuthCallbackData } from './oauth-handler';
+export { AuthClient } from './auth-client';
+
 // Re-export specific items from @roo-code/types to avoid conflicts
 export type {
   ModelInfo as RooModelInfo,
