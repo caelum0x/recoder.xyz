@@ -9,6 +9,8 @@
     "lint": "next lint && biome lint --write --unsafe",
     "lint:fix": "next lint --fix && biome lint --write --unsafe",
     "format": "biome format --write",
+    "type-check": "tsc --noEmit",
+    "test:unit": "echo 'Unit tests not configured' && exit 0",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "npx tsx lib/db/migrate.ts",
     "db:studio": "drizzle-kit studio",

@@ -61,6 +61,29 @@ export const MODELS = [
     description: "Instant responses for simple tasks"
   },
   
+  // Google Gemini Models (Multimodal)
+  {
+    label: "Gemini 2.0 Flash (Latest)",
+    value: "gemini-2.0-flash-exp",
+    provider: "gemini",
+    category: "multimodal",
+    description: "Latest multimodal AI with vision"
+  },
+  {
+    label: "Gemini 1.5 Pro (Balanced)",
+    value: "gemini-1.5-pro-002",
+    provider: "gemini",
+    category: "balanced",
+    description: "High-quality multimodal reasoning"
+  },
+  {
+    label: "Gemini 1.5 Flash (Fast)",
+    value: "gemini-1.5-flash-002",
+    provider: "gemini",
+    category: "fast",
+    description: "Fast multimodal processing"
+  },
+  
   // OpenRouter Models (Access to Everything)
   {
     label: "GPT-4 (OpenRouter)",
@@ -98,8 +121,14 @@ export const AI_PROVIDERS = {
     strengths: ["Speed", "API generation", "Prototyping", "Real-time"],
     available: !!process.env.GROQ_API_KEY
   },
+  gemini: {
+    name: "Google Gemini",
+    description: "Multimodal AI with vision capabilities",
+    strengths: ["Multimodal", "Vision", "Large context", "Code understanding"],
+    available: !!process.env.GOOGLE_API_KEY
+  },
   openrouter: {
-    name: "OpenRouter",
+    name: "OpenRouter", 
     description: "Access to all major models",
     strengths: ["Model variety", "Cost optimization", "Backup access", "Latest releases"],
     available: !!process.env.OPENROUTER_API_KEY

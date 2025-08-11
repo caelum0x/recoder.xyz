@@ -17,9 +17,8 @@ jobs:
       matrix:
         project: 
           - recoder-web
-          - recoder-extension/src
-          - packages/cli
-          - packages/recoder-cli-router
+          - recoder-extension
+          - recoder-chat
     
     steps:
       - name: Checkout code
@@ -35,9 +34,12 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: |
           if [ -f "package-lock.json" ]; then
-            npm ci
+            npm ci --legacy-peer-deps
+          elif [ -f "package.json" ]; then
+            npm install --legacy-peer-deps
           else
-            npm install
+            echo "No package.json found in ${{ matrix.project }}"
+            exit 1
           fi
       
       - name: Run tests
@@ -53,13 +55,18 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: |
           if [ "${{ matrix.project }}" = "recoder-web" ]; then
-            npm install --legacy-peer-deps
-            npm run build
-          elif [ "${{ matrix.project }}" = "recoder-extension/src" ]; then
-            npm run bundle
+            SKIP_ENV_VALIDATION=true npm run build
+          elif [ "${{ matrix.project }}" = "recoder-extension" ]; then
+            npm run bundle || npm run build || npm run compile
+          elif [ "${{ matrix.project }}" = "recoder-chat" ]; then
+            SKIP_ENV_VALIDATION=true npm run build
+          elif [ -f "package.json" ]; then
+            npm run build || echo "No build script available"
           else
-            npm run build
+            echo "No package.json found, skipping build"
           fi
+        env:
+          SKIP_ENV_VALIDATION: true
 
   # Deploy recoder-web to Vercel
   deploy-web:

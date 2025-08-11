@@ -707,19 +707,19 @@ export class IntelligentAIRouter {
       return specialist;
     }
     
-    // Task-specific provider preferences
+    // Task-specific provider preferences - FREE Together AI models prioritized
     const taskPreferences: { [key: string]: string[] } = {
-      'reasoning': ['together', 'claude', 'openrouter', 'groq', 'huggingface'],
-      'code-generation': ['together', 'huggingface', 'groq', 'claude', 'openrouter'],
-      'multi-model': ['openrouter', 'together', 'claude', 'groq', 'huggingface'],
-      'fast-generation': ['groq', 'together', 'huggingface', 'claude', 'openrouter'],
-      'complex-logic': ['claude', 'openrouter', 'together', 'groq', 'huggingface'],
-      'code-review': ['claude', 'openrouter', 'together', 'groq', 'huggingface'],
-      'open-source': ['huggingface', 'together', 'groq', 'claude', 'openrouter'],
-      'cost-effective': ['huggingface', 'together', 'groq', 'openrouter', 'claude']
+      'reasoning': ['together', 'claude', 'groq', 'openrouter', 'huggingface'], // DeepSeek R1 Free
+      'code-generation': ['together', 'groq', 'huggingface', 'claude', 'openrouter'], // Free models first
+      'multi-model': ['together', 'openrouter', 'claude', 'groq', 'huggingface'], // Vision + variety
+      'fast-generation': ['together', 'groq', 'huggingface', 'claude', 'openrouter'], // Free fast models
+      'complex-logic': ['together', 'claude', 'openrouter', 'groq', 'huggingface'], // DeepSeek R1 + Claude
+      'code-review': ['together', 'claude', 'openrouter', 'groq', 'huggingface'], // High quality free
+      'open-source': ['together', 'huggingface', 'groq', 'claude', 'openrouter'], // All free models
+      'cost-effective': ['together', 'huggingface', 'groq', 'openrouter', 'claude'] // FREE first priority
     };
     
-    const preferences = taskPreferences[taskType] || ['claude', 'together', 'groq'];
+    const preferences = taskPreferences[taskType] || ['together', 'groq', 'claude']; // Free first
     
     // Find first available provider from preferences
     for (const preferredName of preferences) {
