@@ -133,10 +133,10 @@ export class RecoderAIProvider {
         together: {
           enabled: !!config.get('apiKeys.together') || !!process.env.TOGETHER_API_KEY,
           apiKey: config.get('apiKeys.together') || process.env.TOGETHER_API_KEY,
-          models: ['shisa-v2-llama-3.3-70b', 'deephermes-3-mistral-24b']
+          models: ['deepseek-ai/deepseek-r1-distill-llama-70b', 'meta-llama/llama-vision-free', 'NousResearch/nous-hermes-llama-3.3-70b-instruct-turbo']
         }
       },
-      defaultProvider: config.get('defaultProvider') || 'claude',
+      defaultProvider: config.get('defaultProvider') || 'together', // Free models first
       qualityValidation: config.get('qualityValidation') !== false,
       realCodeOnly: config.get('realCodeOnly') !== false
     };
@@ -217,8 +217,8 @@ export class RecoderAIProvider {
       }
     }
 
-    // Updated priority: Claude > Gemini > Groq > OpenRouter > Together > HuggingFace > Ollama
-    const priorityOrder = ['claude', 'gemini', 'groq', 'openrouter', 'together', 'huggingface', 'ollama'];
+    // COST-OPTIMIZED priority: Together (FREE) > Groq > Gemini > Claude > OpenRouter > HuggingFace > Ollama
+    const priorityOrder = ['together', 'groq', 'gemini', 'claude', 'openrouter', 'huggingface', 'ollama'];
     for (const provider of priorityOrder) {
       if (availableProviders.includes(provider)) {
         return provider;
@@ -444,10 +444,10 @@ export class RecoderAIProvider {
 
     return {
       code,
-      explanation: 'Code generation with Together AI',
-      confidence: 0.83,
+      explanation: 'Code generation with Together AI - FREE DeepSeek R1',
+      confidence: 0.90, // Higher confidence for DeepSeek R1
       provider: 'together',
-      model: 'shisa-v2-llama-3.3-70b',
+      model: 'deepseek-ai/deepseek-r1-distill-llama-70b',
       metadata: {
         language: request.context?.language || 'typescript',
         dependencies: this.extractDependencies(code),
@@ -538,7 +538,7 @@ export class RecoderAIProvider {
         'Authorization': `Bearer ${config.apiKey}`
       },
       body: JSON.stringify({
-        model: config.models[0],
+        model: 'deepseek-ai/deepseek-r1-distill-llama-70b', // Free DeepSeek R1 model
         messages: [
           {
             role: 'system',

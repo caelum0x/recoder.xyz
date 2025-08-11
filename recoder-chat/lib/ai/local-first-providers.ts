@@ -88,6 +88,47 @@ export class LocalAIProvider {
   }
 
   /**
+   * Generate with Together AI (FREE models)
+   */
+  async generateWithTogetherAI(
+    messages: ChatMessage[],
+    options: { temperature?: number; maxTokens?: number; model?: string } = {}
+  ): Promise<GenerationResponse> {
+    const apiKey = process.env.TOGETHER_API_KEY;
+    if (!apiKey) {
+      throw new Error('Together AI API key not configured');
+    }
+
+    const model = options.model || 'deepseek-ai/deepseek-r1-distill-llama-70b';
+
+    const response = await fetch('https://api.together.xyz/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: options.temperature || 0.7,
+        max_tokens: options.maxTokens || 2000
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Together AI error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return {
+      content: data.choices[0].message.content,
+      model,
+      provider: 'together-ai'
+    };
+  }
+
+  /**
    * Generate with LM Studio
    */
   async generateWithLMStudio(
@@ -119,7 +160,8 @@ export class LocalAIProvider {
   }
 
   /**
-   * Smart generation - automatically choose best available local AI
+   * Smart generation - automatically choose best available AI
+   * Priority: Local AI (free) > Together AI (free) > Error
    */
   async smartGenerate(
     messages: ChatMessage[],
@@ -127,6 +169,7 @@ export class LocalAIProvider {
   ): Promise<GenerationResponse> {
     const status = await this.testConnections();
 
+    // First priority: Local AI (completely free)
     if (status.ollama) {
       return this.generateWithOllama(messages, {
         ...options,
@@ -134,17 +177,31 @@ export class LocalAIProvider {
       });
     } else if (status.lmStudio) {
       return this.generateWithLMStudio(messages, options);
-    } else {
-      throw new Error('No local AI services available. Please install and start Ollama or LM Studio.');
     }
+
+    // Second priority: Together AI free models (internet required but free)
+    try {
+      if (process.env.TOGETHER_API_KEY) {
+        return this.generateWithTogetherAI(messages, {
+          ...options,
+          model: options.preferredModel || 'deepseek-ai/deepseek-r1-distill-llama-70b'
+        });
+      }
+    } catch (error) {
+      console.warn('Together AI failed, no fallback available:', error);
+    }
+
+    throw new Error('No AI services available. Please install Ollama/LM Studio or configure Together AI API key.');
   }
 
   /**
-   * Check if any local AI is available
+   * Check if any AI is available (local or Together AI)
    */
   async isAvailable(): Promise<boolean> {
     const status = await this.testConnections();
-    return status.ollama || status.lmStudio;
+    const hasLocal = status.ollama || status.lmStudio;
+    const hasTogetherAI = !!process.env.TOGETHER_API_KEY;
+    return hasLocal || hasTogetherAI;
   }
 }
 
