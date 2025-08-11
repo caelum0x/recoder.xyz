@@ -95,8 +95,8 @@ export const KiloCode = ({
 				defaultModelId={kilocodeDefaultModelId}
 				models={routerModels?.["recoder-openrouter"] ?? {}}
 				modelIdKey="kilocodeModel"
-				serviceName="Kilo Code"
-				serviceUrl="https://kilocode.ai"
+				serviceName="Recoder"
+				serviceUrl="https://recoder.xyz"
 				organizationAllowList={organizationAllowList}
 			/>
 		</>
