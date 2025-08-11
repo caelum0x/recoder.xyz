@@ -22,14 +22,19 @@
     }
   },
   "include": [
-    "src/**/*",
-    "../shared/src/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "**/*.test.ts",
     "**/*.spec.ts",
-    "../recoder-cli-router/**/*"
+    "../shared/src/auth-client.ts",
+    "../shared/src/oauth-web.ts", 
+    "../shared/src/logger-browser.ts",
+    "../shared/src/recoder-sdk.ts",
+    "../shared/src/sync-client.ts",
+    "../shared/src/websocket-client.ts",
+    "../shared/src/oauth-handler.ts"
   ]
 }
