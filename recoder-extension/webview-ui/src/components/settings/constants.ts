@@ -35,7 +35,7 @@ export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, Mod
 }
 
 export const PROVIDERS = [
-	{ value: "kilocode", label: "Kilo Code" },
+	{ value: "kilocode", label: "Recoder" },
 	{ value: "openrouter", label: "OpenRouter" },
 	{ value: "anthropic", label: "Anthropic" },
 	{ value: "fireworks", label: "Fireworks" }, // kilocode_change

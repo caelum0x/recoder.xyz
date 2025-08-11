@@ -111,8 +111,8 @@
 				{
 					"id": "recoder-ActivityBar",
 					"title": "%views.activitybar.title%",
-					"icon": "assets/icons/recoder.png",
-					"darkIcon": "assets/icons/recoder-dark.png"
+					"icon": "assets/icons/recoder-light.svg",
+					"darkIcon": "assets/icons/recoder-dark.svg"
 				}
 			]
 		},
