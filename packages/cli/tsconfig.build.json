@@ -15,6 +15,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "strict": false,
+    "types": ["node"], 
     "paths": {
       "@recoder/shared": ["../shared/src"],
       "@recoder/shared/*": ["../shared/src/*"]

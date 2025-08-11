@@ -29,7 +29,10 @@
     "dev": "next dev",
     "build": "prisma generate && prisma migrate deploy && NEXT_PRIVATE_SKIP_STATIC_GENERATION=1 next build",
     "start": "next start",
-    "lint": "next lint && tsc --noEmit --noUnusedLocals"
+    "lint": "next lint && tsc --noEmit --noUnusedLocals",
+    "type-check": "tsc --noEmit",
+    "test": "echo 'No tests specified' && exit 0",
+    "test:unit": "echo 'No unit tests specified' && exit 0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.59.0",
