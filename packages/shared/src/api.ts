@@ -14,7 +14,7 @@ export interface ModelInfo {
   supportsComputerUse?: boolean;
   supportsReasoningBudget?: boolean;
   maxThinkingTokens?: number;
-  reasoningEffort?: "low" | "medium" | "high";
+  reasoningEffort?: "minimal" | "low" | "medium" | "high";
   description?: string;
   inputPricePerMillion?: number;
   outputPricePerMillion?: number;
@@ -25,6 +25,7 @@ export interface ModelInfo {
   supportedParameters?: string[];
   preferredIndex?: number;
   requiredReasoningBudget?: boolean;
+  cost?: string | number; // ADD COST PROPERTY
   pricing?: {
     input: number;
     output: number;
