@@ -28,6 +28,7 @@ import { OllamaProvider, OllamaConfig } from './providers/ollama-provider';
 import { ModelRouter, RouterConfig } from './model-router';
 import { ContextManager } from './context-manager';
 import { UsageTracker } from './usage-tracker';
+import { ConsensusEngine, ConsensusRequest, ConsensusResponse } from './consensus-engine';
 
 export interface AIHubConfig {
   providers: {
@@ -63,6 +64,7 @@ export class AIModelHub extends EventEmitter {
   private router: ModelRouter;
   private contextManager: ContextManager;
   private usageTracker: UsageTracker;
+  private consensusEngine: ConsensusEngine;
   private initialized: boolean = false;
 
   constructor(config: AIHubConfig) {
@@ -72,6 +74,7 @@ export class AIModelHub extends EventEmitter {
     this.contextManager = new ContextManager();
     this.usageTracker = new UsageTracker();
     this.router = new ModelRouter(config.router);
+    this.consensusEngine = new ConsensusEngine(this);
     
     this.setupEventHandlers();
   }
@@ -364,6 +367,53 @@ export class AIModelHub extends EventEmitter {
 
   public async getContextSummary(projectPath?: string): Promise<any> {
     return this.contextManager.getContextSummary(projectPath);
+  }
+
+  /**
+   * Generate code with multi-model consensus (KILLER FEATURE vs Cursor/Copilot)
+   */
+  public async generateWithConsensus(request: Partial<ConsensusRequest>): Promise<ConsensusResponse> {
+    this.ensureInitialized();
+
+    const consensusRequest: ConsensusRequest = {
+      id: request.id || this.generateRequestId(),
+      prompt: request.prompt || '',
+      task: request.task || TaskType.CODE_GENERATION,
+      language: request.language,
+      models: request.models || [], // Auto-select if empty
+      consensusThreshold: request.consensusThreshold || 0.7,
+      maxAttempts: request.maxAttempts || 3,
+      preferences: {
+        preferAccuracy: true,
+        preferSpeed: false,
+        preferCost: true,
+        ...request.preferences
+      }
+    };
+
+    Logger.info(`Starting consensus code generation: ${consensusRequest.id}`);
+    return this.consensusEngine.generateWithConsensus(consensusRequest);
+  }
+
+  /**
+   * Get consensus engine status and active requests
+   */
+  public getConsensusStatus(): {
+    active: number;
+    requests: ConsensusRequest[];
+  } {
+    const requests = this.consensusEngine.getActiveConsensus();
+    return {
+      active: requests.length,
+      requests
+    };
+  }
+
+  /**
+   * Cancel a consensus request
+   */
+  public cancelConsensus(requestId: string): boolean {
+    return this.consensusEngine.cancelConsensus(requestId);
   }
 
   public async destroy(): Promise<void> {

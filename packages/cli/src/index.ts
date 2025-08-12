@@ -27,6 +27,8 @@ import { AgentManager, AgentRequest } from './services/specialized-agents';
 import { ProjectContextAnalyzer } from './services/project-context';
 import { backendClient } from './services/backend-client';
 import { unifiedAPI } from './services/unified-api-adapter';
+import { AIModelHub } from './services/ai-models/ai-hub';
+import { RepositoryRefactoringEngine } from './services/ai-models/repository-refactoring-engine';
 
 // Import integrated packages
 import { 
@@ -52,6 +54,9 @@ import { createIntegrationStatusCommand } from './commands/integration-status';
 import { createWebCommand } from './commands/web';
 import { createAssistantCommand } from './commands/assistant';
 import { createPluginsCommand } from './commands/plugins';
+import { createConsensusCommand } from './commands/consensus';
+import { createCollaborateCommand } from './commands/collaborate';
+import { CollaborationService } from '../../shared/src/collaboration';
 
 // Production-ready command setup with unified configuration
 async function setupProductionCommands(program: Command): Promise<void> {
@@ -65,6 +70,55 @@ async function setupProductionCommands(program: Command): Promise<void> {
   const validator = new RealityValidationSystem();
   const agentManager = new AgentManager();
   const contextAnalyzer = new ProjectContextAnalyzer();
+  
+  // Initialize AI Model Hub with enhanced features
+  const aiModelHub = new AIModelHub({
+    providers: {
+      openai: { enabled: !!process.env.OPENAI_API_KEY, apiKey: process.env.OPENAI_API_KEY },
+      anthropic: { enabled: !!process.env.ANTHROPIC_API_KEY, apiKey: process.env.ANTHROPIC_API_KEY },
+      ollama: { enabled: true, host: 'http://localhost:11434' }
+    } as any,
+    router: {
+      defaultPrivacyLevel: 'INTERNAL' as any,
+      enableHybridProcessing: true,
+      hybridConfig: {} as any,
+      routingRules: [],
+      fallbackChains: {},
+      performanceWeights: { speed: 0.3, cost: 0.4, quality: 0.3, availability: 0.0 }
+    },
+    localModels: {} as any,
+    hybrid: {} as any,
+    defaultSettings: {
+      privacyLevel: 'INTERNAL' as any,
+      timeout: 30000,
+      retryCount: 3,
+      temperature: 0.7,
+      maxTokens: 4000
+    },
+    features: {
+      enableCaching: true,
+      enableMonitoring: true,
+      enableAnalytics: true,
+      enableAutoInstall: false,
+      enableHybridProcessing: false
+    }
+  });
+  
+  try {
+    await aiModelHub.initialize();
+    Logger.info('AI Model Hub initialized with enhanced features');
+  } catch (error) {
+    Logger.warn('AI Model Hub initialization failed:', error);
+  }
+  
+  // Initialize repository refactoring engine
+  const refactoringEngine = new RepositoryRefactoringEngine(aiModelHub);
+  
+  // Initialize collaboration service for real-time code sync
+  const collaborationService = new CollaborationService({
+    websocketPort: parseInt(process.env.COLLAB_PORT || '8080'),
+    enableRedis: process.env.NODE_ENV === 'production'
+  });
   
   // Initialize integrated systems
   const usageAnalytics = new UsageAnalytics();
@@ -693,6 +747,112 @@ Make this a production-ready plan that can actually be executed.`;
   // Add unified AI commands with enhanced capabilities
   AICommandsRegistry.register(program);
   
+  // Add consensus command - KILLER FEATURE vs Cursor/Copilot
+  program.addCommand(createConsensusCommand(aiModelHub));
+  
+  // Add collaboration command - KILLER FEATURE: Real-time collaboration
+  program.addCommand(createCollaborateCommand(collaborationService));
+  
+  // Repository refactoring command - KILLER FEATURE vs Cursor (limited context)
+  program
+    .command('refactor')
+    .description('🔄 Repository-wide refactoring with 1M+ token context (beats Cursor!)')
+    .argument('<description>', 'What to refactor (e.g. "modernize to React 18")')
+    .option('-s, --scope <scope>', 'Scope: entire-repo, directory, file-pattern', 'entire-repo')
+    .option('-t, --target <target>', 'Target directory or pattern if not entire repo')
+    .option('--type <type>', 'Refactoring type', 'custom')
+    .option('--max-files <number>', 'Maximum files to process', '100')
+    .option('--backup', 'Create backup before refactoring', false)
+    .option('--dry-run', 'Show plan without executing', false)
+    .action(async (description: string, options: any) => {
+      console.log(chalk.cyan('\n🔄 RECODER - Repository-Wide Refactoring\n'));
+      console.log(chalk.white(`Refactoring: ${description}`));
+      console.log(chalk.gray(`Scope: ${options.scope} | Max Files: ${options.maxFiles}\n`));
+
+      try {
+        const request = {
+          id: `refactor_${Date.now()}`,
+          repositoryPath: process.cwd(),
+          scope: options.scope,
+          target: options.target,
+          refactoringType: options.type,
+          description,
+          preserveHistory: true,
+          createBackup: options.backup,
+          maxFiles: parseInt(options.maxFiles),
+          preferences: {
+            preserveTests: true,
+            updateDocumentation: true,
+            followConventions: true,
+            addComments: false
+          }
+        };
+
+        if (options.dryRun) {
+          console.log(chalk.blue('📋 Generating refactoring plan...'));
+          const plan = await refactoringEngine.generateRefactoringPlan(request);
+          
+          console.log(chalk.green(`\n✅ Refactoring Plan Generated:`));
+          console.log(chalk.white(`Summary: ${plan.summary}`));
+          console.log(chalk.white(`Impact: ${plan.impact.toUpperCase()}`));
+          console.log(chalk.white(`Files Affected: ${plan.filesAffected.length}`));
+          console.log(chalk.white(`Estimated Time: ${plan.estimatedTime} minutes\n`));
+          
+          console.log(chalk.cyan('📁 Files to Change:'));
+          plan.changes.slice(0, 10).forEach((change, i) => {
+            const icon = change.type === 'modify' ? '✏️' : change.type === 'create' ? '➕' : '🗑️';
+            console.log(chalk.white(`  ${icon} ${change.file}: ${change.description}`));
+          });
+          
+          if (plan.risks.length > 0) {
+            console.log(chalk.yellow('\n⚠️  Risks:'));
+            plan.risks.forEach(risk => console.log(chalk.yellow(`  • ${risk}`)));
+          }
+          
+          if (plan.benefits.length > 0) {
+            console.log(chalk.green('\n✨ Benefits:'));
+            plan.benefits.forEach(benefit => console.log(chalk.green(`  • ${benefit}`)));
+          }
+          
+          console.log(chalk.blue('\n🚀 Run without --dry-run to execute the refactoring'));
+        } else {
+          console.log(chalk.blue('🤖 Starting repository-wide refactoring with Qwen3-Coder...'));
+          console.log(chalk.gray('This uses 1M+ token context - something Cursor cannot do!\n'));
+          
+          const result = await refactoringEngine.executeRefactoring(request);
+          
+          if (result.success) {
+            console.log(chalk.green(`\n🎉 Refactoring completed successfully!`));
+            console.log(chalk.white(`Files Changed: ${result.filesChanged}`));
+            console.log(chalk.white(`Lines Changed: ${result.linesChanged}`));
+            console.log(chalk.white(`Quality Improvement: +${result.qualityImprovement.improvement}%`));
+            
+            if (result.backupPath) {
+              console.log(chalk.cyan(`\n💾 Backup created: ${result.backupPath}`));
+            }
+            
+            if (result.validationResults.syntaxErrors.length === 0) {
+              console.log(chalk.green('✅ No syntax errors introduced'));
+            } else {
+              console.log(chalk.yellow(`⚠️  ${result.validationResults.syntaxErrors.length} syntax errors to fix`));
+            }
+            
+            console.log(chalk.magenta('\n🏆 COMPETITIVE ADVANTAGE:'));
+            console.log(chalk.white('Repository-wide refactoring with full context understanding.'));
+            console.log(chalk.white('Cursor is limited to current file + few related files.'));
+            console.log(chalk.green('✨ This is why Recoder will dominate the market!'));
+            
+          } else {
+            console.log(chalk.red(`\n❌ Refactoring failed: ${result.error}`));
+          }
+        }
+
+      } catch (error: any) {
+        console.log(chalk.red(`\n❌ Refactoring failed: ${error.message}`));
+        Logger.error(`Refactoring failed: ${error.message}`);
+      }
+    });
+  
   // Analytics and monitoring commands
   program
     .command('analytics')
@@ -1026,7 +1186,7 @@ async function main() {
     // Check if this looks like a natural language command
     const isNaturalLanguage = (
       (args.length === 1 && args[0].includes(' ') && !args[0].startsWith('-')) ||
-      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'context', 'analytics', 'scan', 'stats', 'security', 'help', 'version'].includes(args[0]))
+      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'context', 'analytics', 'scan', 'stats', 'security', 'consensus', 'refactor', 'collaborate', 'help', 'version'].includes(args[0]))
     );
     
     if (isNaturalLanguage) {

@@ -23,6 +23,7 @@ const modelRoutes = require('./routes/models');
 const billingRoutes = require('./routes/billing');
 const analyticsRoutes = require('./routes/analytics');
 const notificationsRoutes = require('./routes/notifications');
+const collaborationRoutes = require('./routes/collaboration');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -152,6 +153,7 @@ class CodeCraftServer {
     this.app.use('/api/billing', authenticateToken, billingRoutes);
     this.app.use('/api/analytics', analyticsRoutes);
     this.app.use('/api/notifications', notificationsRoutes);
+    this.app.use('/api/collaboration', collaborationRoutes);
 
     // Make server instance available to routes
     this.app.set('server', this);
