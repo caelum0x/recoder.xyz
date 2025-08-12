@@ -42,6 +42,8 @@ model User {
   fileUploads     FileUpload[]
   webhooks        Webhook[]
   analytics       UsageAnalytics[]
+  dodoSubscriptions DodoSubscription[]
+  dodoUsage       DodoUsage[]
 
   @@map("users")
 }
@@ -231,20 +233,24 @@ model Integration {
 }
 
 model ApiKey {
-  id          String    @id @default(cuid())
-  name        String
-  key         String    @unique
-  permissions Json      @default("{}")
-  lastUsed    DateTime?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  name          String
+  keyPrefix     String
+  keyHash       String
+  permissions   String[]  @default([])
+  rateLimit     Json      @default("{}")
+  metadata      Json      @default("{}")
+  isActive      Boolean   @default(true)
+  lastUsedAt    DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Foreign keys
-  userId      String
+  userId        String
 
   // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("api_keys")
 }
@@ -471,4 +477,76 @@ model UsageAnalytics {
   @@index([platform, timestamp])
   @@index([provider, timestamp])
   @@map("usage_analytics")
+}
+
+// DODO Payments Integration Models
+model DodoSubscription {
+  id                   String   @id @default(cuid())
+  userId               String
+  planId               String   // "weekly", "monthly", "enterprise"  
+  planName             String
+  dodoSubscriptionId   String   @unique
+  status               String   @default("pending") // "active", "cancelled", "expired", "failed"
+  amount               Int      // in cents
+  currency             String   @default("USD")
+  nextBillingDate      DateTime
+  cancelAtPeriodEnd    Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usage                DodoUsage[]
+  charges              DodoCharge[]
+
+  @@map("dodo_subscriptions")
+}
+
+model DodoUsage {
+  id               String   @id @default(cuid())
+  userId           String
+  subscriptionId   String?
+  tokensUsed       Int
+  requestsMade     Int
+  aiProvider       String
+  featureUsed      String
+  costCents        Int
+  periodStart      DateTime
+  periodEnd        DateTime
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now())
+
+  // Relations
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription     DodoSubscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("dodo_usage")
+}
+
+model DodoCharge {
+  id               String           @id @default(cuid())
+  subscriptionId   String
+  dodoChargeId     String           @unique
+  amount           Int              // in cents
+  currency         String           @default("USD")
+  description      String
+  status           String           @default("pending") // "succeeded", "failed", "pending"
+  createdAt        DateTime         @default(now())
+
+  // Relations
+  subscription     DodoSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("dodo_charges")
+}
+
+model DodoWebhookEvent {
+  id               String   @id @default(cuid())
+  provider         String   @default("dodo_payments")
+  eventType        String
+  payload          Json
+  processed        Boolean  @default(false)
+  processingError  String?
+  createdAt        DateTime @default(now())
+
+  @@map("dodo_webhook_events")
 }
