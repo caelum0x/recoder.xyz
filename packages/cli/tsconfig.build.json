@@ -4,6 +4,7 @@
     "outDir": "dist",
     "skipLibCheck": true,
     "noImplicitAny": false,
+    "skipDefaultLibCheck": true,
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
@@ -15,7 +16,8 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "strict": false,
-    "types": ["node"], 
+    "types": ["node"],
+    "lib": ["dom", "es2020"], 
     "paths": {
       "@recoder/shared": ["../shared/src"],
       "@recoder/shared/*": ["../shared/src/*"]
@@ -29,6 +31,7 @@
     "dist",
     "**/*.test.ts",
     "**/*.spec.ts",
+    "../recoder-cli-router/**/*",
     "../shared/src/auth-client.ts",
     "../shared/src/oauth-web.ts", 
     "../shared/src/logger-browser.ts",

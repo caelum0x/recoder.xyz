@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "npm-run-all build:esbuild build:copy",
-    "build:esbuild": "esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js --external:vscode --external:@recoder/shared --external:@roo-code/types",
+    "build:esbuild": "esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js --external:vscode --external:@recoder/shared --external:@roo-code/types --external:@musistudio/llms --external:tiktoken --external:node-cache --external:sanitize-filename --external:axios --external:openai --external:@anthropic-ai/sdk --external:@anthropic-ai/vertex-sdk --external:google-auth-library --external:@cerebras/cerebras_cloud_sdk --external:@aws-sdk/client-bedrock-runtime --external:@aws-sdk/credential-providers --external:@mistralai/mistralai --external:@google/genai --external:@lmstudio/sdk --external:@dotenvx/dotenvx --external:dotenv --external:uuid --external:fastify --external:zod",
     "build:copy": "shx cp ../../node_modules/tiktoken/tiktoken_bg.wasm dist/tiktoken_bg.wasm || shx cp node_modules/tiktoken/tiktoken_bg.wasm dist/tiktoken_bg.wasm || echo 'Warning: tiktoken WASM file not found, skipping copy'",
     "release": "npm-run-all build test:build publish",
     "test:build": "node dist/cli.js --help || echo 'Build test passed'",

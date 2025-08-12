@@ -91,7 +91,8 @@
       "Bash(kubectl config:*)",
       "Bash(kubectl get:*)",
       "Bash(SKIP_ENV_VALIDATION=true npm run build)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(npx expo:*)"
     ],
     "deny": []
   }

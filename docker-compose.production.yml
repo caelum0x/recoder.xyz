@@ -59,9 +59,9 @@ services:
   #====================================
   web:
     build:
-      context: .
+      context: ./recoder-web
+      dockerfile: ../Dockerfile
       target: web-production
-      dockerfile: Dockerfile
     container_name: recoder-web
     environment:
       - NODE_ENV=production
@@ -88,6 +88,38 @@ services:
       - "traefik.http.routers.web.rule=Host(`recoder.xyz`,`www.recoder.xyz`)"
       - "traefik.http.routers.web.tls.certresolver=letsencrypt"
       - "traefik.http.services.web.loadbalancer.server.port=3000"
+
+  chat:
+    build:
+      context: ./recoder-chat
+      dockerfile: Dockerfile.production
+    container_name: recoder-chat
+    environment:
+      - NODE_ENV=production
+      - NEXTAUTH_URL=${CHAT_URL:-https://chat.recoder.xyz}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXT_PUBLIC_API_URL=${API_URL:-https://api.recoder.xyz}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/recoder_production
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+    ports:
+      - "3003:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - recoder-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.chat.rule=Host(`chat.recoder.xyz`)"
+      - "traefik.http.routers.chat.tls.certresolver=letsencrypt"
+      - "traefik.http.services.chat.loadbalancer.server.port=3000"
 
   backend:
     build:
@@ -130,6 +162,36 @@ services:
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.services.api.loadbalancer.server.port=3001"
 
+  production-engine:
+    build:
+      context: ./production-engine
+      dockerfile: Dockerfile
+    container_name: recoder-production-engine
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - API_BASE_URL=${API_URL:-https://api.recoder.xyz}
+      - JWT_SECRET=${JWT_SECRET}
+      # AI API Keys
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
+    ports:
+      - "3002:3002"
+    depends_on:
+      - backend
+    networks:
+      - recoder-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.engine.rule=Host(`engine.recoder.xyz`)"
+      - "traefik.http.routers.engine.tls.certresolver=letsencrypt"
+      - "traefik.http.services.engine.loadbalancer.server.port=3002"
+
   cli-service:
     build:
       context: .
@@ -140,6 +202,7 @@ services:
       - NODE_ENV=production
       - PORT=8080
       - API_BASE_URL=${API_URL:-https://api.recoder.xyz}
+      - ENGINE_URL=http://production-engine:3002
       - JWT_SECRET=${JWT_SECRET}
       # AI API Keys
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
@@ -152,6 +215,7 @@ services:
       - "8080:8080"
     depends_on:
       - backend
+      - production-engine
     networks:
       - recoder-network
     restart: unless-stopped
