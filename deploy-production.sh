@@ -1,414 +1,496 @@
 #!/bin/bash
 
-# Production Deployment Script for Recoder.xyz
-# Automated production deployment with monitoring, health checks, and rollback
+# Recoder.xyz Production Deployment Script
+# Automates complete production deployment with Docker Compose
 
-set -e
-trap 'echo "❌ Deployment failed at line $LINENO"' ERR
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
 # Configuration
-DEPLOYMENT_ID="deploy_$(date +%s)"
-BACKUP_DIR="./backups/deployment-$DEPLOYMENT_ID"
-LOG_FILE="./logs/deployment-$DEPLOYMENT_ID.log"
-COMPOSE_FILE="docker-compose.production-enhanced.yml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_NAME="recoder"
+COMPOSE_FILE="docker-compose.production.yml"
 ENV_FILE=".env.production"
+ENV_TEMPLATE=".env.production.template"
 
-# Ensure log directory exists
-mkdir -p logs backups
-
-# Logging function
-log() {
-    echo -e "$1" | tee -a "$LOG_FILE"
-}
-
-log_phase() {
-    log "\n${PURPLE}🔸 PHASE: $1${NC}"
-    log "${BLUE}════════════════════════════════════════${NC}"
-}
-
-log_step() {
-    log "${CYAN}▶️  $1${NC}"
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    log "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warning() {
-    log "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
 log_error() {
-    log "${RED}❌ $1${NC}"
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Header
-log "${PURPLE}"
-log "██████╗ ███████╗ ██████╗ ██████╗ ███████╗██████╗    ██╗  ██╗██╗   ██╗███████╗"
-log "██╔══██╗██╔════╝██╔════╝██╔═══██╗██╔════╝██╔══██╗   ╚██╗██╔╝╚██╗ ██╔╝╚══███╔╝"
-log "██████╔╝█████╗  ██║     ██║   ██║█████╗  ██████╔╝    ╚███╔╝  ╚████╔╝   ███╔╝ "
-log "██╔══██╗██╔══╝  ██║     ██║   ██║██╔══╝  ██╔══██╗    ██╔██╗   ╚██╔╝   ███╔╝  "
-log "██║  ██║███████╗╚██████╗╚██████╔╝███████╗██║  ██║██╗██╔╝ ██╗   ██║   ███████╗"
-log "╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝"
-log "${NC}"
-log "${CYAN}🚀 PRODUCTION DEPLOYMENT - RECODER.XYZ${NC}"
-log "${BLUE}=============================================================${NC}"
-log "Deployment ID: $DEPLOYMENT_ID"
-log "Timestamp: $(date)"
-log "Log File: $LOG_FILE"
-log ""
+# Banner
+show_banner() {
+    echo -e "${BLUE}"
+    echo "=================================="
+    echo "  RECODER.XYZ PRODUCTION DEPLOY"
+    echo "=================================="
+    echo -e "${NC}"
+    echo "🚀 Deploying AI-powered development platform"
+    echo "🏗️  Full stack: Web + Chat + API + Engine"
+    echo "🐳 Docker containerized with SSL termination"
+    echo ""
+}
 
-# Pre-deployment validation
-validate_environment() {
-    log_phase "PRE-DEPLOYMENT VALIDATION"
+# Prerequisites check
+check_prerequisites() {
+    log_info "Checking prerequisites..."
     
-    log_step "Checking required files..."
-    
-    if [[ ! -f "$COMPOSE_FILE" ]]; then
-        log_error "Docker Compose file not found: $COMPOSE_FILE"
+    # Check Docker
+    if ! command -v docker &> /dev/null; then
+        log_error "Docker is not installed. Please install Docker first."
         exit 1
     fi
+    
+    # Check Docker Compose
+    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+        log_error "Docker Compose is not installed. Please install Docker Compose first."
+        exit 1
+    fi
+    
+    # Check if Docker daemon is running
+    if ! docker info &> /dev/null; then
+        log_error "Docker daemon is not running. Please start Docker first."
+        exit 1
+    fi
+    
+    log_success "Prerequisites check passed"
+}
+
+# Environment setup
+setup_environment() {
+    log_info "Setting up environment configuration..."
     
     if [[ ! -f "$ENV_FILE" ]]; then
-        log_error "Environment file not found: $ENV_FILE"
-        log_warning "Copy production.env.example to $ENV_FILE and configure"
-        exit 1
-    fi
-    
-    log_step "Checking required tools..."
-    local missing_tools=()
-    
-    for tool in docker docker-compose curl; do
-        if ! command -v $tool &> /dev/null; then
-            missing_tools+=($tool)
+        if [[ -f "$ENV_TEMPLATE" ]]; then
+            log_warning "Environment file not found. Creating from template..."
+            cp "$ENV_TEMPLATE" "$ENV_FILE"
+            log_warning "Please edit $ENV_FILE with your production values before continuing."
+            log_warning "Key values to update:"
+            echo "  - Domain URLs (WEB_URL, CHAT_URL, etc.)"
+            echo "  - Database passwords (DB_PASSWORD, REDIS_PASSWORD)"
+            echo "  - JWT secrets (JWT_SECRET, NEXTAUTH_SECRET)"
+            echo "  - API keys (ANTHROPIC_API_KEY, GROQ_API_KEY, etc.)"
+            echo "  - SSL email (ACME_EMAIL)"
+            echo ""
+            read -p "Have you updated the environment file? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                log_error "Please update $ENV_FILE and run the script again."
+                exit 1
+            fi
+        else
+            log_error "Environment template not found. Please create $ENV_FILE manually."
+            exit 1
         fi
-    done
-    
-    if [ ${#missing_tools[@]} -ne 0 ]; then
-        log_error "Missing required tools: ${missing_tools[*]}"
-        exit 1
     fi
     
-    log_step "Validating Docker daemon..."
-    if ! docker info > /dev/null 2>&1; then
-        log_error "Docker daemon is not running"
-        exit 1
-    fi
+    log_success "Environment configuration ready"
+}
+
+# Create required directories
+create_directories() {
+    log_info "Creating required directories..."
     
-    log_step "Checking environment variables..."
-    source "$ENV_FILE"
-    
-    local required_vars=(
-        "DB_PASSWORD"
-        "REDIS_PASSWORD" 
-        "JWT_SECRET"
-        "JWT_REFRESH_SECRET"
-        "ENCRYPTION_KEY"
-        "TOGETHER_API_KEY"
-        "ACME_EMAIL"
+    local directories=(
+        "data/postgres"
+        "data/redis"
+        "data/ollama"
+        "data/grafana"
+        "data/prometheus"
+        "logs/traefik"
+        "logs/app"
+        "ssl/certs"
+        "backups"
     )
     
-    local missing_vars=()
-    for var in "${required_vars[@]}"; do
-        if [ -z "${!var}" ]; then
-            missing_vars+=($var)
-        fi
+    for dir in "${directories[@]}"; do
+        mkdir -p "$dir"
+        log_info "Created directory: $dir"
     done
     
-    if [ ${#missing_vars[@]} -ne 0 ]; then
-        log_error "Missing required environment variables: ${missing_vars[*]}"
-        log_warning "Check $ENV_FILE and ensure all required variables are set"
-        exit 1
-    fi
+    # Set proper permissions
+    chmod 755 data/
+    chmod 700 ssl/certs/
     
-    log_step "Validating network connectivity..."
-    if ! curl -s --connect-timeout 5 https://api.together.xyz > /dev/null; then
-        log_warning "Cannot reach Together AI API - check internet connectivity"
-    fi
-    
-    log_success "Pre-deployment validation completed"
+    log_success "Directory structure created"
 }
 
-# Backup existing data
-backup_data() {
-    log_phase "DATA BACKUP"
+# Generate monitoring configurations
+generate_monitoring_configs() {
+    log_info "Generating monitoring configurations..."
     
-    mkdir -p "$BACKUP_DIR"
-    
-    log_step "Creating database backup..."
-    if docker-compose ps | grep -q postgres; then
-        docker-compose exec -T postgres pg_dump -U recoder recoder_production | gzip > "$BACKUP_DIR/database-backup.sql.gz"
-        log_success "Database backup created: $BACKUP_DIR/database-backup.sql.gz"
-    else
-        log_warning "No existing database container found - skipping database backup"
-    fi
-    
-    log_step "Backing up configuration files..."
-    cp -r nginx/ "$BACKUP_DIR/nginx-config/" 2>/dev/null || true
-    cp -r monitoring/ "$BACKUP_DIR/monitoring-config/" 2>/dev/null || true
-    cp "$ENV_FILE" "$BACKUP_DIR/env-backup" 2>/dev/null || true
-    
-    log_step "Recording current state..."
-    docker-compose ps > "$BACKUP_DIR/previous-containers.txt" 2>/dev/null || true
-    docker images > "$BACKUP_DIR/previous-images.txt" 2>/dev/null || true
-    
-    log_success "Backup completed: $BACKUP_DIR"
+    # Prometheus configuration
+    cat > data/prometheus/prometheus.yml << 'EOF'
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'recoder-web'
+    static_configs:
+      - targets: ['recoder-web:3000']
+    metrics_path: '/api/metrics'
+
+  - job_name: 'recoder-chat'
+    static_configs:
+      - targets: ['recoder-chat:3001']
+    metrics_path: '/api/metrics'
+
+  - job_name: 'recoder-api'
+    static_configs:
+      - targets: ['recoder-api:8000']
+    metrics_path: '/api/metrics'
+
+  - job_name: 'production-engine'
+    static_configs:
+      - targets: ['production-engine:8001']
+    metrics_path: '/api/metrics'
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+EOF
+
+    # Grafana datasource configuration
+    mkdir -p data/grafana/provisioning/datasources
+    cat > data/grafana/provisioning/datasources/prometheus.yml << 'EOF'
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+EOF
+
+    log_success "Monitoring configurations generated"
 }
 
-# Build and deploy services
-deploy_services() {
-    log_phase "SERVICE DEPLOYMENT"
+# Build Docker images
+build_images() {
+    log_info "Building Docker images..."
     
-    log_step "Stopping existing services..."
-    docker-compose -f "$COMPOSE_FILE" down || true
+    # Build all services
+    docker-compose -f "$COMPOSE_FILE" build --parallel
     
-    log_step "Pulling latest base images..."
-    docker-compose -f "$COMPOSE_FILE" pull postgres redis nginx grafana prometheus || true
+    log_success "Docker images built successfully"
+}
+
+# Deploy infrastructure services
+deploy_infrastructure() {
+    log_info "Deploying infrastructure services..."
     
-    log_step "Building application images..."
-    docker-compose -f "$COMPOSE_FILE" build --no-cache --parallel
+    # Start infrastructure services first
+    docker-compose -f "$COMPOSE_FILE" up -d \
+        postgres \
+        redis \
+        traefik \
+        prometheus \
+        grafana
     
-    log_step "Starting core infrastructure..."
-    docker-compose -f "$COMPOSE_FILE" up -d postgres redis
+    # Wait for database to be ready
+    log_info "Waiting for database to be ready..."
+    sleep 10
     
-    log_step "Waiting for database to be ready..."
-    local max_attempts=30
-    local attempt=0
-    
-    while [ $attempt -lt $max_attempts ]; do
-        if docker-compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U recoder -d recoder_production; then
-            log_success "Database is ready"
-            break
+    # Check database connectivity
+    local retries=0
+    local max_retries=30
+    while ! docker-compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U postgres > /dev/null 2>&1; do
+        retries=$((retries + 1))
+        if [[ $retries -eq $max_retries ]]; then
+            log_error "Database failed to start after $max_retries attempts"
+            return 1
         fi
-        
-        attempt=$((attempt + 1))
-        log_step "Waiting for database... (attempt $attempt/$max_attempts)"
-        sleep 5
+        log_info "Waiting for database... ($retries/$max_retries)"
+        sleep 2
     done
     
-    if [ $attempt -eq $max_attempts ]; then
-        log_error "Database failed to start within timeout"
-        exit 1
-    fi
-    
-    log_step "Starting application services..."
-    docker-compose -f "$COMPOSE_FILE" up -d backend production-engine web chat
-    
-    log_step "Starting reverse proxy..."
-    docker-compose -f "$COMPOSE_FILE" up -d nginx
-    
-    log_step "Starting SSL certificate service..."
-    docker-compose -f "$COMPOSE_FILE" up -d certbot
-    
-    log_step "Starting monitoring stack..."
-    docker-compose -f "$COMPOSE_FILE" --profile monitoring up -d
-    
-    log_step "Starting additional services..."
-    docker-compose -f "$COMPOSE_FILE" up -d ollama healthcheck
-    
-    log_success "All services started"
+    log_success "Infrastructure services deployed"
 }
 
-# Health check validation
-validate_deployment() {
-    log_phase "DEPLOYMENT VALIDATION"
+# Deploy application services
+deploy_applications() {
+    log_info "Deploying application services..."
+    
+    # Start application services
+    docker-compose -f "$COMPOSE_FILE" up -d \
+        recoder-api \
+        production-engine \
+        recoder-web \
+        recoder-chat \
+        ollama
+    
+    log_success "Application services deployed"
+}
+
+# Health checks
+run_health_checks() {
+    log_info "Running health checks..."
     
     local services=(
-        "postgres:5432"
-        "redis:6379"
-        "backend:3001"
-        "web:3000"
-        "chat:3000"
-        "production-engine:3002"
+        "http://localhost:3000/api/health:Web Platform"
+        "http://localhost:3001/api/health:Chat Platform"
+        "http://localhost:8000/api/health:Backend API"
+        "http://localhost:8001/api/health:Production Engine"
     )
     
-    log_step "Waiting for services to stabilize..."
-    sleep 30
-    
-    log_step "Checking service health..."
-    
     for service in "${services[@]}"; do
-        IFS=':' read -r service_name port <<< "$service"
+        local url="${service%:*}"
+        local name="${service#*:}"
         
-        log_step "Checking $service_name..."
+        log_info "Checking $name..."
+        local retries=0
+        local max_retries=30
         
-        local max_attempts=10
-        local attempt=0
-        local healthy=false
-        
-        while [ $attempt -lt $max_attempts ]; do
-            if docker-compose -f "$COMPOSE_FILE" exec -T "$service_name" sh -c "exit 0" 2>/dev/null; then
-                healthy=true
+        while true; do
+            if curl -f -s "$url" > /dev/null 2>&1; then
+                log_success "$name is healthy"
                 break
             fi
             
-            attempt=$((attempt + 1))
-            sleep 3
+            retries=$((retries + 1))
+            if [[ $retries -eq $max_retries ]]; then
+                log_warning "$name health check failed after $max_retries attempts"
+                break
+            fi
+            
+            sleep 2
         done
-        
-        if [ "$healthy" = true ]; then
-            log_success "$service_name is healthy"
-        else
-            log_error "$service_name is not responding"
-            exit 1
-        fi
     done
     
-    log_step "Testing HTTP endpoints..."
-    
-    # Wait for Nginx to start
-    sleep 10
-    
-    local endpoints=(
-        "http://localhost/nginx-health:healthy"
-        "http://localhost:3000/api/health:ok"
-        "http://localhost:3001/api/health:ok"
-        "http://localhost:3002/health:ok"
-    )
-    
-    for endpoint in "${endpoints[@]}"; do
-        IFS=':' read -r url expected <<< "$endpoint"
-        
-        log_step "Testing $url..."
-        
-        local response=$(curl -s --max-time 10 "$url" 2>/dev/null || echo "ERROR")
-        
-        if [[ "$response" == *"$expected"* ]]; then
-            log_success "$url responded correctly"
-        else
-            log_error "$url failed (response: $response)"
-            exit 1
-        fi
-    done
-    
-    log_success "All health checks passed"
+    log_success "Health checks completed"
 }
 
-# Post-deployment setup
-post_deployment() {
-    log_phase "POST-DEPLOYMENT SETUP"
-    
-    log_step "Recording deployment information..."
-    cat > "./deployments/deployment-$DEPLOYMENT_ID.json" << EOF
-{
-    "deployment_id": "$DEPLOYMENT_ID",
-    "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "status": "completed",
-    "services": {
-        "database": "postgres:15-alpine",
-        "cache": "redis:7-alpine", 
-        "backend": "recoder/backend:production",
-        "web": "recoder/web:production",
-        "chat": "recoder/chat:production",
-        "production-engine": "recoder/production-engine:production",
-        "proxy": "nginx:alpine"
-    },
-    "monitoring": {
-        "grafana": "http://localhost:3004",
-        "prometheus": "http://localhost:9090"
-    }
+# Show deployment info
+show_deployment_info() {
+    echo ""
+    echo -e "${GREEN}🎉 DEPLOYMENT COMPLETED SUCCESSFULLY! 🎉${NC}"
+    echo ""
+    echo "📊 SERVICES STATUS:"
+    docker-compose -f "$COMPOSE_FILE" ps
+    echo ""
+    echo "🌐 ACCESS URLS:"
+    echo "  Web Platform:     http://localhost:3000"
+    echo "  Chat Platform:    http://localhost:3001"
+    echo "  Backend API:      http://localhost:8000"
+    echo "  Production Engine: http://localhost:8001"
+    echo "  Traefik Dashboard: http://localhost:8080"
+    echo "  Grafana:          http://localhost:3002"
+    echo "  Prometheus:       http://localhost:9090"
+    echo ""
+    echo "🔧 MANAGEMENT COMMANDS:"
+    echo "  View logs:        docker-compose -f $COMPOSE_FILE logs -f [service]"
+    echo "  Stop all:         docker-compose -f $COMPOSE_FILE down"
+    echo "  Restart service:  docker-compose -f $COMPOSE_FILE restart [service]"
+    echo "  Update & redeploy: ./deploy-production.sh --update"
+    echo ""
+    echo "📚 NEXT STEPS:"
+    echo "  1. Configure your domain DNS to point to this server"
+    echo "  2. Update .env.production with your actual domain URLs"
+    echo "  3. Run './deploy-production.sh --ssl' to enable HTTPS"
+    echo "  4. Test all functionality and API endpoints"
+    echo ""
 }
-EOF
+
+# Update deployment
+update_deployment() {
+    log_info "Updating deployment..."
     
-    log_step "Setting up log rotation..."
-    docker-compose -f "$COMPOSE_FILE" exec -T nginx sh -c "
-        echo '0 2 * * * /usr/sbin/logrotate /etc/logrotate.conf' | crontab -
-    " 2>/dev/null || true
+    # Pull latest images
+    docker-compose -f "$COMPOSE_FILE" pull
     
-    log_step "Starting backup cron job..."
-    docker-compose -f "$COMPOSE_FILE" --profile backup up -d db-backup
+    # Rebuild and restart services
+    docker-compose -f "$COMPOSE_FILE" up -d --build
     
-    log_success "Post-deployment setup completed"
+    # Clean up old images
+    docker image prune -f
+    
+    log_success "Deployment updated"
+}
+
+# Enable SSL/HTTPS
+enable_ssl() {
+    log_info "Enabling SSL/HTTPS..."
+    
+    # Check if ACME_EMAIL is set
+    if ! grep -q "ACME_EMAIL=.*@" "$ENV_FILE"; then
+        log_error "ACME_EMAIL not properly configured in $ENV_FILE"
+        exit 1
+    fi
+    
+    # Restart Traefik to acquire certificates
+    docker-compose -f "$COMPOSE_FILE" restart traefik
+    
+    log_success "SSL/HTTPS enabled. Certificates will be automatically acquired."
+}
+
+# Backup function
+backup_data() {
+    log_info "Creating backup..."
+    
+    local backup_dir="backups/$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$backup_dir"
+    
+    # Backup database
+    docker-compose -f "$COMPOSE_FILE" exec -T postgres pg_dump -U postgres recoder_production > "$backup_dir/database.sql"
+    
+    # Backup Redis
+    docker-compose -f "$COMPOSE_FILE" exec -T redis redis-cli BGSAVE
+    docker cp "$(docker-compose -f "$COMPOSE_FILE" ps -q redis)":/data/dump.rdb "$backup_dir/redis.rdb"
+    
+    # Backup configuration
+    cp "$ENV_FILE" "$backup_dir/"
+    
+    log_success "Backup created in $backup_dir"
 }
 
 # Cleanup function
 cleanup() {
-    log_phase "CLEANUP"
+    log_info "Cleaning up..."
     
-    log_step "Removing unused Docker images..."
+    # Stop all services
+    docker-compose -f "$COMPOSE_FILE" down
+    
+    # Remove orphaned containers
+    docker container prune -f
+    
+    # Remove unused images
     docker image prune -f
     
-    log_step "Removing unused volumes..."
-    docker volume prune -f
+    # Remove unused volumes (be careful!)
+    read -p "Remove unused volumes? This will delete all unattached data! (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        docker volume prune -f
+    fi
     
     log_success "Cleanup completed"
 }
 
-# Rollback function (in case of failure)
-rollback() {
-    log_error "DEPLOYMENT FAILED - INITIATING ROLLBACK"
-    
-    if [[ -f "$BACKUP_DIR/database-backup.sql.gz" ]]; then
-        log_step "Restoring database backup..."
-        docker-compose -f "$COMPOSE_FILE" up -d postgres
-        sleep 10
-        zcat "$BACKUP_DIR/database-backup.sql.gz" | docker-compose -f "$COMPOSE_FILE" exec -T postgres psql -U recoder recoder_production
-    fi
-    
-    log_step "Stopping failed deployment..."
-    docker-compose -f "$COMPOSE_FILE" down
-    
-    log_error "Rollback completed. Check logs: $LOG_FILE"
-    exit 1
+# Show help
+show_help() {
+    echo "Recoder.xyz Production Deployment Script"
+    echo ""
+    echo "Usage: $0 [OPTION]"
+    echo ""
+    echo "Options:"
+    echo "  (no option)   Full deployment (default)"
+    echo "  --update      Update existing deployment"
+    echo "  --ssl         Enable SSL/HTTPS certificates"
+    echo "  --backup      Create data backup"
+    echo "  --cleanup     Stop services and cleanup"
+    echo "  --status      Show deployment status"
+    echo "  --logs        Show service logs"
+    echo "  --help        Show this help message"
+    echo ""
 }
 
-# Main execution
+# Show status
+show_status() {
+    echo "📊 DEPLOYMENT STATUS:"
+    echo ""
+    docker-compose -f "$COMPOSE_FILE" ps
+    echo ""
+    echo "🔍 SERVICE HEALTH:"
+    run_health_checks
+}
+
+# Show logs
+show_logs() {
+    docker-compose -f "$COMPOSE_FILE" logs -f --tail=100
+}
+
+# Main deployment function
+main_deploy() {
+    show_banner
+    check_prerequisites
+    setup_environment
+    create_directories
+    generate_monitoring_configs
+    build_images
+    deploy_infrastructure
+    deploy_applications
+    run_health_checks
+    show_deployment_info
+}
+
+# Main script logic
 main() {
-    # Set trap for rollback on failure
-    trap rollback ERR
+    cd "$SCRIPT_DIR"
     
-    # Create directories
-    mkdir -p deployments logs backups
-    
-    # Execute deployment phases
-    validate_environment
-    backup_data
-    deploy_services
-    validate_deployment
-    post_deployment
-    cleanup
-    
-    # Success summary
-    log ""
-    log "${GREEN}🎉 PRODUCTION DEPLOYMENT SUCCESSFUL! 🎉${NC}"
-    log "${PURPLE}══════════════════════════════════════════${NC}"
-    log ""
-    log "${CYAN}🌐 Live Endpoints:${NC}"
-    log "   • Main Website:    https://recoder.xyz"
-    log "   • Chat Platform:   https://chat.recoder.xyz"  
-    log "   • API Gateway:     https://api.recoder.xyz"
-    log "   • Monitoring:      https://monitor.recoder.xyz"
-    log "   • Local Access:    http://localhost (proxy)"
-    log ""
-    log "${CYAN}📊 Monitoring Access:${NC}"
-    log "   • Grafana:         http://localhost:3004"
-    log "   • Prometheus:      http://localhost:9090"
-    log "   • Nginx Status:    http://localhost/nginx-health"
-    log ""
-    log "${CYAN}📁 Backup Location:${NC}"
-    log "   • Backup Directory: $BACKUP_DIR"
-    log "   • Deployment Log:   $LOG_FILE"
-    log ""
-    log "${CYAN}🎯 Next Steps:${NC}"
-    log "   1. Configure DNS records for your domains"
-    log "   2. Test SSL certificate automation"
-    log "   3. Monitor application performance"
-    log "   4. Set up external backup sync"
-    log "   5. Configure monitoring alerts"
-    log ""
-    log "${GREEN}🏆 RECODER.XYZ IS LIVE IN PRODUCTION!${NC}"
-    
-    log_success "Production deployment completed successfully!"
+    case "${1:-}" in
+        --update)
+            update_deployment
+            run_health_checks
+            ;;
+        --ssl)
+            enable_ssl
+            ;;
+        --backup)
+            backup_data
+            ;;
+        --cleanup)
+            cleanup
+            ;;
+        --status)
+            show_status
+            ;;
+        --logs)
+            show_logs
+            ;;
+        --help)
+            show_help
+            ;;
+        "")
+            main_deploy
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
 }
 
-# Execute main function with all arguments
+# Error handling
+trap 'log_error "Deployment failed! Check the logs above for details."' ERR
+
+# Run main function
 main "$@"
