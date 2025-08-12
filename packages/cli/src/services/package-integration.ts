@@ -34,18 +34,20 @@ try {
 // CLI Router integration - originally claude-code-router, now recoder-code-router
 let cliRouter: any = null
 try {
-  // Try to import the router src index directly
-  cliRouter = require('../../../recoder-cli-router/src')
+  // Try dist version first (built router)
+  cliRouter = require('../../../recoder-cli-router/dist')
 } catch (error) {
   try {
-    // Try dist version
-    cliRouter = require('../../../recoder-cli-router/dist')
+    // Try npm package if available
+    cliRouter = require('recoder-cli-router')
   } catch (error2) {
     try {
-      // Try to import specific modules we can use
-      const routerUtils = require('../../../recoder-cli-router/src/utils/router')
-      const providers = require('../../../recoder-cli-router/src/api/providers')
-      cliRouter = { router: routerUtils, providers }
+      // Fallback stub implementation
+      cliRouter = { 
+        start: () => Promise.reject(new Error('Router not available')),
+        stop: () => Promise.reject(new Error('Router not available')),
+        status: () => Promise.reject(new Error('Router not available'))
+      }
     } catch (error3) {
       Logger.warn('CLI Router package not available - using fallback mode')
       // Create a minimal mock for testing

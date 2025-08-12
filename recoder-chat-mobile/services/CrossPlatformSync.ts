@@ -3,7 +3,20 @@
  * Real-time synchronization between mobile and web platforms
  */
 
-import { EventEmitter } from 'events';
+// import { EventEmitter } from 'events'; // Node.js module not available in React Native
+// TODO: Use React Native compatible EventEmitter or state management
+class EventEmitter {
+  listeners: { [key: string]: Function[] } = {};
+  on(event: string, listener: Function) {
+    if (!this.listeners[event]) this.listeners[event] = [];
+    this.listeners[event].push(listener);
+  }
+  emit(event: string, ...args: any[]) {
+    if (this.listeners[event]) {
+      this.listeners[event].forEach(listener => listener(...args));
+    }
+  }
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dualPlatformClient, ChatMessage, Project } from './DualPlatformClient';
 

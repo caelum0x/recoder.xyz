@@ -8,7 +8,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { Logger } from '@recoder/shared';
-import { run as startRouter } from '../../../recoder-cli-router/src/index';
+// import { run as startRouter } from '../../../recoder-cli-router/src/index'; // Use built CLI instead
 import { spawn, exec } from 'child_process';
 import { promises as fs } from 'fs';
 import { join } from 'path';
@@ -158,9 +158,8 @@ export class RouterCommand {
         await this.startInBackground(options);
       } else {
         // Start in foreground
-        await startRouter({
-          port: options.port || 3456
-        });
+        console.log(chalk.yellow('🚧 Foreground router start not implemented yet - use --background'));
+        // TODO: Use CLI spawn for foreground mode
       }
 
     } catch (error) {

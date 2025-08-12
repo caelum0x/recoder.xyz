@@ -790,9 +790,9 @@ class ApiClient {
     const formData = new FormData();
     
     if (file instanceof Buffer) {
-      formData.append('file', new Blob([file]), filename || 'file');
+      formData.append('file', new Blob([new Uint8Array(file)]), filename || 'file');
     } else {
-      formData.append('file', file, filename);
+      formData.append('file', file as any, filename);
     }
 
     return this.makeRequest<T>('POST', url, formData, {
