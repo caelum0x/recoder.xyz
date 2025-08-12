@@ -231,20 +231,82 @@ export class ModelRouter extends EventEmitter {
     // Score all available models
     const scores = await this.scoreModels(request);
     
-    // Sort by score and return top candidates
-    const sortedModels = scores
+    // Apply cost-optimized routing for profit maximization
+    const costOptimizedScores = this.applyCostOptimization(scores, request);
+    
+    // Sort by optimized score and return top candidates
+    const sortedModels = costOptimizedScores
       .sort((a, b) => b.score - a.score)
       .slice(0, 5) // Top 5 candidates
       .map(s => s.model);
 
-    Logger.debug('Model selection completed', {
+    Logger.debug('Model selection completed with cost optimization', {
       requestId: request.id,
       task: request.context?.task,
       selectedModels: sortedModels,
-      scores: scores.slice(0, 3)
+      scores: costOptimizedScores.slice(0, 3),
+      costOptimizationApplied: true
     });
 
     return sortedModels;
+  }
+
+  /**
+   * Apply cost optimization to maximize 79% profit margin
+   */
+  private applyCostOptimization(scores: ModelScore[], request: ModelRequest): ModelScore[] {
+    return scores.map(score => {
+      const model = this.models.get(score.model);
+      if (!model) return score;
+
+      // Boost score for cost-efficient models
+      let costBoost = 0;
+      
+      if (model.isLocal) {
+        costBoost = 0.3; // Significant boost for free local models
+        score.reasoning.push('Cost optimization: Local model preferred');
+      } else {
+        const inputCost = model.limits.costPerInputToken || 0;
+        const outputCost = model.limits.costPerOutputToken || 0;
+        const avgCost = (inputCost + outputCost) / 2;
+        
+        if (avgCost <= 0.0002) {
+          costBoost = 0.2; // High boost for DeepSeek-level pricing
+          score.reasoning.push('Cost optimization: DeepSeek pricing tier');
+        } else if (avgCost < 0.001) {
+          costBoost = 0.1; // Medium boost for very cost effective
+          score.reasoning.push('Cost optimization: Cost-effective tier');
+        } else if (avgCost > 0.03) {
+          costBoost = -0.2; // Penalty for expensive models
+          score.reasoning.push('Cost optimization: Premium pricing penalty');
+        }
+      }
+
+      // Apply task-specific cost optimization
+      const taskType = request.context?.task;
+      if (taskType === 'CODE_GENERATION' && !model.isLocal) {
+        const inputCost = model.limits.costPerInputToken || 0;
+        const outputCost = model.limits.costPerOutputToken || 0;
+        const avgCost = (inputCost + outputCost) / 2;
+        
+        if (avgCost <= 0.0002) {
+          costBoost += 0.1; // Extra boost for cheap coding models
+          score.reasoning.push('Cost optimization: Efficient for code generation');
+        }
+      }
+
+      // Update score with cost optimization
+      const optimizedScore = Math.min(1.0, Math.max(0.0, score.score + costBoost));
+      
+      return {
+        ...score,
+        score: optimizedScore,
+        factors: {
+          ...score.factors,
+          cost: score.factors.cost + costBoost
+        }
+      };
+    });
   }
 
   public async getModelRecommendation(request: ModelRequest): Promise<ModelRecommendation> {
@@ -456,28 +518,35 @@ export class ModelRouter extends EventEmitter {
 
   private scoreCost(model: ModelMetadata, reasoning: string[]): number {
     if (model.isLocal) {
-      reasoning.push('Free local model');
+      reasoning.push('Free local model - maximum profit margin');
       return 1.0;
     }
 
     const inputCost = model.limits.costPerInputToken || 0;
     const outputCost = model.limits.costPerOutputToken || 0;
     
-    // Normalize cost (lower cost = higher score)
+    // Cost-optimized scoring for 79% profit margin target
+    // DeepSeek R1 pricing: ~$0.0002/1K tokens (27x cheaper than OpenAI o1)
     const avgCost = (inputCost + outputCost) / 2;
     
     if (avgCost === 0) {
-      reasoning.push('Free model');
+      reasoning.push('Free model - maximum profit');
       return 1.0;
+    } else if (avgCost <= 0.0002) {
+      reasoning.push('DeepSeek-level pricing - optimal for 79% margin');
+      return 0.95;
     } else if (avgCost < 0.001) {
-      reasoning.push('Very cost effective');
+      reasoning.push('Very cost effective - good profit margin');
       return 0.9;
     } else if (avgCost < 0.01) {
-      reasoning.push('Cost effective');
+      reasoning.push('Cost effective - acceptable margin');
       return 0.7;
+    } else if (avgCost < 0.03) {
+      reasoning.push('Higher cost - reduced margin');
+      return 0.4;
     } else {
-      reasoning.push('Higher cost model');
-      return 0.5;
+      reasoning.push('Premium pricing - use sparingly');
+      return 0.2;
     }
   }
 
