@@ -6,9 +6,10 @@
 
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
-import { Logger } from '../utils/logger';
+//import { Logger } from '../utils/logger';
 import { CollaborationUser, AISuggestion } from './websocket-server';
 import { CodeOperation, CodeDocument } from './code-sync-engine';
+import { Logger } from '../logger';
 
 export interface AIAgentCapability {
   name: string;
@@ -507,40 +508,299 @@ export class AICollaborationAgent extends EventEmitter {
   }
 
   private analyzeCode(code: { file: string; content: string; language: string }) {
-    // Mock code analysis - in real implementation, this would use actual analysis tools
-    const issues = [];
+    // Real code analysis using multiple static analysis techniques
+    const issues: string | any[] = [];
     const lines = code.content.split('\n');
     
-    // Simple pattern matching for common issues
+    // Security vulnerability detection
+    this.detectSecurityVulnerabilities(lines, issues);
+    
+    // Performance anti-patterns
+    this.detectPerformanceIssues(lines, issues);
+    
+    // Code quality issues
+    this.detectQualityIssues(lines, issues);
+    
+    // Language-specific analysis
+    this.detectLanguageSpecificIssues(code.language, lines, issues);
+
+    return {
+      confidence: this.calculateAnalysisConfidence(issues, lines.length),
+      issues,
+      linesOfCode: lines.length,
+      language: code.language,
+      complexity: this.calculateComplexity(lines),
+      maintainabilityIndex: this.calculateMaintainabilityIndex(lines, issues.length)
+    };
+  }
+
+  private detectSecurityVulnerabilities(lines: string[], issues: any[]) {
     lines.forEach((line, index) => {
-      if (line.includes('console.log')) {
+      // SQL Injection detection
+      if (line.match(/query.*\+.*\$|SELECT.*\+/i)) {
         issues.push({
           line: index + 1,
-          column: line.indexOf('console.log'),
-          severity: 'low',
-          description: 'Console.log statement should be removed in production',
-          fix: '// Remove console.log statement',
-          confidence: 0.9
+          column: line.search(/query.*\+.*\$|SELECT.*\+/i),
+          severity: 'high',
+          description: 'Potential SQL injection vulnerability detected',
+          fix: 'Use parameterized queries or prepared statements',
+          confidence: 0.85,
+          category: 'security'
         });
       }
-      if (line.includes('TODO')) {
+      
+      // XSS detection
+      if (line.match(/innerHTML.*\+|dangerouslySetInnerHTML/)) {
         issues.push({
           line: index + 1,
-          column: line.indexOf('TODO'),
-          severity: 'medium',
-          description: 'TODO item needs to be addressed',
-          fix: 'Complete the TODO item or remove it',
-          confidence: 0.8
+          column: line.search(/innerHTML.*\+|dangerouslySetInnerHTML/),
+          severity: 'high',
+          description: 'Potential XSS vulnerability with unsafe HTML insertion',
+          fix: 'Use textContent or proper sanitization',
+          confidence: 0.8,
+          category: 'security'
+        });
+      }
+      
+      // Hardcoded secrets
+      if (line.match(/(api_key|password|secret).*=.*['"][^'"]{8,}['"]/i)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/(api_key|password|secret).*=.*['"][^'"]{8,}['"]/i),
+          severity: 'critical',
+          description: 'Hardcoded secret or API key detected',
+          fix: 'Move secrets to environment variables',
+          confidence: 0.9,
+          category: 'security'
         });
       }
     });
+  }
 
-    return {
-      confidence: 0.85,
-      issues,
-      linesOfCode: lines.length,
-      language: code.language
-    };
+  private detectPerformanceIssues(lines: string[], issues: any[]) {
+    lines.forEach((line, index) => {
+      // Inefficient loops
+      if (line.match(/for.*in.*Object\.keys/)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/for.*in.*Object\.keys/),
+          severity: 'medium',
+          description: 'Inefficient object iteration pattern',
+          fix: 'Use for...in or Object.entries() directly',
+          confidence: 0.7,
+          category: 'performance'
+        });
+      }
+      
+      // Synchronous blocking operations
+      if (line.match(/fs\.readFileSync|fs\.writeFileSync/)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/fs\.readFileSync|fs\.writeFileSync/),
+          severity: 'medium',
+          description: 'Synchronous file operation blocks event loop',
+          fix: 'Use async fs.promises methods instead',
+          confidence: 0.85,
+          category: 'performance'
+        });
+      }
+      
+      // Memory leaks
+      if (line.match(/setInterval(?!.*clearInterval)|addEventListener(?!.*removeEventListener)/)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/setInterval(?!.*clearInterval)|addEventListener(?!.*removeEventListener)/),
+          severity: 'medium',
+          description: 'Potential memory leak - missing cleanup',
+          fix: 'Ensure proper cleanup with clearInterval/removeEventListener',
+          confidence: 0.7,
+          category: 'performance'
+        });
+      }
+    });
+  }
+
+  private detectQualityIssues(lines: string[], issues: any[]) {
+    lines.forEach((line, index) => {
+      // Debug statements
+      if (line.match(/console\.(log|debug|info|warn|error)/)) {
+        const severity = line.includes('console.log') ? 'low' : 'medium';
+        issues.push({
+          line: index + 1,
+          column: line.search(/console\./),
+          severity,
+          description: 'Debug statement should be removed or replaced with proper logging',
+          fix: 'Use structured logging or remove debug statement',
+          confidence: 0.9,
+          category: 'quality'
+        });
+      }
+      
+      // TODO/FIXME comments
+      if (line.match(/\/\/\s*(TODO|FIXME|HACK)/i)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/\/\/\s*(TODO|FIXME|HACK)/i),
+          severity: line.toLowerCase().includes('fixme') ? 'medium' : 'low',
+          description: 'Unfinished work item needs attention',
+          fix: 'Complete the work item or create proper issue tracking',
+          confidence: 0.8,
+          category: 'quality'
+        });
+      }
+      
+      // Long lines
+      if (line.length > 100) {
+        issues.push({
+          line: index + 1,
+          column: 100,
+          severity: 'low',
+          description: 'Line length exceeds recommended limit (100 characters)',
+          fix: 'Break line into multiple lines for better readability',
+          confidence: 0.6,
+          category: 'quality'
+        });
+      }
+    });
+  }
+
+  private detectLanguageSpecificIssues(language: string, lines: string[], issues: any[]) {
+    switch (language.toLowerCase()) {
+      case 'typescript':
+      case 'javascript':
+        this.detectJavaScriptIssues(lines, issues);
+        break;
+      case 'python':
+        this.detectPythonIssues(lines, issues);
+        break;
+      case 'rust':
+        this.detectRustIssues(lines, issues);
+        break;
+      case 'go':
+        this.detectGoIssues(lines, issues);
+        break;
+    }
+  }
+
+  private detectJavaScriptIssues(lines: string[], issues: any[]) {
+    lines.forEach((line, index) => {
+      // Loose equality
+      if (line.match(/[^!]==[^=]|[^!]!=[^=]/)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/[^!]==[^=]|[^!]!=[^=]/),
+          severity: 'medium',
+          description: 'Use strict equality operators (=== and !==)',
+          fix: 'Replace == with === and != with !==',
+          confidence: 0.9,
+          category: 'javascript'
+        });
+      }
+      
+      // Missing await on async calls
+      if (line.match(/\.\s*(then|catch)\s*\(/) && !line.includes('await')) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/\.\s*(then|catch)\s*\(/),
+          severity: 'medium',
+          description: 'Consider using async/await instead of Promise chains',
+          fix: 'Use async/await for better error handling and readability',
+          confidence: 0.7,
+          category: 'javascript'
+        });
+      }
+    });
+  }
+
+  private detectPythonIssues(lines: string[], issues: any[]) {
+    lines.forEach((line, index) => {
+      // Global variable usage
+      if (line.match(/^\s*global\s+/)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/global\s+/),
+          severity: 'medium',
+          description: 'Avoid global variables for better code maintainability',
+          fix: 'Pass variables as parameters or use class attributes',
+          confidence: 0.8,
+          category: 'python'
+        });
+      }
+    });
+  }
+
+  private detectRustIssues(lines: string[], issues: any[]) {
+    lines.forEach((line, index) => {
+      // Unwrap usage
+      if (line.match(/\.unwrap\(\)/)) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/\.unwrap\(\)/),
+          severity: 'medium',
+          description: 'Avoid unwrap() in favor of proper error handling',
+          fix: 'Use match, if let, or ? operator for error handling',
+          confidence: 0.8,
+          category: 'rust'
+        });
+      }
+    });
+  }
+
+  private detectGoIssues(lines: string[], issues: any[]) {
+    lines.forEach((line, index) => {
+      // Ignored error
+      if (line.match(/,\s*_\s*:?=/) && line.includes('err')) {
+        issues.push({
+          line: index + 1,
+          column: line.search(/,\s*_\s*:?=/),
+          severity: 'medium',
+          description: 'Error is being ignored',
+          fix: 'Handle errors properly or use explicit error checking',
+          confidence: 0.8,
+          category: 'go'
+        });
+      }
+    });
+  }
+
+  private calculateAnalysisConfidence(issues: any[], linesOfCode: number): number {
+    // More sophisticated confidence calculation based on issue types and code size
+    const criticalIssues = issues.filter(i => i.severity === 'critical').length;
+    const highIssues = issues.filter(i => i.severity === 'high').length;
+    const mediumIssues = issues.filter(i => i.severity === 'medium').length;
+    
+    let baseConfidence = 0.8;
+    
+    // Reduce confidence if too many critical issues (might be false positives)
+    if (criticalIssues > linesOfCode * 0.1) baseConfidence -= 0.2;
+    
+    // Increase confidence if reasonable number of issues found
+    if (issues.length > 0 && issues.length < linesOfCode * 0.3) baseConfidence += 0.1;
+    
+    return Math.max(0.5, Math.min(0.95, baseConfidence));
+  }
+
+  private calculateComplexity(lines: string[]): number {
+    // Simplified cyclomatic complexity calculation
+    let complexity = 1; // Base complexity
+    
+    lines.forEach(line => {
+      // Count decision points
+      if (line.match(/\b(if|else if|while|for|case|catch|&&|\|\|)\b/)) complexity++;
+    });
+    
+    return complexity;
+  }
+
+  private calculateMaintainabilityIndex(lines: string[], issueCount: number): number {
+    // Simplified maintainability index (0-100 scale)
+    const linesOfCode = lines.length;
+    const complexity = this.calculateComplexity(lines);
+    
+    // Basic formula: high lines and complexity reduce maintainability
+    let maintainability = 100 - (issueCount * 5) - (complexity * 2) - (linesOfCode * 0.1);
+    
+    return Math.max(0, Math.min(100, maintainability));
   }
 
   private formatCodeReview(analysis: any): string {
@@ -564,64 +824,479 @@ export class AICollaborationAgent extends EventEmitter {
   }
 
   private generateContextualSuggestion(context: AIAgentContext, prompt?: string): string {
-    const suggestions = [
-      `Based on the current context, I suggest considering error handling for edge cases.`,
-      `The code structure looks good! You might want to add some unit tests.`,
-      `Consider extracting this logic into a reusable utility function.`,
-      `Great progress! Make sure to handle async operations properly.`,
-      `This pattern works well. You could optimize it further with memoization.`
-    ];
+    let suggestion = '';
+    
+    // Analyze context to provide relevant suggestions
+    const recentOps = context.recentOperations.slice(-5); // Last 5 operations
+    const language = context.projectContext?.language || 'javascript';
+    const framework = context.projectContext?.framework;
+    
+    // Analyze recent operation patterns
+    const hasInserts = recentOps.some(op => op.type === 'insert');
+    const hasDeletes = recentOps.some(op => op.type === 'delete');
+    const recentContent = recentOps
+      .filter(op => op.content)
+      .map(op => op.content)
+      .join(' ')
+      .toLowerCase();
 
-    const randomSuggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
+    // Generate suggestions based on content analysis
+    if (recentContent.includes('async') || recentContent.includes('await')) {
+      suggestion = `I notice async operations in your recent changes. Consider:\n• Adding proper error handling with try-catch\n• Using Promise.all() for concurrent operations\n• Implementing proper timeout handling`;
+    } else if (recentContent.includes('useState') || recentContent.includes('useEffect')) {
+      suggestion = `React hooks detected! Suggestions:\n• Consider using useCallback for function dependencies\n• Add dependency arrays to useEffect\n• Use useMemo for expensive calculations`;
+    } else if (recentContent.includes('api') || recentContent.includes('fetch')) {
+      suggestion = `API integration spotted. Recommendations:\n• Implement proper error handling and retry logic\n• Add request/response interceptors\n• Consider caching strategies for better performance`;
+    } else if (recentContent.includes('database') || recentContent.includes('prisma') || recentContent.includes('query')) {
+      suggestion = `Database operations detected. Best practices:\n• Use parameterized queries to prevent SQL injection\n• Implement proper indexing for performance\n• Add database connection pooling`;
+    } else if (recentContent.includes('component') && framework === 'react') {
+      suggestion = `React component development tips:\n• Keep components small and focused\n• Use TypeScript for better type safety\n• Implement proper prop validation`;
+    } else if (recentContent.includes('security') || recentContent.includes('auth')) {
+      suggestion = `Security-focused development detected:\n• Validate all user inputs\n• Use HTTPS for all communications\n• Implement proper authentication and authorization`;
+    } else if (hasInserts && hasDeletes) {
+      suggestion = `I see you're refactoring code. Suggestions:\n• Run tests after changes to ensure nothing breaks\n• Consider breaking large changes into smaller commits\n• Document any API changes`;
+    } else if (language === 'typescript') {
+      suggestion = `TypeScript best practices:\n• Define strict interfaces for better type safety\n• Use utility types like Partial<T> and Pick<T>\n• Enable strict mode in tsconfig.json`;
+    } else if (framework === 'next.js') {
+      suggestion = `Next.js optimization tips:\n• Use dynamic imports for code splitting\n• Optimize images with next/image component\n• Implement proper SEO with next/head`;
+    } else {
+      // Fallback to general suggestions based on recent activity
+      if (hasInserts) {
+        suggestion = `New code detected! Suggestions:\n• Add appropriate error handling\n• Include unit tests for new functionality\n• Consider performance implications`;
+      } else {
+        suggestion = `Code maintenance recommendations:\n• Keep functions small and focused\n• Use meaningful variable and function names\n• Add comments for complex logic`;
+      }
+    }
     
     if (prompt) {
-      return `💡 **Suggestion for "${prompt}"**\n\n${randomSuggestion}`;
+      return `💡 **Contextual Suggestion for "${prompt}"**\n\n${suggestion}\n\nThis suggestion is based on your recent code changes and project context.`;
     }
 
-    return `💡 **Code Suggestion**\n\n${randomSuggestion}`;
+    return `💡 **Smart Code Suggestion**\n\n${suggestion}\n\nThis suggestion is tailored to your current development context.`;
   }
 
   private generateCodeSnippet(context: AIAgentContext): string {
-    // Generate contextual code snippet based on language and framework
+    // Generate contextual code snippet based on language, framework, and recent activity
     const language = context.projectContext?.language || 'typescript';
-    
-    const snippets = {
-      typescript: `// AI-generated TypeScript snippet
-interface UserData {
-  id: string;
-  name: string;
-  email: string;
+    const framework = context.projectContext?.framework;
+    const recentContent = context.recentOperations
+      .filter(op => op.content)
+      .map(op => op.content)
+      .join(' ')
+      .toLowerCase();
+
+    // Generate snippets based on detected patterns
+    if (recentContent.includes('api') || recentContent.includes('fetch')) {
+      return this.generateAPISnippet(language, framework);
+    } else if (recentContent.includes('component') && framework?.includes('react')) {
+      return this.generateReactComponentSnippet(language);
+    } else if (recentContent.includes('database') || recentContent.includes('prisma')) {
+      return this.generateDatabaseSnippet(language);
+    } else if (recentContent.includes('auth') || recentContent.includes('login')) {
+      return this.generateAuthSnippet(language, framework);
+    } else if (recentContent.includes('test') || recentContent.includes('spec')) {
+      return this.generateTestSnippet(language, framework);
+    } else {
+      return this.generateGenericSnippet(language);
+    }
+  }
+
+  private generateAPISnippet(language: string, framework?: string): string {
+    if (language === 'typescript' || language === 'javascript') {
+      return `// AI-generated API client with error handling
+interface ApiResponse<T> {
+  data: T;
+  status: number;
+  message?: string;
 }
 
-const processUserData = async (userData: UserData): Promise<void> => {
-  try {
-    // Process user data here
-    console.log(\`Processing user: \${userData.name}\`);
-  } catch (error) {
-    console.error('Error processing user data:', error);
-  }
-};`,
-      
-      python: `# AI-generated Python snippet
-from typing import Dict, Any
+class ApiClient {
+  private baseUrl: string;
+  private timeout: number;
 
-def process_data(data: Dict[str, Any]) -> None:
-    """Process data with error handling."""
-    try:
-        # Process data here
-        print(f"Processing: {data.get('name', 'Unknown')}")
-    except Exception as e:
-        print(f"Error processing data: {e}")`,
-        
-      javascript: `// AI-generated JavaScript snippet
-const processData = async (data) => {
-  try {
-    // Process data here
-    console.log(\`Processing: \${data.name || 'Unknown'}\`);
-  } catch (error) {
-    console.error('Error processing data:', error);
+  constructor(baseUrl: string, timeout = 10000) {
+    this.baseUrl = baseUrl;
+    this.timeout = timeout;
   }
-};`
+
+  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(\`\${this.baseUrl}\${endpoint}\`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(\`HTTP error! status: \${response.status}\`);
+      }
+
+      const data = await response.json();
+      return { data, status: response.status };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw new Error(\`API request failed: \${error.message}\`);
+    }
+  }
+}`;
+    }
+
+    return this.generateGenericSnippet(language);
+  }
+
+  private generateReactComponentSnippet(language: string): string {
+    const isTypeScript = language === 'typescript';
+    
+    return `// AI-generated React component with TypeScript
+${isTypeScript ? `interface UserCardProps {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  onUserClick?: (userId: string) => void;
+}
+
+const UserCard: React.FC<UserCardProps> = ({ user, onUserClick }) => {` : `const UserCard = ({ user, onUserClick }) => {`}
+  const handleClick = useCallback(() => {
+    onUserClick?.(user.id);
+  }, [user.id, onUserClick]);
+
+  return (
+    <div 
+      className="user-card"
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyPress={(e) => e.key === 'Enter' && handleClick()}
+    >
+      <div className="user-avatar">
+        <img 
+          src={user.avatar || '/default-avatar.png'} 
+          alt={\`\${user.name}'s avatar\`}
+        />
+      </div>
+      <div className="user-info">
+        <h3>{user.name}</h3>
+        <p>{user.email}</p>
+      </div>
+    </div>
+  );
+};
+
+export default UserCard;`;
+  }
+
+  private generateDatabaseSnippet(language: string): string {
+    if (language === 'typescript') {
+      return `// AI-generated Prisma database operations
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+interface CreateUserData {
+  name: string;
+  email: string;
+  password: string;
+}
+
+class UserService {
+  async createUser(userData: CreateUserData) {
+    try {
+      const hashedPassword = await this.hashPassword(userData.password);
+      
+      const user = await prisma.user.create({
+        data: {
+          name: userData.name,
+          email: userData.email,
+          password: hashedPassword,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true,
+        },
+      });
+
+      return user;
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new Error('User with this email already exists');
+      }
+      throw new Error(\`Failed to create user: \${error.message}\`);
+    }
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    const bcrypt = require('bcrypt');
+    return bcrypt.hash(password, 12);
+  }
+}`;
+    }
+
+    return this.generateGenericSnippet(language);
+  }
+
+  private generateAuthSnippet(language: string, framework?: string): string {
+    if (language === 'typescript') {
+      return `// AI-generated authentication middleware
+import jwt from 'jsonwebtoken';
+import { Request, Response, NextFunction } from 'express';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+}
+
+export const authenticate = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication token required' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    
+    // Verify user still exists and is active
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, role: true, isActive: true }
+    });
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};`;
+    }
+
+    return this.generateGenericSnippet(language);
+  }
+
+  private generateTestSnippet(language: string, framework?: string): string {
+    if (language === 'typescript') {
+      return `// AI-generated test suite with Jest
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { jest } from '@jest/globals';
+import UserCard from './UserCard';
+
+const mockUser = {
+  id: '1',
+  name: 'John Doe',
+  email: 'john@example.com',
+  avatar: 'https://example.com/avatar.jpg'
+};
+
+describe('UserCard Component', () => {
+  const mockOnUserClick = jest.fn();
+
+  beforeEach(() => {
+    mockOnUserClick.mockClear();
+  });
+
+  it('renders user information correctly', () => {
+    render(<UserCard user={mockUser} onUserClick={mockOnUserClick} />);
+    
+    expect(screen.getByText(mockUser.name)).toBeInTheDocument();
+    expect(screen.getByText(mockUser.email)).toBeInTheDocument();
+    expect(screen.getByAltText(\`\${mockUser.name}'s avatar\`)).toBeInTheDocument();
+  });
+
+  it('calls onUserClick when card is clicked', async () => {
+    render(<UserCard user={mockUser} onUserClick={mockOnUserClick} />);
+    
+    const card = screen.getByRole('button');
+    fireEvent.click(card);
+    
+    await waitFor(() => {
+      expect(mockOnUserClick).toHaveBeenCalledWith(mockUser.id);
+    });
+  });
+
+  it('handles keyboard navigation', async () => {
+    render(<UserCard user={mockUser} onUserClick={mockOnUserClick} />);
+    
+    const card = screen.getByRole('button');
+    fireEvent.keyPress(card, { key: 'Enter', code: 'Enter', charCode: 13 });
+    
+    await waitFor(() => {
+      expect(mockOnUserClick).toHaveBeenCalledWith(mockUser.id);
+    });
+  });
+});`;
+    }
+
+    return this.generateGenericSnippet(language);
+  }
+
+  private generateGenericSnippet(language: string): string {
+    const snippets = {
+      typescript: `// AI-generated TypeScript utility functions
+interface Result<T, E = Error> {
+  success: boolean;
+  data?: T;
+  error?: E;
+}
+
+class AsyncUtils {
+  /**
+   * Safe async operation wrapper
+   */
+  static async safeAsync<T>(
+    operation: () => Promise<T>
+  ): Promise<Result<T>> {
+    try {
+      const data = await operation();
+      return { success: true, data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error : new Error(String(error))
+      };
+    }
+  }
+
+  /**
+   * Retry async operation with exponential backoff
+   */
+  static async retry<T>(
+    operation: () => Promise<T>,
+    maxAttempts = 3,
+    baseDelay = 1000
+  ): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        if (attempt === maxAttempts) break;
+        
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError!;
+  }
+}`,
+      
+      python: `# AI-generated Python utility functions
+from typing import TypeVar, Callable, Awaitable, Optional
+from functools import wraps
+import asyncio
+import logging
+
+T = TypeVar('T')
+
+class AsyncUtils:
+    """Utility class for async operations"""
+    
+    @staticmethod
+    async def safe_async(operation: Callable[[], Awaitable[T]]) -> tuple[bool, Optional[T], Optional[Exception]]:
+        """Safe async operation wrapper"""
+        try:
+            result = await operation()
+            return True, result, None
+        except Exception as e:
+            logging.error(f"Async operation failed: {e}")
+            return False, None, e
+    
+    @staticmethod
+    async def retry_async(
+        operation: Callable[[], Awaitable[T]], 
+        max_attempts: int = 3,
+        base_delay: float = 1.0
+    ) -> T:
+        """Retry async operation with exponential backoff"""
+        last_error = None
+        
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return await operation()
+            except Exception as e:
+                last_error = e
+                
+                if attempt == max_attempts:
+                    break
+                    
+                delay = base_delay * (2 ** (attempt - 1))
+                await asyncio.sleep(delay)
+        
+        raise last_error`,
+        
+      javascript: `// AI-generated JavaScript utility functions
+class AsyncUtils {
+  /**
+   * Safe async operation wrapper
+   */
+  static async safeAsync(operation) {
+    try {
+      const data = await operation();
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Retry async operation with exponential backoff
+   */
+  static async retry(operation, maxAttempts = 3, baseDelay = 1000) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        
+        if (attempt === maxAttempts) break;
+        
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * Debounce function for frequent operations
+   */
+  static debounce(func, delay = 300) {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func.apply(this, args), delay);
+    };
+  }
+}`
     };
 
     return snippets[language as keyof typeof snippets] || snippets.typescript;
@@ -767,12 +1442,3 @@ const processData = async (data) => {
   }
 }
 
-// Export types
-export type {
-  AIAgentCapability,
-  AIAgentPersonality,
-  AIAgentContext,
-  AIMessage,
-  AIAgentRequest,
-  AIAgentResponse
-};

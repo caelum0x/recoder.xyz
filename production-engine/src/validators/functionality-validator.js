@@ -340,52 +340,88 @@ class FunctionalityValidator {
 
   async validateRealAPIIntegration(projectPath, check) {
     try {
-      // Test real API endpoints that should exist in web apps
       const fetch = require('node-fetch');
       
-      // Test common public APIs to verify network connectivity
+      // First, validate project's API endpoints if they exist
+      await this.validateLocalAPIEndpoints(projectPath, check);
+      
+      // Test external API integrations mentioned in the project
+      await this.validateExternalAPIIntegrations(projectPath, check);
+      
+      // Test common external APIs for connectivity
       const apiTests = [
         {
           name: 'JSONPlaceholder API',
           url: 'https://jsonplaceholder.typicode.com/posts/1',
-          expected: (data) => data.id === 1
+          expected: (data) => {
+            try {
+              const parsed = JSON.parse(data);
+              return parsed.id === 1;
+            } catch { return false; }
+          },
+          timeout: 5000
         },
         {
-          name: 'GitHub API',
-          url: 'https://api.github.com/zen',
-          expected: (data) => typeof data === 'string' && data.length > 0
+          name: 'GitHub API Rate Limit Check',
+          url: 'https://api.github.com/rate_limit',
+          expected: (data) => {
+            try {
+              const parsed = JSON.parse(data);
+              return parsed.resources && parsed.resources.core;
+            } catch { return false; }
+          },
+          timeout: 5000
         },
         {
-          name: 'HTTP Status Check',
+          name: 'Public HTTP Status API',
           url: 'https://httpstat.us/200',
-          expected: (data) => data === '200 OK'
+          expected: (data) => data.includes('200'),
+          timeout: 3000
         }
       ];
 
       for (const test of apiTests) {
         try {
-          const response = await fetch(test.url, { timeout: 5000 });
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), test.timeout || 5000);
+          
+          const response = await fetch(test.url, { 
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Recoder-API-Validator/1.0'
+            }
+          });
+          
+          clearTimeout(timeoutId);
           const data = await response.text();
           
           if (response.ok && test.expected(data)) {
             check.details.push({
-              item: `API Integration: ${test.name}`,
+              item: `External API: ${test.name}`,
               status: 'passed',
-              message: `Successfully connected to ${test.name}`
+              message: `Successfully validated ${test.name} connectivity (${response.status})`
             });
           } else {
             check.details.push({
-              item: `API Integration: ${test.name}`,
+              item: `External API: ${test.name}`,
               status: 'warning',
-              message: `${test.name} returned unexpected response`
+              message: `${test.name} validation failed - Status: ${response.status}`
             });
           }
         } catch (apiError) {
-          check.details.push({
-            item: `API Integration: ${test.name}`,
-            status: 'warning',
-            message: `${test.name} test failed: ${apiError.message}`
-          });
+          if (apiError.name === 'AbortError') {
+            check.details.push({
+              item: `External API: ${test.name}`,
+              status: 'warning',
+              message: `${test.name} timeout after ${test.timeout}ms`
+            });
+          } else {
+            check.details.push({
+              item: `External API: ${test.name}`,
+              status: 'warning',
+              message: `${test.name} connection failed: ${apiError.message}`
+            });
+          }
         }
       }
 
@@ -422,31 +458,265 @@ class FunctionalityValidator {
 
   async validateRealBlockchainIntegration(projectPath, check) {
     try {
-      // Test Solana devnet connection
-      const { Connection } = require('@solana/web3.js');
-      const connection = new Connection('https://api.devnet.solana.com');
+      // Check if Solana web3.js is installed
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      let hasSolanaSDK = false;
       
-      // Test connection
-      const version = await connection.getVersion();
-      check.details.push({
-        item: 'Solana devnet connection',
-        status: 'passed',
-        message: `Connected to Solana devnet (version: ${version['solana-core']})`
-      });
-      
-      // Test account balance check
-      const balance = await connection.getBalance(new (require('@solana/web3.js').PublicKey)('11111111111111111111111111111112'));
-      check.details.push({
-        item: 'Blockchain account query',
-        status: 'passed',
-        message: `Successfully queried account balance: ${balance} lamports`
-      });
-      
+      if (await fs.pathExists(packageJsonPath)) {
+        const packageJson = await fs.readJSON(packageJsonPath);
+        const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+        hasSolanaSDK = dependencies['@solana/web3.js'] || dependencies['@solana/spl-token'];
+      }
+
+      if (hasSolanaSDK) {
+        // Test Solana devnet connection
+        try {
+          const { Connection, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
+          
+          // Test multiple RPC endpoints for reliability
+          const endpoints = [
+            { name: 'Solana Devnet', url: 'https://api.devnet.solana.com', timeout: 10000 },
+            { name: 'Solana Testnet', url: 'https://api.testnet.solana.com', timeout: 10000 },
+            { name: 'Solana Mainnet (rate limited)', url: 'https://api.mainnet-beta.solana.com', timeout: 5000 }
+          ];
+
+          for (const endpoint of endpoints) {
+            try {
+              const connection = new Connection(endpoint.url, {
+                commitment: 'confirmed',
+                httpTimeout: endpoint.timeout
+              });
+              
+              // Test basic connection
+              const version = await Promise.race([
+                connection.getVersion(),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout')), endpoint.timeout)
+                )
+              ]);
+
+              check.details.push({
+                item: `${endpoint.name} Connection`,
+                status: 'passed',
+                message: `Connected successfully (Solana core: ${version['solana-core']})`
+              });
+
+              // Test slot information
+              const slot = await connection.getSlot();
+              check.details.push({
+                item: `${endpoint.name} Slot Query`,
+                status: 'passed',
+                message: `Current slot: ${slot}`
+              });
+
+              // Test system program account (exists on all networks)
+              const systemProgramId = new PublicKey('11111111111111111111111111111112');
+              const accountInfo = await connection.getAccountInfo(systemProgramId);
+              
+              if (accountInfo) {
+                check.details.push({
+                  item: `${endpoint.name} Account Query`,
+                  status: 'passed',
+                  message: 'System program account verified'
+                });
+              }
+
+              // Only test one working endpoint to save time
+              break;
+
+            } catch (endpointError) {
+              check.details.push({
+                item: `${endpoint.name} Connection`,
+                status: 'warning', 
+                message: `Connection failed: ${endpointError.message}`
+              });
+            }
+          }
+
+          // Validate Solana program files if they exist
+          await this.validateSolanaProgramFiles(projectPath, check);
+
+        } catch (solanaError) {
+          check.details.push({
+            item: 'Solana SDK Test',
+            status: 'warning',
+            message: `Solana SDK not available: ${solanaError.message}`
+          });
+        }
+      }
+
+      // Test Ethereum connection if available
+      await this.validateEthereumIntegration(projectPath, check);
+
     } catch (error) {
       check.details.push({
-        item: 'Real blockchain integration',
+        item: 'Blockchain Integration Test',
         status: 'warning',
-        message: `Blockchain integration test failed: ${error.message}`
+        message: `Blockchain validation failed: ${error.message}`
+      });
+    }
+  }
+
+  async validateSolanaProgramFiles(projectPath, check) {
+    try {
+      // Check for Rust programs
+      const programsDir = path.join(projectPath, 'programs');
+      if (await fs.pathExists(programsDir)) {
+        const programs = await fs.readdir(programsDir);
+        
+        for (const program of programs) {
+          const programPath = path.join(programsDir, program);
+          const libRsPath = path.join(programPath, 'src', 'lib.rs');
+          const cargoTomlPath = path.join(programPath, 'Cargo.toml');
+          
+          if (await fs.pathExists(libRsPath) && await fs.pathExists(cargoTomlPath)) {
+            const libContent = await fs.readFile(libRsPath, 'utf8');
+            const cargoContent = await fs.readFile(cargoTomlPath, 'utf8');
+            
+            // Check for Anchor framework usage
+            const usesAnchor = /use anchor_lang/.test(libContent) || 
+                              /anchor-lang/.test(cargoContent);
+            
+            // Check for common Solana program patterns
+            const hasProgram = /#\[program\]/.test(libContent) ||
+                              /declare_id!/.test(libContent) ||
+                              /entrypoint!/.test(libContent);
+
+            if (hasProgram) {
+              check.details.push({
+                item: `Solana Program: ${program}`,
+                status: 'passed',
+                message: `Valid program structure${usesAnchor ? ' (using Anchor)' : ''}`
+              });
+            } else {
+              check.details.push({
+                item: `Solana Program: ${program}`,
+                status: 'warning',
+                message: 'Program structure validation failed'
+              });
+            }
+          }
+        }
+      }
+
+      // Check for JavaScript/TypeScript program clients
+      const clientDirs = ['app', 'client', 'tests'];
+      for (const clientDir of clientDirs) {
+        const fullClientDir = path.join(projectPath, clientDir);
+        if (await fs.pathExists(fullClientDir)) {
+          const files = await this.findAPIFiles(fullClientDir);
+          const solanaFiles = files.filter(file => {
+            const content = fs.readFileSync(file, 'utf8');
+            return content.includes('@solana/web3.js') || 
+                   content.includes('Connection') ||
+                   content.includes('PublicKey');
+          });
+
+          if (solanaFiles.length > 0) {
+            check.details.push({
+              item: `Solana Client Files in ${clientDir}`,
+              status: 'passed',
+              message: `Found ${solanaFiles.length} Solana integration file(s)`
+            });
+          }
+        }
+      }
+
+    } catch (error) {
+      check.details.push({
+        item: 'Solana Program Validation',
+        status: 'warning',
+        message: `Program validation failed: ${error.message}`
+      });
+    }
+  }
+
+  async validateEthereumIntegration(projectPath, check) {
+    try {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      let hasEthereumSDK = false;
+      
+      if (await fs.pathExists(packageJsonPath)) {
+        const packageJson = await fs.readJSON(packageJsonPath);
+        const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+        hasEthereumSDK = dependencies['ethers'] || 
+                        dependencies['web3'] || 
+                        dependencies['viem'] ||
+                        dependencies['@ethersproject/providers'];
+      }
+
+      if (hasEthereumSDK) {
+        try {
+          // Test with ethers.js if available
+          const ethers = require('ethers');
+          
+          // Test public RPC endpoints
+          const providers = [
+            { name: 'Ethereum Mainnet', url: 'https://eth.llamarpc.com' },
+            { name: 'Ethereum Goerli', url: 'https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161' },
+            { name: 'Polygon Mainnet', url: 'https://polygon-rpc.com' }
+          ];
+
+          for (const providerConfig of providers.slice(0, 1)) { // Test only one to save time
+            try {
+              const provider = new ethers.JsonRpcProvider(providerConfig.url);
+              const blockNumber = await Promise.race([
+                provider.getBlockNumber(),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout')), 5000)
+                )
+              ]);
+
+              check.details.push({
+                item: `${providerConfig.name} Connection`,
+                status: 'passed',
+                message: `Connected successfully (Block: ${blockNumber})`
+              });
+              break;
+
+            } catch (providerError) {
+              check.details.push({
+                item: `${providerConfig.name} Connection`,
+                status: 'warning',
+                message: `Connection failed: ${providerError.message}`
+              });
+            }
+          }
+
+        } catch (ethersError) {
+          // Try web3.js as fallback
+          try {
+            const Web3 = require('web3');
+            const web3 = new Web3('https://eth.llamarpc.com');
+            
+            const blockNumber = await Promise.race([
+              web3.eth.getBlockNumber(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), 5000)
+              )
+            ]);
+
+            check.details.push({
+              item: 'Ethereum Web3.js Connection',
+              status: 'passed',
+              message: `Connected via Web3.js (Block: ${blockNumber})`
+            });
+
+          } catch (web3Error) {
+            check.details.push({
+              item: 'Ethereum SDK Test',
+              status: 'warning',
+              message: `Ethereum libraries not available: ${web3Error.message}`
+            });
+          }
+        }
+      }
+
+    } catch (error) {
+      check.details.push({
+        item: 'Ethereum Integration Test',
+        status: 'warning',
+        message: `Ethereum validation failed: ${error.message}`
       });
     }
   }
@@ -684,6 +954,252 @@ class FunctionalityValidator {
     }
     
     this.validationResults.push(check);
+  }
+
+  async validateLocalAPIEndpoints(projectPath, check) {
+    try {
+      // Check for Next.js API routes
+      const apiDirs = [
+        path.join(projectPath, 'pages', 'api'),
+        path.join(projectPath, 'src', 'pages', 'api'),
+        path.join(projectPath, 'app', 'api'),
+        path.join(projectPath, 'src', 'app', 'api')
+      ];
+
+      let foundApiRoutes = false;
+      const apiFiles = [];
+
+      for (const apiDir of apiDirs) {
+        if (await fs.pathExists(apiDir)) {
+          const files = await this.findAPIFiles(apiDir);
+          apiFiles.push(...files);
+          foundApiRoutes = true;
+        }
+      }
+
+      if (foundApiRoutes) {
+        check.details.push({
+          item: 'Local API Routes Discovery',
+          status: 'passed',
+          message: `Found ${apiFiles.length} API endpoint(s): ${apiFiles.slice(0, 3).join(', ')}${apiFiles.length > 3 ? '...' : ''}`
+        });
+
+        // Validate API file structure
+        for (const apiFile of apiFiles.slice(0, 5)) { // Limit to first 5 for performance
+          await this.validateAPIFileStructure(apiFile, check);
+        }
+      }
+
+      // Check for Express.js routes
+      const expressRouteDirs = [
+        path.join(projectPath, 'routes'),
+        path.join(projectPath, 'src', 'routes'),
+        path.join(projectPath, 'server', 'routes'),
+        path.join(projectPath, 'backend', 'routes')
+      ];
+
+      for (const routeDir of expressRouteDirs) {
+        if (await fs.pathExists(routeDir)) {
+          const routeFiles = await this.findRouteFiles(routeDir);
+          if (routeFiles.length > 0) {
+            check.details.push({
+              item: 'Express.js Routes Discovery',
+              status: 'passed',
+              message: `Found ${routeFiles.length} route file(s)`
+            });
+          }
+        }
+      }
+    } catch (error) {
+      check.details.push({
+        item: 'Local API Validation',
+        status: 'warning',
+        message: `Local API validation failed: ${error.message}`
+      });
+    }
+  }
+
+  async findAPIFiles(dir) {
+    const files = [];
+    
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        
+        if (entry.isDirectory()) {
+          const subFiles = await this.findAPIFiles(fullPath);
+          files.push(...subFiles);
+        } else if (entry.isFile() && /\.(js|ts|jsx|tsx)$/.test(entry.name)) {
+          files.push(fullPath);
+        }
+      }
+    } catch (error) {
+      // Directory read failed, skip
+    }
+    
+    return files;
+  }
+
+  async findRouteFiles(dir) {
+    const files = [];
+    
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        if (entry.isFile() && /\.(js|ts)$/.test(entry.name)) {
+          files.push(path.join(dir, entry.name));
+        }
+      }
+    } catch (error) {
+      // Directory read failed, skip
+    }
+    
+    return files;
+  }
+
+  async validateAPIFileStructure(filePath, check) {
+    try {
+      const content = await fs.readFile(filePath, 'utf8');
+      const relativePath = path.relative(process.cwd(), filePath);
+      
+      // Check for proper HTTP method handlers
+      const hasHandlers = /export\s+(default\s+)?(?:function|const|async\s+function)/.test(content) ||
+                         /handler\s*=|export\s*\{.*handler.*\}/.test(content);
+      
+      // Check for error handling
+      const hasErrorHandling = /try\s*\{|catch\s*\(|\.catch\s*\(/.test(content);
+      
+      // Check for input validation
+      const hasValidation = /req\.body|req\.query|req\.params/.test(content) && 
+                           (/validate|schema|joi|yup|zod/.test(content.toLowerCase()) || 
+                            /typeof|instanceof|Array\.isArray/.test(content));
+
+      let status = 'passed';
+      let issues = [];
+
+      if (!hasHandlers) {
+        issues.push('No HTTP handlers found');
+        status = 'warning';
+      }
+      
+      if (!hasErrorHandling) {
+        issues.push('Missing error handling');
+        status = 'warning';
+      }
+      
+      if (!hasValidation && /req\.(body|query|params)/.test(content)) {
+        issues.push('Input validation recommended');
+      }
+
+      check.details.push({
+        item: `API File Structure: ${path.basename(relativePath)}`,
+        status,
+        message: issues.length > 0 ? 
+          `Issues: ${issues.join(', ')}` : 
+          'Well-structured API endpoint'
+      });
+
+    } catch (error) {
+      check.details.push({
+        item: `API File Analysis: ${path.basename(filePath)}`,
+        status: 'warning',
+        message: `Failed to analyze: ${error.message}`
+      });
+    }
+  }
+
+  async validateExternalAPIIntegrations(projectPath, check) {
+    try {
+      // Check package.json for API client libraries
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      if (await fs.pathExists(packageJsonPath)) {
+        const packageJson = await fs.readJSON(packageJsonPath);
+        const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+        
+        const apiLibraries = {
+          'axios': 'HTTP client',
+          'fetch': 'Fetch API',
+          'node-fetch': 'Node.js fetch',
+          'superagent': 'HTTP client',
+          'request': 'HTTP client (deprecated)',
+          '@apollo/client': 'GraphQL client',
+          'graphql-request': 'GraphQL client',
+          'stripe': 'Stripe payments',
+          'openai': 'OpenAI API',
+          '@anthropic-ai/sdk': 'Anthropic API',
+          'twilio': 'Twilio communications',
+          'nodemailer': 'Email service',
+          'aws-sdk': 'AWS services',
+          '@aws-sdk/client-s3': 'AWS S3',
+          '@google-cloud/storage': 'Google Cloud Storage',
+          'firebase-admin': 'Firebase',
+          'mongodb': 'MongoDB',
+          'redis': 'Redis cache',
+          'pg': 'PostgreSQL',
+          'mysql2': 'MySQL'
+        };
+
+        const foundIntegrations = [];
+        for (const [lib, description] of Object.entries(apiLibraries)) {
+          if (dependencies[lib]) {
+            foundIntegrations.push(`${lib} (${description})`);
+          }
+        }
+
+        if (foundIntegrations.length > 0) {
+          check.details.push({
+            item: 'External API Dependencies',
+            status: 'passed',
+            message: `Found ${foundIntegrations.length} integration(s): ${foundIntegrations.slice(0, 3).join(', ')}${foundIntegrations.length > 3 ? '...' : ''}`
+          });
+        }
+      }
+
+      // Check environment files for API configurations
+      const envFiles = ['.env', '.env.local', '.env.example', '.env.development'];
+      const apiEnvVars = [];
+
+      for (const envFile of envFiles) {
+        const envPath = path.join(projectPath, envFile);
+        if (await fs.pathExists(envPath)) {
+          const envContent = await fs.readFile(envPath, 'utf8');
+          
+          // Look for API-related environment variables
+          const apiPatterns = [
+            /API_KEY|API_SECRET|CLIENT_ID|CLIENT_SECRET/i,
+            /STRIPE_|OPENAI_|ANTHROPIC_|GOOGLE_|AWS_/i,
+            /DATABASE_URL|REDIS_URL|MONGODB_URI/i,
+            /WEBHOOK_|ENDPOINT_|BASE_URL/i
+          ];
+
+          for (const pattern of apiPatterns) {
+            const matches = envContent.match(new RegExp(`^${pattern.source}.*=`, 'gmi'));
+            if (matches) {
+              apiEnvVars.push(...matches.map(m => m.replace('=', '')));
+            }
+          }
+        }
+      }
+
+      if (apiEnvVars.length > 0) {
+        const uniqueVars = [...new Set(apiEnvVars)];
+        check.details.push({
+          item: 'API Configuration Variables',
+          status: 'passed',
+          message: `Found ${uniqueVars.length} API config variable(s): ${uniqueVars.slice(0, 3).join(', ')}${uniqueVars.length > 3 ? '...' : ''}`
+        });
+      }
+
+    } catch (error) {
+      check.details.push({
+        item: 'External API Integration Analysis',
+        status: 'warning',
+        message: `Analysis failed: ${error.message}`
+      });
+    }
   }
 
   // Helper methods
