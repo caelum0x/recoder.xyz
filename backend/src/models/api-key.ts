@@ -1,0 +1,368 @@
+// API Key Model
+// Secure API key management with rate limiting
+
+import crypto from 'crypto';
+import { prisma } from '../database/prisma';
+import { logger } from '../utils/logger';
+
+export interface ApiKey {
+  id: string;
+  userId: string;
+  name: string;
+  keyPrefix: string;
+  keyHash: string;
+  permissions: string[];
+  rateLimit: {
+    requests: number;
+    tokens: number;
+    window: number; // in seconds
+  };
+  metadata: Record<string, any>;
+  isActive: boolean;
+  lastUsedAt?: Date;
+  expiresAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class ApiKeyService {
+  private static readonly KEY_LENGTH = 32;
+  private static readonly PREFIX_LENGTH = 8;
+
+  /**
+   * Generate a new API key
+   */
+  static async generateApiKey(
+    userId: string,
+    name: string,
+    permissions: string[] = ['read'],
+    expiresIn?: number // days
+  ): Promise<{ key: string; apiKey: ApiKey }> {
+    try {
+      // Generate random key
+      const keyBytes = crypto.randomBytes(this.KEY_LENGTH);
+      const keyPrefix = keyBytes.slice(0, this.PREFIX_LENGTH / 2).toString('hex');
+      const fullKey = keyBytes.toString('hex');
+      
+      // Create the full API key with prefix
+      const apiKeyString = `rk_${keyPrefix}_${fullKey}`;
+      
+      // Hash the full key for storage
+      const keyHash = crypto
+        .createHash('sha256')
+        .update(apiKeyString)
+        .digest('hex');
+
+      // Get user's subscription to set rate limits
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          dodoSubscriptions: {
+            where: { status: 'active' },
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          }
+        }
+      });
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const subscriptionPlan = user.dodoSubscriptions[0]?.planId || 'free';
+      const rateLimit = this.getRateLimitForPlan(subscriptionPlan);
+
+      // Set expiration date
+      let expiresAt: Date | null = null;
+      if (expiresIn) {
+        expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + expiresIn);
+      }
+
+      // Create API key record
+      const apiKey = await prisma.apiKey.create({
+        data: {
+          userId,
+          name,
+          keyPrefix: `rk_${keyPrefix}`,
+          keyHash,
+          permissions,
+          rateLimit,
+          metadata: {},
+          isActive: true,
+          expiresAt
+        }
+      });
+
+      logger.info('API key generated', {
+        userId,
+        keyId: apiKey.id,
+        permissions,
+        rateLimit
+      });
+
+      return {
+        key: apiKeyString,
+        apiKey: apiKey as ApiKey
+      };
+
+    } catch (error) {
+      logger.error('Failed to generate API key', {
+        error: error.message,
+        userId,
+        name
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Validate and retrieve API key
+   */
+  static async validateApiKey(key: string): Promise<ApiKey | null> {
+    try {
+      if (!key.startsWith('rk_')) {
+        return null;
+      }
+
+      // Extract prefix
+      const parts = key.split('_');
+      if (parts.length !== 3) {
+        return null;
+      }
+
+      const keyPrefix = `rk_${parts[1]}`;
+
+      // Hash the full key
+      const keyHash = crypto
+        .createHash('sha256')
+        .update(key)
+        .digest('hex');
+
+      // Find the key in database
+      const apiKey = await prisma.apiKey.findFirst({
+        where: {
+          keyPrefix,
+          keyHash,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gte: new Date() } }
+          ]
+        },
+        include: {
+          user: {
+            include: {
+              subscriptions: {
+                where: { status: 'active' },
+                orderBy: { createdAt: 'desc' },
+                take: 1
+              }
+            }
+          }
+        }
+      });
+
+      if (!apiKey) {
+        return null;
+      }
+
+      // Update last used timestamp
+      await prisma.apiKey.update({
+        where: { id: apiKey.id },
+        data: { lastUsedAt: new Date() }
+      });
+
+      return apiKey as unknown as ApiKey;
+
+    } catch (error) {
+      logger.error('Failed to validate API key', {
+        error: error.message,
+        keyPrefix: key.substring(0, 10)
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Get rate limits for subscription plan
+   */
+  private static getRateLimitForPlan(planId: string) {
+    const rateLimits = {
+      free: { requests: 100, tokens: 5000, window: 3600 }, // per hour
+      weekly: { requests: 1000, tokens: 100000, window: 3600 }, // per hour  
+      monthly: { requests: 5000, tokens: 500000, window: 3600 }, // per hour
+      enterprise: { requests: 50000, tokens: 5000000, window: 3600 } // per hour
+    };
+
+    return rateLimits[planId as keyof typeof rateLimits] || rateLimits.free;
+  }
+
+  /**
+   * List user's API keys
+   */
+  static async listApiKeys(userId: string): Promise<Omit<ApiKey, 'keyHash'>[]> {
+    try {
+      const apiKeys = await prisma.apiKey.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          keyPrefix: true,
+          permissions: true,
+          rateLimit: true,
+          metadata: true,
+          isActive: true,
+          lastUsedAt: true,
+          expiresAt: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      return apiKeys.map(key => ({
+        ...key,
+        userId
+      })) as Omit<ApiKey, 'keyHash'>[];
+
+    } catch (error) {
+      logger.error('Failed to list API keys', {
+        error: error.message,
+        userId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Revoke API key
+   */
+  static async revokeApiKey(userId: string, keyId: string): Promise<void> {
+    try {
+      await prisma.apiKey.updateMany({
+        where: {
+          id: keyId,
+          userId
+        },
+        data: {
+          isActive: false,
+          updatedAt: new Date()
+        }
+      });
+
+      logger.info('API key revoked', { userId, keyId });
+
+    } catch (error) {
+      logger.error('Failed to revoke API key', {
+        error: error.message,
+        userId,
+        keyId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update API key permissions and settings
+   */
+  static async updateApiKey(
+    userId: string,
+    keyId: string,
+    updates: {
+      name?: string;
+      permissions?: string[];
+      isActive?: boolean;
+      expiresAt?: Date | null;
+    }
+  ): Promise<void> {
+    try {
+      await prisma.apiKey.updateMany({
+        where: {
+          id: keyId,
+          userId
+        },
+        data: {
+          ...updates,
+          updatedAt: new Date()
+        }
+      });
+
+      logger.info('API key updated', { userId, keyId, updates });
+
+    } catch (error) {
+      logger.error('Failed to update API key', {
+        error: error.message,
+        userId,
+        keyId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get API key usage stats
+   */
+  static async getApiKeyUsage(
+    keyId: string,
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<{
+    requests: number;
+    tokens: number;
+    cost: number;
+    errors: number;
+  }> {
+    try {
+      const whereClause: any = {
+        metadata: {
+          path: ['apiKeyId'],
+          equals: keyId
+        }
+      };
+
+      if (startDate || endDate) {
+        whereClause.createdAt = {};
+        if (startDate) whereClause.createdAt.gte = startDate;
+        if (endDate) whereClause.createdAt.lte = endDate;
+      }
+
+      const usage = await prisma.usageRecord.aggregate({
+        where: whereClause,
+        _sum: {
+          tokens: true,
+          cost: true
+        },
+        _count: {
+          id: true
+        }
+      });
+
+      // Count errors from usage records
+      const errorCount = await prisma.usageRecord.count({
+        where: {
+          ...whereClause,
+          metadata: {
+            path: ['apiKeyId'],
+            equals: keyId
+          },
+          status: 'error'
+        }
+      });
+
+      return {
+        requests: usage._count.id || 0,
+        tokens: usage._sum.tokens || 0,
+        cost: usage._sum.cost || 0,
+        errors: errorCount
+      };
+
+    } catch (error) {
+      logger.error('Failed to get API key usage', {
+        error: error.message,
+        keyId
+      });
+      throw error;
+    }
+  }
+}
