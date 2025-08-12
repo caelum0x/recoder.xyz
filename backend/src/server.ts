@@ -36,6 +36,11 @@ const structureRoutes = require('./routes/structure');
 const validationRoutes = require('./routes/validation');
 const modelRoutes = require('./routes/models');
 const billingRoutes = require('./routes/billing');
+const subscriptionRoutes = require('./routes/subscriptions');
+const webhookRoutes = require('./routes/webhooks');
+const analyticsRoutes = require('./routes/analytics');
+const apiKeyRoutes = require('./routes/api-keys');
+const aiProvidersRoutes = require('./routes/ai-providers');
 
 // Import middleware
 const { apiLimiter } = require('./middleware/rateLimit');
@@ -152,6 +157,11 @@ app.use('/api/structure', structureRoutes);
 app.use('/api/validation', validationRoutes);
 app.use('/api/models', modelRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/keys', apiKeyRoutes);
+app.use('/api/ai-providers', aiProvidersRoutes);
 
 // Legacy API endpoints for backward compatibility
 app.get('/api/v1/status', (req: any, res: any) => {
