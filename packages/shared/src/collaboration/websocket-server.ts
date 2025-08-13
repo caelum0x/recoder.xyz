@@ -89,7 +89,7 @@ export interface AISuggestion {
 }
 
 export class CollaborationServer extends EventEmitter {
-  private wss: WebSocketServer;
+  private wss!: WebSocketServer;
   private server: any;
   private sessions: Map<string, CollaborationSession> = new Map();
   private userSessions: Map<string, string> = new Map(); // userId -> sessionId
@@ -298,7 +298,7 @@ export class CollaborationServer extends EventEmitter {
 
   private handleCodeChange(ws: WebSocket, data: any): void {
     const { sessionId, userId } = this.getUserSession(ws);
-    if (!sessionId) return;
+    if (!sessionId || !userId) return;
 
     const codeChange: CodeChange = {
       id: uuidv4(),
@@ -315,7 +315,7 @@ export class CollaborationServer extends EventEmitter {
     this.broadcastToSession(sessionId, {
       type: 'code-changed',
       data: resolvedChange
-    }, userId);
+    }, userId ?? undefined);
 
     // Store change for history/undo
     this.emit('code-changed', {
@@ -328,7 +328,7 @@ export class CollaborationServer extends EventEmitter {
 
   private handleCursorMove(ws: WebSocket, data: any): void {
     const { sessionId, userId } = this.getUserSession(ws);
-    if (!sessionId) return;
+    if (!sessionId || !userId) return;
 
     const session = this.sessions.get(sessionId);
     if (!session) return;
@@ -351,7 +351,7 @@ export class CollaborationServer extends EventEmitter {
         userId,
         cursor: user.cursor
       }
-    }, userId);
+    }, userId ?? undefined);
   }
 
   private handleAIRequest(ws: WebSocket, data: any): void {
@@ -398,7 +398,7 @@ export class CollaborationServer extends EventEmitter {
         audioData: data.audioData,
         timestamp: new Date()
       }
-    }, userId);
+    }, userId ?? undefined);
   }
 
   private handleChatMessage(ws: WebSocket, data: any): void {
@@ -427,7 +427,7 @@ export class CollaborationServer extends EventEmitter {
 
   private handleHeartbeat(ws: WebSocket, data: any): void {
     const { sessionId, userId } = this.getUserSession(ws);
-    if (!sessionId) return;
+    if (!sessionId || !userId) return;
 
     const session = this.sessions.get(sessionId);
     if (!session) return;
@@ -538,9 +538,112 @@ export class CollaborationServer extends EventEmitter {
   }
 
   private resolveConflicts(sessionId: string, change: CodeChange): CodeChange {
-    // Simple conflict resolution - in production, this would be more sophisticated
-    // Could use operational transforms or CRDT for real-time collaboration
-    return change;
+    // Real operational transformation conflict resolution
+    const session = this.sessions.get(sessionId);
+    if (!session) return change;
+
+    // Get all recent changes to the same file within last 5 seconds
+    const recentChanges = this.getRecentChanges(sessionId, change.file, 5000);
+    
+    if (recentChanges.length === 0) {
+      // No conflicts, return original change
+      return change;
+    }
+
+    // Apply operational transformation
+    const transformedChange = this.applyOperationalTransform(change, recentChanges);
+    
+    // Add conflict resolution metadata
+    transformedChange.conflictResolution = {
+      strategy: 'merge',
+      resolvedBy: 'ot-algorithm'
+    };
+
+    Logger.debug(`Conflict resolved for file ${change.file} using operational transforms`);
+    return transformedChange;
+  }
+
+  private recentChanges: Map<string, CodeChange[]> = new Map(); // sessionId -> changes
+
+  private getRecentChanges(sessionId: string, file: string, timeWindowMs: number): CodeChange[] {
+    const sessionChanges = this.recentChanges.get(sessionId) || [];
+    const cutoffTime = Date.now() - timeWindowMs;
+    
+    return sessionChanges
+      .filter(change => 
+        change.file === file && 
+        change.timestamp.getTime() > cutoffTime
+      )
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  }
+
+  private applyOperationalTransform(newChange: CodeChange, existingChanges: CodeChange[]): CodeChange {
+    let transformedChange = { ...newChange };
+    
+    for (const existingChange of existingChanges) {
+      transformedChange = this.transformChangeAgainstChange(transformedChange, existingChange);
+    }
+    
+    // Store this change for future conflict resolution
+    const sessionChanges = this.recentChanges.get(newChange.author) || [];
+    sessionChanges.push(newChange);
+    
+    // Keep only recent changes (last 50 changes or 10 minutes)
+    const cutoffTime = Date.now() - 10 * 60 * 1000; // 10 minutes
+    const filteredChanges = sessionChanges
+      .filter(change => change.timestamp.getTime() > cutoffTime)
+      .slice(-50); // Keep last 50 changes
+    
+    this.recentChanges.set(newChange.author, filteredChanges);
+    
+    return transformedChange;
+  }
+
+  private transformChangeAgainstChange(newChange: CodeChange, existingChange: CodeChange): CodeChange {
+    // Simplified operational transform - in production, use a full OT library
+    const transformedChanges = newChange.changes.map(change => {
+      let transformedChange = { ...change };
+      
+      for (const existingOp of existingChange.changes) {
+        // Transform based on operation type and position
+        if (existingOp.operation === 'insert') {
+          // If existing insertion is before our operation, adjust our position
+          if (existingOp.from.line < change.from.line || 
+              (existingOp.from.line === change.from.line && existingOp.from.column <= change.from.column)) {
+            
+            if (existingOp.from.line === change.from.line) {
+              // Same line insertion
+              transformedChange.from.column += existingOp.text.length;
+              transformedChange.to.column += existingOp.text.length;
+            } else {
+              // Different line insertion
+              const newLines = (existingOp.text.match(/\n/g) || []).length;
+              transformedChange.from.line += newLines;
+              transformedChange.to.line += newLines;
+            }
+          }
+        } else if (existingOp.operation === 'delete') {
+          // If existing deletion affects our operation, adjust accordingly
+          if (existingOp.from.line <= change.from.line && existingOp.to.line >= change.from.line) {
+            // Our operation is within deleted range - need to adjust
+            const deletedLines = existingOp.to.line - existingOp.from.line;
+            transformedChange.from.line -= deletedLines;
+            transformedChange.to.line -= deletedLines;
+            
+            // Ensure we don't go negative
+            transformedChange.from.line = Math.max(0, transformedChange.from.line);
+            transformedChange.to.line = Math.max(0, transformedChange.to.line);
+          }
+        }
+      }
+      
+      return transformedChange;
+    });
+    
+    return {
+      ...newChange,
+      changes: transformedChanges
+    };
   }
 
   private serializeSession(session: CollaborationSession): any {
@@ -677,11 +780,4 @@ export class CollaborationServer extends EventEmitter {
   }
 }
 
-// Export types for use in other modules
-export type {
-  CollaborationUser,
-  CollaborationSession,
-  CollaborationEvent,
-  CodeChange,
-  AISuggestion
-};
+// Types are already exported as interfaces above

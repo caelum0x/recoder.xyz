@@ -190,22 +190,11 @@ export class SecurityAuditor extends EventEmitter {
     }
 
     if (this.config.enabledTests.codeScanning && this.config.codebasePath) {
-      this.codeScanner = new CodeVulnerabilityScanner({
-        enablePatternMatching: true,
-        enableDependencyScanning: true,
-        enableSecretsDetection: true,
-        customRules: [],
-        excludePatterns: ['node_modules/', '.git/', 'dist/', 'build/']
-      });
+      this.codeScanner = new CodeVulnerabilityScanner();
     }
 
     if (this.config.enabledTests.promptSanitization) {
-      this.promptSanitizer = new AIPromptSanitizer({
-        strictMode: true,
-        blockSuspiciousPatterns: true,
-        enableLogging: true,
-        customPatterns: []
-      });
+      this.promptSanitizer = new AIPromptSanitizer();
     }
   }
 
@@ -290,11 +279,21 @@ export class SecurityAuditor extends EventEmitter {
     const scanResults = await this.codeScanner.scanDirectory(this.config.codebasePath);
     const scanDuration = Date.now() - startTime;
 
-    const vulnerabilityCount = scanResults.reduce((sum, result) => sum + result.vulnerabilities.length, 0);
-    const allVulns = scanResults.flatMap(result => result.vulnerabilities);
+    const vulnerabilityCount = scanResults.length;
+    const allVulns = scanResults;
     
     const report: CodeSecurityReport = {
-      scanResults,
+      scanResults: [{
+        totalFiles: scanResults.length,
+        vulnerabilities: scanResults,
+        securityScore: Math.max(0, 100 - vulnerabilityCount * 10),
+        summary: {
+          critical: allVulns.filter(v => v.severity === 'critical').length,
+          high: allVulns.filter(v => v.severity === 'high').length,
+          medium: allVulns.filter(v => v.severity === 'medium').length,
+          low: allVulns.filter(v => v.severity === 'low').length
+        }
+      }],
       vulnerabilityCount,
       criticalIssues: allVulns.filter(v => v.severity === 'critical').length,
       highIssues: allVulns.filter(v => v.severity === 'high').length,

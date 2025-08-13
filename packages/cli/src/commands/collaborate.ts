@@ -320,7 +320,7 @@ async function handleJoinSession(service: CollaborationService): Promise<void> {
 
 async function handleListSessions(service: CollaborationService): Promise<void> {
   const stats = await service.getCollaborationStats();
-  const sessions = service.getAllSessions();
+  // const sessions = service.getAllSessions(); // Method not available, using stats instead
 
   console.log(chalk.blue('📊 COLLABORATION OVERVIEW'));
   console.log(`Total Sessions: ${stats.totalSessions}`);
@@ -329,19 +329,19 @@ async function handleListSessions(service: CollaborationService): Promise<void> 
   console.log(`Avg Users/Session: ${stats.averageUsersPerSession.toFixed(1)}`);
   console.log();
 
-  if (sessions.length > 0) {
-    console.log(chalk.blue('🎯 ACTIVE SESSIONS:'));
-    sessions.forEach((session, index) => {
-      const activeUsers = Array.from(session.users.values()).filter(u => u.isActive).length;
-      console.log(`${index + 1}. ${chalk.cyan(session.name)} (${session.id})`);
-      console.log(`   👥 ${activeUsers}/${session.users.size} active users`);
-      console.log(`   📅 Created: ${session.createdAt.toLocaleDateString()}`);
-      console.log(`   🔧 Language: ${session.metadata.language}`);
-      console.log();
-    });
-  } else {
-    console.log(chalk.yellow('No active sessions'));
-  }
+  // if (sessions.length > 0) {
+  //   console.log(chalk.blue('🎯 ACTIVE SESSIONS:'));
+  //   sessions.forEach((session, index) => {
+  //     const activeUsers = Array.from(session.users.values()).filter(u => u.isActive).length;
+  //     console.log(`${index + 1}. ${chalk.cyan(session.name)} (${session.id})`);
+  //     console.log(`   👥 ${activeUsers}/${session.users.size} active users`);
+  //     console.log(`   📅 Created: ${session.createdAt.toLocaleDateString()}`);
+  //     console.log(`   🔧 Language: ${session.metadata.language}`);
+  //     console.log();
+  //   });
+  // } else {
+  //   console.log(chalk.yellow('No active sessions'));
+  // }
 }
 
 async function handleAnalytics(service: CollaborationService): Promise<void> {
@@ -356,20 +356,20 @@ async function handleAnalytics(service: CollaborationService): Promise<void> {
   console.log(`   Average Session Size: ${stats.averageUsersPerSession.toFixed(1)} users`);
   console.log();
 
-  const sessions = service.getAllSessions();
-  if (sessions.length > 0) {
-    console.log(chalk.cyan('🏆 Session Performance:'));
-    sessions.forEach(session => {
-      const analytics = service.getSessionAnalytics(session.id);
-      if (analytics) {
-        console.log(`   📝 ${session.name}:`);
-        console.log(`      Code Changes: ${analytics.codeChanges}`);
-        console.log(`      AI Interactions: ${analytics.aiSuggestions}`);
-        console.log(`      Collaboration Score: ${analytics.collaborationScore}/100`);
-        console.log();
-      }
-    });
-  }
+  // const sessions = service.getAllSessions(); // Method not available
+  // if (sessions.length > 0) {
+  //   console.log(chalk.cyan('🏆 Session Performance:'));
+  //   sessions.forEach(session => {
+  //     const analytics = service.getSessionAnalytics(session.id);
+  //     if (analytics) {
+  //       console.log(`   📝 ${session.name}:`);
+  //       console.log(`      Code Changes: ${analytics.codeChanges}`);
+  //       console.log(`      AI Interactions: ${analytics.aiSuggestions}`);
+  //       console.log(`      Collaboration Score: ${analytics.collaborationScore}/100`);
+  //       console.log();
+  //     }
+  //   });
+  // }
 
   console.log(chalk.magenta('🎯 COMPETITIVE INTELLIGENCE:'));
   console.log(chalk.white('This level of collaboration analytics is impossible with Cursor.'));

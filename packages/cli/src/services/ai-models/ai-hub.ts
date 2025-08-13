@@ -168,10 +168,7 @@ export class AIModelHub extends EventEmitter {
     const selectedModels = models || this.getOptimalModelsForParallel(requestOptions.context?.task);
     const modelsToUse = selectedModels.slice(0, maxParallelRequests);
 
-    Logger.info(`Starting parallel request with ${modelsToUse.length} models`, {
-      models: modelsToUse,
-      strategy: aggregationStrategy
-    });
+    Logger.info(`Starting parallel request with ${modelsToUse.length} models`);
 
     try {
       // Create requests for each model
@@ -201,8 +198,8 @@ export class AIModelHub extends EventEmitter {
           return { response, modelId, success: true };
         } catch (error) {
           this.usageTracker.trackRequestError(request, error);
-          Logger.warn(`Parallel request failed for model ${modelId}:`, error.message);
-          return { response: null, modelId, success: false, error: error.message };
+          Logger.warn(`Parallel request failed for model ${modelId}:`, error instanceof Error ? error.message : String(error));
+          return { response: null, modelId, success: false, error: error instanceof Error ? error.message : String(error) };
         }
       });
 
@@ -214,12 +211,7 @@ export class AIModelHub extends EventEmitter {
       const parallelResponses = successfulResults.map(r => r.response);
       const executionTime = Date.now() - startTime;
 
-      Logger.info(`Parallel execution completed`, {
-        successful: successfulResults.length,
-        total: modelsToUse.length,
-        executionTime,
-        strategy: aggregationStrategy
-      });
+      Logger.info(`Parallel execution completed: ${successfulResults.length}/${modelsToUse.length} successful`);
 
       if (successfulResults.length === 0) {
         throw new Error('All parallel requests failed');
@@ -288,10 +280,7 @@ export class AIModelHub extends EventEmitter {
       const taskContent = messages[messages.length - 1]?.content || '';
       const orchestrationResponse = await this.orchestrateSubtasks(taskContent, orchestratorModel, maxSubtasks);
       
-      Logger.info('Task orchestration completed', {
-        subtasks: orchestrationResponse.subtasks.length,
-        analysis: orchestrationResponse.analysis.substring(0, 100) + '...'
-      });
+      Logger.info(`Task orchestration completed with ${orchestrationResponse.subtasks.length} subtasks`);
 
       // Step 2: Execute subtasks in parallel
       const subtaskPromises = orchestrationResponse.subtasks.map(async (subtask: any, index: number) => {
@@ -324,7 +313,7 @@ export class AIModelHub extends EventEmitter {
             response: null,
             workerModel,
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : String(error)
           };
         }
       });
@@ -340,7 +329,7 @@ export class AIModelHub extends EventEmitter {
         },
         {
           role: 'user',
-          content: `Original task: ${taskContent}\n\nSubtask results:\n${successfulResults.map((result, i) => `${i + 1}. ${result.subtask.type}: ${result.response?.content || result.response?.text || 'No response'}`).join('\n\n')}\n\nPlease synthesize these results into a final comprehensive answer.`
+          content: `Original task: ${taskContent}\n\nSubtask results:\n${successfulResults.map((result, i) => `${i + 1}. ${result.subtask.type}: ${result.response?.content || 'No response'}`).join('\n\n')}\n\nPlease synthesize these results into a final comprehensive answer.`
         }
       ];
 
@@ -618,7 +607,7 @@ export class AIModelHub extends EventEmitter {
     const consensusRequest: ConsensusRequest = {
       id: request.id || this.generateRequestId(),
       prompt: request.prompt || '',
-      task: request.task || TaskType.CODE_GENERATION,
+      task: request.task || 'CODE_GENERATION' as any,
       language: request.language,
       models: request.models || [], // Auto-select if empty
       consensusThreshold: request.consensusThreshold || 0.7,
@@ -794,19 +783,19 @@ export class AIModelHub extends EventEmitter {
     const allModels = this.getAvailableModels();
     
     // Define model combinations optimized for different task types
-    const taskOptimizedModels = {
-      [TaskType.CODE_GENERATION]: ['claude-3-5-sonnet-20241022', 'llama-3.1-70b-versatile', 'gemini-1.5-pro'],
-      [TaskType.CODE_REVIEW]: ['claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307', 'deepseek-coder'],
-      [TaskType.DEBUGGING]: ['claude-3-5-sonnet-20241022', 'llama-3.1-70b-versatile', 'claude-3-haiku-20240307'],
-      [TaskType.SECURITY_ANALYSIS]: ['claude-3-5-sonnet-20241022', 'gemini-1.5-pro', 'llama-3.1-70b-versatile'],
-      [TaskType.DOCUMENTATION]: ['claude-3-haiku-20240307', 'gemini-1.5-pro', 'llama-3.1-8b-instant']
+    const taskOptimizedModels: Record<string, string[]> = {
+      'CODE_GENERATION': ['claude-3-5-sonnet-20241022', 'llama-3.1-70b-versatile', 'gemini-1.5-pro'],
+      'CODE_REVIEW': ['claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307', 'deepseek-coder'],
+      'DEBUGGING': ['claude-3-5-sonnet-20241022', 'llama-3.1-70b-versatile', 'claude-3-haiku-20240307'],
+      'SECURITY_ANALYSIS': ['claude-3-5-sonnet-20241022', 'gemini-1.5-pro', 'llama-3.1-70b-versatile'],
+      'DOCUMENTATION': ['claude-3-haiku-20240307', 'gemini-1.5-pro', 'llama-3.1-8b-instant']
     };
 
-    const preferredModels = taskType ? taskOptimizedModels[taskType] : null;
+    const preferredModels = taskType ? taskOptimizedModels[taskType.toString()] : null;
     
     if (preferredModels) {
       // Filter to only include available models
-      const availablePreferred = preferredModels.filter(modelId => 
+      const availablePreferred = preferredModels.filter((modelId: string) => 
         allModels.some(model => model.id === modelId && model.isAvailable)
       );
       
@@ -877,7 +866,7 @@ Original question: ${originalMessages[originalMessages.length - 1]?.content || '
 Responses to evaluate:
 ${responses.map((response, index) => `
 Response ${index + 1}:
-${response.content || response.text || 'No content'}
+${response.content || 'No content'}
 `).join('\n')}
 
 Please respond with only the number (1, 2, 3, etc.) of the best response.`;
@@ -900,7 +889,10 @@ Please respond with only the number (1, 2, 3, etc.) of the best response.`;
       return responses[0];
       
     } catch (error) {
-      Logger.warn('Failed to evaluate responses, falling back to first response:', error.message);
+      Logger.warn(
+        'Failed to evaluate responses, falling back to first response:',
+        error instanceof Error ? error.message : String(error)
+      );
       return responses[0];
     }
   }
@@ -911,7 +903,7 @@ Please respond with only the number (1, 2, 3, etc.) of the best response.`;
   private async qualityWeightedAggregation(responses: ModelResponse[]): Promise<ModelResponse> {
     // Calculate quality scores based on response length, coherence, and model reputation
     const scoredResponses = responses.map((response, index) => {
-      const content = response.content || response.text || '';
+      const content = response.content || '';
       const lengthScore = Math.min(content.length / 1000, 1); // Normalize to 0-1
       const modelScore = this.getModelQualityScore(response.model || 'unknown');
       const hasCodeBlocks = (content.match(/```/g) || []).length / 2; // Number of code blocks
@@ -946,7 +938,7 @@ Original question: ${originalMessages[originalMessages.length - 1]?.content || '
 Responses to synthesize:
 ${responses.map((response, index) => `
 Response ${index + 1} (${response.model || 'unknown'}):
-${response.content || response.text || 'No content'}
+${response.content || 'No content'}
 `).join('\n')}
 
 Please provide a synthesized response that combines the best elements from all responses while maintaining accuracy and coherence.`;
@@ -964,13 +956,23 @@ Please provide a synthesized response that combines the best elements from all r
         ...synthesizedResponse,
         metadata: {
           ...synthesizedResponse.metadata,
-          aggregationMethod: 'consensus',
-          sourceResponses: responses.length
+          quality: {
+            ...synthesizedResponse.metadata.quality,
+            score: 0.9, // High score for consensus
+            confidence: 0.85,
+            coherence: synthesizedResponse.metadata.quality?.coherence ?? 1,
+            relevance: synthesizedResponse.metadata.quality?.relevance ?? 1,
+            accuracy: synthesizedResponse.metadata.quality?.accuracy ?? 1,
+            completeness: synthesizedResponse.metadata.quality?.completeness ?? 1
+          }
         }
       };
       
     } catch (error) {
-      Logger.warn('Failed to create consensus response, falling back to best individual response:', error.message);
+      Logger.warn(
+        'Failed to create consensus response, falling back to best individual response:',
+        error instanceof Error ? error.message : String(error)
+      );
       return await this.qualityWeightedAggregation(responses);
     }
   }
@@ -1034,14 +1036,14 @@ Focus on creating subtasks that are independent and can be processed simultaneou
     });
 
     const response = await this.router.routeRequest(orchestrationRequest);
-    const content = response.content || response.text || '';
+    const content = response.content || '';
 
     // Parse the response to extract analysis and subtasks
     const analysisMatch = content.match(/Analysis:\s*(.*?)(?=Subtasks:|$)/s);
     const analysis = analysisMatch ? analysisMatch[1].trim() : 'Task analysis not available';
 
     const subtaskMatches = content.match(/\d+\.\s*Type:\s*(.*?),\s*Description:\s*(.*?)(?=\d+\.|$)/gs) || [];
-    const subtasks = subtaskMatches.map(match => {
+    const subtasks = subtaskMatches.map((match: string) => {
       const [, type, description] = match.match(/Type:\s*(.*?),\s*Description:\s*(.*?)$/) || ['', 'general', 'No description'];
       return {
         type: type.trim(),

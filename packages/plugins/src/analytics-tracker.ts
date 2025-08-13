@@ -383,7 +383,7 @@ export class PluginAnalyticsTracker extends EventEmitter {
    */
   async cleanup(): Promise<void> {
     if (this.flushInterval) {
-      clearInterval(this.flushInterval);
+      clearInterval(this.flushInterval as NodeJS.Timeout);
       this.flushInterval = null;
     }
     

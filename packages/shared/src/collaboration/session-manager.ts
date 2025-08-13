@@ -499,10 +499,4 @@ export class SessionManager extends EventEmitter {
   }
 }
 
-// Export types
-export type {
-  SessionPersistence,
-  UserPresence,
-  SessionInvite,
-  SessionAnalytics
-};
+// Types are already exported as interfaces above

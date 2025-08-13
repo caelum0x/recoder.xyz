@@ -516,9 +516,4 @@ export class RealtimeSyncHandler extends EventEmitter {
 }
 
 // Export types
-export type {
-  SyncMessage,
-  CursorPosition,
-  TextSelection,
-  UserFileActivity
-};
+// Types are already exported as interfaces above

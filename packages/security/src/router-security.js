@@ -98,8 +98,9 @@ export class RouterSecurityService extends EventEmitter {
             if (action === 'block' || action === 'ban') {
                 this.recordFailedAttempt(context.ip);
             }
+            const isAllowed = action === 'allow' || action === 'warn';
             return {
-                allowed: action === 'allow' || action === 'warn',
+                allowed: isAllowed,
                 riskScore,
                 reasons,
                 action
@@ -352,7 +353,7 @@ export class RouterSecurityService extends EventEmitter {
                 name: 'Bot User Agent',
                 description: 'Detects automated bot requests',
                 severity: 'low',
-                action: 'log',
+                action: 'warn',
                 rules: [
                     {
                         condition: 'userAgent',

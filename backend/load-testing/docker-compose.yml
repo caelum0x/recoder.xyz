@@ -1,0 +1,170 @@
+# Docker Compose for Load Testing Infrastructure
+# Supports running load tests against containerized services
+
+version: '3.8'
+
+services:
+  # Load testing runners
+  k6:
+    image: grafana/k6:latest
+    networks:
+      - recoder-testing
+    volumes:
+      - ./k6-tests:/scripts
+      - ./results:/results
+    environment:
+      - BASE_URL=http://recoder-backend:3001
+      - K6_OUT=json=/results/k6-results.json
+    depends_on:
+      - recoder-backend
+    profiles:
+      - k6-testing
+    command: >
+      run
+      --out json=/results/k6-comprehensive-results.json
+      --summary-export=/results/k6-summary.json
+      /scripts/load-test-config.js
+
+  # Artillery alternative runner
+  artillery:
+    image: node:18-alpine
+    networks:
+      - recoder-testing
+    volumes:
+      - ./artillery-tests:/tests
+      - ./results:/results
+      - ./package.json:/app/package.json
+    working_dir: /app
+    environment:
+      - BASE_URL=http://recoder-backend:3001
+    depends_on:
+      - recoder-backend
+    profiles:
+      - artillery-testing
+    command: >
+      sh -c "
+      npm install -g artillery &&
+      artillery run --output /results/artillery-results.json /tests/artillery-config.yml &&
+      artillery report --output /results/artillery-report.html /results/artillery-results.json
+      "
+
+  # Monitoring and metrics collection
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3333:3000"
+    networks:
+      - recoder-testing
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    profiles:
+      - monitoring
+
+  influxdb:
+    image: influxdb:2.0
+    ports:
+      - "8086:8086"
+    networks:
+      - recoder-testing
+    environment:
+      - INFLUXDB_DB=k6
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin123
+      - INFLUXDB_USER=k6
+      - INFLUXDB_USER_PASSWORD=k6123
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    profiles:
+      - monitoring
+
+  # Test target services (if running in containers)
+  recoder-backend:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    networks:
+      - recoder-testing
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/recoder
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - backend
+
+  postgres:
+    image: postgres:15-alpine
+    networks:
+      - recoder-testing
+    environment:
+      - POSTGRES_DB=recoder
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../prisma/schema.prisma:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - recoder-testing
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    profiles:
+      - backend
+
+  # Results analyzer
+  analyzer:
+    build:
+      context: ./analysis
+      dockerfile: Dockerfile
+    networks:
+      - recoder-testing
+    volumes:
+      - ./results:/data/results
+      - ./analysis/reports:/data/reports
+    environment:
+      - RESULTS_PATH=/data/results
+      - REPORTS_PATH=/data/reports
+    profiles:
+      - analysis
+    command: ["python", "analyze_results.py"]
+
+networks:
+  recoder-testing:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  influxdb-data:
+  grafana-data:

@@ -12,6 +12,10 @@
     "build": "expo export",
     "build:android": "eas build --platform android",
     "build:ios": "eas build --platform ios",
+    "build:preview": "eas build --profile preview",
+    "build:production": "eas build --profile production",
+    "submit:ios": "eas submit --platform ios",
+    "submit:android": "eas submit --platform android",
     "preview": "expo start --web",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "type-check": "tsc --noEmit"
@@ -48,7 +52,13 @@
     "react-native-screens": "4.1.0",
     "react-native-svg": "15.8.0",
     "react-native-web": "~0.19.13",
-    "react-native-webview": "13.12.2"
+    "react-native-webview": "13.12.2",
+    "expo-notifications": "~0.29.0",
+    "expo-device": "~7.0.0",
+    "expo-constants": "~17.0.0",
+    "@react-native-async-storage/async-storage": "^2.0.0",
+    "react-native-vector-icons": "^10.0.3",
+    "react-native-keychain": "^8.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",

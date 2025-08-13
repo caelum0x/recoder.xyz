@@ -6,6 +6,7 @@ import { query, body, param, validationResult } from 'express-validator';
 import { authenticateUser, requireSubscription, requireAdmin } from '../middleware/auth';
 import { aiProviderManager } from '../services/ai-provider-manager';
 import { aiRouter } from '../services/ai-router';
+import { ragEnhancedAI } from '../services/rag-enhanced-ai';
 import { logger } from '../utils/logger';
 
 const router = express.Router();
@@ -372,6 +373,86 @@ router.get('/status',
       res.status(500).json({
         success: false,
         error: 'Failed to get system status'
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/ai-providers/generate-enhanced
+ * Generate enhanced response using RAG + AI routing
+ */
+router.post('/generate-enhanced',
+  authenticateUser,
+  requireSubscription(['weekly', 'monthly', 'enterprise']),
+  [
+    body('prompt')
+      .notEmpty()
+      .isLength({ min: 1, max: 10000 })
+      .withMessage('Prompt is required and must be under 10,000 characters'),
+    body('taskType')
+      .isIn(['code-generation', 'explanation', 'refactoring', 'debugging', 'documentation'])
+      .withMessage('Invalid task type'),
+    body('knowledgeBaseId')
+      .optional()
+      .isString(),
+    body('context.language')
+      .optional()
+      .isString(),
+    body('context.framework')
+      .optional()
+      .isString(),
+    body('ragOptions.retrievalThreshold')
+      .optional()
+      .isFloat({ min: 0, max: 1 }),
+    body('ragOptions.maxRetrievalResults')
+      .optional()
+      .isInt({ min: 1, max: 20 }),
+    body('aiOptions.qualityRequired')
+      .optional()
+      .isIn(['basic', 'good', 'excellent'])
+  ],
+  validateRequest,
+  async (req, res) => {
+    try {
+      const ragRequest = {
+        userId: req.user.id,
+        prompt: req.body.prompt,
+        taskType: req.body.taskType,
+        knowledgeBaseId: req.body.knowledgeBaseId,
+        context: req.body.context || {},
+        ragOptions: {
+          retrievalThreshold: 0.7,
+          maxRetrievalResults: 10,
+          includeContext: true,
+          enhancePrompt: true,
+          useCodeExamples: true,
+          ...req.body.ragOptions
+        },
+        aiOptions: {
+          qualityRequired: 'good',
+          ...req.body.aiOptions
+        }
+      };
+
+      const result = await ragEnhancedAI.generateEnhanced(ragRequest);
+
+      res.json({
+        success: true,
+        result,
+        message: 'Enhanced AI response generated successfully'
+      });
+
+    } catch (error) {
+      logger.error('RAG-enhanced generation failed:', {
+        error: error.message,
+        userId: req.user?.id,
+        taskType: req.body?.taskType
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate enhanced response',
+        details: error.message
       });
     }
   }

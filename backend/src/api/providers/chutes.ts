@@ -3,12 +3,13 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import type { ApiHandlerOptions } from "../../shared/api"
-import { XmlMatcher } from "../../utils/xml-matcher"
+//import { XmlMatcher } from "../../utils/xml-matcher"
 import { convertToR1Format } from "../transform/r1-format"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 
 import { BaseOpenAiCompatibleProvider } from "./base-openai-compatible-provider"
+import { XmlMatcher } from "@recoder/shared"
 
 export class ChutesHandler extends BaseOpenAiCompatibleProvider<ChutesModelId> {
 	constructor(options: ApiHandlerOptions) {

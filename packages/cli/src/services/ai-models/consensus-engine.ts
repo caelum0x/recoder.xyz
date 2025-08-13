@@ -10,17 +10,8 @@ import {
   ModelRequest,
   ModelResponse,
   ModelProvider,
+  TaskType
 } from '@recoder/shared/types/ai-models';
-
-// Define TaskType locally if not available
-enum TaskType {
-  CODE_GENERATION = 'CODE_GENERATION',
-  CODE_REVIEW = 'CODE_REVIEW',
-  DEBUGGING = 'DEBUGGING',
-  SECURITY_ANALYSIS = 'SECURITY_ANALYSIS',
-  DOCUMENTATION = 'DOCUMENTATION',
-  CHAT = 'CHAT'
-}
 
 export interface ConsensusRequest {
   id: string;
@@ -243,7 +234,7 @@ ${request.language ? `Language: ${request.language}` : ''}`,
       provider: model?.provider || ModelProvider.OPENAI,
       code: this.extractCode(response.content),
       reasoning: response.content,
-      confidence: response.metadata?.confidence || 0.8,
+      confidence: (response.metadata as any)?.confidence || 0.8,
       executionTime,
       tokensUsed: response.usage?.totalTokens || 0,
       cost: this.calculateCost(response, model),

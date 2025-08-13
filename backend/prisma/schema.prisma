@@ -44,6 +44,14 @@ model User {
   analytics       UsageAnalytics[]
   dodoSubscriptions DodoSubscription[]
   dodoUsage       DodoUsage[]
+  knowledgeBases  CodebaseKnowledge[]
+  semanticQueries SemanticQuery[]
+  ragSessions     RAGSession[]
+  restoreJobs     RestoreJob[]
+  backupAccess    BackupAccess?
+  preferences     UserPreferences?
+  translations    Translation[]
+  userRoles       UserRole[]
 
   @@map("users")
 }
@@ -71,6 +79,7 @@ model Project {
   agents                  Agent[]
   usageRecords            UsageRecord[]
   analytics               UsageAnalytics[]
+  knowledgeBases          CodebaseKnowledge[]
 
   @@map("projects")
 }
@@ -549,4 +558,718 @@ model DodoWebhookEvent {
   createdAt        DateTime @default(now())
 
   @@map("dodo_webhook_events")
+}
+
+// RAG (Retrieval-Augmented Generation) System Models
+// Vector embeddings and knowledge base for enhanced code understanding
+
+model CodebaseKnowledge {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  repositoryUrl   String?
+  type            String    @default("project") // project, library, framework, documentation
+  language        String?   // programming language
+  framework       String?   // framework/stack
+  visibility      String    @default("private") // private, public, organization
+  status          String    @default("active") // active, processing, indexed, error
+  totalFiles      Int       @default(0)
+  indexedFiles    Int       @default(0)
+  lastIndexedAt   DateTime?
+  processingMeta  Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Foreign keys
+  userId          String
+  projectId       String?
+
+  // Relations
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  codeChunks      CodeChunk[]
+  vectorEmbeddings VectorEmbedding[]
+  semanticQueries SemanticQuery[]
+  ragSessions     RAGSession[]
+
+  @@map("codebase_knowledge")
+}
+
+model CodeChunk {
+  id              String    @id @default(cuid())
+  content         String    // Raw code content
+  contentType     String    // function, class, method, variable, comment, import, etc.
+  filePath        String
+  fileName        String
+  fileExtension   String
+  language        String
+  startLine       Int?
+  endLine         Int?
+  functionName    String?
+  className       String?
+  methodName      String?
+  variableName    String?
+  complexity      String?   // simple, medium, complex
+  dependencies    String[]  @default([])
+  keywords        String[]  @default([])
+  summary         String?   // AI-generated summary
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Foreign keys
+  knowledgeBaseId String
+  vectorId        String?   @unique
+
+  // Relations
+  knowledgeBase   CodebaseKnowledge @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  vectorEmbedding VectorEmbedding?  @relation(fields: [vectorId], references: [id], onDelete: SetNull)
+  searchResults   SemanticSearchResult[]
+
+  @@index([knowledgeBaseId, language])
+  @@index([contentType, language])
+  @@index([filePath])
+  @@map("code_chunks")
+}
+
+model VectorEmbedding {
+  id              String    @id @default(cuid())
+  embedding       Float[]   // Vector embedding array (for pgvector)
+  embeddingModel  String    @default("text-embedding-3-small") // OpenAI, Cohere, etc.
+  dimension       Int       @default(1536)
+  provider        String    @default("openai") // openai, cohere, huggingface
+  contentHash     String    // Hash of the content for deduplication
+  similarity      Float?    // Similarity score (for search results)
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+
+  // Foreign keys
+  knowledgeBaseId String
+  chunkId         String?   @unique
+
+  // Relations
+  knowledgeBase   CodebaseKnowledge @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  codeChunk       CodeChunk?
+  searchResults   SemanticSearchResult[]
+
+  @@index([knowledgeBaseId])
+  @@index([contentHash])
+  @@map("vector_embeddings")
+}
+
+model SemanticQuery {
+  id              String    @id @default(cuid())
+  query           String
+  queryType       String    @default("search") // search, explain, generate, refactor
+  intent          String?   // user intent classification
+  language        String?   // programming language filter
+  framework       String?   // framework filter
+  complexity      String?   // complexity filter
+  maxResults      Int       @default(10)
+  threshold       Float     @default(0.7) // similarity threshold
+  processingTime  Int?      // milliseconds
+  totalResults    Int       @default(0)
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+
+  // Foreign keys
+  userId          String
+  knowledgeBaseId String
+
+  // Relations
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeBase   CodebaseKnowledge @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  searchResults   SemanticSearchResult[]
+
+  @@index([userId, createdAt])
+  @@index([knowledgeBaseId, queryType])
+  @@map("semantic_queries")
+}
+
+model SemanticSearchResult {
+  id              String    @id @default(cuid())
+  rank            Int
+  similarity      Float
+  relevanceScore  Float?    // Combined relevance score
+  contextWindow   String?   // Surrounding context
+  explanation     String?   // AI explanation of relevance
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+
+  // Foreign keys
+  queryId         String
+  chunkId         String
+  vectorId        String
+
+  // Relations
+  query           SemanticQuery     @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  codeChunk       CodeChunk         @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  vectorEmbedding VectorEmbedding   @relation(fields: [vectorId], references: [id], onDelete: Cascade)
+
+  @@index([queryId, rank])
+  @@index([similarity])
+  @@map("semantic_search_results")
+}
+
+model EmbeddingCache {
+  id              String    @id @default(cuid())
+  contentHash     String    @unique
+  content         String
+  embedding       Float[]
+  model           String
+  provider        String
+  dimension       Int
+  hitCount        Int       @default(1)
+  lastAccessedAt  DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+
+  @@index([contentHash])
+  @@index([model, provider])
+  @@map("embedding_cache")
+}
+
+model RAGSession {
+  id              String    @id @default(cuid())
+  sessionType     String    @default("chat") // chat, generation, analysis
+  context         Json      @default("{}")
+  conversationId  String?
+  totalQueries    Int       @default(0)
+  totalTokens     Int       @default(0)
+  totalCost       Float     @default(0)
+  qualityScore    Float?    // User feedback quality score
+  feedback        String?   // User feedback
+  isActive        Boolean   @default(true)
+  endedAt         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Foreign keys
+  userId          String
+  knowledgeBaseId String?
+
+  // Relations
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeBase   CodebaseKnowledge? @relation(fields: [knowledgeBaseId], references: [id], onDelete: SetNull)
+  interactions    RAGInteraction[]
+
+  @@index([userId, isActive])
+  @@map("rag_sessions")
+}
+
+model RAGInteraction {
+  id              String    @id @default(cuid())
+  interactionType String    // query, response, feedback
+  input           String?
+  output          String?
+  tokensUsed      Int?
+  cost            Float?
+  latency         Int?      // milliseconds
+  provider        String?   // AI provider used
+  model           String?   // AI model used
+  retrievedChunks Int       @default(0)
+  relevanceScore  Float?
+  userRating      Int?      // 1-5 stars
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+
+  // Foreign keys
+  sessionId       String
+
+  // Relations
+  session         RAGSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("rag_interactions")
+}
+
+// Database Backup System Models
+model BackupJob {
+  id              String    @id @default(cuid())
+  type            String    // "full", "incremental", "manual"
+  status          String    @default("pending") // pending, in_progress, completed, failed, cancelled
+  backupId        String    @unique // External backup identifier
+  storageLocation String?   // S3 path, local path, etc.
+  storageProvider String    @default("local") // local, aws-s3, gcp-storage
+  
+  // Backup Details
+  databaseName    String
+  tableCount      Int       @default(0)
+  recordCount     Int       @default(0)
+  sizeBytes       Int       @default(0)
+  checksum        String?
+  compressionType String?   // gzip, bzip2, none
+  encryptionType  String?   // aes-256, none
+  
+  // Timing
+  scheduledFor    DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  duration        Int?      // milliseconds
+  
+  // Error Handling
+  errorMessage    String?
+  retryCount      Int       @default(0)
+  maxRetries      Int       @default(3)
+  
+  // Configuration
+  config          Json      @default("{}")
+  retention       Json      @default("{}") // retention policy settings
+  metadata        Json      @default("{}")
+  
+  // Tracking
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  restoreJobs     RestoreJob[]
+  validationJobs  BackupValidation[]
+  
+  @@index([status, createdAt])
+  @@index([type, status])
+  @@index([databaseName, createdAt])
+  @@map("backup_jobs")
+}
+
+model RestoreJob {
+  id              String    @id @default(cuid())
+  status          String    @default("pending") // pending, in_progress, completed, failed, cancelled
+  restoreType     String    @default("full") // full, partial, point_in_time
+  targetDatabase  String?   // target database name (if different)
+  
+  // Restore Options
+  dryRun          Boolean   @default(false)
+  cleanFirst      Boolean   @default(false)
+  skipConstraints Boolean   @default(false)
+  tablesToRestore String[]  @default([])
+  pointInTime     DateTime?
+  
+  // Progress Tracking
+  totalSteps      Int       @default(0)
+  completedSteps  Int       @default(0)
+  progressPercent Float     @default(0)
+  currentStep     String?
+  
+  // Timing
+  startedAt       DateTime?
+  completedAt     DateTime?
+  duration        Int?      // milliseconds
+  
+  // Error Handling
+  errorMessage    String?
+  warnings        String[]  @default([])
+  
+  // Results
+  restoredTables  String[]  @default([])
+  restoredRecords Int       @default(0)
+  skippedTables   String[]  @default([])
+  
+  // Configuration
+  config          Json      @default("{}")
+  metadata        Json      @default("{}")
+  
+  // Tracking
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Foreign Keys
+  backupId        String
+  userId          String?   // User who initiated restore
+  
+  // Relations
+  backup          BackupJob @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([status, createdAt])
+  @@index([backupId, createdAt])
+  @@map("restore_jobs")
+}
+
+model BackupValidation {
+  id              String    @id @default(cuid())
+  validationType  String    // "integrity", "restore_test", "checksum", "structure"
+  status          String    @default("pending") // pending, running, passed, failed
+  
+  // Validation Results
+  checksumValid   Boolean?
+  integrityValid  Boolean?
+  restoreValid    Boolean?
+  structureValid  Boolean?
+  
+  // Test Details
+  testDatabase    String?   // temporary database for restore testing
+  validationSteps Json      @default("[]")
+  errors          String[]  @default([])
+  warnings        String[]  @default([])
+  
+  // Performance Metrics
+  validationTime  Int?      // milliseconds
+  testDataSize    Int?      // bytes tested
+  
+  // Timing
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  // Configuration
+  config          Json      @default("{}")
+  metadata        Json      @default("{}")
+  
+  // Tracking
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Foreign Keys
+  backupId        String
+  
+  // Relations
+  backup          BackupJob @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  
+  @@index([backupId, validationType])
+  @@index([status, createdAt])
+  @@map("backup_validations")
+}
+
+model BackupSchedule {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  scheduleType    String    // "full", "incremental"
+  cronExpression  String    // Cron expression for scheduling
+  isActive        Boolean   @default(true)
+  
+  // Backup Configuration
+  databaseName    String
+  storageProvider String    @default("local")
+  storageConfig   Json      @default("{}")
+  compressionType String    @default("gzip")
+  encryptionEnabled Boolean @default(false)
+  
+  // Retention Policy
+  retentionDaily  Int       @default(7)   // days
+  retentionWeekly Int       @default(4)   // weeks  
+  retentionMonthly Int      @default(12)  // months
+  
+  // Monitoring
+  lastRunAt       DateTime?
+  lastBackupId    String?
+  nextRunAt       DateTime?
+  consecutiveFailures Int   @default(0)
+  
+  // Notifications
+  notifyOnSuccess Boolean   @default(false)
+  notifyOnFailure Boolean   @default(true)
+  notificationConfig Json   @default("{}")
+  
+  // Tracking
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([isActive, nextRunAt])
+  @@index([databaseName, scheduleType])
+  @@map("backup_schedules")
+}
+
+model BackupStorage {
+  id              String    @id @default(cuid())
+  provider        String    // "local", "aws-s3", "gcp-storage", "azure-blob"
+  name            String    // Human-readable name
+  
+  // Configuration
+  config          Json      @default("{}")
+  credentials     Json      @default("{}") // Encrypted credentials
+  
+  // Storage Details
+  bucket          String?   // S3 bucket, GCS bucket, etc.
+  region          String?
+  endpoint        String?   // Custom endpoint
+  basePath        String    @default("/") // Base path for backups
+  
+  // Status
+  isActive        Boolean   @default(true)
+  lastTestAt      DateTime?
+  testStatus      String?   // "passed", "failed"
+  testError       String?
+  
+  // Metrics
+  totalBackups    Int       @default(0)
+  totalSizeBytes  BigInt    @default(0)
+  availableBytes  BigInt?   // Available storage space
+  usedBytes       BigInt    @default(0)
+  
+  // Security
+  encryptionEnabled Boolean @default(true)
+  encryptionKey   String?   // Encrypted encryption key
+  accessLevel     String    @default("private") // private, read-only, public
+  
+  // Tracking
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@unique([provider, bucket, basePath])
+  @@index([provider, isActive])
+  @@map("backup_storage")
+}
+
+// Add backup-related fields to User model
+model BackupAccess {
+  id          String    @id @default(cuid())
+  userId      String
+  permissions String[]  @default(["read"]) // read, write, delete, manage
+  
+  // Scope
+  databases   String[]  @default([]) // specific databases, empty = all
+  operations  String[]  @default([]) // backup, restore, validate, schedule
+  
+  // Restrictions
+  maxBackups  Int?      // Maximum backups user can create
+  maxRestore  Int?      // Maximum restores per day
+  
+  // Tracking
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId])
+  @@map("backup_access")
+}
+
+// User Preferences Model - Centralized user preferences
+model UserPreferences {
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  
+  // Theme Preferences
+  themePreferences        Json?     @default("{}")    // Theme settings across platforms
+  
+  // Language Preferences  
+  languagePreferences     Json?     @default("{}")    // i18n and localization settings
+  
+  // UI Preferences
+  uiPreferences           Json?     @default("{}")    // Layout, density, etc.
+  
+  // Notification Preferences
+  notificationPreferences Json?     @default("{}")    // All notification settings
+  
+  // Privacy Preferences
+  privacyPreferences      Json?     @default("{}")    // Data collection, analytics opt-in/out
+  
+  // Accessibility Preferences
+  accessibilityPreferences Json?    @default("{}")    // Screen reader, contrast, etc.
+  
+  // Developer Preferences
+  developerPreferences    Json?     @default("{}")    // Code style, AI model preferences, etc.
+  
+  // Tracking
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  // Relations
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_preferences")
+}
+
+// Translation Model - For internationalization
+model Translation {
+  id          String    @id @default(cuid())
+  key         String    // Translation key (e.g., "common.welcome")
+  locale      String    // Locale code (e.g., "en-US", "es-ES")
+  value       String    // Translated text
+  context     String?   // Context for translators
+  pluralRule  String?   // Plural rule: zero, one, two, few, many, other
+  category    String    @default("ui") // ui, messages, errors, marketing, legal, technical
+  
+  // Management
+  version     String    @default("1.0.0")
+  approved    Boolean   @default(false)
+  reviewerId  String?   // User who approved the translation
+  
+  // Tracking
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastUpdated DateTime  @default(now())
+  
+  // Relations
+  reviewer    User?     @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+  
+  @@unique([key, locale])
+  @@index([locale, category])
+  @@index([key, approved])
+  @@map("translations")
+}
+
+// Responsive Design Breakpoint Configurations
+model ResponsiveConfig {
+  id              String    @id @default(cuid())
+  name            String    // "mobile-first", "desktop-first", "custom"
+  description     String?
+  
+  // Breakpoint Definitions
+  breakpoints     Json      @default("{}")  // { mobile: "320px", tablet: "768px", desktop: "1024px", etc. }
+  
+  // Grid Configuration
+  gridColumns     Json      @default("{}")  // Columns per breakpoint
+  gridGutters     Json      @default("{}")  // Gutters per breakpoint
+  
+  // Typography Scale
+  typographyScale Json      @default("{}")  // Font sizes per breakpoint
+  
+  // Spacing Scale
+  spacingScale    Json      @default("{}")  // Margins/padding per breakpoint
+  
+  // Component Configurations
+  componentRules  Json      @default("{}")  // Component-specific responsive rules
+  
+  // Usage
+  isDefault       Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  usageCount      Int       @default(0)
+  
+  // Tracking
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([isDefault, isActive])
+  @@map("responsive_configs")
+}
+
+// Device Usage Analytics for Responsive Design
+model DeviceAnalytics {
+  id              String    @id @default(cuid())
+  
+  // Device Information
+  deviceType      String    // mobile, tablet, desktop, tv, watch
+  screenWidth     Int?
+  screenHeight    Int?
+  viewportWidth   Int?
+  viewportHeight  Int?
+  pixelRatio      Float?    @default(1.0)
+  
+  // Browser Information
+  userAgent       String?
+  browserName     String?
+  browserVersion  String?
+  platform        String?   // iOS, Android, Windows, macOS, Linux
+  
+  // Usage Data
+  sessionId       String
+  userId          String?
+  pageUrl         String?
+  component       String?   // Which component/page was accessed
+  
+  // Performance Metrics
+  loadTime        Int?      // milliseconds
+  renderTime      Int?      // milliseconds
+  interactionTime Int?      // time to first interaction
+  
+  // Responsive Behavior
+  breakpointUsed  String?   // Which breakpoint was active
+  layoutShifts    Int?      @default(0)  // Count of layout shifts
+  scrollDepth     Float?    // Percentage of page scrolled
+  
+  // Tracking
+  timestamp       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  
+  @@index([deviceType, timestamp])
+  @@index([userId, timestamp])
+  @@index([sessionId, timestamp])
+  @@map("device_analytics")
+}
+
+// Multi-Tenant Architecture Models
+model Tenant {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  domain        String?   @unique
+  customDomain  String?   @unique
+  plan          String    @default("starter") // starter, professional, enterprise
+  settings      String    // JSON string
+  branding      String    // JSON string
+  limits        String    // JSON string
+  status        String    @default("active") // active, suspended, trial
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  users         TenantUser[]
+  usage         TenantUsage[]
+  roles         Role[]
+  
+  @@map("tenants")
+}
+
+model TenantUser {
+  id          String    @id @default(cuid())
+  tenantId    String
+  email       String
+  role        String    // admin, developer, viewer
+  permissions String    // JSON string array
+  status      String    @default("active") // active, inactive, invited
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@map("tenant_users")
+}
+
+model TenantUsage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  metric    String   // api_calls, storage, bandwidth, users, projects
+  value     Int      @default(0)
+  date      String   // YYYY-MM-DD format
+  createdAt DateTime @default(now())
+
+  // Relations
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, metric, date], name: "tenantId_metric_date")
+  @@index([tenantId, date])
+  @@map("tenant_usage")
+}
+
+// Role-Based Access Control (RBAC) Models
+model Role {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  type        String     @default("custom") // system, tenant, custom
+  permissions String     // JSON string array
+  isActive    Boolean    @default(true)
+  tenantId    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  userRoles   UserRole[]
+  tenant      Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([name, tenantId])
+  @@index([type, isActive])
+  @@map("roles")
+}
+
+model UserRole {
+  id         String    @id @default(cuid())
+  userId     String
+  roleId     String
+  tenantId   String?
+  expiresAt  DateTime?
+  assignedBy String
+  assignedAt DateTime  @default(now())
+
+  // Relations  
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, tenantId], name: "userId_roleId_tenantId")
+  @@index([userId, tenantId])
+  @@map("user_roles")
 }
