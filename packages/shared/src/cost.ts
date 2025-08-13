@@ -94,3 +94,10 @@ export function calculateApiCostGeneric(
     outputCost,
   };
 }
+
+export function parseApiPrice(priceString: string): number {
+  // Remove any currency symbols and parse as float
+  const cleanPrice = priceString.replace(/[$€£¥,]/g, '');
+  const parsed = parseFloat(cleanPrice);
+  return isNaN(parsed) ? 0 : parsed;
+}

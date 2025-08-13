@@ -284,7 +284,7 @@ export class ModelRouter extends EventEmitter {
 
       // Apply task-specific cost optimization
       const taskType = request.context?.task;
-      if (taskType === 'CODE_GENERATION' && !model.isLocal) {
+      if (taskType === 'code_generation' && !model.isLocal) {
         const inputCost = model.limits.costPerInputToken || 0;
         const outputCost = model.limits.costPerOutputToken || 0;
         const avgCost = (inputCost + outputCost) / 2;

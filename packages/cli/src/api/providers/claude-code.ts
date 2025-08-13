@@ -71,23 +71,23 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 			if (chunk.type === "assistant" && "message" in chunk) {
 				const message = chunk.message
 
-				if (message.stop_reason !== null) {
-					const content = "text" in message.content[0] ? message.content[0] : undefined
+				if (message && message.stop_reason !== null) {
+					const content = message.content?.[0] && "text" in message.content[0] ? message.content[0] : undefined
 
-					const isError = content && content.text.startsWith(`API Error`)
+					const isError = content && content.text && content.text.startsWith(`API Error`)
 					if (isError) {
 						// Error messages are formatted as: `API Error: <<status code>> <<json>>`
-						const errorMessageStart = content.text.indexOf("{")
-						const errorMessage = content.text.slice(errorMessageStart)
+						const errorMessageStart = content.text!.indexOf("{")
+						const errorMessage = content.text!.slice(errorMessageStart)
 
 						const error = this.attemptParse(errorMessage)
 						if (!error) {
-							throw new Error(content.text)
+							throw new Error(content.text!)
 						}
 
 						if (error.error.message.includes("Invalid model name")) {
 							throw new Error(
-								content.text + `\n\n${t("common:errors.claudeCode.apiKeyModelPlanMismatch")}`,
+								content.text! + `\n\n${t("common:errors.claudeCode.apiKeyModelPlanMismatch")}`,
 							)
 						}
 
@@ -95,37 +95,41 @@ export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 					}
 				}
 
-				for (const content of message.content) {
-					switch (content.type) {
-						case "text":
-							yield {
-								type: "text",
-								text: content.text,
-							}
-							break
-						case "thinking":
-							yield {
-								type: "reasoning",
-								text: content.thinking || "",
-							}
-							break
-						case "redacted_thinking":
-							yield {
-								type: "reasoning",
-								text: "[Redacted thinking block]",
-							}
-							break
-						case "tool_use":
-							console.error(`tool_use is not supported yet. Received: ${JSON.stringify(content)}`)
-							break
+				if (message && message.content) {
+					for (const content of message.content) {
+						switch (content.type) {
+							case "text":
+								yield {
+									type: "text",
+									text: content.text || "",
+								}
+								break
+							case "thinking":
+								yield {
+									type: "reasoning",
+									text: content.thinking || "",
+								}
+								break
+							case "redacted_thinking":
+								yield {
+									type: "reasoning",
+									text: "[Redacted thinking block]",
+								}
+								break
+							case "tool_use":
+								console.error(`tool_use is not supported yet. Received: ${JSON.stringify(content)}`)
+								break
+						}
 					}
 				}
 
-				usage.inputTokens += message.usage.input_tokens
-				usage.outputTokens += message.usage.output_tokens
-				usage.cacheReadTokens = (usage.cacheReadTokens || 0) + (message.usage.cache_read_input_tokens || 0)
-				usage.cacheWriteTokens =
-					(usage.cacheWriteTokens || 0) + (message.usage.cache_creation_input_tokens || 0)
+				if (message && message.usage) {
+					usage.inputTokens += message.usage.input_tokens
+					usage.outputTokens += message.usage.output_tokens
+					usage.cacheReadTokens = (usage.cacheReadTokens || 0) + (message.usage.cache_read_input_tokens || 0)
+					usage.cacheWriteTokens =
+						(usage.cacheWriteTokens || 0) + (message.usage.cache_creation_input_tokens || 0)
+				}
 
 				continue
 			}

@@ -52,7 +52,7 @@ export class PluginEventBus extends EventEmitter {
         this.emit('pluginEventError', {
           pluginId,
           eventType,
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
           timestamp: new Date()
         });
       }

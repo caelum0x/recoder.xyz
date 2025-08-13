@@ -23,29 +23,29 @@ interface ThemeContextType {
 }
 
 const lightColors = {
-  primary: '#007AFF',
+  primary: '#326DF5', // Recoder primary blue
   background: '#FFFFFF',
-  surface: '#F2F2F7',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  border: '#E5E5E7',
-  accent: '#5856D6',
-  error: '#FF3B30',
-  warning: '#FF9500',
-  success: '#34C759',
+  surface: '#F8FAFC', // Recoder gray-50
+  text: '#0F172A', // Recoder gray-900
+  textSecondary: '#64748B', // Recoder gray-500
+  border: '#E2E8F0', // Recoder gray-200
+  accent: '#7C3AED', // Recoder secondary purple
+  error: '#DC2626', // Recoder accent red
+  warning: '#EA580C', // Recoder accent orange
+  success: '#059669', // Recoder accent green
 };
 
 const darkColors = {
-  primary: '#0A84FF',
-  background: '#000000',
-  surface: '#1C1C1E',
-  text: '#FFFFFF',
-  textSecondary: '#8E8E93',
-  border: '#38383A',
-  accent: '#5E5CE6',
-  error: '#FF453A',
-  warning: '#FF9F0A',
-  success: '#32D74B',
+  primary: '#4785FF', // Lighter Recoder blue for dark mode
+  background: '#0F172A', // Recoder gray-900
+  surface: '#1E293B', // Recoder gray-800
+  text: '#F8FAFC', // Recoder gray-50
+  textSecondary: '#94A3B8', // Recoder gray-400
+  border: '#334155', // Recoder gray-700
+  accent: '#8B5CF6', // Lighter Recoder purple for dark mode
+  error: '#EF4444', // Lighter red for dark mode
+  warning: '#F59E0B', // Lighter orange for dark mode
+  success: '#10B981', // Lighter green for dark mode
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);

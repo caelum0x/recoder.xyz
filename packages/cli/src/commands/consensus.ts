@@ -7,16 +7,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { Logger } from '../utils/logger';
 import { AIModelHub } from '../services/ai-models/ai-hub';
-
-// Define TaskType locally
-enum TaskType {
-  CODE_GENERATION = 'CODE_GENERATION',
-  CODE_REVIEW = 'CODE_REVIEW',
-  DEBUGGING = 'DEBUGGING',
-  SECURITY_ANALYSIS = 'SECURITY_ANALYSIS',
-  DOCUMENTATION = 'DOCUMENTATION',
-  CHAT = 'CHAT'
-}
+import { TaskType } from '@recoder/shared/types/ai-models';
 
 export function createConsensusCommand(aiHub: AIModelHub): Command {
   const consensus = new Command('consensus')

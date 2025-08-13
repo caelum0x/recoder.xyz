@@ -3,6 +3,7 @@ import PlausibleProvider from "next-plausible";
 import { getBrandConfig } from "../lib/recoder-config";
 import { AnalyticsProvider } from "@/components/providers/analytics-provider";
 import AuthProvider from "@/lib/auth/auth-context";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const brandConfig = getBrandConfig();
@@ -48,11 +49,18 @@ export default function RootLayout({
         <PlausibleProvider domain="web.recoder.xyz" />
       </head>
       <body className="h-full">
-        <AuthProvider>
-          <AnalyticsProvider>
-            {children}
-          </AnalyticsProvider>
-        </AuthProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <AnalyticsProvider>
+              {children}
+            </AnalyticsProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

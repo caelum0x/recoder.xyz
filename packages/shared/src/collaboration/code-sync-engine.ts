@@ -460,9 +460,4 @@ export class CodeSyncEngine extends EventEmitter {
 }
 
 // Export types
-export type {
-  CodeOperation,
-  CodeDocument,
-  ConflictResolution,
-  SyncState
-};
+// Types are already exported as interfaces above

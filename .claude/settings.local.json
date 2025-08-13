@@ -92,7 +92,8 @@
       "Bash(kubectl get:*)",
       "Bash(SKIP_ENV_VALIDATION=true npm run build)",
       "Bash(true)",
-      "Bash(npx expo:*)"
+      "Bash(npx expo:*)",
+      "Bash(BASE_URL=http://localhost:3005 k6 run --duration=30s --vus=50 k6-tests/load-test-config.js)"
     ],
     "deny": []
   }

@@ -1,35 +1,273 @@
 // Prisma Database Client
-// Centralized database connection management
+// Centralized database connection management with enterprise optimization
 
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
+import { databaseOptimization } from '../services/database-optimization';
+import { redisCache } from '../services/redis-cache';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['query', 'error', 'warn'],
+// Enhanced Prisma configuration for enterprise performance
+const createPrismaClient = () => {
+  return new PrismaClient({
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'event', level: 'error' },
+      { emit: 'event', level: 'warn' },
+      { emit: 'stdout', level: 'info' }
+    ],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL + '?connection_limit=50&pool_timeout=20&statement_timeout=30000'
+      }
+    }
   });
+};
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export const basePrisma = globalForPrisma.prisma ?? createPrismaClient();
 
-// Database connection handler
-prisma.$connect()
-  .then(() => {
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma;
+
+// Enhanced Prisma client with caching and optimization
+class EnhancedPrismaClient {
+  private client: PrismaClient;
+
+  constructor(client: PrismaClient) {
+    this.client = client;
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners() {
+    this.client.$on('query', (e) => {
+      // Track slow queries
+      if (e.duration > 1000) {
+        logger.warn('Slow query detected', {
+          query: e.query.substring(0, 100),
+          duration: e.duration,
+          params: e.params
+        });
+      }
+    });
+
+    this.client.$on('error', (e) => {
+      logger.error('Database error:', e);
+    });
+  }
+
+  // Expose all Prisma methods
+  get user() { return this.client.user; }
+  get project() { return this.client.project; }
+  get template() { return this.client.template; }
+  get agent() { return this.client.agent; }
+  get usageRecord() { return this.client.usageRecord; }
+  get subscription() { return this.client.subscription; }
+  get invoice() { return this.client.invoice; }
+  get paymentMethod() { return this.client.paymentMethod; }
+  get integration() { return this.client.integration; }
+  get apiKey() { return this.client.apiKey; }
+  get auditLog() { return this.client.auditLog; }
+  get configuration() { return this.client.configuration; }
+  get notificationSettings() { return this.client.notificationSettings; }
+  get fileUpload() { return this.client.fileUpload; }
+  get webhook() { return this.client.webhook; }
+  get webhookDelivery() { return this.client.webhookDelivery; }
+  get oAuthAccount() { return this.client.oAuthAccount; }
+  get userDevice() { return this.client.userDevice; }
+  get syncState() { return this.client.syncState; }
+  get aIProviderStatus() { return this.client.aIProviderStatus; }
+  get usageAnalytics() { return this.client.usageAnalytics; }
+  get dodoSubscription() { return this.client.dodoSubscription; }
+  get dodoUsage() { return this.client.dodoUsage; }
+  get dodoCharge() { return this.client.dodoCharge; }
+  get dodoWebhookEvent() { return this.client.dodoWebhookEvent; }
+  get codebaseKnowledge() { return this.client.codebaseKnowledge; }
+  get codeChunk() { return this.client.codeChunk; }
+  get vectorEmbedding() { return this.client.vectorEmbedding; }
+  get semanticQuery() { return this.client.semanticQuery; }
+  get semanticSearchResult() { return this.client.semanticSearchResult; }
+  get embeddingCache() { return this.client.embeddingCache; }
+  get rAGSession() { return this.client.rAGSession; }
+  get rAGInteraction() { return this.client.rAGInteraction; }
+  get backupJob() { return this.client.backupJob; }
+  get restoreJob() { return this.client.restoreJob; }
+  get backupValidation() { return this.client.backupValidation; }
+  get backupSchedule() { return this.client.backupSchedule; }
+  get backupStorage() { return this.client.backupStorage; }
+  get backupAccess() { return this.client.backupAccess; }
+  get userPreferences() { return this.client.userPreferences; }
+  get responsiveConfig() { return this.client.responsiveConfig; }
+  get deviceAnalytics() { return this.client.deviceAnalytics; }
+  
+  // Aliases for usage tracking service compatibility
+  get usage() { return this.client.dodoUsage; }
+  get charge() { return this.client.dodoCharge; }
+  
+  // Missing models for RBAC service
+  get role() { return this.client.role; }
+  get userRole() { return this.client.userRole; }
+
+  // Expose Prisma methods
+  get $connect() { return this.client.$connect.bind(this.client); }
+  get $disconnect() { return this.client.$disconnect.bind(this.client); }
+  get $executeRaw() { return this.client.$executeRaw.bind(this.client); }
+  get $executeRawUnsafe() { return this.client.$executeRawUnsafe.bind(this.client); }
+  get $queryRaw() { return this.client.$queryRaw.bind(this.client); }
+  get $queryRawUnsafe() { return this.client.$queryRawUnsafe.bind(this.client); }
+  get $transaction() { return this.client.$transaction.bind(this.client); }
+  get $on() { return this.client.$on.bind(this.client); }
+
+  // Enhanced cached query method
+  async cachedQuery<T>(
+    query: string,
+    params: any[] = [],
+    cacheKey?: string,
+    cacheTtl: number = 300
+  ): Promise<T> {
+    const finalCacheKey = cacheKey || `query:${this.hashQuery(query, params)}`;
+    
+    // Try cache first
+    const cached = await redisCache.get<T>(finalCacheKey, 'API_RESPONSES');
+    if (cached) {
+      return cached;
+    }
+
+    // Execute query through optimization service
+    const result = await databaseOptimization.executeQuery<T>(query, params, {
+      useCache: true,
+      cacheTtl,
+      readOnly: query.trim().toLowerCase().startsWith('select')
+    });
+
+    // Cache the result
+    await redisCache.set(finalCacheKey, result, { ttl: cacheTtl }, 'API_RESPONSES');
+
+    return result;
+  }
+
+  // Read-optimized query (uses read replicas if available)
+  async readQuery<T>(query: string, params: any[] = []): Promise<T> {
+    return await databaseOptimization.executeQuery<T>(query, params, {
+      readOnly: true,
+      useCache: true,
+      cacheTtl: 600
+    });
+  }
+
+  // Write-optimized query
+  async writeQuery<T>(query: string, params: any[] = []): Promise<T> {
+    // Invalidate related cache entries
+    await this.invalidateQueryCache(query);
+    
+    return await databaseOptimization.executeQuery<T>(query, params, {
+      readOnly: false,
+      useCache: false
+    });
+  }
+
+  // Cached find operations
+  async cachedFindMany<T>(
+    model: string,
+    args: any,
+    cacheKey?: string,
+    cacheTtl: number = 300
+  ): Promise<T> {
+    const key = cacheKey || `find:${model}:${this.hashObject(args)}`;
+    
+    const cached = await redisCache.get<T>(key, 'API_RESPONSES');
+    if (cached) return cached;
+
+    // Execute the actual query
+    const modelClient = (this.client as any)[model];
+    const result = await modelClient.findMany(args);
+
+    await redisCache.set(key, result, { ttl: cacheTtl, tags: [model] }, 'API_RESPONSES');
+    return result;
+  }
+
+  async cachedFindUnique<T>(
+    model: string,
+    args: any,
+    cacheKey?: string,
+    cacheTtl: number = 600
+  ): Promise<T> {
+    const key = cacheKey || `findUnique:${model}:${this.hashObject(args)}`;
+    
+    const cached = await redisCache.get<T>(key, 'API_RESPONSES');
+    if (cached) return cached;
+
+    const modelClient = (this.client as any)[model];
+    const result = await modelClient.findUnique(args);
+
+    await redisCache.set(key, result, { ttl: cacheTtl, tags: [model] }, 'API_RESPONSES');
+    return result;
+  }
+
+  // Invalidate cache for write operations
+  async invalidateCache(model: string, id?: string): Promise<void> {
+    if (id) {
+      await redisCache.invalidateByTags([model, `${model}:${id}`]);
+    } else {
+      await redisCache.invalidateByTags([model]);
+    }
+  }
+
+  private hashQuery(query: string, params: any[]): string {
+    const combined = query + JSON.stringify(params);
+    let hash = 0;
+    for (let i = 0; i < combined.length; i++) {
+      const char = combined.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  private hashObject(obj: any): string {
+    const str = JSON.stringify(obj, Object.keys(obj).sort());
+    return this.hashQuery(str, []);
+  }
+
+  private async invalidateQueryCache(query: string): Promise<void> {
+    // Extract table names from query and invalidate related caches
+    const tableMatches = query.match(/(?:FROM|INTO|UPDATE|JOIN)\s+(\w+)/gi);
+    if (tableMatches) {
+      const tables = tableMatches.map(match => match.split(/\s+/)[1]);
+      await redisCache.invalidateByTags(tables);
+    }
+  }
+}
+
+export const prisma = new EnhancedPrismaClient(basePrisma);
+
+// Database connection handler with optimization integration
+basePrisma.$connect()
+  .then(async () => {
     logger.info('Successfully connected to PostgreSQL database');
+    
+    // Initialize database optimizations
+    try {
+      await databaseOptimization.optimizeSettings();
+      logger.info('Database optimization settings applied');
+    } catch (error) {
+      logger.warn('Database optimization failed:', error);
+    }
   })
   .catch((error) => {
     logger.error('Failed to connect to database:', error);
     process.exit(1);
   });
 
-// Graceful shutdown
+// Graceful shutdown with cleanup
 process.on('beforeExit', async () => {
-  await prisma.$disconnect();
-  logger.info('Database connection closed');
+  await Promise.all([
+    basePrisma.$disconnect(),
+    databaseOptimization.close(),
+    redisCache.close()
+  ]);
+  logger.info('Database connections closed');
 });
 
 export default prisma;

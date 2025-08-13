@@ -3,6 +3,7 @@
 
 import { EventEmitter } from 'events';
 import { aiProviderManager, AIProvider } from './ai-provider-manager';
+import { aiCostOptimizer } from './ai-cost-optimizer';
 import { logger } from '../utils/logger';
 
 interface RoutingRequest {
@@ -30,6 +31,17 @@ interface RoutingResult {
   estimatedLatency: number;
   confidence: number; // 0-1, how confident we are this is the best choice
   fallbackProviders: string[];
+  costOptimization?: {
+    reasoning: string;
+    costSavings: number;
+    qualityScore: number;
+    alternatives: Array<{
+      providerId: string;
+      cost: number;
+      quality: number;
+      reasoning: string;
+    }>;
+  };
 }
 
 interface FailoverAttempt {
@@ -48,61 +60,90 @@ export class AIRouter extends EventEmitter {
   }
 
   /**
-   * Route request to the best AI provider
+   * Route request to the best AI provider with cost optimization
    */
   public async routeRequest(request: RoutingRequest): Promise<RoutingResult> {
-    logger.info('Routing AI request', {
+    logger.info('Routing AI request with cost optimization', {
       userId: request.userId,
       taskType: request.taskType,
       complexity: request.context?.complexity
     });
 
     try {
-      // Determine capability mapping
-      const capability = this.mapTaskToCapability(request.taskType);
+      // Get cost-optimized routing recommendation
+      const costOptimizationRequest = {
+        userId: request.userId,
+        prompt: request.prompt,
+        taskType: request.taskType,
+        complexity: request.context?.complexity,
+        maxCost: request.constraints?.maxCost,
+        userTier: await this.getUserTier(request.userId)
+      };
+
+      const costDecision = await aiCostOptimizer.optimizeRouting(costOptimizationRequest);
       
-      // Get routing criteria based on request
-      const criteria = this.buildRoutingCriteria(request, capability);
+      // Use cost-optimized provider if available
+      let selectedProvider = aiProviderManager.getProvider(costDecision.selectedProvider);
       
-      // Find best provider
-      const provider = aiProviderManager.getBestProvider(criteria);
+      if (!selectedProvider) {
+        // Fallback to original routing logic
+        const capability = this.mapTaskToCapability(request.taskType);
+        const criteria = this.buildRoutingCriteria(request, capability);
+        selectedProvider = aiProviderManager.getBestProvider(criteria);
+      }
       
-      if (!provider) {
+      if (!selectedProvider) {
         throw new Error('No suitable AI provider available');
       }
 
       // Select best model for this task
-      const model = this.selectBestModel(provider, request);
+      const model = this.selectBestModel(selectedProvider, request);
       
-      // Calculate estimates
-      const estimates = this.calculateEstimates(provider, model, request);
+      // Calculate estimates with cost optimization
+      const estimates = this.calculateEstimatesWithOptimization(selectedProvider, model, request, costDecision);
       
-      // Get fallback providers
-      const fallbackProviders = this.getFallbackProviders(provider, request);
+      // Get fallback providers from cost optimization
+      const fallbackProviders = this.getFallbackProvidersOptimized(selectedProvider, request, costDecision);
 
       const result: RoutingResult = {
-        providerId: provider.id,
+        providerId: selectedProvider.id,
         modelId: model.id,
-        estimatedCost: estimates.cost,
+        estimatedCost: costDecision.expectedCost,
         estimatedLatency: estimates.latency,
-        confidence: estimates.confidence,
-        fallbackProviders: fallbackProviders.map(p => p.id)
+        confidence: estimates.confidence * costDecision.qualityScore,
+        fallbackProviders: fallbackProviders.map(p => p.id),
+        costOptimization: {
+          reasoning: costDecision.reasoning,
+          costSavings: costDecision.costSavings,
+          qualityScore: costDecision.qualityScore,
+          alternatives: costDecision.alternativeOptions
+        }
       };
 
       // Store routing decision for learning
       this.storeRoutingHistory(request.userId, result);
+
+      // Track cost optimization decision
+      this.emit('costOptimizedRouting', {
+        request,
+        result,
+        costDecision,
+        costSavings: costDecision.costSavings
+      });
 
       this.emit('requestRouted', { request, result });
 
       return result;
 
     } catch (error) {
-      logger.error('Failed to route AI request', {
+      logger.error('Failed to route AI request with cost optimization', {
         error: error.message,
         userId: request.userId,
         taskType: request.taskType
       });
-      throw error;
+      
+      // Fallback to basic routing without cost optimization
+      return this.basicRoutingFallback(request);
     }
   }
 
@@ -404,6 +445,78 @@ export class AIRouter extends EventEmitter {
     }
     
     this.routingHistory.set(userId, userHistory);
+  }
+
+  /**
+   * Get user tier for cost optimization
+   */
+  private async getUserTier(userId: string): Promise<'free' | 'pro' | 'enterprise'> {
+    // Mock implementation - in practice, query user subscription
+    return 'pro';
+  }
+
+  /**
+   * Calculate estimates with cost optimization
+   */
+  private calculateEstimatesWithOptimization(
+    provider: AIProvider, 
+    model: any, 
+    request: RoutingRequest, 
+    costDecision: any
+  ): { cost: number; latency: number; confidence: number } {
+    
+    const baseEstimates = this.calculateEstimates(provider, model, request);
+    
+    return {
+      cost: costDecision.expectedCost,
+      latency: baseEstimates.latency,
+      confidence: baseEstimates.confidence * costDecision.qualityScore
+    };
+  }
+
+  /**
+   * Get fallback providers optimized for cost
+   */
+  private getFallbackProvidersOptimized(
+    provider: AIProvider, 
+    request: RoutingRequest, 
+    costDecision: any
+  ): AIProvider[] {
+    
+    // Use alternatives from cost optimization
+    const alternativeIds = costDecision.alternativeOptions.map((alt: any) => alt.providerId);
+    
+    return alternativeIds
+      .map((id: string) => aiProviderManager.getProvider(id))
+      .filter((p): p is AIProvider => p !== null && p.status.isHealthy);
+  }
+
+  /**
+   * Basic routing fallback without cost optimization
+   */
+  private async basicRoutingFallback(request: RoutingRequest): Promise<RoutingResult> {
+    logger.info('Using basic routing fallback', { userId: request.userId });
+
+    const capability = this.mapTaskToCapability(request.taskType);
+    const criteria = this.buildRoutingCriteria(request, capability);
+    const provider = aiProviderManager.getBestProvider(criteria);
+    
+    if (!provider) {
+      throw new Error('No suitable AI provider available');
+    }
+
+    const model = this.selectBestModel(provider, request);
+    const estimates = this.calculateEstimates(provider, model, request);
+    const fallbackProviders = this.getFallbackProviders(provider, request);
+
+    return {
+      providerId: provider.id,
+      modelId: model.id,
+      estimatedCost: estimates.cost,
+      estimatedLatency: estimates.latency,
+      confidence: estimates.confidence,
+      fallbackProviders: fallbackProviders.map(p => p.id)
+    };
   }
 
   /**
