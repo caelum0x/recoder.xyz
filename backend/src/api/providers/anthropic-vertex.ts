@@ -11,7 +11,7 @@ import {
 } from "@roo-code/types"
 
 import { ApiHandlerOptions } from "../../shared/api"
-import { safeJsonParse } from "../../shared/safeJsonParse"
+//mport { safeJsonParse } from "../../shared/safeJsonParse"
 
 import { ApiStream } from "../transform/stream"
 import { addCacheBreakpoints } from "../transform/caching/vertex"
@@ -19,6 +19,26 @@ import { getModelParams } from "../transform/model-params"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
+import { safeJsonParse } from "@recoder/shared"
+
+// Define types for compatibility with current Anthropic SDK
+type AnthropicMessageCreateParams = {
+	model: string;
+	max_tokens: number;
+	temperature?: number;
+	thinking?: boolean;
+	system?: string | Array<{ text: string; type: "text"; cache_control?: { type: "ephemeral" } }>;
+	messages: Array<{
+		role: "user" | "assistant";
+		content: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+	}>;
+	stream?: boolean;
+};
+
+type AnthropicMessageParam = {
+	role: "user" | "assistant";
+	content: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+};
 
 // https://docs.anthropic.com/en/api/claude-on-vertex-ai
 export class AnthropicVertexHandler extends BaseProvider implements SingleCompletionHandler {
@@ -41,7 +61,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				googleAuth: new GoogleAuth({
 					scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
-				}),
+				}) as any,
 			})
 		} else if (this.options.vertexKeyFile) {
 			this.client = new AnthropicVertex({
@@ -50,7 +70,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				googleAuth: new GoogleAuth({
 					scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 					keyFile: this.options.vertexKeyFile,
-				}),
+				}) as any,
 			})
 		} else {
 			this.client = new AnthropicVertex({ projectId, region })
@@ -59,7 +79,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 
 	override async *createMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: AnthropicMessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
 		let {
@@ -83,7 +103,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 		 * This ensures we stay under the 4-block limit while maintaining effective caching
 		 * for the most relevant context.
 		 */
-		const params: Anthropic.Messages.MessageCreateParamsStreaming = {
+		const params = {
 			model: id,
 			max_tokens: maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
 			temperature,
@@ -92,71 +112,74 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 			system: supportsPromptCache
 				? [{ text: systemPrompt, type: "text" as const, cache_control: { type: "ephemeral" } }]
 				: systemPrompt,
-			messages: supportsPromptCache ? addCacheBreakpoints(messages) : messages,
-			stream: true,
+			messages: (supportsPromptCache ? addCacheBreakpoints(messages) : messages) as any,
+			stream: true as const,
 		}
 
-		const stream = await this.client.messages.create(params)
+		const stream = await this.client.messages.create(params as any)
 
-		for await (const chunk of stream) {
-			switch (chunk.type) {
-				case "message_start": {
-					const usage = chunk.message!.usage
+		// Handle the stream properly
+		if (Symbol.asyncIterator in stream) {
+			for await (const chunk of stream as any) {
+				switch (chunk.type) {
+					case "message_start": {
+						const usage = chunk.message!.usage
 
-					yield {
-						type: "usage",
-						inputTokens: usage.input_tokens || 0,
-						outputTokens: usage.output_tokens || 0,
-						cacheWriteTokens: usage.cache_creation_input_tokens || undefined,
-						cacheReadTokens: usage.cache_read_input_tokens || undefined,
+						yield {
+							type: "usage",
+							inputTokens: usage.input_tokens || 0,
+							outputTokens: usage.output_tokens || 0,
+							cacheWriteTokens: usage.cache_creation_input_tokens || undefined,
+							cacheReadTokens: usage.cache_read_input_tokens || undefined,
+						}
+
+						break
 					}
+					case "message_delta": {
+						yield {
+							type: "usage",
+							inputTokens: 0,
+							outputTokens: chunk.usage!.output_tokens || 0,
+						}
 
-					break
-				}
-				case "message_delta": {
-					yield {
-						type: "usage",
-						inputTokens: 0,
-						outputTokens: chunk.usage!.output_tokens || 0,
+						break
 					}
+					case "content_block_start": {
+						switch (chunk.content_block!.type) {
+							case "text": {
+								if (chunk.index! > 0) {
+									yield { type: "text", text: "\n" }
+								}
 
-					break
-				}
-				case "content_block_start": {
-					switch (chunk.content_block!.type) {
-						case "text": {
-							if (chunk.index! > 0) {
-								yield { type: "text", text: "\n" }
+								yield { type: "text", text: chunk.content_block!.text }
+								break
 							}
+							case "thinking": {
+								if (chunk.index! > 0) {
+									yield { type: "reasoning", text: "\n" }
+								}
 
-							yield { type: "text", text: chunk.content_block!.text }
-							break
-						}
-						case "thinking": {
-							if (chunk.index! > 0) {
-								yield { type: "reasoning", text: "\n" }
+								yield { type: "reasoning", text: (chunk.content_block as any).thinking }
+								break
 							}
-
-							yield { type: "reasoning", text: (chunk.content_block as any).thinking }
-							break
 						}
+
+						break
 					}
+					case "content_block_delta": {
+						switch (chunk.delta!.type) {
+							case "text_delta": {
+								yield { type: "text", text: chunk.delta!.text }
+								break
+							}
+							case "thinking_delta": {
+								yield { type: "reasoning", text: (chunk.delta as any).thinking }
+								break
+							}
+						}
 
-					break
-				}
-				case "content_block_delta": {
-					switch (chunk.delta!.type) {
-						case "text_delta": {
-							yield { type: "text", text: chunk.delta!.text }
-							break
-						}
-						case "thinking_delta": {
-							yield { type: "reasoning", text: (chunk.delta as any).thinking }
-							break
-						}
+						break
 					}
-
-					break
 				}
 			}
 		}
@@ -185,23 +208,23 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				reasoning: thinking,
 			} = this.getModel()
 
-			const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
+			const params = {
 				model: id,
 				max_tokens: maxTokens,
 				temperature,
 				thinking,
 				messages: [
 					{
-						role: "user",
+						role: "user" as const,
 						content: supportsPromptCache
-							? [{ type: "text" as const, text: prompt, cache_control: { type: "ephemeral" } }]
+							? [{ type: "text" as const, text: prompt, cache_control: { type: "ephemeral" as const } }]
 							: prompt,
 					},
 				],
-				stream: false,
+				stream: false as const,
 			}
 
-			const response = await this.client.messages.create(params)
+			const response = await this.client.messages.create(params as any)
 			const content = response.content[0]
 
 			if (content.type === "text") {

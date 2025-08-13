@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recoder Desktop</title>
+    <style>
+        body { 
+            font-family: system-ui; 
+            margin: 0; 
+            background: #1a1a1a; 
+            color: white;
+        }
+        .header {
+            background: #2a2a2a;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .tab {
+            padding: 8px 16px;
+            background: #333;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .tab.active { background: #0066cc; }
+        .content {
+            height: calc(100vh - 60px);
+            position: relative;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: none;
+        }
+        iframe.active { display: block; }
+        .error {
+            padding: 20px;
+            color: #ff6b6b;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="tab active" data-app="chat">💬 Chat</button>
+        <button class="tab" data-app="web">🌐 Web</button>
+        <button class="tab" data-app="extension">🔧 Extension</button>
+    </div>
+    <div class="content">
+        <div id="loading">Loading...</div>
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        let currentApp = 'chat';
+        let loadedApps = new Set();
+
+        async function loadApp(appName) {
+            try {
+                const result = await window.electronAPI.loadApp(appName);
+                
+                if (!result.available) {
+                    document.getElementById('error').textContent = 
+                        result.error || `${appName} is not available`;
+                    document.getElementById('error').style.display = 'block';
+                    return;
+                }
+
+                document.getElementById('error').style.display = 'none';
+                
+                if (!loadedApps.has(appName)) {
+                    const iframe = document.createElement('iframe');
+                    iframe.id = `app-${appName}`;
+                    iframe.src = result.url;
+                    iframe.onload = () => {
+                        document.getElementById('loading').style.display = 'none';
+                    };
+                    document.querySelector('.content').appendChild(iframe);
+                    loadedApps.add(appName);
+                }
+
+                // Show the app
+                document.querySelectorAll('iframe').forEach(iframe => {
+                    iframe.classList.remove('active');
+                });
+                document.getElementById(`app-${appName}`)?.classList.add('active');
+                
+            } catch (error) {
+                document.getElementById('error').textContent = `Error loading ${appName}: ${error.message}`;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', async () => {
+                const appName = tab.dataset.app;
+                
+                // Update active tab
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Load app
+                await loadApp(appName);
+                currentApp = appName;
+            });
+        });
+
+        // Load initial app
+        window.addEventListener('DOMContentLoaded', () => {
+            loadApp('chat');
+        });
+    </script>
+</body>
+</html>

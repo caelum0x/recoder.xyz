@@ -26,7 +26,7 @@ export interface ThreatPattern {
   description: string;
   rules: ThreatRule[];
   severity: 'low' | 'medium' | 'high' | 'critical';
-  action: 'log' | 'warn' | 'block' | 'ban';
+  action: 'allow' | 'warn' | 'block' | 'ban';
 }
 
 export interface ThreatRule {
@@ -193,8 +193,10 @@ export class RouterSecurityService extends EventEmitter {
       this.recordFailedAttempt(context.ip);
     }
 
+    const isAllowed = (action as string) === 'allow' || (action as string) === 'warn';
+    
     return {
-      allowed: action === 'allow' || action === 'warn',
+      allowed: isAllowed,
       riskScore,
       reasons,
       action
@@ -491,7 +493,7 @@ export class RouterSecurityService extends EventEmitter {
         name: 'Bot User Agent',
         description: 'Detects automated bot requests',
         severity: 'low',
-        action: 'log',
+        action: 'warn',
         rules: [
           {
             condition: 'userAgent',

@@ -22,7 +22,7 @@ export interface ThreatPattern {
     description: string;
     rules: ThreatRule[];
     severity: 'low' | 'medium' | 'high' | 'critical';
-    action: 'log' | 'warn' | 'block' | 'ban';
+    action: 'allow' | 'warn' | 'block' | 'ban';
 }
 export interface ThreatRule {
     condition: string;

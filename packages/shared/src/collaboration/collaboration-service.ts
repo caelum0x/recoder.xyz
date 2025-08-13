@@ -293,7 +293,7 @@ export class CollaborationService extends EventEmitter {
       context: {
         sessionId,
         activeUsers: Array.from(session.users.values()),
-        currentDocument: this.codeSyncEngine.getDocument(sessionId), // Assuming document ID = session ID
+        currentDocument: this.codeSyncEngine.getDocument(sessionId) || undefined, // Assuming document ID = session ID
         recentOperations: [],
         conversationHistory: [],
         projectContext: {
@@ -737,7 +737,4 @@ export class CollaborationService extends EventEmitter {
 
 // Export types and service
 export default CollaborationService;
-export type {
-  CollaborativeCodeGeneration,
-  CollaborationServiceOptions
-};
+// Types are already exported as interfaces above

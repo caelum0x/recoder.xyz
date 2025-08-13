@@ -583,9 +583,4 @@ export class AIAgentManager extends EventEmitter {
   }
 }
 
-// Export types
-export type {
-  AIAgentConfig,
-  AIAgentTeam,
-  AISessionContext
-};
+// Types are already exported as interfaces above

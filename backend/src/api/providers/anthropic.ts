@@ -1,6 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Stream as AnthropicStream } from "@anthropic-ai/sdk/streaming"
-// import { CacheControlEphemeral } from "@anthropic-ai/sdk/resources"
+import { CacheControlEphemeral, Message } from "../../types/anthropic-compat"
+import { createAnthropicClient, type CompatibleAnthropicClient } from "../../types/anthropic-wrapper"
 
 import {
 	type ModelInfo,
@@ -17,11 +18,12 @@ import { getModelParams } from "../transform/model-params"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { calculateApiCostAnthropic } from "../../shared/cost"
+import { calculateApiCostAnthropic } from "@recoder/shared"
+//import { calculateApiCostAnthropic } from "@recoder/shared"
 
 export class AnthropicHandler extends BaseProvider implements SingleCompletionHandler {
 	private options: ApiHandlerOptions
-	private client: Anthropic
+	private client: CompatibleAnthropicClient
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -30,7 +32,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 		const apiKeyFieldName =
 			this.options.anthropicBaseUrl && this.options.anthropicUseAuthToken ? "authToken" : "apiKey"
 
-		this.client = new Anthropic({
+		this.client = createAnthropicClient({
 			baseURL: this.options.anthropicBaseUrl || undefined,
 			[apiKeyFieldName]: this.options.apiKey,
 		})
@@ -71,7 +73,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 				const lastUserMsgIndex = userMsgIndices[userMsgIndices.length - 1] ?? -1
 				const secondLastMsgUserIndex = userMsgIndices[userMsgIndices.length - 2] ?? -1
 
-				stream = await this.client.messages.create(
+				stream = (await this.client.messages.create(
 					{
 						model: modelId,
 						max_tokens: maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
@@ -96,28 +98,8 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 							return message
 						}),
 						stream: true,
-					},
-					(() => {
-						// prompt caching: https://x.com/alexalbert__/status/1823751995901272068
-						// https://github.com/anthropics/anthropic-sdk-typescript?tab=readme-ov-file#default-headers
-						// https://github.com/anthropics/anthropic-sdk-typescript/commit/c920b77fc67bd839bfeb6716ceab9d7c9bbe7393
-
-						// Then check for models that support prompt caching
-						switch (modelId) {
-							case "claude-sonnet-4-20250514":
-							case "claude-opus-4-20250514":
-							case "claude-3-7-sonnet-20250219":
-							case "claude-3-5-sonnet-20241022":
-							case "claude-3-5-haiku-20241022":
-							case "claude-3-opus-20240229":
-							case "claude-3-haiku-20240307":
-								betas.push("prompt-caching-2024-07-31")
-								return { headers: { "anthropic-beta": betas.join(",") } }
-							default:
-								return undefined
-						}
-					})(),
-				)
+					}
+				)) as AnthropicStream<Anthropic.Messages.RawMessageStreamEvent>
 				break
 			}
 			default: {
@@ -220,13 +202,13 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 				type: "usage",
 				inputTokens: 0,
 				outputTokens: 0,
-				totalCost: calculateApiCostAnthropic(
-					this.getModel().info,
+				totalCost: calculateApiCostAnthropic(modelId, {
 					inputTokens,
 					outputTokens,
+					totalTokens: inputTokens + outputTokens,
 					cacheWriteTokens,
 					cacheReadTokens,
-				),
+				}).totalCost,
 			}
 		}
 	}
@@ -258,14 +240,14 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 	async completePrompt(prompt: string) {
 		let { id: model, temperature } = this.getModel()
 
-		const message = await this.client.messages.create({
+		const message = (await this.client.messages.create({
 			model,
 			max_tokens: ANTHROPIC_DEFAULT_MAX_TOKENS,
 			thinking: undefined,
 			temperature,
 			messages: [{ role: "user", content: prompt }],
 			stream: false,
-		})
+		})) as Message
 
 		const content = message.content.find(({ type }) => type === "text")
 		return content?.type === "text" ? content.text : ""

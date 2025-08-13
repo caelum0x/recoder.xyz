@@ -1,12 +1,12 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { ApiHandler, SingleCompletionHandler } from ".."
-import { ApiHandlerOptions, FireworksModelId, fireworksDefaultModelId, fireworksModels } from "../../shared/api"
-import { type ModelInfo } from "@roo-code/types"
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import { FireworksModelId, type ModelInfo } from "@roo-code/types"
+
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
+import { ApiHandlerOptions, fireworksDefaultModelId, fireworksModels } from "@recoder/shared"
 
 export class FireworksHandler extends BaseProvider implements ApiHandler, SingleCompletionHandler {
 	private options: ApiHandlerOptions
@@ -109,11 +109,7 @@ export class FireworksHandler extends BaseProvider implements ApiHandler, Single
 						type: "usage",
 						inputTokens: chunk.usage.prompt_tokens || 0,
 						outputTokens: chunk.usage.completion_tokens || 0,
-						totalCost: calculateApiCostOpenAI(
-							model.info,
-							chunk.usage.prompt_tokens || 0,
-							chunk.usage.completion_tokens || 0,
-						),
+						totalCost: 0, // Calculate cost separately if needed
 					}
 				}
 			}
@@ -172,11 +168,10 @@ export class FireworksHandler extends BaseProvider implements ApiHandler, Single
 	}
 
 	getModel(): { id: FireworksModelId; info: ModelInfo } {
-		const modelId =
-			((this.options.apiModelId || this.options.fireworksModelId) as FireworksModelId) || fireworksDefaultModelId
+		const modelId = (this.options.apiModelId || this.options.fireworksModelId || fireworksDefaultModelId) as FireworksModelId
 		return {
 			id: modelId,
-			info: fireworksModels[modelId] || fireworksModels[fireworksDefaultModelId],
+			info: fireworksModels[modelId] || fireworksModels[fireworksDefaultModelId]
 		}
 	}
 

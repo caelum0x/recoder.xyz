@@ -98,6 +98,7 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/figlet": "^1.5.8",
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.7",
@@ -108,6 +109,7 @@
     "@types/semver": "^7.5.6",
     "@types/update-notifier": "^6.0.8",
     "@types/uuid": "^9.0.0",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "eslint": "^8.56.0",

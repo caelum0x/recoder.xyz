@@ -95,7 +95,7 @@ export class PluginRatingSystem extends EventEmitter {
       console.error(`Failed to submit rating for ${pluginId}:`, error);
       return {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }

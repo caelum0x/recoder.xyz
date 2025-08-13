@@ -375,6 +375,7 @@ export class PenetrationTester extends EventEmitter {
       riskLevel: 'low',
       evidence: technologies,
       finding: technologies.length > 3 ? {
+        id: crypto.randomUUID(),
         title: 'Information Disclosure - Technology Stack',
         description: 'Detailed technology information exposed in headers and content',
         severity: 'low',
