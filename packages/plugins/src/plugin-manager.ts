@@ -59,13 +59,31 @@ export class PluginManager extends EventEmitter {
       this.createRegistryStorage()
     );
 
-    this.installer = new PluginInstaller({
-      pluginsDirectory: config.pluginsDirectory,
-      registryUrl: config.registryUrl,
-      maxConcurrentInstalls: config.maxConcurrentInstalls
-    });
+    this.installer = new PluginInstaller(
+      {
+        registryUrl: config.registryUrl,
+        pluginsDirectory: config.pluginsDirectory,
+        tempDirectory: path.join(config.dataDirectory, 'temp'),
+        maxConcurrentInstalls: config.maxConcurrentInstalls,
+        downloadTimeout: 30000
+      },
+      this.lifecycleManager,
+      this.createInstallerStorage()
+    );
 
-    this.ratingSystem = new PluginRatingSystem(config.registryUrl);
+    this.ratingSystem = new PluginRatingSystem(
+      {
+        requireUsage: false,
+        maxRatingsPerWindow: 5,
+        rateLimitWindow: 3600000, // 1 hour
+        maxTitleLength: 100,
+        maxCommentLength: 1000,
+        cacheTimeout: 300000, // 5 minutes
+        autoModeration: true
+      },
+      this.createRatingStorage(),
+      this.createUserService()
+    );
     this.eventBus = new PluginEventBus();
 
     if (config.enableAnalytics) {
@@ -148,7 +166,7 @@ export class PluginManager extends EventEmitter {
       this.emit('installStarted', { pluginId, options });
 
       // Get plugin metadata
-      const metadata = await this.registry.getPlugin(pluginId);
+      const metadata = await this.registry.getPlugin(pluginId) || null;
       if (!metadata) {
         throw new PluginError(
           `Plugin not found: ${pluginId}`,
@@ -158,7 +176,7 @@ export class PluginManager extends EventEmitter {
       }
 
       // Install plugin
-      await this.installer.install(pluginId, options);
+      await this.installer.installPlugin(pluginId, options);
 
       // Load the installed plugin
       const pluginPath = path.join(this.config.pluginsDirectory, pluginId);
@@ -172,7 +190,8 @@ export class PluginManager extends EventEmitter {
       this.emit('installCompleted', { pluginId, metadata });
       Logger.info(`Plugin installed successfully: ${pluginId}`);
     } catch (error) {
-      this.emit('installFailed', { pluginId, error: error.message });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.emit('installFailed', { pluginId, error: errorMessage });
       Logger.error(`Failed to install plugin ${pluginId}:`, error);
       throw error;
     } finally {
@@ -191,7 +210,7 @@ export class PluginManager extends EventEmitter {
       await this.lifecycleManager.unloadPlugin(pluginId);
 
       // Remove plugin files
-      await this.installer.uninstall(pluginId);
+      await this.installer.uninstallPlugin(pluginId);
 
       // Track analytics
       if (this.analyticsTracker) {
@@ -201,7 +220,8 @@ export class PluginManager extends EventEmitter {
       this.emit('uninstallCompleted', { pluginId });
       Logger.info(`Plugin uninstalled successfully: ${pluginId}`);
     } catch (error) {
-      this.emit('uninstallFailed', { pluginId, error: error.message });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.emit('uninstallFailed', { pluginId, error: errorMessage });
       Logger.error(`Failed to uninstall plugin ${pluginId}:`, error);
       throw error;
     }
@@ -245,7 +265,7 @@ export class PluginManager extends EventEmitter {
       await this.lifecycleManager.unloadPlugin(pluginId);
 
       // Install new version
-      await this.installer.update(pluginId, update.latestVersion);
+      await this.installer.updatePlugin(pluginId, update.latestVersion);
 
       // Reload plugin
       const pluginPath = path.join(this.config.pluginsDirectory, pluginId);
@@ -264,7 +284,8 @@ export class PluginManager extends EventEmitter {
       this.emit('updateCompleted', { pluginId, update });
       Logger.info(`Plugin updated successfully: ${pluginId} (${update.currentVersion} → ${update.latestVersion})`);
     } catch (error) {
-      this.emit('updateFailed', { pluginId, error: error.message });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.emit('updateFailed', { pluginId, error: errorMessage });
       Logger.error(`Failed to update plugin ${pluginId}:`, error);
       throw error;
     }
@@ -406,14 +427,17 @@ export class PluginManager extends EventEmitter {
    * Rate a plugin
    */
   async ratePlugin(pluginId: string, rating: number, review?: string): Promise<void> {
-    await this.ratingSystem.submitRating(pluginId, rating, review);
+    await this.ratingSystem.submitRating(pluginId, 'user-' + Date.now(), { 
+      score: rating, 
+      comment: review 
+    });
   }
 
   /**
    * Get plugin ratings
    */
   async getPluginRatings(pluginId: string): Promise<any> {
-    return await this.ratingSystem.getRatings(pluginId);
+    return await this.ratingSystem.getPluginRating(pluginId);
   }
 
   // Analytics and Statistics
@@ -557,6 +581,178 @@ export class PluginManager extends EventEmitter {
         const syncFile = path.join(storageDir, 'last-sync.txt');
         await fs.mkdir(storageDir, { recursive: true });
         await fs.writeFile(syncFile, date.toISOString());
+      },
+
+      async clear(): Promise<void> {
+        try {
+          await fs.rmdir(storageDir, { recursive: true });
+        } catch (error) {
+          // Ignore if directory doesn't exist
+        }
+      }
+    };
+  }
+
+  private createRatingStorage(): any {
+    const storageDir = path.join(this.config.dataDirectory, 'ratings');
+    
+    return {
+      // Plugin ratings
+      async savePluginRating(rating: any): Promise<void> {
+        const ratingFile = path.join(storageDir, `${rating.pluginId}-rating.json`);
+        await fs.mkdir(storageDir, { recursive: true });
+        await fs.writeFile(ratingFile, JSON.stringify(rating, null, 2));
+      },
+      
+      async getPluginRating(pluginId: string): Promise<any> {
+        try {
+          const ratingFile = path.join(storageDir, `${pluginId}-rating.json`);
+          const content = await fs.readFile(ratingFile, 'utf-8');
+          return JSON.parse(content);
+        } catch (error) {
+          return null;
+        }
+      },
+      
+      async getAllPluginRatings(): Promise<any[]> {
+        try {
+          const files = await fs.readdir(storageDir);
+          const ratings = [];
+          for (const file of files) {
+            if (file.endsWith('-rating.json')) {
+              try {
+                const content = await fs.readFile(path.join(storageDir, file), 'utf-8');
+                ratings.push(JSON.parse(content));
+              } catch (error) {
+                // Skip invalid files
+              }
+            }
+          }
+          return ratings;
+        } catch (error) {
+          return [];
+        }
+      },
+
+      // User ratings - simplified implementations
+      async saveUserRating(rating: any): Promise<void> {
+        const userRatingFile = path.join(storageDir, `${rating.pluginId}-${rating.userId}.json`);
+        await fs.mkdir(storageDir, { recursive: true });
+        await fs.writeFile(userRatingFile, JSON.stringify(rating, null, 2));
+      },
+
+      async getUserRating(pluginId: string, userId: string): Promise<any> {
+        try {
+          const userRatingFile = path.join(storageDir, `${pluginId}-${userId}.json`);
+          const content = await fs.readFile(userRatingFile, 'utf-8');
+          return JSON.parse(content);
+        } catch (error) {
+          return null;
+        }
+      },
+
+      async deleteUserRating(pluginId: string, userId: string): Promise<void> {
+        try {
+          const userRatingFile = path.join(storageDir, `${pluginId}-${userId}.json`);
+          await fs.unlink(userRatingFile);
+        } catch (error) {
+          // Ignore if file doesn't exist
+        }
+      },
+
+      async getAllUserRatings(): Promise<any[]> {
+        return [];
+      },
+
+      async getRecentUserRatings(userId: string, windowMs: number): Promise<any[]> {
+        return [];
+      },
+
+      // Reviews
+      async getAllReviews(): Promise<any[]> {
+        return [];
+      },
+
+      // Helpful votes
+      async saveHelpfulVote(ratingId: string, userId: string, helpful: boolean): Promise<void> {},
+      async updateHelpfulVote(ratingId: string, userId: string, helpful: boolean): Promise<void> {},
+      async getHelpfulVote(ratingId: string, userId: string): Promise<any> { return null; },
+
+      // Reports
+      async saveReviewReport(report: any): Promise<void> {},
+      async getReviewReports(): Promise<any[]> { return []; }
+    };
+  }
+
+  private createUserService(): any {
+    return {
+      async hasUserUsedPlugin(userId: string, pluginId: string): Promise<boolean> {
+        // Simple check - assume user has used plugin if they have it installed
+        return this.isPluginInstalled(pluginId);
+      },
+      
+      async isUserVerified(userId: string): Promise<boolean> {
+        // For now, consider all users verified
+        return true;
+      },
+      
+      async getUserInfo(userId: string): Promise<any> {
+        return {
+          name: `User ${userId}`,
+          avatar: undefined
+        };
+      }
+    };
+  }
+
+  private createInstallerStorage(): any {
+    const storageDir = path.join(this.config.dataDirectory, 'installer');
+    
+    return {
+      async getInstalledPlugins(): Promise<any[]> {
+        try {
+          const installedFile = path.join(storageDir, 'installed.json');
+          const content = await fs.readFile(installedFile, 'utf-8');
+          return JSON.parse(content);
+        } catch (error) {
+          return [];
+        }
+      },
+
+      async saveInstalledPlugin(plugin: any): Promise<void> {
+        await fs.mkdir(storageDir, { recursive: true });
+        const installedFile = path.join(storageDir, 'installed.json');
+        
+        let installed = [];
+        try {
+          const content = await fs.readFile(installedFile, 'utf-8');
+          installed = JSON.parse(content);
+        } catch (error) {
+          // File doesn't exist yet
+        }
+
+        // Update or add plugin
+        const index = installed.findIndex((p: any) => p.id === plugin.id);
+        if (index >= 0) {
+          installed[index] = plugin;
+        } else {
+          installed.push(plugin);
+        }
+
+        await fs.writeFile(installedFile, JSON.stringify(installed, null, 2));
+      },
+
+      async removeInstalledPlugin(pluginId: string): Promise<void> {
+        const installedFile = path.join(storageDir, 'installed.json');
+        
+        try {
+          const content = await fs.readFile(installedFile, 'utf-8');
+          let installed = JSON.parse(content);
+          installed = installed.filter((p: any) => p.id !== pluginId);
+          await fs.writeFile(installedFile, JSON.stringify(installed, null, 2));
+        } catch (error) {
+          // File doesn't exist or other error
+        }
       },
 
       async clear(): Promise<void> {

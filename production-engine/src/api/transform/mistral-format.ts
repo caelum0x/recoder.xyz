@@ -4,13 +4,23 @@ import { SystemMessage } from "@mistralai/mistralai/models/components/systemmess
 import { ToolMessage } from "@mistralai/mistralai/models/components/toolmessage"
 import { UserMessage } from "@mistralai/mistralai/models/components/usermessage"
 
+// Define types compatible with Anthropic SDK
+type AnthropicMessageParam = {
+	role: 'user' | 'assistant' | 'system';
+	content: string | Array<AnthropicTextBlock | AnthropicImageBlock | AnthropicToolUseBlock | AnthropicToolResultBlock>;
+};
+type AnthropicTextBlock = { type: 'text'; text: string };
+type AnthropicImageBlock = { type: 'image'; source: { type: 'base64' | 'url'; media_type: string; data?: string; url?: string } };
+type AnthropicToolUseBlock = { type: 'tool_use'; id: string; name: string; input: any };
+type AnthropicToolResultBlock = { type: 'tool_result'; tool_use_id: string; content: string | any[] };
+
 export type MistralMessage =
 	| (SystemMessage & { role: "system" })
 	| (UserMessage & { role: "user" })
 	| (AssistantMessage & { role: "assistant" })
 	| (ToolMessage & { role: "tool" })
 
-export function convertToMistralMessages(anthropicMessages: Anthropic.Messages.MessageParam[]): MistralMessage[] {
+export function convertToMistralMessages(anthropicMessages: AnthropicMessageParam[]): MistralMessage[] {
 	const mistralMessages: MistralMessage[] = []
 
 	for (const anthropicMessage of anthropicMessages) {
@@ -22,10 +32,10 @@ export function convertToMistralMessages(anthropicMessages: Anthropic.Messages.M
 		} else {
 			if (anthropicMessage.role === "user") {
 				const { nonToolMessages } = anthropicMessage.content.reduce<{
-					nonToolMessages: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[]
-					toolMessages: Anthropic.ToolResultBlockParam[]
+					nonToolMessages: (AnthropicTextBlock | AnthropicImageBlock)[]
+					toolMessages: AnthropicToolResultBlock[]
 				}>(
-					(acc, part) => {
+					(acc: { nonToolMessages: (AnthropicTextBlock | AnthropicImageBlock)[]; toolMessages: AnthropicToolResultBlock[] }, part: any) => {
 						if (part.type === "tool_result") {
 							acc.toolMessages.push(part)
 						} else if (part.type === "text" || part.type === "image") {
@@ -39,7 +49,7 @@ export function convertToMistralMessages(anthropicMessages: Anthropic.Messages.M
 				if (nonToolMessages.length > 0) {
 					mistralMessages.push({
 						role: "user",
-						content: nonToolMessages.map((part) => {
+						content: nonToolMessages.map((part: AnthropicTextBlock | AnthropicImageBlock) => {
 							if (part.type === "image") {
 								return {
 									type: "image_url",
@@ -47,22 +57,22 @@ export function convertToMistralMessages(anthropicMessages: Anthropic.Messages.M
 										// kilocode_change begin support type==url
 										url:
 											part.source.type === "url"
-												? part.source.url
-												: `data:${part.source.media_type};base64,${part.source.data}`,
+												? part.source.url || ""
+												: `data:${part.source.media_type};base64,${part.source.data || ""}`,
 										// kilocode_change end
 									},
-								}
+								} as any
 							}
-							return { type: "text", text: part.text }
-						}),
+							return { type: "text", text: part.text } as any
+						}) as any,
 					})
 				}
 			} else if (anthropicMessage.role === "assistant") {
 				const { nonToolMessages } = anthropicMessage.content.reduce<{
-					nonToolMessages: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[]
-					toolMessages: Anthropic.ToolUseBlockParam[]
+					nonToolMessages: (AnthropicTextBlock | AnthropicImageBlock)[]
+					toolMessages: AnthropicToolUseBlock[]
 				}>(
-					(acc, part) => {
+					(acc: { nonToolMessages: (AnthropicTextBlock | AnthropicImageBlock)[]; toolMessages: AnthropicToolUseBlock[] }, part: any) => {
 						if (part.type === "tool_use") {
 							acc.toolMessages.push(part)
 						} else if (part.type === "text" || part.type === "image") {
@@ -76,7 +86,7 @@ export function convertToMistralMessages(anthropicMessages: Anthropic.Messages.M
 				let content: string | undefined
 				if (nonToolMessages.length > 0) {
 					content = nonToolMessages
-						.map((part) => {
+						.map((part: AnthropicTextBlock | AnthropicImageBlock) => {
 							if (part.type === "image") {
 								return "" // impossible as the assistant cannot send images
 							}

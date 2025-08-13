@@ -18,13 +18,15 @@ const getCacheKey = (router: RouterName, modelId: string) => sanitize(`${router}
 
 async function writeModelEndpoints(key: string, data: ModelRecord) {
 	const filename = `${key}_endpoints.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	// Use a default cache directory since ContextProxy.instance.globalStorageUri doesn't exist
+	const cacheDir = await getCacheDirectoryPath(process.cwd())
 	await safeWriteJson(path.join(cacheDir, filename), data)
 }
 
 async function readModelEndpoints(key: string): Promise<ModelRecord | undefined> {
 	const filename = `${key}_endpoints.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	// Use a default cache directory since ContextProxy.instance.globalStorageUri doesn't exist
+	const cacheDir = await getCacheDirectoryPath(process.cwd())
 	const filePath = path.join(cacheDir, filename)
 	const exists = await fileExistsAtPath(filePath)
 	return exists ? JSON.parse(await fs.readFile(filePath, "utf8")) : undefined

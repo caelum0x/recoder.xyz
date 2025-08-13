@@ -5,6 +5,15 @@
 
 import { Anthropic } from "@anthropic-ai/sdk";
 
+// Re-export reasoning utilities
+export {
+  DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
+  DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS,
+  shouldUseReasoningBudget,
+  shouldUseReasoningEffort,
+  getModelMaxOutputTokens
+} from './reasoning';
+
 export interface ModelInfo {
   maxTokens?: number;
   contextWindow: number;
@@ -138,6 +147,8 @@ export interface ApiProviderConfig {
   supportsImages?: boolean;
   supportsTools?: boolean;
 }
+
+// Cerebras model definitions are in cerebras.ts
 
 // Error types
 export class AIApiError extends Error {

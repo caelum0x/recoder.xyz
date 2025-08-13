@@ -416,15 +416,15 @@ export class SecurityTestingSuite extends EventEmitter {
     
     // OWASP compliance
     const owaspScore = Math.max(0, score - (criticalCount * 30) - (highCount * 15));
-    const owaspStatus = owaspScore >= 80 ? 'compliant' : owaspScore >= 60 ? 'partial' : 'non-compliant';
+    const owaspStatus: 'compliant' | 'non-compliant' | 'partial' = owaspScore >= 80 ? 'compliant' : owaspScore >= 60 ? 'partial' : 'non-compliant';
     
     // GDPR compliance (focused on data protection)
     const gdprScore = score; // Simplified - would need specific GDPR tests
-    const gdprStatus = gdprScore >= 85 ? 'compliant' : gdprScore >= 70 ? 'partial' : 'non-compliant';
+    const gdprStatus: 'compliant' | 'non-compliant' | 'partial' = gdprScore >= 85 ? 'compliant' : gdprScore >= 70 ? 'partial' : 'non-compliant';
     
     // SOC 2 compliance
     const soc2Score = Math.max(0, score - (criticalCount * 25) - (highCount * 10));
-    const soc2Status = soc2Score >= 90 ? 'compliant' : soc2Score >= 75 ? 'partial' : 'non-compliant';
+    const soc2Status: 'compliant' | 'non-compliant' | 'partial' = soc2Score >= 90 ? 'compliant' : soc2Score >= 75 ? 'partial' : 'non-compliant';
     
     return {
       owasp: { score: owaspScore, status: owaspStatus },

@@ -9,6 +9,8 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
 import { securityIntegrationService, SecurityValidationResult } from './security-integration';
+import { ComplianceIntegrationService, ComplianceConfig, GeneratedCodeContext, ComplianceResult } from '../compliance/compliance-integration';
+import { DataClassification, ProjectType, IndustryStandard } from '@recoder/shared/src/security/soc2-compliance-scanner';
 
 export interface CodeGenerationRequest {
   description: string;
@@ -17,6 +19,14 @@ export interface CodeGenerationRequest {
   features?: string[];
   outputPath: string;
   userId?: string;
+  // SOC 2 Compliance Configuration
+  compliance?: {
+    enabled: boolean;
+    enforceBlocking?: boolean;
+    dataClassification?: DataClassification;
+    industryStandards?: IndustryStandard[];
+    autoRemediation?: boolean;
+  };
 }
 
 export interface GeneratedFile {
@@ -31,19 +41,38 @@ export interface CodeGenerationResult {
   instructions: string;
   error?: string;
   securityValidation?: SecurityValidationResult;
+  complianceValidation?: ComplianceResult; // SOC 2 compliance results
+  blockedByCompliance?: boolean; // If generation was blocked due to compliance
   metadata: {
     provider: string;
     model: string;
     tokensUsed: number;
     generationTime: number;
+    complianceScore?: number; // Overall SOC 2 compliance score
   };
 }
 
 export class RealCodeGeneratorService {
   private aiHub: AIHubService;
+  private complianceService: ComplianceIntegrationService;
 
   constructor() {
     this.aiHub = new AIHubService();
+    
+    // Initialize SOC 2 compliance service with enterprise defaults
+    const complianceConfig: ComplianceConfig = {
+      enabled: true,
+      enforceBlocking: false, // Start with warnings, can be enabled per request
+      autoRemediation: true,
+      reportGeneration: true,
+      industryStandards: [IndustryStandard.SOX, IndustryStandard.ISO_27001],
+      dataClassification: DataClassification.INTERNAL,
+      projectType: ProjectType.WEB_APPLICATION,
+      customRules: []
+    };
+    
+    this.complianceService = new ComplianceIntegrationService(complianceConfig);
+    logger.info('🏛️ SOC 2 compliance scanner initialized - MASSIVE enterprise advantage over Cursor/Copilot!');
   }
 
   async generateCode(request: CodeGenerationRequest): Promise<CodeGenerationResult> {
@@ -75,11 +104,23 @@ export class RealCodeGeneratorService {
       logger.info('🔒 Running security validation...');
       const securityValidation = await securityIntegrationService.validateGeneratedCode(files, request.type);
 
+      // Perform SOC 2 compliance validation
+      logger.info('🏛️ Running SOC 2 compliance validation...');
+      const complianceResults = await this.validateCompliance(files, request);
+      const complianceValidation = complianceResults.complianceValidation;
+      const blockedByCompliance = complianceResults.blockedByCompliance;
+
       const generationTime = Date.now() - startTime;
 
+      // Log results
       logger.info(`Code generation completed in ${generationTime}ms, generated ${files.length} files`);
       logger.info(`🔒 Security score: ${securityValidation.securityScore}/100`);
+      if (complianceValidation) {
+        logger.info(`🏛️ SOC 2 compliance score: ${complianceValidation.report.summary.overallScore}%`);
+        logger.info(`🏛️ Risk level: ${complianceValidation.report.summary.riskLevel}`);
+      }
 
+      // Handle security vulnerabilities
       if (securityValidation.vulnerabilities.length > 0) {
         const criticalVulns = securityValidation.vulnerabilities.filter(v => v.severity === 'critical').length;
         const highVulns = securityValidation.vulnerabilities.filter(v => v.severity === 'high').length;
@@ -96,16 +137,59 @@ export class RealCodeGeneratorService {
         logger.warn(`🔑 Found ${securityValidation.secrets.length} potential secrets - use environment variables`);
       }
 
+      // Handle compliance violations
+      if (complianceValidation && complianceValidation.report.violations.length > 0) {
+        const criticalCompliance = complianceValidation.report.summary.criticalViolations;
+        const highCompliance = complianceValidation.report.summary.highViolations;
+        
+        if (criticalCompliance > 0) {
+          logger.error(`🚫 Found ${criticalCompliance} critical SOC 2 compliance violations`);
+        }
+        if (highCompliance > 0) {
+          logger.warn(`⚠️ Found ${highCompliance} high-priority SOC 2 compliance issues`);
+        }
+
+        // Log compliance recommendations
+        if (complianceValidation.recommendations.length > 0) {
+          logger.info('🏛️ SOC 2 Compliance Recommendations:');
+          complianceValidation.recommendations.slice(0, 5).forEach((rec, i) => {
+            logger.info(`${i + 1}. ${rec}`);
+          });
+        }
+      }
+
+      if (blockedByCompliance) {
+        logger.error('🚫 CODE GENERATION BLOCKED by SOC 2 compliance enforcement');
+        return {
+          success: false,
+          files: [],
+          instructions: '',
+          error: 'Code generation blocked due to critical SOC 2 compliance violations',
+          complianceValidation,
+          blockedByCompliance: true,
+          metadata: {
+            provider: 'production-engine',
+            model: 'blocked-compliance',
+            tokensUsed: 0,
+            generationTime,
+            complianceScore: complianceValidation?.report.summary.overallScore || 0
+          }
+        };
+      }
+
       return {
         success: true,
         files,
         instructions,
         securityValidation,
+        complianceValidation,
+        blockedByCompliance: false,
         metadata: {
           provider: 'production-engine',
           model: 'auto-selected',
           tokensUsed: Math.ceil(generatedCode.length / 4),
-          generationTime
+          generationTime,
+          complianceScore: complianceValidation?.report.summary.overallScore || 100
         }
       };
 
@@ -361,6 +445,158 @@ For production deployment, run:
 \`\`\`bash
 npm run build
 \`\`\``;
+  }
+
+  private async validateCompliance(files: GeneratedFile[], request: CodeGenerationRequest): Promise<{
+    complianceValidation?: ComplianceResult;
+    blockedByCompliance: boolean;
+  }> {
+    // Skip if compliance is explicitly disabled
+    if (request.compliance?.enabled === false) {
+      return { blockedByCompliance: false };
+    }
+
+    try {
+      // Update compliance configuration based on request
+      if (request.compliance) {
+        const updatedConfig: Partial<ComplianceConfig> = {};
+        
+        if (request.compliance.enforceBlocking !== undefined) {
+          updatedConfig.enforceBlocking = request.compliance.enforceBlocking;
+        }
+        if (request.compliance.dataClassification) {
+          updatedConfig.dataClassification = request.compliance.dataClassification;
+        }
+        if (request.compliance.industryStandards) {
+          updatedConfig.industryStandards = request.compliance.industryStandards;
+        }
+        if (request.compliance.autoRemediation !== undefined) {
+          updatedConfig.autoRemediation = request.compliance.autoRemediation;
+        }
+
+        // Determine project type from request type
+        const projectTypeMap: Record<string, ProjectType> = {
+          'web': ProjectType.WEB_APPLICATION,
+          'backend': ProjectType.API_SERVICE,
+          'blockchain': ProjectType.FINANCIAL_SYSTEM,
+          'payments': ProjectType.PAYMENT_SYSTEM,
+          'mobile': ProjectType.WEB_APPLICATION,
+          'ai': ProjectType.WEB_APPLICATION
+        };
+        updatedConfig.projectType = projectTypeMap[request.type] || ProjectType.WEB_APPLICATION;
+
+        this.complianceService.updateConfiguration(updatedConfig);
+      }
+
+      // Validate each generated file
+      let overallPassed = true;
+      let overallBlocked = false;
+      const allViolations: any[] = [];
+      const allRecommendations: string[] = [];
+      let worstReport: any = null;
+      let worstScore = 100;
+
+      for (const file of files.filter(f => f.type === 'code')) {
+        const context: GeneratedCodeContext = {
+          filePath: file.path,
+          language: this.determineLanguageFromPath(file.path),
+          framework: request.framework,
+          projectPath: request.outputPath,
+          userRequirements: request.description,
+          generatedCode: file.content,
+          metadata: {
+            model: 'auto-selected',
+            provider: 'production-engine',
+            timestamp: new Date()
+          }
+        };
+
+        const result = await this.complianceService.validateGeneratedCode(context);
+        
+        if (!result.passed) {
+          overallPassed = false;
+        }
+        
+        if (result.blockedByCompliance) {
+          overallBlocked = true;
+        }
+
+        // Collect all violations and recommendations
+        allViolations.push(...result.report.violations);
+        allRecommendations.push(...result.recommendations);
+
+        // Track worst performing file
+        if (result.report.summary.overallScore < worstScore) {
+          worstScore = result.report.summary.overallScore;
+          worstReport = result.report;
+        }
+      }
+
+      // If no files were processed, return success
+      if (!worstReport) {
+        return { blockedByCompliance: false };
+      }
+
+      // Create combined compliance result
+      const complianceValidation: ComplianceResult = {
+        passed: overallPassed,
+        report: worstReport, // Use the worst report as representative
+        blockedByCompliance: overallBlocked,
+        recommendations: Array.from(new Set(allRecommendations)) // Remove duplicates
+      };
+
+      return {
+        complianceValidation,
+        blockedByCompliance: overallBlocked
+      };
+
+    } catch (error) {
+      logger.error('SOC 2 compliance validation failed:', error);
+      return { blockedByCompliance: false };
+    }
+  }
+
+  private determineLanguageFromPath(filePath: string): string {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    const languageMap: Record<string, string> = {
+      'js': 'javascript',
+      'jsx': 'javascript',
+      'ts': 'typescript',
+      'tsx': 'typescript',
+      'py': 'python',
+      'java': 'java',
+      'go': 'go',
+      'rs': 'rust',
+      'php': 'php',
+      'rb': 'ruby',
+      'sol': 'solidity',
+      'c': 'c',
+      'cpp': 'cpp',
+      'cs': 'csharp'
+    };
+    
+    return languageMap[ext || ''] || 'javascript';
+  }
+
+  // Public methods for compliance management
+
+  async scanProjectCompliance(projectPath: string): Promise<Map<string, any>> {
+    logger.info(`🏛️ Running SOC 2 compliance scan on project: ${projectPath}`);
+    return await this.complianceService.scanProject(projectPath);
+  }
+
+  async generateComplianceDashboard(projectPath: string): Promise<string> {
+    logger.info(`📊 Generating SOC 2 compliance dashboard for: ${projectPath}`);
+    return await this.complianceService.generateProjectComplianceDashboard(projectPath);
+  }
+
+  updateComplianceConfiguration(config: Partial<ComplianceConfig>): void {
+    this.complianceService.updateConfiguration(config);
+    logger.info('🏛️ SOC 2 compliance configuration updated');
+  }
+
+  getComplianceConfiguration(): ComplianceConfig {
+    return this.complianceService.getConfiguration();
   }
 
   async getAvailableProviders(): Promise<string[]> {

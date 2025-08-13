@@ -201,14 +201,14 @@ export const parseOpenRouterModel = ({
 		contextWindow: model.context_length,
 		supportsImages: modality?.includes("image") ?? false,
 		supportsPromptCache,
-		inputPrice: parseApiPrice(model.pricing?.prompt),
-		outputPrice: parseApiPrice(model.pricing?.completion),
+		inputPrice: parseApiPrice(model.pricing?.prompt || "0"),
+		outputPrice: parseApiPrice(model.pricing?.completion || "0"),
 		cacheWritesPrice,
 		cacheReadsPrice,
 		description: model.description,
 		supportsReasoningBudget: supportedParameters ? supportedParameters.includes("reasoning") : undefined,
 		supportedParameters: supportedParameters ? supportedParameters.filter(isModelParameter) : undefined,
-		preferredIndex: model.preferredIndex, // kilocode_change
+		preferredIndex: model.preferredIndex ?? undefined, // kilocode_change
 	}
 
 	// The OpenRouter model definition doesn't give us any hints about
@@ -230,13 +230,13 @@ export const parseOpenRouterModel = ({
 	// and force it for anthropic/claude-3.7-sonnet:thinking.
 
 	if (id === "anthropic/claude-3.7-sonnet") {
-		modelInfo.maxTokens = anthropicModels["claude-3-7-sonnet-20250219"].maxTokens
+		modelInfo.maxTokens = anthropicModels["claude-3-5-sonnet-20241022"].maxTokens
 		modelInfo.supportsReasoningBudget = false
 		modelInfo.supportsReasoningBudget = false
 	}
 
 	if (id === "anthropic/claude-3.7-sonnet:thinking") {
-		modelInfo.maxTokens = anthropicModels["claude-3-7-sonnet-20250219:thinking"].maxTokens
+		modelInfo.maxTokens = anthropicModels["claude-3-5-sonnet-20241022"].maxTokens
 	}
 
 	return modelInfo

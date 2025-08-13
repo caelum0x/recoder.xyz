@@ -25,7 +25,7 @@ export class RedisSessionPersistence implements SessionPersistence {
   private maxHistoryItems: number;
 
   constructor(options: RedisSessionPersistenceOptions = {}) {
-    this.redis = options.redis || new Redis(options.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379');
+    this.redis = options.redis || new Redis(options.redisUrl || process.env['REDIS_URL'] || 'redis://localhost:6379');
     this.keyPrefix = options.keyPrefix || 'recoder:sessions:';
     this.sessionTTL = options.sessionTTL || 24 * 60 * 60; // 24 hours
     this.historyTTL = options.historyTTL || 7 * 24 * 60 * 60; // 7 days

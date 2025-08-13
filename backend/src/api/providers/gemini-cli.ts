@@ -4,9 +4,9 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 import axios from "axios"
-import dotenvx from "@dotenvx/dotenvx"
 
-import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@roo-code/types"
+import { type ModelInfo } from "@roo-code/types"
+import { type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@recoder/shared"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 import { t } from "../../i18n"
@@ -17,6 +17,7 @@ import { getModelParams } from "../transform/model-params"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { BaseProvider } from "./base-provider"
+
 
 // OAuth2 Configuration (from Cline implementation)
 const OAUTH_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
@@ -63,7 +64,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				})
 			}
 		} catch (error) {
-			throw new Error(t("common:errors.geminiCli.oauthLoadFailed", { error }))
+			throw new Error(`OAuth credentials loading failed: ${error instanceof Error ? error.message : String(error)}`)
 		}
 	}
 
@@ -89,7 +90,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 					await fs.writeFile(credPath, JSON.stringify(this.credentials, null, 2))
 				}
 			} catch (error) {
-				throw new Error(t("common:errors.geminiCli.tokenRefreshFailed", { error }))
+				throw new Error(`Token refresh failed: ${error instanceof Error ? error.message : String(error)}`)
 			}
 		}
 	}
@@ -144,9 +145,17 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		// with a fallback to a default project ID (can be anything for personal OAuth)
 		const envPath = this.options.geminiCliOAuthPath || path.join(os.homedir(), ".gemini", ".env")
 
-		const { parsed, error } = dotenvx.config({ path: envPath })
-
-		if (error) {
+		let parsed: any = {}
+		try {
+			const envContent = await fs.readFile(envPath, 'utf-8')
+			// Simple .env parser
+			envContent.split('\n').forEach(line => {
+				const [key, value] = line.split('=')
+				if (key && value) {
+					parsed[key.trim()] = value.trim()
+				}
+			})
+		} catch (error) {
 			console.warn("[GeminiCLI] .env file not found or invalid format, proceeding with default project ID")
 		}
 
@@ -355,13 +364,10 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 				throw new Error(t("common:errors.geminiCli.rateLimitExceeded"))
 			}
 			if (error.response?.status === 400) {
-				throw new Error(
-					t("common:errors.geminiCli.badRequest", {
-						details: JSON.stringify(error.response?.data) || error.message,
-					}),
-				)
+				const details = JSON.stringify(error.response?.data) || error.message
+				throw new Error(`Bad request: ${details}`)
 			}
-			throw new Error(t("common:errors.geminiCli.apiError", { error: error.message }))
+			throw new Error(`API error: ${error.message}`)
 		}
 	}
 
@@ -371,7 +377,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		const baseModelId = modelId?.endsWith(":thinking") ? modelId.replace(":thinking", "") : modelId
 		let id =
 			baseModelId && baseModelId in geminiCliModels ? (baseModelId as GeminiCliModelId) : geminiCliDefaultModelId
-		const info: ModelInfo = geminiCliModels[id]
+		const info = geminiCliModels[id] as ModelInfo
 		const params = getModelParams({ format: "gemini", modelId: id, model: info, settings: this.options })
 
 		// Return the cleaned model ID
@@ -421,7 +427,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 			return ""
 		} catch (error) {
 			if (error instanceof Error) {
-				throw new Error(t("common:errors.geminiCli.completionError", { error: error.message }))
+				throw new Error(`Completion error: ${error.message}`)
 			}
 			throw error
 		}

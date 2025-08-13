@@ -978,12 +978,5 @@ export class PerformanceUtils {
   }
 }
 
-/**
- * API parsing utilities
- */
-export function parseApiPrice(priceStr: string): number {
-  // Parse API pricing strings like "$0.50 / 1M tokens" to number
-  const match = priceStr.match(/\$?([\d.]+)/);
-  return match ? parseFloat(match[1]) : 0;
-}
+// parseApiPrice is now in cost.ts to avoid conflicts
 

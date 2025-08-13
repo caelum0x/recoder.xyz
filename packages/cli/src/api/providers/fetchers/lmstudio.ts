@@ -57,7 +57,7 @@ export async function getLMStudioModels(baseUrl = "http://localhost:1234"): Prom
 			}
 		}
 	} catch (error) {
-		if (error.code === "ECONNREFUSED") {
+		if (error && typeof error === 'object' && 'code' in error && error.code === "ECONNREFUSED") {
 			console.warn(`Error connecting to LMStudio at ${baseUrl}`)
 		} else {
 			console.error(

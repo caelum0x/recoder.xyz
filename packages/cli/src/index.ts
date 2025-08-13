@@ -31,20 +31,20 @@ import { AIModelHub } from './services/ai-models/ai-hub';
 import { RepositoryRefactoringEngine } from './services/ai-models/repository-refactoring-engine';
 
 // Import integrated packages
-import { 
-  initializeMonitoring, 
-  getSystemHealthSummary, 
-  monitoringSystem,
-  productionMonitoring,
-  UsageAnalytics,
-  QualityAssessor,
-  ABTestingSystem 
-} from '@recoder/analytics';
+
 import { 
   AIPromptSanitizer, 
   CodeVulnerabilityScanner, 
   SecurityMonitor 
 } from '@recoder/security';
+import { 
+  UsageAnalytics, 
+  QualityAssessor, 
+  ABTestingSystem,
+  initializeMonitoring,
+  getSystemHealthSummary,
+  RecoderAnalytics
+} from '@recoder/analytics';
 
 // Import commands
 import { createOllamaCommand } from './commands/ollama';
@@ -121,7 +121,7 @@ async function setupProductionCommands(program: Command): Promise<void> {
   });
   
   // Initialize integrated systems
-  const usageAnalytics = new UsageAnalytics();
+  const usageAnalytics = RecoderAnalytics.forPlatform('cli');
   const qualityAssessor = new QualityAssessor();
   const abTestingSystem = new ABTestingSystem();
   const promptSanitizer = new AIPromptSanitizer();

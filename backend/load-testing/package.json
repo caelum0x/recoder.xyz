@@ -1,0 +1,35 @@
+{
+  "name": "recoder-load-testing",
+  "version": "1.0.0",
+  "description": "Enterprise load testing suite for Recoder.xyz - 10k+ concurrent users validation",
+  "scripts": {
+    "test": "echo \"Use './run-load-tests.sh' to run load tests\"",
+    "test:k6": "./run-load-tests.sh k6",
+    "test:artillery": "./run-load-tests.sh artillery",
+    "test:all": "./run-load-tests.sh all",
+    "test:quick": "k6 run --duration=2m --vus=100 ./k6-tests/load-test-config.js",
+    "test:stress": "k6 run --duration=10m --vus=1000 ./k6-tests/load-test-config.js",
+    "install-tools": "npm install -g artillery && echo 'Install k6 manually for your platform'",
+    "analyze": "node scripts/analyze-results.js",
+    "report": "node scripts/generate-report.js"
+  },
+  "keywords": [
+    "load-testing",
+    "performance",
+    "k6",
+    "artillery",
+    "enterprise",
+    "scalability",
+    "ai",
+    "recoder"
+  ],
+  "author": "Recoder.xyz Team",
+  "license": "MIT",
+  "devDependencies": {
+    "artillery": "^2.0.0"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "moment": "^2.29.4"
+  }
+}

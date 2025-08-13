@@ -2,10 +2,13 @@
   "name": "recoder-desktop",
   "version": "1.0.0",
   "description": "Recoder.xyz Desktop App - Direct Local AI Access",
-  "main": "src/main.js",
+  "main": "src/main-working.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "start:legacy": "electron src/main.js",
+    "dev:legacy": "electron src/main.js --dev",
+    "prebuild": "node scripts/build-apps.js",
     "build": "electron-builder",
     "build-mac": "electron-builder --mac",
     "build-win": "electron-builder --win",
@@ -55,6 +58,7 @@
     "files": [
       "src/**/*",
       "assets/**/*",
+      "app-bundles/**/*",
       "node_modules/**/*",
       "!node_modules/.cache",
       "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",

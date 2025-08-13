@@ -1,0 +1,292 @@
+# Artillery Load Testing Configuration
+# Alternative load testing with Artillery for comparison and validation
+
+config:
+  target: 'http://localhost:3001'
+  phases:
+    # Warm-up phase
+    - duration: 120      # 2 minutes
+      arrivalRate: 10    # 10 users/second
+      name: "Warm-up"
+    
+    # Normal load
+    - duration: 300      # 5 minutes  
+      arrivalRate: 50    # 50 users/second (3k users total)
+      name: "Normal Load"
+    
+    # Stress test
+    - duration: 600      # 10 minutes
+      arrivalRate: 100   # 100 users/second (6k users total)
+      name: "Stress Test"
+    
+    # Peak load - ENTERPRISE SCALE
+    - duration: 900      # 15 minutes
+      arrivalRate: 200   # 200 users/second (12k users total)
+      name: "Peak Load - Domination Test"
+    
+    # Spike test
+    - duration: 60       # 1 minute
+      arrivalRate: 500   # 500 users/second (30k users total)
+      name: "Spike Test"
+    
+    # Cool down
+    - duration: 180      # 3 minutes
+      arrivalRate: 20    # 20 users/second
+      name: "Cool Down"
+
+  # Load testing configuration
+  defaults:
+    headers:
+      User-Agent: "Artillery/1.0 (Recoder.xyz Load Test)"
+      Content-Type: "application/json"
+  
+  # Performance thresholds
+  ensure:
+    p95: 2000           # 95th percentile under 2 seconds
+    p99: 5000           # 99th percentile under 5 seconds
+    maxErrorRate: 2     # Maximum 2% error rate
+    minThroughput: 800  # Minimum 800 requests/second
+
+  # Plugins for advanced metrics
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+    publish-metrics:
+      - type: cloudwatch
+        region: us-west-2
+        namespace: Recoder/LoadTest
+
+# Variables for dynamic testing
+variables:
+  userIds:
+    - "load-test-user-1"
+    - "load-test-user-2" 
+    - "load-test-user-3"
+    - "load-test-user-4"
+    - "load-test-user-5"
+  
+  prompts:
+    - "Create a React component for user authentication"
+    - "Generate a Node.js Express API endpoint"
+    - "Write a Python function for data processing"
+    - "Build a TypeScript interface for user data"
+    - "Create a Docker configuration for deployment"
+  
+  complexPrompts:
+    - "Build a complete e-commerce checkout system with payment integration"
+    - "Create a microservices architecture with service discovery"
+    - "Generate a blockchain smart contract with comprehensive tests"
+    - "Build a real-time chat application with WebSocket support"
+
+# Test scenarios
+scenarios:
+  # Health check scenario - high frequency
+  - name: "Health Check"
+    weight: 10
+    flow:
+      - get:
+          url: "/health"
+          name: "health_check"
+          expect:
+            - statusCode: 200
+            - hasProperty: "status"
+          capture:
+            - json: "$.status"
+              as: "health_status"
+
+  # Metrics endpoint - monitoring
+  - name: "Metrics Check"
+    weight: 5
+    flow:
+      - get:
+          url: "/metrics"
+          name: "metrics_check"
+          expect:
+            - statusCode: 200
+            - hasProperty: "performance"
+
+  # Authentication flow
+  - name: "Authentication"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          name: "auth_login"
+          json:
+            email: "test@recoder.xyz"
+            password: "test-password"
+          capture:
+            - json: "$.token"
+              as: "auth_token"
+      - get:
+          url: "/api/auth/me"
+          name: "auth_me"
+          headers:
+            Authorization: "Bearer {{ auth_token }}"
+
+  # Core AI generation - main functionality
+  - name: "AI Code Generation"
+    weight: 40
+    flow:
+      - post:
+          url: "/api/ai/generate"
+          name: "ai_generate_simple"
+          json:
+            prompt: "{{ $randomFromList(prompts) }}"
+            userId: "{{ $randomFromList(userIds) }}"
+            taskType: "code-generation"
+            context:
+              language: "{{ $randomFromList(['javascript', 'python', 'typescript']) }}"
+              complexity: "simple"
+              useCache: true
+            constraints:
+              maxLatency: 10000
+              maxCost: 0.05
+          expect:
+            - statusCode: [200, 202]
+          capture:
+            - json: "$.result"
+              as: "generated_code"
+
+  # Complex AI generation - enterprise features
+  - name: "Complex AI Generation"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/ai/generate"
+          name: "ai_generate_complex"
+          json:
+            prompt: "{{ $randomFromList(complexPrompts) }}"
+            userId: "{{ $randomFromList(userIds) }}"
+            taskType: "code-generation"
+            context:
+              language: "typescript"
+              complexity: "complex"
+              useRAG: true
+              useCache: false
+            constraints:
+              maxLatency: 30000
+              maxCost: 0.20
+          expect:
+            - statusCode: [200, 202]
+
+  # RAG system testing
+  - name: "RAG Operations"
+    weight: 15
+    flow:
+      # Code analysis
+      - post:
+          url: "/api/rag/analyze"
+          name: "rag_analyze"
+          json:
+            code: |
+              function fibonacci(n) {
+                if (n <= 1) return n;
+                return fibonacci(n - 1) + fibonacci(n - 2);
+              }
+            language: "javascript"
+            analysisType: "performance"
+            userId: "{{ $randomFromList(userIds) }}"
+          expect:
+            - statusCode: 200
+      
+      # Semantic search
+      - get:
+          url: "/api/rag/search?q=authentication+implementation"
+          name: "rag_search"
+          expect:
+            - statusCode: 200
+            - hasProperty: "results"
+      
+      # Embedding generation
+      - post:
+          url: "/api/rag/embed"
+          name: "rag_embed"
+          json:
+            content: "Authentication middleware for Express.js"
+            type: "code"
+          expect:
+            - statusCode: 200
+
+  # Project management
+  - name: "Project Operations"
+    weight: 10
+    flow:
+      # List projects
+      - get:
+          url: "/api/projects"
+          name: "projects_list"
+          headers:
+            Authorization: "Bearer test-token"
+          expect:
+            - statusCode: 200
+      
+      # Create project
+      - post:
+          url: "/api/projects"
+          name: "projects_create"
+          headers:
+            Authorization: "Bearer test-token"
+          json:
+            name: "Load Test Project {{ $randomString() }}"
+            description: "Generated during load testing"
+            template: "basic-web-app"
+            userId: "{{ $randomFromList(userIds) }}"
+          expect:
+            - statusCode: [200, 201]
+
+  # Analytics and monitoring
+  - name: "Analytics"
+    weight: 8
+    flow:
+      - get:
+          url: "/api/analytics/usage"
+          name: "analytics_usage"
+          headers:
+            Authorization: "Bearer test-token"
+          expect:
+            - statusCode: 200
+      
+      - get:
+          url: "/api/billing/subscription"
+          name: "billing_subscription"
+          headers:
+            Authorization: "Bearer test-token"
+          expect:
+            - statusCode: 200
+
+  # AI Chat testing
+  - name: "AI Chat"
+    weight: 12
+    flow:
+      - post:
+          url: "/api/ai/chat"
+          name: "ai_chat"
+          json:
+            message: "Help me optimize this code for better performance"
+            userId: "{{ $randomFromList(userIds) }}"
+            sessionId: "session-{{ $randomString() }}"
+            context:
+              conversationType: "technical-help"
+              useRAG: true
+          expect:
+            - statusCode: 200
+            - hasProperty: "response"
+
+# Advanced configuration
+advanced:
+  # Connection pooling
+  http:
+    pool: 50                    # Connection pool size
+    timeout: 30                 # Request timeout (seconds)
+    
+  # TLS configuration  
+  tls:
+    rejectUnauthorized: false   # For testing with self-signed certs
+    
+  # Payload configuration
+  payload:
+    path: "./test-data"         # Path to test data files
+    fields:
+      - "userIds"
+      - "prompts"

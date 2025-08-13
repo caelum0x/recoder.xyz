@@ -1,9 +1,9 @@
 // Usage Tracking Service
-// Tracks AI usage for billing and analytics
+// Tracks AI usage for billing and analytics 
 
 import { prisma } from '../database/prisma';
 import { logger } from '../utils/logger';
-import { getDodoPaymentsInstance, SubscriptionPlan } from './dodo-payments';
+import { getDodoPaymentsInstance, SubscriptionPlan, DodoPaymentsService } from './dodo-payments';
 
 interface UsageEvent {
   userId: string;
@@ -59,7 +59,7 @@ class UsageTrackingService {
       );
 
       // Record usage
-      await prisma.dodoUsage.create({
+      await prisma.usage.create({
         data: {
           userId: event.userId,
           subscriptionId: user.dodoSubscriptions[0]?.id,
@@ -94,7 +94,7 @@ class UsageTrackingService {
       });
     } catch (error) {
       logger.error('Failed to track usage', {
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
         event
       });
       throw error;
@@ -180,10 +180,10 @@ class UsageTrackingService {
   /**
    * Check for overage and bill if necessary
    */
-  private async checkOverageAndBill(userId: number, periodStart: Date, periodEnd: Date): Promise<void> {
+  private async checkOverageAndBill(userId: string, periodStart: Date, periodEnd: Date): Promise<void> {
     try {
       // Get user's subscription
-      const subscription = await prisma.subscription.findFirst({
+      const subscription = await prisma.dodoSubscription.findFirst({
         where: {
           userId,
           status: 'active'
@@ -211,7 +211,7 @@ class UsageTrackingService {
 
       // Calculate overage
       const planId = subscription.planId as SubscriptionPlan;
-      const pricing = getDodoPaymentsInstance().constructor.calculateUsage(planId, tokensUsed, requestsMade);
+      const pricing = DodoPaymentsService.calculateUsage(planId, tokensUsed, requestsMade);
 
       // If there's overage, create an on-demand charge
       if (pricing.overage > 0) {
@@ -243,7 +243,7 @@ class UsageTrackingService {
       }
     } catch (error) {
       logger.error('Failed to check overage', {
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
         userId
       });
     }
@@ -252,7 +252,7 @@ class UsageTrackingService {
   /**
    * Get usage summary for a user
    */
-  async getUsageSummary(userId: number, periodStart: Date, periodEnd: Date): Promise<{
+  async getUsageSummary(userId: string, periodStart: Date, periodEnd: Date): Promise<{
     totalTokens: number;
     totalRequests: number;
     totalCost: number;
@@ -317,7 +317,7 @@ class UsageTrackingService {
   /**
    * Get real-time usage for a user
    */
-  async getRealTimeUsage(userId: number): Promise<{
+  async getRealTimeUsage(userId: string): Promise<{
     todayTokens: number;
     todayRequests: number;
     todayCost: number;

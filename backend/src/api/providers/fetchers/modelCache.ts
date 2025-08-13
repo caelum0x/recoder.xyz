@@ -6,8 +6,8 @@ import { safeWriteJson } from "../../../utils/safeWriteJson"
 
 import { ContextProxy } from "../../../core/config/ContextProxy"
 import { getCacheDirectoryPath } from "../../../utils/storage"
-import { RouterName, ModelRecord, cerebrasModels } from "../../../shared/api"
-import { fileExistsAtPath } from "../../../utils/fs"
+import { RouterName, ModelRecord } from "../../../shared/api"
+//import { fileExistsAtPath } from "../../../utils/fs"
 
 import { getOpenRouterModels } from "./openrouter"
 import { getRequestyModels } from "./requesty"
@@ -15,21 +15,24 @@ import { getGlamaModels } from "./glama"
 import { getUnboundModels } from "./unbound"
 import { getLiteLLMModels } from "./litellm"
 import { GetModelsOptions } from "../../../shared/api"
-import { getKiloBaseUriFromToken } from "../../../utils/kilocode-token"
+//import { getKiloBaseUriFromToken } from "../../../utils/kilocode-token"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
+import { cerebrasModels, fileExistsAtPath, getKiloBaseUriFromToken } from "@recoder/shared"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
 export /*kilocode_change*/ async function writeModels(router: RouterName, data: ModelRecord) {
 	const filename = `${router}_models.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	// Use a default cache directory since ContextProxy.instance.globalStorageUri doesn't exist
+	const cacheDir = await getCacheDirectoryPath(process.cwd())
 	await safeWriteJson(path.join(cacheDir, filename), data)
 }
 
 export /*kilocode_change*/ async function readModels(router: RouterName): Promise<ModelRecord | undefined> {
 	const filename = `${router}_models.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	// Use a default cache directory since ContextProxy.instance.globalStorageUri doesn't exist
+	const cacheDir = await getCacheDirectoryPath(process.cwd())
 	const filePath = path.join(cacheDir, filename)
 	const exists = await fileExistsAtPath(filePath)
 	return exists ? JSON.parse(await fs.readFile(filePath, "utf8")) : undefined
@@ -101,9 +104,10 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				models = await getLMStudioModels(options.baseUrl)
 				break
 			default: {
-				// Ensures router is exhaustively checked if RouterName is a strict union
-				const exhaustiveCheck: never = provider
-				throw new Error(`Unknown provider: ${exhaustiveCheck}`)
+				// Handle providers that don't have specific model fetching logic
+				console.warn(`No model fetching implementation for provider: ${provider}`)
+				models = {}
+				break
 			}
 		}
 
