@@ -130,7 +130,8 @@ export class PluginManager extends EventEmitter {
    * Get detailed information about a plugin
    */
   async getPluginInfo(pluginId: string): Promise<PluginMetadata | null> {
-    return await this.registry.getPlugin(pluginId);
+    const plugin = await this.registry.getPlugin(pluginId);
+    return plugin ?? null;
   }
 
   /**
