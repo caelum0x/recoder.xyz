@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ProviderSettings, ModelInfo } from "./providers/types"
+import type { ProviderSettings, ModelInfo } from "@roo-code/types"
 
 import { ApiStream } from "./transform/stream"
 
@@ -48,7 +48,7 @@ export interface ApiHandlerCreateMessageMetadata {
 export interface ApiHandler {
 	createMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: Anthropic.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream
 
@@ -62,7 +62,7 @@ export interface ApiHandler {
 	 * @param content The content to count tokens for
 	 * @returns A promise resolving to the token count
 	 */
-	countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number>
+	countTokens(content: Array<Anthropic.ContentBlockParam>): Promise<number>
 }
 
 export function buildApiHandler(configuration: ProviderSettings): ApiHandler {

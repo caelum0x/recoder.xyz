@@ -1,9 +1,12 @@
+"use strict";
 /**
  * AI Prompt Sanitizer
  * Prevents prompt injection and malicious input attacks
  */
-import { Logger } from '@recoder/shared';
-export class AIPromptSanitizer {
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AIPromptSanitizer = void 0;
+const shared_1 = require("@recoder/shared");
+class AIPromptSanitizer {
     constructor(config = {}) {
         this.injectionPatterns = [
             /ignore\s+previous\s+instructions/gi,
@@ -15,7 +18,13 @@ export class AIPromptSanitizer {
             /jailbreak/gi,
             /bypass\s+safety/gi
         ];
-        this.config = Object.assign({ maxLength: 10000, removeHtml: true, detectInjection: true, logThreats: true }, config);
+        this.config = {
+            maxLength: 10000,
+            removeHtml: true,
+            detectInjection: true,
+            logThreats: true,
+            ...config
+        };
     }
     sanitizePrompt(input) {
         const threats = [];
@@ -51,7 +60,7 @@ export class AIPromptSanitizer {
         }
         // Log threats if configured
         if (this.config.logThreats && threats.length > 0) {
-            Logger.warn(`AI Prompt Sanitizer detected ${threats.length} threats`, { threats, riskLevel });
+            shared_1.Logger.warn(`AI Prompt Sanitizer detected ${threats.length} threats`, { threats, riskLevel });
         }
         return { sanitized, threats, riskLevel };
     }
@@ -60,4 +69,5 @@ export class AIPromptSanitizer {
         return result.threats.length === 0;
     }
 }
+exports.AIPromptSanitizer = AIPromptSanitizer;
 //# sourceMappingURL=ai-prompt-sanitizer.js.map

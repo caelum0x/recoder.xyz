@@ -59,7 +59,7 @@ class UsageTrackingService {
       );
 
       // Record usage
-      await prisma.usage.create({
+      await prisma.dodoUsage.create({
         data: {
           userId: event.userId,
           subscriptionId: user.dodoSubscriptions[0]?.id,
@@ -194,7 +194,7 @@ class UsageTrackingService {
       if (!subscription) return;
 
       // Get total usage for current period
-      const totalUsage = await prisma.usage.aggregate({
+      const totalUsage = await prisma.dodoUsage.aggregate({
         where: {
           userId,
           periodStart,
@@ -216,7 +216,7 @@ class UsageTrackingService {
       // If there's overage, create an on-demand charge
       if (pricing.overage > 0) {
         // Check if we haven't already charged for this period
-        const existingCharge = await prisma.charge.findFirst({
+        const existingCharge = await prisma.dodoCharge.findFirst({
           where: {
             subscriptionId: subscription.id,
             description: {
@@ -259,7 +259,7 @@ class UsageTrackingService {
     byProvider: { [provider: string]: { tokens: number; requests: number; cost: number } };
     byFeature: { [feature: string]: { tokens: number; requests: number; cost: number } };
   }> {
-    const usageData = await prisma.usage.findMany({
+    const usageData = await prisma.dodoUsage.findMany({
       where: {
         userId,
         createdAt: {
@@ -329,7 +329,7 @@ class UsageTrackingService {
     const currentHourStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
 
     const [todayUsage, hourlyUsage] = await Promise.all([
-      prisma.usage.aggregate({
+      prisma.dodoUsage.aggregate({
         where: {
           userId,
           createdAt: { gte: todayStart }
@@ -340,7 +340,7 @@ class UsageTrackingService {
           costCents: true
         }
       }),
-      prisma.usage.aggregate({
+      prisma.dodoUsage.aggregate({
         where: {
           userId,
           createdAt: { gte: currentHourStart }

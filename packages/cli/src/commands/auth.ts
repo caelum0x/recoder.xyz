@@ -136,7 +136,7 @@ export function createAuthCommand(): Command {
           });
 
           const password = await new Promise<string>((resolve) => {
-            rl.question(chalk.cyan('Password: '), (answer) => {
+            rl.question(chalk.cyan('Password: '), (answer: string) => {
               resolve(answer);
             });
             rl.stdoutMuted = true;
@@ -216,14 +216,14 @@ export function createAuthCommand(): Command {
         });
 
         const password = await new Promise<string>((resolve) => {
-          rl.question(chalk.cyan('Password: '), (answer) => {
+          rl.question(chalk.cyan('Password: '), (answer: string) => {
             resolve(answer);
           });
           rl.stdoutMuted = true;
         });
 
         const confirmPassword = await new Promise<string>((resolve) => {
-          rl.question(chalk.cyan('\nConfirm password: '), (answer) => {
+          rl.question(chalk.cyan('\nConfirm password: '), (answer: string) => {
             resolve(answer);
           });
           rl.stdoutMuted = true;
