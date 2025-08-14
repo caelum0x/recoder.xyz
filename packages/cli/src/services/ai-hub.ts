@@ -1003,9 +1003,9 @@ export class AIHub {
     
     return {
       primary: config.primary?.provider || 'ollama',
-      fallbacks: config.fallbacks?.map(m => m.provider) || ['groq', 'together'],
+      fallbacks: config.fallbacks?.map((m: any) => m.provider) || ['groq', 'together'],
       reasoning: config.reasoning?.provider || 'claude',
-      freeOptions: config.freeOptions?.map(m => m.provider) || ['ollama', 'huggingface']
+      freeOptions: config.freeOptions?.map((m: any) => m.provider) || ['ollama', 'huggingface']
     };
   }
 

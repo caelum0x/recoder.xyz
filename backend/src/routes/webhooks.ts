@@ -5,6 +5,7 @@ import express, { Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { prisma } from '../database/prisma';
 import { APIResponse, WebhookEvent } from '../types';
+import * as crypto from 'crypto';
 
 const router = express.Router();
 
@@ -109,7 +110,7 @@ async function handleSubscriptionCreated(data: Record<string, any>) {
     }
 
     // Update subscription status
-    await prisma.subscription.upsert({
+    await prisma.dodoSubscription.upsert({
       where: { dodoSubscriptionId: subscription_id },
       update: {
         status: status,
@@ -119,10 +120,12 @@ async function handleSubscriptionCreated(data: Record<string, any>) {
         id: subscription_id,
         userId: user.id,
         planId: product_id,
+        planName: product_id, // Use product_id as plan name for now
         dodoSubscriptionId: subscription_id,
         status: status,
         amount: recurring_pre_tax_amount,
-        currency: 'USD'
+        currency: 'USD',
+        nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
       }
     });
 
@@ -139,7 +142,7 @@ async function handleSubscriptionUpdated(data: Record<string, any>) {
   try {
     const { subscription_id, status, recurring_pre_tax_amount, product_id } = data;
 
-    await prisma.subscription.updateMany({
+    await prisma.dodoSubscription.updateMany({
       where: { dodoSubscriptionId: subscription_id },
       data: {
         status: status,
@@ -161,11 +164,11 @@ async function handleSubscriptionCancelled(data: Record<string, any>) {
   try {
     const { subscription_id, cancelled_at, cancel_at_next_billing_date } = data;
 
-    await prisma.subscription.updateMany({
+    await prisma.dodoSubscription.updateMany({
       where: { dodoSubscriptionId: subscription_id },
       data: {
         status: cancel_at_next_billing_date ? 'cancelled_at_period_end' : 'cancelled',
-        cancelledAt: cancelled_at ? new Date(cancelled_at) : new Date()
+        cancelAtPeriodEnd: cancel_at_next_billing_date || false
       }
     });
 
@@ -182,7 +185,7 @@ async function handleSubscriptionExpired(data: Record<string, any>) {
   try {
     const { subscription_id } = data;
 
-    await prisma.subscription.updateMany({
+    await prisma.dodoSubscription.updateMany({
       where: { dodoSubscriptionId: subscription_id },
       data: {
         status: 'expired'
@@ -203,7 +206,7 @@ async function handlePaymentSucceeded(data: Record<string, any>) {
     const { payment_id, subscription_id, amount, currency } = data;
 
     // Find subscription
-    const subscription = await prisma.subscription.findFirst({
+    const subscription = await prisma.dodoSubscription.findFirst({
       where: { dodoSubscriptionId: subscription_id }
     });
 
@@ -213,24 +216,26 @@ async function handlePaymentSucceeded(data: Record<string, any>) {
     }
 
     // Record successful payment
-    await prisma.payment.upsert({
-      where: { id: payment_id },
+    await prisma.dodoCharge.upsert({
+      where: { dodoChargeId: payment_id },
       update: {
         status: 'succeeded',
         amount: amount,
         currency: currency
       },
       create: {
-        id: payment_id,
+        id: crypto.randomUUID(),
         subscriptionId: subscription.id,
+        dodoChargeId: payment_id,
         amount: amount,
         currency: currency,
+        description: 'Payment succeeded',
         status: 'succeeded'
       }
     });
 
     // Update subscription to active
-    await prisma.subscription.update({
+    await prisma.dodoSubscription.update({
       where: { id: subscription.id },
       data: { status: 'active' }
     });
@@ -238,7 +243,7 @@ async function handlePaymentSucceeded(data: Record<string, any>) {
     // Update user's subscription status
     await prisma.user.update({
       where: { id: subscription.userId },
-      data: { subscriptionStatus: 'active' }
+      data: { subscription: 'active' }
     });
 
     logger.info('Payment succeeded event processed', { paymentId: payment_id, subscriptionId: subscription_id });
@@ -255,7 +260,7 @@ async function handlePaymentFailed(data: Record<string, any>) {
     const { payment_id, subscription_id, amount, currency, failure_reason } = data;
 
     // Find subscription
-    const subscription = await prisma.subscription.findFirst({
+    const subscription = await prisma.dodoSubscription.findFirst({
       where: { dodoSubscriptionId: subscription_id }
     });
 
@@ -265,26 +270,27 @@ async function handlePaymentFailed(data: Record<string, any>) {
     }
 
     // Record failed payment
-    await prisma.payment.upsert({
-      where: { id: payment_id },
+    await prisma.dodoCharge.upsert({
+      where: { dodoChargeId: payment_id },
       update: {
         status: 'failed',
         amount: amount,
         currency: currency,
-        failureReason: failure_reason
+        description: failure_reason || 'Payment failed'
       },
       create: {
-        id: payment_id,
+        id: crypto.randomUUID(),
         subscriptionId: subscription.id,
+        dodoChargeId: payment_id,
         amount: amount,
         currency: currency,
-        status: 'failed',
-        failureReason: failure_reason
+        description: failure_reason || 'Payment failed',
+        status: 'failed'
       }
     });
 
     // Update subscription status
-    await prisma.subscription.update({
+    await prisma.dodoSubscription.update({
       where: { id: subscription.id },
       data: { status: 'failed' }
     });
@@ -306,7 +312,7 @@ async function handleInvoiceCreated(data: Record<string, any>) {
     const { invoice_id, subscription_id, amount, currency, due_date } = data;
 
     // Find subscription
-    const subscription = await prisma.subscription.findFirst({
+    const subscription = await prisma.dodoSubscription.findFirst({
       where: { dodoSubscriptionId: subscription_id }
     });
 
@@ -323,7 +329,7 @@ async function handleInvoiceCreated(data: Record<string, any>) {
         amount: amount,
         currency: currency,
         status: 'pending',
-        dueDate: due_date ? new Date(due_date) : new Date()
+        userId: subscription.userId
       }
     });
 
@@ -345,7 +351,6 @@ async function handleInvoicePaid(data: Record<string, any>) {
       where: { id: invoice_id },
       data: {
         status: 'paid',
-        paymentId: payment_id,
         paidAt: new Date()
       }
     });
@@ -363,11 +368,12 @@ async function handleCustomerCreated(data: Record<string, any>) {
   try {
     const { customer_id, email, name } = data;
 
-    // Update user with DODO customer ID
-    await prisma.user.updateMany({
-      where: { email: email },
-      data: { dodoCustomerId: customer_id }
-    });
+    // Update user (Note: User model doesn't have dodoCustomerId field, so we'll skip this for now)
+    // In the future, we could add this field to the User model or store it in metadata
+    // await prisma.user.updateMany({
+    //   where: { email: email },
+    //   data: { /* dodoCustomerId: customer_id */ }
+    // });
 
     logger.info('Customer created event processed', { customerId: customer_id, email });
   } catch (error) {

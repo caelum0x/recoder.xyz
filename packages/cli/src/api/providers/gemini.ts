@@ -44,7 +44,7 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 					project,
 					location,
 					googleAuthOptions: {
-						credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
+						credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined) || undefined,
 					},
 				})
 			: this.options.vertexKeyFile
