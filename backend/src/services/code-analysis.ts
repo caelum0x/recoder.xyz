@@ -5,9 +5,9 @@ import { EventEmitter } from 'events';
 import { prisma } from '../database/prisma';
 import { vectorDatabase } from './vector-database';
 import { logger } from '../utils/logger';
-import path from 'path';
-import fs from 'fs/promises';
-import crypto from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs/promises';
+import * as crypto from 'crypto';
 
 interface CodeFile {
   path: string;
@@ -134,7 +134,7 @@ export class CodeAnalysisService extends EventEmitter {
         data: {
           status: 'processing',
           totalFiles: files.length,
-          processingMeta: { startTime, options }
+        //  processingMeta: { startTime, options }
         }
       });
 
@@ -320,7 +320,7 @@ export class CodeAnalysisService extends EventEmitter {
     }
 
     // Extract classes
-    if (patterns.class) {
+    if ('class' in patterns && patterns.class) {
       const classMatches = Array.from(file.content.matchAll(patterns.class));
       for (const match of classMatches) {
         const className = match[1];
@@ -348,8 +348,37 @@ export class CodeAnalysisService extends EventEmitter {
       }
     }
 
+    // Extract structs (Go, Rust)
+    if ('struct' in patterns && patterns.struct) {
+      const structMatches = Array.from(file.content.matchAll(patterns.struct));
+      for (const match of structMatches) {
+        const structName = match[1];
+        const structCode = this.extractClassBody(file.content, match.index || 0);
+        
+        if (structCode) {
+          chunks.push({
+            id: this.generateChunkId(file.path, structName, 'class'),
+            content: structCode,
+            contentType: 'class',
+            filePath: file.path,
+            fileName: path.basename(file.path),
+            fileExtension: file.extension,
+            language: file.language,
+            className: structName,
+            complexity: this.calculateComplexity(structCode),
+            dependencies: this.extractDependencies(structCode),
+            keywords: this.extractKeywords(structCode, file.language),
+            metadata: {
+              extractedAt: new Date(),
+              extractionMethod: 'structured'
+            }
+          });
+        }
+      }
+    }
+
     // Extract interfaces (TypeScript)
-    if (patterns.interface) {
+    if ('interface' in patterns && patterns.interface) {
       const interfaceMatches = Array.from(file.content.matchAll(patterns.interface));
       for (const match of interfaceMatches) {
         const interfaceName = match[1];
@@ -368,6 +397,35 @@ export class CodeAnalysisService extends EventEmitter {
             complexity: 'simple',
             dependencies: this.extractDependencies(interfaceCode),
             keywords: this.extractKeywords(interfaceCode, file.language),
+            metadata: {
+              extractedAt: new Date(),
+              extractionMethod: 'structured'
+            }
+          });
+        }
+      }
+    }
+
+    // Extract traits (Rust)
+    if ('trait' in patterns && patterns.trait) {
+      const traitMatches = Array.from(file.content.matchAll(patterns.trait));
+      for (const match of traitMatches) {
+        const traitName = match[1];
+        const traitCode = this.extractInterfaceBody(file.content, match.index || 0);
+        
+        if (traitCode) {
+          chunks.push({
+            id: this.generateChunkId(file.path, traitName, 'interface'),
+            content: traitCode,
+            contentType: 'interface',
+            filePath: file.path,
+            fileName: path.basename(file.path),
+            fileExtension: file.extension,
+            language: file.language,
+            className: traitName,
+            complexity: 'simple',
+            dependencies: this.extractDependencies(traitCode),
+            keywords: this.extractKeywords(traitCode, file.language),
             metadata: {
               extractedAt: new Date(),
               extractionMethod: 'structured'
@@ -498,7 +556,7 @@ export class CodeAnalysisService extends EventEmitter {
       if (dep) dependencies.push(dep);
     }
 
-    return [...new Set(dependencies)]; // Remove duplicates
+    return Array.from(new Set(dependencies)); // Remove duplicates
   }
 
   /**

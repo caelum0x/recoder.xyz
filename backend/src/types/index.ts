@@ -32,11 +32,13 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
-  organization?: string;
+  subscriptionPlan?: string;
+  subscriptionStatus?: string;
   role: string;
-  subscription: string;
-  createdAt: string;
-  lastLoginAt?: string;
+  isActive: boolean;
+  emailVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // AI Provider types

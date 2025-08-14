@@ -374,7 +374,7 @@ Requirements:
 Source files context: ${sourceFiles.map(f => f.path).join(', ')}`;
 
     const testCode = await this.aiHub.generateWithBestModel(testPrompt, {
-      type: 'general',
+      type: 'web',
       complexity: 'medium',
       maxTokens: 6000,
     });
@@ -406,7 +406,7 @@ Provide:
 Focus on production-ready, secure deployment practices.`;
 
     const deploymentConfig = await this.aiHub.generateWithBestModel(deploymentPrompt, {
-      type: 'devops',
+      type: 'backend',
       complexity: 'medium',
       maxTokens: 4000,
     });
@@ -445,7 +445,7 @@ Include:
 Make it production-ready documentation that enables others to use and maintain the code.`;
 
     return this.aiHub.generateWithBestModel(docPrompt, {
-      type: 'general',
+      type: 'web',
       complexity: 'medium',
       maxTokens: 4000,
     });

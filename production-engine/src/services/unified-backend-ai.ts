@@ -7,7 +7,7 @@
 
 import { buildApiHandler, type ApiHandler } from '../api';
 import { logger } from '../utils/logger';
-import type { ProviderSettings } from '../api/providers/types';
+import type { ProviderSettings } from '@roo-code/types';
 
 export interface BackendAIOptions {
   preferredProvider?: string;

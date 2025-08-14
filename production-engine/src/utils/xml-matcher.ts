@@ -24,3 +24,19 @@ export function extractAllXmlContent(xml: string, tag: string): string[] {
   
   return matches;
 }
+
+export class XmlMatcher {
+  constructor(private content: string) {}
+  
+  extract(tag: string): string | null {
+    return extractXmlContent(this.content, tag);
+  }
+  
+  has(tag: string): boolean {
+    return hasXmlTag(this.content, tag);
+  }
+  
+  extractAll(tag: string): string[] {
+    return extractAllXmlContent(this.content, tag);
+  }
+}

@@ -23,5 +23,5 @@ export { RequestyHandler } from "./requesty"
 export { TogetherHandler } from "./together"
 export { UnboundHandler } from "./unbound"
 export { VertexHandler } from "./vertex"
-export { VsCodeLmHandler } from "./vscode-lm"
+// export { VsCodeLmHandler } from "./vscode-lm" // Excluded from CLI builds
 export { XAIHandler } from "./xai"

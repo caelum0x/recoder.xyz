@@ -19,7 +19,7 @@ import {
 	OpenAiNativeHandler,
 	DeepSeekHandler,
 	MistralHandler,
-	VsCodeLmHandler,
+	// VsCodeLmHandler, // Excluded from CLI builds
 	UnboundHandler,
 	RequestyHandler,
 	HumanRelayHandler,
@@ -101,8 +101,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 			return new OpenAiNativeHandler(options)
 		case "deepseek":
 			return new DeepSeekHandler(options)
-		case "vscode-lm":
-			return new VsCodeLmHandler(options)
+		// case "vscode-lm": // Excluded from CLI builds
+		//	return new VsCodeLmHandler(options)
 		case "mistral":
 			return new MistralHandler(options)
 		case "unbound":

@@ -17,3 +17,12 @@ export function logWarn(message: string, ...args: any[]): void {
 export function logInfo(message: string, ...args: any[]): void {
   console.info(`[${new Date().toISOString()}] INFO: ${message}`, ...args);
 }
+
+// Export a logger object for compatibility with files expecting a logger import
+export const logger = {
+  info: logInfo,
+  warn: logWarn,
+  error: logError,
+  debug: log,
+  log: log
+};

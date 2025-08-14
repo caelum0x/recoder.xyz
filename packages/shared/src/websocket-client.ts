@@ -277,7 +277,7 @@ export class WebSocketClient extends EventEmitter {
   // Private Methods
 
   private async getSocketIOClient(): Promise<any> {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && window) {
       // Browser environment
       const { io } = await import('socket.io-client');
       return io;
