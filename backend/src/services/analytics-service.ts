@@ -224,33 +224,41 @@ export class AnalyticsService extends EventEmitter {
 
       // Store user profile in custom analytics
       if (this.config.enableCustomAnalytics) {
-        await this.prisma.usageAnalytics.upsert({
+        // Check if user profile already exists
+        const existingProfile = await this.prisma.usageAnalytics.findFirst({
           where: {
-            userId_eventType_platform: {
-              userId: profile.userId,
-              eventType: 'user_profile',
-              platform: 'system'
-            }
-          },
-          update: {
-            metadata: {
-              ...profile.properties,
-              ...profile.traits,
-              lastUpdated: new Date()
-            }
-          },
-          create: {
             userId: profile.userId,
             eventType: 'user_profile',
-            platform: 'system',
-            success: true,
-            metadata: {
-              ...profile.properties,
-              ...profile.traits,
-              created: new Date()
-            }
+            platform: 'system'
           }
         });
+
+        if (existingProfile) {
+          await this.prisma.usageAnalytics.update({
+            where: { id: existingProfile.id },
+            data: {
+              metadata: {
+                ...profile.properties,
+                ...profile.traits,
+                lastUpdated: new Date()
+              }
+            }
+          });
+        } else {
+          await this.prisma.usageAnalytics.create({
+            data: {
+              userId: profile.userId,
+              eventType: 'user_profile',
+              platform: 'system',
+              success: true,
+              metadata: {
+                ...profile.properties,
+                ...profile.traits,
+                created: new Date()
+              }
+            }
+          });
+        }
       }
 
       Logger.debug(`User identified: ${profile.userId}`);
@@ -500,7 +508,8 @@ export class AnalyticsService extends EventEmitter {
           }
 
           // Count active users on retention date
-          const activeUsers = await this.prisma.usageAnalytics.count({
+          const activeUserCount = await this.prisma.usageAnalytics.groupBy({
+            by: ['userId'],
             where: {
               userId: { in: userIds },
               timestamp: {
@@ -508,8 +517,10 @@ export class AnalyticsService extends EventEmitter {
                 lt: new Date(retentionDate.getTime() + (24 * 60 * 60 * 1000))
               }
             },
-            distinct: ['userId']
+            _count: true
           });
+
+          const activeUsers = activeUserCount.length;
 
           retentionRates.push((activeUsers / cohortSize) * 100);
         }
@@ -617,14 +628,16 @@ export class AnalyticsService extends EventEmitter {
     try {
       const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      // Active users in last 24 hours
-      const activeUsers = await this.prisma.usageAnalytics.count({
+      // Active users in last 24 hours - use groupBy for distinct count
+      const activeUserGroups = await this.prisma.usageAnalytics.groupBy({
+        by: ['userId'],
         where: {
           timestamp: { gte: last24Hours },
           userId: { not: null }
         },
-        distinct: ['userId']
+        _count: true
       });
+      const activeUsers = activeUserGroups.length;
 
       // Total events in last 24 hours
       const totalEvents = await this.prisma.usageAnalytics.count({
@@ -802,8 +815,7 @@ export class AnalyticsService extends EventEmitter {
 
     const events = await this.prisma.usageAnalytics.findMany({
       where: whereClause,
-      select: { userId: true },
-      distinct: ['userId']
+      select: { userId: true }
     });
 
     return events.map(e => e.userId!).filter(Boolean);

@@ -2226,7 +2226,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
         const reinforcementSignal = 1.0; // Positive feedback
         
         // Train pattern classifier with reinforcement
-        const classifier = new NeuralNetwork(features.length, 32, 16);
+        const classifier = new NeuralNetwork(features.length, 32, 1);
         
         // Train with positive reinforcement
         for (let epoch = 0; epoch < 20; epoch++) {
@@ -2262,7 +2262,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
         const correctionSignal = 0.0; // Negative feedback
         
         // Train pattern classifier with correction
-        const classifier = new NeuralNetwork(features.length, 32, 16);
+        const classifier = new NeuralNetwork(features.length, 32, 1);
         
         // Train with negative correction
         for (let epoch = 0; epoch < 30; epoch++) {
@@ -2308,7 +2308,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
 
       if (modificationFeatures.length > 0) {
         // Train modification learner
-        const modLearner = new NeuralNetwork(modificationFeatures[0].length, 64, 32);
+        const modLearner = new NeuralNetwork(modificationFeatures[0].length, 64, 1);
         
         for (const modFeature of modificationFeatures) {
           // Learn from each modification
@@ -2344,7 +2344,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
     features: number[]
   ): Promise<void> {
     try {
-      // Create adaptation neural network
+      // Create adaptation neural network  
       const adaptationNet = new NeuralNetwork(features.length, 48, 3); // 3 outputs: quality, satisfaction, adaptation_level
       
       const targets = [

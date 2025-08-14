@@ -456,9 +456,9 @@ export class RecoderSDK extends EventEmitter {
   }
 
   private getPlatformDetails(): string {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && window && typeof navigator !== 'undefined' && navigator) {
       return navigator.userAgent;
-    } else if (typeof process !== 'undefined') {
+    } else if (typeof process !== 'undefined' && process) {
       return `${process.platform} ${process.arch}`;
     }
     return 'unknown';

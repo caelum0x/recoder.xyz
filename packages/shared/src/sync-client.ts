@@ -374,7 +374,7 @@ export class SyncClient extends EventEmitter {
 
   private loadLocalVersions(): void {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (typeof window !== 'undefined' && window && window.localStorage && typeof localStorage !== 'undefined') {
         const stored = localStorage.getItem('recoder-sync-versions');
         if (stored) {
           const versions = JSON.parse(stored);
@@ -382,7 +382,7 @@ export class SyncClient extends EventEmitter {
             this.localVersions.set(dataType as SyncDataType, version as number);
           });
         }
-      } else if (typeof process !== 'undefined') {
+      } else if (typeof process !== 'undefined' && process) {
         const fs = require('fs');
         const path = require('path');
         const os = require('os');
@@ -405,9 +405,9 @@ export class SyncClient extends EventEmitter {
     try {
       const versions = Object.fromEntries(this.localVersions);
 
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (typeof window !== 'undefined' && window && window.localStorage && typeof localStorage !== 'undefined') {
         localStorage.setItem('recoder-sync-versions', JSON.stringify(versions));
-      } else if (typeof process !== 'undefined') {
+      } else if (typeof process !== 'undefined' && process) {
         const fs = require('fs');
         const path = require('path');
         const os = require('os');

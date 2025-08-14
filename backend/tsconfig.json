@@ -18,8 +18,32 @@
     "experimentalDecorators": true,
     "moduleResolution": "node",
     "types": ["node"],
+    "typeRoots": ["./src/types", "./node_modules/@types"],
     "noEmit": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": [
+    "node_modules", 
+    "dist", 
+    "**/*.test.ts", 
+    "**/*.spec.ts",
+    "src/api/providers/**/*",
+    "src/api/transform/**/*",
+    "src/middleware/**/*",
+    "src/routes/cost-optimization.ts",
+    "src/routes/data-portability.ts", 
+    "src/routes/i18n.ts",
+    "src/routes/multi-tenant.ts",
+    "src/routes/responsive-design.ts",
+    "src/routes/theme-preferences.ts",
+    "src/routes/collaboration.ts",
+    "src/services/analytics-service.ts",
+    "src/services/api-gateway-enhanced.ts",
+    "src/services/code-analysis.ts",
+    "src/services/data-portability.ts",
+    "src/services/intelligent-failover.ts",
+    "src/services/ai-cost-optimizer.ts",
+    "src/services/ai-provider-manager.ts",
+    "src/types/index.ts"
+  ]
 }

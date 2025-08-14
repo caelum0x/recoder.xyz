@@ -1,51 +1,27 @@
 /**
- * Shared types for AI providers in the production engine
+ * Provider types for production engine API
  */
 
 export interface ProviderSettings {
-  apiProvider: string;
-  
-  // Generic API settings
+  apiProvider?: string;
   apiKey?: string;
+  baseUrl?: string;
+  model?: string;
   apiModelId?: string;
-  
-  // OpenRouter specific
-  openRouterApiKey?: string;
-  openRouterModelId?: string;
-  openRouterBaseUrl?: string;
-  openRouterUseMiddleOutTransform?: boolean;
-  openRouterSpecificProvider?: string;
+  maxTokens?: number;
+  temperature?: number;
   
   // Anthropic specific
   anthropicApiKey?: string;
-  anthropicModelId?: string;
-  
-  // Google/Gemini specific
-  googleApiKey?: string;
-  geminiApiKey?: string;
-  geminiModelId?: string;
-  
-  // Groq specific
-  groqApiKey?: string;
-  groqModelId?: string;
-  
-  // DeepSeek specific
-  deepSeekApiKey?: string;
-  deepSeekModelId?: string;
-  
-  // Ollama specific
-  ollamaBaseUrl?: string;
-  ollamaModelId?: string;
+  anthropicBaseUrl?: string;
+  anthropicUseAuthToken?: boolean;
   
   // OpenAI specific
-  openAiApiKey?: string;
-  openAiModelId?: string;
-  openAiHeaders?: Record<string, string>;
+  openaiApiKey?: string;
+  openaiBaseUrl?: string;
   
-  // Additional settings
-  temperature?: number;
-  maxTokens?: number;
-  topP?: number;
+  // Other provider options
+  [key: string]: any;
 }
 
 export interface ModelInfo {
@@ -57,36 +33,24 @@ export interface ModelInfo {
   outputPrice?: number;
   cacheWritesPrice?: number;
   cacheReadsPrice?: number;
-  description?: string;
-  supportsReasoningEffort?: boolean;
-  supportedParameters?: string[];
-  preferredIndex?: number;
-  supportsComputerUse?: boolean;
   supportsReasoningBudget?: boolean;
-  requiredReasoningBudget?: boolean;
+  supportsReasoningEffort?: boolean;
 }
 
-export interface AIMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
+export interface ApiProvider {
+  name: string;
+  baseUrl?: string;
+  models: Record<string, ModelInfo>;
 }
 
-export interface AIResponse {
-  content: string;
-  model: string;
-  provider: string;
-  tokens?: {
-    input: number;
-    output: number;
-  };
-  finishReason?: string;
-  cost?: number;
-}
-
-export interface TaskContext {
-  type: 'blockchain' | 'web' | 'mobile' | 'backend' | 'security' | 'devops' | 'general';
-  complexity: 'simple' | 'medium' | 'complex';
-  priority: 'speed' | 'quality' | 'cost';
-  requirements?: string[];
-  tokenEstimate?: number;
-}
+export type ApiProviderName = 
+  | 'anthropic'
+  | 'openai' 
+  | 'openrouter'
+  | 'gemini'
+  | 'ollama'
+  | 'groq'
+  | 'cerebras'
+  | 'mistral'
+  | 'bedrock'
+  | 'vertex';
