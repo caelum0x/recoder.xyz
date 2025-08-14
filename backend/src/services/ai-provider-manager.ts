@@ -570,7 +570,7 @@ export class AIProviderManager extends EventEmitter {
       // Check if local Ollama server is running
       try {
         const response = await fetch(`${provider.endpoint}/version`, { 
-          timeout: provider.healthCheck.timeout 
+         // timeout: provider.healthCheck.timeout 
         });
         return response.ok;
       } catch {

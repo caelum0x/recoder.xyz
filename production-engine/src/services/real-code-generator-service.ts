@@ -9,8 +9,23 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
 import { securityIntegrationService, SecurityValidationResult } from './security-integration';
-import { ComplianceIntegrationService, ComplianceConfig, GeneratedCodeContext, ComplianceResult } from '../compliance/compliance-integration';
-import { DataClassification, ProjectType, IndustryStandard } from '@recoder/shared/src/security/soc2-compliance-scanner';
+import { DataClassification, IndustryStandard, ProjectType } from '../../../packages/shared/src/security/soc2-compliance-scanner';
+import { ComplianceIntegrationService, ComplianceConfig, ComplianceResult } from '../compliance/compliance-integration';
+
+// Define GeneratedCodeContext interface specifically for this service
+export interface GeneratedCodeContext {
+  filePath: string;
+  language: string;
+  framework?: string;
+  projectPath: string;
+  userRequirements: string;
+  generatedCode: string;
+  metadata: {
+    model: string;
+    provider: string;
+    timestamp: Date;
+  };
+}
 
 export interface CodeGenerationRequest {
   description: string;
@@ -511,7 +526,7 @@ npm run build
           }
         };
 
-        const result = await this.complianceService.validateGeneratedCode(context);
+        const result = await this.complianceService.validateSingleFile(context);
         
         if (!result.passed) {
           overallPassed = false;

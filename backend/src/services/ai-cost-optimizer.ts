@@ -458,18 +458,19 @@ export class AICostOptimizerService extends EventEmitter {
     const updatedBudget: CostBudget = { ...existingBudget, ...budget };
     this.userBudgets.set(userId, updatedBudget);
 
-    // Store in database
-    await prisma.user.upsert({
-      where: { id: userId },
+    // Store in database using developer preferences
+    const existingPrefs = await this.getUserDeveloperPreferences(userId);
+    await prisma.userPreferences.upsert({
+      where: { userId },
       update: {
-        metadata: {
-          ...(await this.getUserMetadata(userId)),
-          costBudget: updatedBudget
+        developerPreferences: {
+          ...existingPrefs,
+          costBudget: updatedBudget as any // Cast to satisfy JSON type
         }
       },
       create: {
-        id: userId,
-        metadata: { costBudget: updatedBudget }
+        userId,
+        developerPreferences: { costBudget: updatedBudget as any }
       }
     });
 
@@ -651,8 +652,19 @@ export class AICostOptimizerService extends EventEmitter {
   }
 
   private async getUserMetadata(userId: string): Promise<any> {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    return user?.metadata || {};
+    const userPrefs = await prisma.userPreferences.findUnique({ 
+      where: { userId },
+      select: { developerPreferences: true }
+    });
+    return userPrefs?.developerPreferences || {};
+  }
+
+  private async getUserDeveloperPreferences(userId: string): Promise<any> {
+    const userPrefs = await prisma.userPreferences.findUnique({ 
+      where: { userId },
+      select: { developerPreferences: true }
+    });
+    return userPrefs?.developerPreferences || {};
   }
 
   private async checkBudgetAlerts(userId: string, budget: CostBudget): Promise<void> {
@@ -681,13 +693,14 @@ export class AICostOptimizerService extends EventEmitter {
       await prisma.usageRecord.create({
         data: {
           userId,
-          provider: providerId,
+          type: 'ai_cost',
           cost,
-          taskType,
-          timestamp: new Date(),
           metadata: {
+            providerId,
+            taskType,
             optimized: true,
-            costOptimizer: 'v1.0'
+            costOptimizer: 'v1.0',
+            timestamp: new Date().toISOString()
           }
         }
       });

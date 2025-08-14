@@ -59,7 +59,7 @@ export class WebOAuthHandler {
    * Start OAuth flow with popup
    */
   async loginWithPopup(provider: string): Promise<WebOAuthResult> {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !window) {
       throw new Error('Popup authentication only available in browser environment');
     }
 
@@ -83,14 +83,16 @@ export class WebOAuthHandler {
 
       // Listen for message from popup
       const messageHandler = async (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) {
+        if (typeof window !== 'undefined' && window && event.origin !== window.location.origin) {
           return;
         }
 
         if (event.data.type === 'OAUTH_CALLBACK') {
           clearInterval(checkClosed);
           popup.close();
-          window.removeEventListener('message', messageHandler);
+          if (typeof window !== 'undefined' && window) {
+            window.removeEventListener('message', messageHandler);
+          }
 
           try {
             const result = await this.oauthHandler.handleCallback(
@@ -105,7 +107,9 @@ export class WebOAuthHandler {
         }
       };
 
-      window.addEventListener('message', messageHandler);
+      if (typeof window !== 'undefined' && window) {
+        window.addEventListener('message', messageHandler);
+      }
 
       // Timeout after 5 minutes
       setTimeout(() => {
@@ -113,7 +117,9 @@ export class WebOAuthHandler {
         if (!popup.closed) {
           popup.close();
         }
-        window.removeEventListener('message', messageHandler);
+        if (typeof window !== 'undefined' && window) {
+          window.removeEventListener('message', messageHandler);
+        }
         reject(new Error('Authentication timed out'));
       }, 5 * 60 * 1000);
     });
@@ -123,7 +129,7 @@ export class WebOAuthHandler {
    * Start OAuth flow with redirect
    */
   loginWithRedirect(provider: string): void {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !window) {
       throw new Error('Redirect authentication only available in browser environment');
     }
 
@@ -135,7 +141,7 @@ export class WebOAuthHandler {
    * Handle OAuth callback (for redirect flow)
    */
   async handleCallback(provider: string): Promise<WebOAuthResult> {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !window) {
       throw new Error('OAuth callback handling only available in browser environment');
     }
 
@@ -196,12 +202,16 @@ export class WebOAuthHandler {
    * Open OAuth popup window
    */
   private openPopup(url: string): Window | null {
+    if (typeof window === 'undefined' || !window) {
+      return null;
+    }
+
     const { width, height, centerScreen } = this.config.popupOptions;
 
     let left = 0;
     let top = 0;
 
-    if (centerScreen && typeof window !== 'undefined') {
+    if (centerScreen && window.screen) {
       left = Math.round(window.screen.width / 2 - width! / 2);
       top = Math.round(window.screen.height / 2 - height! / 2);
     }

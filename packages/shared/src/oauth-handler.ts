@@ -267,7 +267,7 @@ export class OAuthHandler extends EventEmitter {
     switch (platform) {
       case 'web':
         // For web, redirect to the URL or open in popup
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && window) {
           window.location.href = authUrl;
         }
         break;

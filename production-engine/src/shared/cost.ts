@@ -64,3 +64,21 @@ export function calculateApiCostOpenAI(inputTokens: number, outputTokens: number
   // GPT-4 pricing: $10/1M input, $30/1M output tokens
   return calculateCost(inputTokens, outputTokens, 0.01, 0.03);
 }
+
+/**
+ * Parse API price from various formats
+ */
+export function parseApiPrice(price: any): number {
+  if (typeof price === 'number') {
+    return price;
+  }
+  
+  if (typeof price === 'string') {
+    // Remove currency symbols and parse
+    const cleanPrice = price.replace(/[\$,\s]/g, '');
+    const parsed = parseFloat(cleanPrice);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  
+  return 0;
+}
