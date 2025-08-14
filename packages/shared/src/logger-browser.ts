@@ -30,7 +30,7 @@ export class Logger {
   }
 
   static debug(message: string, meta?: any): void {
-    if (typeof window !== 'undefined' && localStorage && localStorage.getItem('DEBUG')) {
+    if (typeof window !== 'undefined' && window && typeof localStorage !== 'undefined' && localStorage && localStorage.getItem('DEBUG')) {
       console.log('🐛', message);
       if (meta) console.log(meta);
     }

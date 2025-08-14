@@ -74,9 +74,9 @@ export class AuthClient extends EventEmitter {
   }
 
   private getUserAgent(): string {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && window) {
       return `Recoder-Web/${this.getVersion()}`;
-    } else if (typeof process !== 'undefined') {
+    } else if (typeof process !== 'undefined' && process) {
       return `Recoder-CLI/${this.getVersion()} (${process.platform})`;
     }
     return `Recoder-Client/${this.getVersion()}`;
@@ -362,7 +362,7 @@ export class AuthClient extends EventEmitter {
     this.emit('authenticated', { user: this.currentUser, tokens: this.tokens });
 
     // Auto-register device if not already registered
-    if (!this.deviceInfo && typeof window !== 'undefined') {
+    if (!this.deviceInfo && typeof window !== 'undefined' && window && typeof navigator !== 'undefined' && navigator) {
       // Web platform
       await this.registerDevice({
         name: `${navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Browser'} - ${new Date().toLocaleDateString()}`,
@@ -409,10 +409,10 @@ export class AuthClient extends EventEmitter {
       device: this.deviceInfo
     };
 
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined' && window && window.localStorage && typeof localStorage !== 'undefined') {
       // Web platform
       localStorage.setItem('recoder-auth', JSON.stringify(data));
-    } else if (typeof process !== 'undefined') {
+    } else if (typeof process !== 'undefined' && process) {
       // Node.js platform (CLI)
       const fs = require('fs');
       const path = require('path');
@@ -436,13 +436,13 @@ export class AuthClient extends EventEmitter {
     try {
       let data = null;
 
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (typeof window !== 'undefined' && window && window.localStorage && typeof localStorage !== 'undefined') {
         // Web platform
         const stored = localStorage.getItem('recoder-auth');
         if (stored) {
           data = JSON.parse(stored);
         }
-      } else if (typeof process !== 'undefined') {
+      } else if (typeof process !== 'undefined' && process) {
         // Node.js platform (CLI)
         const fs = require('fs');
         const path = require('path');
@@ -467,9 +467,9 @@ export class AuthClient extends EventEmitter {
   }
 
   protected removeFromStorage(): void {
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined' && window && window.localStorage && typeof localStorage !== 'undefined') {
       localStorage.removeItem('recoder-auth');
-    } else if (typeof process !== 'undefined') {
+    } else if (typeof process !== 'undefined' && process) {
       const fs = require('fs');
       const path = require('path');
       const os = require('os');

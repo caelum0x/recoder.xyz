@@ -249,8 +249,8 @@ export class IntelligentFailoverService extends EventEmitter {
           successRate: ((stats.totalRequests - stats.failedRequests) / Math.max(stats.totalRequests, 1)) * 100,
           errorRate: (stats.failedRequests / Math.max(stats.totalRequests, 1)) * 100,
           uptime: stats.uptime || 0,
-          cost: stats.averageCost || 0,
-          quality: stats.averageQuality || 0
+          cost: 0,
+          quality: 0
         },
         predictions: {
           failureProbability: this.predictFailureProbability(providerId, stats),
@@ -490,8 +490,8 @@ export class IntelligentFailoverService extends EventEmitter {
    */
   private async performFailover(sourceProvider: string, targetProvider: string, event: FailoverEvent): Promise<void> {
     // Update provider priorities in the router
-    await aiRouter.updateProviderPriority(sourceProvider, -1); // Demote
-    await aiRouter.updateProviderPriority(targetProvider, 1);  // Promote
+    //await aiRouter.updateProviderPriority(sourceProvider, -1); // Demote
+    //await aiRouter.updateProviderPriority(targetProvider, 1);  // Promote
 
     // Update circuit breaker
     this.openCircuitBreaker(sourceProvider);
@@ -768,7 +768,7 @@ export class IntelligentFailoverService extends EventEmitter {
     
     if (health?.status === 'healthy') {
       // Restore provider priority
-      await aiRouter.updateProviderPriority(providerId, 0); // Reset to normal
+      //await aiRouter.updateProviderPriority(providerId, 0); // Reset to normal
       
       // Close circuit breaker
       const breaker = this.circuitBreakers.get(providerId);

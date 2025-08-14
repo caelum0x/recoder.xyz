@@ -826,14 +826,20 @@ FILE CONTENTS:
               break;
             case 'dependencies':
               if (trimmed.toLowerCase().includes('add')) {
-                const packages = trimmed.match(/[\w-@/]+/g) || [];
-                dependencies.toAdd.push(...packages.filter(p => p.length > 2));
+                const packages = trimmed.match(/[\w-@/]+/g);
+                if (packages) {
+                  dependencies.toAdd.push(...packages.filter(p => p.length > 2));
+                }
               } else if (trimmed.toLowerCase().includes('remove')) {
-                const packages = trimmed.match(/[\w-@/]+/g) || [];
-                dependencies.toRemove.push(...packages.filter(p => p.length > 2));
+                const packages = trimmed.match(/[\w-@/]+/g);
+                if (packages) {
+                  dependencies.toRemove.push(...packages.filter(p => p.length > 2));
+                }
               } else if (trimmed.toLowerCase().includes('update')) {
-                const packages = trimmed.match(/[\w-@/]+/g) || [];
-                dependencies.toUpdate.push(...packages.filter(p => p.length > 2));
+                const packages = trimmed.match(/[\w-@/]+/g);
+                if (packages) {
+                  dependencies.toUpdate.push(...packages.filter(p => p.length > 2));
+                }
               }
               break;
             case 'risks':

@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 export function convertToOpenAiMessages(
-	anthropicMessages: Anthropic.Messages.MessageParam[],
+	anthropicMessages: Anthropic.MessageParam[],
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
 	const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = []
 
@@ -35,7 +35,7 @@ export function convertToOpenAiMessages(
 				)
 
 				// Process tool result messages FIRST since they must follow the tool use messages
-				let toolResultImages: Anthropic.Messages.ImageBlockParam[] = []
+				let toolResultImages: Anthropic.ImageBlockParam[] = []
 				toolMessages.forEach((toolMessage) => {
 					// The Anthropic SDK allows tool results to be a string or an array of text and image blocks, enabling rich and structured content. In contrast, the OpenAI SDK only supports tool results as a single string, so we map the Anthropic tool result parts into one concatenated string to maintain compatibility.
 					let content: string
@@ -50,7 +50,7 @@ export function convertToOpenAiMessages(
 										toolResultImages.push(part)
 										return "(see following user message for image)"
 									}
-									return part.text
+									return 'text' in part ? part.text : JSON.stringify(part)
 								})
 								.join("\n") ?? ""
 					}
