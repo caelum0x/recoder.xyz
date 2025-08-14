@@ -588,7 +588,7 @@ export class ValidationPipeline {
       'Weak Cryptography': 'Use stronger hash algorithms like SHA-256 or bcrypt for password hashing.'
     };
     
-    return recommendations[type] || 'Review and apply security best practices.';
+    return recommendations[type as keyof typeof recommendations] || 'Review and apply security best practices.';
   }
 
   private async assessSecurityRisks(file: GeneratedFile, result: SecurityValidation): Promise<void> {
@@ -632,7 +632,7 @@ export class ValidationPipeline {
       'Open Redirect': ['Validate redirect URLs against whitelist', 'Use relative URLs when possible']
     };
     
-    return mitigations[type] || ['Apply appropriate security controls'];
+    return mitigations[type as keyof typeof mitigations] || ['Apply appropriate security controls'];
   }
 
   private calculateSecurityScore(result: SecurityValidation): number {
@@ -758,7 +758,7 @@ export class ValidationPipeline {
       'Nested Array Operations': 'Consider using a single loop with combined logic'
     };
     
-    return solutions[type] || 'Optimize the identified performance issue';
+    return solutions[type as keyof typeof solutions] || 'Optimize the identified performance issue';
   }
 
   private calculateCyclomaticComplexity(content: string): number {

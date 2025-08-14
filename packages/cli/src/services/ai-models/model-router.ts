@@ -596,7 +596,7 @@ export class ModelRouter extends EventEmitter {
       'solidity': ModelSpecialization.SOLIDITY
     };
 
-    const targetSpecialization = languageSpecializations[context.language.toLowerCase()];
+    const targetSpecialization = languageSpecializations[context.language.toLowerCase() as keyof typeof languageSpecializations];
     
     if (targetSpecialization && model.specializations.includes(targetSpecialization)) {
       reasoning.push(`Specialized for ${context.language}`);

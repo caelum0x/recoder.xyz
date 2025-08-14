@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Stream as AnthropicStream } from "@anthropic-ai/sdk/streaming"
-import { CacheControlEphemeral } from "@anthropic-ai/sdk/resources"
+// Note: CacheControlEphemeral may not be available in current SDK version
 
 import {
 	type ModelInfo,
@@ -38,11 +38,11 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 
 	async *createMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: Anthropic.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
-		let stream: AnthropicStream<Anthropic.Messages.RawMessageStreamEvent>
-		const cacheControl: CacheControlEphemeral = { type: "ephemeral" }
+		let stream: AnthropicStream<Anthropic.RawMessageStreamEvent>
+		const cacheControl = { type: "ephemeral" } as const
 		let { id: modelId, betas = [], maxTokens, temperature, reasoning: thinking } = this.getModel()
 
 		switch (modelId) {
@@ -277,7 +277,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 	 * @param content The content blocks to count tokens for
 	 * @returns A promise resolving to the token count
 	 */
-	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
+	override async countTokens(content: Array<Anthropic.ContentBlockParam>): Promise<number> {
 		try {
 			// Use the current model
 			const { id: model } = this.getModel()

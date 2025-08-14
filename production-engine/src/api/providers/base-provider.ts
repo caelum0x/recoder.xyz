@@ -12,7 +12,7 @@ import { countTokens } from "../../utils/countTokens"
 export abstract class BaseProvider implements ApiHandler {
 	abstract createMessage(
 		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
+		messages: Anthropic.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream
 
@@ -25,7 +25,7 @@ export abstract class BaseProvider implements ApiHandler {
 	 * @param content The content to count tokens for
 	 * @returns A promise resolving to the token count
 	 */
-	async countTokens(content: Anthropic.Messages.ContentBlockParam[]): Promise<number> {
+	async countTokens(content: Anthropic.ContentBlockParam[]): Promise<number> {
 		if (content.length === 0) {
 			return 0
 		}

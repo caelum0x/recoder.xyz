@@ -1,11 +1,17 @@
+"use strict";
 /**
  * Security Testing and Audit Suite
  * Comprehensive testing tools for security validation and penetration testing
  */
-import { __awaiter } from "tslib";
-import crypto from 'crypto';
-import { EventEmitter } from 'events';
-export class SecurityTestingSuite extends EventEmitter {
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SecurityTestingSuite = void 0;
+exports.createSecurityTestingSuite = createSecurityTestingSuite;
+const crypto_1 = __importDefault(require("crypto"));
+const events_1 = require("events");
+class SecurityTestingSuite extends events_1.EventEmitter {
     constructor() {
         super();
         this.tests = new Map();
@@ -24,7 +30,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for weak password policies and common passwords',
             category: 'authentication',
             severity: 'high',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testWeakPasswords(); })
+            execute: async () => this.testWeakPasswords()
         });
         this.addTest({
             id: 'auth-session-management',
@@ -32,7 +38,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for secure session handling and token management',
             category: 'authentication',
             severity: 'high',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testSessionManagement(); })
+            execute: async () => this.testSessionManagement()
         });
         this.addTest({
             id: 'auth-brute-force',
@@ -40,7 +46,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for brute force attack protection',
             category: 'authentication',
             severity: 'medium',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testBruteForceProtection(); })
+            execute: async () => this.testBruteForceProtection()
         });
         // Authorization Tests
         this.addTest({
@@ -49,7 +55,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for unauthorized privilege escalation',
             category: 'authorization',
             severity: 'critical',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testPrivilegeEscalation(); })
+            execute: async () => this.testPrivilegeEscalation()
         });
         this.addTest({
             id: 'authz-broken-access-control',
@@ -57,7 +63,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for broken access control vulnerabilities',
             category: 'authorization',
             severity: 'high',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testBrokenAccessControl(); })
+            execute: async () => this.testBrokenAccessControl()
         });
         // Injection Tests
         this.addTest({
@@ -66,7 +72,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for SQL injection vulnerabilities',
             category: 'injection',
             severity: 'critical',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testSQLInjection(); })
+            execute: async () => this.testSQLInjection()
         });
         this.addTest({
             id: 'injection-nosql',
@@ -74,7 +80,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for NoSQL injection vulnerabilities',
             category: 'injection',
             severity: 'high',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testNoSQLInjection(); })
+            execute: async () => this.testNoSQLInjection()
         });
         this.addTest({
             id: 'injection-command',
@@ -82,7 +88,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for command injection vulnerabilities',
             category: 'injection',
             severity: 'critical',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testCommandInjection(); })
+            execute: async () => this.testCommandInjection()
         });
         // XSS Tests
         this.addTest({
@@ -91,7 +97,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for reflected cross-site scripting vulnerabilities',
             category: 'xss',
             severity: 'high',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testReflectedXSS(); })
+            execute: async () => this.testReflectedXSS()
         });
         this.addTest({
             id: 'xss-stored',
@@ -99,7 +105,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for stored cross-site scripting vulnerabilities',
             category: 'xss',
             severity: 'high',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testStoredXSS(); })
+            execute: async () => this.testStoredXSS()
         });
         // CSRF Tests
         this.addTest({
@@ -108,7 +114,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for cross-site request forgery protection',
             category: 'csrf',
             severity: 'medium',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testCSRFProtection(); })
+            execute: async () => this.testCSRFProtection()
         });
         // Misconfiguration Tests
         this.addTest({
@@ -117,7 +123,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for proper security headers configuration',
             category: 'misconfiguration',
             severity: 'medium',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testSecurityHeaders(); })
+            execute: async () => this.testSecurityHeaders()
         });
         this.addTest({
             id: 'config-https-enforcement',
@@ -125,7 +131,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for proper HTTPS enforcement',
             category: 'misconfiguration',
             severity: 'high',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testHTTPSEnforcement(); })
+            execute: async () => this.testHTTPSEnforcement()
         });
         // DoS Tests
         this.addTest({
@@ -134,7 +140,7 @@ export class SecurityTestingSuite extends EventEmitter {
             description: 'Tests for proper rate limiting implementation',
             category: 'dos',
             severity: 'medium',
-            execute: () => __awaiter(this, void 0, void 0, function* () { return this.testRateLimiting(); })
+            execute: async () => this.testRateLimiting()
         });
     }
     /**
@@ -157,75 +163,75 @@ export class SecurityTestingSuite extends EventEmitter {
     /**
      * Run all security tests
      */
-    runAllTests(config) {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (this.isRunning) {
-                throw new Error('Security tests are already running');
-            }
-            this.isRunning = true;
-            this.results = [];
-            try {
-                const tests = Array.from(this.tests.values());
-                const filteredTests = this.filterTests(tests, config);
-                this.emit('testsStarted', { totalTests: filteredTests.length });
-                // Run tests in parallel with controlled concurrency
-                const concurrency = 5;
-                const chunks = this.chunkArray(filteredTests, concurrency);
-                for (const chunk of chunks) {
-                    const promises = chunk.map(test => this.runSingleTest(test));
-                    const chunkResults = yield Promise.allSettled(promises);
-                    for (const result of chunkResults) {
-                        if (result.status === 'fulfilled') {
-                            this.results.push(result.value);
-                        }
+    async runAllTests(config) {
+        if (this.isRunning) {
+            throw new Error('Security tests are already running');
+        }
+        this.isRunning = true;
+        this.results = [];
+        try {
+            const tests = Array.from(this.tests.values());
+            const filteredTests = this.filterTests(tests, config);
+            this.emit('testsStarted', { totalTests: filteredTests.length });
+            // Run tests in parallel with controlled concurrency
+            const concurrency = 5;
+            const chunks = this.chunkArray(filteredTests, concurrency);
+            for (const chunk of chunks) {
+                const promises = chunk.map(test => this.runSingleTest(test));
+                const chunkResults = await Promise.allSettled(promises);
+                for (const result of chunkResults) {
+                    if (result.status === 'fulfilled') {
+                        this.results.push(result.value);
                     }
                 }
-                const report = this.generateAuditReport();
-                this.emit('testsCompleted', report);
-                return report;
             }
-            finally {
-                this.isRunning = false;
-            }
-        });
+            const report = this.generateAuditReport();
+            this.emit('testsCompleted', report);
+            return report;
+        }
+        finally {
+            this.isRunning = false;
+        }
     }
     /**
      * Run a single security test
      */
-    runSingleTest(test) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const startTime = Date.now();
-            try {
-                this.emit('testStarted', test);
-                const result = yield test.execute();
-                const executionTime = Date.now() - startTime;
-                const finalResult = Object.assign(Object.assign({}, result), { testId: test.id, executionTime });
-                this.emit('testCompleted', { test, result: finalResult });
-                return finalResult;
-            }
-            catch (error) {
-                const executionTime = Date.now() - startTime;
-                const errorResult = {
-                    testId: test.id,
-                    passed: false,
-                    score: 0,
-                    vulnerabilities: [{
-                            id: crypto.randomUUID(),
-                            type: 'test-execution-error',
-                            severity: 'medium',
-                            title: 'Test Execution Error',
-                            description: `Test failed to execute: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                            impact: 'Test could not be completed',
-                            remediation: 'Check test implementation and dependencies'
-                        }],
-                    recommendations: ['Fix test execution error'],
-                    executionTime,
-                    details: { error: error instanceof Error ? error.message : 'Unknown error' }
-                };
-                this.emit('testError', { test, error: errorResult });
-                return errorResult;
-            }
-        });
+    async runSingleTest(test) {
+        const startTime = Date.now();
+        try {
+            this.emit('testStarted', test);
+            const result = await test.execute();
+            const executionTime = Date.now() - startTime;
+            const finalResult = {
+                ...result,
+                testId: test.id,
+                executionTime
+            };
+            this.emit('testCompleted', { test, result: finalResult });
+            return finalResult;
+        }
+        catch (error) {
+            const executionTime = Date.now() - startTime;
+            const errorResult = {
+                testId: test.id,
+                passed: false,
+                score: 0,
+                vulnerabilities: [{
+                        id: crypto_1.default.randomUUID(),
+                        type: 'test-execution-error',
+                        severity: 'medium',
+                        title: 'Test Execution Error',
+                        description: `Test failed to execute: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        impact: 'Test could not be completed',
+                        remediation: 'Check test implementation and dependencies'
+                    }],
+                recommendations: ['Fix test execution error'],
+                executionTime,
+                details: { error: error instanceof Error ? error.message : 'Unknown error' }
+            };
+            this.emit('testError', { test, error: errorResult });
+            return errorResult;
+        }
     }
     /**
      * Filter tests based on criteria
@@ -263,7 +269,7 @@ export class SecurityTestingSuite extends EventEmitter {
         const recommendations = this.generateRecommendations(allVulnerabilities);
         const complianceStatus = this.assessCompliance(allVulnerabilities, overallScore);
         return {
-            id: crypto.randomUUID(),
+            id: crypto_1.default.randomUUID(),
             timestamp: new Date(),
             overallScore,
             totalTests,
@@ -328,212 +334,184 @@ export class SecurityTestingSuite extends EventEmitter {
         };
     }
     // Individual test implementations (simplified for example)
-    testWeakPasswords() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            const weakPatterns = ['password', '123456', 'admin', 'user'];
-            // This would test against actual password policies
-            // For now, we'll simulate a basic check
-            return {
-                testId: 'auth-weak-passwords',
-                passed: true,
-                score: 85,
-                vulnerabilities,
-                recommendations: ['Implement strong password policy with minimum 12 characters'],
-                executionTime: 0,
-                details: { patternsChecked: weakPatterns.length }
-            };
-        });
+    async testWeakPasswords() {
+        const vulnerabilities = [];
+        const weakPatterns = ['password', '123456', 'admin', 'user'];
+        // This would test against actual password policies
+        // For now, we'll simulate a basic check
+        return {
+            testId: 'auth-weak-passwords',
+            passed: true,
+            score: 85,
+            vulnerabilities,
+            recommendations: ['Implement strong password policy with minimum 12 characters'],
+            executionTime: 0,
+            details: { patternsChecked: weakPatterns.length }
+        };
     }
-    testSessionManagement() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            // Check for secure session configuration
-            // This would test actual session implementation
-            return {
-                testId: 'auth-session-management',
-                passed: true,
-                score: 90,
-                vulnerabilities,
-                recommendations: ['Implement session timeout and secure cookie settings'],
-                executionTime: 0,
-                details: { sessionSecure: true, httpOnly: true }
-            };
-        });
+    async testSessionManagement() {
+        const vulnerabilities = [];
+        // Check for secure session configuration
+        // This would test actual session implementation
+        return {
+            testId: 'auth-session-management',
+            passed: true,
+            score: 90,
+            vulnerabilities,
+            recommendations: ['Implement session timeout and secure cookie settings'],
+            executionTime: 0,
+            details: { sessionSecure: true, httpOnly: true }
+        };
     }
-    testBruteForceProtection() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            // Test rate limiting and account lockout
-            // This would perform actual brute force simulation
-            return {
-                testId: 'auth-brute-force',
-                passed: true,
-                score: 95,
-                vulnerabilities,
-                recommendations: ['Consider implementing CAPTCHA for repeated failed attempts'],
-                executionTime: 0,
-                details: { rateLimitingActive: true, accountLockout: true }
-            };
-        });
+    async testBruteForceProtection() {
+        const vulnerabilities = [];
+        // Test rate limiting and account lockout
+        // This would perform actual brute force simulation
+        return {
+            testId: 'auth-brute-force',
+            passed: true,
+            score: 95,
+            vulnerabilities,
+            recommendations: ['Consider implementing CAPTCHA for repeated failed attempts'],
+            executionTime: 0,
+            details: { rateLimitingActive: true, accountLockout: true }
+        };
     }
-    testPrivilegeEscalation() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            // Test for privilege escalation vulnerabilities
-            // This would test actual authorization mechanisms
-            return {
-                testId: 'authz-privilege-escalation',
-                passed: true,
-                score: 88,
-                vulnerabilities,
-                recommendations: ['Implement principle of least privilege'],
-                executionTime: 0,
-                details: { authorizationChecks: true }
-            };
-        });
+    async testPrivilegeEscalation() {
+        const vulnerabilities = [];
+        // Test for privilege escalation vulnerabilities
+        // This would test actual authorization mechanisms
+        return {
+            testId: 'authz-privilege-escalation',
+            passed: true,
+            score: 88,
+            vulnerabilities,
+            recommendations: ['Implement principle of least privilege'],
+            executionTime: 0,
+            details: { authorizationChecks: true }
+        };
     }
-    testBrokenAccessControl() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            // Test for broken access control
-            return {
-                testId: 'authz-broken-access-control',
-                passed: true,
-                score: 87,
-                vulnerabilities,
-                recommendations: ['Implement consistent access control checks'],
-                executionTime: 0,
-                details: { accessControlConsistent: true }
-            };
-        });
+    async testBrokenAccessControl() {
+        const vulnerabilities = [];
+        // Test for broken access control
+        return {
+            testId: 'authz-broken-access-control',
+            passed: true,
+            score: 87,
+            vulnerabilities,
+            recommendations: ['Implement consistent access control checks'],
+            executionTime: 0,
+            details: { accessControlConsistent: true }
+        };
     }
-    testSQLInjection() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            // Test for SQL injection vulnerabilities
-            return {
-                testId: 'injection-sql',
-                passed: true,
-                score: 92,
-                vulnerabilities,
-                recommendations: ['Use parameterized queries and input validation'],
-                executionTime: 0,
-                details: { parameterizedQueries: true }
-            };
-        });
+    async testSQLInjection() {
+        const vulnerabilities = [];
+        // Test for SQL injection vulnerabilities
+        return {
+            testId: 'injection-sql',
+            passed: true,
+            score: 92,
+            vulnerabilities,
+            recommendations: ['Use parameterized queries and input validation'],
+            executionTime: 0,
+            details: { parameterizedQueries: true }
+        };
     }
-    testNoSQLInjection() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'injection-nosql',
-                passed: true,
-                score: 90,
-                vulnerabilities,
-                recommendations: ['Validate and sanitize all NoSQL inputs'],
-                executionTime: 0,
-                details: { inputValidation: true }
-            };
-        });
+    async testNoSQLInjection() {
+        const vulnerabilities = [];
+        return {
+            testId: 'injection-nosql',
+            passed: true,
+            score: 90,
+            vulnerabilities,
+            recommendations: ['Validate and sanitize all NoSQL inputs'],
+            executionTime: 0,
+            details: { inputValidation: true }
+        };
     }
-    testCommandInjection() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'injection-command',
-                passed: true,
-                score: 94,
-                vulnerabilities,
-                recommendations: ['Avoid system command execution with user input'],
-                executionTime: 0,
-                details: { commandValidation: true }
-            };
-        });
+    async testCommandInjection() {
+        const vulnerabilities = [];
+        return {
+            testId: 'injection-command',
+            passed: true,
+            score: 94,
+            vulnerabilities,
+            recommendations: ['Avoid system command execution with user input'],
+            executionTime: 0,
+            details: { commandValidation: true }
+        };
     }
-    testReflectedXSS() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'xss-reflected',
-                passed: true,
-                score: 89,
-                vulnerabilities,
-                recommendations: ['Implement proper output encoding and CSP headers'],
-                executionTime: 0,
-                details: { outputEncoding: true, cspHeaders: true }
-            };
-        });
+    async testReflectedXSS() {
+        const vulnerabilities = [];
+        return {
+            testId: 'xss-reflected',
+            passed: true,
+            score: 89,
+            vulnerabilities,
+            recommendations: ['Implement proper output encoding and CSP headers'],
+            executionTime: 0,
+            details: { outputEncoding: true, cspHeaders: true }
+        };
     }
-    testStoredXSS() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'xss-stored',
-                passed: true,
-                score: 91,
-                vulnerabilities,
-                recommendations: ['Sanitize stored content and implement CSP'],
-                executionTime: 0,
-                details: { contentSanitization: true }
-            };
-        });
+    async testStoredXSS() {
+        const vulnerabilities = [];
+        return {
+            testId: 'xss-stored',
+            passed: true,
+            score: 91,
+            vulnerabilities,
+            recommendations: ['Sanitize stored content and implement CSP'],
+            executionTime: 0,
+            details: { contentSanitization: true }
+        };
     }
-    testCSRFProtection() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'csrf-protection',
-                passed: true,
-                score: 93,
-                vulnerabilities,
-                recommendations: ['Implement CSRF tokens for state-changing operations'],
-                executionTime: 0,
-                details: { csrfTokens: true }
-            };
-        });
+    async testCSRFProtection() {
+        const vulnerabilities = [];
+        return {
+            testId: 'csrf-protection',
+            passed: true,
+            score: 93,
+            vulnerabilities,
+            recommendations: ['Implement CSRF tokens for state-changing operations'],
+            executionTime: 0,
+            details: { csrfTokens: true }
+        };
     }
-    testSecurityHeaders() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'config-security-headers',
-                passed: true,
-                score: 85,
-                vulnerabilities,
-                recommendations: ['Add missing security headers (HSTS, CSP, X-Frame-Options)'],
-                executionTime: 0,
-                details: { securityHeaders: ['CSP', 'HSTS', 'X-Frame-Options'] }
-            };
-        });
+    async testSecurityHeaders() {
+        const vulnerabilities = [];
+        return {
+            testId: 'config-security-headers',
+            passed: true,
+            score: 85,
+            vulnerabilities,
+            recommendations: ['Add missing security headers (HSTS, CSP, X-Frame-Options)'],
+            executionTime: 0,
+            details: { securityHeaders: ['CSP', 'HSTS', 'X-Frame-Options'] }
+        };
     }
-    testHTTPSEnforcement() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'config-https-enforcement',
-                passed: true,
-                score: 95,
-                vulnerabilities,
-                recommendations: ['Ensure all traffic is redirected to HTTPS'],
-                executionTime: 0,
-                details: { httpsRedirect: true, hstsEnabled: true }
-            };
-        });
+    async testHTTPSEnforcement() {
+        const vulnerabilities = [];
+        return {
+            testId: 'config-https-enforcement',
+            passed: true,
+            score: 95,
+            vulnerabilities,
+            recommendations: ['Ensure all traffic is redirected to HTTPS'],
+            executionTime: 0,
+            details: { httpsRedirect: true, hstsEnabled: true }
+        };
     }
-    testRateLimiting() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const vulnerabilities = [];
-            return {
-                testId: 'dos-rate-limiting',
-                passed: true,
-                score: 88,
-                vulnerabilities,
-                recommendations: ['Implement adaptive rate limiting based on user behavior'],
-                executionTime: 0,
-                details: { rateLimiting: true, adaptiveThrottling: false }
-            };
-        });
+    async testRateLimiting() {
+        const vulnerabilities = [];
+        return {
+            testId: 'dos-rate-limiting',
+            passed: true,
+            score: 88,
+            vulnerabilities,
+            recommendations: ['Implement adaptive rate limiting based on user behavior'],
+            executionTime: 0,
+            details: { rateLimiting: true, adaptiveThrottling: false }
+        };
     }
     /**
      * Get test results
@@ -554,9 +532,10 @@ export class SecurityTestingSuite extends EventEmitter {
         return this.isRunning;
     }
 }
+exports.SecurityTestingSuite = SecurityTestingSuite;
 // Export factory function
-export function createSecurityTestingSuite() {
+function createSecurityTestingSuite() {
     return new SecurityTestingSuite();
 }
-export default SecurityTestingSuite;
+exports.default = SecurityTestingSuite;
 //# sourceMappingURL=security-testing.js.map

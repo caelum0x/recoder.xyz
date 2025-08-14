@@ -1,15 +1,21 @@
+"use strict";
 /**
  * Comprehensive Security Audit Suite
  * Orchestrates all security testing and monitoring tools
  */
-import { __awaiter } from "tslib";
-import { EventEmitter } from 'events';
-import crypto from 'crypto';
-import { SecurityTestingSuite } from './security-testing';
-import { PenetrationTester } from './penetration-testing';
-import { CodeVulnerabilityScanner } from './code-vulnerability-scanner';
-import { AIPromptSanitizer } from './ai-prompt-sanitizer';
-export class SecurityAuditor extends EventEmitter {
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SecurityAuditor = void 0;
+exports.createSecurityAuditor = createSecurityAuditor;
+const events_1 = require("events");
+const crypto_1 = __importDefault(require("crypto"));
+const security_testing_1 = require("./security-testing");
+const penetration_testing_1 = require("./penetration-testing");
+const code_vulnerability_scanner_1 = require("./code-vulnerability-scanner");
+const ai_prompt_sanitizer_1 = require("./ai-prompt-sanitizer");
+class SecurityAuditor extends events_1.EventEmitter {
     constructor(config) {
         super();
         this.isRunning = false;
@@ -21,229 +27,226 @@ export class SecurityAuditor extends EventEmitter {
      */
     initializeTools() {
         if (this.config.enabledTests.securityTesting) {
-            this.testingSuite = new SecurityTestingSuite();
+            this.testingSuite = new security_testing_1.SecurityTestingSuite();
         }
         if (this.config.enabledTests.penetrationTesting) {
-            const penTestConfig = Object.assign({ target: {
-                    id: crypto.randomUUID(),
+            const penTestConfig = {
+                target: {
+                    id: crypto_1.default.randomUUID(),
                     name: this.config.target.name,
                     baseUrl: this.config.target.baseUrl,
                     scope: this.config.target.scope,
                     excludedPaths: ['/health', '/favicon.ico']
-                }, maxConcurrency: 5, timeout: 30000, userAgent: 'Recoder Security Audit Suite', followRedirects: true, maxRedirects: 5, aggressive: false, skipSlowTests: false, delayBetweenRequests: 1000, reportFormat: 'json' }, this.config.penetrationTestConfig);
-            this.penetrationTester = new PenetrationTester(penTestConfig);
+                },
+                maxConcurrency: 5,
+                timeout: 30000,
+                userAgent: 'Recoder Security Audit Suite',
+                followRedirects: true,
+                maxRedirects: 5,
+                aggressive: false,
+                skipSlowTests: false,
+                delayBetweenRequests: 1000,
+                reportFormat: 'json',
+                ...this.config.penetrationTestConfig
+            };
+            this.penetrationTester = new penetration_testing_1.PenetrationTester(penTestConfig);
         }
         if (this.config.enabledTests.codeScanning && this.config.codebasePath) {
-            this.codeScanner = new CodeVulnerabilityScanner();
+            this.codeScanner = new code_vulnerability_scanner_1.CodeVulnerabilityScanner();
         }
         if (this.config.enabledTests.promptSanitization) {
-            this.promptSanitizer = new AIPromptSanitizer();
+            this.promptSanitizer = new ai_prompt_sanitizer_1.AIPromptSanitizer();
         }
     }
     /**
      * Run comprehensive security audit
      */
-    runAudit() {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (this.isRunning) {
-                throw new Error('Security audit is already running');
-            }
-            this.isRunning = true;
-            const startTime = Date.now();
-            try {
-                this.emit('auditStarted', { target: this.config.target, timestamp: new Date() });
-                // Run all enabled security tests in parallel where possible
-                const results = yield Promise.allSettled([
-                    this.runSecurityTesting(),
-                    this.runPenetrationTesting(),
-                    this.runCodeSecurityScanning(),
-                    this.gatherRouterSecurityMetrics(),
-                    this.analyzePromptSecurity()
-                ]);
-                // Process results
-                const [testingResult, penTestResult, codeResult, routerResult, promptResult] = results;
-                const report = yield this.generateComprehensiveReport({
-                    testingReport: testingResult.status === 'fulfilled' ? testingResult.value : undefined,
-                    penetrationReport: penTestResult.status === 'fulfilled' ? penTestResult.value : undefined,
-                    codeSecurityReport: codeResult.status === 'fulfilled' ? codeResult.value : undefined,
-                    routerSecurityReport: routerResult.status === 'fulfilled' ? routerResult.value : undefined,
-                    promptSecurityReport: promptResult.status === 'fulfilled' ? promptResult.value : undefined,
-                    executionTime: Date.now() - startTime
-                });
-                this.emit('auditCompleted', report);
-                return report;
-            }
-            catch (error) {
-                this.emit('auditError', error);
-                throw error;
-            }
-            finally {
-                this.isRunning = false;
-            }
-        });
+    async runAudit() {
+        if (this.isRunning) {
+            throw new Error('Security audit is already running');
+        }
+        this.isRunning = true;
+        const startTime = Date.now();
+        try {
+            this.emit('auditStarted', { target: this.config.target, timestamp: new Date() });
+            // Run all enabled security tests in parallel where possible
+            const results = await Promise.allSettled([
+                this.runSecurityTesting(),
+                this.runPenetrationTesting(),
+                this.runCodeSecurityScanning(),
+                this.gatherRouterSecurityMetrics(),
+                this.analyzePromptSecurity()
+            ]);
+            // Process results
+            const [testingResult, penTestResult, codeResult, routerResult, promptResult] = results;
+            const report = await this.generateComprehensiveReport({
+                testingReport: testingResult.status === 'fulfilled' ? testingResult.value : undefined,
+                penetrationReport: penTestResult.status === 'fulfilled' ? penTestResult.value : undefined,
+                codeSecurityReport: codeResult.status === 'fulfilled' ? codeResult.value : undefined,
+                routerSecurityReport: routerResult.status === 'fulfilled' ? routerResult.value : undefined,
+                promptSecurityReport: promptResult.status === 'fulfilled' ? promptResult.value : undefined,
+                executionTime: Date.now() - startTime
+            });
+            this.emit('auditCompleted', report);
+            return report;
+        }
+        catch (error) {
+            this.emit('auditError', error);
+            throw error;
+        }
+        finally {
+            this.isRunning = false;
+        }
     }
     /**
      * Run security testing suite
      */
-    runSecurityTesting() {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.testingSuite)
-                return undefined;
-            this.emit('phaseStarted', 'Security Testing');
-            const report = yield this.testingSuite.runAllTests();
-            this.emit('phaseCompleted', 'Security Testing');
-            return report;
-        });
+    async runSecurityTesting() {
+        if (!this.testingSuite)
+            return undefined;
+        this.emit('phaseStarted', 'Security Testing');
+        const report = await this.testingSuite.runAllTests();
+        this.emit('phaseCompleted', 'Security Testing');
+        return report;
     }
     /**
      * Run penetration testing
      */
-    runPenetrationTesting() {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.penetrationTester)
-                return undefined;
-            this.emit('phaseStarted', 'Penetration Testing');
-            const report = yield this.penetrationTester.startTest();
-            this.emit('phaseCompleted', 'Penetration Testing');
-            return report;
-        });
+    async runPenetrationTesting() {
+        if (!this.penetrationTester)
+            return undefined;
+        this.emit('phaseStarted', 'Penetration Testing');
+        const report = await this.penetrationTester.startTest();
+        this.emit('phaseCompleted', 'Penetration Testing');
+        return report;
     }
     /**
      * Run code security scanning
      */
-    runCodeSecurityScanning() {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.codeScanner || !this.config.codebasePath)
-                return undefined;
-            this.emit('phaseStarted', 'Code Security Scanning');
-            const startTime = Date.now();
-            const scanResults = yield this.codeScanner.scanDirectory(this.config.codebasePath);
-            const scanDuration = Date.now() - startTime;
-            const vulnerabilityCount = scanResults.length;
-            const allVulns = scanResults;
-            const report = {
-                scanResults: [{
-                        totalFiles: scanResults.length,
-                        vulnerabilities: scanResults,
-                        securityScore: Math.max(0, 100 - vulnerabilityCount * 10),
-                        summary: {
-                            critical: allVulns.filter(v => v.severity === 'critical').length,
-                            high: allVulns.filter(v => v.severity === 'high').length,
-                            medium: allVulns.filter(v => v.severity === 'medium').length,
-                            low: allVulns.filter(v => v.severity === 'low').length
-                        }
-                    }],
-                vulnerabilityCount,
-                criticalIssues: allVulns.filter(v => v.severity === 'critical').length,
-                highIssues: allVulns.filter(v => v.severity === 'high').length,
-                mediumIssues: allVulns.filter(v => v.severity === 'medium').length,
-                lowIssues: allVulns.filter(v => v.severity === 'low').length,
-                filesScanned: scanResults.length,
-                scanDuration
-            };
-            this.emit('phaseCompleted', 'Code Security Scanning');
-            return report;
-        });
+    async runCodeSecurityScanning() {
+        if (!this.codeScanner || !this.config.codebasePath)
+            return undefined;
+        this.emit('phaseStarted', 'Code Security Scanning');
+        const startTime = Date.now();
+        const scanResults = await this.codeScanner.scanDirectory(this.config.codebasePath);
+        const scanDuration = Date.now() - startTime;
+        const vulnerabilityCount = scanResults.length;
+        const allVulns = scanResults;
+        const report = {
+            scanResults: [{
+                    totalFiles: scanResults.length,
+                    vulnerabilities: scanResults,
+                    securityScore: Math.max(0, 100 - vulnerabilityCount * 10),
+                    summary: {
+                        critical: allVulns.filter(v => v.severity === 'critical').length,
+                        high: allVulns.filter(v => v.severity === 'high').length,
+                        medium: allVulns.filter(v => v.severity === 'medium').length,
+                        low: allVulns.filter(v => v.severity === 'low').length
+                    }
+                }],
+            vulnerabilityCount,
+            criticalIssues: allVulns.filter(v => v.severity === 'critical').length,
+            highIssues: allVulns.filter(v => v.severity === 'high').length,
+            mediumIssues: allVulns.filter(v => v.severity === 'medium').length,
+            lowIssues: allVulns.filter(v => v.severity === 'low').length,
+            filesScanned: scanResults.length,
+            scanDuration
+        };
+        this.emit('phaseCompleted', 'Code Security Scanning');
+        return report;
     }
     /**
      * Gather router security metrics
      */
-    gatherRouterSecurityMetrics() {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.routerSecurity)
-                return undefined;
-            this.emit('phaseStarted', 'Router Security Analysis');
-            const metrics = this.routerSecurity.getSecurityMetrics();
-            const recentEvents = this.routerSecurity.getRecentSecurityEvents(50);
-            const healthCheck = this.routerSecurity.healthCheck();
-            const report = {
-                metrics,
-                activeThreats: recentEvents.filter(e => e.severity === 'high' || e.severity === 'critical').length,
-                blockedRequests: metrics.blockedRequests,
-                securityEvents: recentEvents.length,
-                averageRiskScore: metrics.averageRiskScore,
-                systemHealth: healthCheck.status
-            };
-            this.emit('phaseCompleted', 'Router Security Analysis');
-            return report;
-        });
+    async gatherRouterSecurityMetrics() {
+        if (!this.routerSecurity)
+            return undefined;
+        this.emit('phaseStarted', 'Router Security Analysis');
+        const metrics = this.routerSecurity.getSecurityMetrics();
+        const recentEvents = this.routerSecurity.getRecentSecurityEvents(50);
+        const healthCheck = this.routerSecurity.healthCheck();
+        const report = {
+            metrics,
+            activeThreats: recentEvents.filter(e => e.severity === 'high' || e.severity === 'critical').length,
+            blockedRequests: metrics.blockedRequests,
+            securityEvents: recentEvents.length,
+            averageRiskScore: metrics.averageRiskScore,
+            systemHealth: healthCheck.status
+        };
+        this.emit('phaseCompleted', 'Router Security Analysis');
+        return report;
     }
     /**
      * Analyze prompt security
      */
-    analyzePromptSecurity() {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.promptSanitizer)
-                return undefined;
-            this.emit('phaseStarted', 'Prompt Security Analysis');
-            // This would analyze recent prompt sanitization data
-            // For demonstration, we'll return mock data
-            const report = {
-                totalPrompts: 1000,
-                sanitizedPrompts: 950,
-                blockedPrompts: 25,
-                highRiskPrompts: 15,
-                commonThreats: ['prompt injection', 'data extraction', 'code injection'],
-                sanitizationEffectiveness: 95
-            };
-            this.emit('phaseCompleted', 'Prompt Security Analysis');
-            return report;
-        });
+    async analyzePromptSecurity() {
+        if (!this.promptSanitizer)
+            return undefined;
+        this.emit('phaseStarted', 'Prompt Security Analysis');
+        // This would analyze recent prompt sanitization data
+        // For demonstration, we'll return mock data
+        const report = {
+            totalPrompts: 1000,
+            sanitizedPrompts: 950,
+            blockedPrompts: 25,
+            highRiskPrompts: 15,
+            commonThreats: ['prompt injection', 'data extraction', 'code injection'],
+            sanitizationEffectiveness: 95
+        };
+        this.emit('phaseCompleted', 'Prompt Security Analysis');
+        return report;
     }
     /**
      * Generate comprehensive security report
      */
-    generateComprehensiveReport(data) {
-        return __awaiter(this, void 0, void 0, function* () {
-            // Consolidate findings from all sources
-            const consolidatedFindings = this.consolidateFindings(data);
-            // Generate prioritized recommendations
-            const prioritizedRecommendations = this.generatePrioritizedRecommendations(consolidatedFindings);
-            // Assess compliance
-            const complianceAssessment = this.assessCompliance(consolidatedFindings);
-            // Calculate overall security score
-            const overallSecurityScore = this.calculateOverallSecurityScore(data, consolidatedFindings);
-            // Determine risk level
-            const riskLevel = this.determineRiskLevel(consolidatedFindings, overallSecurityScore);
-            // Generate executive summary
-            const executiveSummary = this.generateExecutiveSummary(consolidatedFindings, overallSecurityScore, riskLevel);
-            // Generate next steps
-            const nextSteps = this.generateNextSteps(prioritizedRecommendations, riskLevel);
-            return {
-                id: crypto.randomUUID(),
-                timestamp: new Date(),
-                target: {
-                    baseUrl: this.config.target.baseUrl,
-                    name: this.config.target.name
-                },
-                overallSecurityScore,
-                riskLevel,
-                executionTime: data.executionTime,
-                testingReport: data.testingReport,
-                penetrationReport: data.penetrationReport,
-                codeSecurityReport: data.codeSecurityReport,
-                routerSecurityReport: data.routerSecurityReport,
-                promptSecurityReport: data.promptSecurityReport,
-                consolidatedFindings,
-                prioritizedRecommendations,
-                complianceAssessment,
-                executiveSummary,
-                nextSteps
-            };
-        });
+    async generateComprehensiveReport(data) {
+        // Consolidate findings from all sources
+        const consolidatedFindings = this.consolidateFindings(data);
+        // Generate prioritized recommendations
+        const prioritizedRecommendations = this.generatePrioritizedRecommendations(consolidatedFindings);
+        // Assess compliance
+        const complianceAssessment = this.assessCompliance(consolidatedFindings);
+        // Calculate overall security score
+        const overallSecurityScore = this.calculateOverallSecurityScore(data, consolidatedFindings);
+        // Determine risk level
+        const riskLevel = this.determineRiskLevel(consolidatedFindings, overallSecurityScore);
+        // Generate executive summary
+        const executiveSummary = this.generateExecutiveSummary(consolidatedFindings, overallSecurityScore, riskLevel);
+        // Generate next steps
+        const nextSteps = this.generateNextSteps(prioritizedRecommendations, riskLevel);
+        return {
+            id: crypto_1.default.randomUUID(),
+            timestamp: new Date(),
+            target: {
+                baseUrl: this.config.target.baseUrl,
+                name: this.config.target.name
+            },
+            overallSecurityScore,
+            riskLevel,
+            executionTime: data.executionTime,
+            testingReport: data.testingReport,
+            penetrationReport: data.penetrationReport,
+            codeSecurityReport: data.codeSecurityReport,
+            routerSecurityReport: data.routerSecurityReport,
+            promptSecurityReport: data.promptSecurityReport,
+            consolidatedFindings,
+            prioritizedRecommendations,
+            complianceAssessment,
+            executiveSummary,
+            nextSteps
+        };
     }
     /**
      * Consolidate findings from all security tools
      */
     consolidateFindings(data) {
-        var _a, _b, _c;
         const findings = [];
         let priority = 1;
         // Add findings from security testing
-        if ((_a = data.testingReport) === null || _a === void 0 ? void 0 : _a.vulnerabilities) {
+        if (data.testingReport?.vulnerabilities) {
             data.testingReport.vulnerabilities.forEach((vuln) => {
                 findings.push({
-                    id: vuln.id || crypto.randomUUID(),
+                    id: vuln.id || crypto_1.default.randomUUID(),
                     title: vuln.title,
                     description: vuln.description,
                     severity: vuln.severity,
@@ -259,7 +262,7 @@ export class SecurityAuditor extends EventEmitter {
             });
         }
         // Add findings from penetration testing
-        if ((_b = data.penetrationReport) === null || _b === void 0 ? void 0 : _b.findings) {
+        if (data.penetrationReport?.findings) {
             data.penetrationReport.findings.forEach((finding) => {
                 findings.push({
                     id: finding.id,
@@ -278,12 +281,11 @@ export class SecurityAuditor extends EventEmitter {
             });
         }
         // Add findings from code scanning
-        if ((_c = data.codeSecurityReport) === null || _c === void 0 ? void 0 : _c.scanResults) {
+        if (data.codeSecurityReport?.scanResults) {
             data.codeSecurityReport.scanResults.forEach((result) => {
-                var _a;
-                (_a = result.vulnerabilities) === null || _a === void 0 ? void 0 : _a.forEach((vuln) => {
+                result.vulnerabilities?.forEach((vuln) => {
                     findings.push({
-                        id: vuln.id || crypto.randomUUID(),
+                        id: vuln.id || crypto_1.default.randomUUID(),
                         title: `Code Security: ${vuln.type}`,
                         description: vuln.description,
                         severity: vuln.severity,
@@ -323,7 +325,7 @@ export class SecurityAuditor extends EventEmitter {
         // Immediate actions for critical issues
         if (criticalFindings.length > 0) {
             recommendations.push({
-                id: crypto.randomUUID(),
+                id: crypto_1.default.randomUUID(),
                 title: 'Address Critical Security Vulnerabilities',
                 description: 'Immediately address all critical severity security vulnerabilities',
                 priority: 'immediate',
@@ -343,7 +345,7 @@ export class SecurityAuditor extends EventEmitter {
         // High priority for high severity issues
         if (highFindings.length > 0) {
             recommendations.push({
-                id: crypto.randomUUID(),
+                id: crypto_1.default.randomUUID(),
                 title: 'Remediate High Severity Security Issues',
                 description: 'Address high severity security vulnerabilities within the next sprint',
                 priority: 'high',
@@ -363,7 +365,7 @@ export class SecurityAuditor extends EventEmitter {
         // Medium priority recommendations
         if (mediumFindings.length > 0) {
             recommendations.push({
-                id: crypto.randomUUID(),
+                id: crypto_1.default.randomUUID(),
                 title: 'Improve Security Posture',
                 description: 'Address medium severity issues and improve overall security posture',
                 priority: 'medium',
@@ -382,7 +384,7 @@ export class SecurityAuditor extends EventEmitter {
         }
         // Long-term security improvements
         recommendations.push({
-            id: crypto.randomUUID(),
+            id: crypto_1.default.randomUUID(),
             title: 'Implement Continuous Security Program',
             description: 'Establish ongoing security practices and monitoring',
             priority: 'medium',
@@ -548,9 +550,10 @@ export class SecurityAuditor extends EventEmitter {
         return { isRunning: this.isRunning };
     }
 }
+exports.SecurityAuditor = SecurityAuditor;
 // Export factory function
-export function createSecurityAuditor(config) {
+function createSecurityAuditor(config) {
     return new SecurityAuditor(config);
 }
-export default SecurityAuditor;
+exports.default = SecurityAuditor;
 //# sourceMappingURL=security-audit.js.map
