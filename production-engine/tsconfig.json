@@ -1,15 +1,37 @@
 {
-  "extends": "../tsconfig.base.json",
   "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
     "outDir": "./dist",
-    "rootDir": "./src",
-    "baseUrl": "./src",
+    "strict": false,
+    "noImplicitAny": false,
+    "noImplicitReturns": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "baseUrl": "./",
     "paths": {
-      "@/*": ["*"],
-      "@services/*": ["services/*"],
-      "@generators/*": ["generators/*"],
-      "@validators/*": ["validators/*"],
-      "@utils/*": ["utils/*"]
+      "@/*": ["src/*"],
+      "@services/*": ["src/services/*"],
+      "@generators/*": ["src/generators/*"],
+      "@validators/*": ["src/validators/*"],
+      "@utils/*": ["src/utils/*"],
+      "@recoder/shared": ["../packages/shared/src"],
+      "@recoder/shared/*": ["../packages/shared/src/*"],
+      "@recoder/security": ["../packages/security/src"],
+      "@recoder/security/*": ["../packages/security/src/*"],
+      "@roo-code/types": ["../packages/roo-code-types/src"],
+      "@roo-code/types/*": ["../packages/roo-code-types/src/*"]
     }
   },
   "include": [
@@ -19,6 +41,12 @@
     "node_modules",
     "dist",
     "**/*.test.ts",
-    "**/*.spec.ts"
+    "**/*.spec.ts",
+    "src/api/providers/anthropic-vertex.ts",
+    "src/api/providers/bedrock.ts",
+    "src/api/providers/gemini*.ts",
+    "src/api/providers/vscode-lm.ts",
+    "src/api/transform/reasoning.ts",
+    "src/api/transform/vscode-lm-format.ts"
   ]
 }

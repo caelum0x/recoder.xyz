@@ -1,5 +1,36 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
+// Define minimal vscode types for CLI compatibility
+interface VSCodeConfigurationChangeEvent {
+  affectsConfiguration(section: string): boolean;
+}
+
+interface VSCodeLanguageModelChatMessage {
+  role: number;
+  content: string;
+}
+
+interface VSCodeLanguageModelChatRequestOptions {
+  justification?: string;
+}
+
+interface VSCodeCancellationToken {
+  isCancellationRequested: boolean;
+}
+
+interface VSCodeLanguageModelChat {
+  id: string;
+  vendor: string;
+  family: string;
+  version?: string;
+  maxInputTokens: number;
+  sendRequest(
+    messages: VSCodeLanguageModelChatMessage[],
+    options?: VSCodeLanguageModelChatRequestOptions,
+    token?: VSCodeCancellationToken
+  ): Promise<any>;
+}
+
 // Conditionally import vscode only when available (VS Code extension context)
 let vscode: any;
 try {
@@ -88,7 +119,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		try {
 			// Listen for model changes and reset client
-			this.disposable = vscode.workspace.onDidChangeConfiguration((event) => {
+			this.disposable = vscode.workspace.onDidChangeConfiguration((event: vscode.ConfigurationChangeEvent) => {
 				if (event.affectsConfiguration("lm")) {
 					try {
 						this.client = null
@@ -160,7 +191,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				family: "lm",
 				version: "1.0",
 				maxInputTokens: 8192,
-				sendRequest: async (_messages, _options, _token) => {
+				sendRequest: async (_messages: vscode.LanguageModelChatMessage[], _options: vscode.LanguageModelChatRequestOptions, _token: vscode.CancellationToken) => {
 					// Provide a minimal implementation
 					return {
 						stream: (async function* () {
@@ -608,7 +639,7 @@ const VSCODE_LM_STATIC_BLACKLIST: string[] = ["claude-3.7-sonnet", "claude-3.7-s
 export async function getVsCodeLmModels() {
 	try {
 		const models = (await vscode.lm.selectChatModels({})) || []
-		return models.filter((model) => !VSCODE_LM_STATIC_BLACKLIST.includes(model.id))
+		return models.filter((model: vscode.LanguageModelChat) => !VSCODE_LM_STATIC_BLACKLIST.includes(model.id))
 	} catch (error) {
 		console.error(
 			`Error fetching VS Code LM models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,

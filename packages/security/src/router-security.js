@@ -1,11 +1,17 @@
+"use strict";
 /**
  * Enhanced Router Security Service with Threat Detection
  * Provides comprehensive security for AI model routing and API access
  */
-import { __awaiter } from "tslib";
-import crypto from 'crypto';
-import { EventEmitter } from 'events';
-export class RouterSecurityService extends EventEmitter {
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_ROUTER_SECURITY_CONFIG = exports.RouterSecurityService = void 0;
+exports.createRouterSecurity = createRouterSecurity;
+const crypto_1 = __importDefault(require("crypto"));
+const events_1 = require("events");
+class RouterSecurityService extends events_1.EventEmitter {
     constructor(config) {
         super();
         this.requestHistory = new Map();
@@ -30,82 +36,80 @@ export class RouterSecurityService extends EventEmitter {
     /**
      * Analyze incoming request for security threats
      */
-    analyzeRequest(context) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const reasons = [];
-            let riskScore = 0;
-            let action = 'allow';
-            // Check if IP is banned
-            if (this.bannedIPs.has(context.ip)) {
-                reasons.push('IP address is banned');
-                riskScore = 100;
-                action = 'ban';
-                yield this.logSecurityEvent({
-                    type: 'intrusion',
-                    severity: 'critical',
-                    source: context,
-                    details: { reason: 'Banned IP access attempt' },
-                    riskScore: 100
-                });
-                return { allowed: false, riskScore, reasons, action };
+    async analyzeRequest(context) {
+        const reasons = [];
+        let riskScore = 0;
+        let action = 'allow';
+        // Check if IP is banned
+        if (this.bannedIPs.has(context.ip)) {
+            reasons.push('IP address is banned');
+            riskScore = 100;
+            action = 'ban';
+            await this.logSecurityEvent({
+                type: 'intrusion',
+                severity: 'critical',
+                source: context,
+                details: { reason: 'Banned IP access attempt' },
+                riskScore: 100
+            });
+            return { allowed: false, riskScore, reasons, action };
+        }
+        // Rate limiting check
+        if (this.config.enableRateLimiting) {
+            const rateLimitResult = this.checkRateLimit(context.ip);
+            if (!rateLimitResult.allowed) {
+                reasons.push(`Rate limit exceeded: ${rateLimitResult.reason}`);
+                riskScore += 30;
+                action = 'block';
             }
-            // Rate limiting check
-            if (this.config.enableRateLimiting) {
-                const rateLimitResult = this.checkRateLimit(context.ip);
-                if (!rateLimitResult.allowed) {
-                    reasons.push(`Rate limit exceeded: ${rateLimitResult.reason}`);
-                    riskScore += 30;
-                    action = 'block';
-                }
+        }
+        // Geolocation check
+        if (this.config.enableGeoBlocking && context.geolocation) {
+            const geoResult = this.checkGeolocation(context.geolocation);
+            if (!geoResult.allowed) {
+                reasons.push(`Blocked country: ${context.geolocation.country}`);
+                riskScore += 50;
+                action = 'block';
             }
-            // Geolocation check
-            if (this.config.enableGeoBlocking && context.geolocation) {
-                const geoResult = this.checkGeolocation(context.geolocation);
-                if (!geoResult.allowed) {
-                    reasons.push(`Blocked country: ${context.geolocation.country}`);
-                    riskScore += 50;
-                    action = 'block';
-                }
+        }
+        // Threat pattern analysis
+        if (this.config.enableThreatDetection) {
+            const threatResult = await this.analyzeThreatPatterns(context);
+            riskScore += threatResult.riskScore;
+            reasons.push(...threatResult.reasons);
+            if (threatResult.action === 'ban' || threatResult.action === 'block') {
+                action = threatResult.action;
             }
-            // Threat pattern analysis
-            if (this.config.enableThreatDetection) {
-                const threatResult = yield this.analyzeThreatPatterns(context);
-                riskScore += threatResult.riskScore;
-                reasons.push(...threatResult.reasons);
-                if (threatResult.action === 'ban' || threatResult.action === 'block') {
-                    action = threatResult.action;
-                }
-            }
-            // Anomaly detection
-            if (this.config.enableAnomalyDetection) {
-                const anomalyResult = this.detectAnomalies(context);
-                riskScore += anomalyResult.riskScore;
-                reasons.push(...anomalyResult.reasons);
-            }
-            // Store request for analysis
-            this.storeRequest(context);
-            // Log security event if risk is significant
-            if (riskScore > 30) {
-                yield this.logSecurityEvent({
-                    type: riskScore > 70 ? 'intrusion' : 'anomaly',
-                    severity: riskScore > 70 ? 'high' : 'medium',
-                    source: context,
-                    details: { reasons, action },
-                    riskScore
-                });
-            }
-            // Handle failed attempts
-            if (action === 'block' || action === 'ban') {
-                this.recordFailedAttempt(context.ip);
-            }
-            const isAllowed = action === 'allow' || action === 'warn';
-            return {
-                allowed: isAllowed,
-                riskScore,
-                reasons,
-                action
-            };
-        });
+        }
+        // Anomaly detection
+        if (this.config.enableAnomalyDetection) {
+            const anomalyResult = this.detectAnomalies(context);
+            riskScore += anomalyResult.riskScore;
+            reasons.push(...anomalyResult.reasons);
+        }
+        // Store request for analysis
+        this.storeRequest(context);
+        // Log security event if risk is significant
+        if (riskScore > 30) {
+            await this.logSecurityEvent({
+                type: riskScore > 70 ? 'intrusion' : 'anomaly',
+                severity: riskScore > 70 ? 'high' : 'medium',
+                source: context,
+                details: { reasons, action },
+                riskScore
+            });
+        }
+        // Handle failed attempts
+        if (action === 'block' || action === 'ban') {
+            this.recordFailedAttempt(context.ip);
+        }
+        const isAllowed = action === 'allow' || action === 'warn';
+        return {
+            allowed: isAllowed,
+            riskScore,
+            reasons,
+            action
+        };
     }
     /**
      * Check rate limiting for IP address
@@ -151,24 +155,22 @@ export class RouterSecurityService extends EventEmitter {
     /**
      * Analyze request against threat patterns
      */
-    analyzeThreatPatterns(context) {
-        return __awaiter(this, void 0, void 0, function* () {
-            let riskScore = 0;
-            const reasons = [];
-            let highestAction = 'allow';
-            for (const pattern of this.config.suspiciousPatterns) {
-                const matches = yield this.evaluatePattern(pattern, context);
-                if (matches) {
-                    const patternRisk = this.getSeverityScore(pattern.severity);
-                    riskScore += patternRisk;
-                    reasons.push(`Threat pattern: ${pattern.name}`);
-                    if (this.getActionPriority(pattern.action) > this.getActionPriority(highestAction)) {
-                        highestAction = pattern.action;
-                    }
+    async analyzeThreatPatterns(context) {
+        let riskScore = 0;
+        const reasons = [];
+        let highestAction = 'allow';
+        for (const pattern of this.config.suspiciousPatterns) {
+            const matches = await this.evaluatePattern(pattern, context);
+            if (matches) {
+                const patternRisk = this.getSeverityScore(pattern.severity);
+                riskScore += patternRisk;
+                reasons.push(`Threat pattern: ${pattern.name}`);
+                if (this.getActionPriority(pattern.action) > this.getActionPriority(highestAction)) {
+                    highestAction = pattern.action;
                 }
             }
-            return { riskScore, reasons, action: highestAction };
-        });
+        }
+        return { riskScore, reasons, action: highestAction };
     }
     /**
      * Detect anomalies in request patterns
@@ -200,16 +202,14 @@ export class RouterSecurityService extends EventEmitter {
     /**
      * Evaluate threat pattern against request context
      */
-    evaluatePattern(pattern, context) {
-        return __awaiter(this, void 0, void 0, function* () {
-            for (const rule of pattern.rules) {
-                const result = this.evaluateRule(rule, context);
-                if (!result) {
-                    return false; // All rules must match
-                }
+    async evaluatePattern(pattern, context) {
+        for (const rule of pattern.rules) {
+            const result = this.evaluateRule(rule, context);
+            if (!result) {
+                return false; // All rules must match
             }
-            return true;
-        });
+        }
+        return true;
     }
     /**
      * Evaluate individual threat rule
@@ -307,16 +307,18 @@ export class RouterSecurityService extends EventEmitter {
     /**
      * Log security event
      */
-    logSecurityEvent(event) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const securityEvent = Object.assign({ id: crypto.randomUUID(), timestamp: new Date() }, event);
-            this.securityEvents.push(securityEvent);
-            // Keep only last 1000 events
-            if (this.securityEvents.length > 1000) {
-                this.securityEvents.shift();
-            }
-            this.emit('securityEvent', securityEvent);
-        });
+    async logSecurityEvent(event) {
+        const securityEvent = {
+            id: crypto_1.default.randomUUID(),
+            timestamp: new Date(),
+            ...event
+        };
+        this.securityEvents.push(securityEvent);
+        // Keep only last 1000 events
+        if (this.securityEvents.length > 1000) {
+            this.securityEvents.shift();
+        }
+        this.emit('securityEvent', securityEvent);
     }
     /**
      * Get default threat patterns
@@ -497,7 +499,7 @@ export class RouterSecurityService extends EventEmitter {
      * Update security configuration
      */
     updateConfig(newConfig) {
-        this.config = Object.assign(Object.assign({}, this.config), newConfig);
+        this.config = { ...this.config, ...newConfig };
         this.emit('configUpdated', this.config);
     }
     /**
@@ -537,12 +539,13 @@ export class RouterSecurityService extends EventEmitter {
         }
     }
 }
+exports.RouterSecurityService = RouterSecurityService;
 // Export factory function
-export function createRouterSecurity(config) {
+function createRouterSecurity(config) {
     return new RouterSecurityService(config);
 }
 // Export default configuration
-export const DEFAULT_ROUTER_SECURITY_CONFIG = {
+exports.DEFAULT_ROUTER_SECURITY_CONFIG = {
     enableThreatDetection: true,
     enableRateLimiting: true,
     enableAnomalyDetection: true,

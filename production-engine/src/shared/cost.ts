@@ -2,6 +2,8 @@
  * Cost calculation utilities for production engine
  */
 
+import type { ModelInfo } from "@roo-code/types"
+
 export interface CostInfo {
   inputCost: number;
   outputCost: number;
@@ -29,9 +31,33 @@ export function calculateCost(
   };
 }
 
-export function calculateApiCostAnthropic(inputTokens: number, outputTokens: number): CostInfo {
-  // Claude pricing: $3/1M input, $15/1M output tokens
-  return calculateCost(inputTokens, outputTokens, 0.003, 0.015);
+export function calculateApiCostAnthropic(
+  info: ModelInfo,
+  inputTokens: number,
+  outputTokens: number,
+  cacheWriteTokens?: number,
+  cacheReadTokens?: number
+): number {
+  // Calculate input cost (per million tokens)
+  let totalCost = 0;
+  
+  if (inputTokens > 0 && info.inputPrice) {
+    totalCost += (inputTokens / 1_000_000) * info.inputPrice;
+  }
+  
+  if (outputTokens > 0 && info.outputPrice) {
+    totalCost += (outputTokens / 1_000_000) * info.outputPrice;
+  }
+  
+  if (cacheWriteTokens && cacheWriteTokens > 0 && info.cacheWritesPrice) {
+    totalCost += (cacheWriteTokens / 1_000_000) * info.cacheWritesPrice;
+  }
+  
+  if (cacheReadTokens && cacheReadTokens > 0 && info.cacheReadsPrice) {
+    totalCost += (cacheReadTokens / 1_000_000) * info.cacheReadsPrice;
+  }
+  
+  return totalCost;
 }
 
 export function calculateApiCostOpenAI(inputTokens: number, outputTokens: number): CostInfo {

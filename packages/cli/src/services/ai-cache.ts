@@ -84,8 +84,9 @@ export class AIResponseCache {
     
     // If not in memory, check disk cache
     if (!entry && this.options.enableDisk) {
-      entry = await this.loadFromDisk(key);
-      if (entry) {
+      const diskEntry = await this.loadFromDisk(key);
+      if (diskEntry) {
+        entry = diskEntry;
         this.memoryCache.set(key, entry);
       }
     }

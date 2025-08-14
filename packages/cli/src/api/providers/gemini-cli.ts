@@ -132,7 +132,7 @@ export class GeminiCliHandler extends BaseProvider implements SingleCompletionHa
 		// If we already have a project ID, use it
 		if (this.options.geminiCliProjectId) {
 			this.projectId = this.options.geminiCliProjectId
-			return this.projectId
+			return this.options.geminiCliProjectId
 		}
 
 		// If we've already discovered it, return it

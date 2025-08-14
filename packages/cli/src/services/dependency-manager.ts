@@ -635,7 +635,7 @@ export class DependencyManager {
       'esbuild': 'esbuild.config.js'
     };
     
-    return configFiles[buildSystem] || 'build.config.js';
+    return configFiles[buildSystem as keyof typeof configFiles] || 'build.config.js';
   }
 
   private async generateBuildConfig(files: GeneratedFile[], request: GenerationRequest): Promise<any> {
@@ -708,7 +708,7 @@ export class DependencyManager {
       bun: ['add', ...packageNames]
     };
 
-    const command = commands[packageManager] || commands.npm;
+    const command = commands[packageManager as keyof typeof commands] || commands.npm;
     await this.runPackageCommand(packageManager, command, rootPath);
   }
 
@@ -724,7 +724,7 @@ export class DependencyManager {
       bun: ['update', ...packageNames]
     };
 
-    const command = commands[packageManager] || commands.npm;
+    const command = commands[packageManager as keyof typeof commands] || commands.npm;
     await this.runPackageCommand(packageManager, command, rootPath);
   }
 
@@ -738,7 +738,7 @@ export class DependencyManager {
       bun: ['remove', ...packageNames]
     };
 
-    const command = commands[packageManager] || commands.npm;
+    const command = commands[packageManager as keyof typeof commands] || commands.npm;
     await this.runPackageCommand(packageManager, command, rootPath);
   }
 

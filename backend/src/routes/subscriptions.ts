@@ -8,6 +8,7 @@ import { authenticateUser } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { prisma } from '../database/prisma';
 import { APIResponse } from '../types';
+import * as crypto from 'crypto';
 
 const router = express.Router();
 const dodoPayments = getDodoPaymentsInstance();
@@ -150,7 +151,7 @@ router.get('/',
       const user = req.user;
 
       // Get subscriptions from database
-      const subscriptions = await prisma.subscription.findMany({
+      const subscriptions = await prisma.dodoSubscription.findMany({
         where: { userId: user.id },
         orderBy: { createdAt: 'desc' }
       });
@@ -207,7 +208,7 @@ router.get('/:id',
       const user = req.user;
 
       // Check if subscription belongs to user
-      const subscription = await prisma.subscription.findFirst({
+      const subscription = await prisma.dodoSubscription.findFirst({
         where: {
           id,
           userId: user.id
@@ -268,7 +269,7 @@ router.post('/:id/change-plan',
       const user = req.user;
 
       // Check if subscription belongs to user
-      const subscription = await prisma.subscription.findFirst({
+      const subscription = await prisma.dodoSubscription.findFirst({
         where: {
           id,
           userId: user.id
@@ -289,7 +290,7 @@ router.post('/:id/change-plan',
       );
 
       // Update in database
-      await prisma.subscription.update({
+      await prisma.dodoSubscription.update({
         where: { id },
         data: {
           planId: newPlanId,
@@ -336,7 +337,7 @@ router.post('/:id/cancel',
       const user = req.user;
 
       // Check if subscription belongs to user
-      const subscription = await prisma.subscription.findFirst({
+      const subscription = await prisma.dodoSubscription.findFirst({
         where: {
           id,
           userId: user.id
@@ -357,7 +358,7 @@ router.post('/:id/cancel',
       );
 
       // Update in database
-      await prisma.subscription.update({
+      await prisma.dodoSubscription.update({
         where: { id },
         data: {
           status: cancelAtPeriodEnd ? 'cancelled_at_period_end' : 'cancelled'
@@ -403,7 +404,7 @@ router.post('/:id/charge',
       const user = req.user;
 
       // Check if subscription belongs to user
-      const subscription = await prisma.subscription.findFirst({
+      const subscription = await prisma.dodoSubscription.findFirst({
         where: {
           id,
           userId: user.id,
@@ -426,10 +427,11 @@ router.post('/:id/charge',
       );
 
       // Log the charge
-      await prisma.charge.create({
+      await prisma.dodoCharge.create({
         data: {
-          id: charge.payment_id,
+          id: crypto.randomUUID(),
           subscriptionId: subscription.id,
+          dodoChargeId: charge.payment_id,
           amount,
           description,
           status: 'pending'
@@ -475,7 +477,7 @@ router.get('/:id/usage',
       const user = req.user;
 
       // Check if subscription belongs to user
-      const subscription = await prisma.subscription.findFirst({
+      const subscription = await prisma.dodoSubscription.findFirst({
         where: {
           id,
           userId: user.id

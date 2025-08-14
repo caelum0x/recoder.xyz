@@ -820,7 +820,7 @@ export class OllamaService extends EventEmitter {
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', (error: Error) => {
         reject(error);
       });
 

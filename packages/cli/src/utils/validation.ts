@@ -954,8 +954,8 @@ export class RealityCheck {
     };
 
     for (const [pkg, version] of Object.entries(dependencies)) {
-      if (commonPackages[pkg] && this.isVersionOutdated(version, commonPackages[pkg])) {
-        warnings.push(`${pkg}@${version} may be outdated. Consider upgrading to ${commonPackages[pkg]} or later.`);
+      if (commonPackages[pkg as keyof typeof commonPackages] && this.isVersionOutdated(version, commonPackages[pkg as keyof typeof commonPackages])) {
+        warnings.push(`${pkg}@${version} may be outdated. Consider upgrading to ${commonPackages[pkg as keyof typeof commonPackages]} or later.`);
       }
     }
 
@@ -1034,11 +1034,11 @@ export class RealityCheck {
     let score = 0;
     
     for (const feature of features) {
-      score += featureComplexity[feature.toLowerCase()] || 5;
+      score += featureComplexity[feature.toLowerCase() as keyof typeof featureComplexity] || 5;
     }
     
     for (const integration of integrations) {
-      score += integrationComplexity[integration.toLowerCase()] || 5;
+      score += integrationComplexity[integration.toLowerCase() as keyof typeof integrationComplexity] || 5;
     }
 
     return score;
@@ -1055,7 +1055,7 @@ export class RealityCheck {
       '1 year': 48,
     };
 
-    const weeks = timelineMap[timeline] || 4;
+    const weeks = timelineMap[timeline as keyof typeof timelineMap] || 4;
     const capacity = weeks * teamSize; // person-weeks
 
     const requiredCapacity = complexityScore / 5; // rough estimate
