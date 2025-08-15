@@ -4,10 +4,15 @@
     "slug": "recoder-chat",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "recoder-chat",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "bundleIdentifier": "xyz.recoder.chat",
       "supportsTablet": true,
@@ -26,7 +31,7 @@
       "package": "xyz.recoder.chat",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -37,12 +42,11 @@
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ],
-      "useNextNotificationsApi": true
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -63,7 +67,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#ffffff",
           "sounds": ["./assets/sounds/notification.wav"]
         }

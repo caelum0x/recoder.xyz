@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recoder Desktop - Professional</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary-color: #7c3aed;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --error-color: #dc2626;
+            --background: #0f172a;
+            --surface: #1e293b;
+            --surface-light: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --border-color: #475569;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 60px;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.degraded { background: var(--warning-color); }
+        .status-indicator.unhealthy { background: var(--error-color); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--surface-light);
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .auth-button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .auth-button:hover {
+            background: var(--primary-dark);
+        }
+
+        /* Navigation */
+        .nav-container {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 20px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 2px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .nav-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .nav-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .nav-tab:hover {
+            background: var(--surface-light);
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active {
+            background: var(--background);
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--primary-color);
+        }
+
+        .tab-icon {
+            font-size: 16px;
+        }
+
+        .tab-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success-color);
+        }
+
+        .tab-status.error { background: var(--error-color); }
+        .tab-status.loading { background: var(--warning-color); }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .content-area {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* App Frames */
+        .app-frame {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: var(--background);
+            display: none;
+        }
+
+        .app-frame.active {
+            display: block;
+        }
+
+        /* Loading States */
+        .loading-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--background);
+            z-index: 10;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--surface-light);
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 16px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Error States */
+        .error-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--background);
+            padding: 40px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .error-icon {
+            font-size: 48px;
+            color: var(--error-color);
+            margin-bottom: 16px;
+        }
+
+        .error-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .error-message {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            max-width: 400px;
+            line-height: 1.5;
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--surface-light);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        /* Panels */
+        .panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--background);
+            display: none;
+            overflow-y: auto;
+            padding: 40px;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .panel-header {
+            margin-bottom: 32px;
+        }
+
+        .panel-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .panel-subtitle {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .panel-section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Service Grid */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .service-card {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+
+        .service-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .service-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .service-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .service-icon {
+            font-size: 24px;
+        }
+
+        .service-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .service-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .service-status.healthy {
+            background: rgba(5, 150, 105, 0.2);
+            color: var(--success-color);
+        }
+
+        .service-status.degraded {
+            background: rgba(217, 119, 6, 0.2);
+            color: var(--warning-color);
+        }
+
+        .service-status.unhealthy {
+            background: rgba(220, 38, 38, 0.2);
+            color: var(--error-color);
+        }
+
+        .service-details {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            max-width: 300px;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification.success {
+            border-left: 4px solid var(--success-color);
+        }
+
+        .notification.error {
+            border-left: 4px solid var(--error-color);
+        }
+
+        .notification.warning {
+            border-left: 4px solid var(--warning-color);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header {
+                padding: 8px 16px;
+            }
+
+            .nav-container {
+                padding: 0 16px;
+            }
+
+            .panel {
+                padding: 20px;
+            }
+
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Dark mode enhancements */
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            background: rgba(30, 41, 59, 0.8);
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--surface);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <span class="status-indicator" id="system-status"></span>
+                    <span>Recoder Desktop</span>
+                </div>
+                <div id="service-summary" class="service-summary"></div>
+            </div>
+            <div class="header-right">
+                <div id="user-info" class="user-info" style="display: none;">
+                    <span id="user-name"></span>
+                </div>
+                <button id="auth-button" class="auth-button">Login</button>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="nav-container">
+            <div class="nav-tabs" id="nav-tabs">
+                <button class="nav-tab active" data-app="dashboard">
+                    <span class="tab-icon">📊</span>
+                    <span>Dashboard</span>
+                    <span class="tab-status"></span>
+                </button>
+                <button class="nav-tab" data-app="recoder-chat">
+                    <span class="tab-icon">💬</span>
+                    <span>Chat</span>
+                    <span class="tab-status loading"></span>
+                </button>
+                <button class="nav-tab" data-app="recoder-web">
+                    <span class="tab-icon">🌐</span>
+                    <span>Web</span>
+                    <span class="tab-status loading"></span>
+                </button>
+                <button class="nav-tab" data-app="recoder-extension">
+                    <span class="tab-icon">🔧</span>
+                    <span>Extension</span>
+                    <span class="tab-status loading"></span>
+                </button>
+                <button class="nav-tab" data-app="offline-ai">
+                    <span class="tab-icon">🤖</span>
+                    <span>Offline AI</span>
+                    <span class="tab-status"></span>
+                </button>
+                <button class="nav-tab" data-app="settings">
+                    <span class="tab-icon">⚙️</span>
+                    <span>Settings</span>
+                    <span class="tab-status"></span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-area">
+                <!-- Loading State -->
+                <div id="loading-container" class="loading-container">
+                    <div>
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading Recoder Desktop...</div>
+                    </div>
+                </div>
+
+                <!-- Error State -->
+                <div id="error-container" class="error-container" style="display: none;">
+                    <div class="error-icon">⚠️</div>
+                    <div class="error-title">Connection Error</div>
+                    <div class="error-message">Unable to load the requested application. Please check if the service is running.</div>
+                    <div class="error-actions">
+                        <button class="btn btn-primary" onclick="retryConnection()">Retry</button>
+                        <button class="btn btn-secondary" onclick="openInBrowser()">Open in Browser</button>
+                    </div>
+                </div>
+
+                <!-- Dashboard Panel -->
+                <div id="panel-dashboard" class="panel active">
+                    <div class="panel-header">
+                        <h1 class="panel-title">Service Dashboard</h1>
+                        <p class="panel-subtitle">Monitor and manage your Recoder.xyz services</p>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">
+                            <span>🔍</span>
+                            Service Discovery
+                        </h2>
+                        <div id="services-grid" class="services-grid">
+                            <!-- Services will be populated dynamically -->
+                        </div>
+                        <button class="btn btn-primary" onclick="discoverServices()">Refresh Services</button>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">
+                            <span>📊</span>
+                            System Health
+                        </h2>
+                        <div id="health-summary">
+                            <p>Checking system health...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Panel -->
+                <div id="panel-settings" class="panel">
+                    <div class="panel-header">
+                        <h1 class="panel-title">Settings</h1>
+                        <p class="panel-subtitle">Configure your Recoder Desktop experience</p>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">Authentication</h2>
+                        <div id="auth-settings">
+                            <!-- Auth settings will be populated -->
+                        </div>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">Application</h2>
+                        <div id="app-settings">
+                            <p><strong>Version:</strong> <span id="app-version">Loading...</span></p>
+                            <p><strong>Platform:</strong> <span id="app-platform">Loading...</span></p>
+                            <button class="btn btn-secondary" onclick="checkForUpdates()">Check for Updates</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Offline AI Panel -->
+                <div id="panel-offline-ai" class="panel">
+                    <div class="panel-header">
+                        <h1 class="panel-title">Offline AI</h1>
+                        <p class="panel-subtitle">Local AI code generation with Ollama</p>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">Ollama Status</h2>
+                        <div id="ollama-status">
+                            <p>Checking Ollama availability...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- App Frames -->
+                <iframe id="frame-recoder-chat" class="app-frame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"></iframe>
+                <iframe id="frame-recoder-web" class="app-frame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"></iframe>
+                <iframe id="frame-recoder-extension" class="app-frame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"></iframe>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notifications Container -->
+    <div id="notifications"></div>
+
+    <script src="ui-professional.js"></script>
+</body>
+</html>

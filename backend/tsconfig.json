@@ -44,6 +44,10 @@
     "src/services/intelligent-failover.ts",
     "src/services/ai-cost-optimizer.ts",
     "src/services/ai-provider-manager.ts",
+    "src/services/multi-modal-ai-service.ts",
+    "src/routes/multi-modal-ai.ts",
+    "src/routes/predictive-error-detection.ts",
+    "src/test-setup.ts",
     "src/types/index.ts"
   ]
 }
