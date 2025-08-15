@@ -12,11 +12,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import MobileAIStatus from '../../components/MobileAIStatus';
 import { useAuthContext } from '../../contexts/AuthContext';
+import { useOnboarding } from '../../contexts/OnboardingContext';
 import { getProviderStatus } from '../../lib/ai/providers';
 
 export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const { user, logout } = useAuthContext();
+  const { resetOnboarding } = useOnboarding();
   const [aiStatus, setAIStatus] = useState<any>(null);
   const [settings, setSettings] = useState({
     notifications: true,
@@ -56,6 +58,24 @@ export default function ProfileScreen() {
 
   const handleSetting = (setting: keyof typeof settings, value: boolean) => {
     setSettings(prev => ({ ...prev, [setting]: value }));
+  };
+
+  const handleResetOnboarding = () => {
+    Alert.alert(
+      'Reset Onboarding',
+      'This will reset the app onboarding flow. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Reset', 
+          style: 'destructive', 
+          onPress: () => {
+            resetOnboarding();
+            Alert.alert('Success', 'Onboarding has been reset. Restart the app to see the onboarding flow.');
+          }
+        }
+      ]
+    );
   };
 
   const isDark = colorScheme === 'dark';
@@ -207,6 +227,14 @@ export default function ProfileScreen() {
           <View style={styles.settingLeft}>
             <Ionicons name="information-circle-outline" size={20} color="#007AFF" />
             <Text style={[styles.settingLabel, { color: textColor }]}>About</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={secondaryTextColor} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.settingItem} onPress={handleResetOnboarding}>
+          <View style={styles.settingLeft}>
+            <Ionicons name="refresh-outline" size={20} color="#007AFF" />
+            <Text style={[styles.settingLabel, { color: textColor }]}>Reset Onboarding</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={secondaryTextColor} />
         </TouchableOpacity>

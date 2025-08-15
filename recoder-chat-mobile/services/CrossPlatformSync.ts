@@ -3,8 +3,11 @@
  * Real-time synchronization between mobile and web platforms
  */
 
-// import { EventEmitter } from 'events'; // Node.js module not available in React Native
-// TODO: Use React Native compatible EventEmitter or state management
+import { Platform } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// React Native compatible EventEmitter
 class EventEmitter {
   listeners: { [key: string]: Function[] } = {};
   on(event: string, listener: Function) {
@@ -16,8 +19,10 @@ class EventEmitter {
       this.listeners[event].forEach(listener => listener(...args));
     }
   }
+  removeAllListeners() {
+    this.listeners = {};
+  }
 }
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dualPlatformClient, ChatMessage, Project } from './DualPlatformClient';
 
 export interface SyncEvent {
@@ -54,11 +59,27 @@ export interface ConflictResolution {
   resolution?: any;
 }
 
+// Platform-specific WebSocket implementation
+let PlatformWebSocket: any;
+
+try {
+  if (Platform.OS === 'web') {
+    // Use browser WebSocket
+    PlatformWebSocket = typeof WebSocket !== 'undefined' ? WebSocket : null;
+  } else {
+    // For React Native, use the built-in WebSocket
+    PlatformWebSocket = global.WebSocket || WebSocket;
+  }
+} catch (error) {
+  console.warn('WebSocket not available:', error);
+  PlatformWebSocket = null;
+}
+
 export class CrossPlatformSync extends EventEmitter {
   private static instance: CrossPlatformSync;
-  private webSocket: WebSocket | null = null;
-  private chatWebSocket: WebSocket | null = null;
-  private syncInterval: NodeJS.Timeout | null = null;
+  private webSocket: any = null;
+  private chatWebSocket: any = null;
+  private syncInterval: any = null;
   private isOnline: boolean = true;
   private syncState: SyncState = {
     lastSyncTime: new Date().toISOString(),
@@ -103,6 +124,12 @@ export class CrossPlatformSync extends EventEmitter {
    * Setup WebSocket connections for real-time sync
    */
   private async setupWebSocketConnections(): Promise<void> {
+    // Skip WebSocket setup during SSR or if not available
+    if (typeof global === 'undefined' || !this.isWebSocketAvailable()) {
+      console.log('WebSocket not available, skipping real-time sync');
+      return;
+    }
+
     const syncStatus = dualPlatformClient.getSyncStatus();
     
     if (!syncStatus.authenticated) {
@@ -111,44 +138,79 @@ export class CrossPlatformSync extends EventEmitter {
 
     // Web Platform WebSocket
     if (syncStatus.webConnected) {
-      this.webSocket = new WebSocket(
-        `${this.getWebSocketUrl('web')}/sync?session=${this.sessionId}&platform=mobile`
-      );
+      try {
+        this.webSocket = new PlatformWebSocket(
+          `${this.getWebSocketUrl('web')}/sync?session=${this.sessionId}&platform=mobile`
+        );
       
-      this.webSocket.onopen = () => {
-        this.emit('web-connected');
-        this.sendPresenceUpdate('online');
-      };
-      
-      this.webSocket.onmessage = (event) => {
-        this.handleWebSocketMessage('web', JSON.parse(event.data));
-      };
-      
-      this.webSocket.onclose = () => {
-        this.emit('web-disconnected');
-        this.reconnectWebSocket('web');
-      };
+        this.webSocket.onopen = () => {
+          this.emit('web-connected');
+          this.sendPresenceUpdate('online');
+        };
+        
+        this.webSocket.onmessage = (event) => {
+          try {
+            const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            this.handleWebSocketMessage('web', data);
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+          }
+        };
+        
+        this.webSocket.onclose = () => {
+          this.emit('web-disconnected');
+          this.reconnectWebSocket('web');
+        };
+
+        this.webSocket.onerror = (error: any) => {
+          console.error('Web WebSocket error:', error);
+          this.emit('web-error', error);
+        };
+      } catch (error) {
+        console.error('Failed to create web WebSocket:', error);
+      }
     }
 
     // Chat Platform WebSocket
     if (syncStatus.chatConnected) {
-      this.chatWebSocket = new WebSocket(
-        `${this.getWebSocketUrl('chat')}/sync?session=${this.sessionId}&platform=mobile`
-      );
-      
-      this.chatWebSocket.onopen = () => {
-        this.emit('chat-connected');
-      };
-      
-      this.chatWebSocket.onmessage = (event) => {
-        this.handleWebSocketMessage('chat', JSON.parse(event.data));
-      };
-      
-      this.chatWebSocket.onclose = () => {
-        this.emit('chat-disconnected');
-        this.reconnectWebSocket('chat');
-      };
+      try {
+        this.chatWebSocket = new PlatformWebSocket(
+          `${this.getWebSocketUrl('chat')}/sync?session=${this.sessionId}&platform=mobile`
+        );
+        
+        this.chatWebSocket.onopen = () => {
+          this.emit('chat-connected');
+        };
+        
+        this.chatWebSocket.onmessage = (event: any) => {
+          try {
+            const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            this.handleWebSocketMessage('chat', data);
+          } catch (error) {
+            console.error('Error parsing chat WebSocket message:', error);
+          }
+        };
+        
+        this.chatWebSocket.onclose = () => {
+          this.emit('chat-disconnected');
+          this.reconnectWebSocket('chat');
+        };
+
+        this.chatWebSocket.onerror = (error: any) => {
+          console.error('Chat WebSocket error:', error);
+          this.emit('chat-error', error);
+        };
+      } catch (error) {
+        console.error('Failed to create chat WebSocket:', error);
+      }
     }
+  }
+
+  /**
+   * Check if WebSocket is available in current environment
+   */
+  private isWebSocketAvailable(): boolean {
+    return PlatformWebSocket !== null && typeof PlatformWebSocket !== 'undefined';
   }
 
   private getWebSocketUrl(platform: 'web' | 'chat'): string {
@@ -308,21 +370,48 @@ export class CrossPlatformSync extends EventEmitter {
       sessionId: this.sessionId
     };
 
+    let messageSent = false;
+
     // Send to web platform
-    if (this.webSocket && this.webSocket.readyState === WebSocket.OPEN) {
-      this.webSocket.send(JSON.stringify(syncEvent));
+    if (this.webSocket && this.isWebSocketReady(this.webSocket)) {
+      try {
+        this.webSocket.send(JSON.stringify(syncEvent));
+        messageSent = true;
+      } catch (error) {
+        console.error('Error sending message to web platform:', error);
+      }
     }
 
     // Send to chat platform
-    if (this.chatWebSocket && this.chatWebSocket.readyState === WebSocket.OPEN) {
-      this.chatWebSocket.send(JSON.stringify(syncEvent));
+    if (this.chatWebSocket && this.isWebSocketReady(this.chatWebSocket)) {
+      try {
+        this.chatWebSocket.send(JSON.stringify(syncEvent));
+        messageSent = true;
+      } catch (error) {
+        console.error('Error sending message to chat platform:', error);
+      }
     }
 
-    // If offline, queue for later sync
-    if (!this.isOnline) {
+    // If offline or failed to send, queue for later sync
+    if (!this.isOnline || !messageSent) {
       this.syncState.pendingChanges.push(syncEvent);
       await this.saveSyncState();
     }
+  }
+
+  /**
+   * Check if WebSocket is ready for sending messages
+   */
+  private isWebSocketReady(ws: any): boolean {
+    if (!ws) return false;
+    
+    // For standard WebSocket
+    if (typeof ws.readyState !== 'undefined') {
+      return ws.readyState === 1; // WebSocket.OPEN
+    }
+    
+    // Fallback for React Native WebSocket
+    return ws._readyState === 1 || ws.readyState === 'open';
   }
 
   /**
@@ -484,9 +573,48 @@ export class CrossPlatformSync extends EventEmitter {
    * Network status handling
    */
   private setupNetworkListeners(): void {
-    // React Native network state would be handled here
-    // For now, assume online
-    this.isOnline = true;
+    // Use NetInfo for React Native network status
+    if (Platform.OS !== 'web') {
+      NetInfo.addEventListener(state => {
+        const wasOnline = this.isOnline;
+        this.isOnline = state.isConnected ?? true;
+        
+        if (wasOnline !== this.isOnline) {
+          if (this.isOnline) {
+            console.log('Network connected - reinitializing sync');
+            this.initialize();
+            this.emit('online');
+          } else {
+            console.log('Network disconnected');
+            this.emit('offline');
+          }
+        }
+      });
+
+      // Get initial network state
+      NetInfo.fetch().then(state => {
+        this.isOnline = state.isConnected ?? true;
+      });
+    } else {
+      // For web platform, use browser APIs
+      if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
+        this.isOnline = navigator.onLine;
+        
+        window.addEventListener('online', () => {
+          this.isOnline = true;
+          this.initialize();
+          this.emit('online');
+        });
+        
+        window.addEventListener('offline', () => {
+          this.isOnline = false;
+          this.emit('offline');
+        });
+      } else {
+        // Fallback - assume online
+        this.isOnline = true;
+      }
+    }
   }
 
   setNetworkStatus(isOnline: boolean): void {
@@ -505,6 +633,11 @@ export class CrossPlatformSync extends EventEmitter {
    */
   private async loadSyncState(): Promise<void> {
     try {
+      // Skip during SSR or if AsyncStorage is not available
+      if (this.isSSREnvironment() || !AsyncStorage) {
+        return;
+      }
+      
       const state = await AsyncStorage.getItem('sync-state');
       if (state) {
         this.syncState = JSON.parse(state);
@@ -516,10 +649,22 @@ export class CrossPlatformSync extends EventEmitter {
 
   private async saveSyncState(): Promise<void> {
     try {
+      // Skip during SSR or if AsyncStorage is not available
+      if (this.isSSREnvironment() || !AsyncStorage) {
+        return;
+      }
+      
       await AsyncStorage.setItem('sync-state', JSON.stringify(this.syncState));
     } catch (error) {
       console.error('Failed to save sync state:', error);
     }
+  }
+
+  /**
+   * Check if running in SSR environment
+   */
+  private isSSREnvironment(): boolean {
+    return typeof window === 'undefined' && typeof global === 'undefined';
   }
 
   // Placeholder methods for local storage operations
@@ -560,8 +705,11 @@ export class CrossPlatformSync extends EventEmitter {
     conflicts: number;
     userPresence: UserPresence[];
   } {
+    const webConnected = this.webSocket && this.isWebSocketReady(this.webSocket);
+    const chatConnected = this.chatWebSocket && this.isWebSocketReady(this.chatWebSocket);
+    
     return {
-      connected: this.webSocket?.readyState === WebSocket.OPEN || this.chatWebSocket?.readyState === WebSocket.OPEN,
+      connected: webConnected || chatConnected,
       lastSync: this.syncState.lastSyncTime,
       pendingChanges: this.syncState.pendingChanges.length,
       conflicts: this.conflicts.filter(c => !c.resolved).length,

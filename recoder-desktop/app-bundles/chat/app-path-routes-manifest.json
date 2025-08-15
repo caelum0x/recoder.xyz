@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/(auth)/api/auth/[...nextauth]/route": "/api/auth/[...nextauth]",
+  "/(auth)/api/auth/guest/route": "/api/auth/guest",
+  "/(chat)/api/chat/[id]/stream/route": "/api/chat/[id]/stream",
+  "/(chat)/api/files/upload/route": "/api/files/upload",
+  "/(chat)/api/history/route": "/api/history",
+  "/(chat)/api/vote/route": "/api/vote",
+  "/(chat)/api/suggestions/route": "/api/suggestions",
+  "/(chat)/api/document/route": "/api/document",
+  "/(chat)/twitter-image-12cog0.png/route": "/twitter-image-12cog0.png",
+  "/(chat)/opengraph-image-12cog0.png/route": "/opengraph-image-12cog0.png",
+  "/favicon.ico/route": "/favicon.ico",
+  "/api/user/profile/route": "/api/user/profile",
+  "/api/auth/sync/route": "/api/auth/sync",
+  "/(chat)/api/chat/route": "/api/chat",
+  "/(auth)/register/page": "/register",
+  "/(auth)/login/page": "/login",
+  "/(chat)/page": "/",
+  "/(chat)/chat/[id]/page": "/chat/[id]"
+}

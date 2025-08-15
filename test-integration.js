@@ -1,262 +1,486 @@
-#!/usr/bin/env node
-
 /**
- * Recoder.xyz Integration Test Script
- * Tests that all 5 products work together with unified auth
+ * Integration tests for Recoder platform
+ * Tests end-to-end functionality across all services
  */
 
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const axios = require('axios');
 
-const COLORS = {
-  RED: '\x1b[31m',
-  GREEN: '\x1b[32m',
-  YELLOW: '\x1b[33m',
-  BLUE: '\x1b[34m',
-  RESET: '\x1b[0m',
-  BOLD: '\x1b[1m'
+// Test configuration
+const TEST_CONFIG = {
+  timeout: 60000, // 60 seconds
+  backend: {
+    host: 'localhost',
+    port: 3001,
+    healthPath: '/health'
+  },
+  productionEngine: {
+    host: 'localhost',
+    port: 3002,
+    healthPath: '/health'
+  },
+  web: {
+    host: 'localhost',
+    port: 3003
+  },
+  chat: {
+    host: 'localhost',
+    port: 3004
+  }
 };
 
-const log = (message, color = COLORS.RESET) => {
-  console.log(`${color}${message}${COLORS.RESET}`);
-};
-
-const success = (message) => log(`✅ ${message}`, COLORS.GREEN);
-const error = (message) => log(`❌ ${message}`, COLORS.RED);
-const warning = (message) => log(`⚠️  ${message}`, COLORS.YELLOW);
-const info = (message) => log(`ℹ️  ${message}`, COLORS.BLUE);
-
-class RecoderIntegrationTester {
+class IntegrationTester {
   constructor() {
     this.results = {
-      'CLI Router': false,
-      'CLI Tool': false,
-      'VS Code Extension': false,
-      'Web Platform': false,
-      'Chat Platform': false,
-      'Auth System': false
+      total: 0,
+      passed: 0,
+      failed: 0,
+      tests: []
     };
   }
 
-  async runTest() {
-    log(`${COLORS.BOLD}🚀 RECODER.XYZ INTEGRATION TEST${COLORS.RESET}`);
-    log('Testing all 5 products for unified functionality...\n');
-
-    await this.testCliRouter();
-    await this.testCliTool();
-    await this.testVSCodeExtension();
-    await this.testWebPlatform();
-    await this.testChatPlatform();
-    await this.testAuthSystem();
-
-    this.showResults();
-  }
-
-  async testCliRouter() {
-    info('Testing CLI Router...');
+  async runTest(name, testFn) {
+    this.results.total++;
+    console.log(`🧪 Running test: ${name}`);
     
     try {
-      const routerPath = 'packages/recoder-cli-router';
+      const startTime = Date.now();
+      await testFn();
+      const duration = Date.now() - startTime;
       
-      // Check if built
-      if (fs.existsSync(path.join(routerPath, 'dist'))) {
-        success('CLI Router: Build artifacts found');
-        
-        // Test if package.json exists
-        const packagePath = path.join(routerPath, 'package.json');
-        if (fs.existsSync(packagePath)) {
-          const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-          success(`CLI Router: Package configured (${pkg.name}@${pkg.version})`);
-          this.results['CLI Router'] = true;
-        }
-      } else {
-        warning('CLI Router: No build artifacts found');
-      }
-    } catch (err) {
-      error(`CLI Router: ${err.message}`);
+      this.results.passed++;
+      this.results.tests.push({
+        name,
+        status: 'PASSED',
+        duration,
+        error: null
+      });
+      console.log(`✅ ${name} - PASSED (${duration}ms)`);
+    } catch (error) {
+      this.results.failed++;
+      this.results.tests.push({
+        name,
+        status: 'FAILED',
+        duration: 0,
+        error: error.message
+      });
+      console.log(`❌ ${name} - FAILED: ${error.message}`);
     }
   }
 
-  async testCliTool() {
-    info('Testing CLI Tool...');
+  async waitForService(host, port, path = '/', timeout = 30000) {
+    const url = `http://${host}:${port}${path}`;
+    const startTime = Date.now();
     
-    try {
-      const cliPath = 'packages/cli';
-      
-      // Check if built
-      if (fs.existsSync(path.join(cliPath, 'dist'))) {
-        success('CLI Tool: Build artifacts found');
-        
-        // Test main entry point
-        const mainPath = path.join(cliPath, 'dist/packages/cli/src/index.js');
-        if (fs.existsSync(mainPath)) {
-          success('CLI Tool: Main entry point exists');
-          this.results['CLI Tool'] = true;
-        }
-      } else {
-        warning('CLI Tool: No build artifacts found');
+    while (Date.now() - startTime < timeout) {
+      try {
+        await axios.get(url, { timeout: 5000 });
+        return true;
+      } catch (error) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    } catch (err) {
-      error(`CLI Tool: ${err.message}`);
+    }
+    
+    throw new Error(`Service at ${url} did not become available within ${timeout}ms`);
+  }
+
+  async testBackendHealth() {
+    const url = `http://${TEST_CONFIG.backend.host}:${TEST_CONFIG.backend.port}${TEST_CONFIG.backend.healthPath}`;
+    const response = await axios.get(url);
+    
+    if (response.status !== 200) {
+      throw new Error(`Backend health check failed with status ${response.status}`);
+    }
+    
+    if (!response.data || response.data.status !== 'healthy') {
+      throw new Error('Backend is not reporting healthy status');
     }
   }
 
-  async testVSCodeExtension() {
-    info('Testing VS Code Extension...');
+  async testProductionEngineHealth() {
+    const url = `http://${TEST_CONFIG.productionEngine.host}:${TEST_CONFIG.productionEngine.port}${TEST_CONFIG.productionEngine.healthPath}`;
+    const response = await axios.get(url);
     
-    try {
-      const extensionPath = 'recoder-extension/src';
-      
-      // Check if VSIX exists
-      const vsixPath = 'recoder-extension/bin/recoder-vscode-1.0.0.vsix';
-      if (fs.existsSync(vsixPath)) {
-        success('VS Code Extension: VSIX package found');
-        
-        // Check if built
-        if (fs.existsSync(path.join(extensionPath, 'dist/extension.js'))) {
-          success('VS Code Extension: Extension bundle found');
-          this.results['VS Code Extension'] = true;
-        }
-      } else {
-        warning('VS Code Extension: VSIX package not found');
-      }
-    } catch (err) {
-      error(`VS Code Extension: ${err.message}`);
+    if (response.status !== 200) {
+      throw new Error(`Production engine health check failed with status ${response.status}`);
     }
   }
 
-  async testWebPlatform() {
-    info('Testing Web Platform...');
-    
-    try {
-      const webPath = 'recoder-web';
-      
-      // Check key files
-      const files = [
-        'app/layout.tsx',
-        'app/(main)/page.tsx',
-        'lib/auth.ts',
-        'package.json'
-      ];
-      
-      let foundFiles = 0;
-      files.forEach(file => {
-        if (fs.existsSync(path.join(webPath, file))) {
-          foundFiles++;
+  async testCLIBuild() {
+    return new Promise((resolve, reject) => {
+      const cliPath = path.join(__dirname, 'packages', 'cli');
+      const buildProcess = spawn('pnpm', ['build'], {
+        cwd: cliPath,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      buildProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`CLI build failed with code ${code}. Output: ${output}`));
         }
       });
-      
-      if (foundFiles === files.length) {
-        success('Web Platform: All key files found');
-        this.results['Web Platform'] = true;
-      } else {
-        warning(`Web Platform: ${foundFiles}/${files.length} key files found`);
-      }
-    } catch (err) {
-      error(`Web Platform: ${err.message}`);
-    }
-  }
 
-  async testChatPlatform() {
-    info('Testing Chat Platform...');
-    
-    try {
-      const chatPath = 'recoder-chat';
-      
-      // Check key files
-      const files = [
-        'app/layout.tsx',
-        'app/(chat)/page.tsx',
-        'lib/auth.ts',
-        'package.json'
-      ];
-      
-      let foundFiles = 0;
-      files.forEach(file => {
-        if (fs.existsSync(path.join(chatPath, file))) {
-          foundFiles++;
-        }
-      });
-      
-      if (foundFiles === files.length) {
-        success('Chat Platform: All key files found');
-        this.results['Chat Platform'] = true;
-      } else {
-        warning(`Chat Platform: ${foundFiles}/${files.length} key files found`);
-      }
-    } catch (err) {
-      error(`Chat Platform: ${err.message}`);
-    }
-  }
-
-  async testAuthSystem() {
-    info('Testing Auth System...');
-    
-    try {
-      const authFiles = [
-        'lib/auth.ts',
-        'lib/database.ts',
-        'lib/user-management.ts',
-        'lib/session-sync.ts',
-        'database/schema.sql'
-      ];
-      
-      let foundFiles = 0;
-      authFiles.forEach(file => {
-        if (fs.existsSync(file)) {
-          foundFiles++;
-        }
-      });
-      
-      if (foundFiles >= 4) {
-        success('Auth System: Core auth files found');
-        this.results['Auth System'] = true;
-      } else {
-        warning(`Auth System: ${foundFiles}/${authFiles.length} auth files found`);
-      }
-    } catch (err) {
-      error(`Auth System: ${err.message}`);
-    }
-  }
-
-  showResults() {
-    log('\n' + '='.repeat(50));
-    log(`${COLORS.BOLD}📊 INTEGRATION TEST RESULTS${COLORS.RESET}`);
-    log('='.repeat(50));
-
-    const passed = Object.values(this.results).filter(Boolean).length;
-    const total = Object.keys(this.results).length;
-
-    Object.entries(this.results).forEach(([product, status]) => {
-      const icon = status ? '✅' : '❌';
-      const color = status ? COLORS.GREEN : COLORS.RED;
-      log(`${icon} ${product}`, color);
+      setTimeout(() => {
+        buildProcess.kill();
+        reject(new Error('CLI build timed out'));
+      }, 30000);
     });
+  }
 
-    log('\n' + '='.repeat(50));
-    
-    if (passed === total) {
-      success(`🎉 ALL ${total} PRODUCTS READY FOR INTEGRATION!`);
-      log(`${COLORS.BOLD}${COLORS.GREEN}🚀 RECODER.XYZ IS READY FOR LAUNCH!${COLORS.RESET}`);
-      log('\nNext steps:');
-      log('1. Add API keys to .env.production');
-      log('2. Choose payment provider (Dodo Pay: 4% + 40¢)');
-      log('3. Deploy to production');
-    } else {
-      warning(`${passed}/${total} products ready. ${total - passed} need attention.`);
-      log('\nWhat to fix:');
-      Object.entries(this.results).forEach(([product, status]) => {
-        if (!status) {
-          log(`• ${product}: Check build and configuration`);
+  async testBackendBuild() {
+    return new Promise((resolve, reject) => {
+      const backendPath = path.join(__dirname, 'backend');
+      const buildProcess = spawn('pnpm', ['build'], {
+        cwd: backendPath,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      buildProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Backend build failed with code ${code}. Output: ${output}`));
         }
       });
+
+      setTimeout(() => {
+        buildProcess.kill();
+        reject(new Error('Backend build timed out'));
+      }, 30000);
+    });
+  }
+
+  async testProductionEngineBuild() {
+    return new Promise((resolve, reject) => {
+      const enginePath = path.join(__dirname, 'production-engine');
+      const buildProcess = spawn('pnpm', ['build'], {
+        cwd: enginePath,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      buildProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Production engine build failed with code ${code}. Output: ${output}`));
+        }
+      });
+
+      setTimeout(() => {
+        buildProcess.kill();
+        reject(new Error('Production engine build timed out'));
+      }, 30000);
+    });
+  }
+
+  async testWebBuild() {
+    return new Promise((resolve, reject) => {
+      const webPath = path.join(__dirname, 'recoder-web');
+      const buildProcess = spawn('pnpm', ['build'], {
+        cwd: webPath,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      buildProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Web build failed with code ${code}. Output: ${output}`));
+        }
+      });
+
+      setTimeout(() => {
+        buildProcess.kill();
+        reject(new Error('Web build timed out'));
+      }, 30000);
+    });
+  }
+
+  async testChatBuild() {
+    return new Promise((resolve, reject) => {
+      const chatPath = path.join(__dirname, 'recoder-chat');
+      const buildProcess = spawn('pnpm', ['build'], {
+        cwd: chatPath,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      buildProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Chat build failed with code ${code}. Output: ${output}`));
+        }
+      });
+
+      setTimeout(() => {
+        buildProcess.kill();
+        reject(new Error('Chat build timed out'));
+      }, 30000);
+    });
+  }
+
+  async testExtensionBuild() {
+    return new Promise((resolve, reject) => {
+      const extensionPath = path.join(__dirname, 'recoder-extension', 'src');
+      const buildProcess = spawn('pnpm', ['bundle'], {
+        cwd: extensionPath,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      buildProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Extension build failed with code ${code}. Output: ${output}`));
+        }
+      });
+
+      setTimeout(() => {
+        buildProcess.kill();
+        reject(new Error('Extension build timed out'));
+      }, 30000);
+    });
+  }
+
+  async testTypeScriptCompilation() {
+    return new Promise((resolve, reject) => {
+      const typecheckProcess = spawn('pnpm', ['run', 'typecheck:all'], {
+        cwd: __dirname,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      typecheckProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      typecheckProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      typecheckProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`TypeScript compilation failed with code ${code}. Output: ${output}`));
+        }
+      });
+
+      setTimeout(() => {
+        typecheckProcess.kill();
+        reject(new Error('TypeScript compilation timed out'));
+      }, 60000);
+    });
+  }
+
+  async testLinting() {
+    return new Promise((resolve, reject) => {
+      const lintProcess = spawn('pnpm', ['run', 'lint:all'], {
+        cwd: __dirname,
+        stdio: 'pipe'
+      });
+
+      let output = '';
+      lintProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      lintProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      lintProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Linting failed with code ${code}. Output: ${output}`));
+        }
+      });
+
+      setTimeout(() => {
+        lintProcess.kill();
+        reject(new Error('Linting timed out'));
+      }, 30000);
+    });
+  }
+
+  async testPackageJsonValidation() {
+    const packageJsonFiles = [
+      'package.json',
+      'packages/cli/package.json',
+      'packages/shared/package.json',
+      'backend/package.json',
+      'production-engine/package.json',
+      'recoder-web/package.json',
+      'recoder-chat/package.json',
+      'recoder-extension/src/package.json',
+      'recoder-desktop/package.json',
+      'recoder-chat-mobile/package.json'
+    ];
+
+    for (const file of packageJsonFiles) {
+      const fullPath = path.join(__dirname, file);
+      if (fs.existsSync(fullPath)) {
+        try {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          JSON.parse(content);
+        } catch (error) {
+          throw new Error(`Invalid JSON in ${file}: ${error.message}`);
+        }
+      }
+    }
+  }
+
+  generateReport() {
+    const report = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        total: this.results.total,
+        passed: this.results.passed,
+        failed: this.results.failed,
+        successRate: this.results.total > 0 ? (this.results.passed / this.results.total * 100).toFixed(2) : 0
+      },
+      tests: this.results.tests
+    };
+
+    fs.writeFileSync(
+      path.join(__dirname, 'integration-test-results.json'),
+      JSON.stringify(report, null, 2)
+    );
+
+    return report;
+  }
+
+  printSummary() {
+    const passRate = this.results.total > 0 ? (this.results.passed / this.results.total * 100).toFixed(2) : 0;
+    
+    console.log('\n' + '='.repeat(60));
+    console.log('🧪 INTEGRATION TEST SUMMARY');
+    console.log('='.repeat(60));
+    console.log(`Total tests: ${this.results.total}`);
+    console.log(`Passed: ${this.results.passed} (${passRate}%)`);
+    console.log(`Failed: ${this.results.failed}`);
+    
+    if (this.results.failed > 0) {
+      console.log('\n❌ Failed tests:');
+      this.results.tests
+        .filter(test => test.status === 'FAILED')
+        .forEach(test => {
+          console.log(`  - ${test.name}: ${test.error}`);
+        });
+    }
+    
+    console.log('='.repeat(60));
+    
+    if (this.results.failed === 0) {
+      console.log('🎉 All tests passed! The platform is ready for deployment.');
+    } else {
+      console.log('⚠️  Some tests failed. Please fix the issues before deployment.');
+    }
+  }
+
+  async run() {
+    console.log('🚀 Starting Recoder Integration Tests...');
+    console.log('='.repeat(60));
+
+    // Build tests (essential for CI/CD)
+    await this.runTest('TypeScript Compilation', () => this.testTypeScriptCompilation());
+    await this.runTest('Package.json Validation', () => this.testPackageJsonValidation());
+    await this.runTest('CLI Build', () => this.testCLIBuild());
+    await this.runTest('Backend Build', () => this.testBackendBuild());
+    await this.runTest('Production Engine Build', () => this.testProductionEngineBuild());
+    await this.runTest('Web Build', () => this.testWebBuild());
+    await this.runTest('Chat Build', () => this.testChatBuild());
+    await this.runTest('Extension Build', () => this.testExtensionBuild());
+    await this.runTest('Linting', () => this.testLinting());
+
+    // Service health tests (if services are running)
+    try {
+      await this.runTest('Backend Health Check', () => this.testBackendHealth());
+    } catch (error) {
+      console.log('ℹ️ Backend not running, skipping health check');
     }
 
-    log('\n' + '='.repeat(50));
+    try {
+      await this.runTest('Production Engine Health Check', () => this.testProductionEngineHealth());
+    } catch (error) {
+      console.log('ℹ️ Production Engine not running, skipping health check');
+    }
+
+    // Generate test report
+    const report = this.generateReport();
+    this.printSummary();
+
+    // Exit with error code if tests failed
+    process.exit(this.results.failed > 0 ? 1 : 0);
   }
 }
 
-// Run the test
-const tester = new RecoderIntegrationTester();
-tester.runTest().catch(console.error);
+// Run the integration tests
+if (require.main === module) {
+  const tester = new IntegrationTester();
+  tester.run().catch(error => {
+    console.error('❌ Integration tests failed to run:', error);
+    process.exit(1);
+  });
+}
+
+module.exports = IntegrationTester;

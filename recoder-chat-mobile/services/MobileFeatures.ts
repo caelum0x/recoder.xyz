@@ -391,6 +391,11 @@ export class MobileFeatures {
    * Push Notifications
    */
   private initializeNotifications(): void {
+    if (!PushNotification) {
+      console.log('Push notifications not available');
+      return;
+    }
+    
     PushNotification.configure({
       onRegister: (token) => {
         console.log('Push notification token:', token);
