@@ -87,9 +87,13 @@ class MobileAIService {
   private async checkLocalAI(provider: string): Promise<boolean> {
     try {
       // Check if local AI server is running
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      
       const response = await fetch(`http://localhost:11434/api/tags`, {
-        timeout: 2000
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       return response.ok;
     } catch {
       return false;

@@ -2,7 +2,7 @@
   "name": "recoder-desktop",
   "version": "1.0.0",
   "description": "Recoder.xyz Desktop App - Direct Local AI Access",
-  "main": "src/main-working.js",
+  "main": "src/main-enterprise.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
@@ -10,9 +10,10 @@
     "dev:legacy": "electron src/main.js --dev",
     "prebuild": "node scripts/build-apps.js",
     "build": "electron-builder",
-    "build-mac": "electron-builder --mac",
-    "build-win": "electron-builder --win",
-    "build-linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --mac --win --linux",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist-mac": "electron-builder --mac",
@@ -37,7 +38,8 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^28.3.3",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "electron-notarize": "^1.2.2"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.1",
@@ -46,7 +48,8 @@
     "@ai-sdk/xai": "^2.0.2",
     "ai": "^5.0.5",
     "axios": "^1.11.0",
-    "electron-updater": "^6.1.7"
+    "electron-updater": "^6.1.7",
+    "keytar": "^7.9.0"
   },
   "build": {
     "appId": "xyz.recoder.desktop",
@@ -190,8 +193,10 @@
       "provider": "github",
       "owner": "recoder-xyz",
       "repo": "recoder-desktop",
-      "releaseType": "release"
+      "releaseType": "release",
+      "publishAutoUpdate": true
     },
+    "afterSign": "scripts/notarize.js",
     "compression": "maximum",
     "removePackageScripts": true
   },

@@ -864,3 +864,9 @@ export class PredictiveErrorDetectionService extends EventEmitter {
 
 // Export singleton instance
 export const predictiveErrorDetection = new PredictiveErrorDetectionService();
+
+// Also export for CommonJS compatibility
+module.exports = { 
+  predictiveErrorDetection, 
+  PredictiveErrorDetectionService 
+};

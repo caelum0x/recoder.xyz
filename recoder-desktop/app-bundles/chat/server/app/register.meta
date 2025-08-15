@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "headers": {
+    "link": "</_next/static/media/569ce4b8f30dc480-s.p.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", </_next/static/media/93f479601ee12b01-s.p.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\"",
+    "x-nextjs-stale-time": "4294967294",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(auth)/layout,_N_T_/(auth)/register/layout,_N_T_/(auth)/register/page,_N_T_/register"
+  }
+}
