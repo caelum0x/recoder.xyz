@@ -1,15 +1,35 @@
 /**
- * Dual Platform API Client
- * Connects mobile app to both Chat Platform (3001) and Web Platform (3000)
+ * Recoder Backend API Client
+ * Connects mobile app to the main Recoder.xyz backend and services
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 
 export interface AuthTokens {
-  chatToken: string;
-  webToken: string;
-  unifiedToken: string;
+  accessToken: string;
+  refreshToken: string;
   expiresAt: number;
+  user: User;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  subscription: {
+    plan: 'free' | 'premium' | 'enterprise';
+    usage: {
+      requests: number;
+      tokens: number;
+      limit: number;
+    };
+  };
+  preferences: {
+    defaultModel: string;
+    theme: 'light' | 'dark' | 'system';
+  };
 }
 
 export interface ApiResponse<T = any> {
@@ -24,6 +44,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
+  chatId?: string;
   model?: string;
   provider?: string;
 }
@@ -36,9 +57,11 @@ export interface Project {
   framework: string;
   language: string;
   status: 'active' | 'deployed' | 'archived';
-  files: ProjectFile[];
+  structure: any;
+  metadata: any;
   createdAt: string;
   updatedAt: string;
+  files: ProjectFile[];
 }
 
 export interface ProjectFile {
@@ -57,37 +80,71 @@ export interface AIAgent {
   displayName: string;
   description: string;
   icon: string;
-  specialties: string[];
-  available: boolean;
-  platform: 'web' | 'chat' | 'both';
+  type: 'code' | 'chat' | 'analysis' | 'deployment' | 'testing';
+  capabilities: string[];
+  modelProvider: string;
+  isActive: boolean;
+  config: any;
 }
 
-export interface DeploymentStatus {
+export interface AIProvider {
   id: string;
-  projectId: string;
-  status: 'pending' | 'building' | 'deploying' | 'success' | 'failed';
-  url?: string;
-  buildLogs: string[];
-  error?: string;
-  createdAt: string;
+  name: string;
+  status: 'available' | 'unavailable' | 'rate_limited';
+  models: string[];
+  features: string[];
 }
 
-export class DualPlatformClient {
-  private static instance: DualPlatformClient;
-  private chatBaseUrl: string = __DEV__ ? 'http://localhost:3001' : 'https://chat.recoder.xyz';
-  private webBaseUrl: string = __DEV__ ? 'http://localhost:3000' : 'https://web.recoder.xyz';
-  private wsConnections: Map<string, WebSocket> = new Map();
+export interface GenerationRequest {
+  prompt: string;
+  language: string;
+  framework?: string;
+  agentId?: string;
+  includeTests?: boolean;
+  includeComments?: boolean;
+  style?: 'functional' | 'object-oriented' | 'minimal' | 'comprehensive';
+  optimization?: 'performance' | 'readability' | 'size';
+}
+
+export interface GenerationResponse {
+  code: string;
+  explanation: string;
+  suggestions: string[];
+  language: string;
+  tests?: string;
+  dependencies?: string[];
+  instructions?: string;
+}
+
+export class RecoderBackendClient {
+  private static instance: RecoderBackendClient;
+  private backendUrl: string = __DEV__ ? 'http://localhost:3001' : 'https://api.recoder.xyz';
+  private engineUrl: string = __DEV__ ? 'http://localhost:3002' : 'https://engine.recoder.xyz';
+  private wsConnection: WebSocket | null = null;
   private authTokens: AuthTokens | null = null;
+  private deviceInfo: any = null;
 
   private constructor() {
     this.loadAuthTokens();
+    this.initializeDeviceInfo();
   }
 
-  static getInstance(): DualPlatformClient {
-    if (!DualPlatformClient.instance) {
-      DualPlatformClient.instance = new DualPlatformClient();
+  static getInstance(): RecoderBackendClient {
+    if (!RecoderBackendClient.instance) {
+      RecoderBackendClient.instance = new RecoderBackendClient();
     }
-    return DualPlatformClient.instance;
+    return RecoderBackendClient.instance;
+  }
+
+  private async initializeDeviceInfo() {
+    this.deviceInfo = {
+      deviceId: Device.osInternalBuildId || 'unknown',
+      platform: Device.osName,
+      version: Device.osVersion,
+      isDevice: Device.isDevice,
+      brand: Device.brand,
+      model: Device.modelName,
+    };
   }
 
   /**
@@ -95,18 +152,16 @@ export class DualPlatformClient {
    */
   async loadAuthTokens(): Promise<void> {
     try {
-      // Skip during build time / SSR
-      if (typeof window === 'undefined') {
-        return;
-      }
-      
-      const tokens = await AsyncStorage.getItem('auth_tokens');
+      const tokens = await AsyncStorage.getItem('@recoder:auth_tokens');
       if (tokens) {
         this.authTokens = JSON.parse(tokens);
         
         // Check if tokens are expired
         if (this.authTokens && this.authTokens.expiresAt < Date.now()) {
           await this.refreshTokens();
+        } else if (this.authTokens) {
+          // Setup WebSocket connection if tokens are valid
+          this.setupWebSocketConnection();
         }
       }
     } catch (error) {
@@ -117,7 +172,7 @@ export class DualPlatformClient {
   async saveAuthTokens(tokens: AuthTokens): Promise<void> {
     try {
       this.authTokens = tokens;
-      await AsyncStorage.setItem('auth_tokens', JSON.stringify(tokens));
+      await AsyncStorage.setItem('@recoder:auth_tokens', JSON.stringify(tokens));
     } catch (error) {
       console.error('Failed to save auth tokens:', error);
     }
@@ -125,55 +180,101 @@ export class DualPlatformClient {
 
   async login(email: string, password: string): Promise<ApiResponse<AuthTokens>> {
     try {
-      // Login to Chat Platform first
-      const chatResponse = await fetch(`${this.chatBaseUrl}/api/auth/login`, {
+      const response = await fetch(`${this.backendUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Device-Info': JSON.stringify(this.deviceInfo),
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ 
+          email, 
+          password,
+          deviceInfo: this.deviceInfo 
+        }),
       });
 
-      if (!chatResponse.ok) {
-        throw new Error('Chat platform login failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Login failed: ${response.status}`);
       }
 
-      const chatData = await chatResponse.json();
-
-      // Login to Web Platform with unified token
-      const webResponse = await fetch(`${this.webBaseUrl}/api/auth/mobile-login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${chatData.token}`,
-        },
-        body: JSON.stringify({ unifiedToken: chatData.token }),
-      });
-
-      if (!webResponse.ok) {
-        throw new Error('Web platform login failed');
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Login failed');
       }
-
-      const webData = await webResponse.json();
 
       const tokens: AuthTokens = {
-        chatToken: chatData.token,
-        webToken: webData.token,
-        unifiedToken: chatData.token,
-        expiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
+        accessToken: data.data.accessToken,
+        refreshToken: data.data.refreshToken,
+        expiresAt: Date.now() + (15 * 60 * 1000), // 15 minutes for access token
+        user: data.data.user,
       };
 
       await this.saveAuthTokens(tokens);
-      this.setupWebSocketConnections();
+      this.setupWebSocketConnection();
 
       return {
         success: true,
         data: tokens,
       };
     } catch (error) {
+      console.error('Login error:', error);
       return {
         success: false,
-        error: error.message,
+        error: error.message || 'Login failed',
+      };
+    }
+  }
+
+  async register(userData: {
+    name: string;
+    email: string;
+    password: string;
+  }): Promise<ApiResponse<AuthTokens>> {
+    try {
+      const response = await fetch(`${this.backendUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-Info': JSON.stringify(this.deviceInfo),
+        },
+        body: JSON.stringify({
+          ...userData,
+          deviceInfo: this.deviceInfo
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Registration failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Registration failed');
+      }
+
+      const tokens: AuthTokens = {
+        accessToken: data.data.accessToken,
+        refreshToken: data.data.refreshToken,
+        expiresAt: Date.now() + (15 * 60 * 1000),
+        user: data.data.user,
+      };
+
+      await this.saveAuthTokens(tokens);
+      this.setupWebSocketConnection();
+
+      return {
+        success: true,
+        data: tokens,
+      };
+    } catch (error) {
+      console.error('Registration error:', error);
+      return {
+        success: false,
+        error: error.message || 'Registration failed',
       };
     }
   }
@@ -182,10 +283,11 @@ export class DualPlatformClient {
     if (!this.authTokens) return false;
 
     try {
-      const response = await fetch(`${this.chatBaseUrl}/api/auth/refresh`, {
+      const response = await fetch(`${this.backendUrl}/api/auth/refresh`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.authTokens.unifiedToken}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.authTokens.refreshToken}`,
         },
       });
 
@@ -195,11 +297,15 @@ export class DualPlatformClient {
 
       const data = await response.json();
       
+      if (!data.success) {
+        throw new Error(data.error || 'Token refresh failed');
+      }
+
       const newTokens: AuthTokens = {
-        chatToken: data.chatToken,
-        webToken: data.webToken,
-        unifiedToken: data.unifiedToken,
-        expiresAt: Date.now() + (24 * 60 * 60 * 1000),
+        accessToken: data.data.accessToken,
+        refreshToken: data.data.refreshToken || this.authTokens.refreshToken,
+        expiresAt: Date.now() + (15 * 60 * 1000),
+        user: data.data.user || this.authTokens.user,
       };
 
       await this.saveAuthTokens(newTokens);
@@ -212,258 +318,104 @@ export class DualPlatformClient {
   }
 
   async logout(): Promise<void> {
-    this.closeWebSocketConnections();
-    this.authTokens = null;
-    await AsyncStorage.removeItem('auth_tokens');
-  }
-
-  /**
-   * Chat Platform APIs (Port 3001)
-   */
-  async getChatHistory(limit: number = 50): Promise<ApiResponse<ChatMessage[]>> {
-    return await this.chatRequest('/api/messages', { method: 'GET' });
-  }
-
-  async sendChatMessage(message: string, model?: string): Promise<ApiResponse<ChatMessage>> {
-    return await this.chatRequest('/api/messages', {
-      method: 'POST',
-      body: JSON.stringify({ message, model }),
-    });
-  }
-
-  async streamChatMessage(message: string, model?: string): Promise<ReadableStream> {
-    const response = await fetch(`${this.chatBaseUrl}/api/messages/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.authTokens?.chatToken}`,
-      },
-      body: JSON.stringify({ message, model }),
-    });
-
-    if (!response.body) {
-      throw new Error('No response stream available');
+    try {
+      if (this.authTokens) {
+        await fetch(`${this.backendUrl}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.authTokens.accessToken}`,
+          },
+        }).catch(() => {}); // Ignore logout API errors
+      }
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      this.closeWebSocketConnection();
+      this.authTokens = null;
+      await AsyncStorage.removeItem('@recoder:auth_tokens');
     }
-
-    return response.body;
   }
 
   /**
-   * Web Platform APIs (Port 3000) - AI Agents
+   * User Profile APIs
    */
-  async getAvailableAgents(): Promise<ApiResponse<AIAgent[]>> {
-    return await this.webRequest('/api/agents', { method: 'GET' });
+  async getCurrentUser(): Promise<ApiResponse<User>> {
+    return await this.makeRequest('/api/auth/me', { method: 'GET' });
   }
 
-  async chatWithAgent(agentId: string, message: string, context?: any): Promise<ApiResponse<ChatMessage>> {
-    return await this.webRequest(`/api/agents/${agentId}/chat`, {
-      method: 'POST',
-      body: JSON.stringify({ message, context }),
+  async updateProfile(updates: Partial<User>): Promise<ApiResponse<User>> {
+    return await this.makeRequest('/api/auth/update-profile', {
+      method: 'PUT',
+      body: JSON.stringify(updates),
     });
   }
 
-  async generateCode(request: {
-    prompt: string;
-    language: string;
-    framework?: string;
-    agentId?: string;
-  }): Promise<ApiResponse<{
-    code: string;
-    explanation: string;
-    suggestions: string[];
-  }>> {
-    return await this.webRequest('/api/generate/code', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
-  }
-
-  async generateBlockchainContract(request: {
-    type: 'erc20' | 'erc721' | 'erc1155' | 'defi' | 'dao';
-    name: string;
-    symbol?: string;
-    features: string[];
-    network: 'ethereum' | 'solana' | 'polygon';
-  }): Promise<ApiResponse<{
-    contract: string;
-    deployment: string;
-    tests: string;
-  }>> {
-    return await this.webRequest('/api/agents/blockchain/generate', {
-      method: 'POST',
-      body: JSON.stringify(request),
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<void>> {
+    return await this.makeRequest('/api/auth/change-password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
     });
   }
 
   /**
-   * Project Management APIs
+   * AI Agents APIs
    */
-  async getProjects(): Promise<ApiResponse<Project[]>> {
-    return await this.webRequest('/api/projects', { method: 'GET' });
+  async getAgents(): Promise<ApiResponse<AIAgent[]>> {
+    return await this.makeRequest('/api/agents', { method: 'GET' });
   }
 
-  async createProject(project: {
+  async createAgent(agentData: {
     name: string;
     description: string;
     type: string;
-    framework: string;
-    language: string;
-  }): Promise<ApiResponse<Project>> {
-    return await this.webRequest('/api/projects', {
+    capabilities: string[];
+    modelProvider: string;
+    config: any;
+  }): Promise<ApiResponse<AIAgent>> {
+    return await this.makeRequest('/api/agents', {
       method: 'POST',
-      body: JSON.stringify(project),
+      body: JSON.stringify(agentData),
     });
   }
 
-  async getProject(projectId: string): Promise<ApiResponse<Project>> {
-    return await this.webRequest(`/api/projects/${projectId}`, { method: 'GET' });
-  }
-
-  async updateProjectFile(
-    projectId: string, 
-    fileId: string, 
-    content: string
-  ): Promise<ApiResponse<ProjectFile>> {
-    return await this.webRequest(`/api/projects/${projectId}/files/${fileId}`, {
+  async updateAgent(agentId: string, updates: Partial<AIAgent>): Promise<ApiResponse<AIAgent>> {
+    return await this.makeRequest(`/api/agents/${agentId}`, {
       method: 'PUT',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(updates),
     });
   }
 
-  async createProjectFile(
-    projectId: string,
-    file: {
-      name: string;
-      path: string;
-      content: string;
-      language: string;
-    }
-  ): Promise<ApiResponse<ProjectFile>> {
-    return await this.webRequest(`/api/projects/${projectId}/files`, {
+  async deleteAgent(agentId: string): Promise<ApiResponse<void>> {
+    return await this.makeRequest(`/api/agents/${agentId}`, { method: 'DELETE' });
+  }
+
+  async executeAgent(agentId: string, task: string, context?: any): Promise<ApiResponse<any>> {
+    return await this.makeRequest(`/api/agents/${agentId}/execute`, {
       method: 'POST',
-      body: JSON.stringify(file),
+      body: JSON.stringify({ task, context }),
     });
   }
 
-  /**
-   * Deployment APIs
-   */
-  async deployProject(projectId: string, config?: any): Promise<ApiResponse<DeploymentStatus>> {
-    return await this.webRequest(`/api/projects/${projectId}/deploy`, {
-      method: 'POST',
-      body: JSON.stringify({ config }),
-    });
+  async getAIProviders(): Promise<ApiResponse<AIProvider[]>> {
+    return await this.makeRequest('/api/ai-providers', { method: 'GET' });
   }
 
-  async getDeploymentStatus(deploymentId: string): Promise<ApiResponse<DeploymentStatus>> {
-    return await this.webRequest(`/api/deployments/${deploymentId}`, { method: 'GET' });
-  }
-
-  async getDeploymentLogs(deploymentId: string): Promise<ApiResponse<string[]>> {
-    return await this.webRequest(`/api/deployments/${deploymentId}/logs`, { method: 'GET' });
-  }
-
-  /**
-   * Local AI Integration
-   */
-  async getAvailableModels(): Promise<ApiResponse<any>> {
-    // Try local first, then fallback to platforms
+  async generateCode(request: GenerationRequest): Promise<ApiResponse<GenerationResponse>> {
     try {
-      const response = await this.webRequest('/api/ai/models', { method: 'GET' });
-      if (response.success) {
-        return response;
-      }
-    } catch (error) {
-      // Fallback to chat platform
-      return await this.chatRequest('/api/ai/models', { method: 'GET' });
-    }
-  }
-
-  async downloadModel(modelId: string): Promise<ApiResponse<any>> {
-    return await this.webRequest('/api/ai/models/download', {
-      method: 'POST',
-      body: JSON.stringify({ modelId }),
-    });
-  }
-
-  /**
-   * WebSocket Connections for Real-time Features
-   */
-  setupWebSocketConnections(): void {
-    if (!this.authTokens) return;
-
-    // Chat platform WebSocket
-    const chatWs = new WebSocket(`${this.chatBaseUrl.replace('http', 'ws')}/ws?token=${this.authTokens.chatToken}`);
-    this.wsConnections.set('chat', chatWs);
-
-    chatWs.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      this.handleWebSocketMessage('chat', data);
-    };
-
-    // Web platform WebSocket
-    const webWs = new WebSocket(`${this.webBaseUrl.replace('http', 'ws')}/ws?token=${this.authTokens.webToken}`);
-    this.wsConnections.set('web', webWs);
-
-    webWs.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      this.handleWebSocketMessage('web', data);
-    };
-  }
-
-  closeWebSocketConnections(): void {
-    this.wsConnections.forEach((ws) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
-    });
-    this.wsConnections.clear();
-  }
-
-  private handleWebSocketMessage(platform: 'chat' | 'web', data: any): void {
-    // Emit events for the React Native app to handle
-    // This would integrate with your event system
-    console.log(`WebSocket message from ${platform}:`, data);
-  }
-
-  /**
-   * Helper Methods
-   */
-  private async chatRequest(endpoint: string, options: RequestInit = {}): Promise<ApiResponse> {
-    return await this.makeRequest(this.chatBaseUrl, endpoint, options, 'chatToken');
-  }
-
-  private async webRequest(endpoint: string, options: RequestInit = {}): Promise<ApiResponse> {
-    return await this.makeRequest(this.webBaseUrl, endpoint, options, 'webToken');
-  }
-
-  private async makeRequest(
-    baseUrl: string,
-    endpoint: string,
-    options: RequestInit,
-    tokenType: keyof AuthTokens
-  ): Promise<ApiResponse> {
-    try {
-      if (!this.authTokens) {
-        throw new Error('Not authenticated');
-      }
-
-      const token = this.authTokens[tokenType];
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        ...options,
+      // Use Production Engine for code generation (port 3002)
+      const response = await fetch(`${this.engineUrl}/api/generate`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          ...options.headers,
+          'Authorization': `Bearer ${this.authTokens?.accessToken}`,
         },
+        body: JSON.stringify(request),
       });
 
       if (response.status === 401) {
-        // Try to refresh tokens
         const refreshed = await this.refreshTokens();
         if (refreshed) {
-          // Retry the request
-          return await this.makeRequest(baseUrl, endpoint, options, tokenType);
+          return await this.generateCode(request);
         } else {
           throw new Error('Authentication failed');
         }
@@ -479,50 +431,351 @@ export class DualPlatformClient {
         data,
       };
     } catch (error) {
+      console.error('Code generation error:', error);
       return {
         success: false,
-        error: error.message,
+        error: error.message || 'Code generation failed',
+      };
+    }
+  }
+
+  async processMultiModal(request: {
+    code?: string;
+    docs?: string;
+    conversation: string;
+    context?: any;
+  }): Promise<ApiResponse<any>> {
+    return await this.makeRequest('/api/multi-modal-ai/process', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  /**
+   * Project Management APIs
+   */
+  async getProjects(filters?: {
+    status?: string;
+    type?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ApiResponse<{
+    projects: Project[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, value.toString());
+      });
+    }
+    const query = queryParams.toString();
+    return await this.makeRequest(`/api/projects${query ? '?' + query : ''}`, { method: 'GET' });
+  }
+
+  async createProject(project: {
+    name: string;
+    description: string;
+    type: string;
+    framework: string;
+    language: string;
+    template?: string;
+  }): Promise<ApiResponse<Project>> {
+    return await this.makeRequest('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify(project),
+    });
+  }
+
+  async getProject(projectId: string): Promise<ApiResponse<Project>> {
+    return await this.makeRequest(`/api/projects/${projectId}`, { method: 'GET' });
+  }
+
+  async updateProject(projectId: string, updates: Partial<Project>): Promise<ApiResponse<Project>> {
+    return await this.makeRequest(`/api/projects/${projectId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteProject(projectId: string): Promise<ApiResponse<void>> {
+    return await this.makeRequest(`/api/projects/${projectId}`, { method: 'DELETE' });
+  }
+
+  async getProjectStructure(projectId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest(`/api/projects/${projectId}/structure`, { method: 'GET' });
+  }
+
+  async generateProjectCode(projectId: string, options: {
+    feature?: string;
+    prompt?: string;
+    agentId?: string;
+  }): Promise<ApiResponse<any>> {
+    return await this.makeRequest(`/api/projects/${projectId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
+  /**
+   * Templates and Analytics APIs
+   */
+  async getTemplates(): Promise<ApiResponse<any[]>> {
+    return await this.makeRequest('/api/templates', { method: 'GET' });
+  }
+
+  async getAnalytics(timeRange?: string): Promise<ApiResponse<any>> {
+    const query = timeRange ? `?timeRange=${timeRange}` : '';
+    return await this.makeRequest(`/api/analytics${query}`, { method: 'GET' });
+  }
+
+  async getBilling(): Promise<ApiResponse<any>> {
+    return await this.makeRequest('/api/billing', { method: 'GET' });
+  }
+
+  async getSubscription(): Promise<ApiResponse<any>> {
+    return await this.makeRequest('/api/subscriptions', { method: 'GET' });
+  }
+
+  /**
+   * AI Models and Health APIs
+   */
+  async getModels(): Promise<ApiResponse<any[]>> {
+    return await this.makeRequest('/api/models', { method: 'GET' });
+  }
+
+  async getSystemHealth(): Promise<ApiResponse<any>> {
+    return await this.makeRequest('/health', { method: 'GET' });
+  }
+
+  async reportError(error: any): Promise<ApiResponse<void>> {
+    return await this.makeRequest('/api/errors/report', {
+      method: 'POST',
+      body: JSON.stringify({ error, deviceInfo: this.deviceInfo }),
+    });
+  }
+
+  /**
+   * WebSocket Connection for Real-time Features
+   */
+  setupWebSocketConnection(): void {
+    if (!this.authTokens) return;
+
+    try {
+      const wsUrl = `${this.backendUrl.replace('http', 'ws')}/ws?token=${this.authTokens.accessToken}&deviceId=${this.deviceInfo?.deviceId}&platform=mobile`;
+      this.wsConnection = new WebSocket(wsUrl);
+
+      this.wsConnection.onopen = () => {
+        console.log('WebSocket connected');
+        // Send device registration
+        this.sendWebSocketMessage({
+          type: 'device:register',
+          data: {
+            deviceInfo: this.deviceInfo,
+            platform: 'mobile',
+            userId: this.authTokens?.user.id,
+          }
+        });
+      };
+
+      this.wsConnection.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleWebSocketMessage(data);
+        } catch (error) {
+          console.error('WebSocket message parse error:', error);
+        }
+      };
+
+      this.wsConnection.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      this.wsConnection.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+        // Attempt to reconnect after 5 seconds if not a clean close
+        if (event.code !== 1000 && this.authTokens) {
+          setTimeout(() => {
+            this.setupWebSocketConnection();
+          }, 5000);
+        }
+      };
+    } catch (error) {
+      console.error('WebSocket setup error:', error);
+    }
+  }
+
+  closeWebSocketConnection(): void {
+    if (this.wsConnection) {
+      this.wsConnection.close(1000, 'Client logout');
+      this.wsConnection = null;
+    }
+  }
+
+  sendWebSocketMessage(message: any): void {
+    if (this.wsConnection?.readyState === WebSocket.OPEN) {
+      this.wsConnection.send(JSON.stringify(message));
+    }
+  }
+
+  private handleWebSocketMessage(data: any): void {
+    console.log('WebSocket message received:', data.type);
+    
+    // Handle different message types
+    switch (data.type) {
+      case 'sync:update':
+        // Handle cross-platform sync
+        console.log('Sync update received:', data.data);
+        break;
+      
+      case 'notification:push':
+        // Handle push notifications
+        console.log('Push notification:', data.data);
+        break;
+      
+      case 'ai:status':
+        // Handle AI processing status updates
+        console.log('AI status update:', data.data);
+        break;
+      
+      case 'collaboration:update':
+        // Handle real-time collaboration
+        console.log('Collaboration update:', data.data);
+        break;
+      
+      case 'activity:update':
+        // Handle user activity updates
+        console.log('Activity update:', data.data);
+        break;
+      
+      default:
+        console.log('Unknown WebSocket message:', data);
+    }
+  }
+
+  /**
+   * Helper Methods
+   */
+  private async makeRequest(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse> {
+    try {
+      if (!this.authTokens) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(`${this.backendUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.authTokens.accessToken}`,
+          'X-Device-Info': JSON.stringify(this.deviceInfo),
+          ...options.headers,
+        },
+      });
+
+      if (response.status === 401) {
+        // Try to refresh tokens
+        const refreshed = await this.refreshTokens();
+        if (refreshed) {
+          // Retry the request
+          return await this.makeRequest(endpoint, options);
+        } else {
+          throw new Error('Authentication failed');
+        }
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: data.success !== false,
+        data: data.data || data,
+        message: data.message,
+      };
+    } catch (error) {
+      console.error('API request error:', error);
+      return {
+        success: false,
+        error: error.message || 'Request failed',
       };
     }
   }
 
   /**
-   * Sync Status
+   * Status and Utility Methods
    */
-  getSyncStatus(): {
-    chatConnected: boolean;
-    webConnected: boolean;
-    authenticated: boolean;
-  } {
-    const chatWs = this.wsConnections.get('chat');
-    const webWs = this.wsConnections.get('web');
+  isAuthenticated(): boolean {
+    return !!this.authTokens && this.authTokens.expiresAt > Date.now();
+  }
 
+  getCurrentUser(): User | null {
+    return this.authTokens?.user || null;
+  }
+
+  getConnectionStatus(): {
+    wsConnected: boolean;
+    authenticated: boolean;
+    userId: string | null;
+  } {
     return {
-      chatConnected: chatWs?.readyState === WebSocket.OPEN,
-      webConnected: webWs?.readyState === WebSocket.OPEN,
-      authenticated: !!this.authTokens && this.authTokens.expiresAt > Date.now(),
+      wsConnected: this.wsConnection?.readyState === WebSocket.OPEN,
+      authenticated: this.isAuthenticated(),
+      userId: this.authTokens?.user.id || null,
     };
+  }
+
+  async syncWithPlatform(data: any): Promise<ApiResponse<void>> {
+    if (this.wsConnection?.readyState === WebSocket.OPEN) {
+      this.sendWebSocketMessage({
+        type: 'sync:request',
+        data,
+      });
+      return { success: true };
+    } else {
+      return {
+        success: false,
+        error: 'WebSocket not connected',
+      };
+    }
   }
 }
 
 // Export singleton instance
-export const dualPlatformClient = DualPlatformClient.getInstance();
+export const recoderClient = RecoderBackendClient.getInstance();
+
+// For backward compatibility with existing code
+export const dualPlatformClient = recoderClient;
 
 // Export convenience functions
 export const loginUser = (email: string, password: string) => 
-  dualPlatformClient.login(email, password);
+  recoderClient.login(email, password);
 
-export const getChatHistory = () => 
-  dualPlatformClient.getChatHistory();
+export const registerUser = (userData: { name: string; email: string; password: string }) => 
+  recoderClient.register(userData);
 
-export const sendMessage = (message: string, model?: string) => 
-  dualPlatformClient.sendChatMessage(message, model);
-
-export const getProjects = () => 
-  dualPlatformClient.getProjects();
+export const getProjects = (filters?: any) => 
+  recoderClient.getProjects(filters);
 
 export const getAgents = () => 
-  dualPlatformClient.getAvailableAgents();
+  recoderClient.getAgents();
 
-export const generateCode = (request: any) => 
-  dualPlatformClient.generateCode(request);
+export const generateCode = (request: GenerationRequest) => 
+  recoderClient.generateCode(request);
+
+export const getCurrentUser = () => 
+  recoderClient.getCurrentUser();
+
+export const isAuthenticated = () => 
+  recoderClient.isAuthenticated();
+
+export const logout = () => 
+  recoderClient.logout();
+
+export default recoderClient;

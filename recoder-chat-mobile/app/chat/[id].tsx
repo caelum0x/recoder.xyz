@@ -1,20 +1,25 @@
 /**
- * Chat Screen with ID - Mobile
+ * Enhanced Chat Screen with ID - Mobile
+ * Professional chat interface with real-time messaging
  */
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
-import ChatScreen from '../../screens/ChatScreen';
+import { useLocalSearchParams, router } from 'expo-router';
+import EnhancedChatScreen from '../../screens/EnhancedChatScreen';
 
 export default function ChatPage() {
   const { id } = useLocalSearchParams();
 
+  const handleClose = () => {
+    router.back();
+  };
+
   return (
     <View style={styles.container}>
-      <ChatScreen
+      <EnhancedChatScreen
         chatId={id as string}
-        initialMessages={[]}
+        onClose={handleClose}
       />
     </View>
   );
