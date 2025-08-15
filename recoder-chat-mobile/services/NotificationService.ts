@@ -255,6 +255,28 @@ class NotificationService {
     return notificationId;
   }
 
+  async scheduleLocalNotification(options: {
+    title: string;
+    body: string;
+    data?: any;
+    sound?: string;
+  }): Promise<string> {
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: options.title,
+        body: options.body,
+        data: {
+          ...options.data,
+          timestamp: Date.now()
+        },
+        sound: options.sound || 'default'
+      },
+      trigger: null // Show immediately
+    });
+
+    return notificationId;
+  }
+
   async cancelNotification(notificationId: string): Promise<void> {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
   }
