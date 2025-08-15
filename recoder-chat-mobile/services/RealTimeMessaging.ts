@@ -10,7 +10,7 @@ export interface RealtimeMessage {
   role: 'user' | 'assistant' | 'system';
   timestamp: string;
   userId: string;
-  status: 'sending' | 'sent' | 'delivered' | 'read';
+  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   metadata?: {
     model?: string;
     tokens?: number;
@@ -18,6 +18,7 @@ export interface RealtimeMessage {
     attachments?: any[];
     edited?: boolean;
     editedAt?: string;
+    encrypted?: boolean;
   };
 }
 
@@ -419,7 +420,7 @@ class RealTimeMessagingService extends EventEmitter {
   on(event: 'delivery_receipt', listener: (receipt: MessageDeliveryReceipt) => void): this;
   on(event: 'error', listener: (error: any) => void): this;
   on(event: 'max_reconnect_attempts_reached', listener: () => void): this;
-  on(event: string, listener: Function): this {
+  on(event: string, listener: (...args: any[]) => void): this {
     return super.on(event, listener);
   }
 }

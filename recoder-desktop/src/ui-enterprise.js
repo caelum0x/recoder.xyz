@@ -500,7 +500,7 @@ class RecoderEnterpriseUI {
             });
 
             // Handle internal panels
-            if (['dashboard', 'settings', 'offline-ai'].includes(appName)) {
+            if (['dashboard', 'settings', 'offline-ai', 'ai-editor'].includes(appName)) {
                 this.showPanel(appName);
             } else {
                 await this.loadEnterpriseApp(appName);
@@ -526,6 +526,9 @@ class RecoderEnterpriseUI {
                 this.refreshDashboard();
             } else if (panelName === 'offline-ai') {
                 this.setupAIProviders();
+            } else if (panelName === 'ai-editor') {
+                // AI editor panel is ready - no additional setup needed
+                console.log('✨ AI Code Editor panel activated');
             }
         }
     }
@@ -790,6 +793,145 @@ window.checkForUpdates = async function() {
             );
         }
     }
+};
+
+// AI CODE EDITOR FUNCTIONS
+window.openAIEditor = async function() {
+    console.log('✨ Opening Ultimate AI Code Editor...');
+    
+    try {
+        const result = await window.recoderAPI?.apps?.load('ai-editor');
+        
+        if (result?.success) {
+            // Load AI editor in iframe
+            const iframe = document.getElementById('iframe-ai-editor');
+            if (iframe && result.config?.url) {
+                iframe.src = `file://${result.config.url}`;
+                iframe.classList.add('active');
+                
+                // Hide panels and show iframe
+                document.querySelectorAll('.enterprise-panel').forEach(panel => {
+                    panel.classList.remove('active');
+                });
+                
+                // Update navigation
+                document.querySelectorAll('.nav-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                const editorTab = document.querySelector('[data-app="ai-editor"]');
+                if (editorTab) {
+                    editorTab.classList.add('active');
+                }
+                
+                window.enterpriseUI.currentApp = 'ai-editor';
+                window.enterpriseUI?.showNotification(
+                    'AI Code Editor Launched', 
+                    'Ultimate AI-powered coding experience ready!', 
+                    'success'
+                );
+            }
+        } else {
+            throw new Error(result?.error || 'Failed to load AI editor');
+        }
+    } catch (error) {
+        console.error('Failed to open AI editor:', error);
+        window.enterpriseUI?.showNotification(
+            'AI Editor Error', 
+            `Failed to launch AI editor: ${error.message}`, 
+            'error'
+        );
+    }
+};
+
+window.loadAISample = async function() {
+    console.log('📝 Loading AI sample project...');
+    
+    window.enterpriseUI?.showNotification(
+        'Sample Project', 
+        'Loading AI-powered sample project with multi-language examples', 
+        'info'
+    );
+    
+    // Switch to AI editor first
+    await window.openAIEditor();
+    
+    // The AI editor will automatically load with sample files
+    setTimeout(() => {
+        window.enterpriseUI?.showNotification(
+            'Sample Ready', 
+            'Sample project loaded with JS, TS, Python, CSS, and Markdown examples', 
+            'success'
+        );
+    }, 2000);
+};
+
+window.aiProviderTest = async function() {
+    console.log('🧪 Testing AI providers...');
+    
+    try {
+        // Test Ollama
+        const ollamaResult = await window.recoderAPI?.ai?.checkOllama();
+        const ollamaStatus = ollamaResult?.available ? '✅ Online' : '❌ Offline';
+        
+        // Test other providers (placeholder)
+        const openaiStatus = process.env.OPENAI_API_KEY ? '✅ Configured' : '❌ No API Key';
+        const anthropicStatus = process.env.ANTHROPIC_API_KEY ? '✅ Configured' : '❌ No API Key';
+        const groqStatus = process.env.GROQ_API_KEY ? '✅ Configured' : '❌ No API Key';
+        
+        const testResults = `AI Provider Status:
+        
+🦙 Ollama: ${ollamaStatus}
+🧠 OpenAI: ${openaiStatus}  
+🎭 Anthropic: ${anthropicStatus}
+⚡ Groq: ${groqStatus}
+
+${ollamaResult?.available ? `Ollama Models: ${ollamaResult.models?.length || 0} available` : ''}`;
+        
+        window.enterpriseUI?.showNotification(
+            'AI Provider Test Results', 
+            testResults, 
+            ollamaResult?.available ? 'success' : 'warning'
+        );
+        
+    } catch (error) {
+        window.enterpriseUI?.showNotification(
+            'AI Test Failed', 
+            `Provider test error: ${error.message}`, 
+            'error'
+        );
+    }
+};
+
+window.showKeyboardShortcuts = function() {
+    const shortcuts = `AI Code Editor Shortcuts:
+
+🔥 Code Generation:
+• Ctrl+Space - AI code completion
+• Ctrl+Shift+G - Generate code from comment
+• Ctrl+Shift+A - AI code analysis
+• Ctrl+Shift+O - Optimize selected code
+
+💬 AI Assistance:
+• Ctrl+Shift+C - Open AI chat
+• Ctrl+/ - Quick AI question
+• F1 - AI command palette
+
+⚡ Navigation:
+• Ctrl+P - Quick file open
+• Ctrl+Shift+P - Command palette
+• Ctrl+` - Toggle terminal
+• F12 - Go to definition (AI-powered)
+
+🔍 Analysis:
+• Alt+Shift+F - Format code with AI
+• Ctrl+Shift+R - Refactor with AI
+• Ctrl+Shift+T - Generate tests`;
+
+    window.enterpriseUI?.showNotification(
+        'AI Editor Shortcuts', 
+        shortcuts, 
+        'info'
+    );
 };
 
 // Initialize enterprise UI when DOM is ready

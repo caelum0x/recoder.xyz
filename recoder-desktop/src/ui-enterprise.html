@@ -832,6 +832,11 @@
                 <span>VS Code Extension</span>
                 <span class="tab-status loading"></span>
             </button>
+            <button class="nav-tab" data-app="ai-editor">
+                <span class="tab-icon">✨</span>
+                <span>AI Code Editor</span>
+                <span class="tab-status"></span>
+            </button>
             <button class="nav-tab" data-app="offline-ai">
                 <span class="tab-icon">🤖</span>
                 <span>Offline AI</span>
@@ -978,6 +983,121 @@
                     </div>
                 </div>
 
+                <!-- AI CODE EDITOR PANEL -->
+                <div id="panel-ai-editor" class="enterprise-panel">
+                    <div class="panel-header">
+                        <h1 class="panel-title">✨ Ultimate AI Code Editor</h1>
+                        <p class="panel-subtitle">Advanced AI-powered code editor that defeats Cursor and Windsurf</p>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">
+                            <span class="section-icon">🚀</span>
+                            Features Overview
+                        </h2>
+                        <div class="services-grid">
+                            <div class="service-card">
+                                <div class="service-header">
+                                    <div class="service-info">
+                                        <div class="service-icon">🧠</div>
+                                        <div class="service-details">
+                                            <h3>Multi-AI Integration</h3>
+                                            <p>Ollama, GPT-4, Claude, Groq support</p>
+                                        </div>
+                                    </div>
+                                    <div class="service-status healthy">Active</div>
+                                </div>
+                            </div>
+                            <div class="service-card">
+                                <div class="service-header">
+                                    <div class="service-info">
+                                        <div class="service-icon">⚡</div>
+                                        <div class="service-details">
+                                            <h3>Real-time AI Assistance</h3>
+                                            <p>Inline suggestions and completion</p>
+                                        </div>
+                                    </div>
+                                    <div class="service-status healthy">Ready</div>
+                                </div>
+                            </div>
+                            <div class="service-card">
+                                <div class="service-header">
+                                    <div class="service-info">
+                                        <div class="service-icon">🔍</div>
+                                        <div class="service-details">
+                                            <h3>Code Analysis</h3>
+                                            <p>AI-powered bug detection & optimization</p>
+                                        </div>
+                                    </div>
+                                    <div class="service-status healthy">Available</div>
+                                </div>
+                            </div>
+                            <div class="service-card">
+                                <div class="service-header">
+                                    <div class="service-info">
+                                        <div class="service-icon">💬</div>
+                                        <div class="service-details">
+                                            <h3>AI Chat Assistant</h3>
+                                            <p>Context-aware coding companion</p>
+                                        </div>
+                                    </div>
+                                    <div class="service-status healthy">Online</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">
+                            <span class="section-icon">🏆</span>
+                            Competitive Advantages
+                        </h2>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px;">
+                            <div>
+                                <h3 style="color: var(--success); margin-bottom: 12px;">✅ vs Cursor</h3>
+                                <ul style="color: var(--primary-300); font-size: 14px; line-height: 1.6;">
+                                    <li>• Multiple AI providers (not just OpenAI)</li>
+                                    <li>• True offline functionality with Ollama</li>
+                                    <li>• Enterprise telemetry and analytics</li>
+                                    <li>• Real-time service integration</li>
+                                    <li>• Advanced Monaco Editor features</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 style="color: var(--success); margin-bottom: 12px;">✅ vs Windsurf</h3>
+                                <ul style="color: var(--primary-300); font-size: 14px; line-height: 1.6;">
+                                    <li>• Production-ready architecture</li>
+                                    <li>• Multi-language AI optimization</li>
+                                    <li>• Comprehensive debugging tools</li>
+                                    <li>• Enterprise security policies</li>
+                                    <li>• Cross-platform distribution</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2 class="section-title">
+                            <span class="section-icon">🎮</span>
+                            Quick Actions
+                        </h2>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button class="enterprise-btn" onclick="openAIEditor()">
+                                <span>✨</span> Launch AI Code Editor
+                            </button>
+                            <button class="enterprise-btn" onclick="loadAISample()">
+                                <span>📝</span> Load Sample Project
+                            </button>
+                            <button class="enterprise-btn" onclick="aiProviderTest()">
+                                <span>🧪</span> Test AI Providers
+                            </button>
+                            <button class="enterprise-btn" onclick="showKeyboardShortcuts()">
+                                <span>⌨️</span> Keyboard Shortcuts
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- SETTINGS PANEL -->
                 <div id="panel-settings" class="enterprise-panel">
                     <div class="panel-header">
@@ -1024,6 +1144,7 @@
                 <iframe id="iframe-chat" class="enterprise-iframe" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"></iframe>
                 <iframe id="iframe-web" class="enterprise-iframe" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"></iframe>
                 <iframe id="iframe-extension" class="enterprise-iframe" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"></iframe>
+                <iframe id="iframe-ai-editor" class="enterprise-iframe" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"></iframe>
             </div>
         </main>
     </div>

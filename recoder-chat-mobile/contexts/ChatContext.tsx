@@ -8,11 +8,13 @@ interface Message {
   content: string;
   role: 'user' | 'assistant' | 'system';
   timestamp: string;
+  chatId?: string;
   metadata?: {
     model?: string;
     tokens?: number;
     cost?: number;
     reasoning?: any;
+    encrypted?: boolean;
   };
 }
 
