@@ -14,12 +14,23 @@ out/
 .vuepress/dist
 .svelte-kit/
 
+# Next.js cache directories (all subdirectories)
+**/.next/cache/
+**/cache/webpack/
+**/.next/static/chunks/
+
 # Environment variables
 .env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Desktop app bundles and cache
+recoder-desktop/app-bundles/
+**/app-bundles/cache/
+**/cache/
 
 # IDE files
 .vscode/settings.json
