@@ -53,6 +53,13 @@ const ENTERPRISE_CONFIG = {
       type: 'vscode-extension',
       installUrl: 'vscode:extension/recoder.recoder-extension'
     },
+    'ai-editor': {
+      name: 'Ultimate AI Code Editor',
+      ports: [], // Local panel - no web service
+      healthPath: '/',
+      category: 'ai-tools',
+      type: 'local-panel'
+    },
     backend: {
       name: 'Backend API',
       ports: [3001, 8001, 8000],
@@ -484,12 +491,15 @@ function setupEnterpriseIPCHandlers() {
 
     try {
       // Handle internal panels
-      if (['dashboard', 'settings', 'offline-ai'].includes(appName)) {
+      if (['dashboard', 'settings', 'offline-ai', 'ai-editor'].includes(appName)) {
         return {
           success: true,
           type: 'panel',
           appName,
-          config: { isPanel: true }
+          config: { 
+            isPanel: true,
+            url: appName === 'ai-editor' ? path.join(__dirname, 'ai-code-editor.html') : undefined
+          }
         };
       }
 
