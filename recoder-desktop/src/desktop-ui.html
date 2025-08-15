@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recoder Desktop</title>
+    <title>Recoder Desktop - AI-Powered Development</title>
     <style>
         body { 
             font-family: system-ui; 
@@ -33,12 +33,99 @@
             height: 100%;
             border: none;
             display: none;
+            background: #1a1a1a;
         }
-        iframe.active { display: block; }
+        iframe.active { 
+            display: block !important;
+        }
+        .debug-info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            z-index: 1000;
+            border-radius: 4px;
+        }
         .error {
             padding: 20px;
             color: #ff6b6b;
             text-align: center;
+        }
+        .offline-ai-panel, .settings-panel {
+            padding: 20px;
+            display: none;
+            height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        .offline-ai-panel.active, .settings-panel.active {
+            display: block;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online { background: #4CAF50; }
+        .status-offline { background: #f44336; }
+        .code-output {
+            background: #2d2d2d;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .input-group input, .input-group textarea, .input-group select {
+            width: 100%;
+            padding: 8px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+        }
+        .input-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        .btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0052a3;
+        }
+        .btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #666;
+        }
+        .btn-secondary:hover {
+            background: #555;
         }
     </style>
 </head>
@@ -47,10 +134,88 @@
         <button class="tab active" data-app="chat">💬 Chat</button>
         <button class="tab" data-app="web">🌐 Web</button>
         <button class="tab" data-app="extension">🔧 Extension</button>
+        <button class="tab" data-app="test">🧪 Test</button>
+        <button class="tab" data-app="offline-ai">🤖 Offline AI</button>
+        <button class="tab" data-app="settings">⚙️ Settings</button>
     </div>
     <div class="content">
         <div id="loading">Loading...</div>
         <div id="error" class="error" style="display: none;"></div>
+        <div id="debug-info" class="debug-info">Initializing...</div>
+        
+        <!-- Offline AI Panel -->
+        <div id="offline-ai-panel" class="offline-ai-panel">
+            <h2>🤖 Offline AI Code Generation</h2>
+            
+            <div class="input-group">
+                <label>Ollama Status:</label>
+                <div id="ollama-status">
+                    <span class="status-indicator status-offline"></span>
+                    <span>Checking...</span>
+                </div>
+                <button class="btn btn-secondary" onclick="checkOllamaStatus()">Refresh Status</button>
+            </div>
+            
+            <div class="input-group">
+                <label for="model-select">Model:</label>
+                <select id="model-select">
+                    <option value="llama3:latest">Llama 3 (Latest)</option>
+                    <option value="codellama:latest">CodeLlama (Latest)</option>
+                    <option value="mistral:latest">Mistral (Latest)</option>
+                </select>
+                <button class="btn btn-secondary" onclick="refreshModels()">Refresh Models</button>
+                <button class="btn btn-secondary" onclick="pullModel()">Pull New Model</button>
+            </div>
+            
+            <div class="input-group">
+                <label for="code-prompt">Code Generation Prompt:</label>
+                <textarea id="code-prompt" placeholder="Describe what you want to generate, e.g., 'Create a React component for user login with form validation'"></textarea>
+            </div>
+            
+            <button class="btn" onclick="generateCodeOffline()" id="generate-btn">Generate Code</button>
+            
+            <div class="input-group">
+                <label>Generated Code:</label>
+                <div id="generated-code" class="code-output">No code generated yet...</div>
+                <button class="btn btn-secondary" onclick="copyToClipboard()" id="copy-btn" style="display: none;">Copy Code</button>
+            </div>
+            
+            <div id="generation-status" style="margin: 10px 0; font-style: italic;"></div>
+        </div>
+        
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="settings-panel">
+            <h2>⚙️ Settings</h2>
+            
+            <div class="input-group">
+                <label>Application Version:</label>
+                <div id="app-version">Loading...</div>
+            </div>
+            
+            <div class="input-group">
+                <label>Platform:</label>
+                <div id="app-platform">Loading...</div>
+            </div>
+            
+            <div class="input-group">
+                <label>Auto-Updates:</label>
+                <button class="btn" onclick="checkForUpdates()">Check for Updates</button>
+                <div id="update-status" style="margin-top: 10px;"></div>
+            </div>
+            
+            <div class="input-group">
+                <label>Ollama Configuration:</label>
+                <div>Base URL: http://localhost:11434</div>
+                <div>Default Model: llama3:latest</div>
+                <button class="btn btn-secondary" onclick="installOllama()">Install Ollama</button>
+            </div>
+            
+            <div class="input-group">
+                <label>Debug Information:</label>
+                <button class="btn btn-secondary" onclick="showDebugInfo()">Show Debug Info</button>
+                <div id="debug-info" class="code-output" style="display: none;"></div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -58,39 +223,142 @@
         let loadedApps = new Set();
 
         async function loadApp(appName) {
+            console.log(`Loading app: ${appName}`);
+            document.getElementById('loading').style.display = 'block';
+            
             try {
                 const result = await window.electronAPI.loadApp(appName);
+                console.log(`App ${appName} result:`, result);
                 
                 if (!result.available) {
-                    document.getElementById('error').textContent = 
-                        result.error || `${appName} is not available`;
+                    const errorMsg = result.error || `${appName} is not available`;
+                    document.getElementById('error').innerHTML = `
+                        <h3>⚠️ Connection Error</h3>
+                        <p><strong>${appName}</strong> could not be loaded:</p>
+                        <p>${errorMsg}</p>
+                        <button class="btn" onclick="retryConnection('${appName}')">Retry Connection</button>
+                    `;
                     document.getElementById('error').style.display = 'block';
+                    document.getElementById('loading').style.display = 'none';
                     return;
                 }
 
                 document.getElementById('error').style.display = 'none';
                 
                 if (!loadedApps.has(appName)) {
+                    console.log(`Creating iframe for ${appName} with URL: ${result.url}`);
                     const iframe = document.createElement('iframe');
                     iframe.id = `app-${appName}`;
                     iframe.src = result.url;
-                    iframe.onload = () => {
+                    iframe.setAttribute('allow', 'camera; microphone; display-capture');
+                    iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups allow-downloads');
+                    
+                    // Add comprehensive iframe loading with timeout
+                    addIframeTimeout(iframe, appName, result.url);
+                    
+                    iframe.onerror = () => {
+                        console.log(`❌ ${appName} failed to load in iframe`);
+                        updateDebugInfo(`${appName} failed`);
+                        document.getElementById('error').innerHTML = `
+                            <h3>⚠️ Loading Error</h3>
+                            <p><strong>${appName}</strong> failed to load in the application frame.</p>
+                            <p>URL: ${result.url}</p>
+                            <button class="btn" onclick="openExternal('${result.url}')">Open in Browser</button>
+                        `;
+                        document.getElementById('error').style.display = 'block';
                         document.getElementById('loading').style.display = 'none';
                     };
+                    
                     document.querySelector('.content').appendChild(iframe);
                     loadedApps.add(appName);
+                    console.log(`Iframe created and added to DOM for ${appName}`);
                 }
 
                 // Show the app
+                console.log(`Switching to iframe: app-${appName}`);
                 document.querySelectorAll('iframe').forEach(iframe => {
                     iframe.classList.remove('active');
+                    console.log(`Hiding iframe: ${iframe.id}`);
                 });
-                document.getElementById(`app-${appName}`)?.classList.add('active');
+                
+                const targetIframe = document.getElementById(`app-${appName}`);
+                if (targetIframe) {
+                    targetIframe.classList.add('active');
+                    console.log(`✅ Showing iframe: app-${appName}`);
+                    updateDebugInfo(`Active: ${appName}`);
+                } else {
+                    console.error(`❌ Could not find iframe: app-${appName}`);
+                    updateDebugInfo(`Missing: ${appName}`);
+                }
+                
+                // Hide loading after iframe is shown
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                    console.log('Loading hidden');
+                }, 2000);
                 
             } catch (error) {
-                document.getElementById('error').textContent = `Error loading ${appName}: ${error.message}`;
+                console.error(`Error loading ${appName}:`, error);
+                document.getElementById('error').innerHTML = `
+                    <h3>⚠️ System Error</h3>
+                    <p>Failed to load <strong>${appName}</strong>:</p>
+                    <p>${error.message}</p>
+                    <button class="btn" onclick="retryConnection('${appName}')">Retry Connection</button>
+                `;
                 document.getElementById('error').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
             }
+        }
+        
+        async function retryConnection(appName) {
+            console.log(`Retrying connection to ${appName}`);
+            await loadApp(appName);
+        }
+        
+        async function openExternal(url) {
+            console.log(`Opening ${url} in external browser`);
+            try {
+                // Try to use electron API first
+                if (window.electronAPI && window.electronAPI.openExternal) {
+                    await window.electronAPI.openExternal(url);
+                } else {
+                    // Fallback to window.open
+                    window.open(url, '_blank');
+                }
+            } catch (error) {
+                console.error('Failed to open external URL:', error);
+                // Last resort fallback
+                window.open(url, '_blank');
+            }
+        }
+        
+        // Add iframe load timeout and fallback
+        function addIframeTimeout(iframe, appName, url) {
+            let loaded = false;
+            
+            iframe.onload = () => {
+                loaded = true;
+                console.log(`✅ ${appName} iframe loaded successfully`);
+                updateDebugInfo(`${appName} loaded`);
+                document.getElementById('loading').style.display = 'none';
+            };
+            
+            // Timeout after 15 seconds
+            setTimeout(() => {
+                if (!loaded) {
+                    console.log(`⚠️ ${appName} iframe failed to load, showing fallback`);
+                    updateDebugInfo(`${appName} timeout - fallback`);
+                    document.getElementById('error').innerHTML = `
+                        <h3>⚠️ App Loading Issue</h3>
+                        <p><strong>${appName}</strong> is taking too long to load in the desktop app.</p>
+                        <p>This might be due to security restrictions or the server not being ready.</p>
+                        <button class="btn" onclick="openExternal('${url}')">Open in Browser Instead</button>
+                        <button class="btn btn-secondary" onclick="retryConnection('${appName}')">Retry Loading</button>
+                    `;
+                    document.getElementById('error').style.display = 'block';
+                    document.getElementById('loading').style.display = 'none';
+                }
+            }, 15000);
         }
 
         // Tab switching
@@ -108,9 +376,270 @@
             });
         });
 
+        // Handle special panels (offline-ai, settings)
+        async function showPanel(panelName) {
+            // Hide all iframes
+            document.querySelectorAll('iframe').forEach(iframe => {
+                iframe.classList.remove('active');
+            });
+            
+            // Hide all panels
+            document.querySelectorAll('.offline-ai-panel, .settings-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            
+            if (panelName === 'offline-ai') {
+                document.getElementById('offline-ai-panel').classList.add('active');
+                await initOfflineAI();
+            } else if (panelName === 'settings') {
+                document.getElementById('settings-panel').classList.add('active');
+                await initSettings();
+            }
+            
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        // Enhanced tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', async () => {
+                const appName = tab.dataset.app;
+                console.log(`Tab clicked: ${appName}`);
+                
+                // Update active tab
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Show loading
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                
+                if (appName === 'offline-ai' || appName === 'settings') {
+                    // Hide all iframes for special panels
+                    document.querySelectorAll('iframe').forEach(iframe => {
+                        iframe.classList.remove('active');
+                    });
+                    await showPanel(appName);
+                } else {
+                    // Hide panels for regular apps
+                    document.querySelectorAll('.offline-ai-panel, .settings-panel').forEach(panel => {
+                        panel.classList.remove('active');
+                    });
+                    // Load regular app
+                    await loadApp(appName);
+                }
+                
+                currentApp = appName;
+            });
+        });
+        
+        // Offline AI functions
+        async function initOfflineAI() {
+            await checkOllamaStatus();
+            await refreshModels();
+        }
+        
+        async function checkOllamaStatus() {
+            try {
+                const status = await window.electronAPI.checkOllamaStatus();
+                const statusElement = document.getElementById('ollama-status');
+                
+                if (status.available) {
+                    statusElement.innerHTML = `
+                        <span class="status-indicator status-online"></span>
+                        <span>Ollama is running (${status.baseUrl})</span>
+                    `;
+                    document.getElementById('generate-btn').disabled = false;
+                } else {
+                    statusElement.innerHTML = `
+                        <span class="status-indicator status-offline"></span>
+                        <span>Ollama is not available</span>
+                    `;
+                    document.getElementById('generate-btn').disabled = true;
+                }
+            } catch (error) {
+                console.error('Failed to check Ollama status:', error);
+            }
+        }
+        
+        async function refreshModels() {
+            try {
+                const result = await window.electronAPI.listOllamaModels();
+                const select = document.getElementById('model-select');
+                
+                if (result.success && result.models.length > 0) {
+                    select.innerHTML = '';
+                    result.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.name;
+                        option.textContent = `${model.name} (${(model.size / 1e9).toFixed(1)}GB)`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to refresh models:', error);
+            }
+        }
+        
+        async function generateCodeOffline() {
+            const prompt = document.getElementById('code-prompt').value.trim();
+            const model = document.getElementById('model-select').value;
+            const statusElement = document.getElementById('generation-status');
+            const codeElement = document.getElementById('generated-code');
+            const generateBtn = document.getElementById('generate-btn');
+            
+            if (!prompt) {
+                alert('Please enter a code generation prompt');
+                return;
+            }
+            
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+            statusElement.textContent = 'Generating code with ' + model + '...';
+            
+            try {
+                const result = await window.electronAPI.generateCodeOffline({ prompt, model });
+                
+                if (result.success) {
+                    codeElement.textContent = result.code;
+                    statusElement.textContent = `Generated successfully with ${result.model} (${result.metadata.tokens} tokens, ${Math.round(result.metadata.duration / 1000000)}ms)`;
+                    document.getElementById('copy-btn').style.display = 'inline-block';
+                } else {
+                    codeElement.textContent = 'Generation failed: ' + result.error;
+                    statusElement.textContent = 'Generation failed';
+                    
+                    if (result.installUrl) {
+                        statusElement.innerHTML += ` <a href="#" onclick="installOllama()" style="color: #0066cc;">Install Ollama</a>`;
+                    }
+                }
+            } catch (error) {
+                codeElement.textContent = 'Error: ' + error.message;
+                statusElement.textContent = 'Error occurred';
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Code';
+            }
+        }
+        
+        function copyToClipboard() {
+            const code = document.getElementById('generated-code').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const btn = document.getElementById('copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            });
+        }
+        
+        async function pullModel() {
+            const modelName = prompt('Enter model name to pull (e.g., llama3:latest, codellama:7b):');
+            if (!modelName) return;
+            
+            const statusElement = document.getElementById('generation-status');
+            statusElement.textContent = `Pulling model ${modelName}... (This may take several minutes)`;
+            
+            try {
+                const result = await window.electronAPI.pullOllamaModel(modelName);
+                
+                if (result.success) {
+                    statusElement.textContent = result.message;
+                    await refreshModels();
+                } else {
+                    statusElement.textContent = 'Failed to pull model: ' + result.error;
+                }
+            } catch (error) {
+                statusElement.textContent = 'Error pulling model: ' + error.message;
+            }
+        }
+        
+        // Settings functions
+        async function initSettings() {
+            document.getElementById('app-version').textContent = window.electronAPI.getVersion();
+            document.getElementById('app-platform').textContent = window.electronAPI.getPlatform();
+        }
+        
+        async function checkForUpdates() {
+            const statusElement = document.getElementById('update-status');
+            statusElement.textContent = 'Checking for updates...';
+            
+            try {
+                const result = await window.electronAPI.checkForUpdates();
+                
+                if (result.available) {
+                    statusElement.innerHTML = `
+                        Update available: v${result.latestVersion} (current: v${result.currentVersion})<br>
+                        <button class="btn" onclick="installUpdate()">Install Update</button>
+                    `;
+                } else {
+                    statusElement.textContent = result.message || 'You have the latest version';
+                }
+            } catch (error) {
+                statusElement.textContent = 'Failed to check for updates: ' + error.message;
+            }
+        }
+        
+        async function installUpdate() {
+            const result = await window.electronAPI.installUpdate();
+            if (!result.success) {
+                alert('Failed to install update: ' + result.error);
+            }
+        }
+        
+        function installOllama() {
+            window.open('https://ollama.ai/download', '_blank');
+        }
+        
+        function updateDebugInfo(message) {
+            const debugElement = document.getElementById('debug-info');
+            if (debugElement) {
+                debugElement.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            }
+        }
+        
+        function showDebugInfo() {
+            const debugElement = document.getElementById('debug-info');
+            debugElement.style.display = debugElement.style.display === 'none' ? 'block' : 'none';
+            
+            if (debugElement.style.display === 'block') {
+                debugElement.innerHTML = `<pre>${JSON.stringify({
+                    platform: window.electronAPI?.getPlatform(),
+                    version: window.electronAPI?.getVersion(),
+                    userAgent: navigator.userAgent,
+                    loadedApps: Array.from(loadedApps),
+                    currentApp: currentApp,
+                    iframes: Array.from(document.querySelectorAll('iframe')).map(f => ({
+                        id: f.id,
+                        src: f.src,
+                        active: f.classList.contains('active')
+                    }))
+                }, null, 2)}</pre>`;
+            }
+        }
+        
         // Load initial app
         window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing desktop app...');
             loadApp('chat');
+        });
+        
+        // Add debugging for iframe issues
+        window.addEventListener('load', () => {
+            console.log('Window fully loaded');
+            console.log('Available electronAPI:', window.electronAPI);
+        });
+        
+        // Add global error handling
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
         });
     </script>
 </body>

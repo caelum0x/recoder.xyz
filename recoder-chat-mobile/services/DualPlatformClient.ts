@@ -95,6 +95,11 @@ export class DualPlatformClient {
    */
   async loadAuthTokens(): Promise<void> {
     try {
+      // Skip during build time / SSR
+      if (typeof window === 'undefined') {
+        return;
+      }
+      
       const tokens = await AsyncStorage.getItem('auth_tokens');
       if (tokens) {
         this.authTokens = JSON.parse(tokens);

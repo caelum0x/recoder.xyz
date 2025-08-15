@@ -246,8 +246,9 @@ class NotificationService {
         },
         sound: 'reminder.wav'
       },
-      trigger: {
-        date: triggerDate
+      trigger: { 
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: triggerDate 
       }
     });
 

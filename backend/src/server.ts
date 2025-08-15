@@ -127,6 +127,8 @@ const { i18nRouter } = require('./routes/i18n');
 const { responsiveDesignRouter } = require('./routes/responsive-design');
 const costOptimizationRoutes = require('./routes/cost-optimization');
 const advancedRAGLearningRoutes = require('./routes/advanced-rag-learning');
+const predictiveErrorDetectionRoutes = require('./routes/predictive-error-detection');
+const multiModalAIRoutes = require('./routes/multi-modal-ai');
 
 // Import middleware
 const { apiLimiter } = require('./middleware/rateLimit');
@@ -259,6 +261,8 @@ app.use('/api/i18n', i18nRouter);
 app.use('/api/responsive-design', responsiveDesignRouter);
 app.use('/api/cost-optimization', costOptimizationRoutes);
 app.use('/api/advanced-rag-learning', advancedRAGLearningRoutes);
+app.use('/api/predictive-error-detection', predictiveErrorDetectionRoutes);
+app.use('/api/multi-modal-ai', multiModalAIRoutes);
 
 // Legacy API endpoints for backward compatibility
 app.get('/api/v1/status', (req: any, res: any) => {
