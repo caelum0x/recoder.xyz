@@ -91,38 +91,6 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/login": {
-      "renderingMode": "PARTIALLY_STATIC",
-      "experimentalPPR": true,
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        },
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": "Mediapartners-Google|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/login",
-      "dataRoute": "/login.rsc",
-      "prefetchDataRoute": "/login.prefetch.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
     "/register": {
       "renderingMode": "PARTIALLY_STATIC",
       "experimentalPPR": true,
@@ -146,6 +114,38 @@
       "srcRoute": "/register",
       "dataRoute": "/register.rsc",
       "prefetchDataRoute": "/register.prefetch.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
+    "/login": {
+      "renderingMode": "PARTIALLY_STATIC",
+      "experimentalPPR": true,
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "Next-Action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "Mediapartners-Google|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/login",
+      "dataRoute": "/login.rsc",
+      "prefetchDataRoute": "/login.prefetch.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -229,8 +229,8 @@
   },
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "75af9577835d7f22a4ad61ebbeb485c6",
-    "previewModeSigningKey": "479bd03683c5e62c9e83ce977d1d33a7343cf239515480567347e4a71c42c4f4",
-    "previewModeEncryptionKey": "0d496664bbeb45a70b7169a8b7332867a439903e1469898708f01ca1ecbd69ae"
+    "previewModeId": "662f03899b6f8604b2afa42863495a72",
+    "previewModeSigningKey": "958f8edbddebda5d8541c26d729fe4bbb582361f87f40a828103406643b1def8",
+    "previewModeEncryptionKey": "9252dc0d911bf0f963d6e39d2c3cc4e860122f3dba94652c5e237bc8431aa940"
   }
 }

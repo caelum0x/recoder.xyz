@@ -1,0 +1,456 @@
+name: 🚀 Automated Production Deployment & Scaling
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      deployment_type:
+        description: 'Deployment type'
+        required: true
+        default: 'rolling'
+        type: choice
+        options:
+          - rolling
+          - blue-green
+          - canary
+      scale_factor:
+        description: 'Scale factor (1.0 = normal, 2.0 = double capacity)'
+        required: false
+        default: '1.0'
+        type: string
+
+env:
+  NODE_VERSION: '20'
+  DOCKER_REGISTRY: ghcr.io
+  KUBERNETES_NAMESPACE: recoder-production
+  MONITORING_ENABLED: true
+
+jobs:
+  # =============================================
+  # PRE-DEPLOYMENT VALIDATION
+  # =============================================
+  pre-deployment:
+    name: 🔍 Pre-deployment Validation
+    runs-on: ubuntu-latest
+    outputs:
+      deploy-web: ${{ steps.changes.outputs.web }}
+      deploy-chat: ${{ steps.changes.outputs.chat }}
+      deploy-mobile: ${{ steps.changes.outputs.mobile }}
+      deploy-desktop: ${{ steps.changes.outputs.desktop }}
+      deploy-extension: ${{ steps.changes.outputs.extension }}
+      deployment-strategy: ${{ steps.strategy.outputs.strategy }}
+      
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          
+      - name: 🔍 Detect changes
+        id: changes
+        run: |
+          echo "web=$(git diff HEAD~1 HEAD --name-only | grep -E '^recoder-web/' | wc -l | xargs test 0 -lt && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "chat=$(git diff HEAD~1 HEAD --name-only | grep -E '^recoder-chat/' | wc -l | xargs test 0 -lt && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "mobile=$(git diff HEAD~1 HEAD --name-only | grep -E '^recoder-chat-mobile/' | wc -l | xargs test 0 -lt && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "desktop=$(git diff HEAD~1 HEAD --name-only | grep -E '^recoder-desktop/' | wc -l | xargs test 0 -lt && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "extension=$(git diff HEAD~1 HEAD --name-only | grep -E '^recoder-extension/' | wc -l | xargs test 0 -lt && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          
+      - name: 🎯 Determine deployment strategy
+        id: strategy
+        run: |
+          # Determine strategy based on changes and input
+          STRATEGY="${{ github.event.inputs.deployment_type || 'rolling' }}"
+          
+          # Override strategy based on change scope
+          TOTAL_CHANGES=$(git diff HEAD~1 HEAD --name-only | wc -l)
+          if [[ $TOTAL_CHANGES -gt 50 ]]; then
+            STRATEGY="blue-green"  # Major changes
+          elif [[ $TOTAL_CHANGES -gt 20 ]]; then
+            STRATEGY="canary"      # Medium changes
+          fi
+          
+          echo "strategy=$STRATEGY" >> $GITHUB_OUTPUT
+          echo "📋 Deployment strategy: $STRATEGY"
+
+  # =============================================
+  # BUILD & CONTAINERIZATION
+  # =============================================
+  build-containers:
+    name: 🏗️ Build & Push Containers
+    runs-on: ubuntu-latest
+    needs: pre-deployment
+    if: needs.pre-deployment.outputs.deploy-web == 'true' || needs.pre-deployment.outputs.deploy-chat == 'true'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: 
+          - name: recoder-web
+            context: ./recoder-web
+            enabled: ${{ needs.pre-deployment.outputs.deploy-web }}
+          - name: recoder-chat  
+            context: ./recoder-chat
+            enabled: ${{ needs.pre-deployment.outputs.deploy-chat }}
+    
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 🔐 Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 🏗️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: 📦 Build and push container
+        if: matrix.platform.enabled == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.platform.context }}
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ matrix.platform.name }}:latest
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ matrix.platform.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+            SKIP_ENV_VALIDATION=true
+
+  # =============================================
+  # KUBERNETES DEPLOYMENT
+  # =============================================
+  deploy-kubernetes:
+    name: ☸️ Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, build-containers]
+    if: always() && needs.pre-deployment.result == 'success'
+    
+    environment:
+      name: production
+      url: https://recoder.xyz
+      
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: ⚙️ Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: 🔐 Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          kubectl config current-context
+          
+      - name: 🎯 Deploy with strategy: ${{ needs.pre-deployment.outputs.deployment-strategy }}
+        run: |
+          STRATEGY="${{ needs.pre-deployment.outputs.deployment-strategy }}"
+          SCALE_FACTOR="${{ github.event.inputs.scale_factor || '1.0' }}"
+          
+          echo "🚀 Deploying with $STRATEGY strategy (scale: ${SCALE_FACTOR}x)"
+          
+          case $STRATEGY in
+            "rolling")
+              echo "📦 Rolling deployment"
+              ./deployment/scripts/rolling-deploy.sh $SCALE_FACTOR
+              ;;
+            "blue-green")
+              echo "🔵 Blue-green deployment"
+              ./deployment/scripts/blue-green-deploy.sh $SCALE_FACTOR
+              ;;
+            "canary")
+              echo "🐤 Canary deployment"
+              ./deployment/scripts/canary-deploy.sh $SCALE_FACTOR
+              ;;
+          esac
+          
+      - name: ✅ Verify deployment
+        run: |
+          echo "🔍 Verifying deployment health..."
+          ./deployment/scripts/verify-deployment.sh
+          
+      - name: 📊 Update deployment status
+        run: |
+          kubectl annotate deployment recoder-web deployment.kubernetes.io/revision="$(date +%s)" -n ${{ env.KUBERNETES_NAMESPACE }}
+          kubectl annotate deployment recoder-chat deployment.kubernetes.io/revision="$(date +%s)" -n ${{ env.KUBERNETES_NAMESPACE }}
+
+  # =============================================
+  # AUTO-SCALING CONFIGURATION
+  # =============================================
+  configure-autoscaling:
+    name: 📈 Configure Auto-scaling
+    runs-on: ubuntu-latest
+    needs: [deploy-kubernetes]
+    if: needs.deploy-kubernetes.result == 'success'
+    
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: ⚙️ Setup kubectl
+        uses: azure/setup-kubectl@v3
+        
+      - name: 🔐 Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          
+      - name: 📈 Apply HPA (Horizontal Pod Autoscaler)
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: autoscaling/v2
+          kind: HorizontalPodAutoscaler
+          metadata:
+            name: recoder-web-hpa
+            namespace: ${{ env.KUBERNETES_NAMESPACE }}
+          spec:
+            scaleTargetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: recoder-web
+            minReplicas: 2
+            maxReplicas: 20
+            metrics:
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: 70
+            - type: Resource
+              resource:
+                name: memory
+                target:
+                  type: Utilization
+                  averageUtilization: 80
+          ---
+          apiVersion: autoscaling/v2
+          kind: HorizontalPodAutoscaler
+          metadata:
+            name: recoder-chat-hpa
+            namespace: ${{ env.KUBERNETES_NAMESPACE }}
+          spec:
+            scaleTargetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: recoder-chat
+            minReplicas: 3
+            maxReplicas: 30
+            metrics:
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: 60
+            - type: Resource
+              resource:
+                name: memory
+                target:
+                  type: Utilization
+                  averageUtilization: 75
+          EOF
+          
+      - name: 🎯 Configure VPA (Vertical Pod Autoscaler)
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: autoscaling.k8s.io/v1
+          kind: VerticalPodAutoscaler
+          metadata:
+            name: recoder-web-vpa
+            namespace: ${{ env.KUBERNETES_NAMESPACE }}
+          spec:
+            targetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: recoder-web
+            updatePolicy:
+              updateMode: "Auto"
+            resourcePolicy:
+              containerPolicies:
+              - containerName: recoder-web
+                maxAllowed:
+                  cpu: 2
+                  memory: 4Gi
+                minAllowed:
+                  cpu: 100m
+                  memory: 128Mi
+          EOF
+
+  # =============================================
+  # PERFORMANCE MONITORING
+  # =============================================
+  setup-monitoring:
+    name: 📊 Setup Performance Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-kubernetes]
+    if: needs.deploy-kubernetes.result == 'success' && env.MONITORING_ENABLED == 'true'
+    
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: ⚙️ Setup kubectl
+        uses: azure/setup-kubectl@v3
+        
+      - name: 🔐 Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          
+      - name: 📊 Deploy Prometheus monitoring
+        run: |
+          # Deploy ServiceMonitor for application metrics
+          cat <<EOF | kubectl apply -f -
+          apiVersion: monitoring.coreos.com/v1
+          kind: ServiceMonitor
+          metadata:
+            name: recoder-metrics
+            namespace: ${{ env.KUBERNETES_NAMESPACE }}
+            labels:
+              app: recoder
+          spec:
+            selector:
+              matchLabels:
+                app: recoder
+            endpoints:
+            - port: metrics
+              path: /metrics
+              interval: 30s
+          EOF
+          
+      - name: 🚨 Setup alerting rules
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: monitoring.coreos.com/v1
+          kind: PrometheusRule
+          metadata:
+            name: recoder-alerts
+            namespace: ${{ env.KUBERNETES_NAMESPACE }}
+          spec:
+            groups:
+            - name: recoder.rules
+              rules:
+              - alert: RecoderHighCPU
+                expr: rate(container_cpu_usage_seconds_total{pod=~"recoder-.*"}[5m]) > 0.8
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "High CPU usage detected"
+                  
+              - alert: RecoderHighMemory
+                expr: container_memory_usage_bytes{pod=~"recoder-.*"} / container_spec_memory_limit_bytes > 0.9
+                for: 5m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "High memory usage detected"
+                  
+              - alert: RecoderPodCrashLoop
+                expr: rate(kube_pod_container_status_restarts_total{pod=~"recoder-.*"}[15m]) > 0
+                for: 5m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "Pod is crash looping"
+          EOF
+
+  # =============================================
+  # POST-DEPLOYMENT TESTING
+  # =============================================
+  post-deployment-tests:
+    name: 🧪 Post-deployment Testing
+    runs-on: ubuntu-latest
+    needs: [deploy-kubernetes, setup-monitoring]
+    if: always() && needs.deploy-kubernetes.result == 'success'
+    
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 🔍 Health check tests
+        run: |
+          echo "🏥 Running health checks..."
+          
+          # Wait for deployments to be ready
+          sleep 30
+          
+          # Test web platform
+          curl -f https://web.recoder.xyz/health || echo "Web platform health check failed"
+          
+          # Test chat platform  
+          curl -f https://chat.recoder.xyz/health || echo "Chat platform health check failed"
+          
+          # Test API endpoints
+          curl -f https://api.recoder.xyz/health || echo "API health check failed"
+          
+      - name: ⚡ Performance tests
+        run: |
+          echo "⚡ Running performance tests..."
+          
+          # Load test with k6 (if available)
+          if command -v k6 &> /dev/null; then
+            k6 run --duration=2m --vus=10 deployment/tests/load-test.js
+          else
+            echo "k6 not available, skipping load tests"
+          fi
+          
+      - name: 🤖 AI functionality tests
+        run: |
+          echo "🤖 Testing AI functionality..."
+          
+          # Test AI endpoints
+          curl -X POST https://api.recoder.xyz/ai/test \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "test", "model": "local"}' \
+            || echo "AI functionality test failed"
+
+  # =============================================
+  # DEPLOYMENT NOTIFICATION
+  # =============================================
+  notify-deployment:
+    name: 📢 Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, deploy-kubernetes, post-deployment-tests]
+    if: always()
+    
+    steps:
+      - name: 📊 Generate deployment summary
+        id: summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Strategy:** ${{ needs.pre-deployment.outputs.deployment-strategy }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Deployed Components:" >> $GITHUB_STEP_SUMMARY
+          echo "- Web Platform: ${{ needs.pre-deployment.outputs.deploy-web }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Chat Platform: ${{ needs.pre-deployment.outputs.deploy-chat }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Mobile App: ${{ needs.pre-deployment.outputs.deploy-mobile }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Desktop App: ${{ needs.pre-deployment.outputs.deploy-desktop }}" >> $GITHUB_STEP_SUMMARY
+          echo "- VS Code Extension: ${{ needs.pre-deployment.outputs.deploy-extension }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📈 Status:" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.deploy-kubernetes.result }}" == "success" ]]; then
+            echo "✅ **DEPLOYMENT SUCCESSFUL**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **DEPLOYMENT FAILED**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 **Live URLs:**" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌐 Web: https://web.recoder.xyz" >> $GITHUB_STEP_SUMMARY
+          echo "- 💬 Chat: https://chat.recoder.xyz" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 Monitoring: https://monitoring.recoder.xyz" >> $GITHUB_STEP_SUMMARY

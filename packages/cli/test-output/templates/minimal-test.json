@@ -1,0 +1,50 @@
+{
+  "id": "minimal-test",
+  "name": "Minimal Test Template",
+  "description": "A minimal template for testing",
+  "category": "test",
+  "type": "project",
+  "version": "1.0.0",
+  "author": "Test Suite",
+  "tags": [
+    "test",
+    "minimal"
+  ],
+  "public": true,
+  "featured": false,
+  "variables": [
+    {
+      "name": "projectName",
+      "type": "string",
+      "description": "Name of the project",
+      "required": true,
+      "default": "test-project"
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "description": "Project description",
+      "required": false,
+      "default": "A test project"
+    }
+  ],
+  "files": [
+    {
+      "path": "package.json",
+      "content": "{\"name\": \"{{projectName}}\", \"version\": \"1.0.0\", \"description\": \"{{description}}\"}",
+      "template": true
+    },
+    {
+      "path": "README.md",
+      "content": "# {{projectName}}\n\n{{description}}",
+      "template": true
+    },
+    {
+      "path": "src/index.js",
+      "content": "console.log(\"Hello from {{projectName}}!\");",
+      "template": true
+    }
+  ],
+  "created_at": "2025-08-16T09:02:12.431Z",
+  "updated_at": "2025-08-16T09:02:12.433Z"
+}

@@ -44,54 +44,38 @@ jest.mock('./utils/logger', () => ({
   },
 }));
 
-// Mock security and compliance services
-jest.mock('./services/security-integration', () => ({
-  securityIntegrationService: {
-    validateGeneratedCode: jest.fn().mockResolvedValue({
-      success: true,
-      securityScore: 85,
-      vulnerabilities: [],
-      secrets: [],
-      complianceIssues: [],
-      sanitizationViolations: [],
-      recommendations: [],
-      metadata: {
-        scanDuration: 100,
-        scannedFiles: 1,
-        rulesApplied: 5
-      }
-    }),
+// Mock security and compliance services with proper typing
+const mockSecurityValidationResult = {
+  success: true,
+  securityScore: 85,
+  vulnerabilities: [],
+  secrets: [],
+  complianceIssues: [],
+  sanitizationViolations: [],
+  recommendations: [],
+  metadata: {
+    scanDuration: 100,
+    scannedFiles: 1,
+    rulesApplied: 5
+  }
+};
+
+const mockComplianceResult = {
+  passed: true,
+  report: {
+    summary: {
+      overallScore: 90,
+      riskLevel: 'low',
+      criticalViolations: 0,
+      highViolations: 0
+    },
+    violations: []
   },
-}));
+  blockedByCompliance: false,
+  recommendations: []
+};
 
-jest.mock('./compliance/compliance-integration', () => ({
-  ComplianceIntegrationService: jest.fn().mockImplementation(() => ({
-    validateSingleFile: jest.fn().mockResolvedValue({
-      passed: true,
-      report: {
-        summary: {
-          overallScore: 90,
-          riskLevel: 'low',
-          criticalViolations: 0,
-          highViolations: 0
-        },
-        violations: []
-      },
-      blockedByCompliance: false,
-      recommendations: []
-    }),
-    updateConfiguration: jest.fn(),
-    getConfiguration: jest.fn(),
-    scanProject: jest.fn(),
-    generateProjectComplianceDashboard: jest.fn(),
-  })),
-}));
-
-// Mock AI Hub Service
-jest.mock('./services/ai-hub-service', () => ({
-  AIHubService: jest.fn().mockImplementation(() => ({
-    generateWithBestModel: jest.fn().mockResolvedValue(`
-# Test Generated Code
+const mockGeneratedCode = `# Test Generated Code
 
 This is a test response from the AI model.
 
@@ -105,8 +89,33 @@ export function testFunction(): string {
 
 1. Install dependencies: npm install
 2. Run the project: npm start
-`),
-    getAvailableProviders: jest.fn().mockResolvedValue(['anthropic', 'openai', 'groq']),
+`;
+
+const mockAvailableProviders = ['anthropic', 'openai', 'groq'];
+
+jest.mock('./services/security-integration', () => ({
+  SecurityIntegrationService: jest.fn().mockImplementation(() => ({
+    validateGeneratedCode: jest.fn(() => Promise.resolve(mockSecurityValidationResult)),
+  })),
+  securityIntegrationService: {
+    validateGeneratedCode: jest.fn(() => Promise.resolve(mockSecurityValidationResult)),
+  },
+}));
+
+jest.mock('./compliance/compliance-integration', () => ({
+  ComplianceIntegrationService: jest.fn().mockImplementation(() => ({
+    validateSingleFile: jest.fn(() => Promise.resolve(mockComplianceResult)),
+    updateConfiguration: jest.fn(),
+    getConfiguration: jest.fn(),
+    scanProject: jest.fn(),
+    generateProjectComplianceDashboard: jest.fn(),
+  })),
+}));
+
+jest.mock('./services/ai-hub-service', () => ({
+  AIHubService: jest.fn().mockImplementation(() => ({
+    generateWithBestModel: jest.fn(() => Promise.resolve(mockGeneratedCode)),
+    getAvailableProviders: jest.fn(() => Promise.resolve(mockAvailableProviders)),
   })),
 }));
 

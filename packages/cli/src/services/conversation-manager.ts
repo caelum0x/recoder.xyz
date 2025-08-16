@@ -96,7 +96,7 @@ export class ConversationManager {
             message: chalk.blue('recoder>'),
             prefix: '',
           }
-        ]);
+        ] as any);
 
         if (this.shouldExit(input)) {
           break;

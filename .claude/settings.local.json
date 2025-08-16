@@ -95,7 +95,10 @@
       "Bash(npx expo:*)",
       "Bash(BASE_URL=http://localhost:3005 k6 run --duration=30s --vus=50 k6-tests/load-test-config.js)",
       "Bash(pnpm typecheck:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(export NODE_ENV=production)",
+      "Bash(./production-deploy.sh)",
+      "Bash(./scripts/platform-health-check.sh:*)"
     ],
     "deny": []
   }
