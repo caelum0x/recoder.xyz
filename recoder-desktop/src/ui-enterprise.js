@@ -29,34 +29,39 @@ class RecoderEnterpriseUI {
         try {
             console.log('🚀 Enterprise UI initialization started...');
             
-            // Force hide loading immediately for debugging
+            // Hide loading immediately - don't wait for services
             this.hideLoading();
             
-            // Setup event listeners
+            // Setup event listeners first
             this.setupEventListeners();
             
-            // Load initial application state
-            await this.loadApplicationState();
-            
-            // Setup real-time monitoring
-            this.setupRealTimeMonitoring();
-            
-            // Setup authentication
-            await this.setupAuthentication();
-            
-            // Initialize dashboard
-            await this.initializeDashboard();
-            
-            // Force show dashboard panel
+            // Show dashboard immediately - don't wait for services
             this.switchToApp('dashboard');
             
-            console.log('✅ Enterprise UI initialization complete');
+            // Initialize non-blocking components in parallel
+            const initPromises = [
+                this.loadApplicationState().catch(err => console.warn('App state loading failed:', err)),
+                this.setupAuthentication().catch(err => console.warn('Auth setup failed:', err)),
+                this.initializeDashboardAsync().catch(err => console.warn('Dashboard init failed:', err))
+            ];
+            
+            // Setup real-time monitoring (sync)
+            this.setupRealTimeMonitoring();
+            
+            console.log('✅ Enterprise UI core initialization complete');
             this.showNotification('Enterprise Desktop Ready', 'Recoder Desktop Enterprise initialized successfully', 'success');
+            
+            // Wait for background initialization to complete
+            await Promise.allSettled(initPromises);
+            console.log('🔄 Background initialization complete');
             
         } catch (error) {
             console.error('❌ Enterprise UI initialization failed:', error);
             this.hideLoading(); // Hide loading even on error
-            this.showError('Initialization Failed', error.message);
+            
+            // Show dashboard anyway - app should work offline
+            this.switchToApp('dashboard');
+            this.showNotification('Partial Initialization', 'Desktop ready with limited connectivity', 'warning');
         }
     }
 
@@ -239,20 +244,54 @@ class RecoderEnterpriseUI {
         }
     }
 
-    async initializeDashboard() {
+    async initializeDashboardAsync() {
         try {
-            console.log('📊 Initializing enterprise dashboard...');
+            console.log('📊 Initializing enterprise dashboard (background)...');
             
-            // Discover services
-            await this.discoverServices();
+            // Discover services in background - non-blocking
+            this.discoverServicesAsync();
             
-            // Setup AI providers
+            // Setup AI providers - can fail gracefully
             await this.setupAIProviders();
             
-            console.log('✅ Enterprise dashboard initialized');
+            console.log('✅ Enterprise dashboard background initialization complete');
             
         } catch (error) {
-            console.error('Dashboard initialization failed:', error);
+            console.error('Dashboard background initialization failed:', error);
+            // Don't throw - allow app to continue
+        }
+    }
+
+    async discoverServicesAsync() {
+        try {
+            console.log('🔍 Discovering enterprise services (background)...');
+            
+            this.showNotification('Service Discovery', 'Scanning for available services...', 'info');
+            
+            if (window.recoderAPI?.services?.discover) {
+                // Add timeout to prevent hanging
+                const discoveryPromise = window.recoderAPI.services.discover();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Service discovery timeout')), 10000)
+                );
+                
+                const services = await Promise.race([discoveryPromise, timeoutPromise]);
+                this.updateServicesDisplay(services);
+                
+                this.showNotification(
+                    'Service Discovery Complete', 
+                    `Found ${services.length} services, ${services.filter(s => s.status === 'healthy').length} healthy`, 
+                    'success'
+                );
+            } else {
+                // Show offline services when API not available
+                this.showOfflineServices();
+            }
+            
+        } catch (error) {
+            console.error('Service discovery failed:', error);
+            this.showNotification('Services Offline', 'Running in offline mode - services will be discovered when available', 'warning');
+            this.showOfflineServices();
         }
     }
 
@@ -301,6 +340,50 @@ class RecoderEnterpriseUI {
         this.updateNavigationTabStatuses(services);
 
         console.log(`📊 Updated ${services.length} services in dashboard`);
+    }
+
+    showOfflineServices() {
+        console.log('📱 Showing offline service status...');
+        
+        // Create offline service placeholders
+        const offlineServices = [
+            {
+                id: 'chat',
+                name: 'AI Chat Platform',
+                category: 'ai-platform',
+                status: 'offline',
+                url: 'http://localhost:3004',
+                port: 3004,
+                responseTime: null,
+                lastCheck: Date.now(),
+                error: 'Service not running'
+            },
+            {
+                id: 'web',
+                name: 'Web Platform',
+                category: 'web-platform',
+                status: 'offline',
+                url: 'http://localhost:3006',
+                port: 3006,
+                responseTime: null,
+                lastCheck: Date.now(),
+                error: 'Service not running'
+            },
+            {
+                id: 'backend',
+                name: 'Backend API',
+                category: 'api-service',
+                status: 'offline',
+                url: 'http://localhost:3001',
+                port: 3001,
+                responseTime: null,
+                lastCheck: Date.now(),
+                error: 'Service not running'
+            }
+        ];
+
+        this.updateServicesDisplay(offlineServices);
+        this.showNotification('Offline Mode', 'Desktop ready - start services to enable full functionality', 'info');
     }
 
     createEnterpriseServiceCard(service) {
@@ -602,7 +685,8 @@ class RecoderEnterpriseUI {
 
     async refreshDashboard() {
         try {
-            await this.discoverServices();
+            // Use async discovery to avoid blocking
+            this.discoverServicesAsync();
             await this.performHealthCheck();
             this.updatePerformanceMetrics();
         } catch (error) {
@@ -768,7 +852,7 @@ class RecoderEnterpriseUI {
 // Global functions for HTML event handlers
 window.refreshServices = async function() {
     if (window.enterpriseUI) {
-        await window.enterpriseUI.discoverServices();
+        window.enterpriseUI.discoverServicesAsync();
     }
 };
 

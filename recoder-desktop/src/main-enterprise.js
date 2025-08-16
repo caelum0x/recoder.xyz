@@ -45,6 +45,22 @@ const { EnterpriseTelemetryService } = require('./services/enterprise-telemetry'
 const isProduction = !process.argv.includes('--dev');
 const isDev = !isProduction;
 
+// Safe logging to prevent EPIPE errors using file-based logging
+function safeLog(message) {
+  try {
+    // Use file-based logging instead of stdout to prevent EPIPE
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${message}\n`;
+    
+    // Write to log file instead of stdout
+    const logDir = path.join(require('os').homedir(), '.recoder-desktop', 'telemetry');
+    const logPath = path.join(logDir, 'desktop.log');
+    require('fs').appendFileSync(logPath, logEntry, 'utf8');
+  } catch (error) {
+    // Completely silent on any error
+  }
+}
+
 // Enterprise configuration
 const ENTERPRISE_CONFIG = {
   appName: 'Recoder Desktop',
@@ -152,22 +168,22 @@ class EnterpriseServiceManager extends EventEmitter {
   }
 
   async initialize() {
-    console.log('🏢 Initializing Enterprise Service Manager...');
+    safeLog('🏢 Initializing Enterprise Service Manager...');
     
     // Start service discovery in background (don't wait)
     this.discoverServices().catch(error => {
-      console.error('Service discovery failed:', error);
+      safeLog('Service discovery failed: ' + error.message);
     });
     
     // Start continuous health monitoring
     this.startHealthMonitoring();
     
-    console.log('✅ Enterprise Service Manager initialized');
+    safeLog('✅ Enterprise Service Manager initialized');
     return true;
   }
 
   async discoverServices() {
-    console.log('🔍 Discovering enterprise services...');
+    safeLog('🔍 Discovering enterprise services...');
     
     // Run all service discoveries in parallel for speed, skip services with no ports
     const discoveryPromises = Object.entries(ENTERPRISE_CONFIG.services)
@@ -178,11 +194,11 @@ class EnterpriseServiceManager extends EventEmitter {
         if (service) {
           this.services.set(serviceId, service);
           appState.updateService(serviceId, service);
-          console.log(`✅ Service discovered: ${service.name} at ${service.url}`);
+          safeLog(`✅ Service discovered: ${service.name} at ${service.url}`);
         }
         return { serviceId, success: true, service };
       } catch (error) {
-        console.log(`❌ Failed to discover ${serviceId}: Service ${serviceId} not available on any configured port`);
+        safeLog(`❌ Failed to discover ${serviceId}: Service ${serviceId} not available on any configured port`);
         this.services.set(serviceId, {
           id: serviceId,
           name: config.name,
@@ -211,11 +227,11 @@ class EnterpriseServiceManager extends EventEmitter {
           `${baseUrl}${config.authBypass}` : 
           `${baseUrl}${config.healthPath}`;
 
-        console.log(`🔎 Testing ${serviceId} at ${baseUrl}...`);
+        safeLog(`🔎 Testing ${serviceId} at ${baseUrl}...`);
 
         const response = await axios.get(healthUrl, {
-          timeout: 2000, // Reduced from 5000ms
-          maxRedirects: 2, // Reduced from 5
+          timeout: 1000, // Very short timeout for desktop app
+          maxRedirects: 1,
           validateStatus: (status) => status !== 0 // Accept any response as sign of life
         });
 
@@ -235,7 +251,7 @@ class EnterpriseServiceManager extends EventEmitter {
         return service;
 
       } catch (error) {
-        console.log(`❌ ${serviceId} not available on port ${port}: ${error.message}`);
+        safeLog(`❌ ${serviceId} not available on port ${port}: ${error.message}`);
         continue;
       }
     }
@@ -248,7 +264,7 @@ class EnterpriseServiceManager extends EventEmitter {
       await this.performHealthCheck();
     }, this.healthCheckInterval);
 
-    console.log('💓 Health monitoring started');
+    safeLog('💓 Health monitoring started');
   }
 
   async performHealthCheck() {
@@ -323,7 +339,7 @@ class EnterpriseServiceManager extends EventEmitter {
       );
       
       if (fallback) {
-        console.log(`🔄 Using fallback service ${fallback.id} for ${serviceId}`);
+        safeLog(`🔄 Using fallback service ${fallback.id} for ${serviceId}`);
         return fallback.url;
       }
     }
@@ -350,7 +366,7 @@ class EnterpriseSecurityManager {
   }
 
   async initialize() {
-    console.log('🔒 Initializing Enterprise Security Manager...');
+    safeLog('🔒 Initializing Enterprise Security Manager...');
     
     // Setup CSP and security headers
     this.setupSecurityPolicies();
@@ -358,7 +374,7 @@ class EnterpriseSecurityManager {
     // Check for stored authentication
     await this.checkStoredAuth();
     
-    console.log('✅ Enterprise Security Manager initialized');
+    safeLog('✅ Enterprise Security Manager initialized');
     return true;
   }
 
@@ -393,10 +409,10 @@ class EnterpriseSecurityManager {
     // This would integrate with keytar in production
     try {
       // Placeholder for auth check
-      console.log('🔐 Checking stored authentication...');
+      safeLog('🔐 Checking stored authentication...');
       return false;
     } catch (error) {
-      console.error('Auth check failed:', error);
+      safeLog('Auth check failed: ' + error.message);
       return false;
     }
   }
@@ -1008,9 +1024,9 @@ function setupAutoUpdater() {
  * APPLICATION LIFECYCLE
  */
 app.whenReady().then(async () => {
-  console.log('🚀 RECODER.XYZ DESKTOP - ENTERPRISE VERSION STARTING...');
-  console.log(`📊 Version: ${ENTERPRISE_CONFIG.version}`);
-  console.log(`🔧 Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+  safeLog('🚀 RECODER.XYZ DESKTOP - ENTERPRISE VERSION STARTING...');
+  safeLog(`📊 Version: ${ENTERPRISE_CONFIG.version}`);
+  safeLog(`🔧 Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
 
   try {
     // Initialize enterprise telemetry first
@@ -1046,10 +1062,10 @@ app.whenReady().then(async () => {
     appState.state.initialized = true;
     appState.state.connectionStatus = 'connected';
 
-    console.log('✅ RECODER.XYZ DESKTOP ENTERPRISE - READY FOR PRODUCTION');
+    safeLog('✅ RECODER.XYZ DESKTOP ENTERPRISE - READY FOR PRODUCTION');
 
   } catch (error) {
-    console.error('❌ CRITICAL: Enterprise initialization failed:', error);
+    safeLog('❌ CRITICAL: Enterprise initialization failed: ' + error.message);
     
     dialog.showErrorBox(
       'Startup Error',
@@ -1078,7 +1094,7 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', async () => {
-  console.log('🧹 Cleaning up enterprise services...');
+  safeLog('🧹 Cleaning up enterprise services...');
   
   if (telemetryService) {
     await telemetryService.cleanup();
@@ -1088,7 +1104,7 @@ app.on('before-quit', async () => {
     serviceManager.cleanup();
   }
   
-  console.log('✅ Enterprise cleanup complete');
+  safeLog('✅ Enterprise cleanup complete');
 });
 
 // Handle certificate errors in development
@@ -1100,6 +1116,69 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
     callback(false);
   }
 });
+
+// Enterprise-grade error handling
+process.on('uncaughtException', (error) => {
+  // Log error safely without using console.log to prevent EPIPE
+  if (telemetryService && telemetryService.safeLog) {
+    telemetryService.safeLog(`💥 Uncaught Exception: ${error.message}`);
+    telemetryService.trackError(error, 'critical');
+  }
+  
+  // Don't exit in production - let the app recover
+  if (isDev) {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  // Log error safely
+  if (telemetryService && telemetryService.safeLog) {
+    telemetryService.safeLog(`🚫 Unhandled Rejection: ${reason}`);
+    telemetryService.trackError(new Error(reason), 'high');
+  }
+  
+  // Don't exit in production
+  if (isDev) {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  }
+});
+
+// Handle SIGPIPE and other signals gracefully
+process.on('SIGPIPE', () => {
+  // Ignore SIGPIPE errors that cause EPIPE exceptions
+  if (telemetryService && telemetryService.safeLog) {
+    telemetryService.safeLog('🔧 SIGPIPE received - handled gracefully');
+  }
+});
+
+process.on('SIGTERM', async () => {
+  if (telemetryService && telemetryService.safeLog) {
+    telemetryService.safeLog('⏹️ SIGTERM received - graceful shutdown');
+  }
+  await gracefulShutdown();
+});
+
+process.on('SIGINT', async () => {
+  if (telemetryService && telemetryService.safeLog) {
+    telemetryService.safeLog('⏹️ SIGINT received - graceful shutdown');
+  }
+  await gracefulShutdown();
+});
+
+async function gracefulShutdown() {
+  try {
+    if (telemetryService) {
+      await telemetryService.cleanup();
+    }
+    if (serviceManager) {
+      serviceManager.cleanup();
+    }
+    process.exit(0);
+  } catch (error) {
+    process.exit(1);
+  }
+}
 
 module.exports = {
   serviceManager,

@@ -5,6 +5,7 @@
 
 import { Command } from 'commander';
 import inquirer from 'inquirer';
+// Removed invalid import for QuestionCollection
 import chalk from 'chalk';
 import ora from 'ora';
 import path from 'path';
@@ -51,7 +52,21 @@ interface GenerateCommandOptions {
   security?: boolean;
   performance?: boolean;
   interactive?: boolean;
+  confirm?: boolean;
+  database?: string;
+  auth?: string;
+  deployment?: string;
 }
+
+const FRAMEWORKS = {
+  web: ['Next.js', 'React', 'Vue.js', 'Svelte'],
+  api: ['Express.js', 'Fastify', 'NestJS', 'Hapi'],
+  mobile: ['React Native', 'Flutter', 'Ionic'],
+  desktop: ['Electron', 'Tauri', 'Flutter Desktop'],
+  blockchain: ['Next.js + Anchor', 'React + Hardhat', 'Vue + Truffle'],
+  ai: ['LangChain + Node.js', 'Python + FastAPI', 'Node.js + Express'],
+  fullstack: ['Next.js', 'MEAN', 'MERN', 'T3 Stack']
+} as const;
 
 export const generateCommand = new Command('generate')
   .alias('gen')
@@ -63,6 +78,9 @@ export const generateCommand = new Command('generate')
   .option('--language <language>', 'Programming language')
   .option('-o, --output <directory>', 'Output directory', process.cwd())
   .option('--features <features...>', 'Additional features to include')
+  .option('--database <database>', 'Database to use')
+  .option('--auth <auth>', 'Authentication method')
+  .option('--deployment <deployment>', 'Deployment target')
   .option('--ai', 'Enable AI-powered code enhancement', false)
   .option('--tests', 'Include test files and configuration', true)
   .option('--docs', 'Include documentation', true)
@@ -70,6 +88,7 @@ export const generateCommand = new Command('generate')
   .option('--security', 'Enable security hardening', true)
   .option('--performance', 'Enable performance optimization', true)
   .option('-i, --interactive', 'Interactive mode', false)
+  .option('--no-confirm', 'Skip confirmation prompt', false)
   .action(async (options: GenerateCommandOptions) => {
     console.log(chalk.blue.bold('🎯 Recoder.xyz Advanced Project Generator\n'));
 
@@ -77,33 +96,44 @@ export const generateCommand = new Command('generate')
       let context: TemplateContext;
       let generationOptions: GenerationOptions;
 
-      if (options.interactive || !options.template) {
-        // Interactive mode
+      if (options.interactive && !options.template) {
+        // Interactive mode (only if no template specified)
         const answers = await runInteractiveMode(options);
         context = answers.context;
         generationOptions = answers.options;
       } else {
-        // Command-line mode
-        context = await buildContextFromOptions(options);
+        // Non-interactive mode - set defaults (template flag bypasses interactive)
+        context = {
+          projectName: options.name || 'generated-project',
+          projectType: (options.type as any) || 'web',
+          framework: options.framework || 'react',
+          language: options.language || 'typescript',
+          features: [],
+          database: options.database || 'none',
+          authentication: options.auth || 'none',
+          deployment: options.deployment || 'none'
+        };
         generationOptions = buildGenerationOptionsFromOptions(options);
       }
 
       // Display generation summary
       displayGenerationSummary(context, generationOptions);
 
-      // Confirm generation
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Proceed with project generation?',
-          default: true
-        }
-      ]);
+      // Confirm generation (only in interactive mode or when confirm is explicitly true, but skip if template is used)
+      if ((options.interactive || options.confirm) && !options.template) {
+        const { confirm } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirm',
+            message: 'Proceed with project generation?',
+            default: true
+          }
+        ]);
 
-      if (!confirm) {
-        console.log(chalk.yellow('Generation cancelled.'));
-        return;
+        if (!confirm) {
+          console.log(chalk.yellow('Generation cancelled.'));
+          return;
+        }
       }
 
       // Generate project (simplified version)
@@ -121,7 +151,8 @@ export const generateCommand = new Command('generate')
       console.log(chalk.dim('   3. npm run dev'));
 
     } catch (error) {
-      console.error(chalk.red.bold('\n❌ Generation failed:'), error.message);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red.bold('\n❌ Generation failed:'), errorMessage);
       process.exit(1);
     }
   });
@@ -132,7 +163,7 @@ async function runInteractiveMode(options: GenerateCommandOptions): Promise<{
 }> {
   console.log(chalk.cyan('🤖 Interactive Project Generation\n'));
 
-  const answers = await inquirer.prompt([
+  const questions: inquirer.QuestionCollection = [
     {
       type: 'input',
       name: 'projectName',
@@ -163,17 +194,8 @@ async function runInteractiveMode(options: GenerateCommandOptions): Promise<{
       type: 'list',
       name: 'framework',
       message: 'Framework:',
-      choices: (answers: any) => {
-        const frameworks = {
-          web: ['Next.js', 'React', 'Vue.js', 'Svelte'],
-          api: ['Express.js', 'Fastify', 'NestJS', 'Hapi'],
-          mobile: ['React Native', 'Flutter', 'Ionic'],
-          desktop: ['Electron', 'Tauri', 'Flutter Desktop'],
-          blockchain: ['Next.js + Anchor', 'React + Hardhat', 'Vue + Truffle'],
-          ai: ['LangChain + Node.js', 'Python + FastAPI', 'Node.js + Express'],
-          fullstack: ['Next.js', 'MEAN', 'MERN', 'T3 Stack']
-        };
-        return frameworks[answers.projectType] || frameworks.web;
+      choices: (answers: { projectType: keyof typeof FRAMEWORKS }) => {
+        return FRAMEWORKS[answers.projectType] || FRAMEWORKS.web;
       }
     },
     {
@@ -183,7 +205,9 @@ async function runInteractiveMode(options: GenerateCommandOptions): Promise<{
       choices: ['TypeScript', 'JavaScript', 'Python', 'Rust'],
       default: 'TypeScript'
     }
-  ]);
+  ];
+
+  const answers = await inquirer.prompt(questions);
 
   const context: TemplateContext = {
     projectName: answers.projectName,
