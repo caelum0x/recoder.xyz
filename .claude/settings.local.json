@@ -98,7 +98,16 @@
       "Bash(echo:*)",
       "Bash(export NODE_ENV=production)",
       "Bash(./production-deploy.sh)",
-      "Bash(./scripts/platform-health-check.sh:*)"
+      "Bash(./scripts/platform-health-check.sh:*)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts agent \"build a React component for file upload with drag and drop\" --agent web)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts generate \"create a React file upload component with drag and drop functionality\")",
+      "Bash(pnpm --filter recoder-cli-router run build)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts plan \"build a complete e-commerce platform with React, Node.js, PostgreSQL and Stripe payments\")",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts generate \"create a React file upload component\" --type web --framework react)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts generate \"create a React file upload component with drag and drop\" --type web --validate)",
+      "Bash(./test-desktop.sh:*)",
+      "Bash(gh run list:*)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts --help)"
     ],
     "deny": []
   }

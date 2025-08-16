@@ -3,8 +3,9 @@
  * Handles live collaboration, cursor tracking, and AI sharing
  */
 
+import { collaborationEngine } from '@/lib/collaboration/real-time-sync';
 import { NextRequest } from 'next/server';
-import { collaborationEngine } from '../../../../lib/collaboration/real-time-sync';
+//import { collaborationEngine } from '../../../../lib/collaboration/real-time-sync';
 
 // Mock WebSocket for demonstration (in production, use a proper WebSocket server)
 interface MockWebSocket {
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({
       success: false,
       message: 'Internal server error',
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     }), {
       headers: { 'Content-Type': 'application/json' },
       status: 500

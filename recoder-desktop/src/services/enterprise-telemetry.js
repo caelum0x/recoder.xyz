@@ -38,12 +38,12 @@ class EnterpriseTelemetryService extends EventEmitter {
         this.flushTimer = null;
         this.isInitialized = false;
         
-        console.log(`📊 Enterprise Telemetry initialized - Session: ${this.sessionId}`);
+        this.safeLog(`📊 Enterprise Telemetry initialized - Session: ${this.sessionId}`);
     }
 
     async initialize() {
         try {
-            console.log('📊 Initializing Enterprise Telemetry Service...');
+            this.safeLog('📊 Initializing Enterprise Telemetry Service...');
             
             // Setup data directory
             await this.setupDataDirectory();
@@ -66,12 +66,12 @@ class EnterpriseTelemetryService extends EventEmitter {
             this.setupSystemMonitoring();
             
             this.isInitialized = true;
-            console.log('✅ Enterprise Telemetry Service initialized');
+            this.safeLog('✅ Enterprise Telemetry Service initialized');
             
             return true;
             
         } catch (error) {
-            console.error('❌ Failed to initialize telemetry:', error);
+            this.safeLog('❌ Failed to initialize telemetry: ' + error.message);
             return false;
         }
     }
@@ -82,9 +82,9 @@ class EnterpriseTelemetryService extends EventEmitter {
         try {
             await fs.mkdir(dataDir, { recursive: true });
             this.dataDirectory = dataDir;
-            console.log(`📂 Telemetry data directory: ${dataDir}`);
+            this.safeLog(`📂 Telemetry data directory: ${dataDir}`);
         } catch (error) {
-            console.error('Failed to create telemetry directory:', error);
+            this.safeLog('Failed to create telemetry directory: ' + error.message);
             throw error;
         }
     }
@@ -94,7 +94,7 @@ class EnterpriseTelemetryService extends EventEmitter {
             await this.flushMetrics();
         }, this.config.flushInterval);
         
-        console.log('⏰ Periodic telemetry flush started');
+        this.safeLog('⏰ Periodic telemetry flush started');
     }
 
     setupSystemMonitoring() {
@@ -108,7 +108,7 @@ class EnterpriseTelemetryService extends EventEmitter {
             this.checkMemoryLeaks();
         }, 60000);
         
-        console.log('🖥️ System monitoring started');
+        this.safeLog('🖥️ System monitoring started');
     }
 
     collectSystemMetrics() {
@@ -138,7 +138,7 @@ class EnterpriseTelemetryService extends EventEmitter {
             });
             
         } catch (error) {
-            console.error('Failed to collect system metrics:', error);
+            this.safeLog('Failed to collect system metrics: ' + error.message);
         }
     }
 
@@ -154,7 +154,7 @@ class EnterpriseTelemetryService extends EventEmitter {
                 timestamp: Date.now()
             });
             
-            console.warn(`⚠️ High memory usage detected: ${heapUsedMB}MB heap`);
+            this.safeLog(`⚠️ High memory usage detected: ${heapUsedMB}MB heap`);
         }
     }
 
@@ -248,7 +248,7 @@ class EnterpriseTelemetryService extends EventEmitter {
         
         this.emit('error', errorMetric);
         
-        console.error(`🚨 Telemetry Error [${severity}]:`, error.message);
+        this.safeLog(`🚨 Telemetry Error [${severity}]: ${error.message}`);
     }
 
     // GENERIC EVENT TRACKING
@@ -384,7 +384,7 @@ class EnterpriseTelemetryService extends EventEmitter {
             return report;
             
         } catch (error) {
-            console.error('Failed to generate telemetry report:', error);
+            this.safeLog('Failed to generate telemetry report: ' + error.message);
             return null;
         }
     }
@@ -554,7 +554,7 @@ class EnterpriseTelemetryService extends EventEmitter {
 
     // CLEANUP
     async cleanup() {
-        console.log('🧹 Cleaning up Enterprise Telemetry...');
+        this.safeLog('🧹 Cleaning up Enterprise Telemetry...');
         
         if (this.flushTimer) {
             clearInterval(this.flushTimer);
@@ -573,7 +573,7 @@ class EnterpriseTelemetryService extends EventEmitter {
         // Final flush for session end
         await this.flushMetrics();
         
-        console.log('✅ Enterprise Telemetry cleanup complete');
+        this.safeLog('✅ Enterprise Telemetry cleanup complete');
     }
 
     // PUBLIC API METHODS
@@ -583,12 +583,12 @@ class EnterpriseTelemetryService extends EventEmitter {
 
     disable() {
         this.config.enabled = false;
-        console.log('📊 Enterprise Telemetry disabled');
+        this.safeLog('📊 Enterprise Telemetry disabled');
     }
 
     enable() {
         this.config.enabled = true;
-        console.log('📊 Enterprise Telemetry enabled');
+        this.safeLog('📊 Enterprise Telemetry enabled');
     }
 
     getSessionId() {
@@ -609,14 +609,20 @@ class EnterpriseTelemetryService extends EventEmitter {
         };
     }
 
-    // Safe logging to prevent EPIPE errors
+    // Safe logging to prevent EPIPE errors using file-based logging
     safeLog(message) {
         try {
-            if (process.stdout && !process.stdout.destroyed) {
-                console.log(message);
+            // Use file-based logging instead of stdout to prevent EPIPE
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            
+            // Write to log file instead of stdout
+            if (this.dataDirectory) {
+                const logPath = path.join(this.dataDirectory, 'desktop.log');
+                require('fs').appendFileSync(logPath, logEntry, 'utf8');
             }
         } catch (error) {
-            // Silently fail to prevent blocking
+            // Completely silent on any error
         }
     }
 }

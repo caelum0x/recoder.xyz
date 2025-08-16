@@ -1,125 +1,489 @@
 /**
- * Real-time Collaboration System for Recoder.xyz
- * Supports multi-user AI-assisted development with live sync
+ * Real-time Collaboration Engine
+ * Manages live collaboration sessions, user presence, and synchronized changes
  */
 
-import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 
-interface CollaborationUser {
+export interface User {
   id: string;
   name: string;
   email: string;
   cursor?: {
     line: number;
     column: number;
-    selection?: { start: number; end: number };
+    selection?: {
+      start: { line: number; column: number };
+      end: { line: number; column: number };
+    };
   };
-  status: 'active' | 'idle' | 'away';
-  lastActivity: number;
-  color: string; // User highlight color
+  lastSeen: number;
 }
 
-interface CodeChange {
+export interface Change {
   id: string;
   userId: string;
   timestamp: number;
   type: 'insert' | 'delete' | 'replace';
   position: {
-    start: { line: number; column: number };
-    end: { line: number; column: number };
+    line: number;
+    column: number;
   };
   content: string;
-  metadata: {
+  metadata?: {
+    description?: string;
     aiGenerated?: boolean;
-    aiProvider?: string;
-    aiModel?: string;
-    confidence?: number;
+    model?: string;
   };
 }
 
-interface CollaborationSession {
+export interface AIGeneration {
+  id: string;
+  userId: string;
+  timestamp: number;
+  type: 'code' | 'suggestion' | 'completion';
+  content: string;
+  context: {
+    prompt: string;
+    model: string;
+    language?: string;
+    framework?: string;
+  };
+  approved: boolean;
+  appliedAt?: number;
+}
+
+export interface CollaborationSession {
   id: string;
   name: string;
-  description: string;
-  projectId: string;
-  participants: CollaborationUser[];
-  permissions: {
-    canEdit: string[];
-    canComment: string[];
-    canInvite: string[];
-    isPublic: boolean;
-  };
-  aiContext: {
-    sharedHistory: any[];
-    preferredModels: string[];
-    collaborativePrompts: boolean;
-  };
+  createdBy: string;
   createdAt: number;
   lastActivity: number;
+  participants: User[];
+  changes: Change[];
+  aiGenerations: AIGeneration[];
+  settings: {
+    maxParticipants: number;
+    allowAISharing: boolean;
+    requireApproval: boolean;
+    autoSave: boolean;
+  };
+  metadata: {
+    project?: string;
+    repository?: string;
+    branch?: string;
+    files?: string[];
+  };
 }
 
-/**
- * Real-time Collaboration Engine
- */
-export class CollaborationEngine extends EventEmitter {
-  private sessions = new Map<string, CollaborationSession>();
-  private connections = new Map<string, WebSocket>();
-  private changeHistory = new Map<string, CodeChange[]>();
-  private cursorPositions = new Map<string, CollaborationUser['cursor']>();
-  
+class CollaborationEngine {
+  private sessions: Map<string, CollaborationSession> = new Map();
+  private userSessions: Map<string, Set<string>> = new Map(); // userId -> sessionIds
+  private changeListeners: Map<string, Set<Function>> = new Map(); // sessionId -> listeners
+  private maxSessions = 1000;
+  private sessionTimeout = 24 * 60 * 60 * 1000; // 24 hours
+
   constructor() {
-    super();
-    this.setupHeartbeat();
+    // Cleanup inactive sessions every hour
+    setInterval(() => this.cleanupInactiveSessions(), 60 * 60 * 1000);
   }
 
   /**
    * Create a new collaboration session
    */
-  async createSession(
-    userId: string,
-    projectData: {
-      name: string;
-      description: string;
-      projectId: string;
-      isPublic?: boolean;
+  async createSession(userId: string, options: {
+    name?: string;
+    maxParticipants?: number;
+    allowAISharing?: boolean;
+    requireApproval?: boolean;
+    autoSave?: boolean;
+    metadata?: any;
+  } = {}): Promise<string> {
+    if (this.sessions.size >= this.maxSessions) {
+      throw new Error('Maximum number of sessions reached');
     }
-  ): Promise<string> {
-    const sessionId = this.generateSessionId();
-    
+
+    const sessionId = randomUUID();
+    const now = Date.now();
+
     const session: CollaborationSession = {
       id: sessionId,
-      name: projectData.name,
-      description: projectData.description,
-      projectId: projectData.projectId,
+      name: options.name || `Session ${sessionId.slice(0, 8)}`,
+      createdBy: userId,
+      createdAt: now,
+      lastActivity: now,
       participants: [],
-      permissions: {
-        canEdit: [userId], // Creator can edit
-        canComment: [userId],
-        canInvite: [userId],
-        isPublic: projectData.isPublic || false
+      changes: [],
+      aiGenerations: [],
+      settings: {
+        maxParticipants: options.maxParticipants || 10,
+        allowAISharing: options.allowAISharing !== false,
+        requireApproval: options.requireApproval || false,
+        autoSave: options.autoSave !== false,
       },
-      aiContext: {
-        sharedHistory: [],
-        preferredModels: ['local-chat-model'],
-        collaborativePrompts: true
-      },
-      createdAt: Date.now(),
-      lastActivity: Date.now()
+      metadata: options.metadata || {},
     };
-    
+
     this.sessions.set(sessionId, session);
-    this.changeHistory.set(sessionId, []);
-    
-    console.log(`🤝 Created collaboration session: ${sessionId}`);\n    
+    this.changeListeners.set(sessionId, new Set());
+
+    // Auto-join the creator
+    await this.joinSession(sessionId, {
+      id: userId,
+      name: 'Creator',
+      email: '',
+    });
+
     return sessionId;
   }
 
   /**
    * Join an existing collaboration session
    */
-  async joinSession(
-    sessionId: string,
-    user: Omit<CollaborationUser, 'color' | 'status' | 'lastActivity'>
-  ): Promise<boolean> {
-    const session = this.sessions.get(sessionId);\n    
-    if (!session) {\n      console.warn(`Session ${sessionId} not found`);\n      return false;\n    }\n\n    // Check permissions\n    if (!session.permissions.isPublic && \n        !session.permissions.canEdit.includes(user.id) &&\n        !session.permissions.canComment.includes(user.id)) {\n      console.warn(`User ${user.id} not authorized for session ${sessionId}`);\n      return false;\n    }\n\n    // Add user to session\n    const collaborationUser: CollaborationUser = {\n      ...user,\n      status: 'active',\n      lastActivity: Date.now(),\n      color: this.generateUserColor(user.id)\n    };\n    \n    // Remove existing user if already in session\n    session.participants = session.participants.filter(p => p.id !== user.id);\n    session.participants.push(collaborationUser);\n    session.lastActivity = Date.now();\n    \n    // Notify other participants\n    this.broadcastToSession(sessionId, {\n      type: 'user_joined',\n      user: collaborationUser,\n      timestamp: Date.now()\n    });\n    \n    console.log(`👤 User ${user.name} joined session ${sessionId}`);\n    return true;\n  }\n\n  /**\n   * Leave a collaboration session\n   */\n  async leaveSession(sessionId: string, userId: string): Promise<void> {\n    const session = this.sessions.get(sessionId);\n    if (!session) return;\n    \n    // Remove user from participants\n    session.participants = session.participants.filter(p => p.id !== userId);\n    session.lastActivity = Date.now();\n    \n    // Clean up cursor position\n    this.cursorPositions.delete(`${sessionId}:${userId}`);\n    \n    // Notify other participants\n    this.broadcastToSession(sessionId, {\n      type: 'user_left',\n      userId,\n      timestamp: Date.now()\n    });\n    \n    // Clean up empty sessions\n    if (session.participants.length === 0) {\n      this.sessions.delete(sessionId);\n      this.changeHistory.delete(sessionId);\n      console.log(`🗑️ Cleaned up empty session ${sessionId}`);\n    }\n    \n    console.log(`👋 User ${userId} left session ${sessionId}`);\n  }\n\n  /**\n   * Apply a code change to the session\n   */\n  async applyChange(\n    sessionId: string,\n    userId: string,\n    change: Omit<CodeChange, 'id' | 'timestamp' | 'userId'>\n  ): Promise<boolean> {\n    const session = this.sessions.get(sessionId);\n    if (!session) return false;\n    \n    // Check edit permissions\n    if (!session.permissions.canEdit.includes(userId)) {\n      console.warn(`User ${userId} not authorized to edit session ${sessionId}`);\n      return false;\n    }\n    \n    const codeChange: CodeChange = {\n      id: this.generateChangeId(),\n      userId,\n      timestamp: Date.now(),\n      ...change\n    };\n    \n    // Store change in history\n    const history = this.changeHistory.get(sessionId) || [];\n    history.push(codeChange);\n    this.changeHistory.set(sessionId, history);\n    \n    // Update session activity\n    session.lastActivity = Date.now();\n    \n    // Broadcast change to all participants except sender\n    this.broadcastToSession(sessionId, {\n      type: 'code_change',\n      change: codeChange\n    }, userId);\n    \n    console.log(`📝 Applied change ${codeChange.id} in session ${sessionId}`);\n    return true;\n  }\n\n  /**\n   * Update user cursor position\n   */\n  updateCursor(\n    sessionId: string,\n    userId: string,\n    cursor: CollaborationUser['cursor']\n  ): void {\n    const session = this.sessions.get(sessionId);\n    if (!session) return;\n    \n    const user = session.participants.find(p => p.id === userId);\n    if (!user) return;\n    \n    user.cursor = cursor;\n    user.lastActivity = Date.now();\n    \n    // Broadcast cursor update\n    this.broadcastToSession(sessionId, {\n      type: 'cursor_update',\n      userId,\n      cursor\n    }, userId);\n  }\n\n  /**\n   * Share AI generation with the team\n   */\n  async shareAIGeneration(\n    sessionId: string,\n    userId: string,\n    generation: {\n      prompt: string;\n      response: string;\n      model: string;\n      provider: string;\n      position?: { line: number; column: number };\n    }\n  ): Promise<void> {\n    const session = this.sessions.get(sessionId);\n    if (!session) return;\n    \n    // Add to shared AI context\n    session.aiContext.sharedHistory.push({\n      userId,\n      timestamp: Date.now(),\n      ...generation\n    });\n    \n    // Broadcast AI generation to team\n    this.broadcastToSession(sessionId, {\n      type: 'ai_generation_shared',\n      userId,\n      generation,\n      timestamp: Date.now()\n    });\n    \n    console.log(`🤖 Shared AI generation in session ${sessionId}`);\n  }\n\n  /**\n   * Get session information\n   */\n  getSession(sessionId: string): CollaborationSession | null {\n    return this.sessions.get(sessionId) || null;\n  }\n\n  /**\n   * Get change history for a session\n   */\n  getChangeHistory(sessionId: string, fromTimestamp?: number): CodeChange[] {\n    const history = this.changeHistory.get(sessionId) || [];\n    if (!fromTimestamp) return history;\n    \n    return history.filter(change => change.timestamp > fromTimestamp);\n  }\n\n  /**\n   * Broadcast message to all session participants\n   */\n  private broadcastToSession(\n    sessionId: string,\n    message: any,\n    excludeUserId?: string\n  ): void {\n    const session = this.sessions.get(sessionId);\n    if (!session) return;\n    \n    session.participants.forEach(participant => {\n      if (excludeUserId && participant.id === excludeUserId) return;\n      \n      const connection = this.connections.get(participant.id);\n      if (connection && connection.readyState === WebSocket.OPEN) {\n        connection.send(JSON.stringify({\n          sessionId,\n          ...message\n        }));\n      }\n    });\n  }\n\n  /**\n   * Generate unique session ID\n   */\n  private generateSessionId(): string {\n    return `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;\n  }\n\n  /**\n   * Generate unique change ID\n   */\n  private generateChangeId(): string {\n    return `change_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;\n  }\n\n  /**\n   * Generate consistent user color based on user ID\n   */\n  private generateUserColor(userId: string): string {\n    const colors = [\n      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',\n      '#FF9FF3', '#54A0FF', '#5F27CD', '#00D2D3', '#FF9F43'\n    ];\n    \n    let hash = 0;\n    for (let i = 0; i < userId.length; i++) {\n      hash = userId.charCodeAt(i) + ((hash << 5) - hash);\n    }\n    \n    return colors[Math.abs(hash) % colors.length];\n  }\n\n  /**\n   * Setup heartbeat to clean up inactive sessions\n   */\n  private setupHeartbeat(): void {\n    setInterval(() => {\n      const now = Date.now();\n      const inactiveThreshold = 1000 * 60 * 30; // 30 minutes\n      \n      for (const [sessionId, session] of this.sessions.entries()) {\n        if (now - session.lastActivity > inactiveThreshold) {\n          console.log(`💤 Cleaning up inactive session ${sessionId}`);\n          this.sessions.delete(sessionId);\n          this.changeHistory.delete(sessionId);\n        }\n      }\n    }, 1000 * 60 * 5); // Check every 5 minutes\n  }\n\n  /**\n   * Register WebSocket connection for real-time updates\n   */\n  registerConnection(userId: string, ws: WebSocket): void {\n    this.connections.set(userId, ws);\n    \n    ws.on('close', () => {\n      this.connections.delete(userId);\n      // Leave all sessions for this user\n      for (const sessionId of this.sessions.keys()) {\n        this.leaveSession(sessionId, userId);\n      }\n    });\n  }\n\n  /**\n   * Get collaboration statistics\n   */\n  getStats() {\n    const totalSessions = this.sessions.size;\n    const totalParticipants = Array.from(this.sessions.values())\n      .reduce((sum, session) => sum + session.participants.length, 0);\n    const totalChanges = Array.from(this.changeHistory.values())\n      .reduce((sum, history) => sum + history.length, 0);\n    \n    return {\n      activeSessions: totalSessions,\n      totalParticipants,\n      totalChanges,\n      avgParticipantsPerSession: totalSessions > 0 ? totalParticipants / totalSessions : 0\n    };\n  }\n}\n\n// Singleton instance\nexport const collaborationEngine = new CollaborationEngine();\n\nexport default collaborationEngine;"
+  async joinSession(sessionId: string, user: Omit<User, 'lastSeen'>): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+
+    if (session.participants.length >= session.settings.maxParticipants) {
+      return false;
+    }
+
+    // Check if user is already in session
+    const existingIndex = session.participants.findIndex(p => p.id === user.id);
+    if (existingIndex >= 0) {
+      // Update existing user
+      session.participants[existingIndex] = {
+        ...user,
+        lastSeen: Date.now(),
+      };
+    } else {
+      // Add new user
+      session.participants.push({
+        ...user,
+        lastSeen: Date.now(),
+      });
+    }
+
+    session.lastActivity = Date.now();
+
+    // Track user sessions
+    if (!this.userSessions.has(user.id)) {
+      this.userSessions.set(user.id, new Set());
+    }
+    this.userSessions.get(user.id)!.add(sessionId);
+
+    // Notify listeners
+    this.notifyListeners(sessionId, {
+      type: 'user_joined',
+      user,
+      timestamp: Date.now(),
+    });
+
+    return true;
+  }
+
+  /**
+   * Leave a collaboration session
+   */
+  async leaveSession(sessionId: string, userId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return;
+    }
+
+    const userIndex = session.participants.findIndex(p => p.id === userId);
+    if (userIndex >= 0) {
+      const user = session.participants[userIndex];
+      session.participants.splice(userIndex, 1);
+      session.lastActivity = Date.now();
+
+      // Remove from user sessions tracking
+      const userSessionSet = this.userSessions.get(userId);
+      if (userSessionSet) {
+        userSessionSet.delete(sessionId);
+        if (userSessionSet.size === 0) {
+          this.userSessions.delete(userId);
+        }
+      }
+
+      // Notify listeners
+      this.notifyListeners(sessionId, {
+        type: 'user_left',
+        user,
+        timestamp: Date.now(),
+      });
+
+      // Delete session if empty and not the creator's session
+      if (session.participants.length === 0 && session.createdBy !== userId) {
+        this.sessions.delete(sessionId);
+        this.changeListeners.delete(sessionId);
+      }
+    }
+  }
+
+  /**
+   * Apply a code change to the session
+   */
+  async applyChange(sessionId: string, userId: string, changeData: {
+    type: 'insert' | 'delete' | 'replace';
+    position: { line: number; column: number };
+    content: string;
+    metadata?: any;
+  }): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+
+    const user = session.participants.find(p => p.id === userId);
+    if (!user) {
+      return false;
+    }
+
+    const change: Change = {
+      id: randomUUID(),
+      userId,
+      timestamp: Date.now(),
+      ...changeData,
+    };
+
+    session.changes.push(change);
+    session.lastActivity = Date.now();
+
+    // Keep only last 1000 changes to prevent memory issues
+    if (session.changes.length > 1000) {
+      session.changes = session.changes.slice(-1000);
+    }
+
+    // Notify listeners
+    this.notifyListeners(sessionId, {
+      type: 'code_change',
+      change,
+      user,
+      timestamp: Date.now(),
+    });
+
+    return true;
+  }
+
+  /**
+   * Update user cursor position
+   */
+  updateCursor(sessionId: string, userId: string, cursor: User['cursor']): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return;
+    }
+
+    const user = session.participants.find(p => p.id === userId);
+    if (!user) {
+      return;
+    }
+
+    user.cursor = cursor;
+    user.lastSeen = Date.now();
+    session.lastActivity = Date.now();
+
+    // Notify listeners
+    this.notifyListeners(sessionId, {
+      type: 'cursor_update',
+      userId,
+      cursor,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Share AI generation with the team
+   */
+  async shareAIGeneration(sessionId: string, userId: string, generation: {
+    type: 'code' | 'suggestion' | 'completion';
+    content: string;
+    context: {
+      prompt: string;
+      model: string;
+      language?: string;
+      framework?: string;
+    };
+  }): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.settings.allowAISharing) {
+      return;
+    }
+
+    const user = session.participants.find(p => p.id === userId);
+    if (!user) {
+      return;
+    }
+
+    const aiGeneration: AIGeneration = {
+      id: randomUUID(),
+      userId,
+      timestamp: Date.now(),
+      approved: !session.settings.requireApproval,
+      ...generation,
+    };
+
+    session.aiGenerations.push(aiGeneration);
+    session.lastActivity = Date.now();
+
+    // Keep only last 100 AI generations
+    if (session.aiGenerations.length > 100) {
+      session.aiGenerations = session.aiGenerations.slice(-100);
+    }
+
+    // Notify listeners
+    this.notifyListeners(sessionId, {
+      type: 'ai_generation_shared',
+      generation: aiGeneration,
+      user,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Get session information
+   */
+  getSession(sessionId: string): CollaborationSession | null {
+    return this.sessions.get(sessionId) || null;
+  }
+
+  /**
+   * Get change history for a session
+   */
+  getChangeHistory(sessionId: string, fromTimestamp?: number): Change[] {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return [];
+    }
+
+    if (fromTimestamp) {
+      return session.changes.filter(change => change.timestamp >= fromTimestamp);
+    }
+
+    return [...session.changes];
+  }
+
+  /**
+   * Get collaboration statistics
+   */
+  getStats(): {
+    activeSessions: number;
+    totalParticipants: number;
+    totalChanges: number;
+    totalAIGenerations: number;
+    averageSessionSize: number;
+  } {
+    let totalParticipants = 0;
+    let totalChanges = 0;
+    let totalAIGenerations = 0;
+
+    for (const session of this.sessions.values()) {
+      totalParticipants += session.participants.length;
+      totalChanges += session.changes.length;
+      totalAIGenerations += session.aiGenerations.length;
+    }
+
+    return {
+      activeSessions: this.sessions.size,
+      totalParticipants,
+      totalChanges,
+      totalAIGenerations,
+      averageSessionSize: this.sessions.size > 0 ? totalParticipants / this.sessions.size : 0,
+    };
+  }
+
+  /**
+   * Get all sessions for a user
+   */
+  getUserSessions(userId: string): CollaborationSession[] {
+    const sessionIds = this.userSessions.get(userId) || new Set();
+    return Array.from(sessionIds)
+      .map(id => this.sessions.get(id))
+      .filter(Boolean) as CollaborationSession[];
+  }
+
+  /**
+   * Add a listener for session events
+   */
+  addListener(sessionId: string, listener: Function): void {
+    if (!this.changeListeners.has(sessionId)) {
+      this.changeListeners.set(sessionId, new Set());
+    }
+    this.changeListeners.get(sessionId)!.add(listener);
+  }
+
+  /**
+   * Remove a listener for session events
+   */
+  removeListener(sessionId: string, listener: Function): void {
+    const listeners = this.changeListeners.get(sessionId);
+    if (listeners) {
+      listeners.delete(listener);
+    }
+  }
+
+  /**
+   * Notify all listeners of a session event
+   */
+  private notifyListeners(sessionId: string, event: any): void {
+    const listeners = this.changeListeners.get(sessionId);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error('Error in collaboration listener:', error);
+        }
+      });
+    }
+  }
+
+  /**
+   * Clean up inactive sessions
+   */
+  private cleanupInactiveSessions(): void {
+    const now = Date.now();
+    const sessionsToDelete: string[] = [];
+
+    for (const [sessionId, session] of this.sessions.entries()) {
+      // Remove inactive participants
+      session.participants = session.participants.filter(
+        participant => now - participant.lastSeen < this.sessionTimeout
+      );
+
+      // Delete empty sessions or sessions with no activity
+      if (
+        session.participants.length === 0 ||
+        now - session.lastActivity > this.sessionTimeout
+      ) {
+        sessionsToDelete.push(sessionId);
+      }
+    }
+
+    // Clean up sessions
+    sessionsToDelete.forEach(sessionId => {
+      this.sessions.delete(sessionId);
+      this.changeListeners.delete(sessionId);
+    });
+
+    // Clean up user session tracking
+    for (const [userId, sessionIds] of this.userSessions.entries()) {
+      sessionsToDelete.forEach(sessionId => sessionIds.delete(sessionId));
+      if (sessionIds.size === 0) {
+        this.userSessions.delete(userId);
+      }
+    }
+
+    if (sessionsToDelete.length > 0) {
+      console.log(`Cleaned up ${sessionsToDelete.length} inactive collaboration sessions`);
+    }
+  }
+}
+
+// Export singleton instance
+export const collaborationEngine = new CollaborationEngine();
+
+// Types are already exported above with their declarations
