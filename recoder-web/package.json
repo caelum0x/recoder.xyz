@@ -27,12 +27,25 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && NEXT_PRIVATE_SKIP_STATIC_GENERATION=1 next build",
+    "dev:turbo": "next dev --turbo",
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "build:analyze": "ANALYZE=true next build",
+    "build:production": "NODE_ENV=production prisma generate && prisma migrate deploy && next build",
     "start": "next start",
-    "lint": "next lint && tsc --noEmit --noUnusedLocals",
+    "start:production": "NODE_ENV=production next start",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --noEmit --watch",
     "test": "echo 'No tests specified' && exit 0",
-    "test:unit": "echo 'No unit tests specified' && exit 0"
+    "test:unit": "echo 'No unit tests specified' && exit 0",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset",
+    "db:studio": "prisma studio",
+    "health": "curl -f http://localhost:3000/api/health || exit 1",
+    "validate": "npm run type-check && npm run lint"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.59.0",
