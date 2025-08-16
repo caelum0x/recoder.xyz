@@ -4,15 +4,9 @@
     "slug": "recoder-chat",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "scheme": "recoder-chat",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "bundleIdentifier": "xyz.recoder.chat",
       "supportsTablet": true,
@@ -30,10 +24,6 @@
     "android": {
       "package": "xyz.recoder.chat",
       "versionCode": 1,
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
@@ -45,8 +35,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/favicon.png"
+      "output": "static"
     },
     "plugins": [
       "expo-router",
@@ -67,7 +56,6 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
           "color": "#ffffff",
           "sounds": ["./assets/sounds/notification.wav"]
         }

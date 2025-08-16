@@ -10,7 +10,7 @@ import { setupChatCommands } from './chat';
 import { setupTemplateCommands } from './templates';
 import { setupValidateCommands } from './validate';
 import { setupModelCommands } from './models';
-import { setupGenerateCommands } from './generate';
+import { generateCommand } from './generate';
 import { createPlanCommand } from './plan';
 import { createStructureCommand } from './structure';
 import { routerCommand } from './router';
@@ -39,7 +39,7 @@ export function setupCommands(program: Command): void {
   setupModelCommands(program);
   
   // Code Generation commands
-  setupGenerateCommands(program);
+  program.addCommand(generateCommand);
   
   // Plan commands
   program.addCommand(createPlanCommand());

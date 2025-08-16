@@ -402,7 +402,7 @@ async function startInteractiveMode(): Promise<void> {
         message: chalk.cyan('What would you like to build?'),
         prefix: '🤖'
       }
-    ]);
+    ] as any);
 
     if (request.toLowerCase() === 'exit' || request.toLowerCase() === 'quit') {
       console.log(chalk.green('👋 Happy coding!'));

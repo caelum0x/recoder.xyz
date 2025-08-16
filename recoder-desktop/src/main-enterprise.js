@@ -13,12 +13,30 @@
  * - Offline AI integration with multiple providers
  */
 
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, systemPreferences } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, systemPreferences, crashReporter } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const { EventEmitter } = require('events');
+
+// Professional Crash Reporting Configuration
+crashReporter.start({
+  productName: 'Recoder Desktop Enterprise',
+  companyName: 'Recoder.xyz',
+  submitURL: 'https://api.recoder.xyz/crashes', // Replace with actual endpoint
+  uploadToServer: app.isPackaged, // Only in production
+  ignoreSystemCrashHandler: false,
+  rateLimit: true,
+  compress: true,
+  extra: {
+    version: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    buildType: 'enterprise',
+    sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+});
 
 // Enterprise service imports
 const { EnterpriseTelemetryService } = require('./services/enterprise-telemetry');
@@ -34,32 +52,18 @@ const ENTERPRISE_CONFIG = {
   services: {
     chat: {
       name: 'AI Chat Platform',
-      ports: [3001, 3004, 3005],
+      ports: [3004, 3001, 3005],
       healthPath: '/',
-      authBypass: '/api/auth/guest',
+      authBypass: null, // Skip auth bypass due to Next.js issues
       category: 'ai-platform'
     },
     web: {
       name: 'Web Platform',
-      ports: [3003, 3006, 3007],
+      ports: [3006, 3003, 3007],
       healthPath: '/',
       category: 'web-platform'
     },
-    extension: {
-      name: 'VS Code Extension',
-      ports: [], // VS Code extension - no web service
-      healthPath: '/',
-      category: 'development-tools',
-      type: 'vscode-extension',
-      installUrl: 'vscode:extension/recoder.recoder-extension'
-    },
-    'ai-editor': {
-      name: 'Ultimate AI Code Editor',
-      ports: [], // Local panel - no web service
-      healthPath: '/',
-      category: 'ai-tools',
-      type: 'local-panel'
-    },
+    // Removed extension and ai-editor as they don't have web services to discover
     backend: {
       name: 'Backend API',
       ports: [3001, 8001, 8000],
@@ -150,8 +154,10 @@ class EnterpriseServiceManager extends EventEmitter {
   async initialize() {
     console.log('🏢 Initializing Enterprise Service Manager...');
     
-    // Discover all services
-    await this.discoverServices();
+    // Start service discovery in background (don't wait)
+    this.discoverServices().catch(error => {
+      console.error('Service discovery failed:', error);
+    });
     
     // Start continuous health monitoring
     this.startHealthMonitoring();
@@ -163,7 +169,10 @@ class EnterpriseServiceManager extends EventEmitter {
   async discoverServices() {
     console.log('🔍 Discovering enterprise services...');
     
-    for (const [serviceId, config] of Object.entries(ENTERPRISE_CONFIG.services)) {
+    // Run all service discoveries in parallel for speed, skip services with no ports
+    const discoveryPromises = Object.entries(ENTERPRISE_CONFIG.services)
+      .filter(([serviceId, config]) => config.ports && config.ports.length > 0)
+      .map(async ([serviceId, config]) => {
       try {
         const service = await this.discoverService(serviceId, config);
         if (service) {
@@ -171,8 +180,9 @@ class EnterpriseServiceManager extends EventEmitter {
           appState.updateService(serviceId, service);
           console.log(`✅ Service discovered: ${service.name} at ${service.url}`);
         }
+        return { serviceId, success: true, service };
       } catch (error) {
-        console.error(`❌ Failed to discover ${serviceId}:`, error.message);
+        console.log(`❌ Failed to discover ${serviceId}: Service ${serviceId} not available on any configured port`);
         this.services.set(serviceId, {
           id: serviceId,
           name: config.name,
@@ -180,8 +190,12 @@ class EnterpriseServiceManager extends EventEmitter {
           error: error.message,
           category: config.category
         });
+        return { serviceId, success: false, error: error.message };
       }
-    }
+    });
+
+    // Wait for all discoveries to complete
+    await Promise.allSettled(discoveryPromises);
 
     this.emit('discovery:complete', {
       total: this.services.size,
@@ -200,9 +214,9 @@ class EnterpriseServiceManager extends EventEmitter {
         console.log(`🔎 Testing ${serviceId} at ${baseUrl}...`);
 
         const response = await axios.get(healthUrl, {
-          timeout: 5000,
-          maxRedirects: 0,
-          validateStatus: (status) => status < 500 && status !== 404
+          timeout: 2000, // Reduced from 5000ms
+          maxRedirects: 2, // Reduced from 5
+          validateStatus: (status) => status !== 0 // Accept any response as sign of life
         });
 
         // Service is responding
@@ -417,11 +431,18 @@ function createEnterpriseWindow() {
       preload: path.join(__dirname, 'preload-enterprise.js'),
       webSecurity: false, // Disabled for localhost development
       allowRunningInsecureContent: true,
-      experimentalFeatures: true
+      experimentalFeatures: true,
+      backgroundThrottling: false, // Keep performance high
+      v8CacheOptions: 'code', // Cache compiled JS for faster startup
+      spellcheck: false, // Disable spell check for performance
+      enableWebSQL: false, // Disable WebSQL for security and performance
+      partition: 'persist:main' // Separate session for isolation
     },
     show: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    icon: path.join(__dirname, '../assets/icon.png')
+    icon: path.join(__dirname, '../assets/icon.png'),
+    backgroundColor: '#0f172a', // Prevent white flash
+    vibrancy: process.platform === 'darwin' ? 'ultra-dark' : undefined
   });
 
   // Load enterprise UI
@@ -506,16 +527,35 @@ function setupEnterpriseIPCHandlers() {
       // Get service URL with intelligent fallback
       const serviceUrl = await serviceManager.getServiceUrl(appName, true);
       
+      // Enhanced config with professional features
+      const service = serviceManager.getService(appName);
+      const config = {
+        url: serviceUrl,
+        allow: 'camera; microphone; clipboard-read; clipboard-write; fullscreen; display-capture; autoplay',
+        sandbox: 'allow-same-origin allow-scripts allow-forms allow-popups allow-downloads allow-modals allow-pointer-lock',
+        title: service?.name || appName,
+        category: service?.category || 'service'
+      };
+
+      // Add authentication headers if available
+      if (securityManager?.authToken) {
+        config.headers = {
+          'Authorization': `Bearer ${securityManager.authToken}`,
+          'X-Recoder-Desktop': 'true',
+          'X-Session-ID': telemetryService?.sessionId
+        };
+      }
+
       return {
         success: true,
         type: 'service',
         appName,
-        config: {
-          url: serviceUrl,
-          allow: 'camera; microphone; clipboard-read; clipboard-write; fullscreen',
-          sandbox: 'allow-same-origin allow-scripts allow-forms allow-popups allow-downloads allow-modals'
-        },
-        service: serviceManager.getService(appName)
+        config,
+        service: service,
+        performance: {
+          loadTime: Date.now(),
+          routing: 'professional'
+        }
       };
 
     } catch (error) {
@@ -561,17 +601,63 @@ function setupEnterpriseIPCHandlers() {
   // AI Integration
   ipcMain.handle('ai:check-ollama', async () => {
     try {
-      const response = await axios.get('http://localhost:11434/api/tags', { timeout: 3000 });
+      console.log('🦙 Professional Ollama integration check...');
+      const startTime = Date.now();
+      
+      const response = await axios.get('http://localhost:11434/api/tags', { 
+        timeout: 3000,
+        headers: {
+          'User-Agent': 'Recoder-Desktop/1.0.0'
+        }
+      });
+      
+      const responseTime = Date.now() - startTime;
+      const models = response.data.models || [];
+      
+      // Test a model if available
+      let workingModel = null;
+      if (models.length > 0) {
+        try {
+          const testModel = models.find(m => m.name.includes('llama3')) || models[0];
+          await axios.post('http://localhost:11434/api/generate', {
+            model: testModel.name,
+            prompt: 'Hello',
+            stream: false
+          }, { timeout: 5000 });
+          workingModel = testModel.name;
+        } catch (testError) {
+          console.log('Model test failed:', testError.message);
+        }
+      }
+      
       return {
         available: true,
-        models: response.data.models || [],
-        version: response.headers['x-ollama-version'] || 'unknown'
+        models: models.map(m => ({
+          name: m.name,
+          size: m.size,
+          modified: m.modified_at,
+          working: m.name === workingModel
+        })),
+        version: response.headers['x-ollama-version'] || 'unknown',
+        performance: {
+          responseTime,
+          modelCount: models.length,
+          workingModel
+        },
+        tested: true
       };
     } catch (error) {
+      console.log('❌ Ollama integration failed:', error.message);
       return {
         available: false,
         error: error.message,
-        installUrl: 'https://ollama.ai/download'
+        installUrl: 'https://ollama.ai/download',
+        troubleshooting: {
+          isConnRefused: error.code === 'ECONNREFUSED',
+          suggestion: error.code === 'ECONNREFUSED' ? 
+            'Start Ollama service: ollama serve' : 
+            'Check Ollama installation'
+        }
       };
     }
   });
@@ -651,19 +737,105 @@ function setupEnterpriseIPCHandlers() {
     return telemetryService ? telemetryService.isEnabled() : false;
   });
 
+  // Professional Crash Reporting Handlers
+  ipcMain.handle('crash:report', async (event, crashData) => {
+    try {
+      console.log('🚨 Crash report received:', crashData);
+      
+      const enhancedCrashData = {
+        ...crashData,
+        timestamp: new Date().toISOString(),
+        sessionId: telemetryService?.sessionId,
+        version: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+        userAgent: event.sender.userAgent || 'Unknown',
+        memoryUsage: process.memoryUsage(),
+        systemInfo: {
+          platform: process.platform,
+          arch: process.arch,
+          nodeVersion: process.version,
+          electronVersion: process.versions.electron,
+          chromeVersion: process.versions.chrome
+        }
+      };
+
+      // Log to telemetry if available
+      if (telemetryService) {
+        telemetryService.trackEvent('crash-report', enhancedCrashData);
+      }
+
+      // In production, send to crash reporting service
+      if (app.isPackaged && process.env.CRASH_REPORTING_URL) {
+        try {
+          await axios.post(process.env.CRASH_REPORTING_URL, enhancedCrashData, {
+            timeout: 10000,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-App-Version': app.getVersion(),
+              'X-Platform': process.platform
+            }
+          });
+        } catch (uploadError) {
+          console.error('Failed to upload crash report:', uploadError);
+        }
+      }
+
+      return { success: true, reportId: enhancedCrashData.sessionId };
+    } catch (error) {
+      console.error('❌ Crash reporting failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('crash:get-reports', async () => {
+    try {
+      // Get crash reports from crashReporter if available
+      const lastCrashReport = crashReporter.getLastCrashReport();
+      const uploads = crashReporter.getUploadedReports();
+      
+      return {
+        success: true,
+        lastCrash: lastCrashReport,
+        uploads: uploads.slice(-10), // Last 10 uploads
+        totalUploads: uploads.length
+      };
+    } catch (error) {
+      console.error('❌ Failed to get crash reports:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // Auto-update (production only)
   if (isProduction) {
     ipcMain.handle('update:check', async () => {
       try {
+        console.log('🔍 Professional update check initiated...');
         const result = await autoUpdater.checkForUpdates();
-        return {
+        const updateData = {
           available: result.updateInfo.version !== app.getVersion(),
           currentVersion: app.getVersion(),
           latestVersion: result.updateInfo.version,
-          releaseNotes: result.updateInfo.releaseNotes
+          releaseNotes: result.updateInfo.releaseNotes,
+          releaseDate: result.updateInfo.releaseDate,
+          size: result.updateInfo.files?.[0]?.size || 0,
+          checkTime: new Date().toISOString()
         };
+        
+        // Track update check
+        if (telemetryService) {
+          telemetryService.trackEvent('update-check', updateData);
+        }
+        
+        return updateData;
       } catch (error) {
-        return { available: false, error: error.message };
+        console.error('❌ Update check failed:', error);
+        return { 
+          available: false, 
+          error: error.message,
+          currentVersion: app.getVersion(),
+          checkTime: new Date().toISOString()
+        };
       }
     });
 

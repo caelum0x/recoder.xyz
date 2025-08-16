@@ -545,7 +545,7 @@ async function promptForAgentCreation(options: any): Promise<CreateAgentRequest>
     }
   ];
 
-  const answers = await inquirer.prompt(questions);
+  const answers = await inquirer.prompt(questions as any);
   
   const capabilities: Partial<AgentCapabilities> = {};
   answers.capabilities.forEach((cap: string) => {
@@ -595,7 +595,7 @@ async function promptForAgentUpdate(agentId: string): Promise<Partial<CreateAgen
     }
   ];
 
-  const answers = await inquirer.prompt(questions);
+  const answers = await inquirer.prompt(questions as any);
   
   return {
     name: answers.name,

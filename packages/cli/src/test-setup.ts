@@ -2,7 +2,7 @@
  * Jest test setup for CLI package
  */
 
-import { jest } from '@jest/globals';
+import { jest, beforeAll, afterAll, afterEach } from '@jest/globals';
 
 // Mock environment variables for testing
 process.env.NODE_ENV = 'test';
@@ -79,7 +79,7 @@ jest.mock('chalk', () => ({
 }));
 
 // Mock network requests
-global.fetch = jest.fn();
+global.fetch = jest.fn(() => Promise.resolve(new Response()));
 
 // Mock process.exit to prevent tests from exiting
 const mockExit = jest.spyOn(process, 'exit').mockImplementation((code?: number) => {
