@@ -5,6 +5,7 @@
   "main": "src/main-enterprise.js",
   "scripts": {
     "start": "electron .",
+    "start:simple": "electron src/main-simple.js",
     "dev": "electron . --dev",
     "start:legacy": "electron src/main.js",
     "dev:legacy": "electron src/main.js --dev",
@@ -54,9 +55,15 @@
   "build": {
     "appId": "xyz.recoder.desktop",
     "productName": "Recoder Desktop",
+    "copyright": "Copyright © 2025 Recoder.xyz. All rights reserved.",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "recoderxyz",
+      "repo": "recoder-desktop"
     },
     "files": [
       "src/**/*",
@@ -87,6 +94,14 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "gatekeeperAssess": false,
+      "hardenedRuntime": true,
+      "notarize": {
+        "teamId": "RECODER_TEAM_ID"
+      },
       "target": [
         {
           "target": "dmg",
@@ -109,6 +124,13 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "win": {
+      "icon": "assets/icon.ico",
+      "publisherName": "Recoder.xyz",
+      "verifyUpdateCodeSignature": true,
+      "certificateFile": "path/to/certificate.p12",
+      "certificatePassword": "CERTIFICATE_PASSWORD",
+      "signingHashAlgorithms": ["sha256"],
+      "timeStampServer": "http://timestamp.sectigo.com",
       "target": [
         {
           "target": "nsis",
@@ -122,6 +144,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
@@ -132,7 +160,17 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Recoder Desktop",
-      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+      "include": "assets/installer.nsh",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "menuCategory": "Developer Tools",
+      "installerIcon": "assets/installer.ico",
+      "uninstallerIcon": "assets/uninstaller.ico",
+      "license": "LICENSE",
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "warningsAsErrors": false,
+      "displayLanguageSelector": true,
+      "multiLanguageInstaller": true
     },
     "portable": {
       "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
@@ -159,6 +197,12 @@
         },
         {
           "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "snap",
           "arch": [
             "x64"
           ]

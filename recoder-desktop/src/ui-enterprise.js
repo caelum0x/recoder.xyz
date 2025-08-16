@@ -29,6 +29,9 @@ class RecoderEnterpriseUI {
         try {
             console.log('🚀 Enterprise UI initialization started...');
             
+            // Force hide loading immediately for debugging
+            this.hideLoading();
+            
             // Setup event listeners
             this.setupEventListeners();
             
@@ -44,14 +47,15 @@ class RecoderEnterpriseUI {
             // Initialize dashboard
             await this.initializeDashboard();
             
-            // Hide loading and show interface
-            this.hideLoading();
+            // Force show dashboard panel
+            this.switchToApp('dashboard');
             
             console.log('✅ Enterprise UI initialization complete');
             this.showNotification('Enterprise Desktop Ready', 'Recoder Desktop Enterprise initialized successfully', 'success');
             
         } catch (error) {
             console.error('❌ Enterprise UI initialization failed:', error);
+            this.hideLoading(); // Hide loading even on error
             this.showError('Initialization Failed', error.message);
         }
     }
@@ -488,6 +492,7 @@ class RecoderEnterpriseUI {
             const activeTab = document.querySelector(`[data-app="${appName}"]`);
             if (activeTab) {
                 activeTab.classList.add('active');
+                console.log(`✅ Tab activated: ${appName}`);
             }
 
             // Hide all panels and iframes
@@ -509,6 +514,8 @@ class RecoderEnterpriseUI {
             this.currentApp = appName;
             this.performance.successfulLoads++;
 
+            console.log(`✅ Successfully switched to ${appName}`);
+
         } catch (error) {
             console.error(`❌ Failed to switch to ${appName}:`, error);
             this.performance.errorCount++;
@@ -517,19 +524,29 @@ class RecoderEnterpriseUI {
     }
 
     showPanel(panelName) {
+        console.log(`🔧 Attempting to show panel: ${panelName}`);
         const panel = document.getElementById(`panel-${panelName}`);
         if (panel) {
             panel.classList.add('active');
+            console.log(`✅ Panel activated: ${panelName}`);
+            
+            // Force visibility for debugging
+            panel.style.display = 'block';
+            panel.style.visibility = 'visible';
+            panel.style.opacity = '1';
             
             // Refresh panel content
             if (panelName === 'dashboard') {
+                console.log('🔄 Refreshing dashboard...');
                 this.refreshDashboard();
             } else if (panelName === 'offline-ai') {
+                console.log('🤖 Setting up AI providers...');
                 this.setupAIProviders();
             } else if (panelName === 'ai-editor') {
-                // AI editor panel is ready - no additional setup needed
                 console.log('✨ AI Code Editor panel activated');
             }
+        } else {
+            console.error(`❌ Panel not found: panel-${panelName}`);
         }
     }
 

@@ -17,13 +17,6 @@
       "static/chunks/493-7fa0dfd682ce3ec3.js",
       "static/chunks/app/layout-fcc9b3fd8b11acd7.js"
     ],
-    "/(auth)/api/auth/[...nextauth]/route": [
-      "static/chunks/webpack-e3edf49ddec7b093.js",
-      "static/chunks/f5e865f6-0b864fe56cbf115a.js",
-      "static/chunks/451-f18e6e32d6c3f026.js",
-      "static/chunks/main-app-4c14da995fbd93cd.js",
-      "static/chunks/app/(auth)/api/auth/[...nextauth]/route-28b12fcfc9f07444.js"
-    ],
     "/(auth)/api/auth/guest/route": [
       "static/chunks/webpack-e3edf49ddec7b093.js",
       "static/chunks/f5e865f6-0b864fe56cbf115a.js",
@@ -31,12 +24,19 @@
       "static/chunks/main-app-4c14da995fbd93cd.js",
       "static/chunks/app/(auth)/api/auth/guest/route-1b6c278b249dd3ec.js"
     ],
-    "/(chat)/api/chat/[id]/stream/route": [
+    "/(auth)/api/auth/[...nextauth]/route": [
       "static/chunks/webpack-e3edf49ddec7b093.js",
       "static/chunks/f5e865f6-0b864fe56cbf115a.js",
       "static/chunks/451-f18e6e32d6c3f026.js",
       "static/chunks/main-app-4c14da995fbd93cd.js",
-      "static/chunks/app/(chat)/api/chat/[id]/stream/route-f2f39697d143c5d1.js"
+      "static/chunks/app/(auth)/api/auth/[...nextauth]/route-28b12fcfc9f07444.js"
+    ],
+    "/(chat)/api/document/route": [
+      "static/chunks/webpack-e3edf49ddec7b093.js",
+      "static/chunks/f5e865f6-0b864fe56cbf115a.js",
+      "static/chunks/451-f18e6e32d6c3f026.js",
+      "static/chunks/main-app-4c14da995fbd93cd.js",
+      "static/chunks/app/(chat)/api/document/route-9f173b3f7b5e9d42.js"
     ],
     "/(chat)/api/files/upload/route": [
       "static/chunks/webpack-e3edf49ddec7b093.js",
@@ -52,13 +52,6 @@
       "static/chunks/main-app-4c14da995fbd93cd.js",
       "static/chunks/app/(chat)/api/history/route-3c3dad4f9ccb313d.js"
     ],
-    "/(chat)/api/vote/route": [
-      "static/chunks/webpack-e3edf49ddec7b093.js",
-      "static/chunks/f5e865f6-0b864fe56cbf115a.js",
-      "static/chunks/451-f18e6e32d6c3f026.js",
-      "static/chunks/main-app-4c14da995fbd93cd.js",
-      "static/chunks/app/(chat)/api/vote/route-cfbc1d5c00098cbc.js"
-    ],
     "/(chat)/api/suggestions/route": [
       "static/chunks/webpack-e3edf49ddec7b093.js",
       "static/chunks/f5e865f6-0b864fe56cbf115a.js",
@@ -66,19 +59,12 @@
       "static/chunks/main-app-4c14da995fbd93cd.js",
       "static/chunks/app/(chat)/api/suggestions/route-c95d364c9f2a55fe.js"
     ],
-    "/(chat)/api/document/route": [
+    "/(chat)/api/vote/route": [
       "static/chunks/webpack-e3edf49ddec7b093.js",
       "static/chunks/f5e865f6-0b864fe56cbf115a.js",
       "static/chunks/451-f18e6e32d6c3f026.js",
       "static/chunks/main-app-4c14da995fbd93cd.js",
-      "static/chunks/app/(chat)/api/document/route-9f173b3f7b5e9d42.js"
-    ],
-    "/api/user/profile/route": [
-      "static/chunks/webpack-e3edf49ddec7b093.js",
-      "static/chunks/f5e865f6-0b864fe56cbf115a.js",
-      "static/chunks/451-f18e6e32d6c3f026.js",
-      "static/chunks/main-app-4c14da995fbd93cd.js",
-      "static/chunks/app/api/user/profile/route-8ac903d0baf95803.js"
+      "static/chunks/app/(chat)/api/vote/route-cfbc1d5c00098cbc.js"
     ],
     "/api/auth/sync/route": [
       "static/chunks/webpack-e3edf49ddec7b093.js",
@@ -86,6 +72,20 @@
       "static/chunks/451-f18e6e32d6c3f026.js",
       "static/chunks/main-app-4c14da995fbd93cd.js",
       "static/chunks/app/api/auth/sync/route-0f0128c955e4dfff.js"
+    ],
+    "/(chat)/api/chat/[id]/stream/route": [
+      "static/chunks/webpack-e3edf49ddec7b093.js",
+      "static/chunks/f5e865f6-0b864fe56cbf115a.js",
+      "static/chunks/451-f18e6e32d6c3f026.js",
+      "static/chunks/main-app-4c14da995fbd93cd.js",
+      "static/chunks/app/(chat)/api/chat/[id]/stream/route-f2f39697d143c5d1.js"
+    ],
+    "/api/user/profile/route": [
+      "static/chunks/webpack-e3edf49ddec7b093.js",
+      "static/chunks/f5e865f6-0b864fe56cbf115a.js",
+      "static/chunks/451-f18e6e32d6c3f026.js",
+      "static/chunks/main-app-4c14da995fbd93cd.js",
+      "static/chunks/app/api/user/profile/route-8ac903d0baf95803.js"
     ],
     "/(chat)/api/chat/route": [
       "static/chunks/webpack-e3edf49ddec7b093.js",

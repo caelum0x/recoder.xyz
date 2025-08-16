@@ -309,10 +309,11 @@ class EnterpriseTelemetryService extends EventEmitter {
                 await this.sendToRemote(batch);
             }
             
-            console.log(`📤 Flushed ${batch.length} telemetry metrics`);
+            // Use safer logging to prevent EPIPE errors
+            this.safeLog(`📤 Flushed ${batch.length} telemetry metrics`);
             
         } catch (error) {
-            console.error('Failed to flush telemetry metrics:', error);
+            this.safeLog('Failed to flush telemetry metrics: ' + error.message);
             // Put batch back in queue for retry
             this.queue = [...batch, ...this.queue];
         }
@@ -331,7 +332,7 @@ class EnterpriseTelemetryService extends EventEmitter {
     async sendToRemote(batch) {
         // Implementation for sending to remote telemetry service
         // This would be implemented based on your telemetry backend
-        console.log(`🌐 Would send ${batch.length} metrics to remote service`);
+        this.safeLog(`🌐 Would send ${batch.length} metrics to remote service`);
     }
 
     // DATA ANONYMIZATION
@@ -606,6 +607,17 @@ class EnterpriseTelemetryService extends EventEmitter {
             sessionId: this.sessionId,
             uptime: Date.now() - this.startTime
         };
+    }
+
+    // Safe logging to prevent EPIPE errors
+    safeLog(message) {
+        try {
+            if (process.stdout && !process.stdout.destroyed) {
+                console.log(message);
+            }
+        } catch (error) {
+            // Silently fail to prevent blocking
+        }
     }
 }
 

@@ -36,7 +36,7 @@
   "author": "Recoder Team",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.51.0",
+    "@anthropic-ai/sdk": "^0.59.0",
     "@roo-code/types": "file:../roo-code-types",
     "axios": "^1.11.0",
     "chalk": "^4.1.2",
