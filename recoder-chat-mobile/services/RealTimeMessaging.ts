@@ -1,7 +1,41 @@
 import { Platform } from 'react-native';
-import { EventEmitter } from 'events';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+
+// React Native compatible EventEmitter
+class EventEmitter {
+  private listeners: { [event: string]: Function[] } = {};
+
+  on(event: string, listener: Function) {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(listener);
+  }
+
+  emit(event: string, ...args: any[]) {
+    if (this.listeners[event]) {
+      this.listeners[event].forEach(listener => listener(...args));
+    }
+  }
+
+  removeListener(event: string, listener: Function) {
+    if (this.listeners[event]) {
+      const index = this.listeners[event].indexOf(listener);
+      if (index > -1) {
+        this.listeners[event].splice(index, 1);
+      }
+    }
+  }
+
+  removeAllListeners(event?: string) {
+    if (event) {
+      delete this.listeners[event];
+    } else {
+      this.listeners = {};
+    }
+  }
+}
 
 export interface RealtimeMessage {
   id: string;

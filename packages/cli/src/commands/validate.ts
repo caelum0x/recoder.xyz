@@ -558,14 +558,14 @@ async function getInteractiveConfig(currentOptions: any): Promise<any> {
         validate: (input) => input.length > 0 || 'Output file path is required',
       },
     ]);
-    config.output = outputConfig.output;
+    (config as any).output = outputConfig.output;
   }
 
   return {
     categories: config.categories.join(','),
     severity: config.severity,
     format: config.format,
-    output: config.output,
+    output: (config as any).output || undefined,
     fixes: config.includeFixes,
     showPassed: config.showPassed,
   };

@@ -438,7 +438,7 @@ export default function AICodeGenerationScreen({
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={colors.text} />
+            <IoniconsCompat name="close" size={24} color={colors.text} />
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -449,7 +449,7 @@ export default function AICodeGenerationScreen({
             <Text style={[styles.languageName, { color: currentLanguage.color }]}>
               {currentLanguage.name}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={currentLanguage.color} />
+            <IoniconsCompat name="chevron-down" size={16} color={currentLanguage.color} />
           </TouchableOpacity>
           
           <View style={styles.headerActions}>
@@ -458,7 +458,7 @@ export default function AICodeGenerationScreen({
               onPress={() => setShowPromptModal(true)}
               disabled={isGenerating}
             >
-              <Ionicons name="sparkles" size={18} color="#ffffff" />
+              <IoniconsCompat name="sparkles" size={18} color="#ffffff" />
               <Text style={styles.headerButtonText}>
                 {isGenerating ? 'Generating...' : 'Generate'}
               </Text>
@@ -469,7 +469,7 @@ export default function AICodeGenerationScreen({
               onPress={handleSave}
               disabled={!code.trim()}
             >
-              <Ionicons name="save" size={18} color="#ffffff" />
+              <IoniconsCompat name="save" size={18} color="#ffffff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -555,12 +555,12 @@ export default function AICodeGenerationScreen({
 
         {/* Language Selector Modal */}
         <Modal visible={showLanguageSelector} transparent animationType="fade">
-          <BlurView intensity={20} style={styles.modalOverlay}>
+          <BlurViewCompat intensity={20} style={styles.modalOverlay}>
             <View style={[styles.languageModal, { backgroundColor: colors.surface }]}>
               <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Select Language</Text>
                 <TouchableOpacity onPress={() => setShowLanguageSelector(false)}>
-                  <Ionicons name="close" size={24} color={colors.text} />
+                  <IoniconsCompat name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
               </View>
               
@@ -584,18 +584,18 @@ export default function AICodeGenerationScreen({
                       </Text>
                     </View>
                     {selectedLanguage === lang.id && (
-                      <Ionicons name="checkmark" size={20} color={lang.color} />
+                      <IoniconsCompat name="checkmark" size={20} color={lang.color} />
                     )}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
-          </BlurView>
+          </BlurViewCompat>
         </Modal>
 
         {/* Prompt Modal */}
         <Modal visible={showPromptModal} transparent animationType="none">
-          <BlurView intensity={20} style={styles.modalOverlay}>
+          <BlurViewCompat intensity={20} style={styles.modalOverlay}>
             <Animated.View
               style={[
                 styles.promptModal,
@@ -605,7 +605,7 @@ export default function AICodeGenerationScreen({
               <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Generate Code with AI</Text>
                 <TouchableOpacity onPress={() => setShowPromptModal(false)}>
-                  <Ionicons name="close" size={24} color={colors.text} />
+                  <IoniconsCompat name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
               </View>
 
@@ -674,7 +674,7 @@ export default function AICodeGenerationScreen({
                         includeComments: !prev.includeComments
                       }))}
                     >
-                      <Ionicons
+                      <IoniconsCompat
                         name={generationSettings.includeComments ? "checkbox" : "square-outline"}
                         size={20}
                         color={colors.primary}
@@ -693,7 +693,7 @@ export default function AICodeGenerationScreen({
                         includeTests: !prev.includeTests
                       }))}
                     >
-                      <Ionicons
+                      <IoniconsCompat
                         name={generationSettings.includeTests ? "checkbox" : "square-outline"}
                         size={20}
                         color={colors.primary}
@@ -719,12 +719,12 @@ export default function AICodeGenerationScreen({
                   onPress={handleGenerateCode}
                   disabled={!prompt.trim()}
                 >
-                  <Ionicons name="sparkles" size={18} color="#ffffff" />
+                  <IoniconsCompat name="sparkles" size={18} color="#ffffff" />
                   <Text style={[styles.promptButtonText, { color: '#ffffff' }]}>Generate</Text>
                 </TouchableOpacity>
               </View>
             </Animated.View>
-          </BlurView>
+          </BlurViewCompat>
         </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>

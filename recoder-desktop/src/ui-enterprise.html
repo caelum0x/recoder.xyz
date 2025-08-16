@@ -72,6 +72,31 @@
             flex-direction: column;
             height: 100vh;
             background: var(--primary-900);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Professional loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
         }
 
         /* ENTERPRISE HEADER */
@@ -235,17 +260,43 @@
             white-space: nowrap;
             position: relative;
             min-width: fit-content;
+            transform: translateY(0);
+            backdrop-filter: blur(8px);
+        }
+
+        .nav-tab::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity var(--transition-fast);
         }
 
         .nav-tab:hover {
             background: var(--primary-700);
             color: var(--primary-100);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .nav-tab:hover::before {
+            opacity: 1;
         }
 
         .nav-tab.active {
-            background: var(--primary-700);
+            background: linear-gradient(135deg, var(--primary-700) 0%, var(--primary-600) 100%);
             color: var(--primary-50);
-            box-shadow: var(--shadow-sm);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .nav-tab.active::before {
+            opacity: 0.8;
         }
 
         .nav-tab.active::after {
@@ -886,6 +937,12 @@
                             <span class="section-icon">🔍</span>
                             Service Discovery & Health
                         </h2>
+                        <div style="margin-bottom: 20px; text-align: center; background: rgba(59, 130, 246, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                            <h3 style="margin-bottom: 15px; color: #3b82f6;">🚀 Quick Launch Services</h3>
+                            <button onclick="window.enterpriseUI.switchToApp('web')" style="padding: 12px 20px; margin: 8px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">🌐 Open Web Platform</button>
+                            <button onclick="window.enterpriseUI.switchToApp('chat')" style="padding: 12px 20px; margin: 8px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">💬 Open AI Chat</button>
+                            <button onclick="window.enterpriseUI.refreshDashboard()" style="padding: 12px 20px; margin: 8px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">🔄 Refresh Dashboard</button>
+                        </div>
                         <div id="services-grid" class="services-grid">
                             <!-- Services will be populated dynamically -->
                         </div>

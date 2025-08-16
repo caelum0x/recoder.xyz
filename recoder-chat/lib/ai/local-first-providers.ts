@@ -1,7 +1,9 @@
 /**
- * Simple Local-First AI Providers
- * Direct implementation without complex AI SDK dependencies
+ * Advanced Local-First AI Providers
+ * With intelligent caching, performance optimization, and smart routing
  */
+
+import { aiCache } from './advanced-caching-system';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -160,38 +162,78 @@ export class LocalAIProvider {
   }
 
   /**
-   * Smart generation - automatically choose best available AI
-   * Priority: Local AI (free) > Together AI (free) > Error
+   * Smart generation with advanced caching and performance optimization
+   * Priority: Cache > Local AI (free) > Together AI (free) > Error
    */
   async smartGenerate(
     messages: ChatMessage[],
     options: { temperature?: number; maxTokens?: number; preferredModel?: string } = {}
   ): Promise<GenerationResponse> {
-    const status = await this.testConnections();
-
-    // First priority: Local AI (completely free)
-    if (status.ollama) {
-      return this.generateWithOllama(messages, {
-        ...options,
-        model: options.preferredModel || 'qwen2.5-coder:7b'
-      });
-    } else if (status.lmStudio) {
-      return this.generateWithLMStudio(messages, options);
+    const startTime = Date.now();
+    
+    // PRIORITY 1: Check intelligent cache first
+    const cached = await aiCache.getCached(messages, options);
+    if (cached) {
+      console.log('🚀 Serving from intelligent cache');
+      return {
+        content: cached.response,
+        model: cached.model,
+        provider: `${cached.provider}-cached`
+      };
     }
 
-    // Second priority: Together AI free models (internet required but free)
+    // PRIORITY 2: Get best performing model recommendation
+    const bestModel = aiCache.getBestModel();
+    if (bestModel) {
+      console.log(`🎯 Using best performing model: ${bestModel.provider}:${bestModel.model}`);
+    }
+
+    let response: GenerationResponse;
+    let success = false;
+    
     try {
-      if (process.env.TOGETHER_API_KEY) {
-        return this.generateWithTogetherAI(messages, {
-          ...options,
-          model: options.preferredModel || 'deepseek-ai/deepseek-r1-distill-llama-70b'
-        });
-      }
-    } catch (error) {
-      console.warn('Together AI failed, no fallback available:', error);
-    }
+      const status = await this.testConnections();
 
-    throw new Error('No AI services available. Please install Ollama/LM Studio or configure Together AI API key.');
+      // PRIORITY 3: Local AI (completely free)
+      if (status.ollama) {
+        response = await this.generateWithOllama(messages, {
+          ...options,
+          model: options.preferredModel || 'qwen2.5-coder:7b'
+        });
+        success = true;
+      } else if (status.lmStudio) {
+        response = await this.generateWithLMStudio(messages, options);
+        success = true;
+      } else {
+        // PRIORITY 4: Together AI free models (internet required but free)
+        if (process.env.TOGETHER_API_KEY) {
+          response = await this.generateWithTogetherAI(messages, {
+            ...options,
+            model: options.preferredModel || 'deepseek-ai/deepseek-r1-distill-llama-70b'
+          });
+          success = true;
+        } else {
+          throw new Error('No AI services available. Please install Ollama/LM Studio or configure Together AI API key.');
+        }
+      }
+
+      // Update performance metrics
+      const responseTime = Date.now() - startTime;
+      const tokens = response.content.split(' ').length;
+      aiCache.updatePerformance(response.provider, response.model, responseTime, success, tokens);
+
+      // Cache successful response
+      await aiCache.setCached(messages, options, response);
+      
+      console.log(`⚡ Generated in ${responseTime}ms using ${response.provider}:${response.model}`);
+      return response;
+      
+    } catch (error) {
+      // Update performance metrics for failure
+      const responseTime = Date.now() - startTime;
+      aiCache.updatePerformance('unknown', 'unknown', responseTime, false, 0);
+      throw error;
+    }
   }
 
   /**
