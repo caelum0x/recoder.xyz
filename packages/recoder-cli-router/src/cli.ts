@@ -8,16 +8,16 @@ import { spawn } from "child_process";
 import { PID_FILE, REFERENCE_COUNT_FILE } from "./constants";
 import fs, { existsSync, readFileSync } from "fs";
 import {join} from "path";
-import { routerBackendClient } from "./services/backend-client";
+// import { routerBackendClient } from "./services/backend-client";
 
 const command = process.argv[2];
 
 const HELP_TEXT = `
-Usage: ccr [command]
+Usage: rcr [command] (Recoder CLI Router)
 
 Commands:
-  start         Start server 
-  stop          Stop server
+  start         Start Recoder router server 
+  stop          Stop Recoder router server
   restart       Restart server
   status        Show server status
   code          Execute claude command

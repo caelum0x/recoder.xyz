@@ -5,7 +5,6 @@
   "main": "src/main-enterprise.js",
   "scripts": {
     "start": "electron .",
-    "start:simple": "electron src/main-simple.js",
     "dev": "electron . --dev",
     "start:legacy": "electron src/main.js",
     "dev:legacy": "electron src/main.js --dev",
@@ -62,8 +61,10 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "recoderxyz",
-      "repo": "recoder-desktop"
+      "owner": "recoder-xyz",
+      "repo": "recoder-desktop",
+      "releaseType": "release",
+      "publishAutoUpdate": true
     },
     "files": [
       "src/**/*",
@@ -129,7 +130,9 @@
       "verifyUpdateCodeSignature": true,
       "certificateFile": "path/to/certificate.p12",
       "certificatePassword": "CERTIFICATE_PASSWORD",
-      "signingHashAlgorithms": ["sha256"],
+      "signingHashAlgorithms": [
+        "sha256"
+      ],
       "timeStampServer": "http://timestamp.sectigo.com",
       "target": [
         {
@@ -232,13 +235,6 @@
     },
     "appImage": {
       "artifactName": "${productName}-${version}-${arch}.${ext}"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "recoder-xyz",
-      "repo": "recoder-desktop",
-      "releaseType": "release",
-      "publishAutoUpdate": true
     },
     "afterSign": "scripts/notarize.js",
     "compression": "maximum",

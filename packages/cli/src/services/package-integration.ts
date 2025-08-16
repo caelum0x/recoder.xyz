@@ -20,7 +20,12 @@ let intelligencePackage: any = null
 try {
   intelligencePackage = require('@recoder/intelligence')
 } catch (error) {
-  Logger.warn('Intelligence package not available:', error)
+  // Intelligence package optional - CLI works without it
+  intelligencePackage = {
+    initialize: () => Promise.resolve(),
+    getContextMemory: () => null,
+    optimize: () => Promise.resolve()
+  }
 }
 
 // Security integration - vulnerability scanning and compliance

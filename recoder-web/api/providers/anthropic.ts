@@ -117,7 +117,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 								return undefined
 						}
 					})(),
-				)
+				) as any
 				break
 			}
 			default: {
@@ -265,7 +265,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 			temperature,
 			messages: [{ role: "user", content: prompt }],
 			stream: false,
-		})
+		} as any)
 
 		const content = message.content.find(({ type }) => type === "text")
 		return content?.type === "text" ? content.text : ""

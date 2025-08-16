@@ -86,12 +86,27 @@ const nextConfig: NextConfig = {
   // Disable static generation for pages using auth context to avoid SSR issues  
   output: 'standalone',
   trailingSlash: false,
-  // Disable static optimization to prevent SSR issues with auth context
+  // Production optimizations
+  poweredByHeader: false,
+  generateEtags: true,
+  compress: true,
+  productionBrowserSourceMaps: false,
+  
+  // Performance optimizations
   experimental: {
     staleTimes: {
       dynamic: 0,
       static: 0,
     },
+    optimizePackageImports: ['@radix-ui/react-icons', 'lucide-react'],
+    webVitalsAttribution: ['CLS', 'LCP'],
+  },
+  
+  // Image optimization
+  images: {
+    domains: ['localhost', 'web.recoder.xyz'],
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days
   },
   serverExternalPackages: [
     "@codesandbox/sdk",
