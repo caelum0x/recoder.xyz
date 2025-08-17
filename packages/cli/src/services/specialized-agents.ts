@@ -491,10 +491,39 @@ Build production-grade infrastructure that can scale and maintain high availabil
   }
 
   /**
-   * Get agent by name
+   * Get agent by name (supports both full names and short aliases)
    */
   getAgent(name: string): SpecializedAgent | undefined {
-    return this.agents.get(name);
+    // First try exact match
+    const exactMatch = this.agents.get(name);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    // Then try alias mapping
+    const aliasMap: Record<string, string> = {
+      'blockchain': 'Blockchain Agent',
+      'web': 'Web Agent', 
+      'mobile': 'Mobile Agent',
+      'backend': 'Backend Agent',
+      'ai': 'AI Agent',
+      'security': 'Security Agent',
+      'devops': 'DevOps Agent'
+    };
+
+    const fullName = aliasMap[name.toLowerCase()];
+    if (fullName) {
+      return this.agents.get(fullName);
+    }
+
+    // Finally try partial name matching
+    for (const [agentName, agent] of this.agents.entries()) {
+      if (agentName.toLowerCase().includes(name.toLowerCase())) {
+        return agent;
+      }
+    }
+
+    return undefined;
   }
 
   /**

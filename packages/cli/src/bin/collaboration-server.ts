@@ -9,8 +9,9 @@
 import chalk from 'chalk';
 import { Logger } from '../utils/logger';
 import { CollaborationService } from '../../../shared/src/collaboration';
+import { portManager } from '../utils/port-manager';
 
-const PORT = parseInt(process.env.COLLAB_PORT || '8080');
+let PORT: number;
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 async function startCollaborationServer() {
@@ -20,6 +21,9 @@ async function startCollaborationServer() {
   console.log();
 
   try {
+    // Get available port using port manager
+    PORT = await portManager.getPortForService('collaboration-server');
+    console.log(chalk.blue(`📡 Port assigned: ${PORT}`));
     const service = new CollaborationService({
       websocketPort: PORT,
       enableRedis: true,

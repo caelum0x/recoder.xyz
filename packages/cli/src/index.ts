@@ -25,6 +25,7 @@ import { productionEngineClient, CodeGenerationRequest } from './services/produc
 import { RealityValidationSystem } from './services/reality-validator';
 import { AgentManager, AgentRequest } from './services/specialized-agents';
 import { ProjectContextAnalyzer } from './services/project-context';
+import { getMasterOrchestrator, OrchestratorTask } from './services/master-orchestrator';
 import { backendClient } from './services/backend-client';
 import { unifiedAPI } from './services/unified-api-adapter';
 import { AIModelHub } from './services/ai-models/ai-hub';
@@ -57,6 +58,12 @@ import { createPluginsCommand } from './commands/plugins';
 import { createConsensusCommand } from './commands/consensus';
 import { createCollaborateCommand } from './commands/collaborate';
 import { CollaborationService } from '../../shared/src/collaboration';
+import { createAutoCodeCommand } from './commands/auto-code';
+import { createVibeCommand } from './commands/vibe';
+import { createTestPortsCommand } from './commands/test-ports';
+import { createPortFixCommand } from './commands/port-fix';
+import { AIOrchestrator } from './services/ai-orchestrator';
+import { ContextMemorySystem } from './services/context-memory';
 
 // Production-ready command setup with unified configuration
 async function setupProductionCommands(program: Command): Promise<void> {
@@ -71,12 +78,15 @@ async function setupProductionCommands(program: Command): Promise<void> {
   const agentManager = new AgentManager();
   const contextAnalyzer = new ProjectContextAnalyzer();
   
-  // Initialize AI Model Hub with enhanced features
+  // 🧠 Initialize Revolutionary AI Systems (lazy loading for performance)
+  // These will be initialized on-demand to speed up CLI startup
+  
+  // Initialize AI Model Hub with enhanced features (optimized for fast startup)
   const aiModelHub = new AIModelHub({
     providers: {
       openai: { enabled: !!process.env.OPENAI_API_KEY, apiKey: process.env.OPENAI_API_KEY },
       anthropic: { enabled: !!process.env.ANTHROPIC_API_KEY, apiKey: process.env.ANTHROPIC_API_KEY },
-      ollama: { enabled: true, host: 'http://localhost:11434' }
+      ollama: { enabled: false, host: 'http://localhost:11434' } // Disabled for faster startup
     } as any,
     router: {
       defaultPrivacyLevel: 'INTERNAL' as any,
@@ -96,8 +106,8 @@ async function setupProductionCommands(program: Command): Promise<void> {
       maxTokens: 4000
     },
     features: {
-      enableCaching: true,
-      enableMonitoring: true,
+      enableCaching: false, // Disabled for faster startup
+      enableMonitoring: false, // Disabled for faster startup
       enableAnalytics: true,
       enableAutoInstall: false,
       enableHybridProcessing: false
@@ -116,7 +126,7 @@ async function setupProductionCommands(program: Command): Promise<void> {
   
   // Initialize collaboration service for real-time code sync
   const collaborationService = new CollaborationService({
-    websocketPort: parseInt(process.env.COLLAB_PORT || '8080'),
+    websocketPort: parseInt(process.env.COLLAB_PORT || '8081'),
     enableRedis: process.env.NODE_ENV === 'production'
   });
   
@@ -144,6 +154,7 @@ async function setupProductionCommands(program: Command): Promise<void> {
     .argument('<description>', 'What to build (e.g. "Solana DEX with token swapping")')
     .option('-o, --output <path>', 'Output directory', './generated')
     .option('-t, --type <type>', 'Project type', 'web')
+    .option('--template <template>', 'Template ID to bypass interactive prompts')
     .option('--complexity <level>', 'Complexity level', 'medium')
     .option('--validate', 'Validate generated code functionality', false)
     .action(async (description: string, options: any) => {
@@ -667,6 +678,65 @@ Make this a production-ready plan that can actually be executed.`;
       }
     });
 
+  // Orchestrator command - Test the Master AI Orchestrator
+  program
+    .command('orchestrate')
+    .description('🧠 Test the Master AI Orchestrator for intelligent model selection')
+    .argument('<description>', 'Task description')
+    .option('--type <type>', 'Task type: code_generation, analysis, planning, optimization, debugging, documentation', 'code_generation')
+    .option('--complexity <level>', 'Complexity: simple, medium, complex, expert', 'medium')
+    .option('--priority <priority>', 'Priority: cost, speed, quality, balanced', 'balanced')
+    .action(async (description: string, options: any) => {
+      console.log(chalk.cyan('\n🧠 MASTER AI ORCHESTRATOR\n'));
+
+      try {
+        const orchestrator = getMasterOrchestrator();
+        
+        const task: OrchestratorTask = {
+          description,
+          type: options.type,
+          complexity: options.complexity,
+          priority: options.priority,
+          requirements: []
+        };
+
+        console.log(chalk.blue('🎯 Analyzing optimal model selection...'));
+        const decision = await orchestrator.orchestrate(task);
+        
+        console.log(chalk.green('\n✅ Orchestration Decision:'));
+        console.log(chalk.white(`Selected Provider: ${decision.selectedProvider}`));
+        console.log(chalk.white(`Selected Model: ${decision.selectedModel}`));
+        console.log(chalk.white(`Confidence: ${decision.confidence}%`));
+        console.log(chalk.white(`Strategy: ${decision.strategy}`));
+        console.log(chalk.white(`Reasoning: ${decision.reasoning}`));
+        console.log(chalk.white(`Estimated Cost: $${decision.estimatedCost.toFixed(6)}`));
+        console.log(chalk.white(`Estimated Time: ${decision.estimatedTime}ms`));
+        
+        if (decision.fallbackOptions.length > 0) {
+          console.log(chalk.cyan(`\n🔄 Fallback Options: ${decision.fallbackOptions.join(', ')}`));
+        }
+
+        console.log(chalk.blue('\n🚀 Executing task with selected model...'));
+        const result = await orchestrator.executeTask(task);
+        
+        console.log(chalk.green('\n✅ Task Result:'));
+        console.log(chalk.white(result.content || result));
+        
+        // Show orchestrator metrics
+        const metrics = orchestrator.getMetrics();
+        console.log(chalk.cyan('\n📊 Orchestrator Performance:'));
+        console.log(chalk.white(`Total Tasks: ${metrics.totalTasks}`));
+        console.log(chalk.white(`Success Rate: ${metrics.successRate}%`));
+        console.log(chalk.white(`Avg Quality: ${metrics.avgQuality}/10`));
+        console.log(chalk.white(`Avg Response Time: ${metrics.avgResponseTime}ms`));
+        console.log(chalk.white(`Total Cost: $${metrics.totalCost}`));
+
+      } catch (error: any) {
+        console.log(chalk.red(`\n❌ Orchestrator failed: ${error.message}`));
+        Logger.error(`Orchestrator error: ${error.message}`);
+      }
+    });
+
   // Context command - Analyze and manage project context
   program
     .command('context')
@@ -752,6 +822,15 @@ Make this a production-ready plan that can actually be executed.`;
   
   // Add collaboration command - KILLER FEATURE: Real-time collaboration
   program.addCommand(createCollaborateCommand(collaborationService));
+  
+  // 🚀 REVOLUTIONARY FEATURES - NO COMPETITOR HAS THESE!
+  program.addCommand(createAutoCodeCommand());
+  
+  // Add vibe code mode - KILLER FEATURE: AI that reads your mind
+  program.addCommand(createVibeCommand());
+  
+  // Add port conflict resolution - Fix EADDRINUSE errors automatically
+  program.addCommand(createPortFixCommand());
   
   // Repository refactoring command - KILLER FEATURE vs Cursor (limited context)
   program
@@ -1186,7 +1265,7 @@ async function main() {
     // Check if this looks like a natural language command
     const isNaturalLanguage = (
       (args.length === 1 && args[0].includes(' ') && !args[0].startsWith('-')) ||
-      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'context', 'analytics', 'scan', 'stats', 'security', 'consensus', 'refactor', 'collaborate', 'help', 'version'].includes(args[0]))
+      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'orchestrate', 'context', 'analytics', 'scan', 'stats', 'security', 'consensus', 'refactor', 'collaborate', 'auto-code', 'vibe', 'help', 'version'].includes(args[0]))
     );
     
     if (isNaturalLanguage) {

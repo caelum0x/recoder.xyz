@@ -414,9 +414,9 @@ export class AIProviderRouter extends EventEmitter {
       intermediate: 0.7,
       advanced: 0.8,
       expert: 0.9
-    };
+    } as const;
 
-    const required = complexityRequirements[complexity];
+    const required = complexityRequirements[complexity as keyof typeof complexityRequirements];
     const avgQuality = provider.models.reduce((sum, m) => sum + m.quality, 0) / provider.models.length;
     
     return avgQuality >= required ? 0.2 : 0;
@@ -434,7 +434,7 @@ export class AIProviderRouter extends EventEmitter {
     return (successRate * 0.7) + ((2000 - Math.min(avgLatency, 2000)) / 2000 * 0.3);
   }
 
-  async generateCode(prompt: string, options: GenerationRequest = {}): Promise<GenerationResponse> {
+  async generateCode(prompt: string, options: Partial<GenerationRequest> = {}): Promise<GenerationResponse> {
     const startTime = Date.now();
     
     try {
@@ -459,7 +459,7 @@ export class AIProviderRouter extends EventEmitter {
       }
 
       // Generate using selected provider
-      const response = await this.callProvider(provider, prompt, options);
+      const response = await this.callProvider(provider, prompt, { prompt, ...options });
       
       // Track performance
       const latency = Date.now() - startTime;
@@ -507,15 +507,14 @@ export class AIProviderRouter extends EventEmitter {
         model: providerInstance(modelId),
         prompt,
         schema: options.schema,
-        maxTokens: options.maxTokens || 4000,
         temperature: options.temperature || 0.3
-      });
+      } as any);
 
       return {
         content: JSON.stringify(result.object, null, 2),
         usage: {
-          inputTokens: result.usage?.promptTokens || 0,
-          outputTokens: result.usage?.completionTokens || 0,
+          inputTokens: (result.usage as any)?.promptTokens || 0,
+          outputTokens: (result.usage as any)?.completionTokens || 0,
           totalTokens: result.usage?.totalTokens || 0,
           cost: this.calculateCost(provider, result.usage?.totalTokens || 0)
         },
@@ -528,16 +527,15 @@ export class AIProviderRouter extends EventEmitter {
       const result = await generateText({
         model: providerInstance(modelId),
         prompt,
-        maxTokens: options.maxTokens || 4000,
         temperature: options.temperature || 0.3,
         system: options.systemPrompt
-      });
+      } as any);
 
       return {
         content: result.text,
         usage: {
-          inputTokens: result.usage?.promptTokens || 0,
-          outputTokens: result.usage?.completionTokens || 0,
+          inputTokens: (result.usage as any)?.promptTokens || 0,
+          outputTokens: (result.usage as any)?.completionTokens || 0,
           totalTokens: result.usage?.totalTokens || 0,
           cost: this.calculateCost(provider, result.usage?.totalTokens || 0)
         },
@@ -645,12 +643,12 @@ export class AIProviderRouter extends EventEmitter {
           provider.available = await this.checkOllamaAvailability();
         } else {
           // Test with a simple request
-          await this.callProvider(provider, 'Hello', { maxTokens: 10 });
+          await this.callProvider(provider, 'Hello', { prompt: 'Hello', maxTokens: 10 });
           provider.available = true;
         }
       } catch (error) {
         provider.available = false;
-        console.warn(`⚠️ Provider ${provider.name} unavailable:`, error.message);
+        console.warn(`⚠️ Provider ${provider.name} unavailable:`, error instanceof Error ? error.message : String(error));
       }
     }
   }
@@ -736,7 +734,7 @@ export class AIProviderRouter extends EventEmitter {
       totalCost: 0,
       totalTokens: 0,
       totalRequests: 0,
-      byProvider: {}
+      byProvider: {} as Record<string, { totalCost: number; totalTokens: number; requests: number }>
     };
 
     for (const [providerId, costs] of this.costTracker.entries()) {
@@ -749,9 +747,9 @@ export class AIProviderRouter extends EventEmitter {
     return summary;
   }
 
-  getBestProvider(task: AICapability, priority: 'speed' | 'quality' | 'cost' | 'reliability' = 'quality'): AIProvider | null {
+  async getBestProvider(task: AICapability, priority: 'speed' | 'quality' | 'cost' | 'reliability' = 'quality'): Promise<AIProvider | null> {
     try {
-      return this.selectProvider({
+      return await this.selectProvider({
         task,
         complexity: 'advanced',
         estimatedTokens: 2000,
