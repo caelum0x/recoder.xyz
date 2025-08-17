@@ -97,7 +97,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 
 		const response = await this.client.messages.create(params as any)
 		// The response is already an async iterable, so we can iterate over it directly.
-		for await (const chunk of response) {
+		for await (const chunk of response as any) {
 			switch (chunk.type) {
 				case "message_start": {
 					const usage = chunk.message!.usage

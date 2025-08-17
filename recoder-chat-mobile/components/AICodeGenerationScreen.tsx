@@ -15,9 +15,13 @@ import {
   ActivityIndicator,
   useColorScheme,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+
+// Type casting to fix JSX compatibility with React 19
+const IoniconsCompat = Ionicons as any;
+const BlurViewCompat = BlurView as any;
 import { LinearGradient } from 'expo-linear-gradient';
 import { dualPlatformClient } from '../services/DualPlatformClient';
 import { realTimeMessaging } from '../services/RealTimeMessaging';

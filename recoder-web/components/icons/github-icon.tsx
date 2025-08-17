@@ -1,4 +1,8 @@
-export default function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
+import { ComponentProps } from "react";
+
+type SVGProps = ComponentProps<"svg">;
+
+export default function GithubIcon(props: SVGProps) {
   return (
     <svg
       width={16}
@@ -6,7 +10,7 @@ export default function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
       viewBox="0 0 16 16"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      {...props}
+      {...(props as any)}
     >
       <path
         fillRule="evenodd"

@@ -2325,4 +2325,19 @@ CORE PRINCIPLES:
 
     return settings;
   }
+
+  /**
+   * Generate text using AI provider
+   */
+  async generateText(prompt: string, options: any = {}): Promise<string> {
+    const messages = [{ role: 'user', content: prompt }];
+    const context: TaskContext = {
+      type: options.type || 'general',
+      complexity: options.complexity || 'medium',
+      priority: options.priority || 'balanced'
+    };
+    
+    const response = await this.chat(messages, context, options);
+    return response.content || '';
+  }
 }

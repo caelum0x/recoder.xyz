@@ -125,8 +125,10 @@ export class AuthManager {
     tokens?: AuthToken
     error?: string
   }> {
-    return new Promise((resolve) => {
-      const port = 8080
+    return new Promise(async (resolve) => {
+      // Use PortManager to get available port for auth service
+      const { portManager } = await import('../utils/port-manager')
+      const port = await portManager.getPortForService('auth-service')
       const callbackUrl = `http://localhost:${port}/callback`
       const authUrl = `https://recoder.xyz/auth/cli?callback=${encodeURIComponent(callbackUrl)}`
 

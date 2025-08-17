@@ -47,9 +47,15 @@ export async function POST(request: NextRequest) {
       customer: {
         email: session.user.email,
         name: session.user.name || 'Recoder User',
-        phoneNumber: customer?.phoneNumber
+        phoneNumber: customer?.phoneNumber || ''
       },
-      billing,
+      billing: {
+        street: billing.street,
+        city: billing.city,
+        state: billing.state,
+        zipcode: billing.zipcode,
+        country: billing.country
+      },
       productId: planId, // This should match your Dodo Pay product IDs
       quantity: 1,
       returnUrl: `${process.env.NEXTAUTH_URL}/subscription/success?plan=${planId}`
