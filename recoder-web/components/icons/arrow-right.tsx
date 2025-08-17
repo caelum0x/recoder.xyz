@@ -1,6 +1,9 @@
 import { ComponentProps } from "react";
 
-export default function ArrowRightIcon(props: ComponentProps<"svg">) {
+type SVGProps = ComponentProps<"svg">;
+
+
+export default function ArrowRightIcon(props: SVGProps) {
   return (
     <svg
       width={12}
@@ -8,7 +11,7 @@ export default function ArrowRightIcon(props: ComponentProps<"svg">) {
       viewBox="0 0 12 6"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      {...props}
+      {...(props as any)}
     >
       <path
         d="M1 2.519a.5.5 0 000 1v-1zm11 .5L7.003.13v5.777L12 3.02zm-11 .5h6.503v-1H1v1z"

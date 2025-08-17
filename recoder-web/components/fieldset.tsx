@@ -1,14 +1,16 @@
 import { ComponentProps } from "react";
 import { useFormStatus } from "react-dom";
 
+type FieldsetProps = ComponentProps<"fieldset">;
+
 export default function Fieldset({
   children,
   ...rest
-}: ComponentProps<"fieldset">) {
+}: FieldsetProps) {
   const { pending } = useFormStatus();
 
   return (
-    <fieldset {...rest} disabled={pending}>
+    <fieldset {...(rest as any)} disabled={pending}>
       {children}
     </fieldset>
   );

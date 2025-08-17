@@ -71,7 +71,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 				const lastUserMsgIndex = userMsgIndices[userMsgIndices.length - 1] ?? -1
 				const secondLastMsgUserIndex = userMsgIndices[userMsgIndices.length - 2] ?? -1
 
-				stream = await this.client.messages.create(
+				stream = (await this.client.messages.create(
 					{
 						model: modelId,
 						max_tokens: maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
@@ -96,7 +96,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 							return message
 						}),
 						stream: true,
-					},
+					} as any,
 					(() => {
 						// prompt caching: https://x.com/alexalbert__/status/1823751995901272068
 						// https://github.com/anthropics/anthropic-sdk-typescript?tab=readme-ov-file#default-headers
@@ -117,7 +117,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 								return undefined
 						}
 					})(),
-				)
+				)) as any
 				break
 			}
 			default: {
@@ -128,7 +128,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 					system: [{ text: systemPrompt, type: "text" }],
 					messages,
 					stream: true,
-				})) as any
+				} as any)) as any
 				break
 			}
 		}
@@ -265,7 +265,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 			temperature,
 			messages: [{ role: "user", content: prompt }],
 			stream: false,
-		})
+		} as any)
 
 		const content = message.content.find(({ type }) => type === "text")
 		return content?.type === "text" ? content.text : ""

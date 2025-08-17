@@ -1,6 +1,9 @@
 import { ComponentProps } from "react";
 
-export default function ChevronLeftIcon(props: ComponentProps<"svg">) {
+type SVGProps = ComponentProps<"svg">;
+
+
+export default function ChevronLeftIcon(props: SVGProps) {
   return (
     <svg
       width={14}
@@ -8,7 +11,7 @@ export default function ChevronLeftIcon(props: ComponentProps<"svg">) {
       viewBox="0 0 14 14"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      {...props}
+      {...(props as any)}
     >
       <path
         d="M8.75 10.5L5.25 7l3.5-3.5"

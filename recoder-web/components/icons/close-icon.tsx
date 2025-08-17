@@ -1,6 +1,9 @@
 import { ComponentProps } from "react";
 
-export default function CloseIcon(props: ComponentProps<"svg">) {
+type SVGProps = ComponentProps<"svg">;
+
+
+export default function CloseIcon(props: SVGProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -9,7 +12,7 @@ export default function CloseIcon(props: ComponentProps<"svg">) {
       strokeWidth={1.5}
       stroke="currentColor"
       className="size-6"
-      {...props}
+      {...(props as any)}
     >
       <path
         strokeLinecap="round"

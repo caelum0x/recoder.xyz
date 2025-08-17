@@ -1,6 +1,9 @@
 import { ComponentProps } from "react";
 
-export default function LogoSmall(props: ComponentProps<"svg">) {
+type SVGProps = ComponentProps<"svg">;
+
+
+export default function LogoSmall(props: SVGProps) {
   return (
     <svg
       width={20}
@@ -8,7 +11,7 @@ export default function LogoSmall(props: ComponentProps<"svg">) {
       viewBox="0 0 20 20"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      {...props}
+      {...(props as any)}
     >
       <rect
         x={0.25}

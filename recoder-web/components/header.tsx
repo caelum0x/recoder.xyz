@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { User, Settings, LogOut, Plus, History, Zap, Palette } from "lucide-react";
+import { User, Settings, LogOut, Plus, History, Zap, Palette, Users, Trophy, Bot, TrendingUp, Target } from "lucide-react";
 
 import GithubIcon from "@/components/icons/github-icon";
 import { getBrandConfig } from "@/lib/recoder-config";
@@ -165,6 +165,38 @@ export default function Header() {
                   >
                     <Zap className="w-4 h-4" />
                     Dashboard
+                  </Link>
+                  <Link
+                    href="/projects"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <Target className="w-4 h-4" />
+                    Projects
+                  </Link>
+                  <Link
+                    href="/agents"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <Bot className="w-4 h-4" />
+                    AI Agents
+                  </Link>
+                  <Link
+                    href="/social"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <Users className="w-4 h-4" />
+                    Community
+                  </Link>
+                  <Link
+                    href="/discover"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                    Discover
                   </Link>
                   <Link
                     href="/templates"

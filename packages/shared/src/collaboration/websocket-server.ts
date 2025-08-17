@@ -96,7 +96,7 @@ export class CollaborationServer extends EventEmitter {
   private connections: Map<string, WebSocket> = new Map(); // userId -> WebSocket
   private port: number;
 
-  constructor(port: number = 8080) {
+  constructor(port: number) {
     super();
     this.port = port;
     this.setupServer();
