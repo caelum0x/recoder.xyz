@@ -8,23 +8,26 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { Logger } from '../utils/logger';
+import { portManager } from '../utils/port-manager';
 import { CollaborationService, CollaborationUser } from '../../../shared/src/collaboration';
 
 export function createCollaborateCommand(collaborationService?: CollaborationService): Command {
-  function getCollaborationService(): CollaborationService {
+  async function getCollaborationService(): Promise<CollaborationService> {
     if (collaborationService) {
       return collaborationService;
     }
     
-    // Fallback to creating a new service if not provided
+    // Use PortManager to get available port
+    const port = await portManager.getPortForService('collaboration-server');
+    
     return new CollaborationService({
-      websocketPort: 8080,
+      websocketPort: port,
       enableRedis: true
     });
   }
   const collaborate = new Command('collaborate')
     .description('🤝 Start real-time collaborative development (KILLER FEATURE vs Cursor!)')
-    .option('-p, --port <port>', 'WebSocket server port', '8080')
+    .option('-p, --port <port>', 'WebSocket server port (auto-assigned if not specified)')
     .option('--redis-url <url>', 'Redis URL for session persistence')
     .action(async (options) => {
       try {
@@ -33,7 +36,7 @@ export function createCollaborateCommand(collaborationService?: CollaborationSer
         console.log(chalk.magenta('🏆 CURSOR CANNOT DO THIS - KILLER COMPETITIVE ADVANTAGE!'));
         console.log();
 
-        const service = getCollaborationService();
+        const service = await getCollaborationService();
         
         const action = await inquirer.prompt([{
           type: 'list',
@@ -77,14 +80,16 @@ export function createCollaborateCommand(collaborationService?: CollaborationSer
   collaborate
     .command('server')
     .description('Start the collaboration WebSocket server')
-    .option('-p, --port <port>', 'Port to run on', '8080')
+    .option('-p, --port <port>', 'Port to run on (will use PortManager if not specified)')
     .action(async (options) => {
+      const port = options.port ? parseInt(options.port) : await portManager.getPortForService('collaboration-server');
+      
       const service = new CollaborationService({
-        websocketPort: parseInt(options.port),
+        websocketPort: port,
         enableRedis: true
       });
 
-      console.log(chalk.green(`🚀 Collaboration server starting on port ${options.port}...`));
+      console.log(chalk.green(`🚀 Collaboration server starting on port ${port}...`));
       
       service.on('session-created', (data) => {
         console.log(chalk.blue(`📝 New session: ${data.session.name} (${data.session.id})`));
@@ -99,7 +104,7 @@ export function createCollaborateCommand(collaborationService?: CollaborationSer
       });
 
       console.log(chalk.green('✅ Collaboration server is running!'));
-      console.log(chalk.gray(`🔗 Connect at: ws://localhost:${options.port}/collaboration`));
+      console.log(chalk.gray(`🔗 Connect at: ws://localhost:${port}/collaboration`));
       console.log(chalk.magenta('🏆 This is a KILLER FEATURE that Cursor cannot match!'));
 
       // Keep server running
@@ -119,7 +124,7 @@ export function createCollaborateCommand(collaborationService?: CollaborationSer
     .option('--max-users <num>', 'Maximum users', '10')
     .option('--ai-agents', 'Enable AI agents', true)
     .action(async (name: string, options) => {
-      const service = getCollaborationService();
+      const service = await getCollaborationService();
       
       const creator: CollaborationUser = {
         id: 'cli-user',
@@ -162,7 +167,7 @@ export function createCollaborateCommand(collaborationService?: CollaborationSer
     .description('Join an existing collaboration session')
     .option('-n, --name <name>', 'Your display name')
     .action(async (sessionId: string, options) => {
-      const service = getCollaborationService();
+      const service = await getCollaborationService();
       
       const user: CollaborationUser = {
         id: `user-${Date.now()}`,
@@ -393,8 +398,9 @@ async function handleStartServer(service: CollaborationService): Promise<void> {
     console.log(chalk.yellow(`👋 ${data.user.name} left "${data.session.name}"`));
   });
 
-  console.log(chalk.green('✅ Collaboration server is running on port 8080'));
-  console.log(chalk.gray('🔗 WebSocket endpoint: ws://localhost:8080/collaboration'));
+  const port = await portManager.getPortForService('collaboration-server');
+  console.log(chalk.green(`✅ Collaboration server is running on port ${port}`));
+  console.log(chalk.gray(`🔗 WebSocket endpoint: ws://localhost:${port}/collaboration`));
   console.log();
   console.log(chalk.magenta('🏆 CURSOR KILLER FEATURE ACTIVATED!'));
   console.log(chalk.white('Real-time collaborative development with AI agents.'));

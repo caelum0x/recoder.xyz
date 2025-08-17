@@ -1,6 +1,9 @@
 import { ComponentProps } from "react";
 
-export default function PlayIcon(props: ComponentProps<"svg">) {
+type SVGProps = ComponentProps<"svg">;
+
+
+export default function PlayIcon(props: SVGProps) {
   return (
     <svg
       width={24}
@@ -8,7 +11,7 @@ export default function PlayIcon(props: ComponentProps<"svg">) {
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      {...props}
+      {...(props as any)}
     >
       <path
         d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"

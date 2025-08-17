@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logSecurity, logRequest } from '../logger';
 // Temporary: Security package disabled due to TypeScript errors
 // import { 
 //   RouterSecurityService, 
@@ -90,14 +91,14 @@ export function initializeRouterSecurity(config?: Partial<RouterSecurityConfig>)
     
     // Set up event listeners
     securityService.on('securityEvent', (event: { type: any; severity: any; details: any; }) => {
-      console.warn('[Security]', event.type, event.severity, event.details);
+      logSecurity(`${event.type} (${event.severity})`, event.details);
     });
 
     securityService.on('ipBanned', (ip: any) => {
-      console.error('[Security] IP Banned:', ip);
+      logSecurity('IP Banned', { ip, action: 'ban' });
     });
 
-    console.log('[Security] Router security service initialized');
+    logSecurity('Router security service initialized', { status: 'active' });
   }
   
   return securityService;
@@ -255,11 +256,13 @@ export async function routerSecurityMiddleware(
         
       case 'warn':
         // Log warning but allow request to proceed
-        console.warn('[Security Warning]', {
+        logSecurity('Request Warning', {
           ip: context.ip,
           endpoint: context.endpoint,
+          method: context.method,
           reasons: analysis.reasons,
-          riskScore: analysis.riskScore
+          riskScore: analysis.riskScore,
+          userAgent: context.userAgent
         });
         
         const response = NextResponse.next();
@@ -277,7 +280,12 @@ export async function routerSecurityMiddleware(
     }
   } catch (error) {
     // If security analysis fails, log error but don't block request
-    console.error('[Security Error]', error);
+    logSecurity('Analysis Error', {
+      error: error instanceof Error ? error.message : String(error),
+      endpoint: url.pathname,
+      method: request.method,
+      stack: error instanceof Error ? error.stack : undefined
+    });
     
     const errorResponse = NextResponse.next();
     errorResponse.headers.set('X-Security-Error', 'true');

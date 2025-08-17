@@ -96,9 +96,9 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 			stream: true,
 		}
 
-		const stream = await this.client.messages.create(params)
+		const stream = await this.client.messages.create(params as any)
 
-		for await (const chunk of stream) {
+		for await (const chunk of (stream as any)) {
 			switch (chunk.type) {
 				case "message_start": {
 					const usage = chunk.message!.usage
@@ -201,7 +201,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 				stream: false,
 			}
 
-			const response = await this.client.messages.create(params)
+			const response = await this.client.messages.create(params as any)
 			const content = response.content[0]
 
 			if (content.type === "text") {

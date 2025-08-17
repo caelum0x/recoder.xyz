@@ -8,7 +8,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { TemplateEngine } from './template-engine';
 import { AIProviderRouter } from '../providers/ai-router';
-import { SecurityEngine } from '../security/enterprise-security';
+import { EnterpriseSecurity } from '../security/enterprise-security';
 import { AnalyticsEngine } from '../monitoring/analytics-engine';
 
 export interface TemplateConfig {
@@ -71,7 +71,7 @@ export class AdvancedCodeGenerator extends EventEmitter {
   private templates = new Map<string, TemplateConfig>();
   private templateEngine: TemplateEngine;
   private aiRouter: AIProviderRouter;
-  private security: SecurityEngine;
+  private security: EnterpriseSecurity;
   private analytics: AnalyticsEngine;
   private cacheEnabled = true;
   private generationCache = new Map<string, GeneratedCode>();
@@ -80,8 +80,8 @@ export class AdvancedCodeGenerator extends EventEmitter {
     super();
     this.templateEngine = new TemplateEngine();
     this.aiRouter = new AIProviderRouter();
-    this.security = new SecurityEngine();
-    this.analytics = new AnalyticsEngine();
+    this.security = EnterpriseSecurity.getInstance();
+    this.analytics = AnalyticsEngine.getInstance();
     
     console.log('🏗️ Advanced Code Generator initialized');
   }
@@ -256,7 +256,7 @@ export class AdvancedCodeGenerator extends EventEmitter {
       console.log(`🏗️ Generating code for template: ${templateId}`);
       
       // Security validation
-      await this.security.validateGenerationRequest(templateId, context);
+      this.security.validateGenerationRequest({ templateId, context });
       
       // Check cache
       const cacheKey = this.getCacheKey(templateId, context);
@@ -287,14 +287,14 @@ export class AdvancedCodeGenerator extends EventEmitter {
 
       // Track analytics
       const duration = Date.now() - startTime;
-      this.analytics.trackCodeGeneration(templateId, context, duration, 'success');
+      this.analytics.trackCodeGeneration({ templateId, context, duration, status: 'success' });
 
       console.log(`✅ Code generation completed in ${duration}ms`);
       return finalCode;
 
     } catch (error) {
       const duration = Date.now() - startTime;
-      this.analytics.trackCodeGeneration(templateId, context, duration, 'error', error.message);
+      this.analytics.trackCodeGeneration({ templateId, context, duration, status: 'error', error: error instanceof Error ? error.message : String(error) });
       console.error(`❌ Code generation failed for ${templateId}:`, error);
       throw error;
     }
@@ -329,18 +329,18 @@ export class AdvancedCodeGenerator extends EventEmitter {
       task: 'code-generation',
       complexity: template.complexity,
       language: context.language,
-      estimatedTokens: this.estimateTokens(template, context)
+      estimatedTokens: this.estimateTokens(template, context),
+      priority: 'quality'
     });
 
     console.log(`🤖 Using ${provider.name} for code generation`);
 
-    const response = await provider.generateCode(prompt, {
+    const response = await this.aiRouter.generateCode(prompt, {
       maxTokens: 8000,
-      temperature: 0.3,
-      model: provider.getBestModel('code-generation')
+      temperature: 0.3
     });
 
-    return this.parseAIResponse(response);
+    return this.parseAIResponse(response.content || '');
   }
 
   private buildGenerationPrompt(template: TemplateConfig, context: GenerationContext): string {
@@ -479,7 +479,7 @@ Generate the complete codebase now:`;
 
   private async postProcessGeneration(generated: GeneratedCode, template: TemplateConfig, context: GenerationContext): Promise<GeneratedCode> {
     // Security scan
-    await this.security.scanGeneratedCode(generated.files);
+    this.security.scanGeneratedCode(JSON.stringify(generated.files));
     
     // Add enterprise features if required
     if (template.enterpriseReady) {
@@ -887,7 +887,7 @@ export const healthEndpoint = async (req: Request, res: Response) => {
 
   async addCustomTemplate(template: TemplateConfig): Promise<void> {
     // Validate template
-    await this.security.validateTemplate(template);
+    this.security.validateTemplate(template);
     
     // Add to memory
     this.templates.set(template.id, template);

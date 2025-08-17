@@ -5,7 +5,6 @@
 
 import { Command } from 'commander';
 import inquirer from 'inquirer';
-// Removed invalid import for QuestionCollection
 import chalk from 'chalk';
 import ora from 'ora';
 import path from 'path';
@@ -163,7 +162,7 @@ async function runInteractiveMode(options: GenerateCommandOptions): Promise<{
 }> {
   console.log(chalk.cyan('🤖 Interactive Project Generation\n'));
 
-  const questions: inquirer.QuestionCollection = [
+  const questions = [
     {
       type: 'input',
       name: 'projectName',
@@ -207,7 +206,7 @@ async function runInteractiveMode(options: GenerateCommandOptions): Promise<{
     }
   ];
 
-  const answers = await inquirer.prompt(questions);
+  const answers = await inquirer.prompt(questions as any);
 
   const context: TemplateContext = {
     projectName: answers.projectName,

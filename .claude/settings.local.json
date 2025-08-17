@@ -107,7 +107,26 @@
       "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts generate \"create a React file upload component with drag and drop\" --type web --validate)",
       "Bash(./test-desktop.sh:*)",
       "Bash(gh run list:*)",
-      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts --help)"
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts --help)",
+      "Bash(gh workflow:*)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts auto-code --help)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts auto-code \"create a simple React button component\" --mode vibe --quality fast)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-test123 npx tsx src/index.ts agent \"create a simple React button component\" --agent web)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-test123 npx tsx src/index.ts agent \"create a simple React button component\")",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts auto-code \"create a simple todo app with React\" --mode vibe --quality premium)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts agent \"create a secure payment system\" --agent backend)",
+      "Bash(PORT=3009 npm start)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/cli.ts --help)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/cli.ts status)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test node dist/cli.js status)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test node packages/recoder-cli-router/dist/cli.js --help)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts agent --help)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts agent --list)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts agent \"create a simple React button\" --agent web)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts integration-status)",
+      "Bash(source:*)",
+      "Bash(ANTHROPIC_API_KEY=\"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\" GROQ_API_KEY=\"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\" GOOGLE_API_KEY=\"AIzaSyC4nq9suWOt1qQ2SCL4b1wBekMEjBD5Rs4\" npx tsx src/index.ts agent \"create a secure login system\" --consensus)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }

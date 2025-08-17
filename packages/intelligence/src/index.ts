@@ -4,7 +4,7 @@
  */
 
 // Re-export from JavaScript files for compatibility
-export * from '../context-memory';
+// Note: context-memory is now handled by CLI package directly
 export * from '../cost-tracker'; 
 export * from '../feedback-processor';
 export * from '../performance-optimizer';

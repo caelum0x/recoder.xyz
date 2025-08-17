@@ -52,7 +52,7 @@ class InMemoryDatabase {
     limit?: number; 
     offset?: number; 
     where?: any;
-    orderBy?: { field: string; direction: 'asc' | 'desc' };
+    orderBy?: { field?: string; direction?: 'asc' | 'desc' };
   } = {}): any[] {
     this.ensureTable(tableName);
     const table = this.data.get(tableName)!;
@@ -84,8 +84,8 @@ class InMemoryDatabase {
     }
     
     // Apply ORDER BY
-    if (options.orderBy) {
-      const { field, direction } = options.orderBy;
+    if (options.orderBy && options.orderBy.field) {
+      const { field, direction = 'asc' } = options.orderBy;
       records.sort((a, b) => {
         const aVal = a[field];
         const bVal = b[field];

@@ -1,12 +1,15 @@
 import { ComponentProps } from "react";
 
-export default function XIcon(props: ComponentProps<"svg">) {
+type SVGProps = ComponentProps<"svg">;
+
+
+export default function XIcon(props: SVGProps) {
   return (
     <svg
       viewBox="0 0 10 10"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      {...props}
+      {...(props as any)}
     >
       <path
         fillRule="evenodd"
