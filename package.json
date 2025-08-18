@@ -166,6 +166,7 @@
   "author": "Recoder Team",
   "license": "MIT",
   "devDependencies": {
+    "@nx/eslint-plugin": "^21.4.0",
     "@types/glob": "^8.1.0",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -181,17 +182,20 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "autoprefixer": "^10.4.16",
     "chalk": "^4.1.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "fs-extra": "^11.2.0",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.446.0",
     "next": "^15.0.0",
     "ora": "^5.4.1",
     "postcss": "^8.4.31",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "recoder-cli-router": "^2.0.0",
     "redis": "^5.7.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss": "^3.4.1",

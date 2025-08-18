@@ -32,6 +32,10 @@ const createLogger = () => {
 
 const logger = createLogger();
 
+// Export both named and default exports to fix import issues
+export { logger };
+export default logger;
+
 // Add performance and request logging utilities
 export const logPerformance = (operation: string, duration: number, metadata?: any) => {
   logger.info(`Performance: ${operation}`, {
@@ -60,5 +64,3 @@ export const logSecurity = (event: string, details: any) => {
     ...details
   });
 };
-
-export default logger;

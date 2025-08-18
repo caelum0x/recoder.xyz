@@ -62,6 +62,7 @@ import { createAutoCodeCommand } from './commands/auto-code';
 import { createVibeCommand } from './commands/vibe';
 import { createTestPortsCommand } from './commands/test-ports';
 import { createPortFixCommand } from './commands/port-fix';
+import { createOrchestratorTestCommand } from './commands/orchestrator-test';
 import { AIOrchestrator } from './services/ai-orchestrator';
 import { ContextMemorySystem } from './services/context-memory';
 
@@ -831,6 +832,9 @@ Make this a production-ready plan that can actually be executed.`;
   
   // Add port conflict resolution - Fix EADDRINUSE errors automatically
   program.addCommand(createPortFixCommand());
+  
+  // Add AI Orchestrator testing - KILLER FEATURE: Revolutionary small AI controls all models
+  program.addCommand(createOrchestratorTestCommand());
   
   // Repository refactoring command - KILLER FEATURE vs Cursor (limited context)
   program

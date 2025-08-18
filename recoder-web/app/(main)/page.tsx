@@ -133,6 +133,52 @@ export default function Home() {
             AI that generates <strong>production-ready code</strong> with real functionality. 
             Smart model routing automatically selects the best AI for your task.
           </p>
+          
+          {/* Platform Selection */}
+          <div className="mt-8 flex justify-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full">
+              <Link 
+                href="/chats" 
+                className="group flex flex-col items-center p-6 bg-white rounded-2xl border-2 border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-200"
+              >
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">💬</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Recoder Chat</h3>
+                <p className="text-gray-600 text-center text-sm">Interactive AI conversation for complex development tasks and learning</p>
+                <div className="mt-4 flex items-center text-blue-600 group-hover:translate-x-1 transition-transform">
+                  <span className="text-sm font-medium">Start Chatting</span>
+                  <ArrowRightIcon className="ml-1 w-4 h-4" />
+                </div>
+              </Link>
+              
+              <div className="group flex flex-col items-center p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-200 shadow-md">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4">
+                  <span className="text-2xl">🚀</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Recoder Web</h3>
+                <p className="text-gray-600 text-center text-sm">Generate complete applications from prompts (you're here!)</p>
+                <div className="mt-4 flex items-center text-blue-600">
+                  <span className="text-sm font-medium">Current Platform</span>
+                  <span className="ml-2 text-xs bg-blue-100 px-2 py-1 rounded-full">Active</span>
+                </div>
+              </div>
+              
+              <div className="group flex flex-col items-center p-6 bg-white rounded-2xl border-2 border-gray-200 hover:border-green-300 hover:shadow-lg transition-all duration-200 cursor-pointer" onClick={() => {
+                document.getElementById('cli-install-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}>
+                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">⚡</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Recoder CLI</h3>
+                <p className="text-gray-600 text-center text-sm">Professional command-line tool with advanced AI orchestration</p>
+                <div className="mt-4 flex items-center text-green-600 group-hover:translate-x-1 transition-transform">
+                  <span className="text-sm font-medium">Install CLI</span>
+                  <ArrowRightIcon className="ml-1 w-4 h-4" />
+                </div>
+              </div>
+            </div>
+          </div>
 
           <form
             className="relative w-full max-w-2xl pt-6 lg:pt-12"
@@ -467,6 +513,109 @@ export default function Home() {
               </div>
             </Fieldset>
           </form>
+        </div>
+
+        {/* CLI Installation Section */}
+        <div id="cli-install-section" className="w-full px-4 py-16 bg-gradient-to-br from-green-50 to-blue-50 border-t border-gray-200">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              🚀 Install Recoder CLI for Advanced Development
+            </h2>
+            <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
+              Get the full power of Recoder with our command-line interface. Includes AI orchestration, 
+              smart routing across 15+ models, and professional development tools.
+            </p>
+            
+            <div className="grid md:grid-cols-2 gap-8 mb-8">
+              {/* NPM Installation */}
+              <div className="bg-white rounded-2xl p-6 border-2 border-gray-200 shadow-sm">
+                <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mb-4 mx-auto">
+                  <span className="text-2xl">📦</span>
+                </div>
+                <h3 className="text-xl font-semibold mb-4">Recoder CLI</h3>
+                <div className="bg-gray-100 rounded-lg p-4 font-mono text-sm mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <code className="text-green-600">npm install -g @recoder/cli</code>
+                    <button 
+                      onClick={() => navigator.clipboard?.writeText('npm install -g @recoder/cli')}
+                      className="text-gray-500 hover:text-gray-700"
+                      title="Copy to clipboard"
+                    >
+                      📋
+                    </button>
+                  </div>
+                  <code className="text-blue-600 block">recoder --help</code>
+                </div>
+                <ul className="text-sm text-gray-600 space-y-2">
+                  <li>✅ AI-powered code generation</li>
+                  <li>✅ Multi-model smart routing</li>
+                  <li>✅ Project context learning</li>
+                  <li>✅ Vibe code mode</li>
+                </ul>
+              </div>
+              
+              {/* CLI Router Installation */}
+              <div className="bg-white rounded-2xl p-6 border-2 border-gray-200 shadow-sm">
+                <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-full mb-4 mx-auto">
+                  <span className="text-2xl">🔀</span>
+                </div>
+                <h3 className="text-xl font-semibold mb-4">CLI Router</h3>
+                <div className="bg-gray-100 rounded-lg p-4 font-mono text-sm mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <code className="text-green-600">npm install -g @recoder/cli-router</code>
+                    <button 
+                      onClick={() => navigator.clipboard?.writeText('npm install -g @recoder/cli-router')}
+                      className="text-gray-500 hover:text-gray-700"
+                      title="Copy to clipboard"
+                    >
+                      📋
+                    </button>
+                  </div>
+                  <code className="text-blue-600 block">recoder-router status</code>
+                </div>
+                <ul className="text-sm text-gray-600 space-y-2">
+                  <li>⚡ Lightning-fast AI routing</li>
+                  <li>💰 Cost optimization engine</li>
+                  <li>🔄 Intelligent failover</li>
+                  <li>📊 Usage analytics</li>
+                </ul>
+              </div>
+            </div>
+            
+            {/* Feature Highlights */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+              <div>
+                <div className="text-3xl mb-2">🧠</div>
+                <div className="font-semibold text-gray-900">15+ AI Models</div>
+                <div className="text-sm text-gray-600">Claude, GPT, Gemini, Groq & more</div>
+              </div>
+              <div>
+                <div className="text-3xl mb-2">⚡</div>
+                <div className="font-semibold text-gray-900">Smart Routing</div>
+                <div className="text-sm text-gray-600">Optimal model selection</div>
+              </div>
+              <div>
+                <div className="text-3xl mb-2">💰</div>
+                <div className="font-semibold text-gray-900">Cost Savings</div>
+                <div className="text-sm text-gray-600">Up to 65% reduction</div>
+              </div>
+              <div>
+                <div className="text-3xl mb-2">🔒</div>
+                <div className="font-semibold text-gray-900">Enterprise Ready</div>
+                <div className="text-sm text-gray-600">SOC 2 & GDPR compliant</div>
+              </div>
+            </div>
+            
+            <div className="mt-8">
+              <Link 
+                href="/docs/cli" 
+                className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+              >
+                📚 Read CLI Documentation
+                <ArrowRightIcon className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
         </div>
 
         <footer className="flex w-full flex-col items-center justify-between space-y-3 px-5 pb-3 pt-5 text-center sm:flex-row sm:pt-2">

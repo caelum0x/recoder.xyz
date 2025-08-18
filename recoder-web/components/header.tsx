@@ -33,7 +33,9 @@ export default function Header() {
   const handleSignOut = async () => {
     await logout();
     setShowUserMenu(false);
-    window.location.href = "/";
+    if (typeof window !== 'undefined') {
+      window.location.href = "/";
+    }
   };
 
   return (

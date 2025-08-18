@@ -59,7 +59,7 @@ export class CollaborationService extends EventEmitter {
 
     // Initialize components
     this.sessionManager = new SessionManager(persistence);
-    this.websocketServer = new CollaborationServer(options.websocketPort);
+    this.websocketServer = new CollaborationServer(options.websocketPort || 8080);
     this.codeSyncEngine = new CodeSyncEngine();
     this.realtimeSyncHandler = new RealtimeSyncHandler(this.codeSyncEngine);
     this.aiAgentManager = new AIAgentManager();
