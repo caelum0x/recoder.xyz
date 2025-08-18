@@ -87,9 +87,11 @@ function ErrorMessage({ onRequestFix }: { onRequestFix: (e: string) => void }) {
               if (!sandpack.error) return;
 
               setDidCopy(true);
-              await window.navigator.clipboard.writeText(
-                sandpack.error.message,
-              );
+              if (typeof window !== 'undefined') {
+                await window.navigator.clipboard.writeText(
+                  sandpack.error.message,
+                );
+              }
               await new Promise((resolve) => setTimeout(resolve, 2000));
               setDidCopy(false);
             }}

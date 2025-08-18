@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import React from 'react';
 import { 
   Terminal, 
   Globe, 
@@ -24,23 +25,26 @@ export default function HomePage() {
       icon: Terminal,
       href: '/cli',
       status: 'Available',
-      features: ['Multi-AI Integration', 'Real Code Generation', 'Production Ready']
+      features: ['Multi-AI Integration', 'Real Code Generation', 'Production Ready'],
+      buttonText: 'Install CLI'
     },
     {
       name: 'Recoder Web',
       description: 'Web-based AI development platform with real-time collaboration',
       icon: Globe,
-      href: '/web',
+      href: '/platform/web',
       status: 'Available',
-      features: ['Real-time Collaboration', 'AI Code Assistant', 'Template Gallery']
+      features: ['Real-time Collaboration', 'AI Code Assistant', 'Template Gallery'],
+      buttonText: 'Launch Platform'
     },
     {
       name: 'Recoder Chat',
       description: 'Intelligent chat interface for code discussions and AI assistance',
       icon: MessageSquare,
-      href: '/chat',
+      href: '/platform/chat',
       status: 'Available',
-      features: ['Code Context Aware', 'Multi-Model Support', 'Artifact Generation']
+      features: ['Code Context Aware', 'Multi-Model Support', 'Artifact Generation'],
+      buttonText: 'Open Chat'
     },
     {
       name: 'Recoder Extension',
@@ -110,29 +114,42 @@ export default function HomePage() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto text-center">
-          <Badge variant="secondary" className="mb-4">
+      <section className="relative py-20 px-4 perspective-1000 overflow-hidden">
+        {/* Floating Background Elements */}
+        <div className="absolute inset-0 hero-glow"></div>
+        <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full animate-float floating-element" style={{'--delay': '0'} as React.CSSProperties}></div>
+        <div className="absolute top-40 right-20 w-20 h-20 bg-purple-500/10 rounded-full animate-float floating-element" style={{'--delay': '2'} as React.CSSProperties}></div>
+        <div className="absolute bottom-20 left-20 w-16 h-16 bg-blue-600/10 rounded-full animate-float floating-element" style={{'--delay': '4'} as React.CSSProperties}></div>
+        
+        <div className="container mx-auto text-center relative z-10">
+          <Badge variant="secondary" className="mb-4 animate-slide-up glass-effect animate-glow">
             🚀 Next-Generation AI Development Platform
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent animate-slide-up animate-pulse-scale transform-3d">
             Build Real Software
             <br />
             with AI Power
           </h1>
-          <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto">
+          <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto animate-slide-up">
             Recoder.xyz is the ultimate AI-powered development ecosystem. From CLI tools to web platforms, 
             we provide everything you need to build production-ready applications with AI assistance.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button size="lg" asChild>
-              <Link href="/web" className="flex items-center space-x-2">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-slide-up">
+            <Button size="lg" asChild className="animate-glow glass-card">
+              <Link href="/platform/web" className="flex items-center space-x-2">
                 <Globe className="w-5 h-5" />
-                <span>Try Recoder Web</span>
+                <span>Launch Recoder Web</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" asChild>
+            <Button size="lg" variant="outline" asChild className="glass-card animate-hologram">
+              <Link href="/platform/chat" className="flex items-center space-x-2">
+                <MessageSquare className="w-5 h-5" />
+                <span>Open Recoder Chat</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild className="glass-card">
               <Link href="/cli" className="flex items-center space-x-2">
                 <Terminal className="w-5 h-5" />
                 <span>Install CLI</span>
@@ -144,8 +161,8 @@ export default function HomePage() {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-2xl mx-auto">
             {stats.map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400">
+              <div key={index} className="text-center animate-slide-up glass-effect p-4 rounded-lg animate-float" style={{'--delay': `${index}`} as React.CSSProperties}>
+                <div className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400 animate-pulse-scale">
                   {stat.value}
                 </div>
                 <div className="text-sm text-slate-600 dark:text-slate-400">
@@ -167,21 +184,21 @@ export default function HomePage() {
             Choose the right tool for your workflow. All Recoder products work seamlessly together.
           </p>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 perspective-1000">
             {products.map((product, index) => {
               const Icon = product.icon;
               return (
-                <Card key={index} className="group hover:shadow-lg transition-all duration-300 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+                <Card key={index} className="group hover:shadow-lg transition-all duration-300 border-0 glass-card animate-slide-up animate-float transform-3d" style={{'--delay': `${index * 0.1}`} as React.CSSProperties}>
                   <CardHeader>
                     <div className="flex items-center justify-between mb-2">
-                      <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform animate-rotate-3d">
                         <Icon className="w-6 h-6 text-white" />
                       </div>
-                      <Badge variant={product.status === 'Available' ? 'default' : 'secondary'}>
+                      <Badge variant={product.status === 'Available' ? 'default' : 'secondary'} className="animate-glow">
                         {product.status}
                       </Badge>
                     </div>
-                    <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">
+                    <CardTitle className="text-xl group-hover:text-blue-600 transition-colors animate-pulse-scale">
                       {product.name}
                     </CardTitle>
                     <CardDescription className="text-slate-600 dark:text-slate-300">
@@ -203,7 +220,7 @@ export default function HomePage() {
                       disabled={product.status === 'Coming Soon'}
                     >
                       <Link href={product.href}>
-                        {product.status === 'Coming Soon' ? 'Coming Soon' : 'Learn More'}
+                        {product.status === 'Coming Soon' ? 'Coming Soon' : (product.buttonText || 'Learn More')}
                       </Link>
                     </Button>
                   </CardContent>
@@ -227,31 +244,31 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="text-center animate-slide-up glass-effect p-6 rounded-xl">
+              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-float animate-glow">
                 <Shield className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold mb-4">Production Ready</h3>
+              <h3 className="text-xl font-semibold mb-4 animate-pulse-scale">Production Ready</h3>
               <p className="text-slate-600 dark:text-slate-300">
                 Generate real, working code that you can deploy immediately. No more mockups or prototypes.
               </p>
             </div>
 
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="text-center animate-slide-up glass-effect p-6 rounded-xl" style={{'--delay': '0.2'} as React.CSSProperties}>
+              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-float animate-glow" style={{'--delay': '2'} as React.CSSProperties}>
                 <Zap className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold mb-4">Multi-AI Intelligence</h3>
+              <h3 className="text-xl font-semibold mb-4 animate-pulse-scale">Multi-AI Intelligence</h3>
               <p className="text-slate-600 dark:text-slate-300">
                 Leverage the best of Claude, Groq, Gemini, and more. Smart routing picks the right model for each task.
               </p>
             </div>
 
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="text-center animate-slide-up glass-effect p-6 rounded-xl" style={{'--delay': '0.4'} as React.CSSProperties}>
+              <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-float animate-glow" style={{'--delay': '4'} as React.CSSProperties}>
                 <Users className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold mb-4">Developer First</h3>
+              <h3 className="text-xl font-semibold mb-4 animate-pulse-scale">Developer First</h3>
               <p className="text-slate-600 dark:text-slate-300">
                 Built by developers, for developers. Every tool is designed to enhance your existing workflow.
               </p>
@@ -261,22 +278,26 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 bg-gradient-to-r from-blue-600 to-purple-600">
-        <div className="container mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+      <section className="relative py-20 px-4 bg-gradient-to-r from-blue-600 to-purple-600 animate-gradient overflow-hidden">
+        {/* Floating Background Elements */}
+        <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full animate-float floating-element" style={{'--delay': '1'} as React.CSSProperties}></div>
+        <div className="absolute bottom-10 right-10 w-16 h-16 bg-white/10 rounded-full animate-float floating-element" style={{'--delay': '3'} as React.CSSProperties}></div>
+        
+        <div className="container mx-auto text-center relative z-10">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 animate-slide-up animate-pulse-scale">
             Ready to Transform Your Development?
           </h2>
-          <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+          <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto animate-slide-up">
             Join thousands of developers already building the future with Recoder.xyz
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" variant="secondary" asChild>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-slide-up">
+            <Button size="lg" variant="secondary" asChild className="glass-card animate-glow">
               <Link href="/auth/signin" className="flex items-center space-x-2">
                 <span>Start Building Now</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-blue-600" asChild>
+            <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-blue-600 glass-card animate-hologram" asChild>
               <Link href="https://github.com/recoderxyz" className="flex items-center space-x-2">
                 <Github className="w-4 h-4" />
                 <span>View on GitHub</span>

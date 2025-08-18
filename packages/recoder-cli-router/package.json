@@ -1,6 +1,6 @@
 {
   "name": "recoder-cli-router",
-  "version": "1.1.5",
+  "version": "2.0.1",
   "description": "Route Recoder CLI requests to different LLM providers including Kimi K2, Qwen 3, and DeepSeek R1",
   "bin": {
     "rcr": "dist/cli.js",
@@ -28,6 +28,7 @@
   "author": "recoder.xyz",
   "license": "MIT",
   "dependencies": {
+    "@recoder/shared": "workspace:*",
     "@anthropic-ai/sdk": "^0.59.0",
     "@anthropic-ai/vertex-sdk": "^0.12.1",
     "@aws-sdk/client-bedrock-runtime": "^3.864.0",

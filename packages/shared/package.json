@@ -12,6 +12,30 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./types/ai-models": {
+      "node": "./dist/types/ai-models.js",
+      "import": "./dist/types/ai-models.js",
+      "require": "./dist/types/ai-models.js",
+      "types": "./dist/types/ai-models.d.ts"
+    },
+    "./types/*": {
+      "node": "./dist/types/*.js",
+      "import": "./dist/types/*.js",
+      "require": "./dist/types/*.js",
+      "types": "./dist/types/*.d.ts"
+    },
+    "./collaboration": {
+      "node": "./dist/collaboration/index.js",
+      "import": "./dist/collaboration/index.js",
+      "require": "./dist/collaboration/index.js",
+      "types": "./dist/collaboration/index.d.ts"
+    },
+    "./collaboration/*": {
+      "node": "./dist/collaboration/*.js",
+      "import": "./dist/collaboration/*.js",
+      "require": "./dist/collaboration/*.js",
+      "types": "./dist/collaboration/*.d.ts"
     }
   },
   "scripts": {

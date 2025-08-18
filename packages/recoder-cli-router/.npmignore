@@ -1,0 +1,68 @@
+# Environment files - NEVER publish these
+.env
+.env.*
+.env.production
+.env.local
+!.env.example
+
+# Development files
+src/
+*.ts
+!*.d.ts
+tsconfig.json
+.gitignore
+
+# Test files
+**/__tests__/
+**/*.test.*
+**/*.spec.*
+coverage/
+jest.config.*
+
+# Build artifacts
+build/
+.cache/
+.temp/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependencies
+node_modules/
+.pnpm/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files
+dockerfile
+docker-compose.yml
+.dockerignore
+
+# Git files
+.git/
+.gitignore
+
+# Documentation that doesn't need to be in package
+blog/
+docs/
+examples/
+*.md
+!README.md
+
+# Configuration examples (users should get from git)
+config.example.json
+custom-router.example.js

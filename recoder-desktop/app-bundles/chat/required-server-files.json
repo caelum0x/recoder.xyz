@@ -309,6 +309,6 @@
     ".next/server/instrumentation.js"
   ],
   "ignore": [
-    "node_modules/next/dist/compiled/@ampproject/toolbox-optimizer/**/*"
+    "../node_modules/.pnpm/next@15.3.0-canary.31_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54_feb70aaaf86fb9e9e70b241c79252d0b/node_modules/next/dist/compiled/@ampproject/toolbox-optimizer/**/*"
   ]
 }

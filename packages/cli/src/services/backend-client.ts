@@ -80,7 +80,7 @@ export class BackendClient {
 
   constructor() {
     // Use the web API URL for unified authentication
-    this.baseUrl = process.env.RECODER_BACKEND_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    this.baseUrl = process.env.RECODER_BACKEND_URL || process.env.NEXTAUTH_URL || 'http://localhost:3010';
     this.sessionFile = path.join(os.homedir(), '.recoder', 'session.json');
     this.unifiedSessionFile = path.join(os.homedir(), '.recoder', 'unified-session.json');
     this.deviceId = this.getOrCreateDeviceId();
@@ -882,6 +882,47 @@ export class BackendClient {
       extension: false,
       router: false
     };
+  }
+
+  /**
+   * Make AI request through recoder.xyz backend (like Claude Code)
+   * This routes all AI requests through our infrastructure
+   */
+  async makeAIRequest(request: {
+    messages: Array<{ role: string; content: string }>;
+    type: string;
+    options: any;
+  }): Promise<{
+    content: string;
+    model: string;
+    usage: { inputTokens: number; outputTokens: number; cost: number };
+    provider: string;
+  }> {
+    if (!this.currentSession) {
+      throw new Error('Authentication required');
+    }
+
+    try {
+      const response = await this.client.post('/api/ai/chat', {
+        messages: request.messages,
+        type: request.type,
+        options: request.options,
+        userId: this.currentSession.userId
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.currentSession.token}`
+        }
+      });
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        // Token expired, clear session
+        await this.clearUnifiedSession();
+        this.currentSession = null;
+      }
+      throw error;
+    }
   }
 }
 
