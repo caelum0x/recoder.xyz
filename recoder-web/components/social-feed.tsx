@@ -84,7 +84,7 @@ export default function SocialFeed({ type = 'home', showHeader = true, maxItems 
     try {
       const response = await fetch('/api/social/feed', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || 'development-token'}`,
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : 'development-token'}`,
           'Content-Type': 'application/json'
         }
       });

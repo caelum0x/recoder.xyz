@@ -76,7 +76,7 @@ export default function Leaderboards() {
     try {
       const response = await fetch(`/api/social/leaderboard?category=${activeCategory}&timeframe=${activePeriod}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || 'development-token'}`,
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : 'development-token'}`,
           'Content-Type': 'application/json'
         }
       });

@@ -48,13 +48,13 @@ export default function TemplatePreviewModal({
   };
 
   const shareTemplate = async () => {
-    if (navigator.share) {
+    if (typeof window !== 'undefined' && navigator.share) {
       await navigator.share({
         title: template.name,
         text: template.description,
         url: window.location.href,
       });
-    } else {
+    } else if (typeof window !== 'undefined') {
       // Fallback to clipboard
       const shareText = `Check out this amazing template: ${template.name} - ${template.description}`;
       await navigator.clipboard?.writeText(shareText);

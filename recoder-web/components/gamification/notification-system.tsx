@@ -23,7 +23,7 @@ import {
   Code,
   Bot,
   Crown,
-  Fire,
+  Flame,
   Target,
   CheckCircle,
   X,
@@ -399,7 +399,7 @@ export default function NotificationSystem() {
                     } ${!notification.read ? 'bg-blue-50' : ''}`}
                     onClick={() => {
                       markAsRead(notification.id);
-                      if (notification.actionUrl) {
+                      if (notification.actionUrl && typeof window !== 'undefined') {
                         window.open(notification.actionUrl, '_blank');
                       }
                     }}

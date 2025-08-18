@@ -486,6 +486,98 @@ export class AIProviderManager extends EventEmitter {
           fineTuning: true,
           customModels: true
         }
+      },
+
+      // OpenRouter - Multi-model gateway for cost optimization
+      {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        type: 'chat',
+        endpoint: 'https://openrouter.ai/api/v1',
+        models: [
+          {
+            id: 'google/gemini-2.0-flash-exp:free',
+            name: 'Gemini 2.0 Flash (Free)',
+            description: 'Google\'s latest free model via OpenRouter',
+            contextLength: 1000000,
+            inputPrice: 0.0,
+            outputPrice: 0.0,
+            capabilities: ['text-generation', 'code-generation', 'multimodal'],
+            latencyTier: 'fast',
+            qualityTier: 'good'
+          },
+          {
+            id: 'meta-llama/llama-3.1-8b-instruct:free',
+            name: 'Llama 3.1 8B (Free)',
+            description: 'Meta\'s Llama 3.1 8B via OpenRouter (free)',
+            contextLength: 131072,
+            inputPrice: 0.0,
+            outputPrice: 0.0,
+            capabilities: ['text-generation', 'code-generation'],
+            latencyTier: 'fast',
+            qualityTier: 'good'
+          },
+          {
+            id: 'deepseek/deepseek-r1-distill-llama-70b',
+            name: 'DeepSeek R1 Distill 70B',
+            description: 'Cost-effective reasoning model via OpenRouter',
+            contextLength: 65536,
+            inputPrice: 0.14,
+            outputPrice: 0.28,
+            capabilities: ['text-generation', 'code-generation', 'reasoning'],
+            latencyTier: 'medium',
+            qualityTier: 'excellent'
+          }
+        ],
+        config: {
+          timeout: 45000,
+          retryCount: 2,
+          rateLimits: {
+            requestsPerSecond: 10,
+            tokensPerMinute: 200000,
+            concurrentRequests: 20
+          },
+          fallbackProviders: ['anthropic', 'groq'],
+          regions: ['global'],
+          customHeaders: {
+            'HTTP-Referer': 'https://recoder.xyz',
+            'X-Title': 'Recoder.xyz AI Development Platform'
+          }
+        },
+        status: {
+          isHealthy: true,
+          lastHealthCheck: new Date(),
+          responseTime: 1500,
+          errorRate: 0.2,
+          uptime: 99.8,
+          totalRequests: 0,
+          failedRequests: 0
+        },
+        healthCheck: {
+          enabled: true,
+          interval: 180, // 3 minutes
+          timeout: 10000,
+          testPrompt: 'Write a simple "Hello World" function.'
+        },
+        pricing: {
+          currency: 'USD',
+          billingUnit: '1M_tokens',
+          costMultiplier: 1.2, // 20% markup for gateway service
+          volumeDiscounts: [
+            { minimumUsage: 5000000, discountPercentage: 15 },
+            { minimumUsage: 25000000, discountPercentage: 30 }
+          ]
+        },
+        features: {
+          streaming: true,
+          functionCalling: true,
+          imageAnalysis: true,
+          codeGeneration: true,
+          multimodal: true,
+          reasoning: true,
+          fineTuning: false,
+          customModels: true
+        }
       }
     ];
 

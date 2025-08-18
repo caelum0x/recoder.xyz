@@ -3,9 +3,10 @@ import { logger } from '@/lib/logger';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const agentId = params.id;
     logger.info('Fetching agent details', { agentId });
 
@@ -30,6 +31,7 @@ export async function GET(
     });
 
   } catch (error) {
+    const params = await context.params;
     logger.error('Failed to fetch agent', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       agentId: params.id
@@ -48,10 +50,11 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const body = await req.json();
+    const params = await context.params;
     const agentId = params.id;
     
     logger.info('Updating agent', { agentId, updateData: body });
@@ -81,6 +84,7 @@ export async function PUT(
     });
 
   } catch (error) {
+    const params = await context.params;
     logger.error('Failed to update agent', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       agentId: params.id
@@ -99,9 +103,10 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const agentId = params.id;
     logger.info('Deleting agent', { agentId });
 
@@ -126,6 +131,7 @@ export async function DELETE(
     });
 
   } catch (error) {
+    const params = await context.params;
     logger.error('Failed to delete agent', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       agentId: params.id

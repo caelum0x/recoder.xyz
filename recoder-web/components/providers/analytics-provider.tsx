@@ -38,7 +38,9 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
 
   useEffect(() => {
     // Track initial page view
-    analytics.trackPageView(window.location.pathname);
+    if (typeof window !== 'undefined') {
+      analytics.trackPageView(window.location.pathname);
+    }
   }, []);
 
   const contextValue: AnalyticsContextType = {

@@ -103,7 +103,7 @@ export default function AchievementsSystem() {
     try {
       const response = await fetch('/api/social/achievements', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || 'development-token'}`,
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : 'development-token'}`,
           'Content-Type': 'application/json'
         }
       });
