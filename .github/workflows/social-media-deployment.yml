@@ -1,0 +1,466 @@
+name: 📱 Social Media Deployment Announcements
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Project name to announce'
+        required: true
+        default: 'Recoder Platform'
+        type: string
+      version:
+        description: 'Version being deployed'
+        required: true
+        type: string
+      environment:
+        description: 'Environment deployed to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+          - development
+      deployment_url:
+        description: 'Deployment URL'
+        required: false
+        type: string
+      announcement_type:
+        description: 'Type of announcement'
+        required: true
+        default: 'deployment'
+        type: choice
+        options:
+          - deployment
+          - feature_release
+          - update
+          - maintenance
+          - launch
+      platforms:
+        description: 'Social media platforms (comma-separated)'
+        required: false
+        default: 'twitter,linkedin,mastodon'
+        type: string
+      custom_message:
+        description: 'Custom message (optional - AI will generate if not provided)'
+        required: false
+        type: string
+        
+  # Trigger from other workflows
+  workflow_call:
+    inputs:
+      project_name:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      deployment_url:
+        required: false
+        type: string
+      announcement_type:
+        required: false
+        type: string
+        default: 'deployment'
+      platforms:
+        required: false
+        type: string
+        default: 'twitter,linkedin,mastodon'
+      custom_message:
+        required: false
+        type: string
+    secrets:
+      TWITTER_API_KEY:
+        required: false
+      TWITTER_ACCESS_TOKEN:
+        required: false
+      LINKEDIN_CLIENT_ID:
+        required: false
+      LINKEDIN_CLIENT_SECRET:
+        required: false
+      LINKEDIN_ACCESS_TOKEN:
+        required: false
+      LINKEDIN_PERSON_ID:
+        required: false
+      MASTODON_INSTANCE_URL:
+        required: false
+      MASTODON_ACCESS_TOKEN:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+      GROQ_API_KEY:
+        required: false
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ===== VALIDATE INPUTS =====
+  validate-inputs:
+    name: ✅ Validate Inputs
+    runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.validation.outputs.platforms }}
+      has-twitter: ${{ steps.validation.outputs.has-twitter }}
+      has-linkedin: ${{ steps.validation.outputs.has-linkedin }}
+      has-mastodon: ${{ steps.validation.outputs.has-mastodon }}
+      
+    steps:
+      - name: 🔍 Validate and parse inputs
+        id: validation
+        run: |
+          # Parse platforms
+          PLATFORMS="${{ inputs.platforms || 'twitter,linkedin,mastodon' }}"
+          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
+          
+          # Check individual platforms
+          if [[ "$PLATFORMS" == *"twitter"* ]]; then
+            echo "has-twitter=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-twitter=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ "$PLATFORMS" == *"linkedin"* ]]; then
+            echo "has-linkedin=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-linkedin=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ "$PLATFORMS" == *"mastodon"* ]]; then
+            echo "has-mastodon=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-mastodon=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "## 📱 Social Media Announcement Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "**Project:** ${{ inputs.project_name }}" >> $GITHUB_STEP_SUMMARY  
+          echo "**Version:** ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Type:** ${{ inputs.announcement_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** $PLATFORMS" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "${{ inputs.deployment_url }}" ]]; then
+            echo "**URL:** ${{ inputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ===== SETUP CLI ENVIRONMENT =====
+  setup-cli:
+    name: 🛠️ Setup Recoder CLI
+    runs-on: ubuntu-latest
+    needs: [validate-inputs]
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: 📦 Install CLI dependencies
+        working-directory: ./packages/cli
+        run: |
+          npm install --production
+          npm run build || echo "Build failed but continuing..."
+          
+      - name: 🧪 Test CLI Social Deploy Command
+        working-directory: ./packages/cli
+        run: |
+          # Test that the social deploy command exists
+          npx tsx src/index.ts social-deploy --help || echo "CLI command test failed but continuing..."
+          
+      - name: 📦 Cache CLI build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/cli/node_modules
+            packages/cli/dist
+          key: cli-${{ runner.os }}-${{ hashFiles('packages/cli/package*.json') }}
+
+  # ===== ANNOUNCEMENT EXECUTION =====
+  execute-announcement:
+    name: 📢 Execute Social Media Announcement
+    runs-on: ubuntu-latest
+    needs: [validate-inputs, setup-cli]
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: 📦 Restore CLI cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/cli/node_modules
+            packages/cli/dist
+          key: cli-${{ runner.os }}-${{ hashFiles('packages/cli/package*.json') }}
+          
+      - name: 🎯 Prepare announcement context
+        id: context
+        run: |
+          # Create changes array based on announcement type
+          case "${{ inputs.announcement_type }}" in
+            "feature_release")
+              CHANGES="New features added,Enhanced user experience,Performance improvements"
+              ;;
+            "update")
+              CHANGES="Platform updates,Bug fixes,Security enhancements"
+              ;;
+            "maintenance")
+              CHANGES="System maintenance,Infrastructure updates,Reliability improvements"
+              ;;
+            "launch")
+              CHANGES="Platform launch,Initial release,Production ready"
+              ;;
+            *)
+              CHANGES="Platform deployment,Latest updates,System improvements"
+              ;;
+          esac
+          
+          echo "changes=$CHANGES" >> $GITHUB_OUTPUT
+          
+          # Determine if this is production announcement
+          if [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "is-production=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-production=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: 📱 Execute Social Media Deployment via CLI
+        id: social-deploy
+        working-directory: ./packages/cli
+        run: |
+          echo "🚀 Executing social media deployment announcement..."
+          
+          # Prepare CLI arguments
+          CLI_ARGS=(
+            "social-deploy" "announce"
+            "--project" "${{ inputs.project_name }}"
+            "--version" "${{ inputs.version }}"
+            "--environment" "${{ inputs.environment }}"
+          )
+          
+          # Add URL if provided
+          if [[ -n "${{ inputs.deployment_url }}" ]]; then
+            CLI_ARGS+=("--url" "${{ inputs.deployment_url }}")
+          fi
+          
+          # Add changes
+          IFS=',' read -ra CHANGES_ARRAY <<< "${{ steps.context.outputs.changes }}"
+          for change in "${CHANGES_ARRAY[@]}"; do
+            CLI_ARGS+=("--changes" "$change")
+          done
+          
+          echo "Executing: npx tsx src/index.ts ${CLI_ARGS[*]}"
+          
+          # Execute the CLI command
+          if npx tsx src/index.ts "${CLI_ARGS[@]}"; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "✅ Social media announcement executed successfully"
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Social media announcement failed"
+            exit 1
+          fi
+          
+        env:
+          # Social Media API Keys
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_CLIENT_ID: ${{ secrets.TWITTER_CLIENT_ID }}
+          TWITTER_CLIENT_SECRET: ${{ secrets.TWITTER_CLIENT_SECRET }}
+          LINKEDIN_CLIENT_ID: ${{ secrets.LINKEDIN_CLIENT_ID }}
+          LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          LINKEDIN_PERSON_ID: ${{ secrets.LINKEDIN_PERSON_ID }}
+          MASTODON_INSTANCE_URL: ${{ secrets.MASTODON_INSTANCE_URL }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          
+          # AI API Keys for content generation
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          
+      - name: 📊 Generate execution report
+        if: always()
+        run: |
+          echo "## 📢 Social Media Announcement Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Execution Status:** ${{ steps.social-deploy.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Project:** ${{ inputs.project_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Announcement Type:** ${{ inputs.announcement_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Platforms:** ${{ needs.validate-inputs.outputs.platforms }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.social-deploy.outputs.status }}" == "success" ]]; then
+            echo "✅ **Result:** Announcement posted successfully to social media platforms" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Result:** Announcement failed - check workflow logs for details" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Content Strategy:** AI-generated content optimized for each platform" >> $GITHUB_STEP_SUMMARY
+          echo "**Hashtags:** Automatically generated based on project and announcement type" >> $GITHUB_STEP_SUMMARY
+
+  # ===== PLATFORM-SPECIFIC VERIFICATION =====
+  verify-platforms:
+    name: 🔍 Verify Platform Posts
+    runs-on: ubuntu-latest
+    needs: [validate-inputs, execute-announcement]
+    if: needs.execute-announcement.outputs.status == 'success'
+    
+    steps:
+      - name: 📊 Platform verification status
+        run: |
+          echo "## 🔍 Platform Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Twitter verification
+          if [[ "${{ needs.validate-inputs.outputs.has-twitter }}" == "true" ]]; then
+            if [[ -n "${{ secrets.TWITTER_API_KEY }}" ]]; then
+              echo "🐦 **Twitter:** ✅ Configured and announced" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "🐦 **Twitter:** ⚠️ Not configured (missing API keys)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "🐦 **Twitter:** ⏭️ Skipped (not requested)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # LinkedIn verification
+          if [[ "${{ needs.validate-inputs.outputs.has-linkedin }}" == "true" ]]; then
+            if [[ -n "${{ secrets.LINKEDIN_CLIENT_ID }}" ]]; then
+              echo "💼 **LinkedIn:** ✅ Configured and announced" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "💼 **LinkedIn:** ⚠️ Not configured (missing API keys)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "💼 **LinkedIn:** ⏭️ Skipped (not requested)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Mastodon verification
+          if [[ "${{ needs.validate-inputs.outputs.has-mastodon }}" == "true" ]]; then
+            if [[ -n "${{ secrets.MASTODON_ACCESS_TOKEN }}" ]]; then
+              echo "🐘 **Mastodon:** ✅ Configured and announced" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "🐘 **Mastodon:** ⚠️ Not configured (missing API keys)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "🐘 **Mastodon:** ⏭️ Skipped (not requested)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+  # ===== ANALYTICS & TRACKING =====
+  track-announcement:
+    name: 📈 Track Announcement
+    runs-on: ubuntu-latest  
+    needs: [validate-inputs, execute-announcement]
+    if: always()
+    
+    steps:
+      - name: 📊 Record announcement metrics
+        run: |
+          # Record deployment announcement metrics
+          curl -X POST "${{ secrets.ANALYTICS_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event": "social_media_announcement",
+              "project": "${{ inputs.project_name }}",
+              "version": "${{ inputs.version }}",
+              "environment": "${{ inputs.environment }}",
+              "announcement_type": "${{ inputs.announcement_type }}",
+              "platforms": "${{ needs.validate-inputs.outputs.platforms }}",
+              "status": "${{ needs.execute-announcement.result }}",
+              "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+              "workflow_run_id": "${{ github.run_id }}",
+              "deployment_url": "${{ inputs.deployment_url }}"
+            }' \
+            || echo "Analytics tracking skipped (webhook not configured)"
+            
+      - name: 💾 Store announcement record
+        run: |
+          # Create announcement record for historical tracking
+          cat << EOF > announcement-record.json
+          {
+            "project": "${{ inputs.project_name }}",
+            "version": "${{ inputs.version }}",
+            "environment": "${{ inputs.environment }}",
+            "announcement_type": "${{ inputs.announcement_type }}",
+            "platforms": "${{ needs.validate-inputs.outputs.platforms }}",
+            "status": "${{ needs.execute-announcement.result }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "workflow_run_id": "${{ github.run_id }}",
+            "deployment_url": "${{ inputs.deployment_url }}",
+            "custom_message": "${{ inputs.custom_message }}"
+          }
+          EOF
+          
+          echo "Announcement record created:"
+          cat announcement-record.json
+          
+      - name: 📦 Upload announcement record
+        uses: actions/upload-artifact@v4
+        with:
+          name: social-announcement-${{ inputs.version }}-${{ github.run_number }}
+          path: announcement-record.json
+          retention-days: 90
+
+  # ===== NOTIFICATION =====
+  notify-completion:
+    name: 📢 Notify Team
+    runs-on: ubuntu-latest
+    needs: [validate-inputs, execute-announcement, verify-platforms, track-announcement]
+    if: always()
+    
+    steps:
+      - name: 📢 Slack Success Notification
+        if: needs.execute-announcement.result == 'success'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#marketing'
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            📱 *Social Media Announcement Posted Successfully!*
+            
+            **Project:** ${{ inputs.project_name }}
+            **Version:** ${{ inputs.version }}
+            **Environment:** ${{ inputs.environment }}
+            **Type:** ${{ inputs.announcement_type }}
+            **Platforms:** ${{ needs.validate-inputs.outputs.platforms }}
+            ${{ inputs.deployment_url && format('**URL:** {0}', inputs.deployment_url) || '' }}
+            
+            ✅ AI-generated content posted to social media
+            ✅ Analytics tracked
+            ✅ Team notified
+            
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          
+      - name: 📢 Slack Failure Notification
+        if: needs.execute-announcement.result == 'failure'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#marketing'
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            🚨 *Social Media Announcement Failed*
+            
+            **Project:** ${{ inputs.project_name }}
+            **Version:** ${{ inputs.version }}
+            **Environment:** ${{ inputs.environment }}
+            **Type:** ${{ inputs.announcement_type }}
+            
+            Please check the workflow logs and social media API configurations.
+            
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

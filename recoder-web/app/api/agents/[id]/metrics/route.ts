@@ -3,9 +3,10 @@ import { logger } from '@/lib/logger';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const agentId = params.id;
     logger.info('Fetching agent metrics', { agentId });
 
@@ -30,6 +31,7 @@ export async function GET(
     });
 
   } catch (error) {
+    const params = await context.params;
     logger.error('Failed to fetch agent metrics', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       agentId: params.id

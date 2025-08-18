@@ -122,9 +122,9 @@ export class AICostOptimizerService extends EventEmitter {
           taskComplexity: 'simple'
         },
         actions: {
-          preferredProviders: ['deepseek', 'ollama', 'groq'],
-          fallbackProviders: ['anthropic'],
-          costReductionTarget: 80, // 80% cost reduction
+          preferredProviders: ['openrouter', 'deepseek'], // Free models from OpenRouter and DeepSeek
+          fallbackProviders: ['anthropic', 'gemini'], // Main production models as fallback
+          costReductionTarget: 95, // 95% cost reduction with free models
           qualityThreshold: 0.7
         },
         enabled: true
@@ -138,8 +138,8 @@ export class AICostOptimizerService extends EventEmitter {
           taskComplexity: 'complex'
         },
         actions: {
-          preferredProviders: ['anthropic', 'gemini'],
-          fallbackProviders: ['groq', 'deepseek'],
+          preferredProviders: ['anthropic', 'gemini'], // Main production models for enterprise
+          fallbackProviders: ['openrouter', 'deepseek'], // Cost-optimized fallbacks
           costReductionTarget: 20, // Still optimize but prioritize quality
           qualityThreshold: 0.9
         },
@@ -153,9 +153,9 @@ export class AICostOptimizerService extends EventEmitter {
           maxDailyCost: 100 // When approaching budget limits
         },
         actions: {
-          preferredProviders: ['deepseek', 'ollama'],
-          fallbackProviders: ['groq'],
-          costReductionTarget: 70,
+          preferredProviders: ['openrouter', 'deepseek'], // Priority on free models when approaching budget limits
+          fallbackProviders: ['anthropic'],
+          costReductionTarget: 90, // Aggressive cost reduction when budget protection kicks in
           qualityThreshold: 0.6
         },
         enabled: true

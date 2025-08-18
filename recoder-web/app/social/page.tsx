@@ -6,14 +6,17 @@
  */
 
 import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import SocialFeed from '@/components/social-feed';
-import AchievementsSystem from '@/components/gamification/achievements-system';
-import NotificationSystem from '@/components/gamification/notification-system';
-import Leaderboards from '@/components/gamification/leaderboards';
+
+// Dynamic imports to prevent SSR issues
+const SocialFeed = dynamic(() => import('@/components/social-feed'), { ssr: false });
+const AchievementsSystem = dynamic(() => import('@/components/gamification/achievements-system'), { ssr: false });
+const NotificationSystem = dynamic(() => import('@/components/gamification/notification-system'), { ssr: false });
+const Leaderboards = dynamic(() => import('@/components/gamification/leaderboards'), { ssr: false });
 import { 
   Activity,
   Trophy,
