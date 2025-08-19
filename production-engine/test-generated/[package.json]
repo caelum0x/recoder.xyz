@@ -1,0 +1,38 @@
+{
+    "name": "react-button-app",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "repository": "{git repository UR}", // Replace with actual URL if available or use 'null' for private repositories without a remote set up yet (to be added)
+    "scripts": {
+        "start": "react-scripts start",
+        "build": "react-scripts build",
+        "test": "react-scripts test --env=jsdom", // Test script using Jest and JSDOM for DOM testing in React applications with TypeScript (to be implemented)
+        "eject": "react-scripts eject"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@types/jest": "^26.0.8", // Jest types for TypeScript (to be implemented)
+        "react": "^17.0.1",
+        "react-dom": "^17.0.1",
+        "react-scripts": "4.0.3",
+        "@testing-library/jest-dom": "^5.11.4", // Testing library for DOM assertions (to be implemented)
+        "typescript": "^4.2.3"
+    },
+    "devDependencies": {
+        "@babel/plugin-transform-react-jsx": "^7.0.0", // Babel plugin to transform JSX in TypeScript projects with React 16 or below (to be implemented)
+        "@babel/preset-env": "^7.0.0", // Preset for compiling modern JavaScript into a version compatible with the current environment (to be implemented)
+        "tailwindcss": "^2.0.4" // Tailwind CSS utility classes framework (to be configured and used in stylesheets)
+    },
+    "peerDependencies": {
+        "@types/react": "^17.0.3",
+        "@types/react-dom": "^17.0.3"
+    }, // Type definitions for React components that are not part of the core library (to be implemented)
+    "keywords": [],
+    "type": "module",
+    "bugs": {
+        "sourceFilename": "https://github.com/[your-username]/react-button-app/issues" // Replace with actual GitHub repository UR or use 'null' if not yet available (to be added)
+    },
+    "homepage": ""
+}

@@ -3,7 +3,18 @@
  * Connects mobile app to the main Recoder.xyz backend and services
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Conditional import for AsyncStorage to prevent build errors
+let AsyncStorage: any;
+try {
+  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+} catch (error) {
+  // Fallback for non-React Native environments
+  AsyncStorage = {
+    getItem: () => Promise.resolve(null),
+    setItem: () => Promise.resolve(),
+    removeItem: () => Promise.resolve(),
+  };
+}
 import * as Device from 'expo-device';
 
 export interface AuthTokens {

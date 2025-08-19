@@ -4,8 +4,8 @@
   "description": "Production Code Engine - Ensures real functionality and production readiness",
   "main": "src/server.js",
   "scripts": {
-    "dev": "npx tsx src/minimal-server.ts",
-    "start": "npx tsx src/minimal-server.ts",
+    "dev": "npx tsx src/server.ts",
+    "start": "npx tsx src/server.ts",
     "build": "tsc",
     "build:types": "tsc --noEmit || true",
     "test": "jest --passWithNoTests",

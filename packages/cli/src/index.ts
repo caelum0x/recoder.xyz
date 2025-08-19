@@ -63,6 +63,7 @@ import { createVibeCommand } from './commands/vibe';
 import { createTestPortsCommand } from './commands/test-ports';
 import { createPortFixCommand } from './commands/port-fix';
 import { createOrchestratorTestCommand } from './commands/orchestrator-test';
+import { createCostDashboardCommand } from './commands/cost-dashboard';
 import { AIOrchestrator } from './services/ai-orchestrator';
 import { ContextMemorySystem } from './services/context-memory';
 
@@ -835,6 +836,9 @@ Make this a production-ready plan that can actually be executed.`;
   
   // Add AI Orchestrator testing - KILLER FEATURE: Revolutionary small AI controls all models
   program.addCommand(createOrchestratorTestCommand());
+  
+  // Add cost optimization dashboard - KILLER FEATURE: Real-time cost analytics
+  program.addCommand(createCostDashboardCommand());
   
   // Repository refactoring command - KILLER FEATURE vs Cursor (limited context)
   program
