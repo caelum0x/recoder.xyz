@@ -119,7 +119,7 @@ export class MasterAIOrchestrator {
         return;
       }
     } catch (error) {
-      Logger.debug('Backend services not available for model discovery:', error);
+      Logger.debug(`Backend services not available for model discovery: ${error instanceof Error ? error.message : String(error)}`);
     }
     
     // Fallback to static capabilities
@@ -243,7 +243,7 @@ export class MasterAIOrchestrator {
       
       Logger.debug(`🔄 Updated ${this.modelCapabilities.size} model capabilities`);
     } catch (error) {
-      Logger.debug('Failed to update model capabilities:', error);
+      Logger.debug(`Failed to update model capabilities: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -295,7 +295,7 @@ export class MasterAIOrchestrator {
       
       return await router.routeTask(request);
     } catch (error) {
-      Logger.debug('Intelligent routing not available:', error);
+      Logger.debug(`Intelligent routing not available: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }
@@ -331,7 +331,7 @@ export class MasterAIOrchestrator {
       
       return await backendServices.costOptimizer.optimizeRouting(request);
     } catch (error) {
-      Logger.debug('Cost optimization not available:', error);
+      Logger.debug(`Cost optimization not available: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }

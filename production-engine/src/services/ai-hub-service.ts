@@ -210,6 +210,9 @@ export class AIHubService {
     // Initialize AI providers based on available API keys
     if (process.env.ANTHROPIC_API_KEY) {
       this.providers.set('claude', new ClaudeProvider());
+      logger.info('✅ Claude provider initialized with API key');
+    } else {
+      logger.warn('❌ Claude provider not initialized - missing ANTHROPIC_API_KEY');
     }
     if (process.env.GROQ_API_KEY) {
       this.providers.set('groq', new GroqProvider());
@@ -283,29 +286,38 @@ export class AIHubService {
 
   async generateWithBestModel(prompt: string, options: GenerationOptions): Promise<string> {
     await this.ensureInitialized();
-    const bestProvider = this.selectBestProvider(options.type, options.complexity);
+    
+    // PRODUCTION REQUIREMENT: Must use Claude API for paying customers
+    const claudeProvider = this.providers.get('claude');
+    if (!claudeProvider) {
+      throw new Error('Claude provider not available - production service requires Claude API');
+    }
+    
+    if (!(await claudeProvider.isAvailable())) {
+      throw new Error('Claude API not available - check ANTHROPIC_API_KEY configuration');
+    }
     
     try {
-      const result = await bestProvider.generateCode(prompt, options);
-      logger.info(`Code generated successfully using ${bestProvider.name}`);
+      const result = await claudeProvider.generateCode(prompt, options);
+      logger.info(`✅ Production code generated successfully using Claude API`);
       return result;
     } catch (error) {
-      logger.warn(`Primary provider ${bestProvider.name} failed, trying fallback`);
+      logger.error(`❌ Claude API generation failed: ${error.message}`);
       
-      // Try fallback providers
-      for (const [name, provider] of this.providers) {
-        if (provider !== bestProvider && await provider.isAvailable()) {
-          try {
-            const result = await provider.generateCode(prompt, options);
-            logger.info(`Code generated using fallback provider ${name}`);
-            return result;
-          } catch (fallbackError) {
-            logger.warn(`Fallback provider ${name} also failed`);
-          }
+      // Try Groq as premium fallback only
+      const groqProvider = this.providers.get('groq');
+      if (groqProvider && await groqProvider.isAvailable()) {
+        try {
+          const result = await groqProvider.generateCode(prompt, options);
+          logger.info(`⚠️ Fallback: Code generated using Groq API (Claude failed)`);
+          return result;
+        } catch (fallbackError) {
+          logger.error(`❌ Groq fallback also failed: ${fallbackError.message}`);
         }
       }
       
-      throw new Error('All AI providers failed to generate code');
+      // Absolutely NO local models in production
+      throw new Error('Production AI services failed - both Claude and Groq APIs unavailable');
     }
   }
 
@@ -313,10 +325,10 @@ export class AIHubService {
     // Smart provider selection based on task type and complexity
     const providerPriority = {
       blockchain: ['claude', 'openrouter', 'gemini', 'groq', 'together', 'huggingface'],
-      web: ['together', 'huggingface', 'groq', 'claude', 'openrouter', 'gemini'],
-      backend: ['together', 'huggingface', 'claude', 'groq', 'openrouter', 'gemini'],
-      mobile: ['together', 'huggingface', 'groq', 'gemini', 'claude', 'openrouter'],
-      ai: ['openrouter', 'claude', 'gemini', 'together', 'groq', 'huggingface'],
+      web: ['claude', 'groq', 'gemini', 'openrouter', 'together', 'huggingface'],
+      backend: ['claude', 'groq', 'gemini', 'openrouter', 'together', 'huggingface'],
+      mobile: ['claude', 'groq', 'gemini', 'openrouter', 'together', 'huggingface'],
+      ai: ['claude', 'openrouter', 'gemini', 'together', 'groq', 'huggingface'],
       payments: ['claude', 'openrouter', 'groq', 'gemini', 'together', 'huggingface']
     };
 
