@@ -131,7 +131,11 @@
       "Bash(PORT=3001 npm start)",
       "Bash(PORT=3002 npm start)",
       "Bash(PORT=3010 npx next dev)",
-      "Bash(SKIP_ENV_VALIDATION=true npm run build:cli)"
+      "Bash(SKIP_ENV_VALIDATION=true npm run build:cli)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts vibe --help)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts vibe status)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts orchestrate \"create a React component for file upload with drag and drop functionality\" --type code_generation --complexity medium --priority balanced)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts cost-dashboard --detailed --models --savings)"
     ],
     "deny": []
   }

@@ -311,15 +311,17 @@ Start with the main application files, then configuration, then tests and docume
   private parseGeneratedCode(generatedCode: string, request: CodeGenerationRequest): GeneratedFile[] {
     const files: GeneratedFile[] = [];
     
-    // Extract code blocks with file paths
-    const codeBlockRegex = /```(?:(\w+)\s+)?(?:file:\s*(.+?)(?:\n|$))?([\s\S]*?)```/gi;
+    // Enhanced parsing to handle multiple AI output formats
+    
+    // Pattern 1: Standard format with file: prefix
+    const standardRegex = /```(?:(\w+)\s+)?(?:file:\s*(.+?)(?:\n|$))?([\s\S]*?)```/gi;
     let match;
-
-    while ((match = codeBlockRegex.exec(generatedCode)) !== null) {
+    
+    while ((match = standardRegex.exec(generatedCode)) !== null) {
       const [, language, filePath, content] = match;
       
       if (filePath && content) {
-        const cleanPath = filePath.trim();
+        const cleanPath = this.cleanFilePath(filePath);
         const cleanContent = content.trim();
         
         if (cleanContent) {
@@ -332,12 +334,40 @@ Start with the main application files, then configuration, then tests and docume
       }
     }
 
-    // If no files with paths found, try to extract files by common patterns
+    // Pattern 2: AI Hub format with bracketed paths like [src/App.tsx]
+    if (files.length === 0) {
+      const bracketRegex = /\[([^\]]+)\][^a-zA-Z]*([^[]*?)(?=\[|$)/g;
+      let bracketMatch;
+      
+      while ((bracketMatch = bracketRegex.exec(generatedCode)) !== null) {
+        const [, filePath, content] = bracketMatch;
+        const cleanPath = this.cleanFilePath(filePath);
+        const cleanContent = content.trim();
+        
+        if (cleanContent && cleanContent.length > 10) { // Skip very short content
+          files.push({
+            path: cleanPath,
+            content: cleanContent,
+            type: this.determineFileType(cleanPath, cleanContent)
+          });
+        }
+      }
+    }
+
+    // Pattern 3: Fallback to common patterns
     if (files.length === 0) {
       files.push(...this.extractFilesByPattern(generatedCode, request));
     }
 
     return files;
+  }
+
+  private cleanFilePath(rawPath: string): string {
+    return rawPath
+      .trim()
+      .replace(/^\[|\]$/g, '') // Remove surrounding brackets
+      .replace(/^\/+|\/+$/g, '') // Remove leading/trailing slashes
+      .replace(/\/+/g, '/'); // Normalize multiple slashes
   }
 
   private extractFilesByPattern(content: string, request: CodeGenerationRequest): GeneratedFile[] {

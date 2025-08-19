@@ -9,6 +9,17 @@
 
 import { AIHub, TaskContext } from './ai-hub';
 import { Logger } from '../utils/logger';
+import { getIntelligentModelRouter, RoutingDecision } from './intelligent-model-router';
+
+// Import backend services through unified API
+interface BackendServices {
+  costOptimizer?: any;
+  providerManager?: any;
+  failoverService?: any;
+}
+
+// Mock backend services until we can properly import them
+const backendServices: BackendServices = {};
 
 export interface OrchestratorTask {
   description: string;
@@ -60,10 +71,63 @@ export class MasterAIOrchestrator {
     this.modelCapabilities = new Map();
     this.taskHistory = [];
     this.initializeModelCapabilities();
+    this.setupRealTimeModelDiscovery();
+    
+    // Initialize intelligent model router
+    this.initializeIntelligentRouter();
+  }
+  
+  private initializeIntelligentRouter(): void {
+    try {
+      const router = getIntelligentModelRouter();
+      Logger.info('🧠 Intelligent Model Router integrated with orchestrator');
+    } catch (error) {
+      Logger.warn('Failed to initialize intelligent router:', error);
+    }
   }
 
-  private initializeModelCapabilities(): void {
-    // Claude Models - Premium quality, excellent for complex reasoning
+  private async initializeModelCapabilities(): Promise<void> {
+    try {
+      // Try to get real-time model data from backend services
+      if (backendServices.providerManager && backendServices.failoverService) {
+        const providers = await backendServices.providerManager.getAllProviders();
+        
+        for (const provider of providers) {
+          for (const model of provider.models) {
+            const modelKey = `${provider.id}-${model.id}`;
+            
+            // Get real-time performance metrics
+            const systemStatus = await backendServices.failoverService.getSystemStatus();
+            const providerHealth = systemStatus.providers.find((p: any) => p.id === provider.id);
+            
+            this.modelCapabilities.set(modelKey, {
+              provider: provider.id,
+              model: model.id,
+              strengths: model.capabilities || ['general'],
+              weaknesses: this.inferWeaknesses(model),
+              costPerToken: model.inputPrice || 0.0001,
+              avgResponseTime: providerHealth?.metrics.responseTime || 2000,
+              qualityScore: this.calculateQualityScore(model, provider),
+              specializations: model.capabilities || ['general'],
+              maxContext: model.maxTokens || 4096,
+              availability: providerHealth?.metrics.uptime || 0.95
+            });
+          }
+        }
+        
+        Logger.info(`🎯 Initialized ${this.modelCapabilities.size} models for orchestration`);
+        return;
+      }
+    } catch (error) {
+      Logger.debug('Backend services not available for model discovery:', error);
+    }
+    
+    // Fallback to static capabilities
+    this.initializeFallbackCapabilities();
+  }
+  
+  private initializeFallbackCapabilities(): void {
+    // Fallback static model capabilities
     this.modelCapabilities.set('claude-3-5-sonnet', {
       provider: 'anthropic',
       model: 'claude-3-5-sonnet-20241022',
@@ -77,8 +141,34 @@ export class MasterAIOrchestrator {
       availability: 0.98
     });
 
-    // Groq Models - Ultra fast, good for real-time responses
-    this.modelCapabilities.set('llama3-groq', {
+    // Add OpenRouter free models for cost optimization
+    this.modelCapabilities.set('openrouter-gemini-free', {
+      provider: 'openrouter',
+      model: 'google/gemini-2.0-flash-exp:free',
+      strengths: ['cost-efficiency', 'speed', 'multimodal'],
+      weaknesses: ['rate limits', 'consistency'],
+      costPerToken: 0,
+      avgResponseTime: 1500,
+      qualityScore: 8.2,
+      specializations: ['web development', 'analysis', 'documentation'],
+      maxContext: 32000,
+      availability: 0.93
+    });
+
+    this.modelCapabilities.set('deepseek-v3-free', {
+      provider: 'deepseek',
+      model: 'deepseek-v3-0324-free',
+      strengths: ['code generation', 'cost-efficiency', 'reasoning'],
+      weaknesses: ['rate limits', 'availability'],
+      costPerToken: 0,
+      avgResponseTime: 2200,
+      qualityScore: 9.0,
+      specializations: ['code generation', 'debugging', 'optimization'],
+      maxContext: 64000,
+      availability: 0.88
+    });
+
+    this.modelCapabilities.set('groq-llama', {
       provider: 'groq',
       model: 'llama3-70b-8192',
       strengths: ['speed', 'cost-efficiency', 'real-time'],
@@ -90,34 +180,71 @@ export class MasterAIOrchestrator {
       maxContext: 8192,
       availability: 0.95
     });
-
-    // Gemini Models - Strong multimodal, good balance
-    this.modelCapabilities.set('gemini-pro', {
-      provider: 'google',
-      model: 'gemini-1.5-pro',
-      strengths: ['multimodal', 'balanced performance', 'large context'],
-      weaknesses: ['availability', 'consistency'],
-      costPerToken: 0.0001,
-      avgResponseTime: 2500,
-      qualityScore: 8.5,
-      specializations: ['analysis', 'documentation', 'planning'],
-      maxContext: 128000,
-      availability: 0.92
-    });
-
-    // Ollama - Local, private, fast for simple tasks
-    this.modelCapabilities.set('ollama-local', {
-      provider: 'ollama',
-      model: 'llama3:latest',
-      strengths: ['privacy', 'no cost', 'availability'],
-      weaknesses: ['quality', 'complex reasoning'],
-      costPerToken: 0,
-      avgResponseTime: 1200,
-      qualityScore: 7.0,
-      specializations: ['simple tasks', 'prototyping', 'local development'],
-      maxContext: 4096,
-      availability: 1.0
-    });
+  }
+  
+  private inferWeaknesses(model: any): string[] {
+    const weaknesses = [];
+    
+    if (model.inputPrice > 0.0001) weaknesses.push('cost');
+    if (model.maxTokens < 16000) weaknesses.push('context length');
+    if (model.id.includes('free')) weaknesses.push('rate limits');
+    if (!model.capabilities?.includes('code-generation')) weaknesses.push('code generation');
+    
+    return weaknesses.length > 0 ? weaknesses : ['general limitations'];
+  }
+  
+  private calculateQualityScore(model: any, provider: any): number {
+    let score = 7.0; // Base score
+    
+    // Provider-based scoring
+    if (provider.id === 'anthropic') score += 2.5;
+    if (provider.id === 'gemini') score += 1.5;
+    if (provider.id === 'deepseek') score += 2.0;
+    if (provider.id === 'groq') score += 1.0;
+    if (provider.id === 'openrouter') score += 1.2;
+    
+    // Model-specific adjustments
+    if (model.id.includes('sonnet')) score += 0.5;
+    if (model.id.includes('v3')) score += 0.5;
+    if (model.id.includes('coder')) score += 1.0;
+    
+    return Math.min(10.0, score);
+  }
+  
+  private setupRealTimeModelDiscovery(): void {
+    // Update model capabilities every 5 minutes
+    setInterval(async () => {
+      try {
+        await this.updateModelCapabilities();
+      } catch (error) {
+        Logger.warn('Failed to update model capabilities:', error);
+      }
+    }, 5 * 60 * 1000);
+  }
+  
+  private async updateModelCapabilities(): Promise<void> {
+    try {
+      if (!backendServices.failoverService) {
+        return; // Service not available
+      }
+      
+      const systemStatus = await backendServices.failoverService.getSystemStatus();
+      
+      for (const [modelKey, capability] of this.modelCapabilities) {
+        const providerHealth = systemStatus.providers.find((p: any) => p.id === capability.provider);
+        if (providerHealth) {
+          // Update real-time metrics
+          capability.avgResponseTime = providerHealth.metrics.responseTime;
+          capability.availability = providerHealth.metrics.uptime;
+          
+          this.modelCapabilities.set(modelKey, capability);
+        }
+      }
+      
+      Logger.debug(`🔄 Updated ${this.modelCapabilities.size} model capabilities`);
+    } catch (error) {
+      Logger.debug('Failed to update model capabilities:', error);
+    }
   }
 
   /**
@@ -126,6 +253,103 @@ export class MasterAIOrchestrator {
   async orchestrate(task: OrchestratorTask): Promise<OrchestratorDecision> {
     Logger.info(`🎯 Orchestrator analyzing task: ${task.description.substring(0, 50)}...`);
 
+    try {
+      // Step 1: Use intelligent model router for real-time optimization
+      const routingDecision = await this.getIntelligentRouting(task);
+      if (routingDecision) {
+        Logger.info(`🧠 Intelligent router selected: ${routingDecision.provider}/${routingDecision.model} (${routingDecision.confidence}% confidence)`);
+        Logger.info(`💡 Routing reasoning: ${routingDecision.reasoning.slice(0, 2).join(', ')}`);
+        return this.convertRoutingDecisionToOrchestratorDecision(routingDecision, task);
+      }
+    } catch (error) {
+      Logger.warn('Intelligent routing failed, falling back to cost optimizer:', error);
+    }
+
+    try {
+      // Step 2: Fallback to cost optimizer
+      const costOptimizedDecision = await this.getCostOptimizedRouting(task);
+      if (costOptimizedDecision) {
+        Logger.info(`💰 Cost optimizer selected: ${costOptimizedDecision.selectedProvider}`);
+        return this.convertCostDecisionToOrchestratorDecision(costOptimizedDecision, task);
+      }
+    } catch (error) {
+      Logger.warn('Cost optimizer failed, falling back to manual orchestration:', error);
+    }
+
+    // Final fallback: Manual orchestration
+    return await this.manualOrchestrate(task);
+  }
+  
+  private async getIntelligentRouting(task: OrchestratorTask): Promise<RoutingDecision | null> {
+    try {
+      const router = getIntelligentModelRouter();
+      
+      const request = {
+        description: task.description,
+        type: task.type,
+        complexity: task.complexity,
+        priority: task.priority,
+        maxCost: this.getMaxCost(task),
+        requirements: task.requirements || []
+      };
+      
+      return await router.routeTask(request);
+    } catch (error) {
+      Logger.debug('Intelligent routing not available:', error);
+      return null;
+    }
+  }
+  
+  private convertRoutingDecisionToOrchestratorDecision(routingDecision: RoutingDecision, task: OrchestratorTask): OrchestratorDecision {
+    return {
+      selectedProvider: routingDecision.provider,
+      selectedModel: routingDecision.model,
+      confidence: routingDecision.confidence,
+      reasoning: `Intelligent routing: ${routingDecision.reasoning.join(', ')}`,
+      estimatedCost: routingDecision.estimatedCost,
+      estimatedTime: routingDecision.estimatedTime,
+      fallbackOptions: routingDecision.alternatives,
+      strategy: routingDecision.optimizationApplied ? 'consensus' : 'single'
+    };
+  }
+  
+  private async getCostOptimizedRouting(task: OrchestratorTask): Promise<any> {
+    try {
+      if (!backendServices.costOptimizer) {
+        return null; // Cost optimizer not available
+      }
+      
+      const request = {
+        userId: 'orchestrator-system',
+        prompt: task.description,
+        taskType: task.type,
+        complexity: task.complexity,
+        qualityRequirement: this.getQualityRequirement(task),
+        maxCost: this.getMaxCost(task),
+        userTier: this.getUserTier(task)
+      };
+      
+      return await backendServices.costOptimizer.optimizeRouting(request);
+    } catch (error) {
+      Logger.debug('Cost optimization not available:', error);
+      return null;
+    }
+  }
+  
+  private convertCostDecisionToOrchestratorDecision(costDecision: any, task: OrchestratorTask): OrchestratorDecision {
+    return {
+      selectedProvider: costDecision.selectedProvider,
+      selectedModel: costDecision.selectedProvider, // Simplified
+      confidence: Math.min(95, costDecision.qualityScore * 100),
+      reasoning: `Cost-optimized routing: ${costDecision.reasoning}. Potential savings: $${costDecision.costSavings.toFixed(4)}`,
+      estimatedCost: costDecision.expectedCost,
+      estimatedTime: this.estimateResponseTime(costDecision.selectedProvider),
+      fallbackOptions: costDecision.alternativeOptions.map(opt => opt.providerId),
+      strategy: 'single'
+    };
+  }
+  
+  private async manualOrchestrate(task: OrchestratorTask): Promise<OrchestratorDecision> {
     // Step 1: Analyze task requirements
     const taskAnalysis = this.analyzeTask(task);
     
@@ -136,7 +360,7 @@ export class MasterAIOrchestrator {
     const decision = this.makeDecision(task, modelScores);
     
     // Step 4: Log decision for learning
-    Logger.info(`🧠 Orchestrator selected: ${decision.selectedProvider}/${decision.selectedModel} (${decision.confidence}% confidence)`);
+    Logger.info(`🧠 Manual orchestrator selected: ${decision.selectedProvider}/${decision.selectedModel} (${decision.confidence}% confidence)`);
     Logger.info(`💡 Reasoning: ${decision.reasoning}`);
     
     return decision;
@@ -168,43 +392,75 @@ export class MasterAIOrchestrator {
       // Base quality score (0-100)
       score += capability.qualityScore * 10;
 
-      // Task type alignment
-      if (analysis.isCodeGeneration && capability.strengths.includes('complex reasoning')) {
+      // Enhanced task type alignment
+      if (analysis.isCodeGeneration) {
+        if (capability.specializations.includes('code generation') || capability.strengths.includes('complex reasoning')) {
+          score += 25;
+        }
+        if (capability.provider === 'deepseek' && task.description.includes('code')) {
+          score += 15; // DeepSeek specializes in coding
+        }
+      }
+      
+      if (analysis.requiresSecurity && capability.specializations.includes('security')) {
+        score += 30;
+      }
+      
+      if (analysis.isPlanningTask && capability.strengths.includes('analysis')) {
         score += 20;
       }
-      if (analysis.requiresSecurity && capability.specializations.includes('security')) {
-        score += 25;
-      }
-      if (analysis.isPlanningTask && capability.strengths.includes('analysis')) {
-        score += 15;
-      }
 
-      // Priority adjustments
+      // Real-time priority adjustments with cost optimization
       switch (task.priority) {
         case 'speed':
-          score += (5000 - capability.avgResponseTime) / 50; // Faster = higher score
+          score += (5000 - capability.avgResponseTime) / 50;
+          if (capability.provider === 'groq') score += 20; // Groq is fastest
           break;
         case 'cost':
-          score += capability.costPerToken === 0 ? 30 : (0.0002 - capability.costPerToken) * 100000;
+          if (capability.costPerToken === 0) {
+            score += 40; // Free models get huge boost for cost priority
+          } else {
+            score += (0.0002 - capability.costPerToken) * 100000;
+          }
+          // Boost OpenRouter and DeepSeek free models
+          if (capability.provider === 'openrouter' || capability.provider === 'deepseek') {
+            score += 25;
+          }
           break;
         case 'quality':
-          score += capability.qualityScore * 5;
+          score += capability.qualityScore * 6;
+          if (capability.provider === 'anthropic') score += 15; // Claude for quality
           break;
         case 'balanced':
           score += capability.qualityScore * 3;
           score += (3000 - capability.avgResponseTime) / 100;
+          // Balance between free and premium models
+          if (capability.costPerToken === 0 && capability.qualityScore > 8.0) {
+            score += 20;
+          }
           break;
       }
 
-      // Complexity adjustments
-      if (task.complexity === 'expert' && capability.qualityScore < 8.5) {
-        score -= 20; // Penalize low-quality models for expert tasks
+      // Enhanced complexity adjustments
+      if (task.complexity === 'expert') {
+        if (capability.qualityScore < 8.5) {
+          score -= 25;
+        }
+        if (capability.provider === 'anthropic' || capability.provider === 'deepseek') {
+          score += 15; // Premium models for expert tasks
+        }
       }
-      if (task.complexity === 'simple' && capability.costPerToken > 0.0001) {
-        score -= 15; // Penalize expensive models for simple tasks
+      
+      if (task.complexity === 'simple') {
+        if (capability.costPerToken > 0.0001) {
+          score -= 20; // Heavily penalize expensive models for simple tasks
+        }
+        if (capability.costPerToken === 0) {
+          score += 25; // Boost free models for simple tasks
+        }
       }
 
-      // Availability penalty
+      // Real-time availability penalty
       score *= capability.availability;
 
       // Context length requirements
@@ -215,6 +471,11 @@ export class MasterAIOrchestrator {
       // Privacy requirements
       if (analysis.needsPrivacy && capability.provider !== 'ollama') {
         score -= 30;
+      }
+      
+      // Boost models based on current system health
+      if (capability.availability > 0.95 && capability.avgResponseTime < 2000) {
+        score += 10; // Reward reliable, fast models
       }
 
       scores.set(modelId, Math.max(0, score));
@@ -271,31 +532,101 @@ export class MasterAIOrchestrator {
   private generateReasoning(task: OrchestratorTask, model: ModelCapability, alternatives: Array<[string, number]>): string {
     const reasons = [];
 
+    // Cost optimization reasoning
+    if (model.costPerToken === 0) {
+      reasons.push(`free model providing ${(model.qualityScore * 10).toFixed(0)}% cost savings`);
+    }
+    
     if (task.priority === 'speed' && model.avgResponseTime < 1500) {
-      reasons.push(`selected for ultra-fast response time (${model.avgResponseTime}ms)`);
+      reasons.push(`ultra-fast response time (${model.avgResponseTime}ms, ${model.provider} optimized)`);
     }
+    
     if (task.priority === 'cost' && model.costPerToken <= 0.00005) {
-      reasons.push(`chosen for cost efficiency (${model.costPerToken}/token)`);
+      const costDescription = model.costPerToken === 0 ? 'free' : `$${model.costPerToken.toFixed(6)}/token`;
+      reasons.push(`optimal cost efficiency (${costDescription})`);
     }
+    
     if (task.priority === 'quality' && model.qualityScore >= 9.0) {
-      reasons.push(`optimal for quality requirements (${model.qualityScore}/10 score)`);
+      reasons.push(`premium quality (${model.qualityScore}/10 score, ${model.provider} excellence)`);
     }
+    
     if (task.complexity === 'expert' && model.strengths.includes('complex reasoning')) {
-      reasons.push(`best suited for expert-level complexity`);
+      reasons.push(`expert-level complexity handling with ${model.provider} intelligence`);
     }
-
+    
+    // Enhanced specialization detection
+    const taskLower = task.description.toLowerCase();
     const specialization = model.specializations.find(spec => 
-      task.description.toLowerCase().includes(spec.toLowerCase())
+      taskLower.includes(spec.toLowerCase().replace(/[\s-]/g, ''))
     );
     if (specialization) {
-      reasons.push(`specialized in ${specialization}`);
+      reasons.push(`${model.provider} specialization in ${specialization}`);
+    }
+    
+    // Provider-specific advantages
+    if (model.provider === 'deepseek' && taskLower.includes('code')) {
+      reasons.push('DeepSeek V3 coding excellence (10/10 rating)');
+    }
+    if (model.provider === 'groq' && task.priority === 'speed') {
+      reasons.push('Groq lightning-fast inference');
+    }
+    if (model.provider === 'anthropic' && task.complexity === 'expert') {
+      reasons.push('Claude advanced reasoning capabilities');
+    }
+    if (model.provider === 'openrouter' && model.costPerToken === 0) {
+      reasons.push('OpenRouter free model optimization');
+    }
+    
+    // Real-time health factors
+    if (model.availability > 0.95) {
+      reasons.push(`high availability (${(model.availability * 100).toFixed(1)}% uptime)`);
     }
 
     if (reasons.length === 0) {
-      reasons.push(`highest overall score (${alternatives[0][1].toFixed(1)}/100)`);
+      reasons.push(`highest orchestration score (${alternatives[0][1].toFixed(1)}/100)`);
     }
 
     return reasons.join(', ');
+  }
+  
+  // Helper methods for cost optimization integration
+  private getQualityRequirement(task: OrchestratorTask): number {
+    switch (task.complexity) {
+      case 'expert': return 0.9;
+      case 'complex': return 0.8;
+      case 'medium': return 0.7;
+      case 'simple': return 0.6;
+      default: return 0.7;
+    }
+  }
+  
+  private getMaxCost(task: OrchestratorTask): number {
+    switch (task.priority) {
+      case 'cost': return 0.01;
+      case 'balanced': return 0.05;
+      case 'speed': return 0.1;
+      case 'quality': return 0.2;
+      default: return 0.05;
+    }
+  }
+  
+  private getUserTier(task: OrchestratorTask): 'free' | 'pro' | 'enterprise' {
+    // In production, this would come from user context
+    if (task.priority === 'cost') return 'free';
+    if (task.complexity === 'expert') return 'enterprise';
+    return 'pro';
+  }
+  
+  private estimateResponseTime(provider: string): number {
+    const providerTimes = {
+      'groq': 800,
+      'openrouter': 1500,
+      'deepseek': 2200,
+      'anthropic': 3500,
+      'gemini': 2500,
+      'ollama': 1200
+    };
+    return providerTimes[provider as keyof typeof providerTimes] || 2000;
   }
 
   private estimateTokens(text: string): number {

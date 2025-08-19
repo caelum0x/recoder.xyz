@@ -43,7 +43,17 @@ try {
 } catch (e) {
   console.log('react-native-push-notification not available');
 }
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Conditional import for AsyncStorage to prevent build errors
+let AsyncStorage: any;
+try {
+  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+} catch (error) {
+  AsyncStorage = {
+    getItem: () => Promise.resolve(null),
+    setItem: () => Promise.resolve(),
+    removeItem: () => Promise.resolve(),
+  };
+}
 import { dualPlatformClient } from './DualPlatformClient';
 
 interface ImagePickerResponse {
