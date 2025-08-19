@@ -351,3 +351,6 @@ Interesting! The API returned the files JSON but they're not being written to di
   3. Start the backend API to test full-stack integration
 
   What would you like to prioritize?
+  > test is recoder cli router usable with recoder cli make sure you test these two packages with proper backend connections and 
+  production engine connections and I am also thinking we should assing api keys for these packages and monetize our two cli 
+  packaes this way MAKE A PROPER PLAN make sure you understand our two cli packages properly and deeply
