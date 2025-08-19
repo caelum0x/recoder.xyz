@@ -1,0 +1,17 @@
+Assuming we only have one endpoint to handle here, but this could be expanded with more complex routing or state management if needed in the future.
+        
+        if (!apiResponse.ok && apiResponse.status !== 200) {
+          throw new Error(`HTTP error! status: ${apiResponse.status}`); // Realistic error handling for different HTTP responses/errors
+        } else {
+          const data = await apiResponse.json();
+          
+          if (data?.message) setMessage(data.message || 'Hello, World!'); // Setting the state with a message from API or defaulting to "Hello, World!" in case of no response content provided by backend logic.
+        }
+      } catch (error) {
+        console.error('There was a problem fetching data: ', error);
+        setMessage('Failed to load greeting'); // Error handling for network issues or other problems with the request itself, not just HTTP status codes but also unexpected errors like timeouts etc.
+      }
+    }
+    
+    if (endpoints && endpoints.length > 0) fetchData();
+  },

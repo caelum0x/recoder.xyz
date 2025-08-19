@@ -273,3 +273,264 @@ Error: listen EADDRINUSE: address already in use :::3010
   address: '::',
   port: 3010
 }
+AssertionError [ERR_ASSERTION]: false == true
+    at eval (webpack-internal:///(app-pages-browser)/./app/(main)/page.tsx:475:87)
+    at startTransition (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:5811:27)
+    at action (webpack-internal:///(app-pages-browser)/./app/(main)/page.tsx:472:37)
+    at eval (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:5872:22)
+    at startTransition (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:5811:27)
+    at startHostTransition (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:5863:7)
+    at listener (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:16088:21)
+    at processDispatchQueue (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:16146:17)
+    at eval (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:16749:9)
+    at batchedUpdates$1 (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:3130:40)
+    at dispatchEventForPluginEventSystem (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:16305:7)
+    at dispatchEvent (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:20400:11)
+    at dispatchDiscreteEvent (webpack-internal:///(app-pages-browser)/../node_modules/.pnpm/next@15.1.4_@babel+core@7.28.0_@opentelemetry+api@1.9.0_@playwright+test@1.54.2_babel-p_e24c4bc34bc669bde0acbad9fccc1975/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:20368:11)
+    recoder-web
+arhansubasi@Arhan-MacBook-Air recoder-web % npm run dev
+
+> recoder-web-platform@1.0.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+ ⚠ Port 3001 is in use, trying 3002 instead.
+ ⚠ Port 3002 is in use, trying 3003 instead.
+ ⚠ Port 3003 is in use, trying 3004 instead.
+ ⚠ Port 3004 is in use, trying 3005 instead.
+ ⚠ Port 3005 is in use, trying 3006 instead.
+ ⚠ Port 3006 is in use, trying 3007 instead.
+ ⚠ Port 3007 is in use, trying 3008 instead.
+   ▲ Next.js 15.1.4
+   - Local:        http://localhost:3008
+   - Network:      http://192.168.0.2:3008
+   - Environments: .env.local, .env
+   - Experiments (use with caution):
+     · staleTimes
+
+ ✓ Starting...
+ ✓ Ready in 1621ms
+ ✓ Compiled /middleware in 275ms (152 modules)
+2025-08-19T18:56:23.162Z [WARN]: Security: Router security service initialized {"event":"Router security service initialized","type":"security","status":"active"}
+ ○ Compiling / ...
+ ✓ Compiled / in 2.4s (3501 modules)
+ GET / 200 in 2888ms
+ ⚠ The "images.domains" configuration is deprecated. Please use "images.remotePatterns" configuration instead.
+ ✓ Compiled in 608ms (1431 modules)
+2025-08-19T18:56:26.195Z [WARN]: Security: Router security service initialized {"event":"Router security service initialized","type":"security","status":"active"}
+ ○ Compiling /api/auth/session ...
+ ✓ Compiled /api/auth/session in 704ms (1554 modules)
+Session started: {
+  sessionId: 'db0f45aa-ffde-4c69-83df-ef539cffc4a6',
+  timestamp: '2025-08-19T18:56:27.340Z',
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+  deviceId: 'web_1755629786501_elogibwwi',
+  platform: 'web',
+  device: {
+    type: 'desktop',
+    os: 'macOS',
+    browser: 'Chrome',
+    screen: { width: 1470, height: 956 }
+  },
+  location: {
+    country: 'Unknown',
+    region: 'Unknown',
+    city: 'Unknown',
+    timezone: 'Europe/Istanbul'
+  },
+  network: { connection: 'unknown', speed: '4g' },
+  metadata: {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+    language: 'tr',
+    referrer: '',
+    timestamp: '2025-08-19T18:56:26.517Z'
+  }
+}
+ POST /api/analytics/session/start 200 in 817ms
+ GET /api/auth/session 200 in 564ms
+ GET /api/auth/session 200 in 4ms
+ ✓ Compiled /_not-found in 412ms (1833 modules)
+ GET /docs/cli 404 in 494ms
+ GET /docs/cli 404 in 5ms
+ POST /api/analytics/session/end 404 in 47ms
+ GET /docs/cli 404 in 45ms
+Session started: {
+  sessionId: '635e09fb-094d-47fb-8e2f-5ead178635fd',
+  timestamp: '2025-08-19T18:56:53.945Z',
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+  deviceId: 'web_1755629786501_elogibwwi',
+  platform: 'web',
+  device: {
+    type: 'desktop',
+    os: 'macOS',
+    browser: 'Chrome',
+    screen: { width: 1470, height: 956 }
+  },
+  location: {
+    country: 'Unknown',
+    region: 'Unknown',
+    city: 'Unknown',
+    timezone: 'Europe/Istanbul'
+  },
+  network: { connection: 'unknown', speed: '4g' },
+  metadata: {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+    language: 'tr',
+    referrer: 'http://localhost:3008/',
+    timestamp: '2025-08-19T18:56:53.926Z'
+  }
+}
+ POST /api/analytics/session/start 200 in 17ms
+ GET /api/auth/session 200 in 12ms
+ GET / 200 in 317ms
+ ○ Compiling /chats ...
+ ✓ Compiled /chats in 574ms (1971 modules)
+ GET /chats 200 in 632ms
+ POST /api/analytics/activity 404 in 57ms
+ POST /api/analytics/activity 404 in 9ms
+ POST /api/analytics/activity 404 in 21ms
+[Error: aborted] { code: 'ECONNRESET' }
+ ⨯ uncaughtException: [Error: aborted] { code: 'ECONNRESET' }
+ ⨯ uncaughtException:  [Error: aborted] { code: 'ECONNRESET' }
+Session started: {
+  sessionId: 'afc1cf26-d4e4-405f-9177-e37a5aa02521',
+  timestamp: '2025-08-19T18:59:22.698Z',
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+  deviceId: 'web_1755629786501_elogibwwi',
+  platform: 'web',
+  device: {
+    type: 'desktop',
+    os: 'macOS',
+    browser: 'Chrome',
+    screen: { width: 1470, height: 956 }
+  },
+  location: {
+    country: 'Unknown',
+    region: 'Unknown',
+    city: 'Unknown',
+    timezone: 'Europe/Istanbul'
+  },
+  network: { connection: 'unknown', speed: '4g' },
+  metadata: {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+    language: 'tr',
+    referrer: '',
+    timestamp: '2025-08-19T18:59:22.682Z'
+  }
+}
+ POST /api/analytics/session/start 200 in 15ms
+ ✓ Compiled /login in 295ms (1971 modules)
+ GET /login 200 in 373ms
+ POST /api/analytics/activity 404 in 49ms
+ ✓ Compiled /register in 291ms (1982 modules)
+ POST /api/analytics/session/end 404 in 374ms
+ GET /register 200 in 422ms
+Session started: {
+  sessionId: '08bb7e07-c3d8-44e8-8a1b-4082c8c5497e',
+  timestamp: '2025-08-19T18:59:36.985Z',
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+  deviceId: 'web_1755629786501_elogibwwi',
+  platform: 'web',
+  device: {
+    type: 'desktop',
+    os: 'macOS',
+    browser: 'Chrome',
+    screen: { width: 1470, height: 956 }
+  },
+  location: {
+    country: 'Unknown',
+    region: 'Unknown',
+    city: 'Unknown',
+    timezone: 'Europe/Istanbul'
+  },
+  network: { connection: 'unknown', speed: '4g' },
+  metadata: {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0',
+    language: 'tr',
+    referrer: 'http://localhost:3008/login',
+    timestamp: '2025-08-19T18:59:36.972Z'
+  }
+}
+ POST /api/analytics/session/start 200 in 9ms
+ ✓ Compiled /api/auth/session in 78ms (543 modules)
+ GET /api/auth/session 200 in 142ms
+ ✓ Compiled /api/auth/register in 230ms (1995 modules)
+ POST /api/auth/register 400 in 263ms
+ POST /api/auth/register 400 in 7ms
+ POST /api/auth/register 400 in 9ms
+ POST /api/auth/register 400 in 7ms
+ POST /api/auth/register 400 in 5ms
+ POST /api/auth/register 400 in 11ms
+ POST /api/auth/register 400 in 19ms
+ POST /api/auth/register 400 in 9ms
+ POST /api/auth/register 400 in 11ms
+ POST /api/auth/register 400 in 11ms
+ POST /api/auth/register 400 in 11ms
+ GET /login 200 in 56ms
+ POST /api/analytics/activity 404 in 48ms
+ ✓ Compiled /api/auth/login in 169ms (1997 modules)
+ POST /api/auth/login 200 in 318ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 648ms (3540 modules)
+ GET /dashboard 200 in 989ms
+2025-08-19T19:00:23.479Z [WARN]: Security: Router security service initialized {"event":"Router security service initialized","type":"security","status":"active"}
+ GET /dashboard 200 in 6ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 269ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 148ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 141ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 157ms
+ ○ Compiling /api/subscription/manage ...
+ ✓ Compiled /api/subscription/manage in 636ms (2032 modules)
+[next-auth][warn][DEBUG_ENABLED] 
+https://next-auth.js.org/warnings#debug_enabled
+ POST /api/subscription/manage 401 in 1072ms
+ POST /api/subscription/manage 401 in 1073ms
+ GET /dashboard 200 in 224ms
+ POST /api/analytics/activity 404 in 82ms
+ ✓ Compiled /pricing in 424ms (2038 modules)
+ GET /pricing 200 in 477ms
+ ✓ Compiled /api/pricing/tiers in 145ms (2040 modules)
+ GET /api/pricing/tiers 200 in 174ms
+ GET /api/pricing/tiers 200 in 3ms
+ POST /api/analytics/activity 404 in 65ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 517ms
+ POST /api/subscription/manage 401 in 518ms
+ POST /api/subscription/manage 401 in 518ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 135ms
+ POST /api/analytics/activity 404 in 12ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 134ms
+ ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+  clientVersion: '6.13.0',
+  digest: '1992091474'
+}
+ POST /dashboard 500 in 132ms
+ POST /api/analytics/session/end 404 in 19ms
+we need to make wbesite and everything more profeesional billling and stuff like these 

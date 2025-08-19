@@ -48,7 +48,159 @@ export const ROLE_PERMISSIONS = {
   ]
 };
 
-// Extend Express Request type
+// Extended interface for authenticated requests
+export interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+    subscriptionPlan?: string;
+    subscriptionStatus?: string;
+    role: UserRole;
+    isActive: boolean;
+    emailVerified: boolean;
+    permissions: string[];
+    sessionId?: string;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+}
+
+// Helper functions for authentication system
+export const authenticate = authenticateUser;
+
+export const generateTokens = (user: any) => {
+  const payload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    sessionId: crypto.randomBytes(16).toString('hex')
+  };
+
+  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  const refreshToken = jwt.sign(
+    { id: user.id, sessionId: payload.sessionId },
+    JWT_REFRESH_SECRET,
+    { expiresIn: JWT_REFRESH_EXPIRES_IN }
+  );
+
+  return {
+    accessToken,
+    refreshToken,
+    tokenType: 'Bearer',
+    expiresIn: JWT_EXPIRES_IN
+  };
+};
+
+export const verifyRefreshToken = async (token: string) => {
+  return jwt.verify(token, JWT_REFRESH_SECRET) as any;
+};
+
+export const hashPassword = async (password: string): Promise<string> => {
+  const saltRounds = 12;
+  return bcrypt.hash(password, saltRounds);
+};
+
+// Enhanced validation with express-validator
+export const authValidation = {
+  register: [
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email address'),
+    body('password')
+      .isLength({ min: 8, max: 128 })
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+      .withMessage('Password must be 8+ chars with uppercase, lowercase, number, and special char'),
+    body('name')
+      .trim()
+      .isLength({ min: 2, max: 50 })
+      .matches(/^[a-zA-Z\s]+$/)
+      .withMessage('Name must be 2-50 characters and contain only letters and spaces'),
+    body('acceptTerms')
+      .isBoolean()
+      .custom((value) => value === true)
+      .withMessage('You must accept the terms and conditions')
+  ],
+  
+  login: [
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email address'),
+    body('password')
+      .notEmpty()
+      .withMessage('Password is required')
+  ],
+  
+  refreshToken: [
+    body('refreshToken')
+      .notEmpty()
+      .isJWT()
+      .withMessage('Valid refresh token is required')
+  ],
+  
+  changePassword: [
+    body('currentPassword')
+      .notEmpty()
+      .withMessage('Current password is required'),
+    body('newPassword')
+      .isLength({ min: 8, max: 128 })
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+      .withMessage('New password must be 8+ chars with uppercase, lowercase, number, and special char')
+  ]
+};
+
+// Rate limiting for authentication endpoints
+export const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: {
+    error: 'Too many authentication attempts',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Enhanced error handling for validation
+export const handleAuthValidationErrors = (req: Request, res: Response, next: NextFunction) => {
+  const errors = validationResult(req);
+  
+  if (!errors.isEmpty()) {
+    logger.warn('Authentication validation errors', {
+      path: req.path,
+      method: req.method,
+      errors: errors.array(),
+      ip: req.ip
+    });
+    
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: errors.array().map(error => ({
+        field: error.param,
+        message: error.msg,
+        value: error.value
+      }))
+    });
+  }
+  
+  next();
+};
+
+// Security event logging
+export const logSecurityEvent = (event: string, req: AuthenticatedRequest) => {
+  logger.warn(`Security event: ${event}`, {
+    userId: req.user?.id,
+    email: req.user?.email,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    timestamp: new Date().toISOString()
+  });
+};
+
+// Extend Express Request type globally
 declare global {
   namespace Express {
     interface Request {
