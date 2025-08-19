@@ -133,6 +133,8 @@ const multiModalAIRoutes = require('./routes/multi-modal-ai');
 // Import middleware
 const { apiLimiter } = require('./middleware/rateLimit');
 const { validateRequestId } = require('./middleware/validation');
+const security = require('./middleware/security');
+const auth = require('./middleware/auth');
 
 // Load environment variables
 dotenv.config();
@@ -164,6 +166,9 @@ const performanceStack = middlewareStacks.full({
     }
   }
 });
+
+// Apply security middleware first
+security.applySecurity(app);
 
 // Apply performance middleware stack
 performanceStack.forEach(middleware => {
@@ -234,8 +239,11 @@ app.get('/metrics', async (req: any, res: any) => {
   }
 });
 
-// API routes
-app.use('/api/auth', authRoutes);
+// Authentication routes with security hardening
+const authenticationRoutes = require('./routes/auth');
+app.use('/api/auth', authenticationRoutes);
+
+// API routes with authentication
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/agents', agentRoutes);

@@ -311,9 +311,10 @@ Start with the main application files, then configuration, then tests and docume
   private parseGeneratedCode(generatedCode: string, request: CodeGenerationRequest): GeneratedFile[] {
     const files: GeneratedFile[] = [];
     
-    // Enhanced parsing to handle multiple AI output formats
+    // Enhanced parsing to handle Ollama's format where files are structured with code blocks
+    // and file paths are indicated in comments
     
-    // Pattern 1: Standard format with file: prefix
+    // Pattern 1: Standard format with explicit file: prefix
     const standardRegex = /```(?:(\w+)\s+)?(?:file:\s*(.+?)(?:\n|$))?([\s\S]*?)```/gi;
     let match;
     
@@ -334,32 +335,95 @@ Start with the main application files, then configuration, then tests and docume
       }
     }
 
-    // Pattern 2: AI Hub format with bracketed paths like [src/App.tsx]
+    // Pattern 2: Code blocks with file paths in comments (Ollama format)
     if (files.length === 0) {
-      const bracketRegex = /\[([^\]]+)\][^a-zA-Z]*([^[]*?)(?=\[|$)/g;
-      let bracketMatch;
+      const codeBlocks = generatedCode.split(/```/);
       
-      while ((bracketMatch = bracketRegex.exec(generatedCode)) !== null) {
-        const [, filePath, content] = bracketMatch;
-        const cleanPath = this.cleanFilePath(filePath);
-        const cleanContent = content.trim();
+      for (let i = 1; i < codeBlocks.length; i += 2) {
+        if (i + 1 >= codeBlocks.length) break;
         
-        if (cleanContent && cleanContent.length > 10) { // Skip very short content
+        const blockHeader = codeBlocks[i];
+        const blockContent = codeBlocks[i + 1];
+        
+        if (!blockContent || blockContent.trim().length < 20) continue;
+        
+        // Extract file path from comment patterns in the content
+        const filePathPatterns = [
+          /\/\/ ([^-\n]+\.(?:tsx?|jsx?|css|html|json|md))/i, // // src/App.tsx
+          /\/\* ([^-\n]+\.(?:tsx?|jsx?|css|html|json|md))/i, // /* src/App.tsx
+          /^([^-\n]+\.(?:tsx?|jsx?|css|html|json|md))/m, // src/App.tsx at start of line
+        ];
+        
+        let detectedPath = null;
+        for (const pattern of filePathPatterns) {
+          const pathMatch = blockContent.match(pattern);
+          if (pathMatch) {
+            detectedPath = pathMatch[1];
+            break;
+          }
+        }
+        
+        // If no path detected, generate one based on content
+        if (!detectedPath) {
+          detectedPath = this.generateFilePathFromContent(blockContent, blockHeader, files.length, request);
+        }
+        
+        if (detectedPath) {
           files.push({
-            path: cleanPath,
-            content: cleanContent,
-            type: this.determineFileType(cleanPath, cleanContent)
+            path: this.cleanFilePath(detectedPath),
+            content: blockContent.trim(),
+            type: this.determineFileType(detectedPath, blockContent)
           });
         }
       }
     }
 
-    // Pattern 3: Fallback to common patterns
+    // Pattern 3: Fallback to extracting by common patterns
     if (files.length === 0) {
       files.push(...this.extractFilesByPattern(generatedCode, request));
     }
 
     return files;
+  }
+
+  private generateFilePathFromContent(content: string, header: string, index: number, request: CodeGenerationRequest): string {
+    const cleanContent = content.toLowerCase();
+    const cleanHeader = (header || '').toLowerCase();
+    
+    // Determine file type and extension
+    let extension = '.js';
+    if (cleanHeader.includes('typescript') || cleanHeader.includes('tsx') || cleanContent.includes('interface ') || cleanContent.includes(': React.FC')) {
+      extension = request.framework === 'react' ? '.tsx' : '.ts';
+    } else if (cleanHeader.includes('jsx') || (cleanContent.includes('export default') && cleanContent.includes('react'))) {
+      extension = '.jsx';
+    } else if (cleanHeader.includes('css') || cleanContent.includes('@media') || cleanContent.includes('display:')) {
+      extension = '.css';
+    } else if (cleanHeader.includes('json') || (cleanContent.includes('{') && cleanContent.includes('"name":'))) {
+      extension = '.json';
+    } else if (cleanHeader.includes('html') || cleanContent.includes('<html') || cleanContent.includes('<!doctype')) {
+      extension = '.html';
+    }
+    
+    // Generate appropriate filename based on content
+    if (cleanContent.includes('package.json') || (extension === '.json' && cleanContent.includes('"scripts"'))) {
+      return 'package.json';
+    }
+    if (cleanContent.includes('tsconfig') || (extension === '.json' && cleanContent.includes('"compilerOptions"'))) {
+      return 'tsconfig.json';
+    }
+    if (cleanContent.includes('function app') || cleanContent.includes('const app') || cleanContent.includes('export default app')) {
+      return `src/App${extension}`;
+    }
+    if (cleanContent.includes('readme') || extension === '.md') {
+      return 'README.md';
+    }
+    if (cleanContent.includes('test') || cleanContent.includes('describe(') || cleanContent.includes('it(')) {
+      return `src/components/Component.test${extension}`;
+    }
+    
+    // Default filename
+    const componentName = request.type.charAt(0).toUpperCase() + request.type.slice(1);
+    return `src/components/${componentName}Component${extension}`;
   }
 
   private cleanFilePath(rawPath: string): string {

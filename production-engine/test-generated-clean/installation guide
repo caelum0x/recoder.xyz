@@ -1,0 +1,6 @@
+https://tailwindcss.com/docs/installation).
+4. Include the generated colors and SVG element into a React component, for example `ColorPaletteDisplay.tsx`, within your application's UI components directory (e.g., `/src/App.tsx`).
+5. Ensure you have set up TypeScript in your project by creating or updating a `tsconfig.json` file and installing the required typings with npm if needed (`npm install @types/react @types/node --save-dev`, for example).
+6. Import this component into your main application entry point, such as `/src/App.tsx`.
+7. Start your development server using `npx react-scripts start` or a similar setup command if you're not using Create React App (CRA).
+8. Open the provided URL in your browser to see the color palette displayed with Tailwind CSS styling, typically as part of an admin dashboard interface for designers within your application.

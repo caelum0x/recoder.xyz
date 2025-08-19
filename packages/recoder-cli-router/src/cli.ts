@@ -8,7 +8,7 @@ import { spawn } from "child_process";
 import { PID_FILE, REFERENCE_COUNT_FILE } from "./constants";
 import fs, { existsSync, readFileSync } from "fs";
 import {join} from "path";
-// import { routerBackendClient } from "./services/backend-client";
+import { routerBackendClient } from "./services/backend-client";
 
 const command = process.argv[2];
 

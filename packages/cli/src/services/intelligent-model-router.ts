@@ -210,7 +210,7 @@ export class IntelligentModelRouter {
         optimizationApplied: true
       };
     } catch (error) {
-      Logger.debug('Cost optimization failed:', error);
+      Logger.debug(`Cost optimization failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }
