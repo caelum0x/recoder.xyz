@@ -20,8 +20,8 @@ console.log('📁 Desktop root:', desktopRoot);
 const apps = {
   'recoder-extension': {
     path: path.join(projectRoot, 'recoder-extension'),
-    buildCommand: 'pnpm run build',
-    outputDir: 'dist',
+    buildCommand: 'pnpm vsix',
+    outputDir: 'bin',
     targetDir: path.join(desktopRoot, 'app-bundles/extension')
   },
   'recoder-chat': {

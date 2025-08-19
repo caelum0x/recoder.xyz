@@ -1,0 +1,785 @@
+{
+  "summary": {
+    "totalTests": 24,
+    "successfulTests": 20,
+    "authPassed": 8,
+    "crossPlatformPassed": 24,
+    "overallScore": "72.2"
+  },
+  "platformConnectivity": {
+    "Backend API": {
+      "connected": true,
+      "status": 200,
+      "port": 3001
+    },
+    "Web Platform": {
+      "connected": false,
+      "status": 500,
+      "port": 3000
+    },
+    "Chat Platform": {
+      "connected": false,
+      "status": 404,
+      "port": 3010
+    }
+  },
+  "platformStats": {
+    "CLI": {
+      "total": 6,
+      "successful": 5,
+      "authPassed": 2,
+      "successRate": "83.3"
+    },
+    "WEB": {
+      "total": 6,
+      "successful": 5,
+      "authPassed": 2,
+      "successRate": "83.3"
+    },
+    "MOBILE": {
+      "total": 6,
+      "successful": 5,
+      "authPassed": 2,
+      "successRate": "83.3"
+    },
+    "CHAT": {
+      "total": 6,
+      "successful": 5,
+      "authPassed": 2,
+      "successRate": "83.3"
+    }
+  },
+  "authFeatures": [
+    "Public endpoint accessible",
+    "Proper error handling for auth failure"
+  ],
+  "detailedResults": [
+    {
+      "platform": "CLI",
+      "platformName": "CLI",
+      "scenario": "Health Check Authentication",
+      "endpoint": "/health",
+      "method": "GET",
+      "status": 200,
+      "responseTime": 3,
+      "success": true,
+      "responseData": {
+        "status": "healthy",
+        "timestamp": "2025-08-19T16:44:54.909Z",
+        "port": "3001"
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Public endpoint accessible"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Platform CLI successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.911Z"
+    },
+    {
+      "platform": "CLI",
+      "platformName": "CLI",
+      "scenario": "User Registration Flow",
+      "endpoint": "/api/auth/register",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 3,
+      "success": false,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/register"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform CLI successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.914Z"
+    },
+    {
+      "platform": "CLI",
+      "platformName": "CLI",
+      "scenario": "User Login Flow",
+      "endpoint": "/api/auth/login",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/login"
+        }
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for auth failure"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform CLI successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.915Z"
+    },
+    {
+      "platform": "CLI",
+      "platformName": "CLI",
+      "scenario": "Protected User Profile",
+      "endpoint": "/api/auth/me",
+      "method": "GET",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/me"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform CLI successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.916Z"
+    },
+    {
+      "platform": "CLI",
+      "platformName": "CLI",
+      "scenario": "JWT Token Validation",
+      "endpoint": "/api/auth/validate",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 2,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/validate"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform CLI successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.918Z"
+    },
+    {
+      "platform": "CLI",
+      "platformName": "CLI",
+      "scenario": "Session Management",
+      "endpoint": "/api/auth/refresh",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/refresh"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform CLI successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.920Z"
+    },
+    {
+      "platform": "WEB",
+      "platformName": "Web",
+      "scenario": "Health Check Authentication",
+      "endpoint": "/health",
+      "method": "GET",
+      "status": 200,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "status": "healthy",
+        "timestamp": "2025-08-19T16:44:54.920Z",
+        "port": "3001"
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Public endpoint accessible"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Platform Web successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.921Z"
+    },
+    {
+      "platform": "WEB",
+      "platformName": "Web",
+      "scenario": "User Registration Flow",
+      "endpoint": "/api/auth/register",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": false,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/register"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Web successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.922Z"
+    },
+    {
+      "platform": "WEB",
+      "platformName": "Web",
+      "scenario": "User Login Flow",
+      "endpoint": "/api/auth/login",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/login"
+        }
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for auth failure"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Web successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.923Z"
+    },
+    {
+      "platform": "WEB",
+      "platformName": "Web",
+      "scenario": "Protected User Profile",
+      "endpoint": "/api/auth/me",
+      "method": "GET",
+      "status": 404,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/me"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Web successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.923Z"
+    },
+    {
+      "platform": "WEB",
+      "platformName": "Web",
+      "scenario": "JWT Token Validation",
+      "endpoint": "/api/auth/validate",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/validate"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Web successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.924Z"
+    },
+    {
+      "platform": "WEB",
+      "platformName": "Web",
+      "scenario": "Session Management",
+      "endpoint": "/api/auth/refresh",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/refresh"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Web successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.925Z"
+    },
+    {
+      "platform": "MOBILE",
+      "platformName": "Mobile",
+      "scenario": "Health Check Authentication",
+      "endpoint": "/health",
+      "method": "GET",
+      "status": 200,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "status": "healthy",
+        "timestamp": "2025-08-19T16:44:54.925Z",
+        "port": "3001"
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Public endpoint accessible"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Mobile optimization compatible",
+          "Platform Mobile successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.925Z"
+    },
+    {
+      "platform": "MOBILE",
+      "platformName": "Mobile",
+      "scenario": "User Registration Flow",
+      "endpoint": "/api/auth/register",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": false,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/register"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Mobile optimization compatible",
+          "Cross-platform error handling working",
+          "Platform Mobile successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.926Z"
+    },
+    {
+      "platform": "MOBILE",
+      "platformName": "Mobile",
+      "scenario": "User Login Flow",
+      "endpoint": "/api/auth/login",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/login"
+        }
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for auth failure"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Mobile optimization compatible",
+          "Cross-platform error handling working",
+          "Platform Mobile successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.926Z"
+    },
+    {
+      "platform": "MOBILE",
+      "platformName": "Mobile",
+      "scenario": "Protected User Profile",
+      "endpoint": "/api/auth/me",
+      "method": "GET",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/me"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Mobile optimization compatible",
+          "Cross-platform error handling working",
+          "Platform Mobile successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.927Z"
+    },
+    {
+      "platform": "MOBILE",
+      "platformName": "Mobile",
+      "scenario": "JWT Token Validation",
+      "endpoint": "/api/auth/validate",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/validate"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Mobile optimization compatible",
+          "Cross-platform error handling working",
+          "Platform Mobile successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.927Z"
+    },
+    {
+      "platform": "MOBILE",
+      "platformName": "Mobile",
+      "scenario": "Session Management",
+      "endpoint": "/api/auth/refresh",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/refresh"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Mobile optimization compatible",
+          "Cross-platform error handling working",
+          "Platform Mobile successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.928Z"
+    },
+    {
+      "platform": "CHAT",
+      "platformName": "Chat",
+      "scenario": "Health Check Authentication",
+      "endpoint": "/health",
+      "method": "GET",
+      "status": 200,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "status": "healthy",
+        "timestamp": "2025-08-19T16:44:54.928Z",
+        "port": "3001"
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Public endpoint accessible"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Platform Chat successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.928Z"
+    },
+    {
+      "platform": "CHAT",
+      "platformName": "Chat",
+      "scenario": "User Registration Flow",
+      "endpoint": "/api/auth/register",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": false,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/register"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Chat successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.929Z"
+    },
+    {
+      "platform": "CHAT",
+      "platformName": "Chat",
+      "scenario": "User Login Flow",
+      "endpoint": "/api/auth/login",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/login"
+        }
+      },
+      "authValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for auth failure"
+        ]
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Chat successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.929Z"
+    },
+    {
+      "platform": "CHAT",
+      "platformName": "Chat",
+      "scenario": "Protected User Profile",
+      "endpoint": "/api/auth/me",
+      "method": "GET",
+      "status": 404,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/me"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Chat successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.929Z"
+    },
+    {
+      "platform": "CHAT",
+      "platformName": "Chat",
+      "scenario": "JWT Token Validation",
+      "endpoint": "/api/auth/validate",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/validate"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Chat successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.930Z"
+    },
+    {
+      "platform": "CHAT",
+      "platformName": "Chat",
+      "scenario": "Session Management",
+      "endpoint": "/api/auth/refresh",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 0,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/refresh"
+        }
+      },
+      "authValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "crossPlatformValidation": {
+        "passed": true,
+        "notes": [
+          "Cross-platform error handling working",
+          "Platform Chat successfully connected"
+        ]
+      },
+      "timestamp": "2025-08-19T16:44:54.930Z"
+    }
+  ],
+  "timestamp": "2025-08-19T16:44:54.931Z",
+  "recommendations": [
+    {
+      "priority": "HIGH",
+      "category": "connectivity",
+      "issue": "Web Platform not accessible",
+      "solution": "Ensure Web Platform is running on port 3000 with proper CORS configuration"
+    },
+    {
+      "priority": "HIGH",
+      "category": "connectivity",
+      "issue": "Chat Platform not accessible",
+      "solution": "Ensure Chat Platform is running on port 3010 with proper CORS configuration"
+    },
+    {
+      "priority": "HIGH",
+      "category": "authentication",
+      "issue": "Authentication integration below 70%",
+      "solution": "Implement proper JWT token handling and session management across platforms"
+    }
+  ]
+}

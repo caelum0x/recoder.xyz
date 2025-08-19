@@ -1,0 +1,15 @@
+import React from 'react';
+import './App.css';
+import Button from './Button'; // Importing the custom button component we will create next
+
+const App: React.FC = () => {
+    return (
+        <div className="App">
+            <h1>React Web Application with a Custom Button</h1>
+            <p>Click on this button to perform an API call and log the result.</p>
+            <Button label="Fetch Data" onClick={() => console.log('Data fetched!')} />
+        end of file content]
+    );
+};
+
+export default App;

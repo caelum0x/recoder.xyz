@@ -1,0 +1,164 @@
+{
+  "summary": {
+    "totalTests": 4,
+    "passedTests": 4,
+    "passRate": "100.0",
+    "averageCostSavings": "-16.7",
+    "freeModelUsage": "75.0"
+  },
+  "modelUsage": {
+    "meta-llama/llama-3.1-8b-instruct:free": 2,
+    "google/gemini-2.0-flash-exp:free": 1,
+    "deepseek/deepseek-r1-distill-llama-70b": 1
+  },
+  "detailedResults": [
+    {
+      "testCase": {
+        "description": "create a simple React button component",
+        "type": "code_generation",
+        "complexity": "simple",
+        "priority": "cost",
+        "expectedModel": "google/gemini-2.0-flash-exp:free"
+      },
+      "routingDecision": {
+        "selectedModel": "meta-llama/llama-3.1-8b-instruct:free",
+        "reasoning": [
+          "Free Llama 3.1 8B for cost-optimized code generation"
+        ],
+        "estimatedCost": 0,
+        "confidence": 95,
+        "fallbackOptions": [
+          "google/gemini-2.0-flash-exp:free"
+        ]
+      },
+      "actualResponse": false,
+      "costValidation": {
+        "passed": true,
+        "costSavings": 100,
+        "isFreeModel": true,
+        "isCostEffectiveModel": false,
+        "premiumModelCost": 0.00405,
+        "actualCost": 0,
+        "validationNotes": [
+          "Correctly selected free model for cost priority"
+        ]
+      },
+      "responseTime": 0,
+      "timestamp": "2025-08-19T09:49:34.437Z"
+    },
+    {
+      "testCase": {
+        "description": "write a Python function to calculate fibonacci numbers",
+        "type": "code_generation",
+        "complexity": "medium",
+        "priority": "cost",
+        "expectedModel": "meta-llama/llama-3.1-8b-instruct:free"
+      },
+      "routingDecision": {
+        "selectedModel": "meta-llama/llama-3.1-8b-instruct:free",
+        "reasoning": [
+          "Free Llama 3.1 8B for cost-optimized code generation"
+        ],
+        "estimatedCost": 0,
+        "confidence": 95,
+        "fallbackOptions": [
+          "google/gemini-2.0-flash-exp:free"
+        ]
+      },
+      "actualResponse": false,
+      "costValidation": {
+        "passed": true,
+        "costSavings": 100,
+        "isFreeModel": true,
+        "isCostEffectiveModel": false,
+        "premiumModelCost": 0.00417,
+        "actualCost": 0,
+        "validationNotes": [
+          "Correctly selected free model for cost priority"
+        ]
+      },
+      "responseTime": 0,
+      "timestamp": "2025-08-19T09:49:34.437Z"
+    },
+    {
+      "testCase": {
+        "description": "explain the concept of machine learning in simple terms",
+        "type": "analysis",
+        "complexity": "simple",
+        "priority": "cost",
+        "expectedModel": "google/gemini-2.0-flash-exp:free"
+      },
+      "routingDecision": {
+        "selectedModel": "google/gemini-2.0-flash-exp:free",
+        "reasoning": [
+          "Free Gemini 2.0 Flash for cost-optimized general tasks"
+        ],
+        "estimatedCost": 0,
+        "confidence": 95,
+        "fallbackOptions": [
+          "meta-llama/llama-3.1-8b-instruct:free"
+        ]
+      },
+      "actualResponse": false,
+      "costValidation": {
+        "passed": true,
+        "costSavings": 100,
+        "isFreeModel": true,
+        "isCostEffectiveModel": false,
+        "premiumModelCost": 0.00417,
+        "actualCost": 0,
+        "validationNotes": [
+          "Correctly selected free model for cost priority"
+        ]
+      },
+      "responseTime": 0,
+      "timestamp": "2025-08-19T09:49:34.437Z"
+    },
+    {
+      "testCase": {
+        "description": "debug this complex TypeScript generic type issue",
+        "type": "debugging",
+        "complexity": "expert",
+        "priority": "balanced",
+        "expectedModel": "deepseek/deepseek-r1-distill-llama-70b"
+      },
+      "routingDecision": {
+        "selectedModel": "deepseek/deepseek-r1-distill-llama-70b",
+        "reasoning": [
+          "Cost-effective premium model for expert complexity"
+        ],
+        "estimatedCost": 0.01918,
+        "confidence": 95,
+        "fallbackOptions": [
+          "google/gemini-2.0-flash-exp:free",
+          "meta-llama/llama-3.1-8b-instruct:free"
+        ]
+      },
+      "actualResponse": false,
+      "costValidation": {
+        "passed": true,
+        "costSavings": -367,
+        "isFreeModel": false,
+        "isCostEffectiveModel": true,
+        "premiumModelCost": 0.00411,
+        "actualCost": 0.01918,
+        "validationNotes": [
+          "Acceptable model selection for expert task"
+        ]
+      },
+      "responseTime": 0,
+      "timestamp": "2025-08-19T09:49:34.437Z"
+    }
+  ],
+  "timestamp": "2025-08-19T09:49:34.437Z",
+  "configuration": {
+    "freeModels": [
+      "google/gemini-2.0-flash-exp:free",
+      "meta-llama/llama-3.1-8b-instruct:free"
+    ],
+    "costEffectiveModels": [
+      "deepseek/deepseek-r1-distill-llama-70b"
+    ],
+    "hasAPIKey": false
+  }
+}

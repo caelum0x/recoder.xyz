@@ -1,36 +1,6 @@
 {
   "version": 4,
   "routes": {
-    "/twitter-image-12cog0.png": {
-      "initialHeaders": {
-        "cache-control": "public, immutable, no-transform, max-age=31536000",
-        "content-type": "image/png",
-        "x-next-cache-tags": "_N_T_/layout,_N_T_/(chat)/layout,_N_T_/(chat)/twitter-image-12cog0.png/layout,_N_T_/(chat)/twitter-image-12cog0.png/route,_N_T_/twitter-image-12cog0.png"
-      },
-      "renderingMode": "STATIC",
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/twitter-image-12cog0.png",
-      "dataRoute": null,
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
     "/favicon.ico": {
       "initialHeaders": {
         "cache-control": "public, max-age=0, must-revalidate",
@@ -91,9 +61,13 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/register": {
-      "renderingMode": "PARTIALLY_STATIC",
-      "experimentalPPR": true,
+    "/twitter-image-12cog0.png": {
+      "initialHeaders": {
+        "cache-control": "public, immutable, no-transform, max-age=31536000",
+        "content-type": "image/png",
+        "x-next-cache-tags": "_N_T_/layout,_N_T_/(chat)/layout,_N_T_/(chat)/twitter-image-12cog0.png/layout,_N_T_/(chat)/twitter-image-12cog0.png/route,_N_T_/twitter-image-12cog0.png"
+      },
+      "renderingMode": "STATIC",
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -103,17 +77,11 @@
           "type": "header",
           "key": "content-type",
           "value": "multipart/form-data;.*"
-        },
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": "Mediapartners-Google|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti"
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/register",
-      "dataRoute": "/register.rsc",
-      "prefetchDataRoute": "/register.prefetch.rsc",
+      "srcRoute": "/twitter-image-12cog0.png",
+      "dataRoute": null,
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -146,6 +114,38 @@
       "srcRoute": "/login",
       "dataRoute": "/login.rsc",
       "prefetchDataRoute": "/login.prefetch.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
+    "/register": {
+      "renderingMode": "PARTIALLY_STATIC",
+      "experimentalPPR": true,
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "Next-Action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "Mediapartners-Google|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/register",
+      "dataRoute": "/register.rsc",
+      "prefetchDataRoute": "/register.prefetch.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -229,8 +229,8 @@
   },
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "18e645f3d827dd1c424a3a58f558ca28",
-    "previewModeSigningKey": "efab7177adb6ecc74fbf7b5c21c57a627589412cec6e1aa5569487d32c1c1291",
-    "previewModeEncryptionKey": "cd1161f635d7b00511ea85faababd4ba76dd2ef48fe34719ac4f4ed71a697cfa"
+    "previewModeId": "94d476ae29a90e10f911401208be98c0",
+    "previewModeSigningKey": "b3082a2fa09dc995d8922ceb459171963cbf359b8e6db2408963476b3be8fe12",
+    "previewModeEncryptionKey": "0b90df9e0cd293d02bba14da823c51f02811f9b1e0588791a6a24067c120ac7e"
   }
 }
