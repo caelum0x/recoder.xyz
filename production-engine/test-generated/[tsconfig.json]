@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+      "target": "es5", // Compile down to ES5 for broader browser compatibility, or use 'latest' if transpiling with Babel (to be implemented)
+      "lib": ["dom", "dom.iterable", "esnext"],
+      "allowJs": true,
+      "skipLibCheck": true,
+      "noImplicitAny": false, // Allow implicit type coercion for convenience in development mode or set to 'true' with proper types (to be implemented)
+      "jsx": "react-native", // JSX transformer options based on React version and project needs (to be configured correctly according to the actual setup of your application using TypeScript 4.2+ features, which supports native mode for web projects as well)...
+      "moduleResolution": "node",
+      "allowSyntheticDefaultImports": true, // Allow default imports from modules with ES6 module syntax (to be implemented)
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "noImplicitOverride": true,
+      "strictPropertyInitialization": false,
+      "downlevelIteration": true, // Enable iterating over generators in older environments (to be implemented)
+      "isolatedModules": true,
+      "resolveJsonPlugins": true,
+      "noEmitOnError": true,
+      "alwaysStrict": false,
+      "sourceMap": true, // Enable source maps for debugging purposes in development mode (to be implemented)
+      "baseUrl": ".",
+      "paths": {
+          "*": ["node_modules/*"] // Resolve paths to local modules relative to the `node_modules` directory or customize as needed...
+      }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/__tests__/*.{js,jsx}", "dist"] // Exclude files and directories not necessary for production (to be implemented)
+}

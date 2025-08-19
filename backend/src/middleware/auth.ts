@@ -1,10 +1,52 @@
-// Authentication and Authorization Middleware
-// Updated for Prisma and TypeScript with subscription checks
+/**
+ * Authentication & Authorization Middleware
+ * Production-ready JWT-based authentication for Recoder.xyz
+ * Enhanced with security hardening and comprehensive validation
+ */
 
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { rateLimit } from 'express-rate-limit';
+import { body, validationResult } from 'express-validator';
 import { prisma } from '../database/prisma';
 import { logger } from '../utils/logger';
+
+// JWT Configuration with enhanced security
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';
+const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+
+// User roles and permissions
+export enum UserRole {
+  ADMIN = 'admin',
+  PREMIUM = 'premium',
+  USER = 'user',
+  DEVELOPER = 'developer'
+}
+
+export const ROLE_PERMISSIONS = {
+  [UserRole.ADMIN]: [
+    'user:read', 'user:write', 'user:delete',
+    'system:read', 'system:write', 'system:admin',
+    'ai:unlimited', 'analytics:read'
+  ],
+  [UserRole.PREMIUM]: [
+    'user:read', 'user:write',
+    'ai:premium', 'projects:unlimited',
+    'analytics:basic'
+  ],
+  [UserRole.DEVELOPER]: [
+    'user:read', 'user:write',
+    'ai:developer', 'api:extended'
+  ],
+  [UserRole.USER]: [
+    'user:read', 'user:write',
+    'ai:basic', 'projects:limited'
+  ]
+};
 
 // Extend Express Request type
 declare global {

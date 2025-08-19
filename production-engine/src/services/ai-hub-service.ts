@@ -716,7 +716,8 @@ class OllamaProvider implements AIProvider {
       logger.warn('Enhanced integration failed, falling back to direct Ollama API');
       
       // Fallback to direct Ollama API
-      const model = options.model || 'llama3:latest';
+      // Use phi3:mini as it's available and good for code generation
+      const model = options.model || 'phi3:mini';
       
       // Check if model is available
       try {

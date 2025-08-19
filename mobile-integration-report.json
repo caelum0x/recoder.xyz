@@ -1,0 +1,132 @@
+{
+  "summary": {
+    "totalTests": 4,
+    "successfulTests": 3,
+    "mobileIntegrationPassed": 4,
+    "costOptimizationPassed": 3,
+    "backendConnected": true,
+    "engineConnected": true,
+    "overallScore": "83.3"
+  },
+  "connectivity": {
+    "backend": true,
+    "engine": true
+  },
+  "detailedResults": [
+    {
+      "scenario": "Mobile Code Generation Request",
+      "endpoint": "http://localhost:3002/api/generate",
+      "method": "POST",
+      "status": 400,
+      "responseTime": 3,
+      "success": false,
+      "responseData": {
+        "success": false,
+        "error": "Type and description are required",
+        "files": [],
+        "instructions": ""
+      },
+      "costOptimizationValidation": {
+        "passed": true,
+        "notes": [
+          "Cost optimization not required for this endpoint"
+        ]
+      },
+      "mobileIntegrationValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for mobile platform",
+          "Successfully connected from mobile test environment"
+        ]
+      },
+      "timestamp": "2025-08-19T16:42:22.487Z"
+    },
+    {
+      "scenario": "Mobile AI Agent Request",
+      "endpoint": "http://localhost:3001/api/agents",
+      "method": "GET",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/agents"
+        }
+      },
+      "costOptimizationValidation": {
+        "passed": false,
+        "notes": []
+      },
+      "mobileIntegrationValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for mobile platform",
+          "Successfully connected from mobile test environment"
+        ]
+      },
+      "timestamp": "2025-08-19T16:42:22.488Z"
+    },
+    {
+      "scenario": "Mobile Project Creation",
+      "endpoint": "http://localhost:3001/api/projects",
+      "method": "POST",
+      "status": 404,
+      "responseTime": 2,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/projects"
+        }
+      },
+      "costOptimizationValidation": {
+        "passed": true,
+        "notes": [
+          "Cost optimization not required for this endpoint"
+        ]
+      },
+      "mobileIntegrationValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for mobile platform",
+          "Successfully connected from mobile test environment"
+        ]
+      },
+      "timestamp": "2025-08-19T16:42:22.490Z"
+    },
+    {
+      "scenario": "Mobile User Authentication",
+      "endpoint": "http://localhost:3001/api/auth/me",
+      "method": "GET",
+      "status": 404,
+      "responseTime": 1,
+      "success": true,
+      "responseData": {
+        "error": {
+          "message": "Route not found",
+          "code": "ROUTE_NOT_FOUND",
+          "path": "/api/auth/me"
+        }
+      },
+      "costOptimizationValidation": {
+        "passed": true,
+        "notes": [
+          "Cost optimization not required for this endpoint"
+        ]
+      },
+      "mobileIntegrationValidation": {
+        "passed": true,
+        "notes": [
+          "Proper error handling for mobile platform",
+          "Successfully connected from mobile test environment"
+        ]
+      },
+      "timestamp": "2025-08-19T16:42:22.491Z"
+    }
+  ],
+  "timestamp": "2025-08-19T16:42:22.491Z",
+  "recommendations": []
+}

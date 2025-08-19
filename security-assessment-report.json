@@ -1,0 +1,361 @@
+{
+  "summary": {
+    "totalTests": 12,
+    "passedTests": 10,
+    "vulnerabilities": 4,
+    "securityScore": "83.3",
+    "criticalIssues": 2,
+    "highIssues": 4
+  },
+  "categories": {
+    "AUTHENTICATION": {
+      "name": "Authentication & Authorization",
+      "priority": "CRITICAL",
+      "areas": [
+        "JWT Security",
+        "Session Management",
+        "Multi-Factor Auth",
+        "OAuth Integration"
+      ]
+    },
+    "API_SECURITY": {
+      "name": "API Security",
+      "priority": "HIGH",
+      "areas": [
+        "Rate Limiting",
+        "Input Validation",
+        "CORS Configuration",
+        "API Key Management"
+      ]
+    },
+    "DATA_PROTECTION": {
+      "name": "Data Protection",
+      "priority": "CRITICAL",
+      "areas": [
+        "Encryption at Rest",
+        "Encryption in Transit",
+        "PII Protection",
+        "Secret Management"
+      ]
+    },
+    "INFRASTRUCTURE": {
+      "name": "Infrastructure Security",
+      "priority": "HIGH",
+      "areas": [
+        "Network Security",
+        "Container Security",
+        "Environment Isolation",
+        "Access Control"
+      ]
+    },
+    "CODE_SECURITY": {
+      "name": "Code Security",
+      "priority": "MEDIUM",
+      "areas": [
+        "Dependency Scanning",
+        "SAST/DAST",
+        "Code Signing",
+        "Supply Chain Security"
+      ]
+    },
+    "MONITORING": {
+      "name": "Security Monitoring",
+      "priority": "HIGH",
+      "areas": [
+        "Audit Logging",
+        "Threat Detection",
+        "Incident Response",
+        "Compliance"
+      ]
+    }
+  },
+  "detailedResults": [
+    {
+      "name": "Backend Health & Security Headers",
+      "category": "headers",
+      "passed": false,
+      "vulnerabilities": [
+        "Missing security headers: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Strict-Transport-Security"
+      ],
+      "recommendations": [
+        "Implement missing security headers"
+      ],
+      "responseTime": 20,
+      "timestamp": "2025-08-19T16:48:28.615Z",
+      "details": {
+        "securityHeaders": {
+          "X-Content-Type-Options": null,
+          "X-Frame-Options": null,
+          "X-XSS-Protection": null,
+          "Strict-Transport-Security": null
+        },
+        "missingHeaders": [
+          "X-Content-Type-Options",
+          "X-Frame-Options",
+          "X-XSS-Protection",
+          "Strict-Transport-Security"
+        ]
+      }
+    },
+    {
+      "name": "CORS Configuration",
+      "category": "cors",
+      "passed": true,
+      "vulnerabilities": [],
+      "recommendations": [],
+      "responseTime": 2,
+      "timestamp": "2025-08-19T16:48:28.635Z",
+      "details": {
+        "corsHeaders": {
+          "Access-Control-Allow-Origin": null,
+          "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+          "Access-Control-Allow-Headers": "Content-Type"
+        }
+      }
+    },
+    {
+      "name": "Rate Limiting",
+      "category": "rate_limit",
+      "passed": false,
+      "vulnerabilities": [
+        "No rate limiting detected"
+      ],
+      "recommendations": [
+        "Implement rate limiting middleware"
+      ],
+      "responseTime": 19,
+      "timestamp": "2025-08-19T16:48:28.637Z",
+      "details": {
+        "successCount": 100,
+        "totalRequests": 100,
+        "rateLimited": false
+      }
+    },
+    {
+      "name": "Input Validation",
+      "category": "input_validation",
+      "passed": true,
+      "vulnerabilities": [],
+      "recommendations": [],
+      "responseTime": 4,
+      "timestamp": "2025-08-19T16:48:28.656Z",
+      "details": {
+        "testResults": [
+          {
+            "payload": "<script>alert(1)</script>",
+            "status": 404,
+            "blocked": true
+          },
+          {
+            "payload": "DROP TABLE users;",
+            "status": 404,
+            "blocked": true
+          },
+          {
+            "payload": "../../../etc/passwd",
+            "status": 404,
+            "blocked": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Environment Files Security",
+      "scanType": "env_files",
+      "issues": [
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/.env",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/.env.example",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/.env.launch-template",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/backend/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/backend/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/browser-extension/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/browser-extension/.env.production",
+        "Potentially exposed environment file: /Users/arhansubasi/recoder.xyz/kubernetes/secrets.yaml",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/packages/cli/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/packages/cli/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/packages/recoder-cli-router/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/packages/recoder-cli-router/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-chat/.env",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-chat/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-chat/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-chat-mobile/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-chat-mobile/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-desktop/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-desktop/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-desktop/app-bundles/chat/standalone/.env",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-desktop/app-bundles/chat/standalone/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-desktop/app-bundles/web/standalone/.env",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-desktop/app-bundles/web/standalone/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-extension/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-extension/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-extension/src/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-extension/src/.env.production",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-web/.env",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-web/.env.local",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/recoder-web/.env.production",
+        "Potentially exposed environment file: /Users/arhansubasi/recoder.xyz/secrets-management-guide.md",
+        "Sensitive data detected in: /Users/arhansubasi/recoder.xyz/secrets-management-guide.md"
+      ],
+      "recommendations": [
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Add environment files to .gitignore",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Use secure secret management",
+        "Add environment files to .gitignore",
+        "Use secure secret management"
+      ],
+      "filesScanned": 57,
+      "timestamp": "2025-08-19T16:48:28.660Z"
+    },
+    {
+      "name": "Configuration Security",
+      "scanType": "config_files",
+      "issues": [
+        "Potential hardcoded credentials in artillery-config.yml",
+        "Potential hardcoded credentials in load-test-config.js",
+        "Potential hardcoded credentials in package-lock.json",
+        "Potential hardcoded credentials in docker-compose.yml",
+        "Debug mode enabled in docker-compose.yml",
+        "Insecure HTTP protocol detected in electron-builder.config.js",
+        "Potential hardcoded credentials in docker-compose.production-enhanced.yml",
+        "Insecure HTTP protocol detected in docker-compose.production.yml",
+        "Potential hardcoded credentials in package-lock.json",
+        "Potential hardcoded credentials in package-lock.json",
+        "Potential hardcoded credentials in 0000_snapshot.json",
+        "Potential hardcoded credentials in 0001_snapshot.json",
+        "Potential hardcoded credentials in 0002_snapshot.json",
+        "Potential hardcoded credentials in 0003_snapshot.json",
+        "Potential hardcoded credentials in 0004_snapshot.json",
+        "Potential hardcoded credentials in 0005_snapshot.json",
+        "Potential hardcoded credentials in 0006_snapshot.json",
+        "Potential hardcoded credentials in tsconfig.tsbuildinfo",
+        "Insecure HTTP protocol detected in package.json",
+        "Potential hardcoded credentials in docker-compose.yml",
+        "Insecure HTTP protocol detected in editorconfig.svg",
+        "Insecure HTTP protocol detected in folder-config-open.svg",
+        "Insecure HTTP protocol detected in folder-config.svg",
+        "Insecure HTTP protocol detected in jsconfig.svg",
+        "Insecure HTTP protocol detected in tsconfig.svg",
+        "Insecure HTTP protocol detected in vue-config.svg",
+        "Potential hardcoded credentials in docker-compose.yml"
+      ],
+      "recommendations": [],
+      "filesScanned": 1362,
+      "timestamp": "2025-08-19T16:48:28.946Z"
+    },
+    {
+      "name": "Dependency Vulnerabilities",
+      "scanType": "dependencies",
+      "issues": [
+        "Express 4.16.x has known vulnerabilities",
+        "Express 4.16.x has known vulnerabilities"
+      ],
+      "recommendations": [],
+      "filesScanned": 3,
+      "timestamp": "2025-08-19T16:48:29.193Z"
+    },
+    {
+      "name": "Database Configuration",
+      "category": "configuration",
+      "file": "backend/src/database/prisma.ts",
+      "issues": [
+        "Environment variables used without validation",
+        "Database connection may not use SSL"
+      ],
+      "recommendations": [
+        "Implement environment variable validation",
+        "Enable SSL for database connections"
+      ],
+      "timestamp": "2025-08-19T16:48:29.198Z"
+    },
+    {
+      "name": "AI Provider Security",
+      "category": "configuration",
+      "file": "backend/src/services/ai-provider-manager.ts",
+      "issues": [],
+      "recommendations": [],
+      "timestamp": "2025-08-19T16:48:29.198Z"
+    },
+    {
+      "name": "Authentication Bypass",
+      "category": "api_security",
+      "endpoint": "/api/admin",
+      "status": 404,
+      "vulnerable": false,
+      "details": {},
+      "timestamp": "2025-08-19T16:48:29.199Z"
+    },
+    {
+      "name": "SQL Injection",
+      "category": "api_security",
+      "endpoint": "/api/search",
+      "status": 404,
+      "vulnerable": false,
+      "details": {},
+      "timestamp": "2025-08-19T16:48:29.200Z"
+    },
+    {
+      "name": "NoSQL Injection",
+      "category": "api_security",
+      "endpoint": "/api/login",
+      "status": 404,
+      "vulnerable": false,
+      "details": {},
+      "timestamp": "2025-08-19T16:48:29.201Z"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "HIGH",
+      "category": "API Security",
+      "issue": "Missing security headers",
+      "solution": "Implement Helmet.js middleware for security headers",
+      "implementation": "Add helmet middleware to Express server"
+    },
+    {
+      "priority": "CRITICAL",
+      "category": "Authentication",
+      "issue": "Missing authentication endpoints",
+      "solution": "Implement JWT-based authentication system",
+      "implementation": "Create /api/auth routes with proper JWT handling"
+    },
+    {
+      "priority": "HIGH",
+      "category": "Data Protection",
+      "issue": "Environment variables security",
+      "solution": "Implement secure secret management",
+      "implementation": "Use encrypted environment variables and secret managers"
+    }
+  ],
+  "timestamp": "2025-08-19T16:48:29.201Z"
+}

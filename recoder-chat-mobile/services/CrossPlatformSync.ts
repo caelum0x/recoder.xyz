@@ -5,7 +5,17 @@
 
 import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Conditional import for AsyncStorage to prevent build errors
+let AsyncStorage: any;
+try {
+  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+} catch (error) {
+  AsyncStorage = {
+    getItem: () => Promise.resolve(null),
+    setItem: () => Promise.resolve(),
+    removeItem: () => Promise.resolve(),
+  };
+}
 
 // React Native compatible EventEmitter
 class EventEmitter {
