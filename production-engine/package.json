@@ -1,7 +1,7 @@
 {
-  "name": "@codecraft/production-engine",
-  "version": "1.0.0",
-  "description": "Production Code Engine - Ensures real functionality and production readiness",
+  "name": "@recoder/production-engine",
+  "version": "2.0.0",
+  "description": "Commercial Production Code Engine - Real AI-powered code generation with OpenRouter integration",
   "main": "src/server.js",
   "scripts": {
     "dev": "npx tsx src/server.ts",

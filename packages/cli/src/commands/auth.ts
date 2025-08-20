@@ -8,6 +8,8 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { Logger } from '@recoder/shared';
 import { backendClient } from '../services/backend-client';
+import { billingIntegration } from '../services/billing-integration';
+import { webCLIAuthBridge } from '../services/web-cli-auth-bridge';
 
 /**
  * Create authentication command with login, register, status, logout subcommands
@@ -20,6 +22,7 @@ export function createAuthCommand(): Command {
   authCommand
     .command('login')
     .description('Login to your recoder.xyz account')
+    .option('-w, --web', 'Use recoder.xyz website for authentication (recommended)')
     .option('-e, --email <email>', 'Your email address')
     .option('-t, --token <token>', 'Login with token instead of email/password')
     .option('-k, --api-key <key>', 'Login with API key')
@@ -47,6 +50,35 @@ export function createAuthCommand(): Command {
         }
 
         // Handle different authentication methods
+        if (options.web) {
+          // Web-based authentication (recommended)
+          console.log(chalk.blue('🌐 Authenticating via recoder.xyz...'));
+          
+          const webAuth = await webCLIAuthBridge.initiateWebAuth();
+          
+          console.log(chalk.cyan('\n' + webAuth.instructions.join('\n')));
+          
+          // Open browser automatically
+          await webCLIAuthBridge.openBrowserAuth(webAuth.authUrl);
+          
+          console.log(chalk.blue('\n⏳ Waiting for authentication in browser...'));
+          console.log(chalk.gray('Press Ctrl+C to cancel\n'));
+          
+          try {
+            const token = await webCLIAuthBridge.pollForAuthCompletion(webAuth.deviceCode);
+            
+            console.log(chalk.green('\n✅ Successfully authenticated via recoder.xyz!'));
+            console.log(chalk.white(`📧 User: ${token.email}`));
+            console.log(chalk.white(`📋 Plan: ${token.plan.toUpperCase()}`));
+            console.log(chalk.white(`🔒 Scopes: ${token.scopes.join(', ')}`));
+            console.log(chalk.green('\n🎉 You can now use the CLI with your recoder.xyz account!\n'));
+          } catch (authError: any) {
+            console.log(chalk.red(`\n❌ Web authentication failed: ${authError.message}`));
+            console.log(chalk.yellow('💡 Try: recoder auth login --email <your-email>'));
+          }
+          return;
+        }
+
         if (options.apiKey) {
           // API Key authentication
           console.log(chalk.blue('🔑 Authenticating with API key...'));
@@ -154,11 +186,21 @@ export function createAuthCommand(): Command {
         // Update platform status
         await backendClient.updatePlatformStatus('cli', true);
 
-        // Display success information
+        // Display success information and billing info
+        const billing = await billingIntegration.getUserBilling(session.userId);
+        const tier = billing ? billingIntegration.getSubscriptionTiers()[billing.subscription.name] : null;
+        
         console.log(chalk.green(`\n✅ Successfully logged in as ${session.email}`));
         console.log(chalk.white(`📋 Plan: ${session.plan.toUpperCase()}`));
-        console.log(chalk.white(`📊 Quota: ${session.quotas.usedRequests}/${session.quotas.totalRequests} requests`));
-        console.log(chalk.gray(`🔄 Quota resets: ${new Date(session.quotas.resetDate).toLocaleDateString()}`));
+        
+        if (billing && tier) {
+          console.log(chalk.white(`💰 Subscription: ${tier.name.toUpperCase()} ($${tier.price / 100}/month)`));
+          console.log(chalk.white(`📊 Usage: ${billing.current_usage}/${tier.requests_per_month === -1 ? '∞' : tier.requests_per_month} requests`));
+          console.log(chalk.white(`💳 Status: ${billing.payment_status.toUpperCase()}`));
+        } else {
+          console.log(chalk.white(`📊 Quota: ${session.quotas.usedRequests}/${session.quotas.totalRequests} requests`));
+          console.log(chalk.gray(`🔄 Quota resets: ${new Date(session.quotas.resetDate).toLocaleDateString()}`));
+        }
 
         // Show connected platforms
         const activePlatforms = Object.entries(session.platforms).filter(([_, active]) => active);
@@ -592,6 +634,167 @@ export function createAuthCommand(): Command {
       } catch (error: any) {
         console.log(chalk.red(`\n❌ API key management failed: ${error.message}`));
         Logger.error(`API key management failed: ${error.message}`);
+      }
+    });
+
+  // Billing management commands
+  authCommand
+    .command('upgrade')
+    .description('Upgrade your subscription plan')
+    .option('--plan <plan>', 'Target plan (pro, team, enterprise)')
+    .action(async (options) => {
+      console.log(chalk.cyan('\n💰 RECODER - Subscription Upgrade\n'));
+
+      try {
+        if (!backendClient.isAuthenticated()) {
+          console.log(chalk.yellow('❌ Not logged in'));
+          console.log(chalk.gray('Run "recoder auth login" to authenticate\n'));
+          return;
+        }
+
+        const session = backendClient.getCurrentSession();
+        if (!session) {
+          console.log(chalk.red('❌ No valid session found'));
+          return;
+        }
+
+        const tiers = billingIntegration.getSubscriptionTiers();
+        let targetPlan = options.plan;
+
+        if (!targetPlan) {
+          // Show current plan and available upgrades
+          const currentBilling = await billingIntegration.getUserBilling(session.userId);
+          const currentTier = currentBilling?.subscription.name || 'free';
+          
+          console.log(chalk.white(`Current plan: ${currentTier.toUpperCase()}\n`));
+          console.log(chalk.white('Available plans:\n'));
+          
+          Object.entries(tiers).forEach(([key, tier]) => {
+            const price = tier.price === 0 ? 'Free' : `$${tier.price / 100}/month`;
+            const requests = tier.requests_per_month === -1 ? 'Unlimited' : `${tier.requests_per_month.toLocaleString()}`;
+            
+            console.log(chalk.blue(`  ${tier.name.toUpperCase()}`));
+            console.log(chalk.white(`    Price: ${price}`));
+            console.log(chalk.white(`    Requests: ${requests}/month`));
+            console.log(chalk.white(`    Models: ${tier.models.join(', ')}`));
+            console.log(chalk.white(`    Support: ${tier.support_level}\n`));
+          });
+          
+          console.log(chalk.gray('Run "recoder auth upgrade --plan <plan>" to upgrade\n'));
+          return;
+        }
+
+        if (!tiers[targetPlan]) {
+          console.log(chalk.red('❌ Invalid plan. Available plans: pro, team, enterprise'));
+          return;
+        }
+
+        const tier = tiers[targetPlan];
+        console.log(chalk.blue(`🚀 Upgrading to ${tier.name.toUpperCase()} plan...`));
+        console.log(chalk.white(`Price: $${tier.price / 100}/month`));
+        console.log(chalk.white(`Requests: ${tier.requests_per_month === -1 ? 'Unlimited' : tier.requests_per_month.toLocaleString()}/month\n`));
+
+        const checkout = await billingIntegration.createCheckoutSession(session.userId, targetPlan);
+        
+        console.log(chalk.green('✅ Checkout session created'));
+        console.log(chalk.blue('🌐 Opening payment page...'));
+        console.log(chalk.blue(`If browser doesn't open, visit: ${checkout.checkout_url}\n`));
+
+        try {
+          const open = await import('open');
+          await open.default(checkout.checkout_url);
+        } catch (error) {
+          console.log(chalk.yellow('⚠️ Failed to open browser automatically'));
+        }
+
+        console.log(chalk.yellow('⏳ Complete payment in browser, then run "recoder auth status" to verify upgrade\n'));
+
+      } catch (error: any) {
+        console.log(chalk.red(`\n❌ Upgrade failed: ${error.message}`));
+        Logger.error(`Subscription upgrade failed: ${error.message}`);
+      }
+    });
+
+  // Usage analytics command
+  authCommand
+    .command('usage')
+    .description('Show usage analytics and cost savings')
+    .option('--detailed', 'Show detailed breakdown')
+    .action(async (options) => {
+      console.log(chalk.cyan('\n📊 RECODER - Usage Analytics\n'));
+
+      try {
+        if (!backendClient.isAuthenticated()) {
+          console.log(chalk.yellow('❌ Not logged in'));
+          console.log(chalk.gray('Run "recoder auth login" to authenticate\n'));
+          return;
+        }
+
+        const session = backendClient.getCurrentSession();
+        if (!session) {
+          console.log(chalk.red('❌ No valid session found'));
+          return;
+        }
+
+        console.log(chalk.blue('📈 Fetching usage data...'));
+        
+        const [analytics, savings, billing] = await Promise.all([
+          billingIntegration.getUsageAnalytics(session.userId),
+          billingIntegration.getCostSavings(session.userId),
+          billingIntegration.getUserBilling(session.userId)
+        ]);
+
+        const tier = billing ? billingIntegration.getSubscriptionTiers()[billing.subscription.name] : null;
+
+        // Current usage summary
+        console.log(chalk.green('\n📊 Current Usage:'));
+        console.log(chalk.white(`  Requests this period: ${analytics.current_period_usage.toLocaleString()}`));
+        console.log(chalk.white(`  Daily average: ${analytics.daily_average.toFixed(1)} requests`));
+        
+        if (tier && tier.requests_per_month > 0) {
+          const usagePercent = (analytics.current_period_usage / tier.requests_per_month * 100).toFixed(1);
+          const remaining = tier.requests_per_month - analytics.current_period_usage;
+          console.log(chalk.white(`  Quota usage: ${usagePercent}% (${remaining.toLocaleString()} remaining)`));
+        }
+
+        // Cost savings
+        console.log(chalk.green('\n💰 Cost Analysis:'));
+        console.log(chalk.white(`  Your plan cost: $${savings.current_plan_cost.toFixed(2)}/month`));
+        console.log(chalk.white(`  Equivalent API cost: $${savings.api_cost_equivalent.toFixed(2)}/month`));
+        console.log(chalk.white(`  Monthly savings: ${chalk.green(`$${savings.monthly_savings.toFixed(2)} (${savings.savings_percentage.toFixed(1)}%)`)}`));
+
+        // Detailed breakdown
+        if (options.detailed && analytics.most_used_models.length > 0) {
+          console.log(chalk.green('\n🤖 Model Usage:'));
+          analytics.most_used_models.slice(0, 5).forEach((model, index) => {
+            console.log(chalk.white(`  ${index + 1}. ${model.model}: ${model.count} requests ($${model.cost.toFixed(2)})`));
+          });
+        }
+
+        if (options.detailed && analytics.cost_breakdown.length > 0) {
+          console.log(chalk.green('\n📈 Daily Costs (last 7 days):'));
+          analytics.cost_breakdown.slice(-7).forEach(day => {
+            console.log(chalk.white(`  ${day.date}: $${day.cost.toFixed(2)}`));
+          });
+        }
+
+        // Recommendations
+        console.log(chalk.green('\n💡 Recommendations:'));
+        if (savings.savings_percentage < 50) {
+          console.log(chalk.yellow('  Consider upgrading to a higher tier for better cost efficiency'));
+        } else {
+          console.log(chalk.green('  Great job! You\'re maximizing your savings'));
+        }
+        
+        if (tier && tier.requests_per_month > 0 && analytics.current_period_usage > tier.requests_per_month * 0.8) {
+          console.log(chalk.yellow('  You\'re approaching your quota limit - consider upgrading'));
+        }
+
+        console.log('');
+
+      } catch (error: any) {
+        console.log(chalk.red(`\n❌ Usage analytics failed: ${error.message}`));
+        Logger.error(`Usage analytics failed: ${error.message}`);
       }
     });
 

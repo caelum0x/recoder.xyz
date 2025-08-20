@@ -3,7 +3,7 @@
  * Connects Production Engine to CLI AI Hub for real code generation
  */
 
-import { AIHubService } from './ai-hub-service';
+import { commercialAIHubService } from './commercial-ai-hub-service';
 import { logger } from '../utils/logger';
 import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
@@ -68,11 +68,9 @@ export interface CodeGenerationResult {
 }
 
 export class RealCodeGeneratorService {
-  private aiHub: AIHubService;
   private complianceService: ComplianceIntegrationService;
 
   constructor() {
-    this.aiHub = new AIHubService();
     
     // Initialize SOC 2 compliance service with enterprise defaults
     const complianceConfig: ComplianceConfig = {
@@ -95,8 +93,8 @@ export class RealCodeGeneratorService {
     logger.info(`Starting code generation for: ${request.description}`);
 
     try {
-      // Generate code using AI Hub with real providers
-      const generatedCode = await this.aiHub.generateWithBestModel(
+      // Generate code using Commercial AI Hub with OpenRouter
+      const generatedCode = await commercialAIHubService.generateWithBestModel(
         this.buildPrompt(request),
         {
           type: request.type,
@@ -709,7 +707,7 @@ npm run build
   }
 
   async getAvailableProviders(): Promise<string[]> {
-    return await this.aiHub.getAvailableProviders();
+    return await commercialAIHubService.getAvailableProviders();
   }
 }
 
