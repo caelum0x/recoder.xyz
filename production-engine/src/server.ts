@@ -19,6 +19,18 @@ import { commercialAIHubService } from './services/commercial-ai-hub-service';
 import { openRouterService } from './services/openrouter-service';
 import { billingService } from './services/billing-service';
 import { rateLimitService } from './services/rate-limit-service';
+import { userService } from './services/user-service';
+import { projectService } from './services/project-service';
+import developerApiRoutes from './routes/developer-api';
+import developerDashboardRoutes from './routes/developer-dashboard';
+import teamCollaborationRoutes from './routes/team-collaboration';
+import socialFeaturesRoutes from './routes/social-features';
+import gitIntegrationRoutes from './routes/git-integration';
+import viralGrowthRoutes from './routes/viral-growth';
+import onboardingRoutes from './routes/onboarding';
+import templateMarketplaceRoutes from './routes/template-marketplace';
+import deploymentRoutes from './routes/deployment';
+import enterpriseDashboardRoutes from './routes/enterprise-dashboard';
 
 const app = express();
 const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
@@ -76,6 +88,18 @@ app.use('/api', async (req, res, next) => {
   
   next();
 });
+
+// Mount developer API routes
+app.use('/api/dev', developerApiRoutes);
+app.use('/api/dashboard', developerDashboardRoutes);
+app.use('/api/teams', teamCollaborationRoutes);
+app.use('/api/social', socialFeaturesRoutes);
+app.use('/api/git', gitIntegrationRoutes);
+app.use('/api/growth', viralGrowthRoutes);
+app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/templates', templateMarketplaceRoutes);
+app.use('/api/deployment', deploymentRoutes);
+app.use('/api/enterprise/dashboard', enterpriseDashboardRoutes);
 
 // Generate real code endpoint
 app.post('/api/generate', async (req, res) => {
