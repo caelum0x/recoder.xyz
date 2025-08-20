@@ -4,7 +4,15 @@
  */
 
 import { logger } from '../utils/logger';
-import { GeneratedFile } from '../generators/real-code-generator';
+// import { GeneratedFile } from '../generators/real-code-generator';
+
+interface GeneratedFile {
+  path: string;
+  content: string;
+  type: 'code' | 'config' | 'test' | 'documentation' | 'source';
+  language?: string;
+  dependencies?: string[];
+}
 
 export interface CodeTemplate {
   id: string;

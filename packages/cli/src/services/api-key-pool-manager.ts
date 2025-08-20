@@ -292,6 +292,35 @@ export class APIKeyPoolManager {
       savings: Math.round(savings * 100) / 100
     };
   }
+
+  /**
+   * Get optimal API key for enhanced request handler compatibility
+   */
+  async getOptimalAPIKey(model: string, userId: string): Promise<{ id: string; provider: string; key: string } | null> {
+    try {
+      const routing = await this.getOptimalRouting('', 'coding', 'pro');
+      return {
+        id: `${routing.provider}-optimal`,
+        provider: routing.provider,
+        key: routing.apiKey
+      };
+    } catch (error) {
+      Logger.error('Failed to get optimal API key:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Record usage for enhanced request handler compatibility
+   */
+  async recordUsage(keyId: string, cost: number, duration: number): Promise<void> {
+    try {
+      Logger.info('Recording API key usage', { keyId, cost, duration });
+      // Update usage tracking here
+    } catch (error) {
+      Logger.error('Failed to record API key usage:', error);
+    }
+  }
 }
 
 // Export singleton instance

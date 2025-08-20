@@ -85,6 +85,7 @@
     "groq-sdk": "^0.5.0",
     "handlebars": "^4.7.8",
     "inquirer": "^12.9.2",
+    "ioredis": "^5.7.0",
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
