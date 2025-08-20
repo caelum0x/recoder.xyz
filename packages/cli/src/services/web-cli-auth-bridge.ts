@@ -5,6 +5,7 @@
  */
 import { Logger } from '@recoder/shared';
 import { backendClient } from './backend-client';
+import { unifiedSessionManager } from './unified-session-manager';
 import open from 'open';
 import crypto from 'crypto';
 
@@ -180,6 +181,9 @@ export class WebCLIAuthBridge {
 
       // Store token locally
       await this.storeCLIToken(cliToken);
+
+      // Initialize unified session with web auth data
+      await unifiedSessionManager.initializeFromWebAuth(cliToken);
       
       this.logger.info('Web authentication completed successfully');
       return cliToken;
@@ -239,17 +243,22 @@ export class WebCLIAuthBridge {
       const data = response.data;
 
       if (data.status === 'completed') {
+        const cliToken = {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: new Date(data.expires_at),
+          userId: data.user_id,
+          email: data.email,
+          plan: data.plan,
+          scopes: data.scopes
+        };
+
+        // Initialize unified session
+        await unifiedSessionManager.initializeFromWebAuth(cliToken);
+
         return {
           status: 'completed',
-          token: {
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token,
-            expiresAt: new Date(data.expires_at),
-            userId: data.user_id,
-            email: data.email,
-            plan: data.plan,
-            scopes: data.scopes
-          }
+          token: cliToken
         };
       }
 
