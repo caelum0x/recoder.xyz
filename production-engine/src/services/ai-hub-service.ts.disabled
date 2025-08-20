@@ -5,8 +5,8 @@
 
 import { logger } from '../utils/logger';
 import axios, { AxiosInstance } from 'axios';
-import { enhancedOllamaIntegration } from './enhanced-ollama-integration';
-// import { unifiedBackendAI, type ProductionContext, type BackendAIOptions, type BackendAIResponse } from './unified-backend-ai';
+import { openRouterService, GenerationOptions, GenerationResult } from './openrouter-service';
+import { unifiedBackendAI, type ProductionContext, type BackendAIOptions, type BackendAIResponse } from './unified-backend-ai';
 
 // Proper types for unified backend AI integration
 interface ProductionContext {

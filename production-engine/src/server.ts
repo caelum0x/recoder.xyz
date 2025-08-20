@@ -14,15 +14,17 @@ import compression from 'compression';
 import { logger } from './utils/logger';
 import { realCodeGeneratorService } from './services/real-code-generator-service';
 import { ValidationService } from './services/validation-service';
-import { unifiedBackendAI } from './services/unified-backend-ai';
-import { AIHubService } from './services/ai-hub-service';
+// import { unifiedBackendAI } from './services/unified-backend-ai';
+import { commercialAIHubService } from './services/commercial-ai-hub-service';
+import { openRouterService } from './services/openrouter-service';
+import { billingService } from './services/billing-service';
+import { rateLimitService } from './services/rate-limit-service';
 
 const app = express();
 const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
 
 // Services
 const validationService = new ValidationService();
-const aiHubService = new AIHubService();
 
 // Middleware
 app.use(helmet());
@@ -53,6 +55,26 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// Commercial middleware for API authentication and rate limiting
+app.use('/api', async (req, res, next) => {
+  const userId = req.headers['x-user-id'] as string;
+  const apiKey = req.headers['x-api-key'] as string;
+  
+  if (!userId && !apiKey) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required. Please provide x-user-id or x-api-key header.',
+      code: 'AUTH_REQUIRED'
+    });
+  }
+  
+  // For API key authentication, extract user ID from key (implement your logic)
+  const effectiveUserId = userId || apiKey?.split('-')[1] || 'anonymous';
+  req.userId = effectiveUserId;
+  
+  next();
 });
 
 // Generate real code endpoint
@@ -240,29 +262,125 @@ app.get('/api/templates', (req, res) => {
   }
 });
 
-// Get service status and metrics
-app.get('/api/status', (req, res) => {
-  const memUsage = process.memoryUsage();
-  
-  res.json({
-    success: true,
-    data: {
-      service: 'Production Engine',
-      version: '1.0.0',
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-      memory: {
-        rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
-        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB',
-        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
-        external: Math.round(memUsage.external / 1024 / 1024) + 'MB'
-      },
-      cpu: process.cpuUsage(),
-      pid: process.pid,
-      nodeVersion: process.version,
-      platform: process.platform
+// Commercial billing and subscription endpoints
+app.get('/api/billing/subscription/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const subscription = billingService.getUserSubscription(userId);
+    
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        error: 'Subscription not found',
+        code: 'SUBSCRIPTION_NOT_FOUND'
+      });
     }
-  });
+    
+    res.json({
+      success: true,
+      data: subscription
+    });
+  } catch (error: any) {
+    logger.error('Failed to get subscription:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: 'BILLING_ERROR'
+    });
+  }
+});
+
+app.get('/api/billing/pricing', (req, res) => {
+  try {
+    const tiers = billingService.getPricingTiers();
+    
+    res.json({
+      success: true,
+      data: tiers
+    });
+  } catch (error: any) {
+    logger.error('Failed to get pricing tiers:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: 'PRICING_ERROR'
+    });
+  }
+});
+
+// OpenRouter service endpoints
+app.get('/api/openrouter/models', (req, res) => {
+  try {
+    const models = openRouterService.getAvailableModels();
+    
+    res.json({
+      success: true,
+      data: models
+    });
+  } catch (error: any) {
+    logger.error('Failed to get OpenRouter models:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: 'MODELS_ERROR'
+    });
+  }
+});
+
+// Get service status and metrics
+app.get('/api/status', async (req, res) => {
+  try {
+    const memUsage = process.memoryUsage();
+    
+    // Get commercial service status
+    const openRouterHealth = await openRouterService.healthCheck();
+    const rateLimitStats = rateLimitService.getUsageStatistics();
+    
+    res.json({
+      success: true,
+      data: {
+        service: 'Recoder Production Engine (Commercial)',
+        version: '2.0.0',
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development',
+        memory: {
+          rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB',
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
+          external: Math.round(memUsage.external / 1024 / 1024) + 'MB'
+        },
+        cpu: process.cpuUsage(),
+        pid: process.pid,
+        nodeVersion: process.version,
+        platform: process.platform,
+        services: {
+          openRouter: {
+            status: openRouterHealth.status,
+            apiKeyValid: openRouterHealth.apiKeyValid,
+            modelsAvailable: openRouterHealth.modelsAvailable,
+            averageLatency: openRouterHealth.averageLatency,
+            errorRate: openRouterHealth.errorRate
+          },
+          rateLimiting: {
+            totalActiveUsers: rateLimitStats.totalActiveUsers,
+            totalRequests: rateLimitStats.totalRequests,
+            suspendedUsers: rateLimitStats.suspendedUsers
+          },
+          billing: {
+            enabled: true,
+            tiersAvailable: billingService.getPricingTiers().length
+          }
+        }
+      }
+    });
+  } catch (error: any) {
+    logger.error('Status check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: 'STATUS_ERROR'
+    });
+  }
 });
 
 // 404 handler
@@ -297,17 +415,13 @@ async function initializeAISystems() {
   try {
     logger.info('🤖 Initializing unified AI systems...');
     
-    // Test unified backend AI system
-    const metrics = unifiedBackendAI.getProductionMetrics();
-    logger.info(`✅ Unified backend AI: ${metrics.handlers.length} providers available`);
-    
-    // Test legacy AI hub health
-    const health = await aiHubService.healthCheck();
+    // Test commercial AI hub health
+    const health = await commercialAIHubService.healthCheck();
     const healthyProviders = Object.values(health.unified).filter(Boolean).length + 
                             Object.values(health.legacy).filter(Boolean).length;
-    logger.info(`✅ AI Hub health: ${healthyProviders} providers healthy (${health.overall})`);
+    logger.info(`✅ Commercial AI Hub health: ${healthyProviders} providers healthy (${health.overall})`);
     
-    logger.info('🚀 All AI systems initialized successfully');
+    logger.info('🚀 All commercial AI systems initialized successfully');
     
   } catch (error) {
     logger.error('⚠️ Failed to initialize AI systems:', error);

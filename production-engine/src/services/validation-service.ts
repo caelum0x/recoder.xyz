@@ -4,7 +4,14 @@
  */
 
 import { logger } from '../utils/logger';
-import { GeneratedFile } from '../generators/real-code-generator';
+// import { GeneratedFile } from '../generators/real-code-generator';
+
+interface GeneratedFile {
+  path: string;
+  content: string;
+  type: 'code' | 'config' | 'test' | 'documentation' | 'source';
+  language?: string;
+}
 
 export interface ValidationResult {
   type: 'syntax' | 'compilation' | 'functionality' | 'integration' | 'security';
