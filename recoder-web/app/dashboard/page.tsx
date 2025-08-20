@@ -218,6 +218,45 @@ export default function Dashboard() {
           </p>
         </div>
 
+        {/* Dashboard Navigation */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Dashboard Sections</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Link
+              href="/dashboard/cost"
+              className="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <DollarSign className="w-5 h-5 text-blue-600 mr-3" />
+              <div>
+                <h3 className="font-medium text-gray-900">Cost Analysis</h3>
+                <p className="text-sm text-gray-600">View usage costs and optimization</p>
+              </div>
+            </Link>
+            
+            <Link
+              href="/dashboard/router-analytics"
+              className="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+            >
+              <BarChart3 className="w-5 h-5 text-green-600 mr-3" />
+              <div>
+                <h3 className="font-medium text-gray-900">Router Analytics</h3>
+                <p className="text-sm text-gray-600">Monitor CLI router performance</p>
+              </div>
+            </Link>
+
+            <Link
+              href="/settings"
+              className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+            >
+              <Settings className="w-5 h-5 text-purple-600 mr-3" />
+              <div>
+                <h3 className="font-medium text-gray-900">Settings</h3>
+                <p className="text-sm text-gray-600">Manage account and preferences</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+
         {/* Quick Access to Products */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">

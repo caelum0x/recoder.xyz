@@ -21,8 +21,8 @@ export interface BillingInfo {
   billing_period_start: Date;
   billing_period_end: Date;
   payment_status: 'active' | 'pending' | 'failed' | 'cancelled';
-  stripe_customer_id?: string;
-  stripe_subscription_id?: string;
+  dodo_customer_id?: string;
+  dodo_subscription_id?: string;
 }
 
 export class BillingIntegration {
@@ -184,20 +184,34 @@ export class BillingIntegration {
   }
 
   /**
-   * Create Stripe checkout session for subscription upgrade
+   * Create DODO Pay checkout session for subscription upgrade
    */
   async createCheckoutSession(userId: string, tier: string): Promise<{
     checkout_url: string;
-    session_id: string;
+    subscription_id: string;
   }> {
     try {
-      const response = await (backendClient as any).client.post('/api/billing/checkout', {
-        user_id: userId,
-        tier: tier
+      const webUrl = process.env.RECODER_WEB_URL || 'https://recoder.xyz';
+      
+      const response = await (backendClient as any).client.post('/api/billing/create-checkout-session', {
+        userId: userId,
+        plan: tier,
+        source: 'cli',
+        return_url: `${webUrl}/billing?upgraded=true&return_to=cli_success`,
+        cancel_url: `${webUrl}/billing?source=cli&cancelled=true`,
+        metadata: {
+          cli_upgrade: true,
+          timestamp: Date.now(),
+          tier: tier
+        }
       });
-      return response.data;
+
+      return {
+        checkout_url: response.data.checkout_url,
+        subscription_id: response.data.subscription_id
+      };
     } catch (error) {
-      this.logger.error('Failed to create checkout session', { userId, tier, error });
+      this.logger.error('Failed to create DODO Pay checkout session', { userId, tier, error });
       throw new Error('Payment system temporarily unavailable');
     }
   }

@@ -10,6 +10,8 @@ import { Logger } from '@recoder/shared';
 import { backendClient } from '../services/backend-client';
 import { billingIntegration } from '../services/billing-integration';
 import { webCLIAuthBridge } from '../services/web-cli-auth-bridge';
+import { unifiedSessionManager } from '../services/unified-session-manager';
+import { sessionSyncService } from '../services/session-sync-service';
 
 /**
  * Create authentication command with login, register, status, logout subcommands
@@ -71,6 +73,10 @@ export function createAuthCommand(): Command {
             console.log(chalk.white(`📧 User: ${token.email}`));
             console.log(chalk.white(`📋 Plan: ${token.plan.toUpperCase()}`));
             console.log(chalk.white(`🔒 Scopes: ${token.scopes.join(', ')}`));
+            
+            // Initialize session sync
+            await sessionSyncService.initializeSync(token.userId);
+            console.log(chalk.green('\n🔄 Session synced across all platforms'));
             console.log(chalk.green('\n🎉 You can now use the CLI with your recoder.xyz account!\n'));
           } catch (authError: any) {
             console.log(chalk.red(`\n❌ Web authentication failed: ${authError.message}`));
