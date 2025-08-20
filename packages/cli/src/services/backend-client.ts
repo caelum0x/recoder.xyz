@@ -10,6 +10,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { unifiedSessionManager } from './unified-session-manager';
 
 export interface UserSession {
   userId: string;
@@ -150,6 +151,12 @@ export class BackendClient {
         const sessionData = await fs.readJson(this.sessionFile);
         this.currentSession = sessionData;
         Logger.info('✅ User session loaded');
+      }
+
+      // Try to restore unified session if available
+      const unifiedSession = await unifiedSessionManager.restoreSession();
+      if (unifiedSession) {
+        Logger.info('🔄 Unified session restored');
       }
     } catch (error) {
       Logger.warn('Could not load session file');
@@ -570,7 +577,9 @@ export class BackendClient {
    * Check if user is authenticated
    */
   isAuthenticated(): boolean {
-    return this.unifiedSession !== null || this.currentSession !== null;
+    // Check unified session manager first, then fall back to local sessions
+    const unifiedSession = unifiedSessionManager.getCurrentSession();
+    return unifiedSession !== null || this.unifiedSession !== null || this.currentSession !== null;
   }
 
   // ========================================

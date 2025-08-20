@@ -267,6 +267,7 @@ export class ProjectService {
       // Update project with generated code
       project.files = generationResult.files.map(file => ({
         ...file,
+        type: file.type as 'code' | 'config' | 'test' | 'documentation',
         language: this.detectLanguage(file.path),
         size: file.content.length
       }));
@@ -732,11 +733,11 @@ export class ProjectService {
   }
 
   private generateProjectId(): string {
-    return 'proj_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+    return 'proj_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
   }
 
   private generateVersionId(): string {
-    return 'ver_' + Math.random().toString(36).substr(2, 9);
+    return 'ver_' + Math.random().toString(36).substring(2, 11);
   }
 }
 

@@ -686,3 +686,4 @@ Controls the verbosity and length of the model response. Lower values produce mo
      ☐ Implement one-click deployment to cloud platforms
      ☐ Build enterprise sales dashboard and admin panel
      ☐ Create API for third-party integrations
+     MISSION : we need to make these servşce usable we need to integrate it to main web so users will see on web main web needs to have api keys and payment and other necessary files for production engine so we need production engine payments production engine banners production engine pages and tabs for main web users need a dashboard to view their usages and other analytical stuff
