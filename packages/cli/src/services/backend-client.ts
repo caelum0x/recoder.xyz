@@ -81,7 +81,7 @@ export class BackendClient {
 
   constructor() {
     // Use the web API URL for unified authentication
-    this.baseUrl = process.env.RECODER_BACKEND_URL || process.env.NEXTAUTH_URL || 'http://localhost:3010';
+    this.baseUrl = process.env.RECODER_BACKEND_URL || process.env.NEXTAUTH_URL || 'http://localhost:3020';
     this.sessionFile = path.join(os.homedir(), '.recoder', 'session.json');
     this.unifiedSessionFile = path.join(os.homedir(), '.recoder', 'unified-session.json');
     this.deviceId = this.getOrCreateDeviceId();

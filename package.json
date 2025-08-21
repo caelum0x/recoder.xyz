@@ -169,6 +169,7 @@
     "@nx/eslint-plugin": "^21.4.0",
     "@types/glob": "^8.1.0",
     "@types/node": "^20.10.0",
+    "@types/react": "^19.1.10",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "axios": "^1.11.0",
@@ -182,6 +183,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
     "@qwen-code/qwen-code": "^0.0.7",
     "@types/jsonwebtoken": "^9.0.10",
     "autoprefixer": "^10.4.16",
@@ -192,6 +194,7 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.446.0",
     "next": "^15.0.0",
+    "next-auth": "^4.24.11",
     "ora": "^5.4.1",
     "postcss": "^8.4.31",
     "react": "^19.0.0",
