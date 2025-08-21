@@ -64,6 +64,7 @@ import { createTestPortsCommand } from './commands/test-ports';
 import { createPortFixCommand } from './commands/port-fix';
 import { createOrchestratorTestCommand } from './commands/orchestrator-test';
 import { createCostDashboardCommand } from './commands/cost-dashboard';
+import { createDeployCommand } from './commands/deploy';
 import { AIOrchestrator } from './services/ai-orchestrator';
 import { ContextMemorySystem } from './services/context-memory';
 
@@ -251,6 +252,14 @@ async function setupProductionCommands(program: Command): Promise<void> {
           outputPath: options.output,
           userId: userSession?.userId
         };
+
+        // Check if production engine is available first
+        const isEngineAvailable = await productionEngineClient.isEngineAvailable();
+        if (isEngineAvailable) {
+          console.log(chalk.green('✅ Production engine connected'));
+        } else {
+          console.log(chalk.yellow('⚠️ Production engine offline - using local AI generation'));
+        }
 
         console.log(chalk.blue('🤖 Production engine is generating your application...'));
         const result = await productionEngineClient.generateCode(request);
@@ -840,6 +849,9 @@ Make this a production-ready plan that can actually be executed.`;
   // Add cost optimization dashboard - KILLER FEATURE: Real-time cost analytics
   program.addCommand(createCostDashboardCommand());
   
+  // Add deployment command - Deploy generated code to various platforms
+  program.addCommand(createDeployCommand());
+  
   // Repository refactoring command - KILLER FEATURE vs Cursor (limited context)
   program
     .command('refactor')
@@ -1273,7 +1285,7 @@ async function main() {
     // Check if this looks like a natural language command
     const isNaturalLanguage = (
       (args.length === 1 && args[0].includes(' ') && !args[0].startsWith('-')) ||
-      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'orchestrate', 'context', 'analytics', 'scan', 'stats', 'security', 'consensus', 'refactor', 'collaborate', 'auto-code', 'vibe', 'help', 'version'].includes(args[0]))
+      (args.length >= 1 && !args[0].startsWith('-') && !['generate', 'plan', 'validate', 'chat', 'agent', 'orchestrate', 'context', 'analytics', 'scan', 'stats', 'security', 'consensus', 'refactor', 'collaborate', 'auto-code', 'vibe', 'deploy', 'auth', 'ollama', 'help', 'version'].includes(args[0]))
     );
     
     if (isNaturalLanguage) {
@@ -1298,7 +1310,7 @@ async function main() {
         const intentAnalysis = await aiHub.chat([
           {
             role: 'system',
-            content: 'You are a command interpreter for Recoder CLI. Analyze the user\'s natural language input and respond with the appropriate Recoder command. Available commands: generate, plan, validate, chat, agent, context, analytics, scan. Respond with just the command and any necessary flags.'
+            content: 'You are a command interpreter for Recoder CLI. Analyze the user\'s natural language input and respond with the appropriate Recoder command. Available commands: generate, plan, validate, chat, agent, deploy, context, analytics, scan, auth. Respond with just the command and any necessary flags.'
           },
           {
             role: 'user',

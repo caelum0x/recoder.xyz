@@ -392,3 +392,161 @@
      ☐ 🚀 Final security audit and compliance verification
 
 **🎯 SUCCESS CRITERIA:** All 5 platforms (recoder.xyz, recoder-chat, recoder-web, @recoder/cli, recoder-cli-router) working seamlessly together with unified authentication, billing, and user management.
+
+
+
+ first question you need to be usre we are not deploying or .env to npm packages 2- you need to be sure cli connects to prod 
+  engine and backend so that we can acces ai endpoints other wise we need to ask users for api keys which is a bad practice > open 
+  router api key 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  open router api key 
+    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
+
+
+
+
+  ⏺ Perfect! I'll integrate the OpenRouter API key into our production engine to enable the 50+ AI models. Let me update the
+    configuration and test the integration.
+
+
+  ⏺ Update(~/recoder.xyz/production-engine/src/services/openrouter-service.ts)
+
+    ⎿  Error editing file
+
+
+  ⏺ Write(~/recoder.xyz/.env)
+
+    ⎿  Error writing file
+
+
+  ⏺ Bash(curl -H "x-user-id: test-user" -H "Content-Type: application/json" -d '{"model": "anthropic/claude-3-sonnet", "messages":
+        [{"role": "user", "content": "Test Ope…)
+    ⎿  Waiting…
+
+    ⎿  {                                                   
+         "error": {
+           "message": "Route not found: POST /api/ai/chat",
+       … +7 lines (ctrl+r to expand)
+
+
+
+
+  ⏺ Read(~/recoder.xyz/production-engine/src/services/openrouter-service.ts)
+
+    ⎿  Read 50 lines (ctrl+r to expand)
+
+
+  ⏺ Read(~/recoder.xyz/.env)
+
+    ⎿  Read 208 lines (ctrl+r to expand)
+
+
+  ⏺ BashOutput(Reading shell output)
+
+    ⎿  [INFO] 2025-08-21T20:35:41.553Z - GET /health {
+         "userAgent": "recoder-cli/1.0.0",
+         "ip": "::1"
+       … +21 lines (ctrl+r to expand)
+
+
+    ⎿  Interrupted by user
+
+
+  > use these models 1.
+    Claude Sonnet 4
+    by
+    anthropic
+    520B tokens
+    4%
+    2.
+    Gemini 2.5 Flash
+    by
+    google
+    265B tokens
+    3%
+    3.
+    Gemini 2.0 Flash
+    by
+    google
+    264B tokens
+    3%
+    4.
+    DeepSeek V3 0324
+    by
+    deepseek
+    156B tokens
+    12%
+    5.
+    Qwen3 Coder
+    by
+    qwen
+    146B tokens
+    3%
+    6.
+    Claude 3.7 Sonnet
+    by
+    anthropic
+    143B tokens
+    12%
+    7.
+    DeepSeek V3 0324 (free)
+    by
+    deepseek
+    136B tokens
+    14%
+    8.
+    Gemini 2.5 Pro
+    by
+    google
+    136B tokens
+    7%
+    9.
+    R1 0528 (free)
+    by
+    deepseek
+    110B tokens
+    4%
+    10.
+    Kimi K2
+    by
+    moonshotai
+    98,5B tokens
+    1%
+
+
+
+    ⎿  Interrupted by user
+
+
+  > and also make sure prod engine cli ,recoder cli router and backend has open router api key because we will not want api keys 
+  from
+     prmeium users so we need to use our open rotuer api key to monetize it 20 dollar for each user subscription we need to make 
+    money            ☒ PHASE 2: Implement main website authentication system (Google/GitHub OAuth)
+       ☒ Configure premium AI models for monetization with OpenRouter
+       ☐ Update CLI to use production engine with OpenRouter API key
+       ☐ Configure CLI router to use our OpenRouter key for all AI requests
+       ☐ Update backend systems to use centralized OpenRouter API key     ☐ 📦 Publish @recoder/cli to npm with proper installation
+   flow
+       ☐ 🔄 Create router subscription management through web interface
+       ☐ 🚀 Deploy production engine with billing and auth integration
+       ☐ 🚀 Configure Redis for session management and API key caching
+       ☐ 🌍 Deploy recoder.xyz main website with CLI integration pages
+       ☐ 🌍 Deploy billing and subscription management pages
+       ☐ 🌍 Create CLI onboarding and download pages
+       ☐ 📦 Create CLI auto-update mechanism connected to main backend
+       ☐ 📦 Add CLI telemetry and error reporting to main platform
+       ☐ 📦 Build CLI installation verification and health checks
+       ☐ ⚙️ Publish recoder-cli-router to npm with enterprise features
+       ☐ ⚙️ Create router enterprise licensing and billing integration
+       ☐ ⚙️ Add router team management through web dashboard
+       ☐ ⚙️ Implement router usage analytics and optimization reporting
+       ☐ 👤 Create seamless CLI onboarding: download -> install -> auth -> first request
+       ☐ 👤 Build upgrade flow: CLI quota exceeded -> redirects to web -> upgrades -> CLI resumes
+       ☐ 👤 Implement account management: web dashboard managing CLI/router settings
+       ☐ 👤 Create support flow: CLI issues -> web support portal with context
+       ☐ 🧪 End-to-end test: user registers on web -> downloads CLI -> makes requests
+       ☐ 🧪 Test billing flow: CLI hits quota -> redirects to web -> upgrades -> CLI resumes
+       ☐ 🧪 Test router integration: download router -> connect to web account -> optimize costs
+       ☐ 🧪 Load test complete system: web + CLI + router + production engine
+       ☐ 📊 Deploy monitoring for CLI usage, errors, and performance
+       ☐ 📊 Set up billing and revenue tracking across all platforms
+       ☐ 📊 Create admin dashboard for managing CLI users and subscriptions
+       ☐ 📊 Implement alerting for CLI issues, quota limits, and payment failures
