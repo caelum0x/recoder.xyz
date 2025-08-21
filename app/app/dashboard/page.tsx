@@ -78,6 +78,15 @@ export default function DashboardPage() {
 
   const platforms = [
     {
+      name: 'Production Engine',
+      description: '50+ AI models, deployment & enterprise features',
+      icon: Zap,
+      href: '/dashboard/production',
+      color: 'from-gradient-to-r from-blue-600 to-purple-600',
+      status: 'Available',
+      isNew: true
+    },
+    {
       name: 'Recoder Web',
       description: 'Browser-based development platform',
       icon: Globe,
@@ -149,6 +158,26 @@ export default function DashboardPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
+          {/* Production Engine Banner */}
+          <div className="mb-8 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 rounded-lg p-6 text-white">
+            <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold mb-2">🚀 New: Production Engine Available!</h2>
+                <p className="text-blue-100">
+                  50+ AI models, one-click deployment, team collaboration, and enterprise features.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <Button asChild size="sm" className="bg-white text-blue-600 hover:bg-blue-50">
+                  <Link href="/dashboard/production">Explore Features</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600">
+                  <Link href="/dashboard/billing">View Pricing</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {/* Welcome Section */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">
@@ -224,6 +253,11 @@ export default function DashboardPage() {
                           <Icon className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex items-center space-x-2">
+                          {(platform as any).isNew && (
+                            <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs px-2 py-1 rounded-full font-semibold">
+                              NEW
+                            </span>
+                          )}
                           {isConnected ? (
                             <>
                               <CheckCircle className="w-4 h-4 text-green-500" />

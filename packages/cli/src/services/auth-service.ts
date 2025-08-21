@@ -5,7 +5,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from './logger';
+import { Logger } from '../utils/logger';
 import axios from 'axios';
 import open from 'open';
 import { promises as fs } from 'fs';
@@ -53,7 +53,6 @@ export interface DeviceFlowAuth {
 }
 
 export class AuthService extends EventEmitter {
-  private logger: Logger;
   private config: AuthConfig;
   private session: AuthSession | null = null;
   private authConfigPath: string;
@@ -61,10 +60,9 @@ export class AuthService extends EventEmitter {
 
   constructor(config: AuthConfig = {}) {
     super();
-    this.logger = new Logger('AuthService');
     this.config = {
-      webAuthUrl: config.webAuthUrl || 'https://recoder.xyz',
-      apiUrl: config.apiUrl || 'https://api.recoder.xyz',
+      webAuthUrl: config.webAuthUrl || 'http://localhost:3000',
+      apiUrl: config.apiUrl || 'http://localhost:3000/api/auth/cli',
       clientId: config.clientId || 'recoder-cli',
       redirectPort: config.redirectPort || 8080,
       ...config
@@ -85,16 +83,16 @@ export class AuthService extends EventEmitter {
         // Verify session is still valid
         const isValid = await this.validateSession();
         if (!isValid) {
-          this.logger.warn('⚠️ Stored session is invalid, clearing');
+          Logger.warn('⚠️ Stored session is invalid, clearing');
           await this.clearSession();
         } else {
-          this.logger.info('✅ Authenticated as', this.session.user.email);
+          Logger.info(`✅ Authenticated as ${this.session.user.email}`);
           this.emit('authenticated', this.session);
         }
       }
 
     } catch (error: any) {
-      this.logger.error('Failed to initialize auth service:', error.message);
+      Logger.error('Failed to initialize auth service:', error.message);
     }
   }
 
@@ -108,12 +106,12 @@ export class AuthService extends EventEmitter {
     if (this.session && !options.force) {
       const isValid = await this.validateSession();
       if (isValid) {
-        this.logger.info('Already authenticated');
+        Logger.info('Already authenticated');
         return this.session;
       }
     }
 
-    this.logger.info('🌐 Starting web authentication flow...');
+    Logger.info('🌐 Starting web authentication flow...');
 
     try {
       // Generate state for security
@@ -121,7 +119,7 @@ export class AuthService extends EventEmitter {
       const redirectUri = `http://localhost:${this.config.redirectPort}/auth/callback`;
 
       // Build authorization URL
-      const authUrl = new URL('/auth/cli', this.config.webAuthUrl!);
+      const authUrl = new URL('/api/auth/cli', this.config.webAuthUrl!);
       authUrl.searchParams.set('client_id', this.config.clientId!);
       authUrl.searchParams.set('redirect_uri', redirectUri);
       authUrl.searchParams.set('response_type', 'code');
@@ -132,20 +130,20 @@ export class AuthService extends EventEmitter {
       const authPromise = this.startAuthCallbackServer(this.config.redirectPort!, state);
 
       if (options.interactive !== false) {
-        this.logger.info(`🌐 Opening browser for authentication...`);
-        this.logger.info(`📍 Auth URL: ${authUrl.toString()}`);
+        Logger.info(`🌐 Opening browser for authentication...`);
+        Logger.info(`📍 Auth URL: ${authUrl.toString()}`);
         
         try {
           await open(authUrl.toString());
         } catch (error) {
-          this.logger.warn('Failed to open browser automatically');
-          this.logger.info(`Please open this URL manually: ${authUrl.toString()}`);
+          Logger.warn('Failed to open browser automatically');
+          Logger.info(`Please open this URL manually: ${authUrl.toString()}`);
         }
 
-        this.logger.info('⏳ Waiting for authentication...');
-        this.logger.info('💡 Complete the authentication in your browser');
+        Logger.info('⏳ Waiting for authentication...');
+        Logger.info('💡 Complete the authentication in your browser');
       } else {
-        this.logger.info(`Authentication URL: ${authUrl.toString()}`);
+        Logger.info(`Authentication URL: ${authUrl.toString()}`);
       }
 
       // Wait for callback
@@ -158,16 +156,16 @@ export class AuthService extends EventEmitter {
       await this.saveSession(session);
       this.session = session;
 
-      this.logger.info('✅ Authentication successful!');
-      this.logger.info(`👤 Logged in as: ${session.user.name} (${session.user.email})`);
-      this.logger.info(`📋 Plan: ${session.user.subscription_plan}`);
-      this.logger.info(`🎯 Quota: ${session.user.quota.requests_remaining}/${session.user.quota.requests_limit} requests remaining`);
+      Logger.info('✅ Authentication successful!');
+      Logger.info(`👤 Logged in as: ${session.user.name} (${session.user.email})`);
+      Logger.info(`📋 Plan: ${session.user.subscription_plan}`);
+      Logger.info(`🎯 Quota: ${session.user.quota.requests_remaining}/${session.user.quota.requests_limit} requests remaining`);
 
       this.emit('authenticated', session);
       return session;
 
     } catch (error: any) {
-      this.logger.error('❌ Authentication failed:', error.message);
+      Logger.error('❌ Authentication failed:', error.message);
       throw new Error(`Authentication failed: ${error.message}`);
     }
   }
@@ -176,18 +174,18 @@ export class AuthService extends EventEmitter {
    * Start device flow authentication (for headless environments)
    */
   async authenticateWithDeviceFlow(): Promise<AuthSession> {
-    this.logger.info('📱 Starting device flow authentication...');
+    Logger.info('📱 Starting device flow authentication...');
 
     try {
       // Request device code
       const deviceFlow = await this.requestDeviceCode();
 
-      this.logger.info('📋 Device Authentication Required');
-      this.logger.info(`🔗 Visit: ${deviceFlow.verification_uri}`);
-      this.logger.info(`🔢 Enter code: ${deviceFlow.user_code}`);
-      this.logger.info('');
-      this.logger.info(`💡 Or visit: ${deviceFlow.verification_uri_complete}`);
-      this.logger.info('');
+      Logger.info('📋 Device Authentication Required');
+      Logger.info(`🔗 Visit: ${deviceFlow.verification_uri}`);
+      Logger.info(`🔢 Enter code: ${deviceFlow.user_code}`);
+      Logger.info('');
+      Logger.info(`💡 Or visit: ${deviceFlow.verification_uri_complete}`);
+      Logger.info('');
 
       // Poll for token
       const session = await this.pollForDeviceToken(deviceFlow);
@@ -196,14 +194,14 @@ export class AuthService extends EventEmitter {
       await this.saveSession(session);
       this.session = session;
 
-      this.logger.info('✅ Device authentication successful!');
-      this.logger.info(`👤 Logged in as: ${session.user.name} (${session.user.email})`);
+      Logger.info('✅ Device authentication successful!');
+      Logger.info(`👤 Logged in as: ${session.user.name} (${session.user.email})`);
 
       this.emit('authenticated', session);
       return session;
 
     } catch (error: any) {
-      this.logger.error('❌ Device authentication failed:', error.message);
+      Logger.error('❌ Device authentication failed:', error.message);
       throw new Error(`Device authentication failed: ${error.message}`);
     }
   }
@@ -212,15 +210,13 @@ export class AuthService extends EventEmitter {
    * Authenticate using API key
    */
   async authenticateWithApiKey(apiKey: string): Promise<AuthSession> {
-    this.logger.info('🔑 Authenticating with API key...');
+    Logger.info('🔑 Authenticating with API key...');
 
     try {
       // Validate API key and get user info
-      const response = await axios.get(`${this.config.apiUrl}/auth/validate`, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'recoder-cli/2.0.0'
-        }
+      const response = await axios.post(this.config.apiUrl!, {
+        action: 'validate_token',
+        token: apiKey
       });
 
       if (!response.data.success) {
@@ -241,14 +237,14 @@ export class AuthService extends EventEmitter {
       await this.saveSession(session);
       this.session = session;
 
-      this.logger.info('✅ API key authentication successful!');
-      this.logger.info(`👤 Authenticated as: ${session.user.name} (${session.user.email})`);
+      Logger.info('✅ API key authentication successful!');
+      Logger.info(`👤 Authenticated as: ${session.user.name} (${session.user.email})`);
 
       this.emit('authenticated', session);
       return session;
 
     } catch (error: any) {
-      this.logger.error('❌ API key authentication failed:', error.message);
+      Logger.error('❌ API key authentication failed:', error.message);
       throw new Error(`API key authentication failed: ${error.message}`);
     }
   }
@@ -261,10 +257,11 @@ export class AuthService extends EventEmitter {
       throw new Error('No refresh token available');
     }
 
-    this.logger.debug('🔄 Refreshing access token...');
+    Logger.debug('🔄 Refreshing access token...');
 
     try {
-      const response = await axios.post(`${this.config.apiUrl}/auth/refresh`, {
+      const response = await axios.post(this.config.apiUrl!, {
+        action: 'refresh_token',
         refresh_token: this.session.refresh_token,
         client_id: this.config.clientId
       });
@@ -287,13 +284,13 @@ export class AuthService extends EventEmitter {
 
       await this.saveSession(this.session);
 
-      this.logger.debug('✅ Access token refreshed');
+      Logger.debug('✅ Access token refreshed');
       this.emit('session_refreshed', this.session);
 
       return this.session;
 
     } catch (error: any) {
-      this.logger.error('❌ Token refresh failed:', error.message);
+      Logger.error('❌ Token refresh failed:', error.message);
       await this.clearSession();
       throw new Error(`Token refresh failed: ${error.message}`);
     }
@@ -303,12 +300,13 @@ export class AuthService extends EventEmitter {
    * Logout and clear session
    */
   async logout(): Promise<void> {
-    this.logger.info('👋 Logging out...');
+    Logger.info('👋 Logging out...');
 
     try {
       // Revoke tokens if we have them
       if (this.session?.access_token) {
-        await axios.post(`${this.config.apiUrl}/auth/revoke`, {
+        await axios.post(this.config.apiUrl!, {
+          action: 'revoke_token',
           token: this.session.access_token
         }).catch(() => {
           // Ignore revocation errors
@@ -318,11 +316,11 @@ export class AuthService extends EventEmitter {
       // Clear local session
       await this.clearSession();
       
-      this.logger.info('✅ Logged out successfully');
+      Logger.info('✅ Logged out successfully');
       this.emit('logged_out');
 
     } catch (error: any) {
-      this.logger.error('Failed to logout:', error.message);
+      Logger.error('Failed to logout:', error.message);
       // Still clear local session even if server logout fails
       await this.clearSession();
     }
@@ -424,7 +422,7 @@ export class AuthService extends EventEmitter {
       });
 
       this.authServer = app.listen(port, () => {
-        this.logger.debug(`Auth callback server listening on port ${port}`);
+        Logger.debug(`Auth callback server listening on port ${port}`);
       });
 
       // Timeout after 5 minutes
@@ -446,7 +444,8 @@ export class AuthService extends EventEmitter {
   }
 
   private async exchangeCodeForTokens(code: string, redirectUri: string): Promise<AuthSession> {
-    const response = await axios.post(`${this.config.apiUrl}/auth/token`, {
+    const response = await axios.post(this.config.apiUrl!, {
+      action: 'exchange_code',
       grant_type: 'authorization_code',
       client_id: this.config.clientId,
       code: code,
@@ -468,7 +467,8 @@ export class AuthService extends EventEmitter {
   }
 
   private async requestDeviceCode(): Promise<DeviceFlowAuth> {
-    const response = await axios.post(`${this.config.apiUrl}/auth/device/authorize`, {
+    const response = await axios.post(this.config.apiUrl!, {
+      action: 'device_flow',
       client_id: this.config.clientId,
       scope: 'cli:full profile'
     });
@@ -486,7 +486,8 @@ export class AuthService extends EventEmitter {
 
     while (Date.now() < expiresAt) {
       try {
-        const response = await axios.post(`${this.config.apiUrl}/auth/device/token`, {
+        const response = await axios.post(this.config.apiUrl!, {
+          action: 'device_token',
           client_id: this.config.clientId,
           device_code: deviceFlow.device_code,
           grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
@@ -553,8 +554,10 @@ export class AuthService extends EventEmitter {
 
     // Validate with server
     try {
-      const response = await axios.get(`${this.config.apiUrl}/auth/validate`, {
-        headers: this.getAuthHeaders(),
+      const response = await axios.post(this.config.apiUrl!, {
+        action: 'validate_token',
+        token: this.session.access_token
+      }, {
         timeout: 10000
       });
 
@@ -585,7 +588,7 @@ export class AuthService extends EventEmitter {
       // Set secure file permissions
       await fs.chmod(this.authConfigPath, 0o600);
     } catch (error: any) {
-      this.logger.error('Failed to save auth session:', error.message);
+      Logger.error('Failed to save auth session:', error.message);
     }
   }
 

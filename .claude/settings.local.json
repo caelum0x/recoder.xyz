@@ -138,7 +138,15 @@
       "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts cost-dashboard --detailed --models --savings)",
       "Bash(PORT=8000 npm start)",
       "Bash(PORT=3002 npx tsx src/server.ts)",
-      "Bash(rcr:*)"
+      "Bash(rcr:*)",
+      "Bash(PORT=3000 npm run dev)",
+      "Bash(PORT=4567 node dist/server.js)",
+      "Bash(PORT=3000 npm run dev)",
+      "Bash(SKIP_ENV_VALIDATION=true npm run dev)",
+      "Bash(PORT=4567 npx tsx src/server.ts)",
+      "Bash(PORT=3010 npm run dev)",
+      "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts auth --help)",
+      "Bash(PRODUCTION_ENGINE_URL=http://localhost:5678 node dist/packages/cli/src/index.js --help)"
     ],
     "deny": []
   }

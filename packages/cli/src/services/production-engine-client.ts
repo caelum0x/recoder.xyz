@@ -77,7 +77,7 @@ export class ProductionEngineClient {
   private engineUrl: string;
 
   constructor() {
-    this.engineUrl = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:3002';
+    this.engineUrl = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:5678';
     this.client = axios.create({
       baseURL: this.engineUrl,
       headers: {
