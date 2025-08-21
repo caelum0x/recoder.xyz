@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import React from 'react';
+import ProductionEngineBanner, { ProductionEngineFeatureSection } from './components/ProductionEngineBanner';
 import { 
   Terminal, 
   Globe, 
@@ -112,6 +113,9 @@ export default function HomePage() {
           </div>
         </div>
       </header>
+
+      {/* Production Engine Banner */}
+      <ProductionEngineBanner />
 
       {/* Hero Section */}
       <section className="relative py-20 px-4 perspective-1000 overflow-hidden">
@@ -230,6 +234,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Production Engine Features Section */}
+      <ProductionEngineFeatureSection />
 
       {/* Features Section */}
       <section className="py-20 px-4">

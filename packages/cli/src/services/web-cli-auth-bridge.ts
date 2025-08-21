@@ -39,7 +39,7 @@ export interface AuthRedirectData {
 export class WebCLIAuthBridge {
   private logger = new Logger();
   private pendingAuth: Map<string, { resolve: Function; reject: Function; timestamp: number }> = new Map();
-  private baseWebUrl = process.env.RECODER_WEB_URL || 'https://recoder.xyz';
+  private baseWebUrl = process.env.RECODER_WEB_URL || 'http://localhost:3020';
 
   /**
    * Initiate web authentication flow
