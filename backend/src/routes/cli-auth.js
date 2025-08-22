@@ -68,6 +68,9 @@ router.post('/device/authorize', authenticateToken, async (req, res, next) => {
       });
     }
     
+    // Log authentication attempt for monitoring
+    logger.info('CLI device authorization attempt', { userId, userCode: userCode.substring(0, 4) + '****' });
+    
     // Find device code by user code
     global.deviceCodes = global.deviceCodes || new Map();
     let deviceData = null;

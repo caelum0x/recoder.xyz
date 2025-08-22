@@ -40,9 +40,17 @@ REQUIRED_VARS=(
 for var in "${REQUIRED_VARS[@]}"; do
     if [ -z "${!var}" ]; then
         echo -e "${RED}❌ Missing required environment variable: $var${NC}"
+        echo -e "${YELLOW}💡 Add this to your .env file:${NC}"
+        if [ "$var" = "OPENROUTER_API_KEY" ]; then
+            echo "   OPENROUTER_API_KEY=sk-or-v1-your-key-here"
+        elif [ "$var" = "JWT_SECRET" ]; then
+            echo "   JWT_SECRET=$(openssl rand -base64 64)"
+        fi
         exit 1
     fi
 done
+
+echo -e "${GREEN}✅ OpenRouter API key configured for centralized AI monetization${NC}"
 
 echo -e "${GREEN}✅ Environment configuration validated${NC}"
 

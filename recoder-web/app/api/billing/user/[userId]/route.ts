@@ -40,10 +40,11 @@ interface BillingResponse {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  context: { params: Promise<{ userId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
+    const params = await context.params;
     const { userId } = params;
 
     // Validate access - user can only access their own data or be authenticated

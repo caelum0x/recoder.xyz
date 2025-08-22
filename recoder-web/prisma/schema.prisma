@@ -69,6 +69,7 @@ model User {
   userSessions  UserSession[]
   apiKeys       ApiKey[]
   auditLogs     AuditLog[]
+  routers       Router[]
 }
 
 model VerificationToken {
@@ -249,4 +250,60 @@ model SecurityEvent {
   @@index([severity])
   @@index([createdAt])
   @@index([resolved])
+}
+
+// Router and Analytics Models
+model Router {
+  id          String   @id @default(cuid())
+  routerId    String   @unique // CLI router identifier
+  userId      String
+  name        String?
+  version     String?
+  status      String   @default("active") // 'active', 'inactive', 'suspended'
+  metadata    Json     // Configuration, settings, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastUsed    DateTime @default(now())
+
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usage           RouterUsage[]
+  analytics       RouterAnalytics[]
+
+  @@index([userId])
+  @@index([routerId])
+  @@index([status])
+  @@index([lastUsed])
+}
+
+model RouterUsage {
+  id          String   @id @default(cuid())
+  routerId    String
+  timestamp   DateTime @default(now())
+  provider    String   // 'anthropic', 'groq', 'openai', etc.
+  model       String   // Model used
+  tokens      Int      @default(0)
+  cost        Float    @default(0)
+  success     Boolean  @default(true)
+  responseTime Int     @default(0) // in ms
+  metadata    Json     // Request details, error info, etc.
+  
+  router Router @relation(fields: [routerId], references: [routerId], onDelete: Cascade)
+
+  @@index([routerId])
+  @@index([timestamp])
+  @@index([provider])
+  @@index([model])
+}
+
+model RouterAnalytics {
+  id            String   @id @default(cuid())
+  routerId      String
+  analyticsData Json     // Cost analytics, optimization data, etc.
+  timestamp     DateTime
+  createdAt     DateTime @default(now())
+
+  router Router @relation(fields: [routerId], references: [routerId], onDelete: Cascade)
+
+  @@index([routerId])
+  @@index([timestamp])
 }

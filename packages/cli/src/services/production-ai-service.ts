@@ -97,7 +97,7 @@ export class ProductionAIService {
   }
 
   /**
-   * Generate AI response using production engine
+   * Generate AI response using production engine with centralized OpenRouter key
    */
   async generateResponse(request: AIRequest): Promise<AIResponse> {
     if (!this.userSession) {
@@ -124,7 +124,7 @@ export class ProductionAIService {
         request.model = fallbackModel;
       }
 
-      // Send request to production engine
+      // Send request to production engine (it will use our centralized OpenRouter key)
       const response: AxiosResponse = await axios.post(`${this.config.productionEngineUrl}/api/ai/generate`, {
         prompt: request.prompt,
         model: request.model || model,
@@ -137,10 +137,12 @@ export class ProductionAIService {
       }, {
         timeout: this.config.defaultTimeout,
         headers: {
+          // User authentication - backend validates, production engine uses our OpenRouter key
           'Authorization': `Bearer ${this.userSession.accessToken}`,
           'User-Agent': 'recoder-cli/1.0.0',
           'Content-Type': 'application/json',
-          'X-Request-ID': requestId
+          'X-Request-ID': requestId,
+          'X-User-ID': this.userSession.userId
         }
       });
 
