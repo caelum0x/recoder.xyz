@@ -9,18 +9,18 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 interface RouterMetrics {
-  router_id: string;
-  router_name: string;
+  routerId: string;
+  name: string;
   status: 'active' | 'idle' | 'disconnected';
   version: string;
   uptime: number;
-  last_seen: string;
-  enterprise_mode: boolean;
+  lastUsed: string;
+  enterpriseMode: boolean;
 }
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  context: { params: Promise<{ userId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -31,6 +31,7 @@ export async function GET(
       );
     }
 
+    const params = await context.params;
     const { userId } = params;
 
     // Verify user can access this data
@@ -61,7 +62,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  context: { params: Promise<{ userId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -72,6 +73,7 @@ export async function POST(
       );
     }
 
+    const params = await context.params;
     const { userId } = params;
 
     // Verify user can access this data
@@ -84,14 +86,14 @@ export async function POST(
 
     const body = await request.json();
     const {
-      router_id,
-      router_name,
+      routerId,
+      name,
       version,
-      enterprise_mode = false,
+      enterpriseMode = false,
       capabilities = []
     } = body;
 
-    if (!router_id) {
+    if (!routerId) {
       return NextResponse.json(
         { success: false, error: 'Router ID is required' },
         { status: 400 }
@@ -101,29 +103,29 @@ export async function POST(
     // Register/update router
     const router = await prisma.router.upsert({
       where: {
-        router_id_user_id: {
-          router_id,
-          user_id: userId
-        }
+        routerId: routerId
       },
       update: {
-        router_name,
+        name,
         version,
-        enterprise_mode,
-        capabilities,
-        last_seen: new Date(),
+        metadata: {
+          enterpriseMode,
+          capabilities
+        },
+        lastUsed: new Date(),
         status: 'active'
       },
       create: {
-        router_id,
-        router_name: router_name || router_id,
-        user_id: userId,
+        routerId,
+        name: name || routerId,
+        userId: userId,
         version: version || '1.0.0',
-        enterprise_mode,
-        capabilities,
         status: 'active',
-        created_at: new Date(),
-        last_seen: new Date()
+        metadata: {
+          enterpriseMode,
+          capabilities
+        },
+        lastUsed: new Date()
       }
     });
 
@@ -131,9 +133,9 @@ export async function POST(
       success: true,
       message: 'Router registered successfully',
       router: {
-        router_id: router.router_id,
-        router_name: router.router_name,
-        enterprise_mode: router.enterprise_mode,
+        routerId: router.routerId,
+        name: router.name,
+        enterpriseMode: (router.metadata as any)?.enterpriseMode || false,
         status: router.status
       }
     });
@@ -151,10 +153,10 @@ async function getUserRouters(userId: string): Promise<RouterMetrics[]> {
   try {
     const routers = await prisma.router.findMany({
       where: {
-        user_id: userId
+        userId: userId
       },
       orderBy: {
-        last_seen: 'desc'
+        lastUsed: 'desc'
       }
     });
 
@@ -164,13 +166,13 @@ async function getUserRouters(userId: string): Promise<RouterMetrics[]> {
     }
 
     return routers.map(router => ({
-      router_id: router.router_id,
-      router_name: router.router_name,
-      status: determineRouterStatus(router.last_seen),
+      routerId: router.routerId,
+      name: router.name,
+      status: determineRouterStatus(router.lastUsed),
       version: router.version,
-      uptime: calculateUptime(router.created_at),
-      last_seen: router.last_seen.toISOString(),
-      enterprise_mode: router.enterprise_mode
+      uptime: calculateUptime(router.createdAt),
+      lastUsed: router.lastUsed.toISOString(),
+      enterpriseMode: (router.metadata as any)?.enterpriseMode || false
     }));
 
   } catch (error) {
@@ -203,31 +205,31 @@ function generateMockRouters(userId: string): RouterMetrics[] {
   // Generate mock router data for demonstration
   return [
     {
-      router_id: `router-${userId.slice(0, 8)}-main`,
-      router_name: 'Development Router',
+      routerId: `router-${userId.slice(0, 8)}-main`,
+      name: 'Development Router',
       status: 'active',
       version: '2.1.0',
       uptime: 86400, // 1 day
-      last_seen: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 minutes ago
-      enterprise_mode: false
+      lastUsed: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 minutes ago
+      enterpriseMode: false
     },
     {
-      router_id: `router-${userId.slice(0, 8)}-prod`,
-      router_name: 'Production Router',
+      routerId: `router-${userId.slice(0, 8)}-prod`,
+      name: 'Production Router',
       status: 'active',
       version: '2.0.5',
       uptime: 259200, // 3 days
-      last_seen: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 minutes ago
-      enterprise_mode: true
+      lastUsed: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 minutes ago
+      enterpriseMode: true
     },
     {
-      router_id: `router-${userId.slice(0, 8)}-test`,
-      router_name: 'Testing Router',
+      routerId: `router-${userId.slice(0, 8)}-test`,
+      name: 'Testing Router',
       status: 'disconnected',
       version: '1.9.8',
       uptime: 7200, // 2 hours
-      last_seen: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-      enterprise_mode: false
+      lastUsed: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+      enterpriseMode: false
     }
   ];
 }

@@ -22,7 +22,7 @@ interface RealTimeInsights {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { routerId: string } }
+  context: { params: Promise<{ routerId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -33,13 +33,14 @@ export async function GET(
       );
     }
 
+    const params = await context.params;
     const { routerId } = params;
 
     // Verify router ownership
     const router = await prisma.router.findFirst({
       where: {
-        router_id: routerId,
-        user_id: session.user.id
+        routerId: routerId,
+        userId: session.user.id
       }
     });
 
@@ -77,7 +78,7 @@ async function getRealTimeInsights(routerId: string): Promise<RealTimeInsights> 
     const [hourlyUsage, dailyUsage] = await Promise.all([
       prisma.routerUsage.findMany({
         where: {
-          router_id: routerId,
+          routerId: routerId,
           timestamp: {
             gte: oneHourAgo
           }
@@ -85,7 +86,7 @@ async function getRealTimeInsights(routerId: string): Promise<RealTimeInsights> 
       }),
       prisma.routerUsage.findMany({
         where: {
-          router_id: routerId,
+          routerId: routerId,
           timestamp: {
             gte: oneDayAgo
           }

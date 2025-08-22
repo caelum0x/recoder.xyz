@@ -8,6 +8,7 @@ export interface ProductionConfig {
   productionEngineUrl: string;
   backendUrl: string;
   websiteUrl: string;
+  centralizedOpenRouterKey: string;
   enableTelemetry: boolean;
   enableAutoUpdates: boolean;
   defaultTimeout: number;
@@ -16,13 +17,16 @@ export interface ProductionConfig {
 
 export const PRODUCTION_CONFIG: ProductionConfig = {
   // Production engine handles all AI requests with our OpenRouter key
-  productionEngineUrl: process.env.PRODUCTION_ENGINE_URL || 'https://engine.recoder.xyz',
+  productionEngineUrl: process.env.PRODUCTION_ENGINE_URL || process.env.NEXT_PUBLIC_ENGINE_URL || 'https://engine.recoder.xyz',
   
   // Backend handles authentication and billing
-  backendUrl: process.env.BACKEND_URL || 'https://api.recoder.xyz',
+  backendUrl: process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.recoder.xyz',
   
   // Main website for user management
-  websiteUrl: process.env.WEBSITE_URL || 'https://recoder.xyz',
+  websiteUrl: process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEB_URL || 'https://recoder.xyz',
+  
+  // OpenRouter API key from environment (CLI doesn't need to know the key)
+  centralizedOpenRouterKey: process.env.OPENROUTER_API_KEY || '',
   
   // Analytics and monitoring
   enableTelemetry: process.env.ENABLE_TELEMETRY !== 'false',
@@ -38,6 +42,7 @@ export const DEVELOPMENT_CONFIG: ProductionConfig = {
   productionEngineUrl: 'http://localhost:3002',
   backendUrl: 'http://localhost:3001', 
   websiteUrl: 'http://localhost:3000',
+  centralizedOpenRouterKey: process.env.OPENROUTER_API_KEY || '',
   enableTelemetry: true,
   enableAutoUpdates: false,
   defaultTimeout: 60000,

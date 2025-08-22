@@ -13,6 +13,7 @@ import {
   User, History, Settings, Zap, TrendingUp, Calendar,
   MessageSquare, Code, Database, Rocket, ChevronRight,
   Activity, Clock, Sparkles, Target, Terminal, Globe,
+  DollarSign,
   CreditCard, BarChart3, ExternalLink, CheckCircle,
   AlertCircle, Shield
 } from "lucide-react";

@@ -5,6 +5,10 @@
 
 'use client';
 
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -109,7 +113,7 @@ interface RealTimeInsights {
 
 const CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
-export default function RouterAnalyticsPage() {
+function RouterAnalyticsContent() {
   const { data: session } = useSession();
   const [routers, setRouters] = useState<RouterMetrics[]>([]);
   const [selectedRouter, setSelectedRouter] = useState<string>('');
@@ -743,4 +747,24 @@ export default function RouterAnalyticsPage() {
       )}
     </div>
   );
+}
+
+export default function RouterAnalyticsPage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="container mx-auto py-8 space-y-8">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return <RouterAnalyticsContent />;
 }
