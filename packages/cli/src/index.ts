@@ -22,6 +22,9 @@ const VERSION = '1.0.0';
 // Import real AI services
 import { AIHub, TaskContext } from './services/ai-hub';
 import { productionEngineClient, CodeGenerationRequest } from './services/production-engine-client';
+import { premiumAIClient } from './services/premium-ai-client';
+import { ProductionAIService } from './services/production-ai-service';
+import { AVAILABLE_MODELS } from './config/production';
 import { RealityValidationSystem } from './services/reality-validator';
 import { AgentManager, AgentRequest } from './services/specialized-agents';
 import { ProjectContextAnalyzer } from './services/project-context';
@@ -140,6 +143,21 @@ async function setupProductionCommands(program: Command): Promise<void> {
   const promptSanitizer = new AIPromptSanitizer();
   const vulnerabilityScanner = new CodeVulnerabilityScanner();
   const securityMonitor = new SecurityMonitor();
+
+  // Initialize Production AI Service for centralized OpenRouter integration
+  let productionAI: ProductionAIService | null = null;
+  if (backendClient.isAuthenticated()) {
+    const userSession = backendClient.getCurrentSession();
+    if (userSession) {
+      productionAI = new ProductionAIService({
+        accessToken: userSession.token,
+        userId: userSession.userId,
+        subscriptionTier: userSession.plan,
+        quotaRemaining: userSession.quotas.totalRequests - userSession.quotas.usedRequests,
+        quotaLimit: userSession.quotas.totalRequests
+      });
+    }
+  }
   
   // Initialize monitoring system
   try {
@@ -211,17 +229,26 @@ async function setupProductionCommands(program: Command): Promise<void> {
           console.log(chalk.gray('📂 No existing project context found - creating new project'));
         }
 
-        // Check AI providers
-        const providers = aiHub.getAvailableProviders();
-        const availableProviders = providers.filter(p => p.available);
-        
-        if (availableProviders.length === 0) {
-          console.log(chalk.red('❌ No AI providers available!'));
-          console.log(chalk.yellow('Please set up at least one API key:'));
-          console.log(chalk.white('  • ANTHROPIC_API_KEY for Claude'));
-          console.log(chalk.white('  • GROQ_API_KEY for Groq/Llama'));
-          console.log(chalk.white('  • GOOGLE_API_KEY for Gemini'));
+        // Check if production AI service is available
+        if (!productionAI) {
+          console.log(chalk.yellow('⚠️ Please authenticate first to access AI services'));
+          console.log(chalk.white('Run: recoder auth login'));
           return;
+        }
+
+        // Check health of production services
+        const healthCheck = await productionAI.checkHealth();
+        if (healthCheck.status === 'healthy') {
+          console.log(chalk.green('✅ Production AI service connected'));
+          const availableModels = productionAI.getAvailableModels();
+          console.log(chalk.blue(`🤖 Available Models: ${availableModels.length} premium models`));
+          
+          const subscriptionInfo = productionAI.getSubscriptionInfo();
+          console.log(chalk.cyan(`📋 Plan: ${subscriptionInfo.tier.toUpperCase()}`));
+          console.log(chalk.cyan(`📊 Quota: ${subscriptionInfo.quota.remaining}/${subscriptionInfo.quota.limit} requests remaining (${subscriptionInfo.quota.percentage}%)`));
+        } else {
+          console.log(chalk.yellow('⚠️ Production AI service degraded - some features may be limited'));
+          console.log(chalk.gray(`Backend: ${healthCheck.services.backend}, Engine: ${healthCheck.services.productionEngine}`));
         }
 
         // Select best agent for the task
@@ -237,9 +264,16 @@ async function setupProductionCommands(program: Command): Promise<void> {
           });
         }
 
-        console.log(chalk.green('✅ AI Providers:'));
-        availableProviders.forEach(p => {
-          console.log(chalk.white(`  • ${p.name} - ${p.specialties.slice(0, 2).join(', ')}`));
+        // Show available models from production service
+        const availableModels = productionAI.getAvailableModels();
+        const modelDetails = availableModels.slice(0, 3).map(modelId => {
+          const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+          return model || { id: modelId, name: modelId, bestFor: ['general'] };
+        });
+        
+        console.log(chalk.green('✅ Available AI Models:'));
+        modelDetails.forEach(model => {
+          console.log(chalk.white(`  • ${model.name} - ${model.bestFor.slice(0, 2).join(', ')}`));
         });
         console.log('');
 
@@ -420,12 +454,34 @@ ${options.detailed ? '9. Detailed Implementation Steps' : ''}
 Make this a production-ready plan that can actually be executed.`;
 
         console.log(chalk.blue('🤖 AI is analyzing and planning your project...'));
-        const response = await aiHub.chat([
-          { role: 'user', content: planningPrompt }
-        ], context, { maxTokens: 6000 });
+        
+        if (!productionAI) {
+          console.log(chalk.yellow('⚠️ Please authenticate first to access AI services'));
+          console.log(chalk.white('Run: recoder auth login'));
+          return;
+        }
 
-        console.log(chalk.green('\n✅ Project Plan Generated:\n'));
-        console.log(chalk.white(response.content));
+        const response = await productionAI.generateResponse({
+          prompt: planningPrompt,
+          taskType: 'architecture',
+          projectContext: {
+            language: 'general',
+            framework: 'planning'
+          },
+          userPreferences: {
+            verbosity: options.detailed ? 'comprehensive' : 'detailed'
+          }
+        });
+
+        if (response.success) {
+          console.log(chalk.green('\n✅ Project Plan Generated:\n'));
+          console.log(chalk.white(response.content));
+          const costDisplay = response.usage.cost ? ` | Cost: $${response.usage.cost.toFixed(4)}` : '';
+          console.log(chalk.gray(`\nGenerated using: ${response.model} | Tokens: ${response.usage.totalTokens}${costDisplay}`));
+        } else {
+          console.log(chalk.red(`\n❌ Planning failed: ${response.error}`));
+          return;
+        }
 
         console.log(chalk.green('\n🎯 Next Steps:'));
         console.log(chalk.white('  • Review the project plan'));
@@ -525,17 +581,21 @@ Make this a production-ready plan that can actually be executed.`;
     .action(async (options: any) => {
       console.log(chalk.cyan('\n💬 RECODER - AI Development Chat\n'));
       
-      const providers = aiHub.getAvailableProviders();
-      const available = providers.filter(p => p.available);
-      
-      if (available.length === 0) {
-        console.log(chalk.red('❌ No AI providers available. Please configure API keys.'));
+      if (!productionAI) {
+        console.log(chalk.yellow('⚠️ Please authenticate first to access AI chat'));
+        console.log(chalk.white('Run: recoder auth login'));
         return;
       }
 
-      console.log(chalk.green('Available AI Providers:'));
-      available.forEach(p => {
-        console.log(chalk.white(`  • ${p.name} - ${p.specialties.join(', ')}`));
+      const availableModels = productionAI.getAvailableModels();
+      const modelDetails = availableModels.slice(0, 5).map(modelId => {
+        const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+        return model || { id: modelId, name: modelId, bestFor: ['general'] };
+      });
+      
+      console.log(chalk.green('Available AI Models:'));
+      modelDetails.forEach(model => {
+        console.log(chalk.white(`  • ${model.name} - ${model.bestFor.slice(0, 2).join(', ')}`));
       });
       console.log(chalk.gray('\nType "help" for commands, "exit" to quit.\n'));
 
@@ -573,13 +633,24 @@ Make this a production-ready plan that can actually be executed.`;
           }
 
           try {
-            conversationHistory.push({ role: 'user', content: input });
-            
             console.log(chalk.blue('\n🤖 AI: '), { color: false });
-            const response = await aiHub.chat(conversationHistory, context, { maxTokens: 2000 });
             
-            console.log(chalk.white(response.content + '\n'));
-            conversationHistory.push({ role: 'assistant', content: response.content });
+            const response = await productionAI.generateResponse({
+              prompt: input,
+              model: options.model,
+              taskType: 'coding',
+              userPreferences: {
+                verbosity: 'detailed'
+              }
+            });
+            
+            if (response.success) {
+              console.log(chalk.white(response.content + '\n'));
+              const costDisplay = response.usage.cost ? ` | Cost: $${response.usage.cost.toFixed(4)}` : '';
+              console.log(chalk.gray(`Used: ${response.model} | Tokens: ${response.usage.totalTokens}${costDisplay}\n`));
+            } else {
+              console.log(chalk.red(`\n❌ Error: ${response.error}\n`));
+            }
             
           } catch (error: any) {
             console.log(chalk.red(`\n❌ Error: ${error.message}\n`));

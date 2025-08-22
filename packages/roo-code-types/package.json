@@ -1,6 +1,6 @@
 {
-	"name": "@roo-code/types",
-	"version": "0.0.0",
+	"name": "roo-code-types",
+	"version": "1.0.1",
 	"type": "module",
 	"main": "./dist/index.cjs",
 	"exports": {
@@ -20,7 +20,8 @@
 		"build": "tsup",
 		"npm:publish:test": "tsup --outDir npm/dist && cd npm && npm publish --dry-run",
 		"npm:publish": "tsup --outDir npm/dist && cd npm && npm publish",
-		"clean": "rimraf dist npm/dist .turbo"
+		"clean": "rimraf dist npm/dist .turbo",
+		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
 		"zod": "^3.25.61"
@@ -30,5 +31,15 @@
 		"tsup": "^8.3.5",
 		"vitest": "^3.2.3",
 		"typescript": "^5.3.3"
-	}
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/recoder-team/recoder.git",
+		"directory": "packages/roo-code-types"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"author": "Recoder Team",
+	"license": "MIT"
 }

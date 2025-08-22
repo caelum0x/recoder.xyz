@@ -1,5 +1,5 @@
 {
-  "name": "@recoder/security",
+  "name": "recoder-security",
   "version": "1.0.0",
   "description": "Enterprise-grade security and compliance layer for CodeCraft CLI",
   "main": "dist/index.js",
@@ -11,10 +11,12 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint src/**/*.ts",
-    "security-audit": "npm audit && snyk test"
+    "security-audit": "npm audit && snyk test",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@recoder/shared": "file:../shared",
+    "recoder-shared": "^1.0.0",
     "axios": "^1.6.0",
     "bcrypt": "^5.1.1",
     "chalk": "^4.1.2",
@@ -70,7 +72,7 @@
     "soc2",
     "hipaa"
   ],
-  "author": "CodeCraft Security Team <security@codecraft.dev>",
+  "author": "Recoder Team",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -80,5 +82,8 @@
   "bugs": {
     "url": "https://github.com/recoder-team/recoder/issues"
   },
-  "homepage": "https://codecraft.dev/security"
+  "homepage": "https://recoder.xyz",
+  "publishConfig": {
+    "access": "public"
+  }
 }

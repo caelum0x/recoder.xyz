@@ -12,7 +12,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { logger } from './utils/logger';
-import { realCodeGeneratorService } from './services/real-code-generator-service';
+import { CodeGenerationResult, realCodeGeneratorService } from './services/real-code-generator-service';
 import { ValidationService } from './services/validation-service';
 // import { unifiedBackendAI } from './services/unified-backend-ai';
 import { commercialAIHubService } from './services/commercial-ai-hub-service';
@@ -31,6 +31,8 @@ import onboardingRoutes from './routes/onboarding';
 import templateMarketplaceRoutes from './routes/template-marketplace';
 import deploymentRoutes from './routes/deployment';
 import enterpriseDashboardRoutes from './routes/enterprise-dashboard';
+import cliApiRoutes from './routes/cli-api';
+import { subscriptionAuthStack, authenticateSubscription } from './middleware/subscription-auth';
 
 const app = express();
 const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
@@ -69,25 +71,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Commercial middleware for API authentication and rate limiting
-app.use('/api', async (req, res, next) => {
-  const userId = req.headers['x-user-id'] as string;
-  const apiKey = req.headers['x-api-key'] as string;
-  
-  if (!userId && !apiKey) {
-    return res.status(401).json({
-      success: false,
-      error: 'Authentication required. Please provide x-user-id or x-api-key header.',
-      code: 'AUTH_REQUIRED'
-    });
-  }
-  
-  // For API key authentication, extract user ID from key (implement your logic)
-  const effectiveUserId = userId || apiKey?.split('-')[1] || 'anonymous';
-  req.userId = effectiveUserId;
-  
-  next();
-});
+// Apply subscription authentication to all API routes
+app.use('/api', authenticateSubscription);
 
 // Mount developer API routes
 app.use('/api/dev', developerApiRoutes);
@@ -101,8 +86,11 @@ app.use('/api/templates', templateMarketplaceRoutes);
 app.use('/api/deployment', deploymentRoutes);
 app.use('/api/enterprise/dashboard', enterpriseDashboardRoutes);
 
-// Generate real code endpoint
-app.post('/api/generate', async (req, res) => {
+// CLI API routes - for published npm packages
+app.use('/api/ai', cliApiRoutes);
+
+// Generate real code endpoint with full subscription validation
+app.post('/api/generate', subscriptionAuthStack, async (req: express.Request, res: express.Response) => {
   try {
     const {
       description,
