@@ -10,7 +10,7 @@ import { headers } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
-    const headersList = headers();
+    const headersList = await headers();
     const signature = headersList.get('x-dodo-signature') || headersList.get('dodo-signature');
     
     if (!signature) {

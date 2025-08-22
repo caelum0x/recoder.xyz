@@ -17,7 +17,7 @@ const querySchema = z.object({
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { routerId: string } }
+  context: { params: Promise<{ routerId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -28,6 +28,7 @@ export async function GET(
       );
     }
 
+    const params = await context.params;
     const { routerId } = params;
     const searchParams = request.nextUrl.searchParams;
     const query = querySchema.parse({
@@ -39,8 +40,8 @@ export async function GET(
     // Verify router ownership
     const router = await prisma.router.findFirst({
       where: {
-        router_id: routerId,
-        user_id: session.user.id
+        routerId: routerId,
+        userId: session.user.id
       }
     });
 
@@ -102,7 +103,7 @@ async function getAnalyticsForExport(routerId: string, startTime: Date, endTime:
     // Get detailed usage data
     const usageData = await prisma.routerUsage.findMany({
       where: {
-        router_id: routerId,
+        routerId: routerId,
         timestamp: {
           gte: startTime,
           lte: endTime
@@ -116,7 +117,7 @@ async function getAnalyticsForExport(routerId: string, startTime: Date, endTime:
     // Get analytics data
     const analyticsData = await prisma.routerAnalytics.findMany({
       where: {
-        router_id: routerId,
+        routerId: routerId,
         timestamp: {
           gte: startTime,
           lte: endTime
@@ -133,7 +134,7 @@ async function getAnalyticsForExport(routerId: string, startTime: Date, endTime:
     }
 
     return {
-      router_id: routerId,
+      routerId: routerId,
       export_period: {
         start: startTime,
         end: endTime
@@ -144,20 +145,20 @@ async function getAnalyticsForExport(routerId: string, startTime: Date, endTime:
         model: record.model,
         tokens: record.tokens,
         cost: record.cost,
-        response_time: record.response_time,
+        responseTime: record.responseTime,
         success: record.success,
-        error_type: record.error_type
+        errorType: (record.metadata as any)?.errorType || null
       })),
       analytics_data: analyticsData.map(record => ({
         timestamp: record.timestamp,
-        analytics: record.analytics_data
+        analytics: record.analyticsData
       })),
       summary: {
         total_requests: usageData.length,
         total_cost: usageData.reduce((sum, r) => sum + (r.cost || 0), 0),
         total_tokens: usageData.reduce((sum, r) => sum + (r.tokens || 0), 0),
-        avg_response_time: usageData.length > 0 
-          ? usageData.reduce((sum, r) => sum + (r.response_time || 0), 0) / usageData.length 
+        avg_responseTime: usageData.length > 0 
+          ? usageData.reduce((sum, r) => sum + (r.responseTime || 0), 0) / usageData.length 
           : 0,
         success_rate: usageData.length > 0 
           ? usageData.filter(r => r.success).length / usageData.length 
@@ -196,14 +197,14 @@ function generateMockExportData(routerId: string, startTime: Date, endTime: Date
       model,
       tokens,
       cost: Number(cost.toFixed(6)),
-      response_time: responseTime,
+      responseTime: responseTime,
       success,
-      error_type: success ? null : 'timeout'
+      errorType: success ? null : 'timeout'
     });
   }
 
   return {
-    router_id: routerId,
+    routerId: routerId,
     export_period: {
       start: startTime,
       end: endTime
@@ -214,7 +215,7 @@ function generateMockExportData(routerId: string, startTime: Date, endTime: Date
       total_requests: mockUsageData.length,
       total_cost: mockUsageData.reduce((sum, r) => sum + r.cost, 0),
       total_tokens: mockUsageData.reduce((sum, r) => sum + r.tokens, 0),
-      avg_response_time: mockUsageData.reduce((sum, r) => sum + r.response_time, 0) / mockUsageData.length,
+      avg_responseTime: mockUsageData.reduce((sum, r) => sum + r.responseTime, 0) / mockUsageData.length,
       success_rate: mockUsageData.filter(r => r.success).length / mockUsageData.length
     }
   };
@@ -235,7 +236,7 @@ function generateCSV(data: any): string {
   lines.push(`Total Requests,${data.summary.total_requests}`);
   lines.push(`Total Cost,${data.summary.total_cost}`);
   lines.push(`Total Tokens,${data.summary.total_tokens}`);
-  lines.push(`Average Response Time,${data.summary.avg_response_time}`);
+  lines.push(`Average Response Time,${data.summary.avg_responseTime}`);
   lines.push(`Success Rate,${data.summary.success_rate}`);
   lines.push('');
 
@@ -251,9 +252,9 @@ function generateCSV(data: any): string {
       record.model || '',
       record.tokens || 0,
       record.cost || 0,
-      record.response_time || 0,
+      record.responseTime || 0,
       record.success ? 'true' : 'false',
-      record.error_type || ''
+      record.errorType || ''
     ];
     lines.push(row.join(','));
   });

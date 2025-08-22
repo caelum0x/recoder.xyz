@@ -540,7 +540,7 @@ export default function BillingDashboard({ userId, source = 'web' }: BillingDash
                         <h4 className="font-medium capitalize">{platform}</h4>
                         <p className="text-sm text-gray-600">
                           {data.active ? 'Active' : 'Inactive'}
-                          {data.version && ` • v${data.version}`}
+                          {(data as any).version && ` • v${(data as any).version}`}
                         </p>
                       </div>
                     </div>
