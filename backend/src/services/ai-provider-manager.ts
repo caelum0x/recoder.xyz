@@ -114,6 +114,121 @@ export class AIProviderManager extends EventEmitter {
    */
   private async initializeProviders(): Promise<void> {
     const providers: AIProvider[] = [
+      // OpenRouter - PRIMARY provider for monetization with our API key
+      {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        type: 'chat',
+        endpoint: 'https://openrouter.ai/api/v1',
+        apiKey: process.env.OPENROUTER_API_KEY,
+        models: [
+          {
+            id: 'anthropic/claude-3.5-sonnet',
+            name: 'Claude Sonnet 4',
+            description: 'Premium model for complex coding and reasoning',
+            contextLength: 200000,
+            inputPrice: 3.0,
+            outputPrice: 15.0,
+            capabilities: ['text-generation', 'code-generation', 'reasoning', 'function-calling'],
+            latencyTier: 'medium',
+            qualityTier: 'excellent'
+          },
+          {
+            id: 'google/gemini-flash-1.5',
+            name: 'Gemini 2.5 Flash',
+            description: 'Fast multimodal model for web development',
+            contextLength: 1000000,
+            inputPrice: 0.075,
+            outputPrice: 0.3,
+            capabilities: ['text-generation', 'code-generation', 'multimodal', 'image-analysis'],
+            latencyTier: 'fast',
+            qualityTier: 'excellent'
+          },
+          {
+            id: 'deepseek/deepseek-chat',
+            name: 'DeepSeek V3 0324',
+            description: 'Advanced reasoning and mathematics',
+            contextLength: 64000,
+            inputPrice: 0.14,
+            outputPrice: 0.28,
+            capabilities: ['text-generation', 'code-generation', 'reasoning'],
+            latencyTier: 'medium',
+            qualityTier: 'excellent'
+          },
+          {
+            id: 'qwen/qwen-2.5-coder-32b-instruct',
+            name: 'Qwen3 Coder',
+            description: 'Specialized coding assistant',
+            contextLength: 32000,
+            inputPrice: 0.2,
+            outputPrice: 0.2,
+            capabilities: ['code-generation', 'text-generation'],
+            latencyTier: 'medium',
+            qualityTier: 'good'
+          },
+          {
+            id: 'anthropic/claude-3-sonnet',
+            name: 'Claude 3.7 Sonnet',
+            description: 'Balanced performance for general tasks',
+            contextLength: 200000,
+            inputPrice: 3.0,
+            outputPrice: 15.0,
+            capabilities: ['text-generation', 'code-generation', 'reasoning'],
+            latencyTier: 'medium',
+            qualityTier: 'excellent'
+          }
+        ],
+        config: {
+          timeout: 120000,
+          retryCount: 3,
+          rateLimits: {
+            requestsPerSecond: 10,
+            tokensPerMinute: 200000,
+            concurrentRequests: 20
+          },
+          fallbackProviders: ['anthropic', 'gemini'],
+          regions: ['global'],
+          customHeaders: {
+            'HTTP-Referer': 'https://recoder.xyz',
+            'X-Title': 'Recoder Production Engine'
+          }
+        },
+        status: {
+          isHealthy: true,
+          lastHealthCheck: new Date(),
+          responseTime: 1500,
+          errorRate: 0.2,
+          uptime: 99.8,
+          totalRequests: 0,
+          failedRequests: 0
+        },
+        healthCheck: {
+          enabled: true,
+          interval: 180, // 3 minutes
+          timeout: 10000,
+          testPrompt: 'Generate a hello world function in JavaScript.'
+        },
+        pricing: {
+          currency: 'USD',
+          billingUnit: '1M_tokens',
+          costMultiplier: 2.5, // 150% markup for subscription revenue
+          volumeDiscounts: [
+            { minimumUsage: 5000000, discountPercentage: 15 },
+            { minimumUsage: 50000000, discountPercentage: 30 }
+          ]
+        },
+        features: {
+          streaming: true,
+          functionCalling: true,
+          imageAnalysis: true,
+          codeGeneration: true,
+          multimodal: true,
+          reasoning: true,
+          fineTuning: false,
+          customModels: true
+        }
+      },
+
       // Anthropic Claude - Best for reasoning and complex tasks
       {
         id: 'anthropic',

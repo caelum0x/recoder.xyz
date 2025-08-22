@@ -129,6 +129,7 @@ const costOptimizationRoutes = require('./routes/cost-optimization');
 const advancedRAGLearningRoutes = require('./routes/advanced-rag-learning');
 const predictiveErrorDetectionRoutes = require('./routes/predictive-error-detection');
 const multiModalAIRoutes = require('./routes/multi-modal-ai');
+const cliAuthRoutes = require('./routes/cli-auth');
 
 // Import middleware
 const { apiLimiter } = require('./middleware/rateLimit');
@@ -271,6 +272,7 @@ app.use('/api/cost-optimization', costOptimizationRoutes);
 app.use('/api/advanced-rag-learning', advancedRAGLearningRoutes);
 app.use('/api/predictive-error-detection', predictiveErrorDetectionRoutes);
 app.use('/api/multi-modal-ai', multiModalAIRoutes);
+app.use('/api/cli-auth', cliAuthRoutes);
 
 // Legacy API endpoints for backward compatibility
 app.get('/api/v1/status', (req: any, res: any) => {

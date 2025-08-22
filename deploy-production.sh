@@ -1,9 +1,11 @@
 #!/bin/bash
 
 # Recoder.xyz Production Deployment Script
-# Automates complete production deployment with Docker Compose
+# Deploys backend, production engine, and main web app
 
-set -euo pipefail
+set -e  # Exit on any error
+
+echo "🚀 Starting Recoder.xyz Production Deployment..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -13,65 +15,71 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_NAME="recoder"
-COMPOSE_FILE="docker-compose.production.yml"
-ENV_FILE=".env.production"
-ENV_TEMPLATE=".env.production.template"
+BACKEND_PORT=${BACKEND_PORT:-3001}
+ENGINE_PORT=${ENGINE_PORT:-3002}
+WEB_PORT=${WEB_PORT:-3000}
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+# Check if .env file exists
+if [ ! -f ".env" ]; then
+    echo -e "${RED}❌ .env file not found! Please create one with the required environment variables.${NC}"
+    exit 1
+fi
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+echo -e "${BLUE}📋 Checking environment configuration...${NC}"
 
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+# Load environment variables
+source .env
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# Validate critical environment variables
+REQUIRED_VARS=(
+    "OPENROUTER_API_KEY"
+    "DATABASE_URL"
+    "JWT_SECRET"
+    "NEXT_PUBLIC_API_URL"
+    "NEXT_PUBLIC_ENGINE_URL"
+)
 
-# Banner
-show_banner() {
-    echo -e "${BLUE}"
-    echo "=================================="
-    echo "  RECODER.XYZ PRODUCTION DEPLOY"
-    echo "=================================="
-    echo -e "${NC}"
-    echo "🚀 Deploying AI-powered development platform"
-    echo "🏗️  Full stack: Web + Chat + API + Engine"
-    echo "🐳 Docker containerized with SSL termination"
-    echo ""
-}
-
-# Prerequisites check
-check_prerequisites() {
-    log_info "Checking prerequisites..."
-    
-    # Check Docker
-    if ! command -v docker &> /dev/null; then
-        log_error "Docker is not installed. Please install Docker first."
+for var in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!var}" ]; then
+        echo -e "${RED}❌ Missing required environment variable: $var${NC}"
         exit 1
     fi
-    
-    # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-        log_error "Docker Compose is not installed. Please install Docker Compose first."
-        exit 1
+done
+
+echo -e "${GREEN}✅ Environment configuration validated${NC}"
+
+# Function to check if port is available
+check_port() {
+    local port=$1
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null ; then
+        echo -e "${YELLOW}⚠️ Port $port is already in use${NC}"
+        return 1
     fi
+    return 0
+}
+
+# Function to wait for service to be healthy
+wait_for_service() {
+    local url=$1
+    local name=$2
+    local max_attempts=30
+    local attempt=1
     
-    # Check if Docker daemon is running
-    if ! docker info &> /dev/null; then
-        log_error "Docker daemon is not running. Please start Docker first."
-        exit 1
-    fi
+    echo -e "${BLUE}🔄 Waiting for $name to be healthy...${NC}"
     
-    log_success "Prerequisites check passed"
+    while [ $attempt -le $max_attempts ]; do
+        if curl -f -s "$url" > /dev/null 2>&1; then
+            echo -e "${GREEN}✅ $name is healthy${NC}"
+            return 0
+        fi
+        
+        echo -e "${YELLOW}⏳ Attempt $attempt/$max_attempts - waiting for $name...${NC}"
+        sleep 2
+        ((attempt++))
+    done
+    
+    echo -e "${RED}❌ $name failed to start within timeout${NC}"
+    return 1
 }
 
 # Environment setup

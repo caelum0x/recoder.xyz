@@ -1,5 +1,5 @@
 {
-  "name": "@recoder/analytics",
+  "name": "recoder-analytics",
   "version": "1.0.0",
   "description": "Comprehensive analytics and monitoring for the Recoder.xyz ecosystem",
   "main": "dist/index.js",
@@ -37,7 +37,7 @@
     "url": "https://github.com/recoderxyz/recoder/issues"
   },
   "dependencies": {
-    "@recoder/shared": "file:../shared",
+    "recoder-shared": "^1.0.0",
     "events": "^3.3.0"
   },
   "devDependencies": {
