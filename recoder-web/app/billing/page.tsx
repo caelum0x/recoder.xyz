@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 interface BillingPageProps {
-  searchParams: {
+  searchParams: Promise<{
     source?: string;
     user_id?: string;
     reason?: string;
@@ -27,10 +27,19 @@ interface BillingPageProps {
     limit?: string;
     upgraded?: string;
     return_to?: string;
-  };
+  }>;
 }
 
-function BillingPageContent({ searchParams }: BillingPageProps) {
+function BillingPageContent({ searchParams }: { searchParams: {
+  source?: string;
+  user_id?: string;
+  reason?: string;
+  recommended?: string;
+  usage?: string;
+  limit?: string;
+  upgraded?: string;
+  return_to?: string;
+} }) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Success message for completed upgrades */}
@@ -72,14 +81,15 @@ function BillingPageContent({ searchParams }: BillingPageProps) {
 
 export default async function BillingPage({ searchParams }: BillingPageProps) {
   const session = await getServerSession(authOptions);
+  const resolvedSearchParams = await searchParams;
   
   // If no session and no user_id from CLI, redirect to login
-  if (!session && !searchParams.user_id) {
+  if (!session && !resolvedSearchParams.user_id) {
     redirect('/auth/login?return_to=/billing');
   }
 
   // Use session user ID or CLI-provided user ID
-  const userId = session?.user?.id || searchParams.user_id;
+  const userId = session?.user?.id || resolvedSearchParams.user_id;
   
   if (!userId) {
     redirect('/auth/login?return_to=/billing');
@@ -88,7 +98,7 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
   return (
     <BillingPageContent 
       searchParams={{ 
-        ...searchParams, 
+        ...resolvedSearchParams, 
         user_id: userId 
       }} 
     />

@@ -15,7 +15,7 @@ const querySchema = z.object({
 });
 
 interface CostAnalyticsData {
-  router_id: string;
+  routerId: string;
   time_period: {
     start: Date;
     end: Date;
@@ -36,8 +36,8 @@ interface CostAnalyticsData {
     savings_percentage: number;
   };
   performance_metrics: {
-    avg_response_time: number;
-    p95_response_time: number;
+    avg_responseTime: number;
+    p95_responseTime: number;
     success_rate: number;
     error_rate: number;
   };
@@ -54,7 +54,7 @@ interface CostAnalyticsData {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { routerId: string } }
+  context: { params: Promise<{ routerId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -65,6 +65,7 @@ export async function GET(
       );
     }
 
+    const params = await context.params;
     const { routerId } = params;
     const searchParams = request.nextUrl.searchParams;
     const query = querySchema.parse({
@@ -75,8 +76,8 @@ export async function GET(
     // Verify router ownership
     const router = await prisma.router.findFirst({
       where: {
-        router_id: routerId,
-        user_id: session.user.id
+        routerId: routerId,
+        userId: session.user.id
       }
     });
 
@@ -114,7 +115,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { routerId: string } }
+  context: { params: Promise<{ routerId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -125,6 +126,7 @@ export async function POST(
       );
     }
 
+    const params = await context.params;
     const { routerId } = params;
     const body = await request.json();
 
@@ -134,11 +136,11 @@ export async function POST(
       timestamp
     } = body;
 
-    // Verify router ownership
+    // Verify router ownership  
     const router = await prisma.router.findFirst({
       where: {
-        router_id: routerId,
-        user_id: session.user.id
+        routerId: routerId,
+        userId: session.user.id
       }
     });
 
@@ -180,7 +182,7 @@ async function getRouterUsageData(routerId: string, startTime: Date, endTime: Da
   // Get router usage data from database
   const usageRecords = await prisma.routerUsage.findMany({
     where: {
-      router_id: routerId,
+      routerId: routerId,
       timestamp: {
         gte: startTime,
         lte: endTime
@@ -232,7 +234,7 @@ function generateCostAnalytics(
   const savingsPercentage = baselineCost > 0 ? (savingsAmount / baselineCost) * 100 : 0;
 
   // Calculate performance metrics
-  const responseTimes = usageData.map(r => r.response_time || 1000);
+  const responseTimes = usageData.map(r => r.responseTime || 1000);
   const successCount = usageData.filter(r => r.success !== false).length;
   
   const avgResponseTime = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length;
@@ -245,7 +247,7 @@ function generateCostAnalytics(
   const recommendations = generateOptimizationRecommendations(costByModel, costByProvider);
 
   return {
-    router_id: routerId,
+    routerId: routerId,
     time_period: {
       start: startTime,
       end: endTime,
@@ -266,8 +268,8 @@ function generateCostAnalytics(
       savings_percentage: savingsPercentage
     },
     performance_metrics: {
-      avg_response_time: avgResponseTime,
-      p95_response_time: p95ResponseTime,
+      avg_responseTime: avgResponseTime,
+      p95_responseTime: p95ResponseTime,
       success_rate: successRate,
       error_rate: errorRate
     },
@@ -285,7 +287,7 @@ function generateMockAnalytics(
   const mockUsageScaling = Math.max(1, durationHours / 24); // Scale with time period
   
   return {
-    router_id: routerId,
+    routerId: routerId,
     time_period: {
       start: startTime,
       end: endTime,
@@ -317,8 +319,8 @@ function generateMockAnalytics(
       savings_percentage: 60.0
     },
     performance_metrics: {
-      avg_response_time: 1850,
-      p95_response_time: 3200,
+      avg_responseTime: 1850,
+      p95_responseTime: 3200,
       success_rate: 0.976,
       error_rate: 0.024
     },
@@ -423,10 +425,9 @@ async function storeRouterAnalytics(routerId: string, costData: any, timestamp: 
     // Store analytics data in database
     await prisma.routerAnalytics.create({
       data: {
-        router_id: routerId,
-        analytics_data: costData,
-        timestamp: new Date(timestamp),
-        created_at: new Date()
+        routerId: routerId,
+        analyticsData: costData,
+        timestamp: new Date(timestamp)
       }
     });
   } catch (error) {

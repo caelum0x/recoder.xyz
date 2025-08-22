@@ -78,16 +78,13 @@ export async function GET(request: NextRequest) {
       const authCode = nanoid(32);
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-      // Store authorization request
-      await prisma.cliAuthRequest.create({
+      // Store authorization request using DeviceFlow model
+      await prisma.deviceFlow.create({
         data: {
-          client_id: clientId,
-          auth_code: authCode,
-          redirect_uri: redirectUri,
-          state: state,
-          scope: scope,
-          expires_at: expiresAt,
-          created_at: new Date()
+          deviceCode: authCode,
+          userCode: nanoid(8).toUpperCase(),
+          status: 'pending',
+          expiresAt: expiresAt,
         }
       });
 
@@ -190,16 +187,12 @@ async function handleDeviceFlow(body: any): Promise<NextResponse> {
   const verificationUriComplete = `${baseUrl}/auth/device?user_code=${userCode}`;
 
   // Store device flow request
-  await prisma.deviceFlowRequest.create({
+  await prisma.deviceFlow.create({
     data: {
-      device_code: deviceCode,
-      user_code: userCode,
-      client_id: client_id,
-      scope: scope,
-      expires_at: new Date(Date.now() + expiresIn * 1000),
-      interval: interval,
+      deviceCode: deviceCode,
+      userCode: userCode,
       status: 'pending',
-      created_at: new Date()
+      expiresAt: new Date(Date.now() + expiresIn * 1000)
     }
   });
 
@@ -240,24 +233,23 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
     }
 
     // Check if it's an access token
-    const cliSession = await prisma.cliSession.findFirst({
+    const userSession = await prisma.userSession.findFirst({
       where: {
-        access_token: token,
-        expires_at: {
+        accessToken: token,
+        expiresAt: {
           gt: new Date()
-        },
-        revoked: false
+        }
       },
       include: {
         user: {
           include: {
-            subscription: true
+            
           }
         }
       }
     });
 
-    if (!cliSession) {
+    if (!userSession) {
       return NextResponse.json({
         success: false,
         error: 'invalid_token',
@@ -269,14 +261,14 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       user: {
-        id: cliSession.user.id,
-        email: cliSession.user.email,
-        name: cliSession.user.name,
-        subscription_plan: cliSession.user.subscription?.plan_name || 'free',
+        id: userSession.user.id,
+        email: userSession.user.email,
+        name: userSession.user.name,
+        subscription_plan: 'free',
         quota: {
-          requests_remaining: cliSession.user.subscription?.requests_remaining || 1000,
-          requests_limit: cliSession.user.subscription?.requests_limit || 1000,
-          reset_date: cliSession.user.subscription?.reset_date?.toISOString() || new Date().toISOString()
+          requests_remaining: 1000,
+          requests_limit: 1000,
+          reset_date: new Date().toISOString()
         }
       }
     });
@@ -305,16 +297,14 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
   }
 
   try {
-    // Find and validate auth request
-    const authRequest = await prisma.cliAuthRequest.findFirst({
+    // Find and validate auth request using DeviceFlow model
+    const authRequest = await prisma.deviceFlow.findFirst({
       where: {
-        auth_code: code,
-        client_id: client_id,
-        redirect_uri: redirect_uri,
-        expires_at: {
+        deviceCode: code,
+        expiresAt: {
           gt: new Date()
         },
-        used: false
+        status: 'pending'
       }
     });
 
@@ -327,17 +317,14 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
     }
 
     // Mark as used
-    await prisma.cliAuthRequest.update({
+    await prisma.deviceFlow.update({
       where: { id: authRequest.id },
-      data: { used: true }
+      data: { status: 'authorized' }
     });
 
     // Get user from session (this should be set during auth flow)
     const user = await prisma.user.findUnique({
-      where: { id: authRequest.user_id! },
-      include: {
-        subscription: true
-      }
+      where: { id: authRequest.userId! }
     });
 
     if (!user) {
@@ -354,15 +341,19 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
     // Create CLI session
-    const cliSession = await prisma.cliSession.create({
+    const userSession = await prisma.userSession.create({
       data: {
-        user_id: user.id,
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: expiresAt,
-        client_id: client_id,
-        scope: authRequest.scope,
-        created_at: new Date()
+        userId: user.id,
+        deviceId: nanoid(16),
+        platform: 'cli',
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        expiresAt: expiresAt,
+        scopes: ['cli:full', 'profile'],
+        metadata: {
+          client_id: client_id,
+          scope: 'cli:full profile'
+        }
       }
     });
 
@@ -376,11 +367,11 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
         id: user.id,
         email: user.email,
         name: user.name || '',
-        subscription_plan: user.subscription?.plan_name || 'free',
+        subscription_plan: 'free',
         quota: {
-          requests_remaining: user.subscription?.requests_remaining || 1000,
-          requests_limit: user.subscription?.requests_limit || 1000,
-          reset_date: user.subscription?.reset_date?.toISOString() || new Date().toISOString()
+          requests_remaining: 1000,
+          requests_limit: 1000,
+          reset_date: new Date().toISOString()
         }
       },
       platform_connection: {
@@ -420,22 +411,20 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
 
   try {
     // Find CLI session by refresh token
-    const cliSession = await prisma.cliSession.findFirst({
+    const userSession = await prisma.userSession.findFirst({
       where: {
-        refresh_token: refresh_token,
-        client_id: client_id,
-        revoked: false
+        refreshToken: refresh_token
       },
       include: {
         user: {
           include: {
-            subscription: true
+            
           }
         }
       }
     });
 
-    if (!cliSession) {
+    if (!userSession) {
       return NextResponse.json({
         success: false,
         error: 'invalid_grant',
@@ -448,12 +437,12 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
     const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     // Update session
-    await prisma.cliSession.update({
-      where: { id: cliSession.id },
+    await prisma.userSession.update({
+      where: { id: userSession.id },
       data: {
-        access_token: newAccessToken,
-        expires_at: newExpiresAt,
-        updated_at: new Date()
+        accessToken: newAccessToken,
+        expiresAt: newExpiresAt,
+        lastUsed: new Date()
       }
     });
 
@@ -462,14 +451,14 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
       access_token: newAccessToken,
       expires_at: newExpiresAt.toISOString(),
       user: {
-        id: cliSession.user.id,
-        email: cliSession.user.email,
-        name: cliSession.user.name,
-        subscription_plan: cliSession.user.subscription?.plan_name || 'free',
+        id: userSession.user.id,
+        email: userSession.user.email,
+        name: userSession.user.name,
+        subscription_plan: 'free',
         quota: {
-          requests_remaining: cliSession.user.subscription?.requests_remaining || 1000,
-          requests_limit: cliSession.user.subscription?.requests_limit || 1000,
-          reset_date: cliSession.user.subscription?.reset_date?.toISOString() || new Date().toISOString()
+          requests_remaining: 1000,
+          requests_limit: 1000,
+          reset_date: new Date().toISOString()
         }
       }
     });
@@ -489,18 +478,15 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
  */
 async function validateApiKey(apiKey: string): Promise<NextResponse> {
   try {
-    const userApiKey = await prisma.userApiKey.findFirst({
+    const userApiKey = await prisma.apiKey.findFirst({
       where: {
-        api_key: apiKey,
-        revoked: false,
-        expires_at: {
-          gt: new Date()
-        }
+        keyId: apiKey,
+        active: true
       },
       include: {
         user: {
           include: {
-            subscription: true
+            
           }
         }
       }
@@ -515,9 +501,9 @@ async function validateApiKey(apiKey: string): Promise<NextResponse> {
     }
 
     // Update last used
-    await prisma.userApiKey.update({
+    await prisma.apiKey.update({
       where: { id: userApiKey.id },
-      data: { last_used_at: new Date() }
+      data: { lastUsed: new Date() }
     });
 
     return NextResponse.json({
@@ -526,11 +512,11 @@ async function validateApiKey(apiKey: string): Promise<NextResponse> {
         id: userApiKey.user.id,
         email: userApiKey.user.email,
         name: userApiKey.user.name,
-        subscription_plan: userApiKey.user.subscription?.plan_name || 'free',
+        subscription_plan: 'free',
         quota: {
-          requests_remaining: userApiKey.user.subscription?.requests_remaining || 1000,
-          requests_limit: userApiKey.user.subscription?.requests_limit || 1000,
-          reset_date: userApiKey.user.subscription?.reset_date?.toISOString() || new Date().toISOString()
+          requests_remaining: 1000,
+          requests_limit: 1000,
+          reset_date: new Date().toISOString()
         }
       }
     });

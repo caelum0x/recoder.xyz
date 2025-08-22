@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 interface UpgradePageProps {
-  searchParams: {
+  searchParams: Promise<{
     source?: 'cli' | 'web' | 'router' | 'extension';
     user_id?: string;
     current_plan?: string;
@@ -29,10 +29,21 @@ interface UpgradePageProps {
     blocked_feature?: string;
     return_to?: string;
     focus?: 'quota' | 'features' | 'ai_models';
-  };
+  }>;
 }
 
-function UpgradePageContent({ searchParams }: UpgradePageProps) {
+function UpgradePageContent({ searchParams }: { searchParams: {
+  source?: 'cli' | 'web' | 'router' | 'extension';
+  user_id?: string;
+  current_plan?: string;
+  reason?: 'quota_exceeded' | 'feature_limited' | 'model_restricted' | 'manual_upgrade';
+  usage?: string;
+  limit?: string;
+  recommended?: 'pro' | 'team' | 'enterprise';
+  blocked_feature?: string;
+  return_to?: string;
+  focus?: 'quota' | 'features' | 'ai_models';
+} }) {
   const {
     source = 'web',
     current_plan = 'free',
@@ -144,15 +155,16 @@ function UpgradePageContent({ searchParams }: UpgradePageProps) {
 
 export default async function UpgradePage({ searchParams }: UpgradePageProps) {
   const session = await getServerSession(authOptions);
+  const resolvedSearchParams = await searchParams;
   
   // If no session and no user_id from CLI, redirect to login
-  if (!session && !searchParams.user_id) {
-    const returnUrl = `/billing/upgrade?${new URLSearchParams(searchParams as any).toString()}`;
+  if (!session && !resolvedSearchParams.user_id) {
+    const returnUrl = `/billing/upgrade?${new URLSearchParams(resolvedSearchParams as any).toString()}`;
     redirect(`/auth/login?return_to=${encodeURIComponent(returnUrl)}`);
   }
 
   // Use session user ID or CLI-provided user ID
-  const userId = session?.user?.id || searchParams.user_id;
+  const userId = session?.user?.id || resolvedSearchParams.user_id;
   
   if (!userId) {
     redirect('/auth/login?return_to=/billing/upgrade');
@@ -161,7 +173,7 @@ export default async function UpgradePage({ searchParams }: UpgradePageProps) {
   return (
     <UpgradePageContent 
       searchParams={{ 
-        ...searchParams, 
+        ...resolvedSearchParams, 
         user_id: userId 
       }} 
     />
