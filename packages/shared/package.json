@@ -1,5 +1,5 @@
 {
-  "name": "@recoder/shared",
+  "name": "recoder-shared",
   "version": "1.0.0",
   "description": "Shared types, utilities, and configurations for Recoder",
   "main": "dist/index.js",
