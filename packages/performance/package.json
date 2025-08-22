@@ -1,5 +1,5 @@
 {
-  "name": "@recoder/performance",
+  "name": "recoder-performance",
   "version": "1.0.0",
   "description": "High-performance monitoring, caching, and optimization utilities for Recoder.xyz",
   "main": "dist/index.js",
@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "test": "echo \"No tests specified\" && exit 0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -39,5 +40,19 @@
     "middleware",
     "redis",
     "optimization"
+  ],
+  "author": "Recoder Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/recoder-team/recoder.git",
+    "directory": "packages/performance"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
   ]
 }

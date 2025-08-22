@@ -64,24 +64,34 @@ export class UnifiedRouterAI {
 
   /**
    * Load router configuration from file or environment
+   * Updated to prioritize OpenRouter with our API key for monetization
    */
   private loadRouterConfig(): RouterConfig {
-    // Default configuration - can be overridden by config file
+    // Monetization-focused configuration - OpenRouter first with our API key
     return {
       enabled: true,
       providers: {
-        openrouter: { enabled: true, priority: 1, maxConcurrent: 5, costPerToken: 0.00001 },
-        ollama: { enabled: true, priority: 2, maxConcurrent: 3, costPerToken: 0.0 },
-        anthropic: { enabled: true, priority: 3, maxConcurrent: 2, costPerToken: 0.00003 },
-        gemini: { enabled: true, priority: 4, maxConcurrent: 4, costPerToken: 0.000001 },
-        groq: { enabled: true, priority: 5, maxConcurrent: 5, costPerToken: 0.000001 },
-        deepseek: { enabled: true, priority: 6, maxConcurrent: 3, costPerToken: 0.000001 }
+        // OpenRouter is now primary provider using our API key for monetization
+        openrouter: { 
+          enabled: true, 
+          priority: 1, 
+          maxConcurrent: 10, 
+          costPerToken: 0.00001,
+        },
+        // Ollama disabled in production to force subscription revenue
+        ollama: { enabled: false, priority: 9, maxConcurrent: 0, costPerToken: 0.0 },
+        // Other providers as fallback only if OpenRouter fails
+        anthropic: { enabled: false, priority: 8, maxConcurrent: 1, costPerToken: 0.00003 },
+        gemini: { enabled: false, priority: 7, maxConcurrent: 1, costPerToken: 0.000001 },
+        groq: { enabled: false, priority: 6, maxConcurrent: 1, costPerToken: 0.000001 },
+        deepseek: { enabled: false, priority: 5, maxConcurrent: 1, costPerToken: 0.000001 }
       },
       routing: {
+        // All requests route to OpenRouter for consistent monetization
         default: 'openrouter',
-        background: 'ollama',
-        think: 'anthropic',
-        longContext: 'gemini',
+        background: 'openrouter',
+        think: 'openrouter',
+        longContext: 'openrouter',
         webSearch: 'openrouter'
       }
     };
@@ -125,15 +135,26 @@ export class UnifiedRouterAI {
   private buildRouterProviderConfigs(): Map<string, ApiHandlerOptions> {
     const configs = new Map<string, ApiHandlerOptions>();
 
-    // OpenRouter - best for routing diverse requests
-    if (process.env.OPENROUTER_API_KEY) {
-      configs.set('openrouter', {
-        apiProvider: 'openrouter' as const,
-        openRouterApiKey: process.env.OPENROUTER_API_KEY,
-        openRouterModelId: 'anthropic/claude-3.5-sonnet',
-        openRouterUseMiddleOutTransform: true
-      });
-    }
+    // OpenRouter - PRIMARY provider using our API key for monetization
+    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+    configs.set('openrouter', {
+      apiProvider: 'openrouter' as const,
+      openRouterApiKey: openRouterApiKey,
+      // Use Claude Sonnet 4 as default for best quality
+      openRouterModelId: 'anthropic/claude-3.5-sonnet',
+      openRouterUseMiddleOutTransform: true,
+      // Add custom configuration for our premium models
+      openRouterModels: [
+        'anthropic/claude-3.5-sonnet',      // Claude Sonnet 4
+        'google/gemini-flash-1.5',          // Gemini 2.5 Flash  
+        'deepseek/deepseek-chat',           // DeepSeek V3
+        'qwen/qwen-2.5-coder-32b-instruct', // Qwen3 Coder
+        'anthropic/claude-3-sonnet',        // Claude 3.7 Sonnet
+        'google/gemini-pro-1.5',            // Gemini 2.5 Pro
+        'deepseek/deepseek-reasoner',       // R1 0528
+        'moonshot/moonshot-v1-8k'           // Kimi K2
+      ]
+    });
 
     // Ollama - local, free, great for background tasks
     configs.set('ollama', {

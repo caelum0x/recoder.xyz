@@ -1,5 +1,5 @@
 {
-  "name": "@recoder/intelligence",
+  "name": "recoder-intelligence",
   "version": "1.0.0",
   "description": "Adaptive AI intelligence and learning layer for CodeCraft CLI",
   "main": "dist/index.js",
@@ -9,7 +9,8 @@
     "dev": "tsc --watch",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "artificial-intelligence",
@@ -22,7 +23,7 @@
     "context-awareness"
   ],
   "dependencies": {
-    "@recoder/shared": "file:../shared",
+    "recoder-shared": "^1.0.0",
     "ml-matrix": "^6.10.7",
     "ml-kmeans": "^6.0.0",
     "simple-statistics": "^7.8.3",
@@ -50,8 +51,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/recoder-ai/cli.git",
+    "url": "https://github.com/recoder-team/recoder.git",
     "directory": "packages/intelligence"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "MIT",
   "engines": {

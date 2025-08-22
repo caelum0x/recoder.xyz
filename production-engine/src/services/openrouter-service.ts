@@ -1,9 +1,11 @@
 /**
  * OpenRouter AI Service - Commercial AI Integration
- * Replaces local Ollama with production-grade commercial AI providers
+ * Centralized API key management for premium monetization
+ * Users pay $20/month subscription, we handle all AI costs via OpenRouter
  */
 
 import { logger } from '../utils/logger';
+import { OPENROUTER_MODELS, MODEL_SELECTION_STRATEGY, selectBestModel, calculateModelCost } from '../config/openrouter-models';
 
 export interface OpenRouterConfig {
   apiKey: string;

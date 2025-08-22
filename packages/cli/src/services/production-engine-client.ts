@@ -77,12 +77,18 @@ export class ProductionEngineClient {
   private engineUrl: string;
 
   constructor() {
-    this.engineUrl = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:5678';
+    // Use production URLs when available, fallback to local development
+    this.engineUrl = process.env.PRODUCTION_ENGINE_URL || 
+                     process.env.NEXT_PUBLIC_ENGINE_URL || 
+                     'https://engine.recoder.xyz';
+    
     this.client = axios.create({
       baseURL: this.engineUrl,
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'recoder-cli/1.0.0'
+        'User-Agent': 'recoder-cli/1.0.0',
+        // Use our OpenRouter API key for all requests
+        'x-api-key': process.env.OPENROUTER_API_KEY
       },
       timeout: 300000 // 5 minutes for code generation
     });

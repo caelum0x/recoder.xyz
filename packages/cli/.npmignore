@@ -6,9 +6,24 @@ src/
 **/tsconfig.json
 **/tsconfig.*.json
 
-# Development files
+# SECURITY - Environment and secret files (NEVER publish)
 .env*
 *.env
+.env.local
+.env.production
+.env.development
+.env.staging
+config.local.*
+secrets/
+keys/
+*.key
+*.pem
+*.p12
+*.crt
+auth.json
+credentials.json
+
+# Development files
 .vscode/
 .idea/
 
