@@ -3,6 +3,8 @@
  * Handles users, subscriptions, CLI sessions, and billing data
  */
 
+export type PlanType = 'free' | 'pro' | 'enterprise';
+
 export interface User {
   id: string;
   email: string;
@@ -62,10 +64,12 @@ export interface DeviceFlow {
   client_id: string;
   scope: string;
   user_id?: string;
-  status: 'pending' | 'authorized' | 'denied' | 'expired';
+  status: 'pending' | 'authorized' | 'denied' | 'expired' | 'completed';
   expires_at: Date;
   created_at: Date;
   authorized_at?: Date;
+  denied_at?: Date;
+  user_data?: any;
 }
 
 export interface Subscription {
@@ -442,3 +446,15 @@ export class DatabaseService {
 
 // Singleton database instance
 export const db = new DatabaseService();
+
+// Export userDb for compatibility with session-sync
+export const userDb = {
+  findByEmail: (email: string) => db.getUserByEmail(email),
+  findById: (id: string) => db.getUserById(id),
+  create: (userData: any) => db.createUser(userData),
+  update: (id: string, userData: any) => db.updateUser(id, userData),
+  delete: async (id: string) => {
+    // Mock delete function
+    return false;
+  }
+};

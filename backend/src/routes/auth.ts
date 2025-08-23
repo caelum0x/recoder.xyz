@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { body } from 'express-validator';
 import { prisma } from '../database/prisma';
 import { logger } from '../utils/logger';
 import { 
@@ -27,6 +28,7 @@ const router = Router();
 // JWT Configuration
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';
 
 /**
  * @route POST /api/auth/register

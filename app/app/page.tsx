@@ -169,7 +169,7 @@ export default function HomePage() {
                 <div className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400 animate-pulse-scale">
                   {stat.value}
                 </div>
-                <div className="text-sm text-slate-600 dark:text-slate-400">
+                <div className="text-sm text-slate-600 dark:text-slate-300">
                   {stat.label}
                 </div>
               </div>
