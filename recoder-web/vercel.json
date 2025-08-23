@@ -1,35 +1,24 @@
 {
-  "version": 2,
-  "name": "recoder-web-platform",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
+  "framework": "nextjs",
+  "buildCommand": "prisma generate && prisma db push --accept-data-loss && next build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
   "env": {
-    "NEXTAUTH_URL": "@nextauth_url",
-    "NEXTAUTH_SECRET": "@nextauth_secret",
-    "DATABASE_URL": "@database_url",
-    "ANTHROPIC_API_KEY": "@anthropic_api_key",
-    "GROQ_API_KEY": "@groq_api_key",
-    "GOOGLE_API_KEY": "@google_api_key",
-    "OPENAI_API_KEY": "@openai_api_key"
+    "NODE_ENV": "production",
+    "NEXTAUTH_URL": "https://app.recoder.xyz",
+    "NEXTAUTH_SECRET": "fb43a832342cc7646343a443eed7940c79fb41e132bff7fe1842d91fbd0ce804",
+    "NEXT_PUBLIC_API_URL": "https://api.recoder.xyz",
+    "NEXT_PUBLIC_ENGINE_URL": "https://engine.recoder.xyz",
+    "NEXT_PUBLIC_CHAT_URL": "https://chat.recoder.xyz",
+    "DATABASE_URL": "postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+    "DIRECT_URL": "postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+    "ANTHROPIC_API_KEY": "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",
+    "GROQ_API_KEY": "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",
+    "GOOGLE_API_KEY": "AIzaSyC4nq9suWOt1qQ2SCL4b1wBekMEjBD5Rs4"
   },
   "build": {
     "env": {
-      "SKIP_ENV_VALIDATION": "1"
+      "NODE_ENV": "production"
     }
-  },
-  "functions": {
-    "app/api/**/*.ts": {
-      "maxDuration": 60
-    }
-  },
-  "regions": ["iad1"],
-  "framework": "nextjs",
-  "installCommand": "npm install --legacy-peer-deps",
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./"
+  }
 }
