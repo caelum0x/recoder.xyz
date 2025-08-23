@@ -45,7 +45,7 @@ interface CLISession {
 const authRequests = new Map();
 
 // Import device flow storage from internal endpoint
-import { deviceFlowRequests } from '../cli-internal/authorize-device/route';
+import { initializeDeviceFlowRequest } from '@/lib/device-flow-storage';
 
 /**
  * GET - Initiate CLI authentication flow
@@ -178,13 +178,13 @@ async function handleDeviceFlow(body: any): Promise<NextResponse> {
   const verificationUri = `${baseUrl}/auth/device`;
   const verificationUriComplete = `${baseUrl}/auth/device?user_code=${userCode}`;
 
-  // Store device flow request
-  deviceFlowRequests.set(deviceCode, {
+  // Store device flow request in database
+  await initializeDeviceFlowRequest(deviceCode, {
+    device_code: deviceCode,
     user_code: userCode,
     client_id: client_id,
     scope: scope,
     expires_at: new Date(Date.now() + expiresIn * 1000),
-    interval: interval,
     status: 'pending',
     created_at: new Date()
   });
@@ -482,7 +482,16 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
       user: mockUser
     };
 
-    cliSessions.set(accessToken, session);
+    // Store CLI session in database
+    await db.createCLISession({
+      user_id: mockUser.id,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      device_name: 'CLI Device',
+      device_type: 'cli',
+      expires_at: expiresAt,
+      is_active: true
+    });
 
     return NextResponse.json({
       success: true,
@@ -516,14 +525,8 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
   }
 
   try {
-    // Find session by refresh token
-    let foundSession = null;
-    for (const [token, session] of cliSessions) {
-      if (session.refresh_token === refresh_token) {
-        foundSession = session;
-        break;
-      }
-    }
+    // Find session by refresh token in database
+    const foundSession = await db.getCLISessionByToken(refresh_token);
 
     if (!foundSession) {
       return NextResponse.json({
@@ -536,24 +539,32 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
     const newAccessToken = `rct_${nanoid(32)}`;
     const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    // Update session
-    foundSession.access_token = newAccessToken;
-    foundSession.expires_at = newExpiresAt.toISOString();
+    // Update session in database
+    await db.updateCLISession(foundSession.access_token, {
+      access_token: newAccessToken,
+      expires_at: newExpiresAt
+    });
     
-    // Remove old token and add new one
-    for (const [token, session] of cliSessions) {
-      if (session.refresh_token === refresh_token) {
-        cliSessions.delete(token);
-        break;
-      }
+    // Get updated user data
+    const user = await db.getUserById(foundSession.user_id);
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        error: 'user_not_found'
+      }, { status: 404 });
     }
-    cliSessions.set(newAccessToken, foundSession);
 
     return NextResponse.json({
       success: true,
       access_token: newAccessToken,
       expires_at: newExpiresAt.toISOString(),
-      user: foundSession.user
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        subscription_plan: user.subscription_plan,
+        quota: user.quota
+      }
     });
 
   } catch (error: any) {

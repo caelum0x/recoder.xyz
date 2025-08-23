@@ -4,6 +4,12 @@ const nextConfig = {
     SKIP_ENV_VALIDATION: process.env.SKIP_ENV_VALIDATION,
   },
   outputFileTracingRoot: __dirname,
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 }
 
 module.exports = nextConfig

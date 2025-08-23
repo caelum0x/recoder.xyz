@@ -6,14 +6,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { 
+  getDeviceFlowRequestByUserCode, 
+  updateDeviceFlowRequest,
+  getDeviceFlowRequest 
+} from '@/lib/device-flow-storage';
 
 const authorizeDeviceSchema = z.object({
   user_code: z.string().length(8),
   action: z.enum(['authorize', 'deny'])
 });
-
-// In-memory storage for demo (replace with database in production)
-const deviceFlowRequests = new Map();
 
 /**
  * POST - Handle device authorization from web interface
@@ -45,17 +47,10 @@ export async function POST(request: NextRequest) {
 
     const { user_code, action } = validation.data;
 
-    // Find device flow request by user code
-    let deviceRequest = null;
-    for (const [deviceCode, request] of deviceFlowRequests) {
-      if (request.user_code === user_code && request.status === 'pending') {
-        deviceRequest = request;
-        deviceRequest.device_code = deviceCode;
-        break;
-      }
-    }
+    // Find device flow request by user code in database
+    const deviceRequest = await getDeviceFlowRequestByUserCode(user_code);
 
-    if (!deviceRequest) {
+    if (!deviceRequest || deviceRequest.status !== 'pending') {
       return NextResponse.json({
         success: false,
         error: 'invalid_user_code',
@@ -65,8 +60,8 @@ export async function POST(request: NextRequest) {
 
     // Check if request has expired
     if (new Date() > deviceRequest.expires_at) {
-      // Clean up expired request
-      deviceFlowRequests.delete(deviceRequest.device_code);
+      // Update status to expired in database
+      await updateDeviceFlowRequest(deviceRequest.device_code, { status: 'expired' });
       
       return NextResponse.json({
         success: false,
@@ -76,13 +71,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'authorize') {
-      // Authorize the device
-      deviceRequest.status = 'authorized';
-      deviceRequest.user_id = session.user.id;
-      deviceRequest.authorized_at = new Date();
-      
-      // Update the device flow request
-      deviceFlowRequests.set(deviceRequest.device_code, deviceRequest);
+      // Update device flow request in database
+      await updateDeviceFlowRequest(deviceRequest.device_code, {
+        status: 'authorized',
+        user_id: session.user.id,
+        authorized_at: new Date()
+      });
 
       // Create CLI session data for when CLI polls for token
       const mockUser = {
@@ -97,9 +91,10 @@ export async function POST(request: NextRequest) {
         }
       };
 
-      // Store user data for token exchange
-      deviceRequest.user_data = mockUser;
-      deviceFlowRequests.set(deviceRequest.device_code, deviceRequest);
+      // Store user data for token exchange in database
+      await updateDeviceFlowRequest(deviceRequest.device_code, {
+        user_data: mockUser
+      });
 
       return NextResponse.json({
         success: true,
@@ -112,12 +107,11 @@ export async function POST(request: NextRequest) {
       });
 
     } else if (action === 'deny') {
-      // Deny the device authorization
-      deviceRequest.status = 'denied';
-      deviceRequest.denied_at = new Date();
-      
-      // Update the device flow request
-      deviceFlowRequests.set(deviceRequest.device_code, deviceRequest);
+      // Deny the device authorization in database
+      await updateDeviceFlowRequest(deviceRequest.device_code, {
+        status: 'denied',
+        denied_at: new Date()
+      });
 
       return NextResponse.json({
         success: true,
@@ -151,7 +145,7 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const deviceRequest = deviceFlowRequests.get(deviceCode);
+    const deviceRequest = await getDeviceFlowRequest(deviceCode);
     
     if (!deviceRequest) {
       return NextResponse.json({
@@ -163,7 +157,7 @@ export async function GET(request: NextRequest) {
 
     // Check if expired
     if (new Date() > deviceRequest.expires_at) {
-      deviceFlowRequests.delete(deviceCode);
+      await updateDeviceFlowRequest(deviceCode, { status: 'expired' });
       return NextResponse.json({
         success: false,
         error: 'expired_token',
@@ -178,13 +172,13 @@ export async function GET(request: NextRequest) {
       const refreshToken = `rcr_${Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('')}`;
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-      // Clean up the device flow request
-      deviceFlowRequests.delete(deviceCode);
+      // Mark device flow request as completed in database
+      await updateDeviceFlowRequest(deviceCode, { status: 'completed' });
 
       return NextResponse.json({
         success: true,
         status: 'authorized',
-        user_id: deviceRequest.user_data.id,
+        user_id: deviceRequest.user_data?.id || deviceRequest.user_id,
         access_token: accessToken,
         refresh_token: refreshToken,
         expires_at: expiresAt.toISOString(),
@@ -196,8 +190,8 @@ export async function GET(request: NextRequest) {
       });
 
     } else if (deviceRequest.status === 'denied') {
-      // Clean up the device flow request
-      deviceFlowRequests.delete(deviceCode);
+      // Mark device flow request as completed in database
+      await updateDeviceFlowRequest(deviceCode, { status: 'completed' });
       
       return NextResponse.json({
         success: false,
@@ -224,15 +218,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper function to initialize device flow request (called from main CLI auth endpoint)
-export function initializeDeviceFlowRequest(deviceCode: string, data: any) {
-  deviceFlowRequests.set(deviceCode, data);
-}
-
-// Helper function to get device flow request
-export function getDeviceFlowRequest(deviceCode: string) {
-  return deviceFlowRequests.get(deviceCode);
-}
-
-// Export the storage for access from main CLI auth endpoint
-export { deviceFlowRequests };

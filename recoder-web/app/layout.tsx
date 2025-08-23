@@ -10,7 +10,7 @@ const brandConfig = getBrandConfig();
 
 let title = `${brandConfig.fullName} – AI Development Platform`;
 let description = "AI-powered code generation platform that creates real, production-ready applications with multi-AI intelligence and offline capabilities";
-let url = brandConfig.urls.web();
+let url = brandConfig.urls.getWebURL();
 let ogimage = `${url}/recoder-og.png`;
 let sitename = "recoder.xyz";
 

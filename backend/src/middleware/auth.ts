@@ -67,7 +67,7 @@ export interface AuthenticatedRequest extends Request {
 }
 
 // Helper functions for authentication system
-export const authenticate = authenticateUser;
+// Note: authenticate will be defined after authenticateUser function
 
 export const generateTokens = (user: any) => {
   const payload = {
@@ -77,11 +77,11 @@ export const generateTokens = (user: any) => {
     sessionId: crypto.randomBytes(16).toString('hex')
   };
 
-  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
   const refreshToken = jwt.sign(
     { id: user.id, sessionId: payload.sessionId },
     JWT_REFRESH_SECRET,
-    { expiresIn: JWT_REFRESH_EXPIRES_IN }
+    { expiresIn: JWT_REFRESH_EXPIRES_IN } as jwt.SignOptions
   );
 
   return {
@@ -179,9 +179,9 @@ export const handleAuthValidationErrors = (req: Request, res: Response, next: Ne
       success: false,
       error: 'Validation failed',
       details: errors.array().map(error => ({
-        field: error.param,
+        field: (error as any).path || (error as any).param,
         message: error.msg,
-        value: error.value
+        value: (error as any).value
       }))
     });
   }
@@ -303,6 +303,9 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
     });
   }
 };
+
+// Export authenticate as alias for authenticateUser
+export const authenticate = authenticateUser;
 
 /**
  * Require admin role

@@ -1,0 +1,40 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install --production=false",
+  "env": {
+    "NODE_ENV": "production",
+    "NEXTAUTH_URL": "https://recoder.xyz",
+    "NEXTAUTH_SECRET": "fb43a832342cc7646343a443eed7940c79fb41e132bff7fe1842d91fbd0ce804",
+    "NEXT_PUBLIC_API_URL": "https://api.recoder.xyz",
+    "NEXT_PUBLIC_ENGINE_URL": "https://engine.recoder.xyz",
+    "NEXT_PUBLIC_WEB_URL": "https://app.recoder.xyz",
+    "NEXT_PUBLIC_CHAT_URL": "https://chat.recoder.xyz",
+    "DATABASE_URL": "postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+  },
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods", 
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ]
+}

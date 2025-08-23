@@ -26,10 +26,10 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      plan: profile.plan,
+      plan: profile.subscription_plan,
       subscription_status: profile.subscription_status,
-      subscription_ends_at: profile.subscription_ends_at,
-      usage_stats: profile.usage_stats,
+      subscription_ends_at: null, // This would come from subscription data
+      usage_stats: profile.quota,
       available_plans: [
         {
           name: 'FREE',
@@ -116,7 +116,7 @@ export async function PUT(request: NextRequest) {
     const profile = await userManager.getUserProfile(session.user.id);
     
     return NextResponse.json({
-      plan: profile?.plan,
+      plan: profile?.subscription_plan,
       subscription_status: profile?.subscription_status,
       changed_at: new Date().toISOString(),
       message: `Successfully upgraded to ${plan} plan`

@@ -5,11 +5,11 @@
  * the existing recoder.xyz CLI ecosystem and multi-AI capabilities.
  */
 
-import { getRecoderConfig, RecoderURLBuilder, RECODER_BRAND } from '../../assets/branding/config/domains';
+import { getRecoderConfig, RecoderURLBuilder, RECODER_BRAND } from './branding-config';
 
 // Import the centralized domain configuration
 const recoderConfig = getRecoderConfig();
-export const recoderURLs = new RecoderURLBuilder(recoderConfig);
+export const recoderURLs = new RecoderURLBuilder();
 
 /**
  * Web Platform Specific Configuration
@@ -109,8 +109,8 @@ export const WEB_PLATFORM_CONFIG = {
     
     // Real environment variables for generated code
     environmentVariables: {
-      'NEXT_PUBLIC_APP_URL': recoderURLs.web(),
-      'NEXT_PUBLIC_RECODER_API': recoderURLs.api(),
+      'NEXT_PUBLIC_APP_URL': recoderURLs.getWebURL(),
+      'NEXT_PUBLIC_RECODER_API': recoderURLs.getAPIURL(),
       // Note: Sensitive keys would be handled securely in production
     }
   },
