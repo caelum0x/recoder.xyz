@@ -55,38 +55,41 @@ export default function BillingPage() {
 
   const fetchPricingData = async () => {
     try {
-      // This would connect to the production engine billing API
-      const pricingResponse = await fetch('http://localhost:4567/api/billing/pricing');
-      const billingResponse = await fetch('http://localhost:4567/api/billing/subscription/current-user', {
+      // Connect to real backend API for billing data
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.recoder.xyz';
+      const pricingResponse = await fetch(`${apiBaseUrl}/api/billing/plans`);
+      const billingResponse = await fetch(`${apiBaseUrl}/api/billing/subscription/status`, {
         headers: {
-          'x-user-id': 'current-user',
-          'Authorization': 'Bearer ' + localStorage.getItem('authToken')
+          'Authorization': 'Bearer ' + localStorage.getItem('authToken'),
+          'Content-Type': 'application/json'
         }
       });
 
       if (pricingResponse.ok) {
         const pricingData = await pricingResponse.json();
-        setPricingTiers(pricingData.data || getMockPricingTiers());
+        setPricingTiers(pricingData.plans || getDodoPricingTiers());
       } else {
-        setPricingTiers(getMockPricingTiers());
+        console.warn('Failed to fetch pricing from API, using Dodo Pay plans');
+        setPricingTiers(getDodoPricingTiers());
       }
 
       if (billingResponse.ok) {
         const billingData = await billingResponse.json();
-        setBillingInfo(billingData.data);
+        setBillingInfo(billingData.subscription);
       } else {
-        setBillingInfo(getMockBillingInfo());
+        console.warn('Failed to fetch billing info from API, using default');
+        setBillingInfo(getDefaultBillingInfo());
       }
     } catch (error) {
       console.error('Billing fetch error:', error);
-      setPricingTiers(getMockPricingTiers());
-      setBillingInfo(getMockBillingInfo());
+      setPricingTiers(getDodoPricingTiers());
+      setBillingInfo(getDefaultBillingInfo());
     } finally {
       setLoading(false);
     }
   };
 
-  const getMockPricingTiers = (): PricingTier[] => [
+  const getDodoPricingTiers = (): PricingTier[] => [
     {
       id: 'free',
       name: 'Free',
@@ -94,7 +97,7 @@ export default function BillingPage() {
       currency: 'USD',
       billingCycle: 'forever',
       features: [
-        '5,000 lines of code generation',
+        '10k AI tokens per month',
         '100 API calls per month',
         '2 deployments per month',
         'Community support',
@@ -110,52 +113,52 @@ export default function BillingPage() {
       isEnterprise: false
     },
     {
-      id: 'professional',
-      name: 'Professional',
-      price: 29,
+      id: 'weekly',
+      name: 'Recoder Weekly',
+      price: 10,
       currency: 'USD',
-      billingCycle: 'monthly',
+      billingCycle: 'weekly',
       features: [
-        '100,000 lines of code generation',
-        '5,000 API calls per month',
-        '50 deployments per month',
-        'Priority support',
+        '500k AI tokens per week',
+        '5k API requests per week',
+        'Multi-provider AI access (Claude, Groq, Gemini)',
+        'Real-time collaboration',
+        'Basic support',
         'All templates',
-        'GitHub/GitLab integration',
-        'Advanced analytics'
-      ],
-      limits: {
-        codeGeneration: 100000,
-        apiCalls: 5000,
-        deployments: 50,
-        teamMembers: 5
-      },
-      isPopular: true,
-      isEnterprise: false
-    },
-    {
-      id: 'business',
-      name: 'Business',
-      price: 99,
-      currency: 'USD',
-      billingCycle: 'monthly',
-      features: [
-        '500,000 lines of code generation',
-        '25,000 API calls per month',
-        'Unlimited deployments',
-        '24/7 priority support',
-        'Custom templates',
-        'Team collaboration',
-        'Advanced security',
-        'SOC 2 compliance'
+        'GitHub integration'
       ],
       limits: {
         codeGeneration: 500000,
-        apiCalls: 25000,
-        deployments: -1,
-        teamMembers: 25
+        apiCalls: 5000,
+        deployments: 20,
+        teamMembers: 3
       },
       isPopular: false,
+      isEnterprise: false
+    },
+    {
+      id: 'monthly',
+      name: 'Recoder Monthly',
+      price: 20,
+      currency: 'USD',
+      billingCycle: 'monthly',
+      features: [
+        '2.5M AI tokens per month',
+        '25k API requests per month',
+        'Multi-provider AI access (Claude, Groq, Gemini)',
+        'Real-time collaboration',
+        'Priority support',
+        'Custom templates',
+        'Team collaboration',
+        'Advanced analytics'
+      ],
+      limits: {
+        codeGeneration: 2500000,
+        apiCalls: 25000,
+        deployments: 100,
+        teamMembers: 10
+      },
+      isPopular: true,
       isEnterprise: false
     },
     {
@@ -185,14 +188,14 @@ export default function BillingPage() {
     }
   ];
 
-  const getMockBillingInfo = (): BillingInfo => ({
-    currentTier: 'professional',
+  const getDefaultBillingInfo = (): BillingInfo => ({
+    currentTier: 'free',
     status: 'active',
-    nextBillingDate: '2024-09-20',
+    nextBillingDate: '',
     paymentMethod: {
-      type: 'Visa',
-      last4: '4242',
-      expiry: '12/26'
+      type: '',
+      last4: '',
+      expiry: ''
     },
     billingHistory: [
       {
