@@ -27,10 +27,10 @@ export {
   CodePatternDetector,
   PerformanceOptimizer,
   createWebAIAssistant
-} from '@recoder/web-ai-assistant';
+} from 'recoder-web-ai-assistant';
 
 // Platform-specific initialization
-import { createWebAIAssistant as createSharedAssistant } from '@recoder/web-ai-assistant';
+import { createWebAIAssistant as createSharedAssistant } from 'recoder-web-ai-assistant';
 import { unifiedWebAI } from '../unified-web-ai';
 
 /**
