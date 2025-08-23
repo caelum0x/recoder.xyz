@@ -368,7 +368,7 @@ export class OpenRouterService {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const endTime = Date.now();
     const latency = endTime - startTime;
 
@@ -390,7 +390,7 @@ export class OpenRouterService {
     return {
       success: true,
       content,
-      model: data.model || model,
+      model: (data as any).model || model,
       usage: {
         promptTokens: usage.prompt_tokens,
         completionTokens: usage.completion_tokens,

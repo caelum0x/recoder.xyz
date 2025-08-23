@@ -1,42 +1,22 @@
 {
-  "version": 2,
-  "name": "recoder-chat-platform",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
+  "buildCommand": "tsx lib/db/migrate && next build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm ci --force",
   "env": {
-    "NEXTAUTH_URL": "@nextauth_url_chat",
-    "NEXTAUTH_SECRET": "@nextauth_secret",
-    "DATABASE_URL": "@database_url_chat",
-    "ANTHROPIC_API_KEY": "@anthropic_api_key",
-    "GROQ_API_KEY": "@groq_api_key",
-    "GOOGLE_API_KEY": "@google_api_key",
-    "OPENAI_API_KEY": "@openai_api_key",
-    "XAI_API_KEY": "@xai_api_key"
+    "NODE_ENV": "production",
+    "NEXTAUTH_URL": "https://chat.recoder.xyz",
+    "AUTH_SECRET": "bb3be4bcc274377e8cc42c190f8eed10df5441d4308ad53045ff01ab5119177f",
+    "NEXT_PUBLIC_API_URL": "https://api.recoder.xyz",
+    "NEXT_PUBLIC_ENGINE_URL": "https://engine.recoder.xyz",
+    "DATABASE_URL": "postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+    "POSTGRES_URL": "postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+    "ANTHROPIC_API_KEY": "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",
+    "GROQ_API_KEY": "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",
+    "GOOGLE_API_KEY": "AIzaSyC4nq9suWOt1qQ2SCL4b1wBekMEjBD5Rs4"
   },
   "build": {
     "env": {
-      "SKIP_ENV_VALIDATION": "1"
+      "NODE_ENV": "production"
     }
-  },
-  "functions": {
-    "app/api/**/*.ts": {
-      "maxDuration": 60
-    }
-  },
-  "regions": ["iad1"],
-  "framework": "nextjs",
-  "installCommand": "pnpm install",
-  "buildCommand": "pnpm build",
-  "outputDirectory": ".next",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
-  "rewrites": [
-    {
-      "source": "/chat/:path*",
-      "destination": "https://chat.recoder.xyz/:path*"
-    }
-  ]
+  }
 }
