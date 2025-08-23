@@ -147,7 +147,14 @@
       "Bash(PORT=3010 npm run dev)",
       "Bash(ANTHROPIC_API_KEY=sk-ant-api03-test npx tsx src/index.ts auth --help)",
       "Bash(PRODUCTION_ENGINE_URL=http://localhost:5678 node dist/packages/cli/src/index.js --help)",
-      "Bash(NODE_ENV=production npm run dev)"
+      "Bash(NODE_ENV=production npm run dev)",
+      "Bash(NODE_ENV=production PORT=3003 npm start)",
+      "Bash(PORT=4567 npm start)",
+      "Bash(PORT=3001 npm run dev)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx vercel:*)"
     ],
     "deny": []
   }

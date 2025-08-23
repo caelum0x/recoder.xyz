@@ -1,6 +1,6 @@
 {
   "name": "recoder-cli-router",
-  "version": "2.2.0",
+  "version": "2.3.1",
   "description": "Route Recoder CLI requests to different LLM providers including Kimi K2, Qwen 3, and DeepSeek R1",
   "bin": {
     "rcr": "dist/cli.js",

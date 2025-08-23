@@ -53,12 +53,15 @@ export const authOptions: NextAuthOptions = {
         ...session,
         accessToken: token.accessToken,
         userId: token.userId,
+        user: {
+          ...session.user,
+          id: token.userId as string,
+        },
       };
     },
   },
   pages: {
     signIn: '/auth/signin',
-    signUp: '/auth/signup',
   },
   session: {
     strategy: 'jwt',
