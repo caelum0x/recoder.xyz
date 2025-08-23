@@ -1,5 +1,5 @@
 {
-  "name": "recoder-web-ai-assistant",
+  "name": "@recoder/web-ai-assistant",
   "version": "1.0.0",
   "description": "Advanced AI assistant for web development with intelligent completion, refactoring, and analysis",
   "main": "dist/index.js",
