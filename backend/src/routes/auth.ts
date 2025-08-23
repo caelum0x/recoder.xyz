@@ -19,8 +19,7 @@ import {
   authRateLimit,
   handleAuthValidationErrors,
   logSecurityEvent,
-  UserRole,
-  AuthenticatedRequest
+  UserRole
 } from '../middleware/auth';
 
 const router = Router();
@@ -320,7 +319,7 @@ router.post('/refresh',
  * @desc Get current user profile
  * @access Protected
  */
-router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
@@ -388,7 +387,7 @@ router.put('/update-profile',
       .withMessage('Please provide a valid email address')
   ],
   handleAuthValidationErrors,
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const { name, email } = req.body;
       const updateData: any = {};
@@ -465,7 +464,7 @@ router.post('/change-password',
   authenticate,
   authValidation.changePassword,
   handleAuthValidationErrors,
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const { currentPassword, newPassword } = req.body;
 
@@ -486,7 +485,7 @@ router.post('/change-password',
       const currentPasswordValid = await bcrypt.compare(currentPassword, user.password);
 
       if (!currentPasswordValid) {
-        logSecurityEvent('password_change_invalid_current', req as AuthenticatedRequest);
+        logSecurityEvent('password_change_invalid_current', req as Request);
 
         return res.status(401).json({
           success: false,
@@ -538,14 +537,14 @@ router.post('/change-password',
  * @desc Logout user (invalidate tokens)
  * @access Protected
  */
-router.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/logout', authenticate, async (req: Request, res: Response) => {
   try {
     // In a production system, you would:
     // 1. Add the token to a blacklist in Redis
     // 2. Remove refresh token from database
     // 3. Clear session data
 
-    logSecurityEvent('user_logout', req as AuthenticatedRequest);
+    logSecurityEvent('user_logout', req as Request);
 
     logger.info('User logged out', {
       userId: req.user!.id,
@@ -577,7 +576,7 @@ router.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Resp
  * @desc Validate JWT token
  * @access Protected
  */
-router.post('/validate', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/validate', authenticate, async (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Token is valid',
