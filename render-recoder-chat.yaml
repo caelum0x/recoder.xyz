@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: recoder-chat
+    env: node
+    plan: free
+    rootDir: recoder-chat
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: NEXTAUTH_URL
+        value: https://chat.recoder.xyz
+      - key: AUTH_SECRET
+        value: bb3be4bcc274377e8cc42c190f8eed10df5441d4308ad53045ff01ab5119177f
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api.recoder.xyz
+      - key: NEXT_PUBLIC_ENGINE_URL
+        value: https://engine.recoder.xyz
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: POSTGRES_URL
+        value: postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: ANTHROPIC_API_KEY
+        value: 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
+      - key: GROQ_API_KEY
+        value: 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
+      - key: GOOGLE_API_KEY
+        value: AIzaSyC4nq9suWOt1qQ2SCL4b1wBekMEjBD5Rs4
+    domains:
+      - chat.recoder.xyz
