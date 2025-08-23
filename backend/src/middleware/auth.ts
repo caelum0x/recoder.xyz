@@ -48,23 +48,7 @@ export const ROLE_PERMISSIONS = {
   ]
 };
 
-// Extended interface for authenticated requests
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    subscriptionPlan?: string;
-    subscriptionStatus?: string;
-    role: UserRole;
-    isActive: boolean;
-    emailVerified: boolean;
-    permissions: string[];
-    sessionId?: string;
-    createdAt: Date;
-    updatedAt: Date;
-  };
-}
+// Use the global Express.Request extension instead of custom interface
 
 // Helper functions for authentication system
 // Note: authenticate will be defined after authenticateUser function
@@ -190,7 +174,7 @@ export const handleAuthValidationErrors = (req: Request, res: Response, next: Ne
 };
 
 // Security event logging
-export const logSecurityEvent = (event: string, req: AuthenticatedRequest) => {
+export const logSecurityEvent = (event: string, req: Request) => {
   logger.warn(`Security event: ${event}`, {
     userId: req.user?.id,
     email: req.user?.email,
@@ -200,25 +184,7 @@ export const logSecurityEvent = (event: string, req: AuthenticatedRequest) => {
   });
 };
 
-// Extend Express Request type globally
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email: string;
-        name: string;
-        subscriptionPlan?: string;
-        subscriptionStatus?: string;
-        role: string;
-        isActive: boolean;
-        emailVerified: boolean;
-        createdAt: Date;
-        updatedAt: Date;
-      };
-    }
-  }
-}
+// Use global Express types from types/index.ts
 
 /**
  * Authenticate user with JWT token

@@ -37,6 +37,8 @@ export interface UserProfile {
   role: string;
   isActive: boolean;
   emailVerified: boolean;
+  permissions?: string[];
+  sessionId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
