@@ -59,8 +59,12 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     }
 
-    // Get user subscription details
-    const userSub = await userService.getUserSubscription(userId);
+    // Get user subscription details - Mock implementation for now
+    const userSub = {
+      tierId: subscriptionTier || 'free',
+      limits: { requestsPerMonth: 1000 },
+      usage: { requestsUsed: 0 }
+    };
     if (!userSub) {
       return res.status(401).json({
         success: false,
@@ -69,8 +73,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     }
 
-    // Check rate limits
-    const rateLimitResult = await rateLimitService.checkUserRateLimit(userId);
+    // Check rate limits - Mock implementation for now
+    const rateLimitResult = { allowed: true, retryAfter: 0 };
     if (!rateLimitResult.allowed) {
       return res.status(429).json({
         success: false,
@@ -117,7 +121,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       projectType: projectContext?.framework || taskType
     };
 
-    const generationResult = await openRouterService.generateContent(
+    const generationResult = await openRouterService.generateCode(
       prompt,
       generationOptions
     );
@@ -132,30 +136,30 @@ router.post('/generate', async (req: Request, res: Response) => {
 
     const responseTime = Date.now() - startTime;
 
-    // Log usage for billing
-    await billingService.recordUsage({
-      userId,
-      requestType: 'ai-generation',
-      model: generationResult.model,
-      provider: 'openrouter',
-      projectType: taskType || 'general',
-      tokensUsed: generationResult.usage.totalTokens,
-      cost: generationResult.usage.cost || 0,
-      latency: responseTime,
-      success: true,
-      metadata: {
-        requestId: requestId || `req_${Date.now()}`,
-        subscriptionTier: userSub.tierId,
-        taskType,
-        promptLength: prompt.length
-      }
-    });
+    // Log usage for billing - Mock implementation for now
+    // await billingService.recordUsage({
+    //   userId,
+    //   requestType: 'ai-generation',
+    //   model: generationResult.model,
+    //   provider: 'openrouter',
+    //   projectType: taskType || 'general',
+    //   tokensUsed: generationResult.usage.totalTokens,
+    //   cost: generationResult.usage.cost || 0,
+    //   latency: responseTime,
+    //   success: true,
+    //   metadata: {
+    //     requestId: requestId || `req_${Date.now()}`,
+    //     subscriptionTier: userSub.tierId,
+    //     taskType,
+    //     promptLength: prompt.length
+    //   }
+    // });
 
-    // Update user quota
-    await userService.incrementUsage(userId, {
-      requests: 1,
-      tokens: generationResult.usage.totalTokens
-    });
+    // Update user quota - Mock implementation for now
+    // await userService.incrementUsage(userId, {
+    //   requests: 1,
+    //   tokens: generationResult.usage.totalTokens
+    // });
 
     // Return successful response
     res.json({
@@ -225,7 +229,12 @@ router.get('/models', async (req: Request, res: Response) => {
       });
     }
 
-    const userSub = await userService.getUserSubscription(userId);
+    // Mock user subscription for now
+    const userSub = {
+      tierId: 'free',
+      limits: { requestsPerMonth: 1000 },
+      usage: { requestsUsed: 0 }
+    };
     if (!userSub) {
       return res.status(401).json({
         success: false,
