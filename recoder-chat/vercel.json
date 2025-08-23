@@ -1,7 +1,7 @@
 {
-  "buildCommand": "tsx lib/db/migrate && next build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm ci --force",
+  "buildCommand": "next build",
+  "devCommand": "pnpm dev",
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "env": {
     "NODE_ENV": "production",
     "NEXTAUTH_URL": "https://chat.recoder.xyz",
