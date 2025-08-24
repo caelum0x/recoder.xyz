@@ -5,7 +5,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Platform = 'web' | 'mobile' | 'extension' | 'desktop';

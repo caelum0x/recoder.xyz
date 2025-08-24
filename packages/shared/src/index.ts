@@ -28,7 +28,7 @@ export { AuthClient } from './auth-client';
 export type {
   ModelInfo as RooModelInfo,
   ProviderSettings as RooProviderSettings
-} from '@roo-code/types';
+} from 'roo-code-types';
 
 // Constants with type aliases to avoid conflicts - export only what exists
 export {
@@ -52,6 +52,9 @@ export {
 } from './constants';
 
 export * from './utils';
+
+// Security exports
+export * from './security/soc2-compliance-scanner';
 
 // Version export
 export const VERSION = '1.0.0';

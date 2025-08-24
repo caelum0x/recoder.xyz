@@ -12,7 +12,6 @@ import { logger } from '../utils/logger';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
-import archiver from 'archiver';
 
 const router = express.Router();
 
@@ -186,7 +185,7 @@ router.post('/knowledge-bases/:id/upload',
   async (req, res) => {
     try {
       const { id: knowledgeBaseId } = req.params;
-      const files = req.files as Express.Multer.File[];
+      const files = req.files as any[];
 
       // Verify knowledge base ownership
       const knowledgeBase = await prisma.codebaseKnowledge.findFirst({

@@ -5,9 +5,32 @@
  */
 
 import express from 'express';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
+
+// Define compliance types locally until available in published package
+enum DataClassification {
+  PUBLIC = 'public',
+  INTERNAL = 'internal', 
+  CONFIDENTIAL = 'confidential',
+  RESTRICTED = 'restricted'
+}
+
+enum ProjectType {
+  WEB = 'web',
+  MOBILE = 'mobile', 
+  API = 'api',
+  DESKTOP = 'desktop',
+  CLI = 'cli'
+}
+
+enum IndustryStandard {
+  SOC2 = 'SOC2',
+  SOX = 'SOX',
+  GDPR = 'GDPR',
+  HIPAA = 'HIPAA', 
+  PCI_DSS = 'PCI_DSS'
+}
 import { realCodeGeneratorService } from '../../../production-engine/src/services/real-code-generator-service';
-import { DataClassification, ProjectType, IndustryStandard } from '@recoder/shared/src/security/soc2-compliance-scanner';
 
 const router = express.Router();
 
