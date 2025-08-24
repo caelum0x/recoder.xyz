@@ -83,7 +83,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Disable static generation for pages using auth context to avoid SSR issues  
+  // Netlify supports Next.js serverless functions
   output: 'standalone',
   trailingSlash: false,
   // Production optimizations
