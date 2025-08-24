@@ -12,7 +12,7 @@ import {
   createSecurityAuditor, 
   SecurityAuditConfig,
   ComprehensiveSecurityReport 
-} from '@recoder/security';
+} from 'recoder-security';
 import { backendClient } from '../services/backend-client';
 import fs from 'fs-extra';
 import path from 'path';

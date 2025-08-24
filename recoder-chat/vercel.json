@@ -1,7 +1,8 @@
 {
-  "buildCommand": "next build",
-  "devCommand": "pnpm dev",
-  "installCommand": "pnpm install --no-frozen-lockfile",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
   "env": {
     "NODE_ENV": "production",
     "NEXTAUTH_URL": "https://chat.recoder.xyz",
