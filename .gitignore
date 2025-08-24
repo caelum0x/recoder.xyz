@@ -244,3 +244,5 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
+# Local Netlify folder
+.netlify
