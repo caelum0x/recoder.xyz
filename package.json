@@ -168,7 +168,7 @@
   "devDependencies": {
     "@nx/eslint-plugin": "^21.4.0",
     "@types/glob": "^8.1.0",
-    "@types/node": "^20.10.0",
+    "@types/node": "^20.19.11",
     "@types/react": "^19.1.10",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",

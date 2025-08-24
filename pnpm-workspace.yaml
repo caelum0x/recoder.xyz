@@ -10,6 +10,12 @@ packages:
   
   # Backend services
   - "production-engine"
+  - "backend"
+  
+  # Web applications
+  - "recoder-web"
+  - "recoder-chat"
+  - "app"
   
   # Deployment and scripts
   - "scripts"
