@@ -1,125 +1,106 @@
-all services gaved error againg except production engine it got stucked 
-Create web service recoder-main-sgc4
-(deploy failed)
-Create web service recoder-backend-sgc4
-(deploy failed)
-Create web service recoder-production-engine-sgc4
-Create web service recoder-chat-sgc4
-(deploy failed)
-Create web service recoder-web-sgc4
-(deploy failed)
-main web -
-> recoder-main-app@1.0.0 build
-> next build
-⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
-   ▲ Next.js 15.5.0
-   Creating an optimized production build ...
- ✓ Compiled successfully in 11.4s
-   Skipping linting
-   Checking validity of types ...
-It looks like you're trying to use TypeScript but do not have the required package(s) installed.
-Please install @types/node by running:
-	npm install --save-dev @types/node
-If you are not trying to use TypeScript, please remove the tsconfig.json file from your package root (and any TypeScript files in your app and pages directories).
-Next.js build worker exited with code: 1 and signal: null
-==> Build failed 😞
-backend-
-found 0 vulnerabilities
-> backend@1.0.0 build
-> tsc
-src/routes/database-backup.ts(8,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/routes/enhanced-analytics.ts(8,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/routes/rag.ts(189,42): error TS2694: Namespace 'global.Express' has no exported member 'Multer'.
-src/routes/soc2-compliance.ts(8,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/services/analytics-service.ts(9,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/services/database-backup.ts(14,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/services/i18n-service.ts(8,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/services/responsive-design.ts(8,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/services/theme-preferences.ts(8,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-src/utils/logging.ts(5,24): error TS2307: Cannot find module '@recoder/shared' or its corresponding type declarations.
-../packages/shared/src/api.ts(6,27): error TS2307: Cannot find module '@anthropic-ai/sdk' or its corresponding type declarations.
-../packages/shared/src/logger.ts(1,21): error TS2307: Cannot find module 'winston' or its corresponding type declarations.
-../packages/shared/src/logger.ts(2,19): error TS2307: Cannot find module 'chalk' or its corresponding type declarations.
-../packages/shared/src/reasoning.ts(6,50): error TS2307: Cannot find module '@roo-code/types' or its corresponding type declarations.
-==> Build failed 😞
-==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
-recoder-chat-
-==> Running build command 'pnpm install --no-frozen-lockfile && pnpm build'...
-/opt/render/project/src/backend:
- ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND  Could not install from "/opt/render/project/src/roo-code-types" as it does not exist.
-This error happened while installing the dependencies of recoder-shared@1.0.0
-==> Build failed 😞
-==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
-recoder-web -
-==> Running build command 'pnpm install --no-frozen-lockfile && pnpm build'...
-/opt/render/project/src/backend:
- ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND  Could not install from "/opt/render/project/src/roo-code-types" as it does not exist.
-This error happened while installing the dependencies of recoder-shared@1.0.0
-==> Build failed 😞
-==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+The Netlify deploy errored, with the following guidance provided:
 
-PACKAGES
-10 packages
-Packages List
-recoder-cli-router
-Route Recoder CLI requests to different LLM providers including Kimi K2, Qwen 3, and DeepSeek R1
+  ### Diagnosis
+  [line 18](#L18) indicates a build failure during the stage of installing dependencies with a
+   non-zero exit code. The error is specifically related to version mismatches in the 
+  dependencies.
 
-recoder.xyz
-published 2.3.1 • 6 hours ago
-published version 2.3.1, 6 hours ago
-recoder-cli
-Recoder CLI - AI-powered development platform with production-ready code generation
+  ### Solution
+  The build is failing due to dependency version mismatches, specifically with the 
+  `@types/node` package. To resolve this issue:
+  1. Update the `@types/node` package version in the `package.json` to match the version in 
+  the `pnpm-lock.yaml` file.
+  2. Run the build again to ensure all dependencies match between the lockfile and the 
+  `package.json`.
 
-recoder.xyz
-published 1.0.1 • a day ago
-published version 1.0.1, a day ago
-recoder-shared
-Shared types, utilities, and configurations for Recoder
+  If the issue persists, ensure that the required package versions are correctly set and 
+  synchronized between the lockfile and the package.json file.
 
-recoder.xyz
-published 1.0.0 • a day ago
-published version 1.0.0, a day ago
-recoder-analytics
-Comprehensive analytics and monitoring for the Recoder.xyz ecosystem
+  The relevant error logs are:
 
-recoder.xyz
-published 1.0.0 • a day ago
-published version 1.0.0, a day ago
-recoder-intelligence
-Adaptive AI intelligence and learning layer for CodeCraft CLI
+  Line 0: build-image version: 9b5eda74bd0982ea06a6fdf058a78c4ba15c7b10 (noble)
+  Line 1: buildbot version: 9b5eda74bd0982ea06a6fdf058a78c4ba15c7b10
+  Line 2: Fetching cached dependencies
+  Line 3: Failed to fetch cache, continuing with build
+  Line 4: Starting to prepare the repo for build
+  Line 5: No cached dependencies found. Cloning fresh repo
+  Line 6: git clone --filter=blob:none https://github.com/caelum0x/recoder.xyz
+  Line 7: Preparing Git Reference refs/heads/main
+  Line 8: Starting to install dependencies
+  Line 9: v22.18.0 is already installed.
+  Line 10: Now using node v22.18.0 (npm v10.9.3)
+  Line 11: Enabling Node.js Corepack
+  Line 12: Started restoring cached build plugins
+  Line 13: Finished restoring cached build plugins
+  Line 14: Started restoring cached corepack dependencies
+  Line 15: Finished restoring cached corepack dependencies
+  Line 16: pnpm workspaces detected
+  Line 17: Installing npm packages using pnpm version 10.14.0
+  Line 18: Failed during stage 'Install dependencies': dependency_installation script returned
+   non-zero exit code: 1
+  Line 19: recoder-extension                        |  WARN  Unsupported engine: wanted: 
+  {"node":"20.19.2"} (current: {"node":"v22.18.0","p
+  Line 20: recoder-extension                        |  WARN  The field "pnpm.overrides" was 
+  found in /opt/build/repo/recoder-extension/pack
+  Line 21: Scope: all 22 workspace projects
+  Line 22:  ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because 
+  pnpm-lock.yaml is not up to date with <ROOT>/package.
+  Line 23: Note that in CI environments this setting is true by default. If you still need to 
+  run install in such cases, use "pnpm install 
+  Line 24:   Failure reason:
+  Line 25:   specifiers in the lockfile don't match specifiers in package.json:
+  * 1 dependencies were added: recoder-web-ai-assistant@^1.0.
+  Line 26: * 1 dependencies are mismatched:
+  Line 27:   - @types/node (lockfile: ^20.10.0, manifest: ^20.19.11)
+  Line 28: Error during pnpm install
+  Line 29: Failing build: Failed to install dependencies
+  Line 30: Finished processing build request in 14.52s 6:19:49 PM: build-image version: 
+  9b5eda74bd0982ea06a6fdf058a78c4ba15c7b10 (noble)
+  6:19:49 PM: buildbot version: 9b5eda74bd0982ea06a6fdf058a78c4ba15c7b10
+  6:19:50 PM: Fetching cached dependencies
+  6:19:50 PM: Failed to fetch cache, continuing with build
+  6:19:50 PM: Starting to prepare the repo for build
+  6:19:50 PM: No cached dependencies found. Cloning fresh repo
+  6:19:50 PM: git clone --filter=blob:none https://github.com/caelum0x/recoder.xyz
+  6:19:50 PM: Preparing Git Reference refs/heads/main
+  6:20:02 PM: Starting to install dependencies
+  6:20:02 PM: v22.18.0 is already installed.
+  6:20:03 PM: Now using node v22.18.0 (npm v10.9.3)
+  6:20:03 PM: Enabling Node.js Corepack
+  6:20:03 PM: Started restoring cached build plugins
+  6:20:03 PM: Finished restoring cached build plugins
+  6:20:03 PM: Started restoring cached corepack dependencies
+  6:20:03 PM: Finished restoring cached corepack dependencies
+  6:20:03 PM: pnpm workspaces detected
+  6:20:03 PM: Installing npm packages using pnpm version 10.14.0
+  6:20:04 PM: Failed during stage 'Install dependencies': dependency_installation script 
+  returned non-zero exit code: 1
+  6:20:04 PM: recoder-extension                        |  WARN  Unsupported engine: wanted: 
+  {"node":"20.19.2"} (current: {"node":"v22.18.0","pnpm":"10.14.0"})
+  6:20:04 PM: recoder-extension                        |  WARN  The field "pnpm.overrides" was
+   found in /opt/build/repo/recoder-extension/package.json. This will not take effect. You 
+  should configure "pnpm.overrides" at the root of the workspace instead.
+  6:20:04 PM: Scope: all 22 workspace projects
+  6:20:04 PM:  ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because 
+  pnpm-lock.yaml is not up to date with <ROOT>/package.json
+  6:20:04 PM: Note that in CI environments this setting is true by default. If you still need 
+  to run install in such cases, use "pnpm install --no-frozen-lockfile"
+  6:20:04 PM:   Failure reason:
+  6:20:04 PM:   specifiers in the lockfile don't match specifiers in package.json:
+  * 1 dependencies were added: recoder-web-ai-assistant@^1.0.0
+  6:20:04 PM: * 1 dependencies are mismatched:
+  6:20:04 PM:   - @types/node (lockfile: ^20.10.0, manifest: ^20.19.11)
+  6:20:04 PM: Error during pnpm install
+  6:20:04 PM: Failing build: Failed to install dependencies
+  6:20:04 PM: Finished processing build request in 14.52s
 
-recoder.xyz
-published 1.0.0 • a day ago
-published version 1.0.0, a day ago
-recoder-plugins
-Plugin system for Recoder.xyz extensibility
+⏺ Perfect! I can see the exact issue. The problem is with the pnpm lockfile being outdated and
+   dependency mismatches. Let me fix this immediately:
 
-recoder.xyz
-published 1.0.0 • a day ago
-published version 1.0.0, a day ago
-recoder-security
-Enterprise-grade security and compliance layer for CodeCraft CLI
-
-recoder.xyz
-published 1.0.0 • a day ago
-published version 1.0.0, a day ago
-roo-code-types
-First authenticate with NPM:
-
-recoder.xyz
-published 1.0.1 • a day ago
-published version 1.0.1, a day ago
-recoder-performance
-High-performance monitoring, caching, and optimization utilities for Recoder.xyz
-
-recoder.xyz
-published 1.0.0 • a day ago
-published version 1.0.0, a day ago
-recoder-web-ai-assistant
-Advanced AI assistant for web development with intelligent completion, refactoring, and analysis
-
-recoder.xyz
-published 1.0.0 • a day ago
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ > '/Users/arhansubasi/recoder.xyz/important-docs/errors.md' THESE ARE CURRENT ERRORS FIX THESE ONE BY ONE BY ERROR GIVING              │
-│   PROJECTS'/Users/arhansubasi/recoder.xyz/app'   
+  Update Todos
+  ⎿  ☐ Fix pnpm lockfile and dependency version mismatches      
+     ☐ Update @types/node version to match lockfile
+     ☐ Remove recoder-web-ai-assistant dependency causing issues
+     ☐ Regenerate pnpm-lock.yaml with correct versions
+     ☐ Test deployment after fixes
+     ☐ Deploy successfully to Netlify

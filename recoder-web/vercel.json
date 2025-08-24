@@ -1,8 +1,7 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm install --legacy-peer-deps && prisma generate && npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install --legacy-peer-deps",
+  "installCommand": "npm install",
+  "buildCommand": "npx prisma generate && npm run build",
   "env": {
     "NODE_ENV": "production",
     "NEXTAUTH_URL": "https://app.recoder.xyz",

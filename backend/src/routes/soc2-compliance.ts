@@ -1,11 +1,26 @@
 /**
- * SOC 2 Compliance API Routes
- * KILLER FEATURE: Enterprise compliance-as-a-service
+ * SOC 2 Compliance API Rou}
+import { realCodeGeneratorService } from '../../../production-engine/src/services/real-code-generator-service.js';
+
+const router = express.Router(); * KILLER FEATURE: Enterprise compliance-as-a-service
  * Cursor/Copilot have ZERO compliance capabilities - we dominate enterprise sales!
  */
 
 import express from 'express';
 import { Logger } from 'recoder-shared';
+
+// Define interfaces for compliance report structure
+interface ComplianceSummary {
+  overallScore: number;
+  criticalViolations: number;
+  highViolations: number;
+  riskLevel: string;
+}
+
+interface ComplianceReport {
+  summary: ComplianceSummary;
+  violations: any[];
+}
 
 // Define compliance types locally until available in published package
 enum DataClassification {
@@ -30,7 +45,7 @@ enum IndustryStandard {
   HIPAA = 'HIPAA', 
   PCI_DSS = 'PCI_DSS'
 }
-import { realCodeGeneratorService } from '../../../production-engine/src/services/real-code-generator-service';
+import { realCodeGeneratorService } from '../../../production-engine/dist/services/real-code-generator-service.js';
 
 const router = express.Router();
 
@@ -113,11 +128,11 @@ router.post('/scan-project', async (req, res) => {
       success: true,
       scanResults: Array.from(scanResults.entries()).map(([path, report]) => ({
         filePath: path,
-        complianceScore: report.summary.overallScore,
-        violations: report.violations.length,
-        criticalViolations: report.summary.criticalViolations,
-        highViolations: report.summary.highViolations,
-        riskLevel: report.summary.riskLevel
+        complianceScore: (report as ComplianceReport).summary.overallScore,
+        violations: (report as ComplianceReport).violations.length,
+        criticalViolations: (report as ComplianceReport).summary.criticalViolations,
+        highViolations: (report as ComplianceReport).summary.highViolations,
+        riskLevel: (report as ComplianceReport).summary.riskLevel
       })),
       dashboard,
       timestamp: new Date().toISOString()
@@ -269,7 +284,7 @@ router.get('/certificate-eligibility', async (req, res) => {
     }
 
     const scanResults = await realCodeGeneratorService.scanProjectCompliance(projectPath as string);
-    const reports = Array.from(scanResults.values());
+    const reports = Array.from(scanResults.values()) as ComplianceReport[];
 
     const totalCritical = reports.reduce((sum, r) => sum + r.summary.criticalViolations, 0);
     const totalHigh = reports.reduce((sum, r) => sum + r.summary.highViolations, 0);
