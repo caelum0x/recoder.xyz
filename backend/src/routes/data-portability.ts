@@ -6,7 +6,7 @@
 
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { dataPortabilityService, ExportRequest, ImportRequest } from '../services/data-portability';
 import { authenticateUser, requireSubscription } from '../middleware/auth';
 import { apiLimiter } from '../middleware/rate-limit';

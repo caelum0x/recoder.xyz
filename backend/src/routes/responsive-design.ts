@@ -6,7 +6,7 @@
 
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { responsiveDesignService, DeviceAnalytics, ResponsiveConfig, DeviceType, Breakpoint } from '../services/responsive-design';
 import { authenticateUser, requireSubscription } from '../middleware/auth';
 import { apiLimiter } from '../middleware/rate-limit';

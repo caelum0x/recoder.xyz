@@ -5,7 +5,7 @@
  */
 
 import express from 'express';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { CollaborationService } from '../../shared/src/collaboration';
 
 const router = express.Router();

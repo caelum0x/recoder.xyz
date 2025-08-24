@@ -2,7 +2,7 @@
  * Logging utilities for the backend
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 // Export logging functions
 export function logInfo(message: string, meta?: any) {

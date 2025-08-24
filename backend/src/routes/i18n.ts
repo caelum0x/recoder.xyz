@@ -6,7 +6,7 @@
 
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { i18nService, SupportedLocale, TranslationEntry, UserLanguagePreference } from '../services/i18n-service';
 import { authenticateUser, requireSubscription } from '../middleware/auth';
 import { apiLimiter } from '../middleware/rate-limit';
