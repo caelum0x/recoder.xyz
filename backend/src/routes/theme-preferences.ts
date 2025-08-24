@@ -6,7 +6,7 @@
 
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { themePreferencesService, ThemePreferences, ThemeMode, Platform } from '../services/theme-preferences';
 import { authenticateUser, requireSubscription } from '../middleware/auth';
 import { apiLimiter } from '../middleware/rate-limit';

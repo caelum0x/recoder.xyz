@@ -5,7 +5,7 @@
  */ 
 
 import { prisma } from '../database/prisma';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export type DeviceType = 'mobile' | 'tablet' | 'desktop' | 'tv' | 'watch';
 export type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';

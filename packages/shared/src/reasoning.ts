@@ -3,7 +3,7 @@
  */
 
 // Import the actual types from @roo-code/types for compatibility
-import type { ModelInfo, ProviderSettings } from '@roo-code/types';
+import type { ModelInfo, ProviderSettings } from 'roo-code-types';
 
 export const DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS = 16_384
 export const DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS = 8_192

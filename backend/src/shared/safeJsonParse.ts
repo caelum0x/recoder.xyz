@@ -2,4 +2,4 @@
  * Re-export shared safeJsonParse utility for backend compatibility
  */
 
-export * from '@recoder/shared/src/safeJsonParse';
+export * from 'recoder-shared';

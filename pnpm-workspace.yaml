@@ -3,8 +3,6 @@ packages:
   - "packages/*"
   
   # Platform applications  
-  - "recoder-web"
-  - "recoder-chat"
   - "recoder-chat-mobile"
   - "recoder-desktop"
   - "recoder-extension"
