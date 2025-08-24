@@ -5,9 +5,8 @@
 
 import { commercialAIHubService } from './commercial-ai-hub-service';
 import { logger } from '../utils/logger';
-import { writeFile, mkdir } from 'fs/promises';
-import { join, dirname } from 'path';
-import { existsSync } from 'fs';
+import * as fs from 'fs';
+import * as path from 'path';
 import { securityIntegrationService, SecurityValidationResult } from './security-integration';
 // import { DataClassification, IndustryStandard, ProjectType } from 'recoder-shared/security/soc2-compliance-scanner';
 import { ComplianceIntegrationService, ComplianceConfig, ComplianceResult, DataClassification, IndustryStandard, ProjectType } from '../compliance/compliance-integration';
@@ -510,15 +509,15 @@ Start with the main application files, then configuration, then tests and docume
 
   private async writeGeneratedFiles(files: GeneratedFile[], outputPath: string): Promise<void> {
     for (const file of files) {
-      const fullPath = join(outputPath, file.path);
-      const dir = dirname(fullPath);
+      const fullPath = path.join(outputPath, file.path);
+      const dir = path.dirname(fullPath);
       
       // Create directory if it doesn't exist
-      if (!existsSync(dir)) {
-        await mkdir(dir, { recursive: true });
+      if (!fs.existsSync(dir)) {
+        await fs.promises.mkdir(dir, { recursive: true });
       }
       
-      await writeFile(fullPath, file.content, 'utf-8');
+      await fs.promises.writeFile(fullPath, file.content, 'utf-8');
       logger.info(`Generated file: ${fullPath}`);
     }
   }

@@ -40,7 +40,7 @@ import {
   AIPromptSanitizer, 
   CodeVulnerabilityScanner, 
   SecurityMonitor 
-} from '@recoder/security';
+} from 'recoder-security';
 import { 
   UsageAnalytics, 
   QualityAssessor, 
@@ -48,7 +48,7 @@ import {
   initializeMonitoring,
   getSystemHealthSummary,
   RecoderAnalytics
-} from '@recoder/analytics';
+} from 'recoder-analytics';
 
 // Import commands
 import { createOllamaCommand } from './commands/ollama';
