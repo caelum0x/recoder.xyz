@@ -6,7 +6,7 @@
 
 import { PostHog } from 'posthog-node';
 import { PrismaClient } from '@prisma/client';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { EventEmitter } from 'events';
 
 export interface AnalyticsEvent {

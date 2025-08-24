@@ -5,7 +5,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { promises as fs } from 'fs';
 import path from 'path';
 

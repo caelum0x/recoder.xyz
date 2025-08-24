@@ -24,7 +24,7 @@ export * from './file-utils';
 export type {
   ModelInfo as RooModelInfo,
   ProviderSettings as RooProviderSettings
-} from '@roo-code/types';
+} from 'roo-code-types';
 
 // Constants with type aliases to avoid conflicts - export only what exists
 export {
