@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   output: 'standalone',
   experimental: {
-    ppr: true,
+    // ppr: true, // Disabled for deployment compatibility
   },
   images: {
     remotePatterns: [
