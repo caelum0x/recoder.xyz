@@ -9,7 +9,6 @@ packages:
   - "browser-extension"
   
   # Backend services
-  - "backend"
   - "production-engine"
   
   # Deployment and scripts
