@@ -1,9 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Logger = void 0;
-const tslib_1 = require("tslib");
-const winston_1 = tslib_1.__importDefault(require("winston"));
-const chalk_1 = tslib_1.__importDefault(require("chalk"));
+const winston_1 = __importDefault(require("winston"));
+const chalk_1 = __importDefault(require("chalk"));
 // Create logger instance
 const logger = winston_1.default.createLogger({
     level: process.env['LOG_LEVEL'] || 'info',
@@ -66,4 +68,3 @@ class Logger {
     }
 }
 exports.Logger = Logger;
-//# sourceMappingURL=logger.js.map
