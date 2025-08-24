@@ -9,8 +9,8 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
 import { securityIntegrationService, SecurityValidationResult } from './security-integration';
-import { DataClassification, IndustryStandard, ProjectType } from '../../../packages/shared/src/security/soc2-compliance-scanner';
-import { ComplianceIntegrationService, ComplianceConfig, ComplianceResult } from '../compliance/compliance-integration';
+// import { DataClassification, IndustryStandard, ProjectType } from 'recoder-shared/security/soc2-compliance-scanner';
+import { ComplianceIntegrationService, ComplianceConfig, ComplianceResult, DataClassification, IndustryStandard, ProjectType } from '../compliance/compliance-integration';
 
 // Define GeneratedCodeContext interface specifically for this service
 export interface GeneratedCodeContext {
@@ -275,7 +275,15 @@ CRITICAL REQUIREMENTS:
 - Add real-time inference capabilities
 - Implement model monitoring and performance tracking
 - Include proper vector databases and embeddings
-- Add comprehensive AI safety measures`
+- Add comprehensive AI safety measures`,
+
+      payments: `PAYMENTS APPLICATION REQUIREMENTS:
+- Implement secure payment processing with Stripe/PayPal
+- Include real transaction handling and refunds
+- Add proper payment validation and security measures
+- Implement subscription and recurring payments
+- Include comprehensive payment logging and monitoring
+- Add PCI compliance and security standards`
     };
 
     const specificRequirements = typeSpecificRequirements[request.type] || '';
@@ -584,8 +592,8 @@ npm run build
         // Determine project type from request type
         const projectTypeMap: Record<string, ProjectType> = {
           'web': ProjectType.WEB_APPLICATION,
-          'backend': ProjectType.API_SERVICE,
-          'blockchain': ProjectType.FINANCIAL_SYSTEM,
+          //'backend': ProjectType.API_SERVICE,
+          //'//blockchain': ProjectType.FINANCIAL_SYSTEM,
           'payments': ProjectType.PAYMENT_SYSTEM,
           'mobile': ProjectType.WEB_APPLICATION,
           'ai': ProjectType.WEB_APPLICATION
