@@ -28,7 +28,7 @@
     "postinstall": "prisma generate",
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "build:analyze": "ANALYZE=true next build",
     "build:production": "NODE_ENV=production prisma generate && prisma migrate deploy && next build",
     "start": "next start",

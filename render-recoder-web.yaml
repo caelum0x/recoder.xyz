@@ -29,5 +29,7 @@ services:
         value: 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
       - key: GOOGLE_API_KEY
         value: AIzaSyC4nq9suWOt1qQ2SCL4b1wBekMEjBD5Rs4
+      - key: PRISMA_CLI_QUERY_ENGINE_TYPE
+        value: binary
     domains:
       - web.recoder.xyz
