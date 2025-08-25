@@ -82,3 +82,19 @@ export const register = async (
     return { status: 'failed' };
   }
 };
+
+export const signInAsGuest = async (): Promise<{ success: boolean; error?: string }> => {
+  try {
+    await signIn('guest', {
+      redirect: false,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Guest signin error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to sign in as guest' 
+    };
+  }
+};
