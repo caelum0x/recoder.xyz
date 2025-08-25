@@ -51,8 +51,9 @@ export class DodoPayments {
     this.baseUrl = process.env.DODO_API_BASE_URL || 'https://api.dodopayments.com';
     this.webhookSecret = process.env.DODO_WEBHOOK_SECRET!;
 
-    if (!this.apiKey) {
-      throw new Error('DODO_PAYMENTS_API_KEY is required');
+    // Only require API key in production runtime, not during build
+    if (!this.apiKey && process.env.NODE_ENV === 'production' && typeof window === 'undefined') {
+      console.warn('DODO_PAYMENTS_API_KEY not found - payment features will be disabled');
     }
   }
 

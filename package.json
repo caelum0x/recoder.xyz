@@ -199,7 +199,7 @@
     "postcss": "^8.4.31",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recoder-cli-router": "^2.0.0",
+    "recoder-cli-router": "^2.3.1",
     "recoder-web-ai-assistant": "^1.0.0",
     "redis": "^5.7.0",
     "tailwind-merge": "^2.5.2",

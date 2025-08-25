@@ -11,7 +11,6 @@ import LoadingButton from "@/components/loading-button";
 import Spinner from "@/components/spinner";
 import bgImg from "./halo.png";
 import * as Select from "@radix-ui/react-select";
-import assert from "assert";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -186,34 +185,48 @@ export default function Home() {
               startTransition(async () => {
                 const { prompt, model, quality } = Object.fromEntries(formData);
 
-                assert.ok(typeof prompt === "string");
-                assert.ok(typeof model === "string");
-                assert.ok(quality === "high" || quality === "low");
+                // Validate form data with proper error handling
+                if (typeof prompt !== "string" || !prompt.trim()) {
+                  console.error("Invalid prompt");
+                  return;
+                }
+                if (typeof model !== "string") {
+                  console.error("Invalid model");
+                  return;
+                }
+                if (quality !== "high" && quality !== "low") {
+                  console.error("Invalid quality");
+                  return;
+                }
 
-                const { chatId, lastMessageId } = await createChat(
-                  prompt,
-                  model,
-                  quality,
-                  screenshotUrl,
-                );
+                try {
+                  const { chatId, lastMessageId } = await createChat(
+                    prompt,
+                    model,
+                    quality,
+                    screenshotUrl,
+                  );
 
-                const streamPromise = fetch(
-                  "/api/get-next-completion-stream-promise",
-                  {
-                    method: "POST",
-                    body: JSON.stringify({ messageId: lastMessageId, model }),
-                  },
-                ).then((res) => {
-                  if (!res.body) {
-                    throw new Error("No body on response");
-                  }
-                  return res.body;
-                });
+                  const streamPromise = fetch(
+                    "/api/get-next-completion-stream-promise",
+                    {
+                      method: "POST",
+                      body: JSON.stringify({ messageId: lastMessageId, model }),
+                    },
+                  ).then((res) => {
+                    if (!res.body) {
+                      throw new Error("No body on response");
+                    }
+                    return res.body;
+                  });
 
-                startTransition(() => {
-                  setStreamPromise(streamPromise);
-                  router.push(`/chats/${chatId}`);
-                });
+                  startTransition(() => {
+                    setStreamPromise(streamPromise);
+                    router.push(`/chats/${chatId}`);
+                  });
+                } catch (error) {
+                  console.error("Failed to create chat:", error);
+                }
               });
             }}
           >

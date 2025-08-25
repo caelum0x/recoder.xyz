@@ -14,7 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('User', {
-  id: text('id').primaryKey().notNull(),
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
   email: varchar('email', { length: 64 }).notNull(),
   password: varchar('password', { length: 64 }),
   name: varchar('name', { length: 255 }),
@@ -179,7 +179,7 @@ export type Stream = InferSelectModel<typeof stream>;
 // OAuth Tables for NextAuth (matching existing database structure)
 export const account = pgTable('Account', {
   id: text('id').primaryKey().notNull(),
-  userId: text('userId')
+  userId: uuid('userId')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
   type: text('type').notNull(),
@@ -201,7 +201,7 @@ export type Account = InferSelectModel<typeof account>;
 export const session = pgTable('Session', {
   id: text('id').primaryKey().notNull(),
   sessionToken: text('sessionToken').notNull().unique(),
-  userId: text('userId')
+  userId: uuid('userId')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
   expires: timestamp('expires').notNull(),

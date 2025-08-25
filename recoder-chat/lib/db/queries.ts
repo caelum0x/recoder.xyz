@@ -58,7 +58,6 @@ export async function createUser(email: string, password: string) {
 
   try {
     return await db.insert(user).values({ 
-      id: generateUUID(),
       email, 
       password: hashedPassword 
     });
@@ -73,7 +72,6 @@ export async function createGuestUser() {
 
   try {
     return await db.insert(user).values({ 
-      id: generateUUID(),
       email, 
       password 
     }).returning({
