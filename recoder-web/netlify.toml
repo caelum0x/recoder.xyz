@@ -1,10 +1,11 @@
 [build]
-  command = "npm install --legacy-peer-deps && npm run build"
-  publish = ".next"
+  command = "npm install && npm run build"
+  # publish directory is managed by @netlify/plugin-nextjs - do not specify it
   
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
+  NEXT_TELEMETRY_DISABLED = "1"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
@@ -13,11 +14,8 @@
   command = "npm run dev"
   port = 3000
 
-# Redirect all routes to Next.js
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Next.js routing handled by the runtime
+# No custom redirects needed - let @netlify/plugin-nextjs handle it
 
 # Security headers
 [[headers]]
