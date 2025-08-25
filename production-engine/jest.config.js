@@ -3,6 +3,10 @@ module.exports = {
   preset: '../jest.preset.js',
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  moduleNameMapper: {
+    '^@roo-code/types$': '<rootDir>/../packages/roo-code-types/src/index.ts',
+    '^@roo-code/(.*)$': '<rootDir>/../packages/roo-code-types/src/$1'
+  },
   testMatch: [
     '<rootDir>/src/**/__tests__/**/*.{js,ts}',
     '<rootDir>/src/**/*.{test,spec}.{js,ts}'

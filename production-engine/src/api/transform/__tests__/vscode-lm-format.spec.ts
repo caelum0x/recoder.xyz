@@ -1,15 +1,18 @@
 // npx vitest run src/api/transform/__tests__/vscode-lm-format.spec.ts
 
+import { describe, it, expect } from '@jest/globals';
 import { Anthropic } from "@anthropic-ai/sdk"
 
 import { convertToVsCodeLmMessages, convertToAnthropicRole } from "../vscode-lm-format"
 
-// Mock crypto using Vitest
-vitest.stubGlobal("crypto", {
-	randomUUID: () => "test-uuid",
+// Mock crypto for Jest
+Object.defineProperty(global, 'crypto', {
+	value: {
+		randomUUID: () => "test-uuid",
+	},
 })
 
-// Define types for our mocked classes
+// Define types for our mocked classes (matching the global mock)
 interface MockLanguageModelTextPart {
 	type: "text"
 	value: string
@@ -27,55 +30,6 @@ interface MockLanguageModelToolResultPart {
 	toolUseId: string
 	parts: MockLanguageModelTextPart[]
 }
-
-// Mock vscode namespace
-vitest.mock("vscode", () => {
-	const LanguageModelChatMessageRole = {
-		Assistant: "assistant",
-		User: "user",
-	}
-
-	class MockLanguageModelTextPart {
-		type = "text"
-		constructor(public value: string) {}
-	}
-
-	class MockLanguageModelToolCallPart {
-		type = "tool_call"
-		constructor(
-			public callId: string,
-			public name: string,
-			public input: any,
-		) {}
-	}
-
-	class MockLanguageModelToolResultPart {
-		type = "tool_result"
-		constructor(
-			public toolUseId: string,
-			public parts: MockLanguageModelTextPart[],
-		) {}
-	}
-
-	return {
-		LanguageModelChatMessage: {
-			Assistant: vitest.fn((content) => ({
-				role: LanguageModelChatMessageRole.Assistant,
-				name: "assistant",
-				content: Array.isArray(content) ? content : [new MockLanguageModelTextPart(content)],
-			})),
-			User: vitest.fn((content) => ({
-				role: LanguageModelChatMessageRole.User,
-				name: "user",
-				content: Array.isArray(content) ? content : [new MockLanguageModelTextPart(content)],
-			})),
-		},
-		LanguageModelChatMessageRole,
-		LanguageModelTextPart: MockLanguageModelTextPart,
-		LanguageModelToolCallPart: MockLanguageModelToolCallPart,
-		LanguageModelToolResultPart: MockLanguageModelToolResultPart,
-	}
-})
 
 describe("convertToVsCodeLmMessages", () => {
 	it("should convert simple string messages", () => {
