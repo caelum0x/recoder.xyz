@@ -83,8 +83,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Netlify deployment configuration with server-side rendering
-  output: undefined, // Use default SSR
+  // Netlify deployment configuration - force standalone for proper function generation
+  output: "standalone",
   trailingSlash: false,
   // Production optimizations
   poweredByHeader: false,
