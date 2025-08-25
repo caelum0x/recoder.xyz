@@ -8,7 +8,6 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { signIn, getSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -185,7 +184,9 @@ function SignInForm() {
                 variant="outline" 
                 className="w-full" 
                 size="lg" 
-                onClick={() => signIn('github')}
+                onClick={() => {
+                  window.location.href = `https://github.com/login/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_GITHUB_ID || 'Ov23liVrw6X0xO8m2jPy'}&redirect_uri=${encodeURIComponent('https://recoder.xyz/api/auth/callback/github')}&scope=user:email`;
+                }}
               >
                 <Github className="w-4 h-4 mr-2" />
                 Continue with GitHub
@@ -195,7 +196,11 @@ function SignInForm() {
                 variant="outline" 
                 className="w-full" 
                 size="lg" 
-                onClick={() => signIn('google')}
+                onClick={() => {
+                  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com';
+                  const redirectUri = encodeURIComponent('https://recoder.xyz/api/auth/callback/google');
+                  window.location.href = `https://accounts.google.com/oauth/authorize?client_id=${googleClientId}&redirect_uri=${redirectUri}&scope=openid%20email%20profile&response_type=code`;
+                }}
               >
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
