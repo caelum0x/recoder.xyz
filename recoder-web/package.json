@@ -25,7 +25,7 @@
   ],
   "private": true,
   "scripts": {
-    "postinstall": "prisma generate",
+    "postinstall": "echo 'Skipping prisma generate - no schema found'",
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
     "build": "next build",
