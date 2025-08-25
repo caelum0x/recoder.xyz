@@ -29,15 +29,15 @@
     "target": "ES2017"
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "next-env.d.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "**/*.spec.ts",
-    "**/*.test.ts", 
+    "**/*.test.ts",
     "**/__tests__/**/*",
     "api/providers/**/*",
     "lib/api/**/*"
