@@ -1,6 +1,11 @@
 /**
  * Production Engine Server
- * Real code generation and validation service
+ * Real codeapp.use(cors({
+  origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+  credentials: true
+}));
+app.use(compression() as express.RequestHandler);
+app.use(express.json({ limit: '50mb' }));ation and validation service
  */
 
 // Load environment variables first
@@ -46,7 +51,7 @@ app.use(cors({
   origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
   credentials: true
 }));
-app.use(compression());
+app.use(compression() as any);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
