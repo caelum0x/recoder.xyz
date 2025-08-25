@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "installCommand": "npm install",
+  "installCommand": "rm -f package-lock.json && npm install",
   "buildCommand": "npx prisma generate && npm run build",
   "env": {
     "NODE_ENV": "production",

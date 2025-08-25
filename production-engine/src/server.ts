@@ -395,6 +395,154 @@ app.get('/api/status', async (req, res) => {
   }
 });
 
+// Compliance API endpoints for backend service integration
+app.post('/api/compliance/validate', async (req: express.Request, res: express.Response) => {
+  try {
+    const { files, request } = req.body;
+
+    if (!files || !request) {
+      return res.status(400).json({
+        success: false,
+        error: 'Files and request are required for compliance validation'
+      });
+    }
+
+    logger.info('Processing compliance validation request', {
+      filesCount: files.length,
+      requestType: request.type
+    });
+
+    // Use the realCodeGeneratorService to validate compliance
+    const complianceResult = await realCodeGeneratorService['validateCompliance'](files, request);
+
+    res.json({
+      success: true,
+      complianceValidation: complianceResult.complianceValidation,
+      blockedByCompliance: complianceResult.blockedByCompliance,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    logger.error('Compliance validation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Compliance validation failed',
+      details: error.message
+    });
+  }
+});
+
+app.post('/api/compliance/scan-project', async (req: express.Request, res: express.Response) => {
+  try {
+    const { projectPath } = req.body;
+
+    if (!projectPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project path is required for compliance scanning'
+      });
+    }
+
+    logger.info('Processing project compliance scan', { projectPath });
+
+    const scanResults = await realCodeGeneratorService.scanProjectCompliance(projectPath);
+
+    res.json({
+      success: true,
+      scanResults: Array.from(scanResults.entries()),
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    logger.error('Project compliance scan failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Project compliance scan failed',
+      details: error.message
+    });
+  }
+});
+
+app.post('/api/compliance/dashboard', async (req: express.Request, res: express.Response) => {
+  try {
+    const { projectPath } = req.body;
+
+    if (!projectPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project path is required for compliance dashboard'
+      });
+    }
+
+    logger.info('Generating compliance dashboard', { projectPath });
+
+    const dashboard = await realCodeGeneratorService.generateComplianceDashboard(projectPath);
+
+    res.json({
+      success: true,
+      dashboard,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    logger.error('Compliance dashboard generation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Compliance dashboard generation failed',
+      details: error.message
+    });
+  }
+});
+
+app.get('/api/compliance/config', async (req: express.Request, res: express.Response) => {
+  try {
+    const configuration = realCodeGeneratorService.getComplianceConfiguration();
+
+    res.json({
+      success: true,
+      configuration,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    logger.error('Failed to get compliance configuration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get compliance configuration',
+      details: error.message
+    });
+  }
+});
+
+app.post('/api/compliance/config', async (req: express.Request, res: express.Response) => {
+  try {
+    const { configuration } = req.body;
+
+    if (!configuration) {
+      return res.status(400).json({
+        success: false,
+        error: 'Configuration is required'
+      });
+    }
+
+    realCodeGeneratorService.updateComplianceConfiguration(configuration);
+
+    res.json({
+      success: true,
+      message: 'Compliance configuration updated successfully',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    logger.error('Failed to update compliance configuration:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update compliance configuration',
+      details: error.message
+    });
+  }
+});
+
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
