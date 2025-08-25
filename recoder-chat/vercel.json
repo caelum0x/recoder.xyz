@@ -5,10 +5,10 @@
   "installCommand": "npm install",
   "env": {
     "NODE_ENV": "production",
-    "NEXTAUTH_URL": "https://recoder-chat-3gsa5zetx-arhansubas-projects.vercel.app",
+    "NEXTAUTH_URL": "https://chat.recoder.xyz",
     "NEXTAUTH_SECRET": "bb3be4bcc274377e8cc42c190f8eed10df5441d4308ad53045ff01ab5119177f",
     "AUTH_SECRET": "bb3be4bcc274377e8cc42c190f8eed10df5441d4308ad53045ff01ab5119177f",
-    "AUTH_URL": "https://recoder-chat-3gsa5zetx-arhansubas-projects.vercel.app",
+    "AUTH_URL": "https://chat.recoder.xyz",
     "GOOGLE_CLIENT_ID": "716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com",
     "GOOGLE_CLIENT_SECRET": "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",
     "GITHUB_ID": "Ov23liVrw6X0xO8m2jPy",
