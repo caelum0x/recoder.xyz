@@ -9,7 +9,7 @@ import ArrowRightIcon from "@/components/icons/arrow-right";
 import LightningBoltIcon from "@/components/icons/lightning-bolt";
 import LoadingButton from "@/components/loading-button";
 import Spinner from "@/components/spinner";
-import bgImg from "@/public/halo.png";
+import bgImg from "./halo.png";
 import * as Select from "@radix-ui/react-select";
 import assert from "assert";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
