@@ -83,8 +83,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Netlify deployment configuration - use static export
-  output: "export",
+  // Netlify deployment configuration
+  output: undefined,
   trailingSlash: false,
   // Production optimizations
   poweredByHeader: false,
