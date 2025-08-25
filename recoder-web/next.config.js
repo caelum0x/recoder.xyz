@@ -5,12 +5,22 @@ module.exports = {
   images: {
     unoptimized: true,
   },
-  // Disable ESLint during builds for Netlify
+  // Enable proper error checking for production builds
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
-  // Disable TypeScript checking during builds for Netlify
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    return config;
   },
 };
