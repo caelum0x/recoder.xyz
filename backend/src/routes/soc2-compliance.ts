@@ -1,13 +1,12 @@
 /**
- * SOC 2 Compliance API Rou}
-import { realCodeGeneratorService } from '../../../production-engine/src/services/real-code-generator-service.js';
-
-const router = express.Router(); * KILLER FEATURE: Enterprise compliance-as-a-service
+ * SOC 2 Compliance API Routes
+ * KILLER FEATURE: Enterprise compliance-as-a-service
  * Cursor/Copilot have ZERO compliance capabilities - we dominate enterprise sales!
  */
 
 import express from 'express';
 import { Logger } from 'recoder-shared';
+import axios from 'axios';
 
 // Define interfaces for compliance report structure
 interface ComplianceSummary {
@@ -45,9 +44,11 @@ enum IndustryStandard {
   HIPAA = 'HIPAA', 
   PCI_DSS = 'PCI_DSS'
 }
-import { realCodeGeneratorService } from '../../../production-engine/dist/services/real-code-generator-service.js';
 
 const router = express.Router();
+
+// Production Engine service URL - will be set via environment variable
+const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:3002';
 
 // POST /api/compliance/scan-code - Scan code for SOC 2 compliance
 router.post('/scan-code', async (req, res) => {
@@ -90,12 +91,16 @@ router.post('/scan-code', async (req, res) => {
       type: 'code' as const
     }];
 
-    const result = await realCodeGeneratorService['validateCompliance'](files, mockRequest);
+    // Make API call to production-engine service
+    const response = await axios.post(`${PRODUCTION_ENGINE_URL}/api/compliance/validate`, {
+      files,
+      request: mockRequest
+    });
 
     res.json({
       success: true,
-      compliance: result.complianceValidation,
-      blocked: result.blockedByCompliance,
+      compliance: response.data.complianceValidation,
+      blocked: response.data.blockedByCompliance,
       timestamp: new Date().toISOString()
     });
 
@@ -121,8 +126,16 @@ router.post('/scan-project', async (req, res) => {
       });
     }
 
-    const scanResults = await realCodeGeneratorService.scanProjectCompliance(projectPath);
-    const dashboard = await realCodeGeneratorService.generateComplianceDashboard(projectPath);
+    // Make API calls to production-engine service
+    const scanResponse = await axios.post(`${PRODUCTION_ENGINE_URL}/api/compliance/scan-project`, {
+      projectPath
+    });
+    const dashboardResponse = await axios.post(`${PRODUCTION_ENGINE_URL}/api/compliance/dashboard`, {
+      projectPath
+    });
+    
+    const scanResults = new Map(scanResponse.data.scanResults);
+    const dashboard = dashboardResponse.data.dashboard;
 
     res.json({
       success: true,
@@ -149,9 +162,10 @@ router.post('/scan-project', async (req, res) => {
 });
 
 // GET /api/compliance/config - Get current compliance configuration
-router.get('/config', (req, res) => {
+router.get('/config', async (req, res) => {
   try {
-    const config = realCodeGeneratorService.getComplianceConfiguration();
+    const response = await axios.get(`${PRODUCTION_ENGINE_URL}/api/compliance/config`);
+    const config = response.data.configuration;
     
     res.json({
       success: true,
@@ -182,12 +196,16 @@ router.post('/config', async (req, res) => {
       });
     }
 
-    realCodeGeneratorService.updateComplianceConfiguration(configuration);
+    await axios.post(`${PRODUCTION_ENGINE_URL}/api/compliance/config`, {
+      configuration
+    });
+
+    const updatedResponse = await axios.get(`${PRODUCTION_ENGINE_URL}/api/compliance/config`);
 
     res.json({
       success: true,
       message: 'Compliance configuration updated successfully',
-      configuration: realCodeGeneratorService.getComplianceConfiguration()
+      configuration: updatedResponse.data.configuration
     });
 
   } catch (error: any) {
@@ -283,7 +301,10 @@ router.get('/certificate-eligibility', async (req, res) => {
       });
     }
 
-    const scanResults = await realCodeGeneratorService.scanProjectCompliance(projectPath as string);
+    const scanResponse = await axios.post(`${PRODUCTION_ENGINE_URL}/api/compliance/scan-project`, {
+      projectPath: projectPath as string
+    });
+    const scanResults = new Map(scanResponse.data.scanResults);
     const reports = Array.from(scanResults.values()) as ComplianceReport[];
 
     const totalCritical = reports.reduce((sum, r) => sum + r.summary.criticalViolations, 0);

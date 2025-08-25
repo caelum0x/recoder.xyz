@@ -7,6 +7,7 @@
     "dev": "npx tsx src/server.ts",
     "start": "npx tsx src/server.ts",
     "build": "tsc",
+    "vercel-build": "npm run build",
     "build:types": "tsc --noEmit || true",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",

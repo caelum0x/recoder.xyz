@@ -2,10 +2,10 @@
  * Jest test setup for Production Engine
  */
 
-import { jest } from '@jest/globals';
+import { afterAll, afterEach, beforeAll, jest } from '@jest/globals';
 
 // Mock environment variables for testing
-process.env.NODE_ENV = 'test';
+Object.defineProperty(process.env, 'NODE_ENV', { value: 'test', writable: true });
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/recoder_test';
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 process.env.ANTHROPIC_API_KEY = 'test-key';
@@ -18,6 +18,60 @@ jest.mock('@anthropic-ai/sdk');
 jest.mock('openai');
 jest.mock('groq-sdk');
 jest.mock('@google/generative-ai');
+
+// Mock missing provider modules
+jest.mock('../providers/bedrock', () => ({
+  AwsBedrockHandler: jest.fn()
+}), { virtual: true });
+
+// Mock VSCode module globally
+jest.mock('vscode', () => {
+  const LanguageModelChatMessageRole = {
+    Assistant: "assistant",
+    User: "user",
+  }
+
+  class MockLanguageModelTextPart {
+    type = "text"
+    constructor(public value: string) {}
+  }
+
+  class MockLanguageModelToolCallPart {
+    type = "tool_call"
+    constructor(
+      public callId: string,
+      public name: string,
+      public input: any,
+    ) {}
+  }
+
+  class MockLanguageModelToolResultPart {
+    type = "tool_result"
+    constructor(
+      public toolUseId: string,
+      public parts: MockLanguageModelTextPart[],
+    ) {}
+  }
+
+  return {
+    LanguageModelChatMessage: {
+      Assistant: jest.fn((content: any) => ({
+        role: LanguageModelChatMessageRole.Assistant,
+        name: "assistant",
+        content: Array.isArray(content) ? content : [new MockLanguageModelTextPart(String(content))],
+      })),
+      User: jest.fn((content: any) => ({
+        role: LanguageModelChatMessageRole.User,
+        name: "user",
+        content: Array.isArray(content) ? content : [new MockLanguageModelTextPart(String(content))],
+      })),
+    },
+    LanguageModelChatMessageRole,
+    LanguageModelTextPart: MockLanguageModelTextPart,
+    LanguageModelToolCallPart: MockLanguageModelToolCallPart,
+    LanguageModelToolResultPart: MockLanguageModelToolResultPart,
+  }
+}, { virtual: true });
 
 // Mock file system operations
 jest.mock('fs/promises', () => ({
@@ -106,17 +160,51 @@ jest.mock('./compliance/compliance-integration', () => ({
   ComplianceIntegrationService: jest.fn().mockImplementation(() => ({
     validateSingleFile: jest.fn(() => Promise.resolve(mockComplianceResult)),
     updateConfiguration: jest.fn(),
-    getConfiguration: jest.fn(),
-    scanProject: jest.fn(),
-    generateProjectComplianceDashboard: jest.fn(),
+    getConfiguration: jest.fn(() => ({
+      enabled: true,
+      enforceBlocking: false,
+      autoRemediation: true,
+      reportGeneration: true,
+      industryStandards: ['SOX', 'ISO_27001'],
+      dataClassification: 'INTERNAL',
+      projectType: 'WEB_APPLICATION',
+      customRules: []
+    })),
+    scanProject: jest.fn(() => Promise.resolve(new Map())),
+    generateProjectComplianceDashboard: jest.fn(() => Promise.resolve('Mock dashboard HTML')),
   })),
+  IndustryStandard: {
+    SOC2: 'SOC2',
+    PCI: 'PCI',
+    HIPAA: 'HIPAA',
+    GDPR: 'GDPR',
+    SOX: 'SOX',
+    ISO_27001: 'ISO_27001'
+  },
+  DataClassification: {
+    PUBLIC: 'public',
+    INTERNAL: 'internal',
+    CONFIDENTIAL: 'confidential',
+    RESTRICTED: 'restricted'
+  },
+  ProjectType: {
+    WEB: 'web',
+    WEB_APPLICATION: 'web',
+    MOBILE: 'mobile',
+    API: 'api',
+    BLOCKCHAIN: 'blockchain',
+    AI: 'ai',
+    DESKTOP: 'desktop',
+    PAYMENTS: 'payments',
+    PAYMENT_SYSTEM: 'payments'
+  }
 }));
 
-jest.mock('./services/ai-hub-service', () => ({
-  AIHubService: jest.fn().mockImplementation(() => ({
+jest.mock('./services/commercial-ai-hub-service', () => ({
+  commercialAIHubService: {
     generateWithBestModel: jest.fn(() => Promise.resolve(mockGeneratedCode)),
     getAvailableProviders: jest.fn(() => Promise.resolve(mockAvailableProviders)),
-  })),
+  },
 }));
 
 // Setup global test timeout
