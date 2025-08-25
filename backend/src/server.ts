@@ -458,7 +458,9 @@ async function startServer() {
   }
 }
 
-// Start the server
-startServer();
+// Only start the server if not in serverless environment
+if (!process.env.NETLIFY && !process.env.VERCEL && require.main === module) {
+  startServer();
+}
 
 module.exports = app;
