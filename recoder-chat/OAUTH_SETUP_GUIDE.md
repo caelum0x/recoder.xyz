@@ -1,6 +1,22 @@
 # 🔐 OAuth Setup Guide for Recoder Chat
 
-## Required: Real OAuth Credentials Setup
+## ✅ RESOLVED: OAuth Credentials Updated
+
+**SUCCESS**: Real Google OAuth credentials have been configured!
+
+**NEW CREDENTIALS APPLIED**:
+- Client ID: `716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com`
+- Client Secret: `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`
+- Status: ✅ Enabled (Created: August 25, 2025)
+
+## 🚨 Important Notes
+
+⚠️ **OAuth Access Restriction**: Your OAuth app is currently in testing mode. Access is restricted to test users listed on your OAuth consent screen.
+
+To add test users or publish your app:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Navigate to "APIs & Services" > "OAuth consent screen" 
+3. Add test user emails OR publish the app for public use
 
 The current OAuth credentials in `vercel.json` are placeholders. You need to set up real credentials:
 

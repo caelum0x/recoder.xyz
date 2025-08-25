@@ -9,10 +9,12 @@ import {
   primaryKey,
   foreignKey,
   boolean,
+  integer,
+  unique,
 } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('User', {
-  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  id: text('id').primaryKey().notNull(),
   email: varchar('email', { length: 64 }).notNull(),
   password: varchar('password', { length: 64 }),
   name: varchar('name', { length: 255 }),
@@ -174,45 +176,45 @@ export const stream = pgTable(
 
 export type Stream = InferSelectModel<typeof stream>;
 
-// OAuth Tables for NextAuth
+// OAuth Tables for NextAuth (matching existing database structure)
 export const account = pgTable('Account', {
-  id: uuid('id').primaryKey().notNull().defaultRandom(),
-  userId: uuid('userId')
+  id: text('id').primaryKey().notNull(),
+  userId: text('userId')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
-  type: varchar('type', { length: 255 }).notNull(),
-  provider: varchar('provider', { length: 255 }).notNull(),
-  providerAccountId: varchar('providerAccountId', { length: 255 }).notNull(),
+  type: text('type').notNull(),
+  provider: text('provider').notNull(),
+  providerAccountId: text('providerAccountId').notNull(),
   refresh_token: text('refresh_token'),
   access_token: text('access_token'),
-  expires_at: timestamp('expires_at'),
-  token_type: varchar('token_type', { length: 255 }),
-  scope: varchar('scope', { length: 255 }),
+  expires_at: integer('expires_at'),
+  token_type: text('token_type'),
+  scope: text('scope'),
   id_token: text('id_token'),
-  session_state: varchar('session_state', { length: 255 }),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+  session_state: text('session_state'),
+}, (account) => ({
+  accountProviderProviderAccountIdKey: unique().on(account.provider, account.providerAccountId),
+}));
 
 export type Account = InferSelectModel<typeof account>;
 
 export const session = pgTable('Session', {
-  id: uuid('id').primaryKey().notNull().defaultRandom(),
-  sessionToken: varchar('sessionToken', { length: 255 }).notNull().unique(),
-  userId: uuid('userId')
+  id: text('id').primaryKey().notNull(),
+  sessionToken: text('sessionToken').notNull().unique(),
+  userId: text('userId')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
   expires: timestamp('expires').notNull(),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
 
 export type Session = InferSelectModel<typeof session>;
 
 export const verificationToken = pgTable('VerificationToken', {
-  identifier: varchar('identifier', { length: 255 }).notNull(),
-  token: varchar('token', { length: 255 }).notNull().unique(),
+  identifier: text('identifier').notNull(),
+  token: text('token').notNull().unique(),
   expires: timestamp('expires').notNull(),
-});
+}, (vt) => ({
+  identifierTokenKey: unique().on(vt.identifier, vt.token),
+}));
 
 export type VerificationToken = InferSelectModel<typeof verificationToken>;
