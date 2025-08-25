@@ -86,6 +86,13 @@ const nextConfig: NextConfig = {
   // Netlify deployment configuration
   output: undefined,
   trailingSlash: false,
+  // Image optimization for Netlify
+  images: {
+    unoptimized: true, // Required for Netlify
+    domains: ['localhost', 'web.recoder.xyz', 'recoder-web.netlify.app'],
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days
+  },
   // Production optimizations
   poweredByHeader: false,
   generateEtags: true,
@@ -110,12 +117,6 @@ const nextConfig: NextConfig = {
     webVitalsAttribution: ['CLS', 'LCP'],
   },
   
-  // Image optimization
-  images: {
-    domains: ['localhost', 'web.recoder.xyz'],
-    formats: ['image/webp', 'image/avif'],
-    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days
-  },
   serverExternalPackages: [
     "@codesandbox/sdk",
     "google-auth-library",
