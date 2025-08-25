@@ -24,11 +24,13 @@ export async function middleware(request: NextRequest) {
   });
 
   if (!token) {
-    const redirectUrl = encodeURIComponent(request.url);
+    // Don't redirect auth pages to prevent infinite loops
+    if (['/login', '/register'].includes(pathname) || pathname.startsWith('/api/auth')) {
+      return NextResponse.next();
+    }
 
-    return NextResponse.redirect(
-      new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url),
-    );
+    // Instead of redirecting to guest auth, redirect to login
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   const isGuest = guestRegex.test(token?.email ?? '');

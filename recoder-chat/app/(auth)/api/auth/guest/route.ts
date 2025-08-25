@@ -1,21 +1,20 @@
-import { signIn } from '@/app/(auth)/auth';
-import { isDevelopmentEnvironment } from '@/lib/constants';
-import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const redirectUrl = searchParams.get('redirectUrl') || '/';
-
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET,
-    secureCookie: !isDevelopmentEnvironment,
-  });
-
-  if (token) {
-    return NextResponse.redirect(new URL('/', request.url));
+  try {
+    console.log('Guest auth route called - redirecting to login for now');
+    
+    const { searchParams } = new URL(request.url);
+    const redirectUrl = searchParams.get('redirectUrl') || '/';
+    
+    // For now, redirect to login instead of trying to create guest user
+    // This prevents the database errors and infinite loops
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('callbackUrl', redirectUrl);
+    
+    return NextResponse.redirect(loginUrl);
+  } catch (error) {
+    console.error('Guest auth error:', error);
+    return NextResponse.redirect(new URL('/login', request.url));
   }
-
-  return signIn('guest', { redirect: true, redirectTo: redirectUrl });
 }
