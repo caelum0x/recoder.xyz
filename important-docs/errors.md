@@ -1,4 +1,5 @@
-oh-my-zsh] theme 'powerlevel10k' not found
+/Users/arhansubasi/.zshrc:source:12: no such file or directory: /opt/homebrew/opt/powerlevel10k/powerlevel10k.zsh-theme
+[oh-my-zsh] theme 'powerlevel10k' not found
 arhansubasi@192 recoder.xyz % npm run dev
 
 > recoder@1.0.0 dev
@@ -286,3 +287,119 @@ arhansubasi@192 recoder.xyz % npm run dev
 [mobile]     at MetroBundlerDevServer.metroImportAsArtifactsAsync (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/@expo+cli@0.22.26_bufferutil@4.0.9_encoding@0.1.13_utf-8-validate@5.0.10/node_modules/@expo/cli/src/start/server/metro/MetroBundlerDevServer.ts:444:21)
 [mobile]     at MetroBundlerDevServer.getStaticResourcesAsync (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/@expo+cli@0.22.26_bufferutil@4.0.9_encoding@0.1.13_utf-8-validate@5.0.10/node_modules/@expo/cli/src/start/server/metro/MetroBundlerDevServer.ts:325:12)
 [mobile]     at async Promise.all (index 0)
+[web]  ○ Compiling / ...
+[web]  ✓ Compiled / in 4.2s (3381 modules)
+[web]  HEAD / 200 in 4697ms
+[web]  GET / 200 in 494ms
+[web]  ⚠ The "images.domains" configuration is deprecated. Please use "images.remotePatterns" configuration instead.
+[web]  ✓ Compiled in 587ms (1437 modules)
+[web]  ○ Compiling /chats ...
+[web]  ✓ Compiled /chats in 939ms (1949 modules)
+[web]  GET /chats 200 in 639ms
+[web]  ✓ Compiled /api/auth/session in 284ms (1982 modules)
+[web]  GET /api/auth/session 200 in 306ms
+[web] 2025-08-25T00:45:33.294Z [INFO]: Loading chat analytics 
+[web] 2025-08-25T00:45:33.294Z [INFO]: Chat analytics generated {"totalChats":8,"totalMessages":187,"learningRate":"96%"}
+[web]  GET /api/chats/analytics 200 in 310ms
+[web] 2025-08-25T00:45:33.297Z [INFO]: Loading chat history 
+[web] 2025-08-25T00:45:33.297Z [INFO]: Chat history loaded {"count":8,"totalMessages":177,"avgSatisfaction":"4.3"}
+[web]  GET /api/chats/history 200 in 312ms
+[web] Session started: {
+[web]   sessionId: '5790008a-45b9-4960-827b-accebd823e0d',
+[web]   timestamp: '2025-08-25T00:45:33.300Z',
+[web]   userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0',
+[web]   deviceId: 'web_1756082732930_0346f4j68',
+[web]   platform: 'web',
+[web]   device: {
+[web]     type: 'desktop',
+[web]     os: 'macOS',
+[web]     browser: 'Chrome',
+[web]     screen: { width: 1470, height: 956 }
+[web]   },
+[web]   location: {
+[web]     country: 'Unknown',
+[web]     region: 'Unknown',
+[web]     city: 'Unknown',
+[web]     timezone: 'Europe/Istanbul'
+[web]   },
+[web]   network: { connection: 'unknown', speed: '4g' },
+[web]   metadata: {
+[web]     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0',
+[web]     language: 'tr',
+[web]     referrer: 'http://localhost:3001/',
+[web]     timestamp: '2025-08-25T00:45:32.945Z'
+[web]   }
+[web] }
+[web]  POST /api/analytics/session/start 200 in 354ms
+[web] 2025-08-25T00:45:33.304Z [INFO]: Loading chat learning insights 
+[web] 2025-08-25T00:45:33.304Z [INFO]: Chat insights loaded {"count":8,"applied":6,"avgConfidence":"0.918"}
+[web]  GET /api/chats/insights 200 in 319ms
+[web]  ✓ Compiled /_not-found in 250ms (1983 modules)
+[web]  GET /docs/cli 404 in 318ms
+[web] Session started: {
+[web]   sessionId: 'e73e2fcf-6f0a-4ba5-9333-fd85f24f1561',
+[web]   timestamp: '2025-08-25T00:46:32.140Z',
+[web]   userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0',
+[web]   userId: '1',
+[web]   deviceId: 'web_1756082732930_0346f4j68',
+[web]   platform: 'web',
+[web]   device: {
+[web]     type: 'desktop',
+[web]     os: 'macOS',
+[web]     browser: 'Chrome',
+[web]     screen: { width: 1470, height: 956 }
+[web]   },
+[web]   location: {
+[web]     country: 'Unknown',
+[web]     region: 'Unknown',
+[web]     city: 'Unknown',
+[web]     timezone: 'Europe/Istanbul'
+[web]   },
+[web]   network: { connection: 'unknown', speed: '4g' },
+[web]   metadata: {
+[web]     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 OPR/120.0.0.0',
+[web]     language: 'tr',
+[web]     referrer: 'http://localhost:3001/',
+[web]     timestamp: '2025-08-25T00:46:32.129Z'
+[web]   }
+[web] }
+[web]  POST /api/analytics/session/start 200 in 11ms
+[web]  GET /api/auth/session 200 in 8ms
+[web]  ○ Compiling /dashboard ...
+[web]  ✓ Compiled /dashboard in 580ms (2390 modules)
+[web]  GET /dashboard 200 in 859ms
+[web]  GET /dashboard 200 in 9ms
+[web]  ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+[web]   clientVersion: '6.14.0',
+[web]   digest: '3071539301'
+[web] }
+[web]  POST /dashboard 500 in 193ms
+[web]  ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+[web]   clientVersion: '6.14.0',
+[web]   digest: '3071539301'
+[web] }
+[web]  POST /dashboard 500 in 29ms
+[web]  ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+[web]   clientVersion: '6.14.0',
+[web]   digest: '3071539301'
+[web] }
+[web]  POST /dashboard 500 in 17ms
+[web]  ⨯ [Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: arhansubasi, db: arhansubasi, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.] {
+[web]   clientVersion: '6.14.0',
+[web]   digest: '3071539301'
+[web] }
+[web]  POST /dashboard 500 in 18ms
+[web]  ○ Compiling /api/subscription/manage ...
+[web]  ✓ Compiled /api/subscription/manage in 502ms (2021 modules)
+[web] [next-auth][warn][DEBUG_ENABLED] 
+[web] https://next-auth.js.org/warnings#debug_enabled
+[web]  POST /api/subscription/manage 401 in 656ms
+[web]  POST /api/subscription/manage 401 in 657ms
+[web]  GET /dashboard 200 in 371ms
+[web]  ✓ Compiled /pricing in 297ms (2026 modules)
+[web]  GET /pricing 200 in 357ms
+[web]  ✓ Compiled /api/pricing/tiers in 118ms (2028 modules)
+[web]  GET /api/pricing/tiers 200 in 140ms
+[web]  GET /api/pricing/tiers 200 in 2ms
+[web]  POST /api/analytics/activity 404 in 81ms
+[web]  POST /api/analytics/activity 404 in 7ms
