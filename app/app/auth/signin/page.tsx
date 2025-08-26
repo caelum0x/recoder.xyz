@@ -28,6 +28,7 @@ function SignInForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('return');
 
@@ -51,11 +52,19 @@ function SignInForm() {
         // Store token for platform access
         localStorage.setItem('authToken', data.user.token);
         
+        // Show success state
+        setError(''); // Clear any previous errors
+        setSuccess(true);
+        
         // Redirect to return URL or dashboard
         const redirectTo = returnUrl || '/dashboard';
-        window.location.href = redirectTo;
+        
+        // Add a brief delay to show success feedback
+        setTimeout(() => {
+          window.location.href = redirectTo;
+        }, 1500);
       } else {
-        setError(data.error || 'Login failed');
+        setError(data.error || 'Authentication failed. Please try again.');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -130,6 +139,11 @@ function SignInForm() {
                     {error}
                   </div>
                 )}
+                {success && (
+                  <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded">
+                    ✓ Authentication successful! Redirecting to dashboard...
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input 
@@ -163,7 +177,7 @@ function SignInForm() {
                   ) : (
                     <>
                       <Mail className="w-4 h-4 mr-2" />
-                      Sign In
+                      Sign In with Email
                     </>
                   )}
                 </Button>
