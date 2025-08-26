@@ -102,36 +102,39 @@ export const MODELS = [
 ];
 
 // AI Provider capabilities for smart routing
+// Safe environment variable checking for client-side compatibility
+const isServer = typeof window === 'undefined';
+
 export const AI_PROVIDERS = {
   together: {
     name: "Together AI",
     description: "Multi-model platform with latest models",
     strengths: ["Latest models", "Reasoning", "Code generation", "Cost-effective"],
-    available: !!process.env.TOGETHER_API_KEY
+    available: true // Default to available, server-side will validate
   },
   claude: {
     name: "Anthropic Claude",
     description: "Premium AI for complex reasoning",
     strengths: ["Complex logic", "Security", "Architecture design", "Code review"],
-    available: !!process.env.ANTHROPIC_API_KEY
+    available: true // Default to available, server-side will validate
   },
   groq: {
     name: "Groq",
     description: "Ultra-fast inference",
     strengths: ["Speed", "API generation", "Prototyping", "Real-time"],
-    available: !!process.env.GROQ_API_KEY
+    available: true // Default to available, server-side will validate
   },
   gemini: {
     name: "Google Gemini",
     description: "Multimodal AI with vision capabilities",
     strengths: ["Multimodal", "Vision", "Large context", "Code understanding"],
-    available: !!process.env.GOOGLE_API_KEY
+    available: true // Default to available, server-side will validate
   },
   openrouter: {
     name: "OpenRouter", 
     description: "Access to all major models",
     strengths: ["Model variety", "Cost optimization", "Backup access", "Latest releases"],
-    available: !!process.env.OPENROUTER_API_KEY
+    available: true // Default to available, server-side will validate
   }
 };
 

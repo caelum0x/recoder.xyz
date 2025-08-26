@@ -187,15 +187,15 @@ export default function Home() {
 
                 // Validate form data with proper error handling
                 if (typeof prompt !== "string" || !prompt.trim()) {
-                  console.error("Invalid prompt");
+                  console.warn("Form validation: Invalid prompt");
                   return;
                 }
-                if (typeof model !== "string") {
-                  console.error("Invalid model");
+                if (typeof model !== "string" || !model.trim()) {
+                  console.warn("Form validation: Invalid model");
                   return;
                 }
                 if (quality !== "high" && quality !== "low") {
-                  console.error("Invalid quality");
+                  console.warn("Form validation: Invalid quality");
                   return;
                 }
 

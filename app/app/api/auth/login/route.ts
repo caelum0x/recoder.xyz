@@ -73,7 +73,14 @@ export async function POST(request: NextRequest) {
       name,
       plan: mockSession.plan,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-      domains: ['web.recoder.xyz', 'chat.recoder.xyz', 'recoder.xyz']
+      domains: [
+        'recoder.xyz', 
+        'chat.recoder.xyz', 
+        'worthy-truth-production.up.railway.app',    // AI App Builder (Railway)
+        'resplendent-marshmallow-7de2b1.netlify.app', // Backend API (Netlify) 
+        'recoder-production-engine.netlify.app'       // Production Engine (Netlify)
+        // CLI is npm package, not web domain
+      ]
     };
 
     // Generate cross-platform sync token
