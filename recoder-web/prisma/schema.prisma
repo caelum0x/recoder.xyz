@@ -307,3 +307,53 @@ model RouterAnalytics {
   @@index([routerId])
   @@index([timestamp])
 }
+
+// Error tracking and monitoring models
+model ErrorLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  type         String   // 'javascript_error', 'react_error', 'api_error', 'auth_error', 'validation_error'
+  message      String   @db.Text
+  stack        String?  @db.Text
+  url          String
+  lineNumber   Int?
+  columnNumber Int?
+  userAgent    String   @db.Text
+  userId       String?
+  sessionId    String
+  platform     String   // 'web', 'chat', 'cli', 'engine'
+  severity     String   // 'low', 'medium', 'high', 'critical'
+  context      Json?    // Additional context data
+  resolved     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([platform])
+  @@index([severity])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([resolved])
+  @@index([type])
+}
+
+model PerformanceLog {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  type      String   // 'navigation', 'resource', 'api_call', 'form_submission'
+  duration  Int      // Duration in milliseconds
+  url       String
+  success   Boolean  @default(true)
+  userId    String?
+  sessionId String
+  platform  String
+  metadata  Json?    // Additional performance metadata
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([platform])
+  @@index([type])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([duration])
+  @@index([success])
+}

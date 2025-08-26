@@ -37,6 +37,7 @@ import templateMarketplaceRoutes from './routes/template-marketplace';
 import deploymentRoutes from './routes/deployment';
 import enterpriseDashboardRoutes from './routes/enterprise-dashboard';
 import cliApiRoutes from './routes/cli-api';
+import authSyncRoutes from './routes/auth-sync';
 import { subscriptionAuthStack, authenticateSubscription } from './middleware/subscription-auth';
 
 const app = express();
@@ -93,6 +94,9 @@ app.use('/api/enterprise/dashboard', enterpriseDashboardRoutes);
 
 // CLI API routes - for published npm packages
 app.use('/api/ai', cliApiRoutes);
+
+// Auth sync routes - PUBLIC (no auth required for sync)
+app.use('/api/auth', authSyncRoutes);
 
 // Generate real code endpoint with full subscription validation
 app.post('/api/generate', subscriptionAuthStack, async (req: express.Request, res: express.Response) => {
