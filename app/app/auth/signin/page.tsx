@@ -185,7 +185,7 @@ function SignInForm() {
                 className="w-full" 
                 size="lg" 
                 onClick={() => {
-                  window.location.href = `https://github.com/login/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_GITHUB_ID || 'Ov23liVrw6X0xO8m2jPy'}&redirect_uri=${encodeURIComponent('https://recoder.xyz/api/auth/callback?provider=github')}&scope=user:email`;
+                  window.location.href = `https://github.com/login/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_GITHUB_ID || 'Ov23liVrw6X0xO8m2jPy'}&redirect_uri=${encodeURIComponent('https://recoder.xyz/auth/oauth-success')}&scope=user:email&state=github`;
                 }}
               >
                 <Github className="w-4 h-4 mr-2" />
@@ -198,8 +198,8 @@ function SignInForm() {
                 size="lg" 
                 onClick={() => {
                   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com';
-                  const redirectUri = encodeURIComponent('https://recoder.xyz/api/auth/callback?provider=google');
-                  window.location.href = `https://accounts.google.com/oauth/authorize?client_id=${googleClientId}&redirect_uri=${redirectUri}&scope=openid%20email%20profile&response_type=code`;
+                  const redirectUri = encodeURIComponent('https://recoder.xyz/auth/oauth-success');
+                  window.location.href = `https://accounts.google.com/oauth/authorize?client_id=${googleClientId}&redirect_uri=${redirectUri}&scope=openid%20email%20profile&response_type=code&state=google`;
                 }}
               >
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
