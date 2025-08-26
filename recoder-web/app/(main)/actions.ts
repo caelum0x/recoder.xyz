@@ -13,6 +13,9 @@ import { unifiedWebAI } from "@/lib/unified-web-ai";
 import { requireAuth } from "@/lib/auth/server-auth";
 import { callExtensionAPI } from "@/lib/server-api";
 
+// Production Engine integration for advanced code generation
+const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || 'https://recoder-production-engine.netlify.app';
+
 export async function createChat(
   prompt: string,
   model: string,
@@ -152,6 +155,33 @@ export async function createChat(
       fullScreenshotDescription;
   } else {
     userMessage = prompt;
+  }
+
+  // Enhanced code generation with production engine for complex prompts
+  try {
+    if (quality === "high" && (prompt.length > 100 || prompt.includes('production') || prompt.includes('deploy'))) {
+      const productionResponse = await fetch(`${PRODUCTION_ENGINE_URL}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: userMessage,
+          model: model,
+          enhance: true,
+          production_ready: true
+        })
+      });
+
+      if (productionResponse.ok) {
+        const productionResult = await productionResponse.json();
+        if (productionResult.enhanced_prompt) {
+          userMessage = productionResult.enhanced_prompt;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Production engine enhancement failed, using standard generation:', error);
   }
 
   let newChat = await prisma.chat.update({

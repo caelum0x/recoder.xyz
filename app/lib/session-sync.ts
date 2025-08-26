@@ -42,9 +42,11 @@ export class SessionSyncManager {
   // Generate sync URLs for cross-platform access
   generateSyncUrls(syncToken: string): string[] {
     const domains = [
-      'web.recoder.xyz',
-      'chat.recoder.xyz',
-      'cli.recoder.xyz'
+      'chat.recoder.xyz',   // AI Chat Platform
+      'worthy-truth-production.up.railway.app',    // AI App Builder (Railway deployment)
+      'resplendent-marshmallow-7de2b1.netlify.app', // Backend API (Netlify deployment)
+      'recoder-production-engine.netlify.app'       // Production Engine (Netlify deployment)
+      // Note: CLI is npm package (@recoder/cli), not a web domain
     ];
     
     return domains.map(domain => `https://${domain}/api/auth/sync?token=${encodeURIComponent(syncToken)}`);
