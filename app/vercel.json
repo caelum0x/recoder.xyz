@@ -6,7 +6,7 @@
   "env": {
     "NODE_ENV": "production",
     "NEXTAUTH_URL": "https://recoder.xyz",
-    "NEXTAUTH_SECRET": "fb43a832342cc7646343a443eed7940c79fb41e132bff7fe1842d91fbd0ce804",
+    "NEXTAUTH_SECRET": "bb3be4bcc274377e8cc42c190f8eed10df5441d4308ad53045ff01ab5119177f",
     "GOOGLE_CLIENT_ID": "716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com",
     "GOOGLE_CLIENT_SECRET": "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",
     "GITHUB_ID": "Ov23liVrw6X0xO8m2jPy",
