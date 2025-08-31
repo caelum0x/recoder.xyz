@@ -48,7 +48,7 @@ export default function RootLayout({
       <head>
         <PlausibleProvider domain="web.recoder.xyz" />
       </head>
-      <body className="h-full">
+      <body className="h-full web-builder-container">
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
