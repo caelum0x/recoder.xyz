@@ -22,7 +22,7 @@ router.get('/stats', async (req, res) => {
     // Get platform-wide statistics (no auth required for marketing)
     const projectAnalytics = projectService.generateProjectAnalytics();
     const rateLimitStats = rateLimitService.getUsageStatistics();
-    const openRouterHealth = await openRouterService.healthCheck();
+    const openRouterHealth = await openRouterService.instance.healthCheck();
     const pricingTiers = billingService.getPricingTiers();
 
     const stats = {

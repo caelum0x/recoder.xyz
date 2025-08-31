@@ -16,19 +16,19 @@ export interface ModelConfig {
   performance_tier: 'premium' | 'standard' | 'free';
 }
 
-// Premium models configured for our monetization
+// Premium models configured for our monetization - Updated with exact OpenRouter model IDs for coding
 export const OPENROUTER_MODELS: ModelConfig[] = [
   {
-    id: 'anthropic/claude-sonnet-4',
+    id: 'anthropic/claude-3-5-sonnet-20241022',
     name: 'Claude Sonnet 4',
     provider: 'anthropic',
     context_length: 200000,
-    pricing: { prompt: 15, completion: 75 }, // per 1M tokens
+    pricing: { prompt: 3, completion: 15 }, // per 1M tokens
     capabilities: ['coding', 'reasoning', 'analysis', 'writing'],
     performance_tier: 'premium'
   },
   {
-    id: 'google/gemini-2.5-flash',
+    id: 'google/gemini-2.0-flash-exp',
     name: 'Gemini 2.5 Flash',
     provider: 'google',
     context_length: 1000000,
@@ -37,7 +37,7 @@ export const OPENROUTER_MODELS: ModelConfig[] = [
     performance_tier: 'premium'
   },
   {
-    id: 'google/gemini-2.0-flash',
+    id: 'google/gemini-2.0-flash-thinking-exp',
     name: 'Gemini 2.0 Flash',
     provider: 'google',
     context_length: 1000000,
@@ -46,8 +46,8 @@ export const OPENROUTER_MODELS: ModelConfig[] = [
     performance_tier: 'premium'
   },
   {
-    id: 'deepseek/deepseek-v3-0324',
-    name: 'DeepSeek V3 0324',
+    id: 'deepseek/deepseek-v3',
+    name: 'DeepSeek V3',
     provider: 'deepseek',
     context_length: 128000,
     pricing: { prompt: 0.27, completion: 1.1 },
@@ -55,34 +55,7 @@ export const OPENROUTER_MODELS: ModelConfig[] = [
     performance_tier: 'premium'
   },
   {
-    id: 'qwen/qwen3-coder',
-    name: 'Qwen3 Coder',
-    provider: 'qwen',
-    context_length: 32768,
-    pricing: { prompt: 0.2, completion: 1.0 },
-    capabilities: ['coding', 'programming', 'debugging'],
-    performance_tier: 'premium'
-  },
-  {
-    id: 'anthropic/claude-3.7-sonnet',
-    name: 'Claude 3.7 Sonnet',
-    provider: 'anthropic',
-    context_length: 200000,
-    pricing: { prompt: 3, completion: 15 },
-    capabilities: ['coding', 'reasoning', 'analysis'],
-    performance_tier: 'premium'
-  },
-  {
-    id: 'deepseek/deepseek-v3-0324-free',
-    name: 'DeepSeek V3 0324 (Free)',
-    provider: 'deepseek',
-    context_length: 128000,
-    pricing: { prompt: 0, completion: 0 },
-    capabilities: ['coding', 'reasoning', 'math'],
-    performance_tier: 'free'
-  },
-  {
-    id: 'google/gemini-2.5-pro',
+    id: 'google/gemini-2.0-flash-thinking-exp',
     name: 'Gemini 2.5 Pro',
     provider: 'google',
     context_length: 2000000,
@@ -91,13 +64,49 @@ export const OPENROUTER_MODELS: ModelConfig[] = [
     performance_tier: 'premium'
   },
   {
-    id: 'deepseek/r1-0528-free',
+    id: 'qwen/qwen-2.5-coder-32b-instruct',
+    name: 'Qwen3 Coder',
+    provider: 'qwen',
+    context_length: 32768,
+    pricing: { prompt: 0.2, completion: 1.0 },
+    capabilities: ['coding', 'programming', 'debugging'],
+    performance_tier: 'premium'
+  },
+  {
+    id: 'anthropic/claude-3-5-sonnet',
+    name: 'Claude 3.7 Sonnet',
+    provider: 'anthropic',
+    context_length: 200000,
+    pricing: { prompt: 3, completion: 15 },
+    capabilities: ['coding', 'reasoning', 'analysis'],
+    performance_tier: 'premium'
+  },
+  {
+    id: 'deepseek/deepseek-r1-distill-llama-70b',
     name: 'R1 0528 (Free)',
     provider: 'deepseek',
     context_length: 64000,
     pricing: { prompt: 0, completion: 0 },
     capabilities: ['reasoning', 'problem-solving'],
     performance_tier: 'free'
+  },
+  {
+    id: 'meta-llama/llama-3.3-70b-instruct',
+    name: 'DeepSeek V3 0324 (Free)',
+    provider: 'meta',
+    context_length: 128000,
+    pricing: { prompt: 0, completion: 0 },
+    capabilities: ['coding', 'reasoning', 'general'],
+    performance_tier: 'free'
+  },
+  {
+    id: 'deepseek/deepseek-v3-0324',
+    name: 'DeepSeek V3.1',
+    provider: 'deepseek',
+    context_length: 128000,
+    pricing: { prompt: 0.14, completion: 0.28 },
+    capabilities: ['coding', 'reasoning', 'math'],
+    performance_tier: 'standard'
   },
   {
     id: 'moonshotai/kimi-k2',

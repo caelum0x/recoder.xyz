@@ -79,7 +79,7 @@ export class OpenRouterService {
   private usageTracker: Map<string, any> = new Map();
   private rateLimiter: Map<string, { count: number; resetTime: number }> = new Map();
 
-  // Best coding models from OpenRouter (from the documentation)
+  // Best coding models from OpenRouter (exact model IDs from API)
   private readonly BEST_CODING_MODELS: ModelInfo[] = [
     {
       id: 'anthropic/claude-sonnet-4',
@@ -91,15 +91,6 @@ export class OpenRouterService {
       bestFor: ['complex-logic', 'architecture', 'enterprise-code', 'security-review']
     },
     {
-      id: 'google/gemini-2.0-flash',
-      name: 'Gemini 2.0 Flash',
-      provider: 'google',
-      maxTokens: 1048576,
-      pricing: { prompt: 0.075, completion: 0.3 },
-      capabilities: ['fast-generation', 'multimodal', 'large-context'],
-      bestFor: ['rapid-prototyping', 'large-codebases', 'documentation']
-    },
-    {
       id: 'google/gemini-2.5-flash',
       name: 'Gemini 2.5 Flash',
       provider: 'google',
@@ -109,13 +100,31 @@ export class OpenRouterService {
       bestFor: ['production-code', 'optimization', 'complex-algorithms']
     },
     {
-      id: 'deepseek/deepseek-v3-0324',
-      name: 'DeepSeek V3',
+      id: 'google/gemini-2.0-flash-001',
+      name: 'Gemini 2.0 Flash',
+      provider: 'google',
+      maxTokens: 1048576,
+      pricing: { prompt: 0.075, completion: 0.3 },
+      capabilities: ['fast-generation', 'multimodal', 'large-context'],
+      bestFor: ['rapid-prototyping', 'large-codebases', 'documentation']
+    },
+    {
+      id: 'deepseek/deepseek-chat-v3-0324',
+      name: 'DeepSeek V3 0324',
       provider: 'deepseek',
       maxTokens: 64000,
       pricing: { prompt: 0.27, completion: 1.1 },
       capabilities: ['code-understanding', 'refactoring', 'bug-fixing'],
       bestFor: ['code-review', 'refactoring', 'maintenance']
+    },
+    {
+      id: 'google/gemini-2.5-pro',
+      name: 'Gemini 2.5 Pro',
+      provider: 'google',
+      maxTokens: 2097152,
+      pricing: { prompt: 1.25, completion: 5 },
+      capabilities: ['complex-reasoning', 'enterprise-features', 'large-context'],
+      bestFor: ['enterprise-applications', 'complex-systems', 'architecture']
     },
     {
       id: 'qwen/qwen3-coder',
@@ -134,6 +143,33 @@ export class OpenRouterService {
       pricing: { prompt: 3, completion: 15 },
       capabilities: ['balanced-performance', 'reasoning', 'code-analysis'],
       bestFor: ['general-purpose', 'balanced-cost', 'reliable-output']
+    },
+    {
+      id: 'deepseek/deepseek-r1-distill-llama-70b:free',
+      name: 'R1 0528 (free)',
+      provider: 'deepseek',
+      maxTokens: 8000,
+      pricing: { prompt: 0, completion: 0 },
+      capabilities: ['free-tier', 'reasoning', 'basic-coding'],
+      bestFor: ['free-users', 'testing', 'simple-tasks']
+    },
+    {
+      id: 'deepseek/deepseek-chat-v3-0324:free',
+      name: 'DeepSeek V3 0324 (free)',
+      provider: 'deepseek',
+      maxTokens: 8000,
+      pricing: { prompt: 0, completion: 0 },
+      capabilities: ['free-tier', 'code-understanding', 'basic-refactoring'],
+      bestFor: ['free-users', 'learning', 'simple-coding']
+    },
+    {
+      id: 'deepseek/deepseek-chat-v3.1',
+      name: 'DeepSeek V3.1',
+      provider: 'deepseek',
+      maxTokens: 64000,
+      pricing: { prompt: 0.55, completion: 2.19 },
+      capabilities: ['latest-model', 'improved-performance', 'advanced-reasoning'],
+      bestFor: ['cutting-edge', 'performance', 'latest-features']
     }
   ];
 
@@ -155,8 +191,9 @@ export class OpenRouterService {
       defaultModel: 'anthropic/claude-sonnet-4',
       fallbackModels: [
         'google/gemini-2.5-flash',
-        'deepseek/deepseek-v3-0324',
-        'anthropic/claude-3.7-sonnet'
+        'google/gemini-2.0-flash-001',
+        'deepseek/deepseek-chat-v3-0324',
+        'deepseek/deepseek-chat-v3-0324:free'
       ],
       maxRetries: 3,
       timeout: 60000,
@@ -201,18 +238,18 @@ export class OpenRouterService {
   selectBestModel(projectType: string, complexity: 'low' | 'medium' | 'high' = 'medium'): string {
     const modelPreferences: Record<string, string[]> = {
       'web': ['google/gemini-2.5-flash', 'anthropic/claude-3.7-sonnet', 'qwen/qwen3-coder'],
-      'blockchain': ['anthropic/claude-sonnet-4', 'deepseek/deepseek-v3-0324', 'google/gemini-2.5-flash'],
-      'backend': ['anthropic/claude-3.7-sonnet', 'google/gemini-2.0-flash', 'deepseek/deepseek-v3-0324'],
+      'blockchain': ['anthropic/claude-sonnet-4', 'deepseek/deepseek-chat-v3-0324', 'google/gemini-2.5-flash'],
+      'backend': ['anthropic/claude-3.7-sonnet', 'google/gemini-2.0-flash-001', 'deepseek/deepseek-chat-v3-0324'],
       'mobile': ['google/gemini-2.5-flash', 'qwen/qwen3-coder', 'anthropic/claude-3.7-sonnet'],
-      'ai': ['anthropic/claude-sonnet-4', 'google/gemini-2.5-flash', 'deepseek/deepseek-v3-0324'],
-      'payments': ['anthropic/claude-sonnet-4', 'anthropic/claude-3.7-sonnet', 'deepseek/deepseek-v3-0324']
+      'ai': ['anthropic/claude-sonnet-4', 'google/gemini-2.5-flash', 'deepseek/deepseek-chat-v3-0324'],
+      'payments': ['anthropic/claude-sonnet-4', 'anthropic/claude-3.7-sonnet', 'deepseek/deepseek-chat-v3-0324']
     };
 
     // Adjust for complexity
     if (complexity === 'high') {
       return 'anthropic/claude-sonnet-4'; // Best for complex tasks
     } else if (complexity === 'low') {
-      return 'google/gemini-2.0-flash'; // Fast and cost-effective
+      return 'google/gemini-2.0-flash-001'; // Fast and cost-effective
     }
 
     const preferredModels = modelPreferences[projectType] || modelPreferences['web'];
@@ -582,5 +619,14 @@ export class OpenRouterService {
   }
 }
 
-// Export singleton instance
-export const openRouterService = new OpenRouterService();
+// Export singleton instance (lazy-loaded)
+let _openRouterServiceInstance: OpenRouterService | null = null;
+
+export const openRouterService = {
+  get instance(): OpenRouterService {
+    if (!_openRouterServiceInstance) {
+      _openRouterServiceInstance = new OpenRouterService();
+    }
+    return _openRouterServiceInstance;
+  }
+};
