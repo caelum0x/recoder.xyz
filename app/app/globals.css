@@ -37,23 +37,23 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 217.2 32.6% 8.5%;
+    --card: 220 13% 18%;
     --card-foreground: 210 40% 98%;
-    --popover: 217.2 32.6% 8.5%;
+    --popover: 220 13% 18%;
     --popover-foreground: 210 40% 98%;
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 220 13% 25%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 75.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --muted: 220 13% 25%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 220 13% 25%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 75% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 20.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
+    --border: 220 13% 30%;
+    --input: 220 13% 25%;
+    --ring: 217.2 91.2% 59.8%;
     
     /* Enhanced dark mode brand colors */
     --recoder-primary: 217.2 91.2% 65%;
@@ -169,11 +169,23 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
+.dark .glass-effect {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.3);
   transition: all 0.3s ease;
+}
+
+.dark .glass-card {
+  background: rgba(34, 34, 34, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .glass-card:hover {
@@ -196,4 +208,40 @@
 .floating-element {
   animation: float 6s ease-in-out infinite;
   animation-delay: calc(var(--delay) * 0.5s);
+}
+
+/* Auth page specific improvements */
+.auth-header {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+}
+
+.dark .auth-header {
+  background: rgba(15, 15, 15, 0.9);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.auth-card {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dark .auth-card {
+  background: rgba(30, 30, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+.auth-button {
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.auth-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.dark .auth-button:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
 }
