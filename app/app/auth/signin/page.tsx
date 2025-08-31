@@ -103,7 +103,7 @@ function SignInForm() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
+      <header className="border-b auth-header">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
@@ -125,7 +125,7 @@ function SignInForm() {
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-md mx-auto">
           {/* Sign In Card */}
-          <Card className="mb-8">
+          <Card className="mb-8 auth-card border-0">
             <CardHeader className="text-center">
               <CardTitle className="text-2xl">Sign in to Recoder</CardTitle>
               <CardDescription>
@@ -168,7 +168,7 @@ function SignInForm() {
                     required
                   />
                 </div>
-                <Button className="w-full" size="lg" type="submit" disabled={loading}>
+                <Button className="w-full auth-button" size="lg" type="submit" disabled={loading}>
                   {loading ? (
                     <>
                       <div className="w-4 h-4 mr-2 animate-spin border-2 border-white border-t-transparent rounded-full" />
@@ -196,7 +196,7 @@ function SignInForm() {
               
               <Button 
                 variant="outline" 
-                className="w-full" 
+                className="w-full auth-button" 
                 size="lg" 
                 onClick={() => {
                   window.location.href = `https://github.com/login/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_GITHUB_ID || 'Ov23liVrw6X0xO8m2jPy'}&redirect_uri=${encodeURIComponent('https://recoder.xyz/auth/oauth-success')}&scope=user:email&state=github`;
@@ -208,7 +208,7 @@ function SignInForm() {
               
               <Button 
                 variant="outline" 
-                className="w-full" 
+                className="w-full auth-button" 
                 size="lg" 
                 onClick={() => {
                   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com';
@@ -235,7 +235,7 @@ function SignInForm() {
           </Card>
 
           {/* Platform Access Card */}
-          <Card>
+          <Card className="auth-card border-0">
             <CardHeader>
               <CardTitle className="text-lg">Platform Access</CardTitle>
               <CardDescription>
