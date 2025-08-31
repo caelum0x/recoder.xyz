@@ -123,3 +123,172 @@
     font-family: var(--recoder-font-sans);
   }
 }
+
+/* Professional Recoder Web UI Enhancements */
+.web-builder-container {
+  background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--muted)/0.3) 100%);
+  min-height: 100vh;
+}
+
+.dark .web-builder-container {
+  background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--muted)/0.1) 100%);
+}
+
+.web-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 10px -3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.dark .web-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.4), 0 4px 10px -3px rgba(0, 0, 0, 0.3);
+}
+
+.web-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.15), 0 6px 15px -3px rgba(0, 0, 0, 0.08);
+}
+
+.dark .web-card:hover {
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.5), 0 6px 15px -3px rgba(0, 0, 0, 0.4);
+}
+
+.web-header {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid hsl(var(--border));
+  transition: all 0.3s ease;
+}
+
+.dark .web-header {
+  background: rgba(15, 15, 15, 0.9);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.web-button {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 2px 8px -2px hsl(var(--primary)/0.3);
+}
+
+.web-button:hover {
+  background: hsl(var(--primary)/0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -4px hsl(var(--primary)/0.4);
+}
+
+.web-button:active {
+  transform: translateY(0);
+}
+
+.web-button-secondary {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  box-shadow: 0 2px 8px -2px hsl(var(--secondary)/0.3);
+}
+
+.web-button-secondary:hover {
+  background: hsl(var(--secondary)/0.9);
+  box-shadow: 0 6px 16px -4px hsl(var(--secondary)/0.4);
+}
+
+.web-input {
+  background: hsl(var(--background));
+  border: 2px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.web-input:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary)/0.1);
+  outline: none;
+}
+
+.dark .web-input:focus {
+  box-shadow: 0 0 0 3px hsl(var(--primary)/0.2);
+}
+
+.web-textarea {
+  background: hsl(var(--background));
+  border: 2px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.web-textarea:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary)/0.1);
+  outline: none;
+}
+
+.dark .web-textarea:focus {
+  box-shadow: 0 0 0 3px hsl(var(--primary)/0.2);
+}
+
+.code-preview {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 16px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.dark .code-preview {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-effect-web {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-effect-web {
+  background: rgba(15, 15, 15, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
