@@ -1,16 +1,20 @@
 /**
  * Commercial AI Hub Service for Production Engine
- * Simplified service that uses OpenRouter instead of complex legacy integrations
+ * Smart routing: OpenRouter (premium users) + Together.ai (free users)
+ * Cost optimization strategy for competitive advantage
  */
 
 import { logger } from '../utils/logger';
 import { openRouterService } from './openrouter-service';
+import { togetherService } from './together-service';
 
 export interface GenerationOptions {
   type?: string;
   complexity?: 'low' | 'medium' | 'high';
   maxTokens?: number;
   temperature?: number;
+  userTier?: 'free' | 'pro' | 'enterprise';
+  userId?: string;
 }
 
 export interface GenerationContext {
@@ -25,52 +29,172 @@ export interface GenerationContext {
   };
 }
 
+export interface SmartRoutingResult {
+  success: boolean;
+  content?: string;
+  model?: string;
+  provider?: 'openrouter' | 'together';
+  cost?: number;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+  error?: string;
+}
+
 export class CommercialAIHubService {
   
   constructor() {
-    logger.info('🤖 Initializing Commercial AI Hub Service with OpenRouter...');
+    logger.info('🤖 Initializing Commercial AI Hub Service with Smart Routing...');
+    logger.info('📊 Premium users → OpenRouter | Free users → Together.ai');
   }
 
   /**
-   * Generate code using the best available model
+   * Smart AI routing based on user tier and request complexity
    */
-  async generateWithBestModel(
+  async generateWithSmartRouting(
     prompt: string, 
     options: GenerationOptions = {}
-  ): Promise<string> {
+  ): Promise<SmartRoutingResult> {
+    const userTier = options.userTier || 'free';
+    const complexity = options.complexity || 'medium';
+    
+    logger.info(`🧠 Smart routing: User tier=${userTier}, Complexity=${complexity}`);
+
+    // Route based on user tier and complexity
+    if (userTier === 'free') {
+      return await this.generateWithTogether(prompt, options);
+    } else {
+      return await this.generateWithOpenRouter(prompt, options);
+    }
+  }
+
+  /**
+   * Generate using OpenRouter (premium models for paid users)
+   */
+  private async generateWithOpenRouter(
+    prompt: string, 
+    options: GenerationOptions
+  ): Promise<SmartRoutingResult> {
     try {
-      logger.info(`Starting code generation with OpenRouter...`);
+      logger.info(`🚀 Using OpenRouter for premium user generation...`);
       
-      // Use OpenRouter service directly
-      const result = await openRouterService.generateCode(prompt, {
+      const result = await openRouterService.instance.generateCode(prompt, {
         projectType: options.type || 'web',
         maxTokens: options.maxTokens || 8000,
         temperature: options.temperature || 0.3
       });
 
       if (result.success) {
-        logger.info(`Code generation successful with model: ${result.model}`);
-        return result.content;
+        logger.info(`✅ OpenRouter generation successful with model: ${result.model}`);
+        return {
+          success: true,
+          content: result.content,
+          model: result.model,
+          provider: 'openrouter',
+          cost: 0, // Calculate from usage if needed
+          usage: {
+            prompt_tokens: result.usage?.promptTokens || 0,
+            completion_tokens: result.usage?.completionTokens || 0,
+            total_tokens: result.usage?.totalTokens || 0
+          }
+        };
       } else {
-        throw new Error(result.error || 'Code generation failed');
+        throw new Error(result.error || 'OpenRouter generation failed');
       }
 
     } catch (error: any) {
-      logger.error(`Code generation failed: ${error.message}`);
-      throw error;
+      logger.error(`❌ OpenRouter generation failed: ${error.message}`);
+      
+      // Fallback to Together.ai for resilience
+      logger.info('🔄 Falling back to Together.ai for error recovery...');
+      return await this.generateWithTogether(prompt, options);
     }
   }
 
   /**
-   * Get available AI providers
+   * Generate using Together.ai (free models for free tier users)
+   */
+  private async generateWithTogether(
+    prompt: string, 
+    options: GenerationOptions
+  ): Promise<SmartRoutingResult> {
+    try {
+      logger.info(`🤝 Using Together.ai for free tier user generation...`);
+      
+      const taskType = this.determineTaskType(options.type || 'web');
+      const bestModel = togetherService.selectBestFreeModel(taskType);
+      const messages = togetherService.formatCodingPrompt(prompt, options.type || 'react');
+      
+      const result = await togetherService.generateCode({
+        model: bestModel,
+        messages,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      });
+
+      if (result.success) {
+        logger.info(`✅ Together.ai generation successful with model: ${result.model}`);
+        return {
+          success: true,
+          content: result.content,
+          model: result.model,
+          provider: 'together',
+          cost: 0, // Free tier
+          usage: result.usage
+        };
+      } else {
+        throw new Error(result.error || 'Together.ai generation failed');
+      }
+
+    } catch (error: any) {
+      logger.error(`❌ Together.ai generation failed: ${error.message}`);
+      
+      return {
+        success: false,
+        error: `Both OpenRouter and Together.ai failed: ${error.message}`,
+        provider: 'together'
+      };
+    }
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   */
+  async generateWithBestModel(
+    prompt: string, 
+    options: GenerationOptions = {}
+  ): Promise<string> {
+    const result = await this.generateWithSmartRouting(prompt, options);
+    
+    if (result.success) {
+      return result.content || '';
+    } else {
+      throw new Error(result.error || 'Code generation failed');
+    }
+  }
+
+  /**
+   * Get available AI providers (both premium and free)
    */
   async getAvailableProviders(): Promise<string[]> {
     try {
-      if (openRouterService.isConfigured()) {
-        const models = openRouterService.getAvailableModels();
-        return models.map(model => `${model.provider}/${model.id}`);
+      const providers: string[] = [];
+      
+      // Add OpenRouter models for premium users
+      if (openRouterService.instance.isConfigured()) {
+        const openRouterModels = openRouterService.instance.getAvailableModels();
+        providers.push(...openRouterModels.map(model => `openrouter/${model.provider}/${model.id}`));
       }
-      return ['openrouter-not-configured'];
+      
+      // Add Together.ai models for free users
+      if (togetherService.isServiceConfigured()) {
+        const togetherModels = togetherService.getAvailableModels();
+        providers.push(...togetherModels.map(model => `together/${model.provider}/${model.id}`));
+      }
+      
+      return providers.length > 0 ? providers : ['no-providers-configured'];
     } catch (error: any) {
       logger.error(`Failed to get providers: ${error.message}`);
       return ['error-getting-providers'];
@@ -78,230 +202,94 @@ export class CommercialAIHubService {
   }
 
   /**
-   * Health check for all AI services
+   * Enhanced health check for both OpenRouter and Together.ai
    */
   async healthCheck(): Promise<{
     overall: 'healthy' | 'degraded' | 'unhealthy';
-    unified: Record<string, boolean>;
-    legacy: Record<string, boolean>;
-  }> {
-    try {
-      const openRouterHealth = await openRouterService.healthCheck();
-      
-      const unified = {
-        openRouter: openRouterHealth.status === 'healthy',
-        anthropic: openRouterHealth.apiKeyValid,
-        google: openRouterHealth.modelsAvailable > 0,
-        deepSeek: openRouterHealth.status !== 'unhealthy'
+    services: {
+      openrouter: {
+        status: string;
+        healthy: boolean;
+        modelsAvailable: number;
       };
-
-      const legacy = {
-        ollama: false, // Disabled in commercial version
-        local: false   // Disabled in commercial version
+      together: {
+        status: string;
+        healthy: boolean;
+        modelsAvailable: number;
       };
-
-      const healthyCount = Object.values(unified).filter(Boolean).length;
-      let overall: 'healthy' | 'degraded' | 'unhealthy' = 'unhealthy';
-      
-      if (healthyCount >= 3) {
-        overall = 'healthy';
-      } else if (healthyCount >= 1) {
-        overall = 'degraded';
-      }
-
-      return { overall, unified, legacy };
-
-    } catch (error: any) {
-      logger.error(`Health check failed: ${error.message}`);
-      return {
-        overall: 'unhealthy',
-        unified: { openRouter: false, anthropic: false, google: false, deepSeek: false },
-        legacy: { ollama: false, local: false }
-      };
-    }
-  }
-
-  /**
-   * Get performance metrics
-   */
-  getProductionMetrics(): {
-    handlers: string[];
-    activeProviders: number;
-    totalRequests: number;
-    averageLatency: number;
-    errorRate: number;
-  } {
-    try {
-      const models = openRouterService.getAvailableModels();
-      
-      return {
-        handlers: models.map(m => m.id),
-        activeProviders: models.length,
-        totalRequests: 0, // Would be tracked in production
-        averageLatency: 0,
-        errorRate: 0
-      };
-    } catch (error) {
-      return {
-        handlers: [],
-        activeProviders: 0,
-        totalRequests: 0,
-        averageLatency: 0,
-        errorRate: 100
-      };
-    }
-  }
-
-  /**
-   * Generate structured code with validation
-   */
-  async generateStructuredCode(
-    context: GenerationContext,
-    prompt: string,
-    options: GenerationOptions = {}
-  ): Promise<{
-    code: string;
-    files: Array<{ path: string; content: string; type: string }>;
-    instructions: string;
-    metadata: {
-      provider: string;
-      model: string;
-      tokensUsed: number;
-      generationTime: number;
     };
+    totalModelsAvailable: number;
   }> {
-    const startTime = Date.now();
-    
     try {
-      // Enhanced prompt for structured output
-      const structuredPrompt = this.buildStructuredPrompt(context, prompt);
+      const openRouterHealth = await openRouterService.instance.healthCheck();
+      const togetherHealth = await togetherService.healthCheck();
       
-      const result = await openRouterService.generateCode(structuredPrompt, {
-        projectType: context.type,
-        maxTokens: options.maxTokens || 8000,
-        temperature: options.temperature || 0.3
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'Generation failed');
-      }
-
-      // Parse the structured output
-      const parsed = this.parseStructuredOutput(result.content);
-      
-      return {
-        code: result.content,
-        files: parsed.files,
-        instructions: parsed.instructions,
-        metadata: {
-          provider: 'openrouter',
-          model: result.model,
-          tokensUsed: result.usage.totalTokens,
-          generationTime: Date.now() - startTime
+      const services = {
+        openrouter: {
+          status: openRouterHealth.status,
+          healthy: openRouterHealth.status === 'healthy',
+          modelsAvailable: openRouterHealth.modelsAvailable || 0
+        },
+        together: {
+          status: togetherHealth.status,
+          healthy: togetherHealth.status === 'healthy',
+          modelsAvailable: togetherHealth.modelsAvailable || 0
         }
       };
 
-    } catch (error: any) {
-      logger.error(`Structured code generation failed: ${error.message}`);
-      throw error;
-    }
-  }
-
-  private buildStructuredPrompt(context: GenerationContext, userPrompt: string): string {
-    const contextInfo = `
-Project Type: ${context.type}
-Complexity: ${context.complexity}
-Requirements:
-- Real Code: ${context.requirements.realCode}
-- Include Tests: ${context.requirements.includeTests}
-- Include Docs: ${context.requirements.includeDocs}
-- Security Audit: ${context.requirements.securityAudit}
-- Performance Optimized: ${context.requirements.performanceOptimized}
-`;
-
-    return `${contextInfo}
-
-User Request: ${userPrompt}
-
-Please generate production-ready code with the following structure:
-1. Complete, working implementation
-2. Proper error handling
-3. Security best practices
-4. Performance optimizations
-5. Comprehensive documentation
-
-Format your response with clear file separations using:
-\`\`\`language file:path/filename
-[code content]
-\`\`\``;
-  }
-
-  private parseStructuredOutput(content: string): {
-    files: Array<{ path: string; content: string; type: string }>;
-    instructions: string;
-  } {
-    const files: Array<{ path: string; content: string; type: string }> = [];
-    let instructions = '';
-
-    // Extract code blocks
-    const codeBlockRegex = /```(\w+)?\s*(?:file:(.+?))?\n([\s\S]*?)```/gi;
-    let match;
-
-    while ((match = codeBlockRegex.exec(content)) !== null) {
-      const [, language, filePath, codeContent] = match;
+      const totalModelsAvailable = services.openrouter.modelsAvailable + services.together.modelsAvailable;
       
-      if (filePath && codeContent) {
-        files.push({
-          path: filePath.trim(),
-          content: codeContent.trim(),
-          type: this.determineFileType(filePath)
-        });
+      // Determine overall health
+      let overall: 'healthy' | 'degraded' | 'unhealthy';
+      if (services.openrouter.healthy && services.together.healthy) {
+        overall = 'healthy';
+      } else if (services.openrouter.healthy || services.together.healthy) {
+        overall = 'degraded';
+      } else {
+        overall = 'unhealthy';
       }
-    }
 
-    // Extract instructions (text not in code blocks)
-    const instructionsMatch = content.match(/(?:## Instructions|## Setup|## Usage)([\s\S]*?)(?=```|$)/i);
-    if (instructionsMatch) {
-      instructions = instructionsMatch[1].trim();
-    } else {
-      instructions = 'Run `npm install` and `npm start` to get started.';
-    }
+      logger.info(`🏥 AI Hub Health Check: ${overall} - OpenRouter(${services.openrouter.modelsAvailable}) + Together(${services.together.modelsAvailable}) = ${totalModelsAvailable} models`);
 
-    return { files, instructions };
+      return {
+        overall,
+        services,
+        totalModelsAvailable
+      };
+
+    } catch (error: any) {
+      logger.error(`Health check failed: ${error.message}`);
+      
+      return {
+        overall: 'unhealthy',
+        services: {
+          openrouter: { status: 'error', healthy: false, modelsAvailable: 0 },
+          together: { status: 'error', healthy: false, modelsAvailable: 0 }
+        },
+        totalModelsAvailable: 0
+      };
+    }
   }
 
-  private determineFileType(filePath: string): string {
-    const ext = filePath.split('.').pop()?.toLowerCase();
+  /**
+   * Determine task type for model selection
+   */
+  private determineTaskType(projectType: string): 'coding' | 'reasoning' | 'analysis' | 'multimodal' {
+    const codingTypes = ['web', 'react', 'vue', 'angular', 'node', 'express', 'next'];
+    const reasoningTypes = ['algorithm', 'backend', 'api', 'database'];
+    const analysisTypes = ['review', 'optimize', 'refactor', 'documentation'];
     
-    const typeMap: Record<string, string> = {
-      'js': 'code',
-      'jsx': 'code',
-      'ts': 'code',
-      'tsx': 'code',
-      'py': 'code',
-      'java': 'code',
-      'go': 'code',
-      'rs': 'code',
-      'sol': 'code',
-      'json': 'config',
-      'yaml': 'config',
-      'yml': 'config',
-      'env': 'config',
-      'md': 'documentation',
-      'txt': 'documentation',
-      'test.js': 'test',
-      'test.ts': 'test',
-      'spec.js': 'test',
-      'spec.ts': 'test'
-    };
-
-    if (filePath.includes('test') || filePath.includes('spec')) {
-      return 'test';
+    if (codingTypes.some(type => projectType.toLowerCase().includes(type))) {
+      return 'coding';
+    } else if (reasoningTypes.some(type => projectType.toLowerCase().includes(type))) {
+      return 'reasoning';
+    } else if (analysisTypes.some(type => projectType.toLowerCase().includes(type))) {
+      return 'analysis';
     }
-
-    return typeMap[ext || ''] || 'code';
+    
+    return 'coding'; // Default fallback
   }
 }
 
-// Export singleton instance
+// Create and export the singleton instance
 export const commercialAIHubService = new CommercialAIHubService();

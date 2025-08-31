@@ -10,7 +10,8 @@ app.use(express.json({ limit: '50mb' }));ation and validation service
 
 // Load environment variables first
 import * as dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import express from 'express';
 import cors from 'cors';
@@ -41,7 +42,7 @@ import authSyncRoutes from './routes/auth-sync';
 import { subscriptionAuthStack, authenticateSubscription } from './middleware/subscription-auth';
 
 const app = express();
-const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
+const PORT = process.env.PRODUCTION_ENGINE_PORT || process.env.ENGINE_PORT || process.env.PORT || 8001;
 
 // Services
 const validationService = new ValidationService();
@@ -332,7 +333,7 @@ app.get('/api/billing/pricing', (req, res) => {
 // OpenRouter service endpoints
 app.get('/api/openrouter/models', (req, res) => {
   try {
-    const models = openRouterService.getAvailableModels();
+    const models = openRouterService.instance.getAvailableModels();
     
     res.json({
       success: true,
@@ -354,7 +355,7 @@ app.get('/api/status', async (req, res) => {
     const memUsage = process.memoryUsage();
     
     // Get commercial service status
-    const openRouterHealth = await openRouterService.healthCheck();
+    const openRouterHealth = await openRouterService.instance.healthCheck();
     const rateLimitStats = rateLimitService.getUsageStatistics();
     
     res.json({
@@ -586,8 +587,7 @@ async function initializeAISystems() {
     
     // Test commercial AI hub health
     const health = await commercialAIHubService.healthCheck();
-    const healthyProviders = Object.values(health.unified).filter(Boolean).length + 
-                            Object.values(health.legacy).filter(Boolean).length;
+    const healthyProviders = Object.values(health.services).filter(service => service.healthy).length;
     logger.info(`✅ Commercial AI Hub health: ${healthyProviders} providers healthy (${health.overall})`);
     
     logger.info('🚀 All commercial AI systems initialized successfully');
