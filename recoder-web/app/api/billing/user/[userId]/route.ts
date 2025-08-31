@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { authOptions } from '@/lib/auth';
 import { dodoPayments } from '@/lib/dodo-payments';
 
@@ -43,7 +43,7 @@ export async function GET(
   context: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const params = await context.params;
     const { userId } = params;
 

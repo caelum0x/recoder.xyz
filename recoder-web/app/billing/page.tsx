@@ -6,8 +6,7 @@
 
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import BillingDashboard from '@/components/billing/BillingDashboard';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { Metadata } from 'next';
@@ -80,7 +79,7 @@ function BillingPageContent({ searchParams }: { searchParams: {
 }
 
 export default async function BillingPage({ searchParams }: BillingPageProps) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   const resolvedSearchParams = await searchParams;
   
   // If no session and no user_id from CLI, redirect to login

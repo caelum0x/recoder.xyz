@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { authOptions } from '@/lib/auth';
 import { unifiedAuth } from '@/lib/unified-auth';
 import { prisma } from '@/lib/prisma';
@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 // Generate API Key
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 // Get user's API keys
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
 // Revoke API key
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

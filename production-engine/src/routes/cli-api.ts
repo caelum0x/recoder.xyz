@@ -121,7 +121,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       projectType: projectContext?.framework || taskType
     };
 
-    const generationResult = await openRouterService.generateCode(
+    const generationResult = await openRouterService.instance.generateCode(
       prompt,
       generationOptions
     );

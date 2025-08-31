@@ -164,7 +164,7 @@ export default function MonitoringPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{healthStatus.summary.slowPerformanceRate.toFixed(1)}%</div>
                 <div className="text-xs text-muted-foreground">
-                  >5s response time
+                  &gt;5s response time
                 </div>
               </CardContent>
             </Card>
