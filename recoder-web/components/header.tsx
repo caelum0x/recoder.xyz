@@ -39,7 +39,7 @@ export default function Header() {
   };
 
   return (
-    <header className="relative mx-auto flex w-full shrink-0 items-center justify-center py-6">
+    <header className="relative mx-auto flex w-full shrink-0 items-center justify-center py-6 web-header">
       <Link href="/" className="flex items-center gap-3">
         <Image
           src="/recoder-logo.svg"

@@ -11,7 +11,7 @@ export default function LoadingButton({
   const { pending } = useFormStatus();
 
   return (
-    <button {...(rest as any)} disabled={pending}>
+    <button {...(rest as any)} disabled={pending} className={`web-button ${rest.className || ''}`}>
       <Spinner loading={pending}>{children}</Spinner>
     </button>
   );
