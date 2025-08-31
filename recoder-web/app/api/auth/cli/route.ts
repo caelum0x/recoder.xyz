@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { nanoid } from 'nanoid';
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Default: Return authentication status
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     return NextResponse.json({
       success: true,
       authenticated: !!session,

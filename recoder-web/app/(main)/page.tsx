@@ -106,14 +106,16 @@ export default function Home() {
         <Header />
 
         <div className="mt-10 flex grow flex-col items-center px-4 lg:mt-16">
-          <div className="mb-4 flex flex-wrap justify-center gap-2">
-            <div className="inline-flex shrink-0 items-center rounded-full border-[0.5px] bg-white px-7 py-2 text-xs text-gray-800 shadow-[0px_1px_1px_0px_rgba(0,0,0,0.25)] md:text-base">
-              <span className="text-center">
+          {/* Enhanced Feature Highlights */}
+          <div className="mb-8 flex flex-wrap justify-center gap-3">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-full backdrop-blur-sm">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              <span className="text-center text-sm font-medium text-blue-700">
                 Powered by <span className="font-semibold">Multi-AI Intelligence</span>
               </span>
             </div>
-            <div className="inline-flex shrink-0 items-center rounded-full border-[0.5px] bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 text-xs text-gray-700 shadow-[0px_1px_1px_0px_rgba(0,0,0,0.15)]">
-              <span className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-full backdrop-blur-sm">
+              <span className="flex items-center gap-2 text-sm font-medium text-purple-700">
                 <span className="flex items-center gap-1">
                   🤖 Claude • ⚡ Groq • 🔥 Together • 🌍 OpenRouter
                 </span>
@@ -121,66 +123,195 @@ export default function Home() {
             </div>
           </div>
 
-          <h1 className="mt-4 text-balance text-center text-4xl leading-none text-gray-700 md:text-[64px] lg:mt-8">
-            Turn your <span className="text-blue-500">idea</span>
-            <br className="hidden md:block" /> into{" "}
-            <span className="bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-              real apps
-            </span>
-          </h1>
-          <p className="mt-4 text-center text-gray-600 max-w-2xl mx-auto">
-            AI that generates <strong>production-ready code</strong> with real functionality. 
-            Smart model routing automatically selects the best AI for your task.
-          </p>
+          {/* Enhanced Hero Section with Better Visual Hierarchy */}
+          <div className="relative mb-12">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-pink-500/10 rounded-[3rem] blur-3xl transform scale-110" />
+            <div className="relative bg-white/70 backdrop-blur-md border border-white/30 rounded-[2rem] p-8 md:p-12 shadow-2xl ring-1 ring-black/5">
+              <div className="text-center space-y-8">
+                <div className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-100/80 to-purple-100/80 rounded-full text-sm font-semibold text-gray-800 border border-blue-200/50 backdrop-blur-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span>Production-Ready AI Development Platform</span>
+                </div>
+                
+                <div className="space-y-4">
+                  <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-tight">
+                    <span className="bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent">
+                      Ship Ideas
+                    </span>
+                    <br />
+                    <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      Into Reality
+                    </span>
+                  </h1>
+                  
+                  <p className="text-lg md:text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
+                    Transform concepts into <span className="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">production-ready applications</span> using our 
+                    multi-AI development platform. Smart routing across <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-md">15+ models</span> 
+                    ensures optimal results for every task.
+                  </p>
+                </div>
+                
+                {/* Enhanced Feature Highlights */}
+                <div className="flex flex-wrap justify-center gap-3 mt-8">
+                  {[
+                    { icon: "⚡", text: "Lightning Fast", color: "green" },
+                    { icon: "🧠", text: "Smart AI Routing", color: "blue" },
+                    { icon: "🚀", text: "Deploy Instantly", color: "purple" },
+                    { icon: "🔒", text: "Enterprise Ready", color: "orange" }
+                  ].map((feature) => (
+                    <div key={feature.text} className={`group flex items-center gap-2 px-4 py-3 bg-white/80 rounded-xl border border-gray-200/50 backdrop-blur-sm hover:scale-105 transition-all duration-200 hover:shadow-lg ${
+                      feature.color === 'green' ? 'hover:border-green-300 hover:bg-green-50/50' :
+                      feature.color === 'blue' ? 'hover:border-blue-300 hover:bg-blue-50/50' :
+                      feature.color === 'purple' ? 'hover:border-purple-300 hover:bg-purple-50/50' :
+                      'hover:border-orange-300 hover:bg-orange-50/50'
+                    }`}>
+                      <span className="text-lg">{feature.icon}</span>
+                      <span className="text-sm font-semibold text-gray-800">{feature.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
           
-          {/* Platform Selection */}
-          <div className="mt-8 flex justify-center">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full">
+          {/* Platform Ecosystem Overview */}
+          <div className="mt-16 w-full max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                <span className="bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+                  Complete Development Ecosystem
+                </span>
+              </h2>
+              <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+                Five integrated platforms working together to accelerate your development workflow
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Chat Platform */}
               <Link 
                 href="/chats" 
-                className="group flex flex-col items-center p-6 bg-white rounded-2xl border-2 border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-200"
+                className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-8 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2"
               >
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-2xl">💬</span>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Recoder Chat</h3>
-                <p className="text-gray-600 text-center text-sm">Interactive AI conversation for complex development tasks and learning</p>
-                <div className="mt-4 flex items-center text-blue-600 group-hover:translate-x-1 transition-transform">
-                  <span className="text-sm font-medium">Start Chatting</span>
-                  <ArrowRightIcon className="ml-1 w-4 h-4" />
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                    <span className="text-2xl">💬</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">chat.recoder.xyz</h3>
+                  <p className="text-gray-600 mb-6 leading-relaxed">
+                    Multi-AI chat platform with smart model routing. ChatGPT competitor with 15+ AI models.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-blue-600 group-hover:translate-x-2 transition-transform duration-300">
+                      <span className="font-semibold">Start Chatting</span>
+                      <ArrowRightIcon className="w-5 h-5" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      <span className="text-xs text-green-600 font-medium">Live</span>
+                    </div>
+                  </div>
                 </div>
               </Link>
               
-              <div className="group flex flex-col items-center p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-200 shadow-md">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4">
-                  <span className="text-2xl">🚀</span>
+              {/* Current Platform - Web Builder */}
+              <div className="group relative overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-300 rounded-2xl p-8 shadow-lg">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/10 to-pink-600/5" />
+                <div className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                  ACTIVE
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Recoder Web</h3>
-                <p className="text-gray-600 text-center text-sm">Generate complete applications from prompts (you're here!)</p>
-                <div className="mt-4 flex items-center text-blue-600">
-                  <span className="text-sm font-medium">Current Platform</span>
-                  <span className="ml-2 text-xs bg-blue-100 px-2 py-1 rounded-full">Active</span>
+                <div className="relative z-10">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                    <span className="text-2xl">🚀</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">web.recoder.xyz</h3>
+                  <p className="text-gray-700 mb-6 leading-relaxed">
+                    AI app builder platform. Complete applications from prompts with live preview and deployment.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-blue-700">
+                      <span className="font-semibold">Current Platform</span>
+                      <span className="px-2 py-1 bg-blue-200 text-xs font-bold rounded-full">YOU'RE HERE</span>
+                    </div>
+                  </div>
                 </div>
               </div>
               
-              <div className="group flex flex-col items-center p-6 bg-white rounded-2xl border-2 border-gray-200 hover:border-green-300 hover:shadow-lg transition-all duration-200 cursor-pointer" onClick={() => {
-                document.getElementById('cli-install-section')?.scrollIntoView({ behavior: 'smooth' });
-              }}>
-                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-2xl">⚡</span>
+              {/* CLI Platform */}
+              <div 
+                className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-8 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 cursor-pointer"
+                onClick={() => document.getElementById('cli-install-section')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                    <span className="text-2xl">⚡</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">@recoder/cli</h3>
+                  <p className="text-gray-600 mb-6 leading-relaxed">
+                    Professional command-line tool with AI orchestration, smart routing, and vibe mode.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-green-600 group-hover:translate-x-2 transition-transform duration-300">
+                      <span className="font-semibold">Install CLI</span>
+                      <ArrowRightIcon className="w-5 h-5" />
+                    </div>
+                    <div className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">
+                      npm i -g
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Recoder CLI</h3>
-                <p className="text-gray-600 text-center text-sm">Professional command-line tool with advanced AI orchestration</p>
-                <div className="mt-4 flex items-center text-green-600 group-hover:translate-x-1 transition-transform">
-                  <span className="text-sm font-medium">Install CLI</span>
-                  <ArrowRightIcon className="ml-1 w-4 h-4" />
+              </div>
+              
+              {/* Main Website */}
+              <div className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-8 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-500/5 via-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 bg-gradient-to-br from-gray-700 to-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                    <span className="text-2xl">🏠</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">recoder.xyz</h3>
+                  <p className="text-gray-600 mb-6 leading-relaxed">
+                    Main platform hub with authentication, billing, documentation, and user management.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-gray-600 group-hover:translate-x-2 transition-transform duration-300">
+                      <span className="font-semibold">Visit Main Site</span>
+                      <ArrowRightIcon className="w-5 h-5" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* CLI Router */}
+              <div className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-8 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-pink-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                    <span className="text-2xl">🔀</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">recoder-cli-router</h3>
+                  <p className="text-gray-600 mb-6 leading-relaxed">
+                    Enterprise AI model router with cost optimization and intelligent load balancing.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-purple-600 group-hover:translate-x-2 transition-transform duration-300">
+                      <span className="font-semibold">Enterprise Router</span>
+                      <ArrowRightIcon className="w-5 h-5" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-purple-600 font-bold bg-purple-100 px-2 py-1 rounded-full">ENTERPRISE</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Professional AI Generation Form */}
           <form
-            className="relative w-full max-w-2xl pt-6 lg:pt-12"
+            className="relative w-full max-w-4xl pt-12 lg:pt-16"
             action={async (formData) => {
               startTransition(async () => {
                 const { prompt, model, quality } = Object.fromEntries(formData);
@@ -231,286 +362,485 @@ export default function Home() {
             }}
           >
             <Fieldset>
-              <div className="relative flex w-full max-w-2xl rounded-xl border-4 border-gray-300 bg-white pb-10">
-                <div className="w-full">
-                  {screenshotLoading && (
-                    <div className="relative mx-3 mt-3">
-                      <div className="rounded-xl">
-                        <div className="group mb-2 flex h-16 w-[68px] animate-pulse items-center justify-center rounded bg-gray-200">
-                          <Spinner />
+              {/* Enhanced Form Container with Professional Design */}
+              <div className="relative bg-gradient-to-br from-white/95 to-white/90 backdrop-blur-md border-2 border-white/30 rounded-3xl shadow-2xl overflow-hidden ring-1 ring-black/5">
+                {/* Enhanced Form Header */}
+                <div className="bg-gradient-to-r from-blue-50/90 to-purple-50/90 backdrop-blur-sm p-8 border-b border-white/20">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-bold text-gray-900 tracking-tight">AI Application Builder</h3>
+                      <p className="text-base text-gray-700 font-medium">Describe your app and watch it come to life with intelligent AI assistance</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {smartRouting && recommendedModel && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-100/80 to-green-100/80 rounded-full border border-blue-200/50 backdrop-blur-sm">
+                          <span className="text-sm">🎯</span>
+                          <span className="text-sm font-semibold text-blue-700">Smart AI Selected</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 px-3 py-2 bg-green-100/80 rounded-full border border-green-200/50">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        <span className="text-xs font-semibold text-green-700">ONLINE</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Enhanced Main Form Content */}
+                <div className="relative flex w-full">
+                  <div className="w-full p-6">
+                    {screenshotLoading && (
+                      <div className="relative mb-4">
+                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4 border border-blue-200/50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gray-200 rounded-xl animate-pulse flex items-center justify-center">
+                              <Spinner />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-700">Uploading image...</div>
+                              <div className="text-xs text-gray-500">Processing visual input for enhanced context</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {screenshotUrl && (
+                      <div className={`${isPending ? "invisible" : ""} relative mb-4`}>
+                        <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl p-4 border border-green-200/50">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <img
+                                alt="screenshot"
+                                src={screenshotUrl}
+                                className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow-lg"
+                              />
+                              <button
+                                type="button"
+                                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg transition-colors"
+                                onClick={() => {
+                                  setScreenshotUrl(undefined);
+                                  if (fileInputRef.current) {
+                                    fileInputRef.current.value = "";
+                                  }
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-700">Visual input attached</div>
+                              <div className="text-xs text-gray-500">AI will analyze this image for enhanced context</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Enhanced Textarea */}
+                    <div className="relative mb-6">
+                      <div className="bg-white/80 border-2 border-gray-200/50 rounded-2xl shadow-inner overflow-hidden focus-within:border-blue-300 focus-within:shadow-lg transition-all duration-200">
+                        <div className="p-4">
+                          <div className="invisible w-full whitespace-pre-wrap text-lg">
+                            {textareaResizePrompt}
+                          </div>
+                          <textarea
+                            placeholder="Build me a budgeting app with expense tracking, categories, and beautiful charts..."
+                            required
+                            name="prompt"
+                            rows={1}
+                            className="peer absolute inset-4 w-[calc(100%-2rem)] resize-none bg-transparent text-lg placeholder-gray-500 focus:outline-none disabled:opacity-50 font-medium"
+                            value={prompt}
+                            onChange={(e) => {
+                              setPrompt(e.target.value);
+                              // Trigger smart recommendation after user stops typing
+                              if (smartRouting && e.target.value.length > 10) {
+                                setTimeout(() => getSmartRecommendation(e.target.value), 1000);
+                              }
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" && !event.shiftKey) {
+                                event.preventDefault();
+                                const target = event.target;
+                                if (!(target instanceof HTMLTextAreaElement)) return;
+                                target.closest("form")?.requestSubmit();
+                              }
+                            }}
+                          />
                         </div>
                       </div>
                     </div>
-                  )}
-                  {screenshotUrl && (
-                    <div
-                      className={`${isPending ? "invisible" : ""} relative mx-3 mt-3`}
-                    >
-                      <div className="rounded-xl">
-                        <img
-                          alt="screenshot"
-                          src={screenshotUrl}
-                          className="group relative mb-2 h-16 w-[68px] rounded"
+                  </div>
+                </div>
+
+                {/* Enhanced Form Controls Bar */}
+                <div className="bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm border-t border-white/20 p-6">
+                  <div className="flex items-center justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                      {/* Enhanced Model Selector */}
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold text-gray-700">AI Model:</label>
+                        <Select.Root
+                          name="model"
+                          value={model}
+                          onValueChange={setModel}
+                        >
+                          <Select.Trigger className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                            isUsingRecommended 
+                              ? 'text-blue-700 bg-blue-50 border-blue-200 shadow-md' 
+                              : 'text-gray-700 bg-white border-gray-200 hover:border-gray-300'
+                          }`}>
+                            <Select.Value aria-label={model}>
+                              <span className="flex items-center gap-2">
+                                {isUsingRecommended && <span className="text-xs">🎯</span>}
+                                <span className="font-semibold">{selectedModel?.label}</span>
+                                {selectedModel?.provider && (
+                                  <span className="text-xs px-2 py-1 bg-gray-100 rounded-full">{selectedModel.provider}</span>
+                                )}
+                              </span>
+                            </Select.Value>
+                            <Select.Icon>
+                              <ChevronDownIcon className="w-4 h-4" />
+                            </Select.Icon>
+                          </Select.Trigger>
+                          <Select.Portal>
+                            <Select.Content className="overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/10 max-h-96 overflow-y-auto border border-gray-200/50 backdrop-blur-md">
+                              <Select.Viewport className="p-3 space-y-2">
+                                {/* Smart Routing Toggle */}
+                                <div className="px-3 py-2 border-b border-gray-200 mb-3">
+                                  <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={smartRouting}
+                                      onChange={(e) => {
+                                        setSmartRouting(e.target.checked);
+                                        if (e.target.checked && prompt.length > 10) {
+                                          getSmartRecommendation(prompt);
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                    />
+                                    <span className="font-medium">🧠 Smart AI Selection</span>
+                                  </label>
+                                  <p className="text-xs text-gray-500 mt-1 ml-7">Automatically select the best model for your prompt</p>
+                                </div>
+                                
+                                {/* Group models by provider */}
+                                {Object.entries(AI_PROVIDERS).map(([providerId, provider]) => {
+                                  const providerModels = MODELS.filter(m => m.provider === providerId);
+                                  if (providerModels.length === 0 || !provider.available) return null;
+                                  
+                                  return (
+                                    <div key={providerId} className="space-y-1">
+                                      <div className="px-3 py-2 text-xs font-bold text-gray-800 bg-gradient-to-r from-gray-100 to-gray-50 rounded-lg border border-gray-200/50">
+                                        {provider.name} {!provider.available && '(Unavailable)'}
+                                      </div>
+                                      {providerModels.map((m) => (
+                                        <Select.Item
+                                          key={m.value}
+                                          value={m.value}
+                                          className="flex cursor-pointer items-center gap-3 rounded-lg p-3 text-sm data-[highlighted]:bg-blue-50 data-[highlighted]:outline-none ml-3 border border-transparent hover:border-blue-200/50 transition-all"
+                                        >
+                                          <Select.ItemText className="flex items-center gap-3 text-gray-700 flex-1">
+                                            <div className="flex flex-col gap-1">
+                                              <span className="flex items-center gap-2 font-medium">
+                                                {m.value === recommendedModel && smartRouting && <span className="text-xs">🎯</span>}
+                                                {m.label}
+                                              </span>
+                                              {m.description && (
+                                                <span className="text-xs text-gray-500">{m.description}</span>
+                                              )}
+                                            </div>
+                                          </Select.ItemText>
+                                          <Select.ItemIndicator>
+                                            <CheckIcon className="w-4 h-4 text-blue-600" />
+                                          </Select.ItemIndicator>
+                                        </Select.Item>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </Select.Viewport>
+                              <Select.ScrollDownButton />
+                              <Select.Arrow />
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select.Root>
+                      </div>
+
+                      <div className="h-6 w-px bg-gray-300" />
+
+                      {/* Enhanced Quality Selector */}
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold text-gray-700">Quality:</label>
+                        <Select.Root
+                          name="quality"
+                          value={quality}
+                          onValueChange={setQuality}
+                        >
+                          <Select.Trigger className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-gray-200 bg-white text-sm font-medium text-gray-700 hover:border-gray-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all">
+                            <Select.Value aria-label={quality}>
+                              <span className="flex items-center gap-2">
+                                <span className={quality === "high" ? "text-green-600" : "text-orange-600"}>
+                                  {quality === "high" ? "🐎" : "⚡"}
+                                </span>
+                                <span className="font-semibold">
+                                  {quality === "low" ? "Fast Mode" : "High Quality"}
+                                </span>
+                              </span>
+                            </Select.Value>
+                            <Select.Icon>
+                              <ChevronDownIcon className="w-4 h-4" />
+                            </Select.Icon>
+                          </Select.Trigger>
+                          <Select.Portal>
+                            <Select.Content className="overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/10 border border-gray-200/50">
+                              <Select.Viewport className="p-3 space-y-2">
+                                {[
+                                  { value: "low", label: "Fast Mode", icon: "⚡", desc: "Quick iterations and faster results" },
+                                  { value: "high", label: "High Quality", icon: "🐎", desc: "Better results with more processing time" },
+                                ].map((q) => (
+                                  <Select.Item
+                                    key={q.value}
+                                    value={q.value}
+                                    className="flex cursor-pointer items-center gap-3 rounded-lg p-3 text-sm data-[highlighted]:bg-blue-50 data-[highlighted]:outline-none border border-transparent hover:border-blue-200/50 transition-all"
+                                  >
+                                    <Select.ItemText className="flex items-center gap-3 text-gray-700 flex-1">
+                                      <span className="text-lg">{q.icon}</span>
+                                      <div className="flex flex-col gap-1">
+                                        <span className="font-medium">{q.label}</span>
+                                        <span className="text-xs text-gray-500">{q.desc}</span>
+                                      </div>
+                                    </Select.ItemText>
+                                    <Select.ItemIndicator>
+                                      <CheckIcon className="w-4 h-4 text-blue-600" />
+                                    </Select.ItemIndicator>
+                                  </Select.Item>
+                                ))}
+                              </Select.Viewport>
+                              <Select.ScrollDownButton />
+                              <Select.Arrow />
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select.Root>
+                      </div>
+                      
+                      <div className="h-6 w-px bg-gray-300" />
+                      
+                      {/* Enhanced File Upload */}
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold text-gray-700">Visual:</label>
+                        <label
+                          htmlFor="screenshot"
+                          className="flex cursor-pointer items-center gap-2 px-4 py-2 rounded-xl border-2 border-gray-200 bg-white text-sm font-medium text-gray-700 hover:border-gray-300 hover:shadow-md transition-all"
+                        >
+                          <div className="w-5 h-5 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md flex items-center justify-center">
+                            <UploadIcon className="w-3 h-3 text-white" />
+                          </div>
+                          <span>Attach Image</span>
+                        </label>
+                        <input
+                          id="screenshot"
+                          type="file"
+                          accept="image/png, image/jpeg, image/webp"
+                          onChange={handleScreenshotUpload}
+                          className="hidden"
+                          ref={fileInputRef}
                         />
                       </div>
-                      <button
-                        type="button"
-                        id="x-circle-icon"
-                        className="absolute -right-3 -top-4 left-14 z-10 size-5 rounded-full bg-white text-gray-900 hover:text-gray-500"
-                        onClick={() => {
-                          setScreenshotUrl(undefined);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = "";
-                          }
-                        }}
+                    </div>
+
+                    {/* Enhanced Submit Button */}
+                    <div className="relative flex shrink-0">
+                      <LoadingButton
+                        className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-bold text-base rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
+                        type="submit"
+                        disabled={!prompt.trim() || isPending}
                       >
-                        <XCircleIcon />
-                      </button>
+                        {isPending ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <span>Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Generate App</span>
+                            <ArrowRightIcon className="w-5 h-5" />
+                          </>
+                        )}
+                      </LoadingButton>
                     </div>
-                  )}
-                  <div className="relative">
-                    <div className="p-3">
-                      <p className="invisible w-full whitespace-pre-wrap">
-                        {textareaResizePrompt}
-                      </p>
-                    </div>
-                    <textarea
-                      placeholder="Build me a budgeting app..."
-                      required
-                      name="prompt"
-                      rows={1}
-                      className="peer absolute inset-0 w-full resize-none bg-transparent p-3 placeholder-gray-500 focus-visible:outline-none disabled:opacity-50"
-                      value={prompt}
-                      onChange={(e) => {
-                        setPrompt(e.target.value);
-                        // Trigger smart recommendation after user stops typing
-                        if (smartRouting && e.target.value.length > 10) {
-                          setTimeout(() => getSmartRecommendation(e.target.value), 1000);
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                          event.preventDefault();
-                          const target = event.target;
-                          if (!(target instanceof HTMLTextAreaElement)) return;
-                          target.closest("form")?.requestSubmit();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="absolute bottom-2 left-2 right-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Select.Root
-                      name="model"
-                      value={model}
-                      onValueChange={setModel}
-                    >
-                      <Select.Trigger className={`inline-flex items-center gap-1 rounded-md p-1 text-sm hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300 ${
-                        isUsingRecommended ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:text-gray-700'
-                      }`}>
-                        <Select.Value aria-label={model}>
-                          <span className="flex items-center gap-1">
-                            {isUsingRecommended && <span className="text-xs">🎯</span>}
-                            {selectedModel?.label}
-                            {selectedModel?.provider && (
-                              <span className="text-xs text-gray-500">({selectedModel.provider})</span>
-                            )}
-                          </span>
-                        </Select.Value>
-                        <Select.Icon>
-                          <ChevronDownIcon className="size-3" />
-                        </Select.Icon>
-                      </Select.Trigger>
-                      <Select.Portal>
-                        <Select.Content className="overflow-hidden rounded-md bg-white shadow ring-1 ring-black/5 max-h-96 overflow-y-auto">
-                          <Select.Viewport className="space-y-1 p-2">
-                            {/* Smart Routing Toggle */}
-                            <div className="px-2 py-1 border-b border-gray-200 mb-2">
-                              <label className="flex items-center gap-2 text-xs text-gray-600">
-                                <input
-                                  type="checkbox"
-                                  checked={smartRouting}
-                                  onChange={(e) => {
-                                    setSmartRouting(e.target.checked);
-                                    if (e.target.checked && prompt.length > 10) {
-                                      getSmartRecommendation(prompt);
-                                    }
-                                  }}
-                                  className="rounded"
-                                />
-                                🧠 Smart AI Selection
-                              </label>
-                            </div>
-                            
-                            {/* Group models by provider */}
-                            {Object.entries(AI_PROVIDERS).map(([providerId, provider]) => {
-                              const providerModels = MODELS.filter(m => m.provider === providerId);
-                              if (providerModels.length === 0 || !provider.available) return null;
-                              
-                              return (
-                                <div key={providerId}>
-                                  <div className="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-50 rounded">
-                                    {provider.name} {!provider.available && '(Unavailable)'}
-                                  </div>
-                                  {providerModels.map((m) => (
-                                    <Select.Item
-                                      key={m.value}
-                                      value={m.value}
-                                      className="flex cursor-pointer items-center gap-1 rounded-md p-1 text-sm data-[highlighted]:bg-gray-100 data-[highlighted]:outline-none ml-2"
-                                    >
-                                      <Select.ItemText className="inline-flex items-center gap-2 text-gray-500 flex-1">
-                                        <div className="flex flex-col">
-                                          <span className="flex items-center gap-1">
-                                            {m.value === recommendedModel && smartRouting && <span className="text-xs">🎯</span>}
-                                            {m.label}
-                                          </span>
-                                          {m.description && (
-                                            <span className="text-xs text-gray-400">{m.description}</span>
-                                          )}
-                                        </div>
-                                      </Select.ItemText>
-                                      <Select.ItemIndicator>
-                                        <CheckIcon className="size-3 text-blue-600" />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                  ))}
-                                </div>
-                              );
-                            })}
-                          </Select.Viewport>
-                          <Select.ScrollDownButton />
-                          <Select.Arrow />
-                        </Select.Content>
-                      </Select.Portal>
-                    </Select.Root>
-
-                    <div className="h-4 w-px bg-gray-200 max-sm:hidden" />
-
-                    <Select.Root
-                      name="quality"
-                      value={quality}
-                      onValueChange={setQuality}
-                    >
-                      <Select.Trigger className="inline-flex items-center gap-1 rounded p-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300">
-                        <Select.Value aria-label={quality}>
-                          <span className="max-sm:hidden">
-                            {quality === "low"
-                              ? "Low quality [faster]"
-                              : "High quality [slower]"}
-                          </span>
-                          <span className="sm:hidden">
-                            <LightningBoltIcon className="size-3" />
-                          </span>
-                        </Select.Value>
-                        <Select.Icon>
-                          <ChevronDownIcon className="size-3" />
-                        </Select.Icon>
-                      </Select.Trigger>
-                      <Select.Portal>
-                        <Select.Content className="overflow-hidden rounded-md bg-white shadow ring-1 ring-black/5">
-                          <Select.Viewport className="space-y-1 p-2">
-                            {[
-                              { value: "low", label: "Low quality [faster]" },
-                              {
-                                value: "high",
-                                label: "High quality [slower]",
-                              },
-                            ].map((q) => (
-                              <Select.Item
-                                key={q.value}
-                                value={q.value}
-                                className="flex cursor-pointer items-center gap-1 rounded-md p-1 text-sm data-[highlighted]:bg-gray-100 data-[highlighted]:outline-none"
-                              >
-                                <Select.ItemText className="inline-flex items-center gap-2 text-gray-500">
-                                  {q.label}
-                                </Select.ItemText>
-                                <Select.ItemIndicator>
-                                  <CheckIcon className="size-3 text-blue-600" />
-                                </Select.ItemIndicator>
-                              </Select.Item>
-                            ))}
-                          </Select.Viewport>
-                          <Select.ScrollDownButton />
-                          <Select.Arrow />
-                        </Select.Content>
-                      </Select.Portal>
-                    </Select.Root>
-                    <div className="h-4 w-px bg-gray-200 max-sm:hidden" />
-                    <div>
-                      <label
-                        htmlFor="screenshot"
-                        className="flex cursor-pointer gap-2 text-sm text-gray-400 hover:underline"
-                      >
-                        <div className="flex size-6 items-center justify-center rounded bg-black hover:bg-gray-700">
-                          <UploadIcon className="size-4" />
-                        </div>
-                        <div className="flex items-center justify-center transition hover:text-gray-700">
-                          Attach
-                        </div>
-                      </label>
-                      <input
-                        // name="screenshot"
-                        id="screenshot"
-                        type="file"
-                        accept="image/png, image/jpeg, image/webp"
-                        onChange={handleScreenshotUpload}
-                        className="hidden"
-                        ref={fileInputRef}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="relative flex shrink-0 has-[:disabled]:opacity-50">
-                    <div className="pointer-events-none absolute inset-0 -bottom-[1px] rounded bg-blue-500" />
-
-                    <LoadingButton
-                      className="relative inline-flex size-6 items-center justify-center rounded bg-blue-500 font-medium text-white shadow-lg outline-blue-300 hover:bg-blue-500/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                      type="submit"
-                    >
-                      <ArrowRightIcon />
-                    </LoadingButton>
                   </div>
                 </div>
 
+                {/* Loading Overlay */}
                 {isPending && (
-                  <LoadingMessage
-                    isHighQuality={quality === "high"}
-                    screenshotUrl={screenshotUrl}
-                  />
+                  <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex items-center justify-center rounded-3xl">
+                    <div className="flex flex-col items-center justify-center gap-4 text-gray-700">
+                      <div className="relative">
+                        <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <span className="text-white font-bold text-sm">AI</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-semibold mb-2">
+                          {quality === "high"
+                            ? `Creating your project plan...`
+                            : screenshotUrl
+                              ? "Analyzing your screenshot..."
+                              : `Building your app...`}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {quality === "high" ? "This may take up to 15 seconds for optimal results" : "Fast generation in progress"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="mt-4 flex w-full flex-wrap justify-center gap-3">
-                {SUGGESTED_PROMPTS.map((v) => {
-                  const isComplex = (v as any).complexity === 'complex';
-                  const recommendedModelInfo = MODELS.find(m => m.value === (v as any).recommendedModel);
-                  
-                  return (
-                    <button
-                      key={v.title}
-                      type="button"
-                      onClick={() => {
-                        setPrompt(v.description);
-                        if (smartRouting && (v as any).recommendedModel) {
-                          setModel((v as any).recommendedModel);
-                          setRecommendedModel((v as any).recommendedModel);
-                        }
-                      }}
-                      className={`rounded px-2.5 py-1.5 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300 ${
-                        isComplex ? 'bg-gradient-to-r from-purple-200 to-blue-200 border border-purple-300' : 'bg-gray-200'
-                      }`}
-                      title={recommendedModelInfo ? `Recommended: ${recommendedModelInfo.label}` : undefined}
-                    >
-                      <span className="flex items-center gap-1">
-                        {isComplex && <span className="text-xs">✨</span>}
-                        {v.title}
-                        {recommendedModelInfo && (
-                          <span className="text-xs text-gray-500">({recommendedModelInfo.provider})</span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
+              
+              {/* Enhanced AI Model Information Panel */}
+              {selectedModel && (
+                <div className="info-panel mt-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                          isUsingRecommended 
+                            ? 'bg-gradient-to-br from-green-500 to-blue-600' 
+                            : 'bg-gradient-to-br from-blue-500 to-purple-600'
+                        }`}>
+                          <span className="text-white font-bold text-lg">
+                            {selectedModel.provider?.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            {isUsingRecommended && (
+                              <div className="info-badge">
+                                <span>🎯</span>
+                                <span>Smart Selected</span>
+                              </div>
+                            )}
+                            <h4 className="font-bold text-gray-900 text-lg">{selectedModel.label}</h4>
+                            <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-medium">
+                              {selectedModel.provider}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            {isUsingRecommended 
+                              ? '✨ Automatically selected based on your prompt complexity and requirements' 
+                              : 'Manually selected AI model'}
+                          </p>
+                          {selectedModel.description && (
+                            <p className="text-xs text-gray-500 mt-1">{selectedModel.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Configuration Summary */}
+                    <div className="grid grid-cols-3 gap-4 pt-3 border-t border-gray-200/50">
+                      <div className="text-center">
+                        <div className={`text-lg font-bold ${
+                          quality === 'high' ? 'text-green-600' : 'text-orange-600'
+                        }`}>
+                          {quality === 'high' ? '🐎' : '⚡'}
+                        </div>
+                        <div className="text-xs font-medium text-gray-700">
+                          {quality === 'high' ? 'High Quality' : 'Fast Mode'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {quality === 'high' ? 'Better results' : 'Quick iterations'}
+                        </div>
+                      </div>
+                      
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-600">
+                          {smartRouting ? '🧠' : '🎯'}
+                        </div>
+                        <div className="text-xs font-medium text-gray-700">
+                          {smartRouting ? 'Smart Routing' : 'Manual Select'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {smartRouting ? 'Auto-optimized' : 'User controlled'}
+                        </div>
+                      </div>
+                      
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-purple-600">
+                          {screenshotUrl ? '📷' : '📝'}
+                        </div>
+                        <div className="text-xs font-medium text-gray-700">
+                          {screenshotUrl ? 'Visual Input' : 'Text Only'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {screenshotUrl ? 'Image analysis' : 'Prompt based'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Enhanced Suggested Prompts */}
+              <div className="mt-8">
+                <div className="text-center mb-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Popular Project Ideas</h4>
+                  <p className="text-sm text-gray-600">Click any example to get started instantly</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {SUGGESTED_PROMPTS.map((v) => {
+                    const isComplex = (v as any).complexity === 'complex';
+                    const recommendedModelInfo = MODELS.find(m => m.value === (v as any).recommendedModel);
+                    
+                    return (
+                      <button
+                        key={v.title}
+                        type="button"
+                        onClick={() => {
+                          setPrompt(v.description);
+                          if (smartRouting && (v as any).recommendedModel) {
+                            setModel((v as any).recommendedModel);
+                            setRecommendedModel((v as any).recommendedModel);
+                          }
+                        }}
+                        className={`group relative p-4 rounded-2xl text-left transition-all duration-300 hover:scale-105 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                          isComplex 
+                            ? 'bg-gradient-to-br from-purple-100 to-blue-100 border-2 border-purple-200 hover:border-purple-300' 
+                            : 'bg-white border-2 border-gray-200 hover:border-blue-300'
+                        }`}
+                        title={recommendedModelInfo ? `Recommended: ${recommendedModelInfo.label}` : undefined}
+                      >
+                        <div className="absolute top-2 right-2">
+                          {isComplex && <span className="text-lg">✨</span>}
+                          {recommendedModelInfo && <span className="text-xs ml-1">🎯</span>}
+                        </div>
+                        
+                        <div>
+                          <h5 className="font-semibold text-gray-900 mb-2 group-hover:text-blue-700 transition-colors">
+                            {v.title}
+                          </h5>
+                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                            {v.description.substring(0, 80)}...
+                          </p>
+                          {recommendedModelInfo && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                <span className="text-white text-xs font-bold">{recommendedModelInfo.provider?.charAt(0).toUpperCase()}</span>
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {recommendedModelInfo.provider} · {isComplex ? 'Complex' : 'Simple'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               
               {/* Templates Link */}

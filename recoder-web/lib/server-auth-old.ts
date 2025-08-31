@@ -9,7 +9,7 @@ export async function getServerSessionSafe() {
     import("next-auth"),
     import("./auth")
   ]);
-  return getServerSession(authOptions);
+  return auth();
 }
 
 // Server-side session validation
