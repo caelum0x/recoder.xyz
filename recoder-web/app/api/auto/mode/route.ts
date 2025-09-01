@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       openRouterBaseUrl: 'https://openrouter.ai/api/v1'
     });
 
-    const results = [];
+    const results: any[] = [];
     let currentIteration = 0;
     let currentObjective = objective;
     let workingCodebase = codebase;

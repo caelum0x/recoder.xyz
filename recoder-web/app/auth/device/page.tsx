@@ -12,7 +12,7 @@ export default function DeviceAuthorizationPage() {
   const { user, loading } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [userCode, setUserCode] = useState(searchParams.get('user_code') || '');
+  const [userCode, setUserCode] = useState(searchParams?.get('user_code') || '');
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [authResult, setAuthResult] = useState<'success' | 'error' | null>(null);
   const [errorMessage, setErrorMessage] = useState('');

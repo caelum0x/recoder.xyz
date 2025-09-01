@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     const newUsers = uniqueUsers.size - returningUsers;
 
     // Activity trends by day
-    const trends = [];
+    const trends: any[] = [];
     const daysToShow = timeRange === 'day' ? 1 : timeRange === 'week' ? 7 : timeRange === 'month' ? 30 : 365;
     
     for (let i = daysToShow - 1; i >= 0; i--) {

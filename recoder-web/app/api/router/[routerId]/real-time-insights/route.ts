@@ -34,7 +34,7 @@ export async function GET(
     }
 
     const params = await context.params;
-    const { routerId } = params;
+    const { routerId } = await params;
 
     // Verify router ownership
     const router = await prisma.router.findFirst({

@@ -32,7 +32,7 @@ export async function GET(
     }
 
     const params = await context.params;
-    const { userId } = params;
+    const { userId } = await params;
 
     // Verify user can access this data
     if (session.user.id !== userId) {
@@ -74,7 +74,7 @@ export async function POST(
     }
 
     const params = await context.params;
-    const { userId } = params;
+    const { userId } = await params;
 
     // Verify user can access this data
     if (session.user.id !== userId) {
@@ -167,9 +167,9 @@ async function getUserRouters(userId: string): Promise<RouterMetrics[]> {
 
     return routers.map(router => ({
       routerId: router.routerId,
-      name: router.name,
+      name: router.name || 'Unknown Router',
       status: determineRouterStatus(router.lastUsed),
-      version: router.version,
+      version: router.version || 'unknown',
       uptime: calculateUptime(router.createdAt),
       lastUsed: router.lastUsed.toISOString(),
       enterpriseMode: (router.metadata as any)?.enterpriseMode || false

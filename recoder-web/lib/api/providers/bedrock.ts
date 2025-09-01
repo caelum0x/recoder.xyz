@@ -927,7 +927,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 			return { ...this.costModelConfig, ...params }
 		}
 
-		let modelConfig = undefined
+		let modelConfig: { id: BedrockModelId | string; info: ModelInfo }
 
 		// If custom ARN is provided, use it
 		if (this.options.awsCustomArn) {
@@ -936,7 +936,9 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 			//If the user entered an ARN for a foundation-model they've done the same thing as picking from our list of options.
 			//We leave the model data matching the same as if a drop-down input method was used by not overwriting the model ID with the user input ARN
 			//Otherwise the ARN is not a foundation-model resource type that ARN should be used as the identifier in Bedrock interactions
-			if (this.arnInfo.modelType !== "foundation-model") modelConfig.id = this.options.awsCustomArn
+			if (this.arnInfo.modelType !== "foundation-model") {
+				modelConfig.id = this.options.awsCustomArn
+			}
 		} else {
 			//a model was selected from the drop down
 			modelConfig = this.getModelById(this.options.apiModelId as string)

@@ -5,7 +5,9 @@
  * cross-domain session management, and subscription integration.
  */
 
-import { DefaultSession, NextAuthOptions } from "next-auth";
+import { type DefaultSession, type NextAuthConfig } from "next-auth";
+import { type JWT } from "next-auth/jwt";
+import NextAuth from "next-auth";
 import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import DiscordProvider from "next-auth/providers/discord"; 
@@ -27,7 +29,7 @@ declare module 'next-auth' {
       bio?: string;
       location?: string;
       company?: string;
-    } & DefaultSession["user"];
+    };
   }
 
   interface User {
@@ -44,19 +46,7 @@ declare module 'next-auth' {
   }
 }
 
-declare module 'next-auth/jwt' {
-  interface JWT {
-    id: string;
-    plan: PlanType;
-    emailVerified: boolean;
-    username?: string;
-    bio?: string;
-    location?: string;
-    company?: string;
-  }
-}
-
-export const authOptions: NextAuthOptions = {
+export const authOptions: NextAuthConfig = {
   providers: [
     // GitHub OAuth
     GithubProvider({
@@ -66,14 +56,14 @@ export const authOptions: NextAuthOptions = {
         return {
           id: profile.id.toString(),
           name: profile.name || profile.login,
-          email: profile.email,
+          email: profile.email || "",
           image: profile.avatar_url,
           plan: 'FREE' as PlanType,
           emailVerified: true,
           username: profile.login,
-          bio: profile.bio,
-          location: profile.location,
-          company: profile.company,
+          bio: profile.bio || undefined,
+          location: profile.location || undefined,
+          company: profile.company || undefined,
         };
       },
     }),
@@ -126,7 +116,12 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email and password required');
         }
 
-        const { email, password, action, name } = credentials;
+        const { email, password, action, name } = credentials as {
+          email: string;
+          password: string;
+          action?: string;
+          name?: string;
+        };
 
         try {
           if (action === 'signup') {
@@ -258,13 +253,13 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id;
-        session.user.plan = token.plan;
-        session.user.emailVerified = token.emailVerified;
-        session.user.username = token.username;
-        session.user.bio = token.bio;
-        session.user.location = token.location;
-        session.user.company = token.company;
+        session.user.id = token.id as string;
+        session.user.plan = token.plan as PlanType;
+        session.user.emailVerified = token.emailVerified as any; // NextAuth v5 type compatibility
+        session.user.username = token.username as string | undefined;
+        session.user.bio = token.bio as string | undefined;
+        session.user.location = token.location as string | undefined;
+        session.user.company = token.company as string | undefined;
       }
       return session;
     },
@@ -311,16 +306,11 @@ export const authOptions: NextAuthOptions = {
       }
     },
     
-    async signOut({ session, token }) {
-      console.log(`User ${session?.user?.email} signed out`);
+    async signOut(message) {
+      console.log(`User signed out`);
       
-      if (session?.user?.id) {
-        await usageDb.logUsage({
-          user_id: session.user.id,
-          product: 'web',
-          action: 'signout',
-        });
-      }
+      // Note: In NextAuth v5, session is not available in signOut event
+      // We'll track this differently if needed
     },
   },
 
