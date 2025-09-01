@@ -67,20 +67,20 @@ export async function getOllamaModels(baseUrl = "http://localhost:11434"): Promi
 
 		const response = await axios.get<OllamaModelsResponse>(`${baseUrl}/api/tags`)
 		const parsedResponse = OllamaModelsResponseSchema.safeParse(response.data)
-		let modelInfoPromises = []
+	let modelInfoPromises: Promise<void>[] = []
 
-		if (parsedResponse.success) {
-			for (const ollamaModel of parsedResponse.data.models) {
-				modelInfoPromises.push(
-					axios
-						.post<OllamaModelInfoResponse>(`${baseUrl}/api/show`, {
-							model: ollamaModel.model,
-						})
-						.then((ollamaModelInfo) => {
-							models[ollamaModel.name] = parseOllamaModel(ollamaModelInfo.data)
-						}),
-				)
-			}
+	if (parsedResponse.success) {
+		for (const ollamaModel of parsedResponse.data.models) {
+			modelInfoPromises.push(
+				axios
+					.post<OllamaModelInfoResponse>(`${baseUrl}/api/show`, {
+						model: ollamaModel.model,
+					})
+					.then((ollamaModelInfo) => {
+						models[ollamaModel.name] = parseOllamaModel(ollamaModelInfo.data)
+					}),
+			)
+		}
 
 			await Promise.all(modelInfoPromises)
 		} else {

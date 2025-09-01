@@ -45,10 +45,10 @@ interface ProjectAnalytics {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const projectPath = path.join(process.cwd(), 'projects', projectId);
 
     if (!fs.existsSync(projectPath)) {

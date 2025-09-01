@@ -67,7 +67,7 @@ export async function getOllamaModels(baseUrl = "http://localhost:11434"): Promi
 
 		const response = await axios.get<OllamaModelsResponse>(`${baseUrl}/api/tags`)
 		const parsedResponse = OllamaModelsResponseSchema.safeParse(response.data)
-		let modelInfoPromises = []
+		let modelInfoPromises: Promise<any>[] = []
 
 		if (parsedResponse.success) {
 			for (const ollamaModel of parsedResponse.data.models) {

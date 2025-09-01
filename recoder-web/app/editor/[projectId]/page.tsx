@@ -3,13 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import TabManager from '@/components/editor/TabManager';
 import MonacoCodeEditor, { getMonacoLanguage } from '@/components/editor/MonacoCodeEditor';
+//import ComponentLibrary from '@/components/editor/ComponentLibrary';
 import { 
   Code2, Save, Download, Upload, Settings, Search, 
   ZoomIn, ZoomOut, Play, Terminal, FileText, Folder, 
   FolderOpen, Plus, X, ChevronRight, ChevronDown,
   RefreshCw, Monitor, Smartphone, Tablet, Maximize,
   Wand2, Bot, Send, Loader2, Copy, Check, Users,
-  Rocket, BarChart3, Globe, GitBranch, Box
+  Rocket, BarChart3, Globe, GitBranch, Box, Package,
+  Brain
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -26,6 +28,8 @@ import { useDeployment } from '@/hooks/use-deployment';
 import { useGit } from '@/hooks/use-git';
 import { usePackageManager } from '@/hooks/use-package-manager';
 import { useProjectSettings } from '@/hooks/use-project-settings';
+import ComponentLibrary from '@/components/component-library';
+import AIPoweredCodeAssist from '@/components/editor/AIPoweredCodeAssist';
 
 interface FileNode {
   name: string;
@@ -83,8 +87,13 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
   const [showGitPanel, setShowGitPanel] = useState(false);
   const [showPackagePanel, setShowPackagePanel] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [showComponentLibrary, setShowComponentLibrary] = useState(false);
   const [gitCommitMessage, setGitCommitMessage] = useState('');
   const [packageSearchQuery, setPackageSearchQuery] = useState('');
+  
+  // AI Code Assistant state
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ line: 0, column: 0 });
 
   const { projectId } = params;
 
@@ -398,6 +407,23 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
     }
   };
 
+  // Handle component insertion from ComponentLibrary
+  const handleInsertComponent = (component: any) => {
+    if (!activeFile || !activeTabId) {
+      alert('Please open a file first to insert the component');
+      return;
+    }
+
+    // Insert component code at current cursor position or at the end
+    const insertCode = `\n\n${component.code}\n`;
+    const newContent = fileContent + insertCode;
+    
+    updateTabContent(newContent);
+    
+    // Show success feedback
+    console.log(`Inserted component: ${component.name}`);
+  };
+
   // Update existing loadFileContent to use tab system
   const loadFileContentLegacy = async (filePath: string) => {
     await openFileInTab(filePath);
@@ -562,6 +588,66 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
     setShowDeployModal(false);
   };
 
+  // AI Code Assistant Functions
+  const handleAICodeInsert = (code: string, position?: { line: number; column: number }) => {
+    if (!activeFile) return;
+    
+    let updatedContent: string;
+    
+    if (position) {
+      // Insert at specific position
+      const lines = fileContent.split('\n');
+      const beforeLines = lines.slice(0, position.line);
+      const afterLines = lines.slice(position.line);
+      
+      // Insert code at the specified line
+      beforeLines.push(code);
+      updatedContent = [...beforeLines, ...afterLines].join('\n');
+    } else {
+      // Insert at cursor position (end of current content for now)
+      updatedContent = fileContent + '\n' + code;
+    }
+    
+    setFileContent(updatedContent);
+    
+    // Update the tab content
+    setOpenTabs(prev => prev.map(tab => 
+      tab.id === activeTabId 
+        ? { ...tab, content: updatedContent, isDirty: true }
+        : tab
+    ));
+    
+    // Notify collaborators of the change
+    sendTextChange(updatedContent, Date.now());
+  };
+
+  const handleAICodeReplace = (startLine: number, endLine: number, newCode: string) => {
+    if (!activeFile) return;
+    
+    const lines = fileContent.split('\n');
+    const beforeLines = lines.slice(0, startLine);
+    const afterLines = lines.slice(endLine + 1);
+    const codeLines = newCode.split('\n');
+    
+    const updatedContent = [...beforeLines, ...codeLines, ...afterLines].join('\n');
+    
+    setFileContent(updatedContent);
+    
+    // Update the tab content
+    setOpenTabs(prev => prev.map(tab => 
+      tab.id === activeTabId 
+        ? { ...tab, content: updatedContent, isDirty: true }
+        : tab
+    ));
+    
+    // Notify collaborators of the change
+    sendTextChange(updatedContent, Date.now());
+  };
+
+  const handleCursorPositionChange = (line: number, column: number) => {
+    setCursorPosition({ line, column });
+  };
+
   useEffect(() => {
     testEngineConnection();
     const interval = setInterval(testEngineConnection, 30000); // Check every 30 seconds
@@ -681,6 +767,24 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
           >
             <Wand2 className="w-4 h-4" />
             AI Assistant
+          </Button>
+
+          <Button
+            onClick={() => setShowAIAssistant(!showAIAssistant)}
+            variant={showAIAssistant ? "default" : "outline"}
+            className="gap-2"
+          >
+            <Brain className="w-4 h-4" />
+            Smart AI
+          </Button>
+
+          <Button
+            onClick={() => setShowComponentLibrary(!showComponentLibrary)}
+            variant={showComponentLibrary ? "default" : "outline"}
+            className="gap-2"
+          >
+            <Package className="w-4 h-4" />
+            Components
           </Button>
 
           <Button
@@ -826,6 +930,31 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
                 </div>
               )}
             </div>
+
+            {/* Component Library Panel */}
+            {showComponentLibrary && (
+              <div className="w-80 border-l bg-white dark:bg-gray-800 flex flex-col">
+                <div className="p-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Package className="w-5 h-5 text-purple-600" />
+                      <h3 className="text-sm font-semibold">Component Library</h3>
+                    </div>
+                    <X 
+                      className="w-4 h-4 cursor-pointer hover:text-red-500" 
+                      onClick={() => setShowComponentLibrary(false)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-hidden">
+                  <ComponentLibrary
+                    onComponentSelect={handleInsertComponent}
+                    framework={project?.framework}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* AI Assistant Panel */}
             {aiPanelOpen && (
@@ -1032,6 +1161,12 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
             className={`hover:text-blue-600 ${aiPanelOpen ? 'text-blue-600' : ''}`}
           >
             AI Assistant
+          </button>
+          <button 
+            onClick={() => setShowComponentLibrary(!showComponentLibrary)}
+            className={`hover:text-purple-600 ${showComponentLibrary ? 'text-purple-600' : ''}`}
+          >
+            Components
           </button>
           <button 
             onClick={() => setShowGitPanel(!showGitPanel)}
@@ -1463,6 +1598,18 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
           </div>
         </div>
       )}
+
+      {/* AI-Powered Code Assistant */}
+      <AIPoweredCodeAssist
+        currentCode={fileContent}
+        filePath={activeFile || ''}
+        language={activeTabId ? getMonacoLanguage(openTabs.find(t => t.id === activeTabId)?.fileName || '') : 'typescript'}
+        cursorPosition={cursorPosition}
+        onCodeInsert={handleAICodeInsert}
+        onCodeReplace={handleAICodeReplace}
+        isVisible={showAIAssistant}
+        onClose={() => setShowAIAssistant(false)}
+      />
     </div>
   );
 }

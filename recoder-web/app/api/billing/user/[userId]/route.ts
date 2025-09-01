@@ -45,7 +45,7 @@ export async function GET(
   try {
     const session = await auth();
     const params = await context.params;
-    const { userId } = params;
+    const { userId } = await params;
 
     // Validate access - user can only access their own data or be authenticated
     if (!session && !userId) {
@@ -69,7 +69,7 @@ export async function GET(
     const billingData = await getUserBillingData(userId);
     
     // Get subscription data from DODO if exists
-    let dodoSubscription = null;
+    let dodoSubscription: any = null;
     if (billingData.subscription_id) {
       try {
         dodoSubscription = await dodoPayments.getSubscription(billingData.subscription_id);

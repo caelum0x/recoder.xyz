@@ -7,10 +7,10 @@ const PROJECTS_DIR = path.join(process.cwd(), 'projects');
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string; filePath: string[] } }
+  { params }: { params: Promise<{ projectId: string; filePath: string[] }> }
 ) {
   try {
-    const { projectId, filePath } = params;
+    const { projectId, filePath } = await params;
     const projectPath = path.join(PROJECTS_DIR, projectId);
     const fullFilePath = path.join(projectPath, ...filePath);
 
@@ -66,10 +66,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { projectId: string; filePath: string[] } }
+  { params }: { params: Promise<{ projectId: string; filePath: string[] }> }
 ) {
   try {
-    const { projectId, filePath } = params;
+    const { projectId, filePath } = await params;
     const { content } = await request.json();
 
     if (content === undefined) {
@@ -130,10 +130,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { projectId: string; filePath: string[] } }
+  { params }: { params: Promise<{ projectId: string; filePath: string[] }> }
 ) {
   try {
-    const { projectId, filePath } = params;
+    const { projectId, filePath } = await params;
     const projectPath = path.join(PROJECTS_DIR, projectId);
     const fullFilePath = path.join(projectPath, ...filePath);
 

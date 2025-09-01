@@ -15,10 +15,10 @@ interface DeploymentPlatform {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const { platforms = ['vercel'], buildCommand, outputDir } = await request.json();
 
     const projectPath = path.join(process.cwd(), 'projects', projectId);
@@ -228,10 +228,10 @@ async function deployToRailway(projectPath: string, deployment: DeploymentPlatfo
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const metadataPath = path.join(process.cwd(), 'projects', projectId, '.recoder', 'metadata.json');
 
     if (!fs.existsSync(metadataPath)) {

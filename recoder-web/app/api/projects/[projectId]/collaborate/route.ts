@@ -55,10 +55,10 @@ const USER_COLORS = [
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const { action, userId, userName, userEmail, data } = await request.json();
 
     let session = collaborationSessions.get(projectId);
@@ -157,10 +157,10 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const session = collaborationSessions.get(projectId);
 
     return NextResponse.json({
