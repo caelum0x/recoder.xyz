@@ -29,7 +29,7 @@ export async function GET(
     }
 
     const params = await context.params;
-    const { routerId } = params;
+    const { routerId } = await params;
     const searchParams = request.nextUrl.searchParams;
     const query = querySchema.parse({
       period: searchParams.get('period'),
@@ -130,7 +130,7 @@ async function getAnalyticsForExport(routerId: string, startTime: Date, endTime:
 
     // If no real data, generate mock data
     if (usageData.length === 0 && analyticsData.length === 0) {
-      return generateMockExportData(routerId, startTime, endTime);
+      return await getRouterAnalyticsData(routerId, startTime, endTime);
     }
 
     return {
@@ -168,55 +168,28 @@ async function getAnalyticsForExport(routerId: string, startTime: Date, endTime:
 
   } catch (error) {
     console.error('Failed to get analytics for export:', error);
-    return generateMockExportData(routerId, startTime, endTime);
+    return await getRouterAnalyticsData(routerId, startTime, endTime);
   }
 }
 
-function generateMockExportData(routerId: string, startTime: Date, endTime: Date) {
-  // Generate realistic mock data for export
-  const mockUsageData = [];
-  const duration = endTime.getTime() - startTime.getTime();
-  const requestCount = Math.floor(duration / (1000 * 60 * 15)); // One request every 15 minutes
-
-  const providers = ['openai', 'anthropic', 'groq', 'google'];
-  const models = ['gpt-4o-mini', 'claude-3-haiku', 'llama-3.1-8b', 'gemini-flash', 'gpt-4o'];
-
-  for (let i = 0; i < requestCount; i++) {
-    const timestamp = new Date(startTime.getTime() + (i * (duration / requestCount)));
-    const provider = providers[Math.floor(Math.random() * providers.length)];
-    const model = models[Math.floor(Math.random() * models.length)];
-    const tokens = Math.floor(Math.random() * 2000) + 500;
-    const baseCost = tokens * 0.00002; // Base cost per token
-    const cost = baseCost * (Math.random() * 0.5 + 0.75); // Add some variance
-    const responseTime = Math.floor(Math.random() * 3000) + 500;
-    const success = Math.random() > 0.05; // 95% success rate
-
-    mockUsageData.push({
-      timestamp,
-      provider,
-      model,
-      tokens,
-      cost: Number(cost.toFixed(6)),
-      responseTime: responseTime,
-      success,
-      errorType: success ? null : 'timeout'
-    });
-  }
-
+async function getRouterAnalyticsData(routerId: string, startTime: Date, endTime: Date) {
+  // TODO: Replace with actual database query to get real analytics data
+  // This should query the router's usage logs, performance metrics, etc.
+  
   return {
     routerId: routerId,
     export_period: {
       start: startTime,
       end: endTime
     },
-    usage_data: mockUsageData,
-    analytics_data: [], // Mock analytics would be complex, keep empty
+    usage_data: [],
+    analytics_data: [],
     summary: {
-      total_requests: mockUsageData.length,
-      total_cost: mockUsageData.reduce((sum, r) => sum + r.cost, 0),
-      total_tokens: mockUsageData.reduce((sum, r) => sum + r.tokens, 0),
-      avg_responseTime: mockUsageData.reduce((sum, r) => sum + r.responseTime, 0) / mockUsageData.length,
-      success_rate: mockUsageData.filter(r => r.success).length / mockUsageData.length
+      total_requests: 0,
+      total_cost: 0,
+      total_tokens: 0,
+      avg_responseTime: 0,
+      success_rate: 0
     }
   };
 }

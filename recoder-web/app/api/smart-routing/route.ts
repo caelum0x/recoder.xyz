@@ -334,7 +334,7 @@ function performSmartRouting(
 
 // Helper functions
 function generateReason(analysis: any, scores: any, modelInfo: any): string {
-  const reasons = [];
+  const reasons: string[] = [];
   
   if (scores.complexity[analysis.complexity] > 0.8) {
     reasons.push(`optimized for ${analysis.complexity} tasks`);

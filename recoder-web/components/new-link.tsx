@@ -21,7 +21,7 @@ export default function NewLink({
   let finalHref = href || pathname;
 
   if (newQuery) {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() || '');
 
     // Then, add new params from newQuery
     Object.entries(newQuery).forEach(([key, value]) => {
@@ -37,7 +37,7 @@ export default function NewLink({
   }
 
   return (
-    <Link href={finalHref} {...props}>
+    <Link href={finalHref || '/'} {...props}>
       {children}
     </Link>
   );

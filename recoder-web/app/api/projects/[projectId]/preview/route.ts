@@ -29,10 +29,10 @@ function isPortAvailable(port: number): Promise<boolean> {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const projectPath = path.join(process.cwd(), 'projects', projectId);
 
     // Check if project exists
@@ -61,6 +61,48 @@ export async function POST(
         success: false,
         error: 'No dev or start script found in package.json'
       }, { status: 400 });
+    }
+
+    // Check if node_modules exists, if not install dependencies
+    const nodeModulesPath = path.join(projectPath, 'node_modules');
+    if (!fs.existsSync(nodeModulesPath)) {
+      logger.info(`Installing dependencies for project ${projectId}...`);
+      
+      try {
+        // Install dependencies first
+        const installProcess = spawn('npm', ['install'], {
+          cwd: projectPath,
+          stdio: 'pipe',
+          shell: true
+        });
+
+        let installOutput = '';
+        installProcess.stdout?.on('data', (data) => {
+          installOutput += data.toString();
+        });
+
+        installProcess.stderr?.on('data', (data) => {
+          installOutput += data.toString();
+        });
+
+        // Wait for installation to complete
+        await new Promise<void>((resolve, reject) => {
+          installProcess.on('close', (code) => {
+            if (code === 0) {
+              logger.info(`Dependencies installed successfully for project ${projectId}`);
+              resolve();
+            } else {
+              logger.error(`Dependency installation failed with code ${code}`, { output: installOutput });
+              reject(new Error(`Dependency installation failed: ${installOutput.slice(-500)}`));
+            }
+          });
+        });
+      } catch (error) {
+        return NextResponse.json({
+          success: false,
+          error: `Failed to install dependencies: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }, { status: 500 });
+      }
     }
 
     // Find available port
@@ -129,10 +171,10 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const { pid } = await request.json();
 
     if (pid) {

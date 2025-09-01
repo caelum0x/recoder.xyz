@@ -234,7 +234,7 @@ export const getWebProviderStatus = () => {
  */
 export const getWebSetupInstructions = () => {
   const status = getWebProviderStatus();
-  const instructions = [];
+  const instructions: string[] = [];
 
   if (!status.local.ollama && !status.local.lmstudio) {
     instructions.push(
