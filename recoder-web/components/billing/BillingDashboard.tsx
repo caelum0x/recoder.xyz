@@ -103,10 +103,10 @@ export default function BillingDashboard({ userId, source = 'web' }: BillingDash
   const searchParams = useSearchParams();
   
   // Check for CLI upgrade context
-  const reason = searchParams.get('reason');
-  const recommendedPlan = searchParams.get('recommended');
-  const currentUsage = searchParams.get('usage');
-  const quotaLimit = searchParams.get('limit');
+  const reason = searchParams?.get('reason');
+  const recommendedPlan = searchParams?.get('recommended');
+  const currentUsage = searchParams?.get('usage');
+  const quotaLimit = searchParams?.get('limit');
 
   useEffect(() => {
     fetchBillingData();

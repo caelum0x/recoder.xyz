@@ -1,6 +1,11 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+// shadcn/ui cn utility for combining class names
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
 export function extractFirstCodeBlock(input: string) {
   // 1) We use a more general pattern for the code fence:
   //    - ^```([^\n]*) captures everything after the triple backticks up to the newline.
@@ -167,8 +172,4 @@ export function splitByFirstCodeFence(markdown: string) {
   }
 
   return result;
-}
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
 }

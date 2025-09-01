@@ -66,7 +66,7 @@ export async function GET(
     }
 
     const params = await context.params;
-    const { routerId } = params;
+    const { routerId } = await params;
     const searchParams = request.nextUrl.searchParams;
     const query = querySchema.parse({
       period: searchParams.get('period'),
@@ -127,7 +127,7 @@ export async function POST(
     }
 
     const params = await context.params;
-    const { routerId } = params;
+    const { routerId } = await params;
     const body = await request.json();
 
     // This endpoint receives cost analytics data from CLI routers

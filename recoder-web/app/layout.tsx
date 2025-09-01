@@ -4,6 +4,7 @@ import { getBrandConfig } from "../lib/recoder-config";
 import { AnalyticsProvider } from "@/components/providers/analytics-provider";
 import AuthProvider from "@/lib/auth/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 const brandConfig = getBrandConfig();
@@ -58,6 +59,7 @@ export default function RootLayout({
           <AuthProvider>
             <AnalyticsProvider>
               {children}
+              <Toaster />
             </AnalyticsProvider>
           </AuthProvider>
         </ThemeProvider>

@@ -16,7 +16,7 @@ import React, {
   Fragment
 } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '@/lib/utils';
+
 
 // ========================================
 // ALERT COMPONENT
@@ -187,15 +187,15 @@ const ToastContext = createContext<{
   removeToast: () => {},
 });
 
-export const useToast = () => {
+export const useToastSystem = () => {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
+    throw new Error('useToastSystem must be used within a ToastProvider');
   }
   return context;
 };
 
-export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const ToastSystemProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastData[]>([]);
 
   const addToast = (toast: Omit<ToastData, 'id'>) => {
@@ -223,7 +223,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 };
 
 const ToastContainer: React.FC = () => {
-  const { toasts, removeToast } = useToast();
+  const { toasts, removeToast } = useToastSystem();
 
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
@@ -466,12 +466,14 @@ const Tooltip: React.FC<TooltipProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const showTooltip = () => {
     if (disabled) return;
     setIsHovered(true);
-    clearTimeout(timeoutRef.current);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     timeoutRef.current = setTimeout(() => {
       if (isHovered) setIsVisible(true);
     }, delay);
@@ -479,12 +481,18 @@ const Tooltip: React.FC<TooltipProps> = ({
 
   const hideTooltip = () => {
     setIsHovered(false);
-    clearTimeout(timeoutRef.current);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     setIsVisible(false);
   };
 
   useEffect(() => {
-    return () => clearTimeout(timeoutRef.current);
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, []);
 
   const positionClasses = {
@@ -758,8 +766,8 @@ Skeleton.displayName = 'Skeleton';
 export {
   Alert,
   Toast,
-  ToastProvider,
-  useToast,
+  ToastSystemProvider,
+  useToastSystem,
   Modal,
   Tooltip,
   Spinner,
@@ -770,12 +778,12 @@ export {
 };
 
 export type {
-  AlertProps,
-  ToastData,
-  ModalProps,
-  TooltipProps,
-  SpinnerProps,
-  LoadingOverlayProps,
-  ProgressProps,
-  SkeletonProps,
+  AlertProps as FeedbackAlertProps,
+  ToastData as FeedbackToastData,
+  ModalProps as FeedbackModalProps,
+  TooltipProps as FeedbackTooltipProps,
+  SpinnerProps as FeedbackSpinnerProps,
+  LoadingOverlayProps as FeedbackLoadingOverlayProps,
+  ProgressProps as FeedbackProgressProps,
+  SkeletonProps as FeedbackSkeletonProps,
 };

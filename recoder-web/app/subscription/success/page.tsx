@@ -10,7 +10,7 @@ import { Check, Sparkles, Zap, Shield } from 'lucide-react';
 function SubscriptionSuccessContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  const planId = searchParams.get('plan');
+  const planId = searchParams?.get('plan');
   const [plan, setPlan] = useState<any>(null);
 
   useEffect(() => {

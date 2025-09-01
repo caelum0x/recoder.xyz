@@ -16,14 +16,14 @@ export async function GET(request: NextRequest) {
       systemPerformance
     ] = await Promise.all([
       // Active users (activity in last 5 minutes)
-      prisma.performanceLog.count({
+      prisma.performanceLog.groupBy({
+        by: ['sessionId'],
         where: {
           timestamp: {
             gte: fiveMinutesAgo
           }
-        },
-        distinct: ['sessionId']
-      }),
+        }
+      }).then(result => result.length),
 
       // Current requests (activity in last minute)
       prisma.performanceLog.count({
