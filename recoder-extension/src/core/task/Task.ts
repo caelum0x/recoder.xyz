@@ -1490,7 +1490,7 @@ export class Task extends EventEmitter<ClineEvents> {
 					const history = await provider?.getTaskWithId(this.taskId)
 
 					if (history) {
-						await provider?.initClineWithHistoryItem(history.historyItem)
+						await provider?.initRecoderWithHistoryItem(history.historyItem)
 					}
 				}
 			} finally {

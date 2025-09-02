@@ -23,6 +23,13 @@ import { useS3Upload } from "next-s3-upload";
 import UploadIcon from "@/components/icons/upload-icon";
 import { XCircleIcon } from "@heroicons/react/20/solid";
 import { MODELS, SUGGESTED_PROMPTS, AI_PROVIDERS } from "@/lib/constants";
+import MobileOptimizations from "@/components/mobile-optimizations";
+import EnterpriseAnalyticsDashboard from "@/components/enterprise-analytics-dashboard";
+import TeamCollaboration from "@/components/team-collaboration";
+import AIOrchestrationEngine from "@/components/ai-orchestration-engine";
+import CodeQualityAnalyzer from "@/components/code-quality-analyzer";
+import RealTimeMarketDestroyer from "@/components/real-time-market-destroyer";
+import MobileAppBuilder from "@/components/mobile-app-builder";
 
 export default function Home() {
   const { setStreamPromise } = use(Context);
@@ -92,18 +99,19 @@ export default function Home() {
     .join("\n");
 
   return (
-    <div className="relative flex grow flex-col">
-      <div className="absolute inset-0 flex justify-center">
-        <Image
-          src={bgImg}
-          alt=""
-          className="max-h-[953px] w-full max-w-[1200px] object-cover object-top mix-blend-screen"
-          priority
-        />
-      </div>
+    <MobileOptimizations>
+      <div className="relative flex grow flex-col">
+        <div className="absolute inset-0 flex justify-center">
+          <Image
+            src={bgImg}
+            alt=""
+            className="max-h-[953px] w-full max-w-[1200px] object-cover object-top mix-blend-screen"
+            priority
+          />
+        </div>
 
-      <div className="isolate flex h-full grow flex-col">
-        <Header />
+        <div className="isolate flex h-full grow flex-col">
+          <Header />
 
         <div className="mt-10 flex grow flex-col items-center px-4 lg:mt-16">
           {/* Enhanced Feature Highlights */}
@@ -174,6 +182,38 @@ export default function Home() {
             </div>
           </div>
           
+          {/* CURSOR KILLER FEATURES - Revolutionary AI Platform */}
+          <div className="mt-16 w-full max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-bold mb-6">
+                <span className="bg-gradient-to-r from-red-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  🔥 Revolutionary AI Development Platform
+                </span>
+              </h2>
+              <p className="text-xl text-gray-700 max-w-4xl mx-auto leading-relaxed">
+                Industry-first features that <span className="font-bold text-red-600">destroy the competition</span>. 
+                Technologies that Cursor, v0.dev, and other competitors <span className="font-bold text-purple-600">simply cannot match</span>.
+              </p>
+              
+              {/* Competitive Kill Banner */}
+              <div className="mt-6 bg-gradient-to-r from-red-500 via-purple-500 to-blue-500 text-white p-6 rounded-2xl shadow-2xl">
+                <div className="text-2xl font-bold mb-2">💀 COMPETITION DESTROYER MODE ACTIVE 💀</div>
+                <div className="text-lg opacity-90">
+                  Multi-AI Orchestration • Enterprise Analytics • Real-time Collaboration • Code Quality Analysis
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-16 space-y-16">
+              <RealTimeMarketDestroyer className="mb-16" />
+              <MobileAppBuilder className="mb-16" />
+              <AIOrchestrationEngine className="mb-16" />
+              <CodeQualityAnalyzer className="mb-16" />
+              <EnterpriseAnalyticsDashboard className="mb-16" />
+              <TeamCollaboration className="mb-16" />
+            </div>
+          </div>
+
           {/* Platform Ecosystem Overview */}
           <div className="mt-16 w-full max-w-7xl mx-auto">
             <div className="text-center mb-12">
@@ -331,12 +371,16 @@ export default function Home() {
                 }
 
                 try {
+                  console.log('🚀 Starting chat creation...', { prompt: prompt.substring(0, 50), model, quality });
+                  
                   const { chatId, lastMessageId } = await createChat(
                     prompt,
                     model,
                     quality,
                     screenshotUrl,
                   );
+
+                  console.log('✅ Chat created successfully:', { chatId, lastMessageId });
 
                   const streamPromise = fetch(
                     "/api/get-next-completion-stream-promise",
@@ -356,7 +400,9 @@ export default function Home() {
                     router.push(`/chats/${chatId}`);
                   });
                 } catch (error) {
-                  console.error("Failed to create chat:", error);
+                  console.error("❌ Failed to create chat:", error);
+                  // Show user-friendly error message
+                  alert(`Failed to create chat: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
                 }
               });
             }}
@@ -493,8 +539,20 @@ export default function Home() {
                               <span className="flex items-center gap-2">
                                 {isUsingRecommended && <span className="text-xs">🎯</span>}
                                 <span className="font-semibold">{selectedModel?.label}</span>
+                                {selectedModel?.premium && (
+                                  <span className="px-2 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 text-xs font-bold rounded-full border border-purple-200">
+                                    PREMIUM
+                                  </span>
+                                )}
                                 {selectedModel?.provider && (
-                                  <span className="text-xs px-2 py-1 bg-gray-100 rounded-full">{selectedModel.provider}</span>
+                                  <span className={`text-xs px-2 py-1 rounded-full ${
+                                    selectedModel.provider === 'claude' ? 'bg-purple-100 text-purple-700' :
+                                    selectedModel.provider === 'together' ? 'bg-blue-100 text-blue-700' :
+                                    selectedModel.provider === 'groq' ? 'bg-green-100 text-green-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {selectedModel.provider}
+                                  </span>
                                 )}
                               </span>
                             </Select.Value>
@@ -529,25 +587,77 @@ export default function Home() {
                                   const providerModels = MODELS.filter(m => m.provider === providerId);
                                   if (providerModels.length === 0 || !provider.available) return null;
                                   
+                                  // Special highlighting for Claude premium models
+                                  const isClaudeProvider = providerId === 'claude';
+                                  const isOpenRouterProvider = providerId === 'openrouter';
+                                  
                                   return (
                                     <div key={providerId} className="space-y-1">
-                                      <div className="px-3 py-2 text-xs font-bold text-gray-800 bg-gradient-to-r from-gray-100 to-gray-50 rounded-lg border border-gray-200/50">
+                                      <div className={`px-3 py-2 text-xs font-bold rounded-lg border ${
+                                        isClaudeProvider 
+                                          ? 'text-purple-800 bg-gradient-to-r from-purple-100 to-purple-50 border-purple-200/50' 
+                                          : isOpenRouterProvider
+                                          ? 'text-blue-800 bg-gradient-to-r from-blue-100 to-blue-50 border-blue-200/50'
+                                          : 'text-gray-800 bg-gradient-to-r from-gray-100 to-gray-50 border-gray-200/50'
+                                      }`}>
+                                        {isClaudeProvider && '👑 '}
+                                        {isOpenRouterProvider && '🌐 '}
                                         {provider.name} {!provider.available && '(Unavailable)'}
+                                        {isClaudeProvider && <span className="ml-2 text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">PREMIUM AI</span>}
+                                        {isOpenRouterProvider && <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">ALL MODELS</span>}
                                       </div>
                                       {providerModels.map((m) => (
                                         <Select.Item
                                           key={m.value}
                                           value={m.value}
-                                          className="flex cursor-pointer items-center gap-3 rounded-lg p-3 text-sm data-[highlighted]:bg-blue-50 data-[highlighted]:outline-none ml-3 border border-transparent hover:border-blue-200/50 transition-all"
+                                          className={`flex cursor-pointer items-center gap-3 rounded-lg p-3 text-sm data-[highlighted]:outline-none ml-3 border transition-all ${
+                                            m.provider === 'claude' && m.premium
+                                              ? 'data-[highlighted]:bg-purple-50 border-purple-200/30 bg-gradient-to-r from-purple-25 to-white hover:border-purple-300/50 hover:shadow-md'
+                                              : m.free
+                                              ? 'data-[highlighted]:bg-green-50 border-green-200/30 bg-gradient-to-r from-green-25 to-white hover:border-green-300/50'
+                                              : m.featured
+                                              ? 'data-[highlighted]:bg-blue-50 border-blue-200/30 bg-gradient-to-r from-blue-25 to-white hover:border-blue-300/50 hover:shadow-sm'
+                                              : 'data-[highlighted]:bg-gray-50 border-transparent hover:border-gray-200/50'
+                                          }`}
                                         >
                                           <Select.ItemText className="flex items-center gap-3 text-gray-700 flex-1">
-                                            <div className="flex flex-col gap-1">
+                                            <div className="flex flex-col gap-1 flex-1">
                                               <span className="flex items-center gap-2 font-medium">
                                                 {m.value === recommendedModel && smartRouting && <span className="text-xs">🎯</span>}
+                                                {m.featured && <span className="text-xs">⭐</span>}
+                                                {m.free && <span className="text-xs">🆓</span>}
+                                                {m.reasoning && <span className="text-xs">🧠</span>}
+                                                {m.code && <span className="text-xs">💻</span>}
+                                                {m.multimodal && <span className="text-xs">👁️</span>}
                                                 {m.label}
+                                                {m.premium && (
+                                                  <span className="px-2 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 text-xs font-bold rounded-full border border-purple-200">
+                                                    PREMIUM
+                                                  </span>
+                                                )}
+                                                {m.free && (
+                                                  <span className="px-2 py-1 bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 text-xs font-bold rounded-full border border-green-200">
+                                                    FREE
+                                                  </span>
+                                                )}
+                                                {m.latest && (
+                                                  <span className="px-2 py-1 bg-gradient-to-r from-blue-100 to-cyan-100 text-blue-700 text-xs font-bold rounded-full border border-blue-200">
+                                                    NEW
+                                                  </span>
+                                                )}
                                               </span>
                                               {m.description && (
                                                 <span className="text-xs text-gray-500">{m.description}</span>
+                                              )}
+                                              {m.costPer1M && m.speed && (
+                                                <div className="flex items-center gap-3 mt-1">
+                                                  <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                                                    ⚡ {m.speed}
+                                                  </span>
+                                                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                                    💰 {m.costPer1M}
+                                                  </span>
+                                                </div>
                                               )}
                                             </div>
                                           </Select.ItemText>
@@ -672,28 +782,90 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Loading Overlay */}
+                {/* Enhanced Loading Overlay - CURSOR-KILLER UX */}
                 {isPending && (
                   <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex items-center justify-center rounded-3xl">
-                    <div className="flex flex-col items-center justify-center gap-4 text-gray-700">
+                    <div className="flex flex-col items-center justify-center gap-6 text-gray-700 max-w-md mx-auto">
+                      {/* Advanced Loading Animation */}
                       <div className="relative">
-                        <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                        <div className="w-20 h-20 border-4 border-blue-100 rounded-full animate-spin">
+                          <div className="w-full h-full border-4 border-transparent border-t-blue-600 rounded-full animate-pulse"></div>
+                        </div>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">AI</span>
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-600 to-pink-600 rounded-xl flex items-center justify-center shadow-lg animate-pulse">
+                            <span className="text-white font-bold text-base">
+                              {selectedModel?.provider === 'claude' ? '🧠' :
+                               selectedModel?.provider === 'together' ? '🤝' :
+                               selectedModel?.provider === 'openrouter' ? '🌐' :
+                               selectedModel?.provider === 'groq' ? '⚡' :
+                               'AI'}
+                            </span>
                           </div>
                         </div>
                       </div>
+                      
+                      {/* Progressive Loading Messages */}
                       <div className="text-center">
-                        <div className="text-lg font-semibold mb-2">
-                          {quality === "high"
-                            ? `Creating your project plan...`
+                        <div className="text-xl font-bold mb-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                          {selectedModel?.provider === 'claude' && quality === "high"
+                            ? `Claude is architecting your solution...`
+                            : selectedModel?.provider === 'claude'
+                            ? `Claude is crafting your application...`
+                            : selectedModel?.provider === 'together' && selectedModel.value.includes('deepseek')
+                            ? `DeepSeek is reasoning through your requirements...`
+                            : selectedModel?.provider === 'together' && selectedModel.value.includes('qwen')
+                            ? `Qwen Coder is generating optimized code...`
+                            : selectedModel?.provider === 'openrouter'
+                            ? `OpenRouter is selecting the optimal model...`
+                            : selectedModel?.provider === 'groq'
+                            ? `Groq is turbo-charging your build...`
+                            : quality === "high"
+                            ? `AI is creating your project plan...`
                             : screenshotUrl
-                              ? "Analyzing your screenshot..."
-                              : `Building your app...`}
+                              ? "AI is analyzing your screenshot..."
+                              : `AI is building your app...`}
                         </div>
-                        <div className="text-sm text-gray-600">
-                          {quality === "high" ? "This may take up to 15 seconds for optimal results" : "Fast generation in progress"}
+                        
+                        {/* Smart Model-Based Descriptions */}
+                        <div className="text-sm text-gray-600 mb-4">
+                          {selectedModel?.provider === 'claude' && quality === "high"
+                            ? "Advanced reasoning and enterprise-grade architecture"
+                            : selectedModel?.provider === 'claude'
+                            ? "Superior code quality with security best practices"
+                            : selectedModel?.value?.includes('deepseek')
+                            ? "Deep reasoning for complex logic and algorithms"
+                            : selectedModel?.value?.includes('qwen') && selectedModel?.value?.includes('coder')
+                            ? "Specialized code generation with TypeScript excellence"
+                            : selectedModel?.provider === 'groq'
+                            ? "Ultra-fast generation with optimized performance"
+                            : quality === "high" 
+                            ? "This may take up to 15 seconds for optimal results" 
+                            : "Fast generation in progress"}
+                        </div>
+                        
+                        {/* Enhanced Progress Indicator */}
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-3 overflow-hidden">
+                          <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 h-2 rounded-full animate-pulse" 
+                               style={{
+                                 width: quality === "high" ? "60%" : "80%",
+                                 animation: "progress 8s ease-in-out infinite"
+                               }}>
+                          </div>
+                        </div>
+                        
+                        {/* Real-time Status Updates */}
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                            <span>Model: {selectedModel?.label}</span>
+                          </div>
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span>
+                              Speed: {selectedModel?.speed || (quality === "high" ? "8-15s" : "3-8s")} • 
+                              Cost: {selectedModel?.costPer1M || (quality === "high" ? "$0.50-$3.00" : "$0.10-$1.00")}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1009,33 +1181,11 @@ export default function Home() {
           </div>
         </footer>
       </div>
-    </div>
-  );
-}
-
-function LoadingMessage({
-  isHighQuality,
-  screenshotUrl,
-}: {
-  isHighQuality: boolean;
-  screenshotUrl: string | undefined;
-}) {
-  return (
-    <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white px-1 py-3 md:px-3">
-      <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
-        <span className="animate-pulse text-balance text-center text-sm md:text-base">
-          {isHighQuality
-            ? `Coming up with project plan, may take 15 seconds...`
-            : screenshotUrl
-              ? "Analyzing your screenshot..."
-              : `Creating your app...`}
-        </span>
-
-        <Spinner />
       </div>
-    </div>
+    </MobileOptimizations>
   );
 }
+
 
 export const runtime = "edge";
 export const maxDuration = 45;
