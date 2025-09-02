@@ -38,7 +38,22 @@ export async function POST() {
     });
     
     // Generate realistic router usage data
-    const usageData = [];
+    interface UsageDataItem {
+      routerId: string;
+      timestamp: Date;
+      provider: string;
+      model: string;
+      tokens: number;
+      cost: number;
+      success: boolean;
+      responseTime: number;
+      metadata: {
+        source: string;
+        request_type: string;
+      };
+    }
+    
+    const usageData: UsageDataItem[] = [];
     const now = new Date();
     
     // Create usage data for the last 24 hours

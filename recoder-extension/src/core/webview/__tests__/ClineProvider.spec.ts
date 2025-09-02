@@ -565,6 +565,21 @@ describe("RecoderProvider", () => {
 			sharingEnabled: false,
 			profileThresholds: {},
 			hasOpenedModeSelector: false,
+			commitMessageApiConfigId: "",
+			autocompleteApiConfigId: "",
+			systemNotificationsEnabled: true,
+			localWorkflowToggles: {},
+			ghostServiceSettings: {
+				enabled: false,
+				apiKey: "",
+				baseUrl: "",
+			},
+			allowVeryLargeReads: false,
+			alwaysApproveResubmit: false,
+			customModePrompts: {},
+			language: "en",
+			listApiConfigMeta: [],
+			currentApiConfigName: undefined,
 		}
 
 		const message: ExtensionMessage = {
@@ -3429,7 +3444,7 @@ describe("RecoderProvider - Comprehensive Edit/Delete Edge Cases", () => {
 
 				// Verify successful operation completed
 				expect(mockCline.overwriteClineMessages).toHaveBeenCalled()
-				expect(provider.initClineWithHistoryItem).toHaveBeenCalled()
+				expect(provider.initRecoderWithHistoryItem).toHaveBeenCalled()
 				expect(vscode.window.showErrorMessage).not.toHaveBeenCalled()
 			})
 

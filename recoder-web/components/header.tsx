@@ -39,7 +39,7 @@ export default function Header() {
   };
 
   return (
-    <header className="web-header relative mx-auto flex w-full shrink-0 items-center justify-center py-6 z-50">
+    <header className="web-header relative mx-auto flex w-full shrink-0 items-center justify-between py-6 z-50 px-6">
       {/* Enhanced Logo Section */}
       <Link href="/" className="flex items-center gap-3 group transition-all duration-300 hover:scale-105">
         <div className="relative">
@@ -55,7 +55,35 @@ export default function Header() {
         </div>
       </Link>
 
-      <div className="absolute right-3 flex items-center gap-4">
+      {/* Navigation Links */}
+      <nav className="hidden md:flex items-center gap-6">
+        <Link 
+          href="/docs" 
+          className="text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors duration-200 hover:scale-105"
+        >
+          📚 Docs
+        </Link>
+        <Link 
+          href="/cli" 
+          className="text-sm font-semibold text-gray-700 hover:text-purple-600 transition-colors duration-200 hover:scale-105"
+        >
+          ⚡ CLI
+        </Link>
+        <Link 
+          href="/chat" 
+          className="text-sm font-semibold text-gray-700 hover:text-green-600 transition-colors duration-200 hover:scale-105"
+        >
+          💬 Chat
+        </Link>
+        <Link 
+          href="/web-builder" 
+          className="text-sm font-semibold text-gray-700 hover:text-orange-600 transition-colors duration-200 hover:scale-105"
+        >
+          🛠️ Builder
+        </Link>
+      </nav>
+
+      <div className="flex items-center gap-4">
         {/* Enhanced Multi-AI Status Indicator */}
         <div className="hidden items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-50/80 to-purple-50/80 backdrop-blur-sm px-4 py-2 text-xs font-semibold text-blue-800 ring-1 ring-blue-200/50 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105 lg:flex">
           <div className="flex items-center gap-2">
