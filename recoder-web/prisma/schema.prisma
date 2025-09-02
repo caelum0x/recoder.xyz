@@ -70,6 +70,7 @@ model User {
   apiKeys       ApiKey[]
   auditLogs     AuditLog[]
   routers       Router[]
+  projects      Project[]
 }
 
 model VerificationToken {
@@ -356,4 +357,45 @@ model PerformanceLog {
   @@index([userId])
   @@index([duration])
   @@index([success])
+}
+
+// Project management models
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  framework   String?  // 'nextjs', 'react', 'vue', 'angular', etc.
+  language    String?  // 'typescript', 'javascript', 'python', etc.
+  repository  String?  // Git repository URL
+  visibility  String   @default("private") // 'public', 'private'
+  status      String   @default("active") // 'active', 'archived', 'deleted'
+  metadata    Json?    // Additional project metadata
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deploymentHistory DeploymentHistory[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Advanced deployment automation models
+model DeploymentHistory {
+  id                    String   @id @default(cuid())
+  projectId             String
+  platforms             String[] // Array of platform IDs
+  results               Json     // Array of deployment results
+  config                Json     // Deployment configuration
+  timestamp             DateTime @default(now())
+  totalDeployments      Int
+  successfulDeployments Int
+  createdAt             DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([timestamp])
 }

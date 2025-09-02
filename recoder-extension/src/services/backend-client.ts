@@ -119,8 +119,12 @@ export class ExtensionBackendClient {
       this.currentSession = data.user;
       await this.saveSession();
       
-      console.log(`✅ Authenticated as ${this.currentSession.email}`);
-      return this.currentSession;
+      if (this.currentSession) {
+        console.log(`✅ Authenticated as ${this.currentSession.email}`);
+        return this.currentSession;
+      } else {
+        throw new Error('Authentication failed: No user data received');
+      }
     } catch (error: any) {
       throw new Error(`Authentication failed: ${error.message}`);
     }
@@ -150,8 +154,12 @@ export class ExtensionBackendClient {
       this.currentSession = data.user;
       await this.saveSession();
       
-      console.log(`✅ Registered and authenticated as ${this.currentSession.email}`);
-      return this.currentSession;
+      if (this.currentSession) {
+        console.log(`✅ Registered and authenticated as ${this.currentSession.email}`);
+        return this.currentSession;
+      } else {
+        throw new Error('Registration failed: No user data received');
+      }
     } catch (error: any) {
       throw new Error(`Registration failed: ${error.message}`);
     }

@@ -51,10 +51,10 @@ const resendMessageSequence = async (
 		return false
 	}
 
-	const newCline = await provider.initClineWithHistoryItem(historyItem)
+	const newCline = await provider.initRecoderWithHistoryItem(historyItem)
 	if (!newCline) {
 		provider.log(
-			`[Edit Message] Error: Failed to re-initialize Cline with updated history item for task ${taskId}.`,
+			`[Edit Message] Error: Failed to re-initialize Recoder with updated history item for task ${taskId}.`,
 		)
 		vscode.window.showErrorMessage(t("kilocode:userFeedback.message_update_failed"))
 		return false
