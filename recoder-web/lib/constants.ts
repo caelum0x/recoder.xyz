@@ -1,48 +1,178 @@
 export const MODELS = [
-  // Together AI Models (Primary)
+  // Together AI Models (Multi-Model Platform) 🤝
   {
-    label: "DeepSeek V3 (Reasoning)",
+    label: "DeepSeek V3 (Together) 🧠",
     value: "deepseek-ai/DeepSeek-V3",
     provider: "together",
     category: "reasoning",
-    description: "Advanced reasoning and complex logic"
+    description: "🤖 Advanced reasoning & complex logic • Competitive with GPT-4 • $0.27/1M",
+    quality: "premium",
+    speed: "6s",
+    costPer1M: "$0.27",
+    strengths: ["Advanced reasoning", "Cost-effective", "Complex logic"],
+    reasoning: true,
+    featured: true
   },
   {
-    label: "Llama 3.3 70B (Balanced)",
+    label: "Llama 3.3 70B Turbo 🦙",
     value: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     provider: "together",
     category: "balanced",
-    description: "Best overall performance"
+    description: "🦙 Meta's latest Llama • Best overall performance • Balanced quality & speed",
+    quality: "premium",
+    speed: "4s",
+    costPer1M: "$0.88",
+    strengths: ["Meta optimized", "Well-balanced", "Reliable"],
+    balanced: true
   },
   {
-    label: "Qwen 2.5 Coder 32B (Code)",
+    label: "Llama 3.1 70B Turbo ⚡",
+    value: "meta-llama/Llama-3.1-70B-Instruct-Turbo",
+    provider: "together",
+    category: "fast",
+    description: "⚡ Fast Llama 3.1 • Quick responses • Efficient processing",
+    quality: "balanced",
+    speed: "3s",
+    costPer1M: "$0.88",
+    strengths: ["Fast", "Efficient", "Good quality"],
+    fast: true
+  },
+  {
+    label: "Llama 3.1 8B Turbo 🚀",
+    value: "meta-llama/Llama-3.1-8B-Instruct-Turbo",
+    provider: "together",
+    category: "ultra-fast",
+    description: "🚀 Ultra-fast 8B model • Instant responses • Perfect for prototyping",
+    quality: "fast",
+    speed: "1s",
+    costPer1M: "$0.20",
+    strengths: ["Ultra-fast", "Cost-effective", "Instant"],
+    instant: true
+  },
+  {
+    label: "Qwen 2.5 Coder 32B 💻",
     value: "Qwen/Qwen2.5-Coder-32B-Instruct",
     provider: "together",
     category: "code",
-    description: "Specialized for code generation"
+    description: "👨‍💻 Specialized coding AI • Best for development • Code generation expert",
+    quality: "premium",
+    speed: "5s",
+    costPer1M: "$0.75",
+    strengths: ["Code generation", "Development", "Programming"],
+    code: true,
+    featured: true
   },
   {
-    label: "Kimi K2 (Fast)",
-    value: "moonshotai/Kimi-K2-Instruct",
+    label: "Qwen 2.5 72B Turbo 🎯",
+    value: "qwen/qwen-2.5-72b-instruct-turbo",
     provider: "together",
-    category: "fast",
-    description: "Quick generation for prototyping"
+    category: "premium",
+    description: "🎯 Qwen 2.5 72B • Premium quality • Large context window",
+    quality: "premium",
+    speed: "6s",
+    costPer1M: "$1.20",
+    strengths: ["Large context", "Premium quality", "Versatile"],
+    premium: true
+  },
+  {
+    label: "Mistral Large 2407 🌟",
+    value: "mistralai/mistral-large-2407",
+    provider: "together",
+    category: "premium",
+    description: "🌟 Mistral's flagship • European AI excellence • 32K context",
+    quality: "premium",
+    speed: "7s",
+    costPer1M: "$8.00",
+    strengths: ["European AI", "Large context", "Premium"],
+    premium: true
+  },
+  {
+    label: "DeepSeek LLM 67B Chat 💬",
+    value: "deepseek-ai/deepseek-llm-67b-chat",
+    provider: "together",
+    category: "chat",
+    description: "💬 DeepSeek 67B Chat • Optimized for conversations • Natural dialogue",
+    quality: "balanced",
+    speed: "5s",
+    costPer1M: "$0.90",
+    strengths: ["Chat optimized", "Natural", "Conversational"],
+    chat: true
+  },
+  {
+    label: "Shisa v2 Llama 3.3 70B 🌸",
+    value: "shisa-ai/shisa-v2-llama-3.3-70b",
+    provider: "together",
+    category: "specialized",
+    description: "🌸 Shisa v2 • Japanese-English bilingual • Cultural understanding",
+    quality: "premium",
+    speed: "6s",
+    costPer1M: "$0.88",
+    strengths: ["Bilingual", "Cultural", "Specialized"],
+    multilingual: true
+  },
+  {
+    label: "Deep Hermes 3 Mistral 24B 🔮",
+    value: "deephermes-3-mistral-24b",
+    provider: "together",
+    category: "creative",
+    description: "🔮 Deep Hermes 3 • Creative AI • Enhanced reasoning",
+    quality: "balanced",
+    speed: "4s",
+    costPer1M: "$0.60",
+    strengths: ["Creative", "Enhanced reasoning", "Unique"],
+    creative: true
   },
   
   // Claude Models (Premium)
   {
-    label: "Claude 3.5 Sonnet (Premium)",
+    label: "Claude Sonnet 4 👑",
+    value: "claude-sonnet-4-20250514",
+    provider: "claude",
+    category: "ultra-premium",
+    description: "🔥 Latest flagship model • Ultimate reasoning & architecture • Best for enterprise apps",
+    quality: "ultra-premium", 
+    speed: "10s",
+    costPer1M: "$15.00",
+    strengths: ["Cutting-edge reasoning", "Advanced architecture", "Enterprise-grade security"],
+    premium: true,
+    featured: true
+  },
+  {
+    label: "Claude 3.7 Sonnet 🧠",
+    value: "claude-3-7-sonnet-20250219",
+    provider: "claude",
+    category: "reasoning-premium",
+    description: "🤔 Advanced reasoning model • Multi-step thinking • Complex problem solving",
+    quality: "reasoning-premium",
+    speed: "12s", 
+    costPer1M: "$8.00",
+    strengths: ["Multi-step reasoning", "Complex analysis", "Chain-of-thought"],
+    premium: true,
+    reasoning: true
+  },
+  {
+    label: "Claude 3.5 Sonnet 👑",
     value: "claude-3-5-sonnet-20241022",
     provider: "claude",
     category: "premium",
-    description: "Highest quality for complex tasks"
+    description: "🧠 Advanced reasoning & architecture • Best for complex apps • $3/1M tokens",
+    quality: "premium",
+    speed: "8s",
+    costPer1M: "$3.00",
+    strengths: ["Complex reasoning", "Code architecture", "Security analysis"],
+    premium: true
   },
   {
-    label: "Claude 3.5 Haiku (Fast Premium)",
+    label: "Claude 3.5 Haiku ⚡",
     value: "claude-3-5-haiku-20241022",
     provider: "claude",
     category: "fast-premium",
-    description: "Fast, high-quality generation"
+    description: "🚀 Fast premium quality • Quick prototypes & iterations • $0.25/1M tokens",
+    quality: "fast-premium",
+    speed: "3s",
+    costPer1M: "$0.25",
+    strengths: ["Fast generation", "Quick prototypes", "Code reviews"],
+    premium: true
   },
   
   // Groq Models (Ultra Fast)
@@ -84,20 +214,155 @@ export const MODELS = [
     description: "Fast multimodal processing"
   },
   
-  // OpenRouter Models (Access to Everything)
+  // OpenRouter Models (Access to Everything) 🌐
   {
-    label: "GPT-4 (OpenRouter)",
-    value: "openai/gpt-4",
+    label: "Claude Sonnet 4 (OpenRouter) 🔥",
+    value: "anthropic/claude-4-sonnet:beta",
     provider: "openrouter",
-    category: "versatile",
-    description: "OpenAI's flagship model"
+    category: "ultra-premium",
+    description: "🚀 Latest Claude 4 Sonnet via OpenRouter • 518B tokens • Ultimate reasoning",
+    quality: "ultra-premium",
+    speed: "12s",
+    costPer1M: "$15.00",
+    strengths: ["Cutting-edge AI", "Advanced reasoning", "Complex architecture"],
+    premium: true,
+    featured: true
   },
   {
-    label: "Claude 3.5 Sonnet (OpenRouter)",
-    value: "anthropic/claude-3.5-sonnet",
+    label: "Gemini 2.5 Flash (OpenRouter) ⚡",
+    value: "google/gemini-2.5-flash",
+    provider: "openrouter",
+    category: "ultra-fast",
+    description: "🌟 Latest Gemini 2.5 Flash • 253B tokens • Ultra-fast multimodal",
+    quality: "premium",
+    speed: "2s",
+    costPer1M: "$0.075",
+    strengths: ["Ultra-fast", "Multimodal", "Latest tech"],
+    multimodal: true
+  },
+  {
+    label: "Gemini 2.0 Flash (OpenRouter) 🎯",
+    value: "google/gemini-2.0-flash",
+    provider: "openrouter",
+    category: "balanced",
+    description: "⚡ Gemini 2.0 Flash • 221B tokens • Balanced performance",
+    quality: "balanced",
+    speed: "3s",
+    costPer1M: "$0.075",
+    strengths: ["Fast", "Multimodal", "Cost-effective"],
+    multimodal: true
+  },
+  {
+    label: "DeepSeek V3 (OpenRouter) 🧠",
+    value: "deepseek/deepseek-v3-324",
+    provider: "openrouter",
+    category: "reasoning",
+    description: "🤖 DeepSeek V3 • 99.5B tokens • Advanced reasoning • $0.27/1M",
+    quality: "premium",
+    speed: "5s",
+    costPer1M: "$0.27",
+    strengths: ["Advanced reasoning", "Cost-effective", "Latest AI"],
+    reasoning: true
+  },
+  {
+    label: "DeepSeek V3 Free 🆓",
+    value: "deepseek/deepseek-v3-324:free",
+    provider: "openrouter",
+    category: "free",
+    description: "🆓 FREE DeepSeek V3 • Full capability at no cost • Perfect for development",
+    quality: "premium",
+    speed: "6s",
+    costPer1M: "$0.00",
+    strengths: ["FREE!", "Full capability", "No limits"],
+    free: true,
+    featured: true
+  },
+  {
+    label: "DeepSeek R1 Free 🆓",
+    value: "deepseek/r1-0528:free",
+    provider: "openrouter",
+    category: "reasoning-free",
+    description: "🆓 FREE DeepSeek R1 • Advanced reasoning at no cost",
+    quality: "reasoning",
+    speed: "8s",
+    costPer1M: "$0.00",
+    strengths: ["FREE reasoning", "Chain-of-thought", "No cost"],
+    free: true,
+    reasoning: true
+  },
+  {
+    label: "Gemini Pro 2.5 (OpenRouter) 🎯",
+    value: "google/gemini-2.5-pro",
     provider: "openrouter",
     category: "premium",
-    description: "Claude via OpenRouter"
+    description: "🏆 Gemini 2.5 Pro • 144B tokens • Premium multimodal • $2.50/1M",
+    quality: "premium",
+    speed: "8s",
+    costPer1M: "$2.50",
+    strengths: ["Premium quality", "Large context", "Multimodal"],
+    premium: true,
+    multimodal: true
+  },
+  {
+    label: "Qwen 3 Coder (OpenRouter) 💻",
+    value: "qwen/qwen-3-coder",
+    provider: "openrouter",
+    category: "code",
+    description: "👨‍💻 Qwen 3 Coder • Specialized coding model • Best for development",
+    quality: "premium",
+    speed: "4s",
+    costPer1M: "$0.30",
+    strengths: ["Code generation", "Development", "Programming"],
+    code: true
+  },
+  {
+    label: "Claude 3.7 Sonnet (OpenRouter) 🧠",
+    value: "anthropic/claude-3.7-sonnet",
+    provider: "openrouter",
+    category: "reasoning-premium",
+    description: "🤔 Claude 3.7 Sonnet • Advanced reasoning • Multi-step thinking",
+    quality: "reasoning-premium",
+    speed: "10s",
+    costPer1M: "$8.00",
+    strengths: ["Advanced reasoning", "Multi-step logic", "Complex analysis"],
+    premium: true,
+    reasoning: true
+  },
+  {
+    label: "DeepSeek V3.1 (OpenRouter) ⭐",
+    value: "deepseek/deepseek-v3.1",
+    provider: "openrouter",
+    category: "latest",
+    description: "⭐ DeepSeek V3.1 • Latest iteration • Enhanced capabilities",
+    quality: "premium",
+    speed: "5s",
+    costPer1M: "$0.27",
+    strengths: ["Latest version", "Enhanced", "Cost-effective"],
+    latest: true
+  },
+  {
+    label: "GPT-4 Turbo (OpenRouter) 🔵",
+    value: "openai/gpt-4-turbo",
+    provider: "openrouter",
+    category: "versatile",
+    description: "🔵 OpenAI GPT-4 Turbo • Versatile flagship model",
+    quality: "premium",
+    speed: "7s",
+    costPer1M: "$10.00",
+    strengths: ["Versatile", "Reliable", "Well-tested"],
+    premium: true
+  },
+  {
+    label: "GPT-4o (OpenRouter) 🎯",
+    value: "openai/gpt-4o",
+    provider: "openrouter",
+    category: "balanced",
+    description: "🎯 OpenAI GPT-4o • Optimized for speed and quality",
+    quality: "balanced",
+    speed: "4s",
+    costPer1M: "$5.00",
+    strengths: ["Optimized", "Fast", "Balanced"],
+    balanced: true
   }
 ];
 

@@ -22,33 +22,57 @@ export async function createChat(
   quality: "high" | "low",
   screenshotUrl: string | undefined,
 ) {
-  // Get the current session to associate chat with user
-  const session = await requireAuth().catch(() => null);
-  
-  const prisma = getPrisma();
-  const chat = await prisma.chat.create({
-    data: {
-      model,
-      quality,
-      prompt,
-      title: "",
-      shadcn: true,
-      userId: session?.user?.id || null, // Associate with authenticated user
-    },
-  });
+  try {
+    console.log('Creating chat with:', { prompt: prompt.substring(0, 50), model, quality });
+    
+    // Get the current session to associate chat with user
+    const session = await requireAuth().catch(() => null);
+    console.log('Session:', session ? 'authenticated' : 'anonymous');
+    
+    // Initialize Prisma client directly (similar to API route approach)
+    const { PrismaClient } = await import("@prisma/client");
+    const { PrismaNeon } = await import("@prisma/adapter-neon");
+    const { Pool } = await import("@neondatabase/serverless");
+    
+    const neon = new Pool({ connectionString: process.env.DATABASE_URL });
+    const adapter = new PrismaNeon(neon as any);
+    const prisma = new PrismaClient({ adapter });
+    
+    console.log('Prisma client initialized successfully');
 
-  let options: ConstructorParameters<typeof Together>[0] = {};
-  if (process.env.HELICONE_API_KEY) {
-    options.baseURL = "https://together.helicone.ai/v1";
-    options.defaultHeaders = {
-      "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
-      "Helicone-Property-appname": "LlamaCoder",
-      "Helicone-Session-Id": chat.id,
-      "Helicone-Session-Name": "LlamaCoder Chat",
+    const chat = await prisma.chat.create({
+      data: {
+        model,
+        quality,
+        prompt,
+        title: "",
+        shadcn: true,
+        userId: session?.user?.id || null, // Associate with authenticated user
+      },
+    });
+
+    console.log('Chat created successfully:', chat.id);
+
+    // Check if Together AI API key is available
+    if (!process.env.TOGETHER_API_KEY) {
+      throw new Error('TOGETHER_API_KEY is not configured. Please add it to your .env file.');
+    }
+
+    let options: ConstructorParameters<typeof Together>[0] = {
+      apiKey: process.env.TOGETHER_API_KEY,
     };
-  }
+    
+    if (process.env.HELICONE_API_KEY) {
+      options.baseURL = "https://together.helicone.ai/v1";
+      options.defaultHeaders = {
+        "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
+        "Helicone-Property-appname": "LlamaCoder",
+        "Helicone-Session-Id": chat.id,
+        "Helicone-Session-Name": "LlamaCoder Chat",
+      };
+    }
 
-  const together = new Together(options);
+    const together = new Together(options);
 
   // Use extension's API folder for better provider support (now imported from server-api)
 
@@ -217,6 +241,11 @@ export async function createChat(
     chatId: chat.id,
     lastMessageId: lastMessage.id,
   };
+  
+  } catch (error) {
+    console.error('Error in createChat:', error);
+    throw new Error(`Failed to create chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 export async function createMessage(

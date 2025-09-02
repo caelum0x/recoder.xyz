@@ -1,0 +1,12 @@
+{
+  "id": "3c80a504-f9da-4090-bea0-ccc165b1719e",
+  "name": "AI Generated React App",
+  "description": "Generated from: \"Build a React todo app with authentication...\"",
+  "framework": "react",
+  "typescript": false,
+  "styling": "css",
+  "features": [],
+  "prompt": "Build a React todo app with authentication",
+  "createdAt": "2025-09-01T16:47:24.843Z",
+  "aiGenerated": true
+}

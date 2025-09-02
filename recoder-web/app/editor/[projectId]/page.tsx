@@ -30,6 +30,9 @@ import { usePackageManager } from '@/hooks/use-package-manager';
 import { useProjectSettings } from '@/hooks/use-project-settings';
 import ComponentLibrary from '@/components/component-library';
 import AIPoweredCodeAssist from '@/components/editor/AIPoweredCodeAssist';
+import MobileCodeEditor from '@/components/editor/MobileCodeEditor';
+import EnterpriseCollaboration from '@/components/enterprise/EnterpriseCollaboration';
+import AdvancedDeploymentAutomation from '@/components/deployment/AdvancedDeploymentAutomation';
 
 interface FileNode {
   name: string;
@@ -94,6 +97,12 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
   // AI Code Assistant state
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ line: 0, column: 0 });
+  
+  // Mobile optimization state
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [showEnterprisePanel, setShowEnterprisePanel] = useState(false);
+  const [showAdvancedDeployment, setShowAdvancedDeployment] = useState(false);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'developer' | 'viewer'>('developer');
 
   const { projectId } = params;
 
@@ -185,6 +194,18 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
       loadAnalytics();
     }
   }, [projectId]);
+
+  // Mobile device detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileDevice(window.innerWidth < 768 || 'ontouchstart' in window);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const loadProject = async () => {
     try {
@@ -815,13 +836,22 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
           </Button>
 
           <Button
-            onClick={() => setShowDeployModal(true)}
+            onClick={() => setShowEnterprisePanel(!showEnterprisePanel)}
+            variant={showEnterprisePanel ? "default" : "outline"}
+            className="gap-2"
+          >
+            <Users className="w-4 h-4" />
+            Enterprise
+          </Button>
+
+          <Button
+            onClick={() => setShowAdvancedDeployment(!showAdvancedDeployment)}
             disabled={isDeploying}
-            variant="outline"
+            variant={showAdvancedDeployment ? "default" : "outline"}
             className="gap-2"
           >
             <Rocket className="w-4 h-4" />
-            Deploy
+            Advanced Deploy
           </Button>
 
           {analytics && (
@@ -907,13 +937,22 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
           <div className="flex-1 flex">
             <div className="flex-1">
               {activeFile ? (
-                <MonacoCodeEditor
-                  value={fileContent}
-                  onChange={handleContentChange}
-                  language={activeTabId ? getMonacoLanguage(openTabs.find(t => t.id === activeTabId)?.fileName || '') : 'typescript'}
-                  theme="vs-dark"
-                  className="h-full"
-                />
+                isMobileDevice ? (
+                  <MobileCodeEditor
+                    value={fileContent}
+                    onChange={handleContentChange}
+                    language={activeTabId ? getMonacoLanguage(openTabs.find(t => t.id === activeTabId)?.fileName || '') : 'typescript'}
+                    className="h-full"
+                  />
+                ) : (
+                  <MonacoCodeEditor
+                    value={fileContent}
+                    onChange={handleContentChange}
+                    language={activeTabId ? getMonacoLanguage(openTabs.find(t => t.id === activeTabId)?.fileName || '') : 'typescript'}
+                    theme="vs-dark"
+                    className="h-full"
+                  />
+                )
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500 bg-gray-900">
                   <div className="text-center">
@@ -1595,6 +1634,49 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
                 <p className="text-sm text-gray-600">Loading settings...</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Enterprise Collaboration Panel */}
+      {showEnterprisePanel && (
+        <div className="fixed top-16 right-4 w-[800px] h-[600px] bg-white dark:bg-gray-800 shadow-xl rounded-lg border z-40 overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-600" />
+              <h3 className="font-semibold">Enterprise Collaboration & Analytics</h3>
+            </div>
+            <X 
+              className="w-4 h-4 cursor-pointer hover:text-red-500" 
+              onClick={() => setShowEnterprisePanel(false)}
+            />
+          </div>
+          
+          <div className="h-full overflow-hidden">
+            <EnterpriseCollaboration
+              projectId={projectId}
+              userRole={userRole}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Advanced Deployment Automation Panel */}
+      {showAdvancedDeployment && (
+        <div className="fixed top-16 right-4 w-[900px] h-[700px] bg-white dark:bg-gray-800 shadow-xl rounded-lg border z-40 overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center gap-2">
+              <Rocket className="w-5 h-5 text-blue-600" />
+              <h3 className="font-semibold">Advanced Deployment Automation</h3>
+            </div>
+            <X 
+              className="w-4 h-4 cursor-pointer hover:text-red-500" 
+              onClick={() => setShowAdvancedDeployment(false)}
+            />
+          </div>
+          
+          <div className="h-full p-4 overflow-y-auto">
+            <AdvancedDeploymentAutomation projectId={projectId} />
           </div>
         </div>
       )}

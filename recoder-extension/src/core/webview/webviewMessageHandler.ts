@@ -129,7 +129,7 @@ export const webviewMessageHandler = async (
 					await removeMessagesThisAndSubsequent(currentCline, messageIndex, apiConversationHistoryIndex)
 
 					// Initialize with history item after deletion
-					await provider.initClineWithHistoryItem(historyItem)
+					await provider.initRecoderWithHistoryItem(historyItem)
 				} catch (error) {
 					console.error("Error in delete message:", error)
 					vscode.window.showErrorMessage(
@@ -299,7 +299,7 @@ export const webviewMessageHandler = async (
 			// Initializing new instance of Cline will make sure that any
 			// agentically running promises in old instance don't affect our new
 			// task. This essentially creates a fresh slate for the new task.
-			await provider.initClineWithTask(message.text, message.images)
+			await provider.initRecoderWithTask(message.text, message.images)
 			break
 		// kilocode_change start
 		case "condense":
@@ -1189,13 +1189,7 @@ export const webviewMessageHandler = async (
 				const existingPrompts = getGlobalState("customModePrompts") ?? {}
 				const updatedPrompts = { ...existingPrompts, [message.promptMode]: message.customPrompt }
 				await updateGlobalState("customModePrompts", updatedPrompts)
-				const currentState = await provider.getStateToPostToWebview()
-				const stateWithPrompts = {
-					...currentState,
-					customModePrompts: updatedPrompts,
-					hasOpenedModeSelector: currentState.hasOpenedModeSelector ?? false,
-				}
-				provider.postMessageToWebview({ type: "state", state: stateWithPrompts })
+				await provider.postStateToWebview()
 
 				if (TelemetryService.hasInstance()) {
 					// Determine which setting was changed by comparing objects

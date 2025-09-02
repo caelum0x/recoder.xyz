@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { createPlatformAuth } from '@recoder/unified-auth';
+import { createPlatformAuth } from '../../packages/unified-auth/src/factory';
 
 export interface UnifiedSession {
   userId: string;
@@ -226,7 +226,7 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
   private async promptForAPIKey(): Promise<any> {
     const apiKey = await vscode.window.showInputBox({
       prompt: 'Enter your Recoder API key',
-      placeholder: 'rcd_xxxxxxxx_xxxxxxxx...',
+      placeHolder: 'rcd_xxxxxxxx_xxxxxxxx...',
       password: true,
       validateInput: (value) => {
         if (!value) return 'API key is required';
@@ -402,7 +402,7 @@ export class UnifiedAuthProvider implements vscode.AuthenticationProvider, vscod
   private async authenticateWithAPIKey(scopes: string[]): Promise<UnifiedSession> {
     const apiKey = await vscode.window.showInputBox({
       prompt: 'Enter your Recoder API key',
-      placeholder: 'rcd_xxxxxxxx_xxxxxxxx...',
+      placeHolder: 'rcd_xxxxxxxx_xxxxxxxx...',
       password: true,
       validateInput: (value) => {
         if (!value) return 'API key is required';
