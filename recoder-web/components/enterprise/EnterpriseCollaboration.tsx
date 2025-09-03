@@ -40,6 +40,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { useSession } from "next-auth/react";
+import { useCollaboration } from "@/hooks/use-collaboration";
 
 interface TeamMember {
   id: string;

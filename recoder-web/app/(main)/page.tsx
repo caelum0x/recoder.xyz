@@ -206,7 +206,7 @@ export default function Home() {
             
             <div className="mb-16 space-y-16">
               <RealTimeMarketDestroyer className="mb-16" />
-              <MobileAppBuilder className="mb-16" />
+              <MobileAppBuilder />
               <AIOrchestrationEngine className="mb-16" />
               <CodeQualityAnalyzer className="mb-16" />
               <EnterpriseAnalyticsDashboard className="mb-16" />

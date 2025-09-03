@@ -18,8 +18,8 @@ export const getPrisma = cache(() => {
       connectionString: connectionString
     });
     
-    // Create adapter with type assertion
-    const adapter = new PrismaNeon(neon as any);
+    // Create adapter with proper type handling
+    const adapter = new PrismaNeon(neon as any) as any;
     
     const client = new PrismaClient({
       adapter,
