@@ -1,21 +1,14 @@
-/**
- * NextAuth Configuration for Recoder Web Platform
- * 
- * Provides secure authentication with unified Recoder database,
- * cross-domain session management, and subscription integration.
- */
-
-import { type DefaultSession, type NextAuthConfig } from "next-auth";
-import { type JWT } from "next-auth/jwt";
-import NextAuth from "next-auth";
-import GithubProvider from "next-auth/providers/github";
-import GoogleProvider from "next-auth/providers/google";
-import DiscordProvider from "next-auth/providers/discord"; 
-import CredentialsProvider from "next-auth/providers/credentials";
-import { userDb, subscriptionDb, usageDb, PlanType } from "./database";
+// Unified authentication configuration for all Recoder products
+import NextAuth, { NextAuthOptions, Session, User } from 'next-auth';
+import { JWT } from 'next-auth/jwt';
+import GithubProvider from 'next-auth/providers/github';
+import GoogleProvider from 'next-auth/providers/google';
+import DiscordProvider from 'next-auth/providers/discord';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { userDb, subscriptionDb, PlanType } from './database';
 import { compare, hash } from 'bcryptjs';
 
-// Extended types for our unified application
+// Extended types for our application
 declare module 'next-auth' {
   interface Session {
     user: {
@@ -25,10 +18,6 @@ declare module 'next-auth' {
       image?: string;
       plan: PlanType;
       emailVerified: boolean;
-      username?: string;
-      bio?: string;
-      location?: string;
-      company?: string;
     };
   }
 
@@ -39,14 +28,19 @@ declare module 'next-auth' {
     image?: string;
     plan: PlanType;
     emailVerified: boolean;
-    username?: string;
-    bio?: string;
-    location?: string;
-    company?: string;
   }
 }
 
-export const authOptions: NextAuthConfig = {
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    plan: PlanType;
+    emailVerified: boolean;
+  }
+}
+
+// Shared NextAuth configuration
+export const authOptions: NextAuthOptions = {
   providers: [
     // GitHub OAuth
     GithubProvider({
@@ -56,14 +50,10 @@ export const authOptions: NextAuthConfig = {
         return {
           id: profile.id.toString(),
           name: profile.name || profile.login,
-          email: profile.email || "",
-          image: profile.avatar_url,
+          email: profile.email,
+          image: profile.avatar_url || undefined,
           plan: 'FREE' as PlanType,
           emailVerified: true,
-          username: profile.login,
-          bio: profile.bio || undefined,
-          location: profile.location || undefined,
-          company: profile.company || undefined,
         };
       },
     }),
@@ -77,10 +67,9 @@ export const authOptions: NextAuthConfig = {
           id: profile.sub,
           name: profile.name,
           email: profile.email,
-          image: profile.picture,
+          image: profile.picture || undefined,
           plan: 'FREE' as PlanType,
-          emailVerified: profile.email_verified,
-          username: profile.email?.split('@')[0],
+          emailVerified: Boolean(profile.email_verified),
         };
       },
     }),
@@ -96,8 +85,7 @@ export const authOptions: NextAuthConfig = {
           email: profile.email,
           image: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : undefined,
           plan: 'FREE' as PlanType,
-          emailVerified: profile.verified,
-          username: profile.username,
+          emailVerified: Boolean(profile.verified),
         };
       },
     }),
@@ -108,7 +96,7 @@ export const authOptions: NextAuthConfig = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
-        action: { label: 'Action', type: 'text' },
+        action: { label: 'Action', type: 'text' }, // 'signin' or 'signup'
         name: { label: 'Name', type: 'text' },
       },
       async authorize(credentials) {
@@ -116,28 +104,35 @@ export const authOptions: NextAuthConfig = {
           throw new Error('Email and password required');
         }
 
-        const { email, password, action, name } = credentials as {
-          email: string;
-          password: string;
-          action?: string;
-          name?: string;
-        };
+        const { email, password, action, name } = credentials;
 
         try {
           if (action === 'signup') {
-            if (!name) throw new Error('Name is required for signup');
+            // Sign up flow
+            if (!name) {
+              throw new Error('Name is required for signup');
+            }
 
+            // Check if user already exists
             const existingUser = await userDb.findByEmail(email);
-            if (existingUser) throw new Error('User already exists');
+            if (existingUser) {
+              throw new Error('User already exists with this email');
+            }
 
+            // Hash password
             const hashedPassword = await hash(password, 12);
+
+            // Create user
             const user = await userDb.create({
               email,
               name,
               avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
             });
 
+            // Store password hash (you'll need to add this to userDb.create or update)
+            // For now, we'll update the user with password hash
             await userDb.update(user.id, { password_hash: hashedPassword } as any);
+
             const plan = await subscriptionDb.getUserPlan(user.id);
 
             return {
@@ -149,13 +144,21 @@ export const authOptions: NextAuthConfig = {
               emailVerified: user.email_verified,
             };
           } else {
+            // Sign in flow
             const user = await userDb.findByEmail(email);
-            if (!user) throw new Error('No user found');
+            if (!user) {
+              throw new Error('No user found with this email');
+            }
 
+            // Check password (you'll need to add password_hash to User type)
             const isValidPassword = await compare(password, (user as any).password_hash || '');
-            if (!isValidPassword) throw new Error('Invalid password');
+            if (!isValidPassword) {
+              throw new Error('Invalid password');
+            }
 
+            // Update last login
             await userDb.updateLastLogin(user.id);
+
             const plan = await subscriptionDb.getUserPlan(user.id);
 
             return {
@@ -174,13 +177,7 @@ export const authOptions: NextAuthConfig = {
       },
     }),
   ],
-  pages: {
-    signIn: "/auth/signin",
-    error: "/auth/error",
-    verifyRequest: "/auth/verify-request",
-    newUser: "/onboarding",
-  },
-  
+
   callbacks: {
     async signIn({ user, account, profile }) {
       if (!user.email) return false;
@@ -227,15 +224,12 @@ export const authOptions: NextAuthConfig = {
       if (user) {
         token.id = user.id;
         token.plan = user.plan;
-        token.emailVerified = !!user.emailVerified;
-        token.username = user.username;
-        token.bio = user.bio;
-        token.location = user.location;
-        token.company = user.company;
+        token.emailVerified = Boolean(user.emailVerified);
       }
 
       // Update session (when user updates profile, plan changes, etc.)
       if (trigger === 'update' && session) {
+        // Refresh user data from database
         if (token.email) {
           const dbUser = await userDb.findByEmail(token.email);
           if (dbUser) {
@@ -253,19 +247,15 @@ export const authOptions: NextAuthConfig = {
 
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id as string;
-        session.user.plan = token.plan as PlanType;
-        session.user.emailVerified = token.emailVerified as any; // NextAuth v5 type compatibility
-        session.user.username = token.username as string | undefined;
-        session.user.bio = token.bio as string | undefined;
-        session.user.location = token.location as string | undefined;
-        session.user.company = token.company as string | undefined;
+        session.user.id = token.id;
+        session.user.plan = token.plan;
+        session.user.emailVerified = token.emailVerified;
       }
       return session;
     },
 
     async redirect({ url, baseUrl }) {
-      // Handle cross-domain redirects for Recoder products
+      // Handle cross-domain redirects for our different products
       const recoderDomains = [
         'recoder.xyz',
         'web.recoder.xyz',
@@ -281,93 +271,80 @@ export const authOptions: NextAuthConfig = {
           return url;
         }
         
-        // Allow relative URLs
-        if (url.startsWith("/")) return `${baseUrl}${url}`;
-        
-        // Default to dashboard
-        return `${baseUrl}/dashboard`;
+        // Default to base URL
+        return baseUrl;
       } catch {
-        return `${baseUrl}/dashboard`;
+        return baseUrl;
       }
     },
   },
-  events: {
-    async signIn({ user, account, profile, isNewUser }) {
-      console.log(`User ${user.email} signed in via ${account?.provider}`, { isNewUser });
-      
-      // Track web platform usage
-      if (user.id) {
-        await usageDb.logUsage({
-          user_id: user.id,
-          product: 'web',
-          action: 'signin',
-          metadata: { provider: account?.provider, isNewUser },
-        });
-      }
-    },
-    
-    async signOut(message) {
-      console.log(`User signed out`);
-      
-      // Note: In NextAuth v5, session is not available in signOut event
-      // We'll track this differently if needed
-    },
+
+  pages: {
+    signIn: '/auth/signin',
+    error: '/auth/error',
+    verifyRequest: '/auth/verify-request',
   },
 
   session: {
-    strategy: "jwt",
+    strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
+  },
+
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
 
   secret: process.env.NEXTAUTH_SECRET,
+
   debug: process.env.NODE_ENV === 'development',
 };
 
-// NextAuth v5 compatibility - auth function
+// Create NextAuth handler
+export default NextAuth(authOptions);
+
+// Server-side auth function for API routes
 export async function auth() {
-  // For now, return a mock session to prevent build errors
-  // TODO: Properly implement NextAuth v5 when stable
-  return {
-    user: {
-      id: 'demo-user',
-      email: 'demo@recoder.xyz',
-      name: 'Demo User',
-      plan: 'PRO' as PlanType,
-      emailVerified: true
-    }
-  };
+  // For development, return a mock session
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      user: {
+        id: 'dev-user-123',
+        email: 'dev@recoder.xyz',
+        name: 'Dev User',
+        plan: 'FREE' as PlanType,
+        emailVerified: true,
+      },
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
+  
+  // In production, implement proper session validation
+  return null;
 }
 
-// Web-specific auth helpers
-export const webAuthHelpers = {
-  // Check if user can create new project
-  async canCreateProject(userId: string): Promise<boolean> {
-    const limit = await usageDb.checkUsageLimit(userId, 'web', 'projects_max');
-    return limit.canUse;
+// Helper functions for authentication
+export const authHelpers = {
+  // Get user session on server-side
+  async getServerSession(req: any, res: any) {
+    return await NextAuth(req, res, authOptions);
   },
 
-  // Check if user can upload files
-  async canUploadFile(userId: string, fileSizeMB: number): Promise<boolean> {
-    const storageLimit = await usageDb.checkUsageLimit(userId, 'web', 'storage_mb');
-    return storageLimit.remaining >= fileSizeMB;
-  },
-
-  // Track web platform usage
-  async trackWebUsage(userId: string, action: string, metadata?: Record<string, any>) {
-    await usageDb.logUsage({
-      user_id: userId,
-      product: 'web',
-      action,
-      resource_type: 'web_action',
-      metadata,
-    });
-  },
-
-  // Check plan access
+  // Check if user has required plan
   hasAccess(userPlan: PlanType, requiredPlan: PlanType): boolean {
     const planHierarchy = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
     return planHierarchy[userPlan] >= planHierarchy[requiredPlan];
+  },
+
+  // Generate API key for user (for CLI and extension)
+  generateApiKey(userId: string): string {
+    const timestamp = Date.now().toString();
+    const randomBytes = Math.random().toString(36).substring(2);
+    return `rcdr_${userId.substring(0, 8)}_${timestamp}_${randomBytes}`;
+  },
+
+  // Validate API key format
+  validateApiKeyFormat(apiKey: string): boolean {
+    return /^rcdr_[a-f0-9]{8}_\d+_[a-z0-9]+$/.test(apiKey);
   },
 };
 
@@ -375,17 +352,25 @@ export const webAuthHelpers = {
 export function withAuth(handler: any, options: { requiredPlan?: PlanType } = {}) {
   return async (req: any, res: any) => {
     try {
-      // For web platform, we'll use session-based auth
-      const session = await auth();
-      
-      if (!session?.user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      // Check for API key in headers
+      const apiKey = req.headers.authorization?.replace('Bearer ', '');
+      if (apiKey && authHelpers.validateApiKeyFormat(apiKey)) {
+        // TODO: Validate API key against database
+        // For now, extract user ID from API key
+        const userId = apiKey.split('_')[1];
+        req.user = { id: userId }; // Simplified for now
+      } else {
+        // Check for session
+        const session = await NextAuth(req, res, authOptions);
+        if (!session?.user) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        
+        req.user = session.user;
       }
-      
-      req.user = session.user;
 
       // Check plan access
-      if (options.requiredPlan && !webAuthHelpers.hasAccess(req.user.plan, options.requiredPlan)) {
+      if (options.requiredPlan && !authHelpers.hasAccess(req.user.plan, options.requiredPlan)) {
         return res.status(403).json({ error: 'Insufficient plan access' });
       }
 
@@ -396,3 +381,6 @@ export function withAuth(handler: any, options: { requiredPlan?: PlanType } = {}
     }
   };
 }
+
+// React hook for client-side auth
+export { useSession, signIn, signOut } from 'next-auth/react';
