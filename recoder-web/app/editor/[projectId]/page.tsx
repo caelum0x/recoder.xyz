@@ -33,6 +33,7 @@ import AIPoweredCodeAssist from '@/components/editor/AIPoweredCodeAssist';
 import MobileCodeEditor from '@/components/editor/MobileCodeEditor';
 import EnterpriseCollaboration from '@/components/enterprise/EnterpriseCollaboration';
 import AdvancedDeploymentAutomation from '@/components/deployment/AdvancedDeploymentAutomation';
+import IntelligentAssistant from '@/components/ai/IntelligentAssistant';
 
 interface FileNode {
   name: string;
@@ -1677,6 +1678,49 @@ export default function RealCodeEditor({ params }: { params: { projectId: string
           
           <div className="h-full p-4 overflow-y-auto">
             <AdvancedDeploymentAutomation projectId={projectId} />
+          </div>
+        </div>
+      )}
+
+      {/* Intelligent AI Assistant Panel */}
+      {showAIAssistant && (
+        <div className="fixed top-16 right-4 w-[800px] h-[600px] bg-white dark:bg-gray-800 shadow-xl rounded-lg border z-40 overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center gap-2">
+              <Brain className="w-5 h-5 text-purple-600" />
+              <h3 className="font-semibold">Intelligent AI Assistant</h3>
+            </div>
+            <X 
+              className="w-4 h-4 cursor-pointer hover:text-red-500" 
+              onClick={() => setShowAIAssistant(false)}
+            />
+          </div>
+          
+          <div className="h-full overflow-hidden">
+            <IntelligentAssistant
+              currentCode={fileContent}
+              filePath={activeFile || ''}
+              language={activeTabId ? getMonacoLanguage(openTabs.find(t => t.id === activeTabId)?.fileName || '') : 'typescript'}
+              projectContext={{
+                framework: project?.framework || 'unknown',
+                dependencies: dependencies?.map(d => d.name) || [],
+                fileCount: files?.length || 0,
+                totalLines: fileContent.split('\n').length
+              }}
+              onCodeUpdate={(newCode) => {
+                setFileContent(newCode);
+                handleAICodeReplace(0, fileContent.split('\n').length, newCode);
+              }}
+              onInsertCode={(code, position) => {
+                if (position) {
+                  handleAICodeReplace(position.line, position.line, code);
+                } else {
+                  setFileContent(prev => prev + '\n' + code);
+                }
+              }}
+              isVisible={showAIAssistant}
+              onClose={() => setShowAIAssistant(false)}
+            />
           </div>
         </div>
       )}

@@ -28,7 +28,7 @@ const generateRequestSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-    const adapter = new PrismaNeon(neon as any); // Type assertion for Neon Pool compatibility
+    const adapter = new PrismaNeon(neon as any) as any; // Type assertion for Neon Pool compatibility
     const prisma = new PrismaClient({ adapter });
     
     const body = await req.json();
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-    const adapter = new PrismaNeon(neon as any); // Type assertion for Neon Pool compatibility
+    const adapter = new PrismaNeon(neon as any) as any; // Type assertion for Neon Pool compatibility
     const prisma = new PrismaClient({ adapter });
 
     const message = await prisma.message.findUnique({

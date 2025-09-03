@@ -71,6 +71,16 @@ model User {
   auditLogs     AuditLog[]
   routers       Router[]
   projects      Project[]
+  aiConsensusLogs AiConsensusLog[]
+  
+  // Media Processing relations
+  mediaFiles     MediaFile[]
+  processingJobs ProcessingJob[]
+  batchJobs      BatchJob[]
+  campaignTemplates CampaignTemplate[]
+  templateUsages TemplateUsage[]
+  analyticsEvents AnalyticsEvent[]
+  subscription   Subscription?
 }
 
 model VerificationToken {
@@ -376,6 +386,7 @@ model Project {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   deploymentHistory DeploymentHistory[]
+  mediaFiles MediaFile[]
 
   @@index([userId])
   @@index([status])
@@ -398,4 +409,201 @@ model DeploymentHistory {
 
   @@index([projectId])
   @@index([timestamp])
+}
+
+// AI Consensus System models
+model AiConsensusLog {
+  id                   String   @id @default(cuid())
+  userId               String
+  projectId            String?
+  validationTypes      String   // Comma-separated list
+  consensusScore       Float
+  consensusReached     Boolean
+  validatorCount       Int
+  totalCost            Float
+  totalTokens          Int
+  executionTime        Int      // Milliseconds
+  language             String
+  codeLength           Int
+  isQuickValidation    Boolean  @default(false)
+  metadata             Json?    // Additional validation metadata
+  createdAt            DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([consensusScore])
+  @@index([language])
+  @@index([isQuickValidation])
+}
+
+// Media Processing Platform models
+model MediaFile {
+  id                String   @id @default(cuid())
+  originalName      String
+  fileName          String
+  filePath          String
+  fileSize          Int
+  mimeType          String
+  format            String
+  purpose           String   @default("general") // general, campaign, template, etc.
+  width             Int?
+  height            Int?
+  duration          Float?   // Duration in seconds for video/audio
+  thumbnailPath     String?
+  previewPath       String?
+  metadata          Json?
+  deleted           Boolean  @default(false)
+  userId            String
+  projectId         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project           Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  processingJobs    ProcessingJob[]
+  templateUsages    TemplateUsage[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([purpose])
+  @@index([createdAt])
+}
+
+model ProcessingJob {
+  id                String   @id @default(cuid())
+  type              String   // video, audio, image, batch
+  status            String   @default("queued") // queued, processing, completed, failed
+  operation         String   // compress, convert, watermark, etc.
+  parameters        Json
+  progress          Int      @default(0)
+  inputPath         String
+  outputPath        String?
+  error             String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  userId            String
+  mediaFileId       String?
+  batchJobId        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaFile         MediaFile? @relation(fields: [mediaFileId], references: [id], onDelete: SetNull)
+  batchJob          BatchJob? @relation(fields: [batchJobId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([mediaFileId])
+  @@index([batchJobId])
+  @@index([createdAt])
+}
+
+model BatchJob {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  status            String   @default("queued") // queued, processing, completed, failed, cancelled
+  operation         String
+  parameters        Json
+  progress          Int      @default(0)
+  processedFiles    Int      @default(0)
+  totalFiles        Int
+  error             String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  userId            String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processingJobs    ProcessingJob[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CampaignTemplate {
+  id                String   @id @default(cuid())
+  name              String
+  description       String
+  category          String   // social, ads, presentations, marketing, branding
+  platform          String   // youtube, instagram, tiktok, facebook, linkedin, universal
+  aspectRatio       String
+  resolution        Json     // {width: number, height: number}
+  duration          Int?     // Duration in seconds
+  framerate         Int?
+  settings          Json     // format, quality, codec, bitrate settings
+  branding          Json     // logo, watermark, brand colors
+  effects           Json     // filters, transitions, animations
+  isPublic          Boolean  @default(false)
+  featured          Boolean  @default(false)
+  popularity        Int      @default(0)
+  tags              String[]
+  usageCount        Int      @default(0)
+  userId            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  templateUsages    TemplateUsage[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([platform])
+  @@index([isPublic])
+  @@index([featured])
+  @@index([popularity])
+}
+
+model TemplateUsage {
+  id                String   @id @default(cuid())
+  userId            String
+  templateId        String
+  mediaFileId       String?
+  customizations    Json?
+  createdAt         DateTime @default(now())
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template          CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  mediaFile         MediaFile? @relation(fields: [mediaFileId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([templateId])
+  @@index([createdAt])
+}
+
+model AnalyticsEvent {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String   // media_upload, processing_complete, template_usage, etc.
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  plan              String   // free, pro, enterprise
+  status            String   // active, cancelled, expired
+  currentPeriodStart DateTime
+  currentPeriodEnd  DateTime
+  cancelAtPeriodEnd Boolean  @default(false)
+  stripeCustomerId  String?
+  stripeSubscriptionId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
 }
