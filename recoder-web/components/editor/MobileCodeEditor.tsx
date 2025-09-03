@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Editor from "@monaco-editor/react";
+import MonacoCodeEditor from "./MonacoCodeEditor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +42,11 @@ interface MobileCodeEditorProps {
   language: string;
   className?: string;
   readOnly?: boolean;
+  projectId?: string;
+  user?: { id: string; name: string };
+  filePath?: string;
+  onSave?: () => void;
+  onPreview?: () => void;
 }
 
 export default function MobileCodeEditor({
@@ -49,7 +54,12 @@ export default function MobileCodeEditor({
   onChange,
   language,
   className = "",
-  readOnly = false
+  readOnly = false,
+  projectId,
+  user,
+  filePath,
+  onSave,
+  onPreview
 }: MobileCodeEditorProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -274,18 +284,16 @@ export default function MobileCodeEditor({
     // Return regular Monaco editor for desktop
     return (
       <div className={className}>
-        <Editor
+        <MonacoCodeEditor
           value={value}
-          onChange={(val) => onChange(val || '')}
+          onChange={onChange}
           language={language}
-          onMount={handleEditorMount}
-          options={{
-            minimap: { enabled: true },
-            fontSize: 14,
-            lineNumbers: 'on',
-            wordWrap: 'off',
-            scrollBeyondLastLine: false,
-          }}
+          theme="vs-dark"
+          enableAISuggestions={true}
+          enableCollaboration={!!projectId}
+          projectId={projectId}
+          user={user}
+          readOnly={readOnly}
         />
       </div>
     );
@@ -309,22 +317,16 @@ export default function MobileCodeEditor({
         
         <TabsContent value="code" className="mt-0">
           <div style={{ height: isMobile ? '60vh' : '70vh' }}>
-            <Editor
+            <MonacoCodeEditor
               value={value}
-              onChange={(val) => onChange(val || '')}
+              onChange={onChange}
               language={language}
-              onMount={handleEditorMount}
-              options={{
-                fontSize: fontSize,
-                lineNumbers: showLineNumbers ? 'on' : 'off',
-                minimap: { enabled: showMinimap },
-                wordWrap: 'on',
-                scrollBeyondLastLine: false,
-                smoothScrolling: true,
-                mouseWheelZoom: true,
-                contextmenu: false,
-                readOnly: readOnly,
-              }}
+              theme="vs-dark"
+              enableAISuggestions={true}
+              enableCollaboration={!!projectId}
+              projectId={projectId}
+              user={user}
+              readOnly={readOnly}
             />
           </div>
         </TabsContent>

@@ -111,34 +111,85 @@ export default function AdvancedDeploymentAutomation({ projectId }: { projectId:
     analytics: true
   });
 
-  // Simulate deployment progress
-  const simulateDeployment = async (platformId: string) => {
-    const stages = [
-      { stage: 'Preparing build', progress: 10, message: 'Setting up build environment...', duration: 2000 },
-      { stage: 'Installing dependencies', progress: 30, message: 'npm install...', duration: 3000 },
-      { stage: 'Building application', progress: 60, message: 'Compiling TypeScript and bundling...', duration: 4000 },
-      { stage: 'Deploying to platform', progress: 85, message: 'Uploading build artifacts...', duration: 2000 },
-      { stage: 'Configuring services', progress: 95, message: 'Setting up SSL and domains...', duration: 1000 },
-      { stage: 'Deployment complete', progress: 100, message: 'Successfully deployed!', duration: 500 }
-    ];
+  // Real deployment using the API
+  const deployToPlatform = async (platformId: string) => {
+    // Update progress with initial stage
+    setDeploymentProgress(prev => new Map(prev.set(platformId, {
+      stage: 'Initializing deployment',
+      progress: 5,
+      message: 'Starting deployment process...',
+      duration: 0
+    })));
 
-    for (const stage of stages) {
-      setDeploymentProgress(prev => new Map(prev.set(platformId, stage)));
-      await new Promise(resolve => setTimeout(resolve, stage.duration));
+    try {
+      // Call the real deployment API
+      const response = await fetch('/api/deployment/advanced', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          platforms: [platformId],
+          config: deploymentConfig
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Deployment failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Deployment failed');
+      }
+
+      const platformResult = result.results[0];
+      
+      if (platformResult.status === 'success') {
+        // Update with successful deployment
+        setPlatforms(prev => prev.map(p => 
+          p.id === platformId 
+            ? { 
+                ...p, 
+                status: 'deployed' as const,
+                url: platformResult.url,
+                deployTime: platformResult.buildTime,
+                lastDeploy: new Date()
+              }
+            : p
+        ));
+
+        setDeploymentProgress(prev => new Map(prev.set(platformId, {
+          stage: 'Deployment complete',
+          progress: 100,
+          message: `Successfully deployed to ${platformResult.url}`,
+          duration: platformResult.buildTime
+        })));
+      } else {
+        throw new Error(platformResult.error || 'Deployment failed');
+      }
+
+    } catch (error) {
+      console.error(`Deployment to ${platformId} failed:`, error);
+      
+      // Update platform status to failed
+      setPlatforms(prev => prev.map(p => 
+        p.id === platformId 
+          ? { ...p, status: 'failed' as const }
+          : p
+      ));
+
+      setDeploymentProgress(prev => new Map(prev.set(platformId, {
+        stage: 'Deployment failed',
+        progress: 0,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        duration: 0
+      })));
+
+      throw error;
     }
-
-    // Update platform status
-    setPlatforms(prev => prev.map(p => 
-      p.id === platformId 
-        ? { 
-            ...p, 
-            status: 'deployed' as const,
-            url: `https://${projectId}-${platformId}.com`,
-            deployTime: Date.now(),
-            lastDeploy: new Date()
-          }
-        : p
-    ));
   };
 
   const handleDeploy = async (platformIds: string[]) => {
@@ -151,17 +202,14 @@ export default function AdvancedDeploymentAutomation({ projectId }: { projectId:
 
     // Deploy to selected platforms in parallel
     const deploymentPromises = platformIds.map(platformId => 
-      simulateDeployment(platformId)
+      deployToPlatform(platformId)
     );
 
     try {
       await Promise.all(deploymentPromises);
     } catch (error) {
       console.error('Deployment failed:', error);
-      // Update failed platforms
-      setPlatforms(prev => prev.map(p => 
-        platformIds.includes(p.id) ? { ...p, status: 'failed' as const } : p
-      ));
+      // Failed platforms are already updated in deployToPlatform
     } finally {
       setIsDeploying(false);
     }

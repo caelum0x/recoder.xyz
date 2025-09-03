@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
       downloadUrl: `/api/download/${generatedCode.id}`,
       preview: generatedCode.preview,
       aiPowered: generatedCode.isAIGenerated,
-      aiModel: generatedCode.aiModel || 'template-based',
-      aiReasoning: generatedCode.aiReasoning || 'Generated using intelligent templates',
+      aiModel: 'aiModel' in generatedCode ? generatedCode.aiModel : 'template-based',
+      aiReasoning: 'aiReasoning' in generatedCode ? generatedCode.aiReasoning : 'Generated using intelligent templates',
       fileCount: Object.keys(generatedCode.files).length,
-      message: generatedCode.isAIGenerated ? 
+      message: generatedCode.isAIGenerated && 'aiModel' in generatedCode ? 
         `AI-powered code generation successful using ${generatedCode.aiModel}` : 
         'Template-based code generation successful (AI service unavailable)'
     });

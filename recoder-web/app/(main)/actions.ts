@@ -35,7 +35,7 @@ export async function createChat(
     const { Pool } = await import("@neondatabase/serverless");
     
     const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-    const adapter = new PrismaNeon(neon as any);
+    const adapter = new PrismaNeon(neon as any) as any;
     const prisma = new PrismaClient({ adapter });
     
     console.log('Prisma client initialized successfully');
