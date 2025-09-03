@@ -1,7 +1,71 @@
-// Web Platform Database Connection using Prisma
-import { prisma } from './prisma';
+// Unified database connection and utilities for Recoder.xyz
+import { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
 
-// Types
+// Database configuration
+const dbConfig = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20, // Maximum number of connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+};
+
+// Global connection pool
+let pool: Pool | null = null;
+
+export function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool(dbConfig);
+    
+    pool.on('error', (err) => {
+      console.error('Unexpected error on idle client', err);
+      process.exit(-1);
+    });
+    
+    pool.on('connect', () => {
+      console.log('Connected to PostgreSQL database');
+    });
+  }
+  
+  return pool;
+}
+
+// Database client wrapper with error handling
+export async function withDatabase<T>(
+  operation: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await getPool().connect();
+  
+  try {
+    return await operation(client);
+  } catch (error) {
+    console.error('Database operation failed:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Transaction wrapper
+export async function withTransaction<T>(
+  operation: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  return withDatabase(async (client) => {
+    await client.query('BEGIN');
+    
+    try {
+      const result = await operation(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+// Type definitions
 export type PlanType = 'FREE' | 'PRO' | 'ENTERPRISE';
 export type PlanStatus = 'ACTIVE' | 'CANCELLED' | 'EXPIRED' | 'PAUSED';
 
@@ -17,7 +81,7 @@ export interface User {
   last_login_at?: Date;
   is_active: boolean;
   metadata: Record<string, any>;
-} 
+}
 
 export interface Subscription {
   id: string;
@@ -43,6 +107,34 @@ export interface UsageLog {
   created_at: Date;
 }
 
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  project_type: string;
+  template_id?: string;
+  settings: Record<string, any>;
+  file_count: number;
+  storage_used_mb: number;
+  is_public: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface ChatConversation {
+  id: string;
+  user_id: string;
+  title?: string;
+  model_provider: string;
+  model_name: string;
+  system_prompt?: string;
+  settings: Record<string, any>;
+  message_count: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
 // User management functions
 export const userDb = {
   async create(userData: {
@@ -52,107 +144,72 @@ export const userDb = {
     provider_id?: string;
     provider?: string;
   }): Promise<User> {
-    const user = await prisma.user.create({
-      data: {
-        email: userData.email,
-        name: userData.name,
-        image: userData.avatar_url,
-        emailVerified: new Date(),
-      }
+    return withTransaction(async (client) => {
+      // Create user
+      const userResult = await client.query(
+        `INSERT INTO users (email, name, avatar_url, email_verified)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [userData.email, userData.name, userData.avatar_url, true]
+      );
+      
+      const user = userResult.rows[0];
+      
+      // Create default FREE subscription
+      await client.query(
+        `INSERT INTO subscriptions (user_id, plan_type, status)
+         VALUES ($1, 'FREE', 'ACTIVE')`,
+        [user.id]
+      );
+      
+      return user;
     });
-
-    // TODO: Create default FREE subscription when subscription model is implemented
-
-    return {
-      id: user.id,
-      email: user.email!,
-      name: user.name!,
-      avatar_url: user.image ?? undefined,
-      email_verified: !!user.emailVerified,
-      email_verified_at: user.emailVerified ?? undefined,
-      created_at: user.createdAt,
-      updated_at: user.updatedAt,
-      last_login_at: user.lastLoginAt ?? undefined,
-      is_active: true,
-      metadata: {},
-    };
   },
 
   async findByEmail(email: string): Promise<User | null> {
-    const user = await prisma.user.findUnique({
-      where: { email }
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email]
+      );
+      return result.rows[0] || null;
     });
-    
-    if (!user) return null;
-    
-    return {
-      id: user.id,
-      email: user.email!,
-      name: user.name!,
-      avatar_url: user.image ?? undefined,
-      email_verified: !!user.emailVerified,
-      email_verified_at: user.emailVerified ?? undefined,
-      created_at: user.createdAt,
-      updated_at: user.updatedAt,
-      last_login_at: user.lastLoginAt ?? undefined,
-      is_active: true,
-      metadata: {},
-    };
   },
 
   async findById(id: string): Promise<User | null> {
-    const user = await prisma.user.findUnique({
-      where: { id }
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        'SELECT * FROM users WHERE id = $1',
+        [id]
+      );
+      return result.rows[0] || null;
     });
-    
-    if (!user) return null;
-    
-    return {
-      id: user.id,
-      email: user.email!,
-      name: user.name!,
-      avatar_url: user.image ?? undefined,
-      email_verified: !!user.emailVerified,
-      email_verified_at: user.emailVerified ?? undefined,
-      created_at: user.createdAt,
-      updated_at: user.updatedAt,
-      last_login_at: user.lastLoginAt ?? undefined,
-      is_active: true,
-      metadata: {},
-    };
   },
 
   async update(id: string, updates: Partial<User>): Promise<User> {
-    const user = await prisma.user.update({
-      where: { id },
-      data: {
-        name: updates.name,
-        image: updates.avatar_url,
-        emailVerified: updates.email_verified ? new Date() : undefined,
-        lastLoginAt: updates.last_login_at,
-        updatedAt: new Date(),
-      }
+    return withDatabase(async (client) => {
+      const setClause = Object.keys(updates)
+        .map((key, index) => `${key} = $${index + 2}`)
+        .join(', ');
+      
+      const values = [id, ...Object.values(updates)];
+      
+      const result = await client.query(
+        `UPDATE users SET ${setClause}, updated_at = NOW()
+         WHERE id = $1 RETURNING *`,
+        values
+      );
+      
+      return result.rows[0];
     });
-    
-    return {
-      id: user.id,
-      email: user.email!,
-      name: user.name!,
-      avatar_url: user.image ?? undefined,
-      email_verified: !!user.emailVerified,
-      email_verified_at: user.emailVerified ?? undefined,
-      created_at: user.createdAt,
-      updated_at: user.updatedAt,
-      last_login_at: user.lastLoginAt ?? undefined,
-      is_active: true,
-      metadata: {},
-    };
   },
 
   async updateLastLogin(id: string): Promise<void> {
-    await prisma.user.update({
-      where: { id },
-      data: { lastLoginAt: new Date() }
+    await withDatabase(async (client) => {
+      await client.query(
+        'UPDATE users SET last_login_at = NOW() WHERE id = $1',
+        [id]
+      );
     });
   }
 };
@@ -160,18 +217,44 @@ export const userDb = {
 // Subscription management functions
 export const subscriptionDb = {
   async getUserPlan(userId: string): Promise<PlanType> {
-    // TODO: Implement subscription model or use user settings
-    return 'FREE';
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        'SELECT get_user_plan($1) as plan_type',
+        [userId]
+      );
+      return result.rows[0]?.plan_type || 'FREE';
+    });
   },
 
   async getUserSubscription(userId: string): Promise<Subscription | null> {
-    // TODO: Implement subscription model or use user settings
-    return null;
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        `SELECT * FROM subscriptions 
+         WHERE user_id = $1 AND status = 'ACTIVE'
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId]
+      );
+      return result.rows[0] || null;
+    });
   },
 
   async updatePlan(userId: string, planType: PlanType): Promise<void> {
-    // TODO: Implement subscription model or use user settings
-    // For now, this is a no-op
+    await withTransaction(async (client) => {
+      // Deactivate current subscription
+      await client.query(
+        `UPDATE subscriptions 
+         SET status = 'CANCELLED', cancelled_at = NOW()
+         WHERE user_id = $1 AND status = 'ACTIVE'`,
+        [userId]
+      );
+      
+      // Create new subscription
+      await client.query(
+        `INSERT INTO subscriptions (user_id, plan_type, status)
+         VALUES ($1, $2, 'ACTIVE')`,
+        [userId, planType]
+      );
+    });
   }
 };
 
@@ -185,49 +268,40 @@ export const usageDb = {
     resource_count?: number;
     metadata?: Record<string, any>;
   }): Promise<void> {
-    // TODO: Use UsageStats model instead of usageLog
-    // For now, this is a no-op
+    await withDatabase(async (client) => {
+      await client.query(
+        `INSERT INTO usage_logs (user_id, product, action, resource_type, resource_count, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          data.user_id,
+          data.product,
+          data.action,
+          data.resource_type || null,
+          data.resource_count || 1,
+          JSON.stringify(data.metadata || {})
+        ]
+      );
+    });
   },
 
   async getUserUsage(userId: string, product: string, days: number = 30): Promise<number> {
-    // TODO: Use UsageStats model to calculate usage
-    // For now, return 0
-    return 0;
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        `SELECT get_user_usage($1, $2, $3::interval) as usage_count`,
+        [userId, product, `${days} days`]
+      );
+      return result.rows[0]?.usage_count || 0;
+    });
   },
 
   async getUserLimit(userId: string, product: string, feature: string): Promise<number> {
-    const plan = await subscriptionDb.getUserPlan(userId);
-    
-    // Basic limits by plan
-    const limits = {
-      FREE: {
-        'requests_per_month': 100,
-        'projects_max': 3,
-        'storage_mb': 100,
-        'messages_per_day': 50,
-        'conversations_max': 5,
-        'suggestions_per_day': 20,
-      },
-      PRO: {
-        'requests_per_month': 1000,
-        'projects_max': 25,
-        'storage_mb': 1000,
-        'messages_per_day': 500,
-        'conversations_max': 50,
-        'suggestions_per_day': 200,
-      },
-      ENTERPRISE: {
-        'requests_per_month': -1, // Unlimited
-        'projects_max': -1,
-        'storage_mb': -1,
-        'messages_per_day': -1,
-        'conversations_max': -1,
-        'suggestions_per_day': -1,
-      }
-    };
-    
-    const planLimits = limits[plan as keyof typeof limits];
-    return (planLimits?.[feature as keyof typeof planLimits] as number) || 0;
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        'SELECT get_user_limit($1, $2, $3) as limit_value',
+        [userId, product, feature]
+      );
+      return result.rows[0]?.limit_value || 0;
+    });
   },
 
   async checkUsageLimit(userId: string, product: string, feature: string): Promise<{
@@ -237,8 +311,8 @@ export const usageDb = {
     remaining: number;
   }> {
     const [usage, limit] = await Promise.all([
-      usageDb.getUserUsage(userId, product, feature.includes('day') ? 1 : 30),
-      usageDb.getUserLimit(userId, product, feature)
+      this.getUserUsage(userId, product, 30),
+      this.getUserLimit(userId, product, feature)
     ]);
 
     const remaining = limit === -1 ? Infinity : Math.max(0, limit - usage);
@@ -253,10 +327,189 @@ export const usageDb = {
   }
 };
 
+// Project management functions
+export const projectDb = {
+  async create(data: {
+    user_id: string;
+    name: string;
+    description?: string;
+    project_type: string;
+    template_id?: string;
+    settings?: Record<string, any>;
+  }): Promise<Project> {
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        `INSERT INTO projects (user_id, name, description, project_type, template_id, settings)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [
+          data.user_id,
+          data.name,
+          data.description || null,
+          data.project_type,
+          data.template_id || null,
+          JSON.stringify(data.settings || {})
+        ]
+      );
+      return result.rows[0];
+    });
+  },
+
+  async getUserProjects(userId: string, limit: number = 50): Promise<Project[]> {
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        `SELECT * FROM projects 
+         WHERE user_id = $1 
+         ORDER BY updated_at DESC 
+         LIMIT $2`,
+        [userId, limit]
+      );
+      return result.rows;
+    });
+  },
+
+  async findById(id: string, userId: string): Promise<Project | null> {
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        'SELECT * FROM projects WHERE id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      return result.rows[0] || null;
+    });
+  },
+
+  async update(id: string, userId: string, updates: Partial<Project>): Promise<Project> {
+    return withDatabase(async (client) => {
+      const setClause = Object.keys(updates)
+        .map((key, index) => `${key} = $${index + 3}`)
+        .join(', ');
+      
+      const values = [id, userId, ...Object.values(updates)];
+      
+      const result = await client.query(
+        `UPDATE projects SET ${setClause}, updated_at = NOW()
+         WHERE id = $1 AND user_id = $2 RETURNING *`,
+        values
+      );
+      
+      return result.rows[0];
+    });
+  },
+
+  async delete(id: string, userId: string): Promise<boolean> {
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        'DELETE FROM projects WHERE id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      return result.rowCount > 0;
+    });
+  }
+};
+
+// Chat conversation functions
+export const chatDb = {
+  async createConversation(data: {
+    user_id: string;
+    title?: string;
+    model_provider: string;
+    model_name: string;
+    system_prompt?: string;
+    settings?: Record<string, any>;
+  }): Promise<ChatConversation> {
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        `INSERT INTO chat_conversations (user_id, title, model_provider, model_name, system_prompt, settings)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [
+          data.user_id,
+          data.title || null,
+          data.model_provider,
+          data.model_name,
+          data.system_prompt || null,
+          JSON.stringify(data.settings || {})
+        ]
+      );
+      return result.rows[0];
+    });
+  },
+
+  async getUserConversations(userId: string, limit: number = 50): Promise<ChatConversation[]> {
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        `SELECT * FROM chat_conversations 
+         WHERE user_id = $1 
+         ORDER BY updated_at DESC 
+         LIMIT $2`,
+        [userId, limit]
+      );
+      return result.rows;
+    });
+  },
+
+  async addMessage(data: {
+    conversation_id: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    metadata?: Record<string, any>;
+    token_count?: number;
+  }): Promise<void> {
+    await withTransaction(async (client) => {
+      // Add message
+      await client.query(
+        `INSERT INTO chat_messages (conversation_id, role, content, metadata, token_count)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          data.conversation_id,
+          data.role,
+          data.content,
+          JSON.stringify(data.metadata || {}),
+          data.token_count || null
+        ]
+      );
+      
+      // Update conversation message count
+      await client.query(
+        `UPDATE chat_conversations 
+         SET message_count = message_count + 1, updated_at = NOW()
+         WHERE id = $1`,
+        [data.conversation_id]
+      );
+    });
+  }
+};
+
+// System configuration functions
+export const configDb = {
+  async get(key: string): Promise<any> {
+    return withDatabase(async (client) => {
+      const result = await client.query(
+        'SELECT value FROM system_config WHERE key = $1',
+        [key]
+      );
+      return result.rows[0]?.value || null;
+    });
+  },
+
+  async set(key: string, value: any): Promise<void> {
+    await withDatabase(async (client) => {
+      await client.query(
+        `INSERT INTO system_config (key, value, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+        [key, JSON.stringify(value)]
+      );
+    });
+  }
+};
+
 // Health check function
 export async function checkDatabaseHealth(): Promise<boolean> {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await withDatabase(async (client) => {
+      await client.query('SELECT 1');
+    });
     return true;
   } catch (error) {
     console.error('Database health check failed:', error);
@@ -266,5 +519,8 @@ export async function checkDatabaseHealth(): Promise<boolean> {
 
 // Cleanup function for graceful shutdown
 export async function closeDatabaseConnections(): Promise<void> {
-  await prisma.$disconnect();
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
 }
