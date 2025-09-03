@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs'
-import path from 'path'
+import * as path from 'path'
 import { v4 as uuidv4 } from 'uuid'
+import { AWSS3Service, initializeS3Service, getS3Service } from '../cloud-storage/aws-s3-service'
 
 export interface FileUploadOptions {
   file: File
@@ -22,16 +23,24 @@ export interface UploadResult {
   metadata: Record<string, any>
   thumbnailPath?: string
   createdAt: Date
+  // Cloud storage fields
+  cloudUrl?: string
+  cdnUrl?: string
+  s3Key?: string
+  bucket?: string
 }
 
 export class MediaUploadService {
   private uploadDir: string
   private maxFileSize: number
   private allowedFormats: Set<string>
+  private s3Service: AWSS3Service | null = null
+  private useCloudStorage: boolean
 
   constructor() {
     this.uploadDir = process.env.MEDIA_UPLOAD_DIR || '/tmp/media-uploads'
     this.maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '500000000') // 500MB default
+    this.useCloudStorage = process.env.USE_CLOUD_STORAGE === 'true'
     this.allowedFormats = new Set([
       // Video formats
       'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', '3gp',
@@ -42,6 +51,16 @@ export class MediaUploadService {
       // Document formats (for campaigns)
       'pdf', 'psd', 'ai', 'eps'
     ])
+
+    // Initialize S3 service if cloud storage is enabled
+    if (this.useCloudStorage) {
+      try {
+        this.s3Service = initializeS3Service()
+      } catch (error) {
+        console.warn('Failed to initialize S3 service:', error)
+        this.useCloudStorage = false
+      }
+    }
   }
 
   async uploadFile(options: FileUploadOptions): Promise<UploadResult> {
@@ -53,39 +72,82 @@ export class MediaUploadService {
     // Generate unique filename
     const fileExtension = this.getFileExtension(file.name)
     const uniqueFilename = `${uuidv4()}.${fileExtension}`
-    const userDir = path.join(this.uploadDir, userId)
-    const filePath = path.join(userDir, uniqueFilename)
-
-    // Ensure user directory exists
-    await fs.mkdir(userDir, { recursive: true })
-
-    // Save file
     const buffer = Buffer.from(await file.arrayBuffer())
-    await fs.writeFile(filePath, buffer)
 
-    // Generate thumbnail if it's a video or image
-    let thumbnailPath: string | undefined
-    if (this.isVideoFile(file.type) || this.isImageFile(file.type)) {
-      thumbnailPath = await this.generateThumbnail(filePath, fileExtension)
-    }
+    let uploadResult: UploadResult
 
-    // Create database record
-    const uploadResult: UploadResult = {
-      id: uuidv4(),
-      filename: uniqueFilename,
-      originalName: file.name,
-      filePath,
-      size: file.size,
-      format: fileExtension,
-      mimeType: file.type,
-      purpose,
-      metadata: {
-        ...metadata,
-        uploadedAt: new Date().toISOString(),
-        userAgent: metadata.userAgent || 'unknown'
-      },
-      thumbnailPath,
-      createdAt: new Date()
+    if (this.useCloudStorage && this.s3Service) {
+      // Cloud storage upload
+      const cloudFile = await this.s3Service.uploadMediaFile(
+        buffer,
+        file.name,
+        file.type,
+        userId,
+        purpose as any
+      )
+
+      // Generate thumbnail if it's a video or image
+      let thumbnailCloudFile: any = undefined
+      if (this.isVideoFile(file.type) || this.isImageFile(file.type)) {
+        thumbnailCloudFile = await this.generateCloudThumbnail(cloudFile, buffer, fileExtension)
+      }
+
+      uploadResult = {
+        id: uuidv4(),
+        filename: uniqueFilename,
+        originalName: file.name,
+        filePath: cloudFile.key, // Use S3 key as file path
+        size: file.size,
+        format: fileExtension,
+        mimeType: file.type,
+        purpose,
+        metadata: {
+          ...metadata,
+          uploadedAt: new Date().toISOString(),
+          userAgent: metadata.userAgent || 'unknown',
+          s3Etag: cloudFile.etag
+        },
+        thumbnailPath: thumbnailCloudFile?.key,
+        cloudUrl: cloudFile.url,
+        cdnUrl: cloudFile.cdnUrl,
+        s3Key: cloudFile.key,
+        bucket: cloudFile.bucket,
+        createdAt: new Date()
+      }
+    } else {
+      // Local storage upload (fallback)
+      const userDir = path.join(this.uploadDir, userId)
+      const filePath = path.join(userDir, uniqueFilename)
+
+      // Ensure user directory exists
+      await fs.mkdir(userDir, { recursive: true })
+
+      // Save file
+      await fs.writeFile(filePath, buffer)
+
+      // Generate thumbnail if it's a video or image
+      let thumbnailPath: string | undefined
+      if (this.isVideoFile(file.type) || this.isImageFile(file.type)) {
+        thumbnailPath = await this.generateThumbnail(filePath, fileExtension)
+      }
+
+      uploadResult = {
+        id: uuidv4(),
+        filename: uniqueFilename,
+        originalName: file.name,
+        filePath,
+        size: file.size,
+        format: fileExtension,
+        mimeType: file.type,
+        purpose,
+        metadata: {
+          ...metadata,
+          uploadedAt: new Date().toISOString(),
+          userAgent: metadata.userAgent || 'unknown'
+        },
+        thumbnailPath,
+        createdAt: new Date()
+      }
     }
 
     return uploadResult
@@ -143,6 +205,75 @@ export class MediaUploadService {
     return mimeType.startsWith('image/')
   }
 
+  private async generateCloudThumbnail(cloudFile: any, originalBuffer: Buffer, extension: string): Promise<any> {
+    try {
+      if (this.isVideoFile(`video/${extension}`)) {
+        // For video thumbnails, we need to download, process, and re-upload
+        // This is a simplified version - in production, use a more efficient approach
+        const tempFilePath = `/tmp/${uuidv4()}.${extension}`
+        const tempThumbnailPath = `/tmp/${uuidv4()}_thumb.jpg`
+
+        // Save temp file
+        await fs.writeFile(tempFilePath, originalBuffer)
+
+        // Generate thumbnail
+        const { FFmpegProcessor } = await import('./ffmpeg-processor')
+        const processor = new FFmpegProcessor()
+        const thumbnailGenerated = await processor.generateThumbnail(tempFilePath, 1, tempThumbnailPath)
+
+        if (thumbnailGenerated && this.s3Service) {
+          // Upload thumbnail to S3
+          const thumbnailBuffer = await fs.readFile(tempThumbnailPath)
+          const thumbnailKey = cloudFile.key.replace(`.${extension}`, '_thumb.jpg')
+          
+          const thumbnailCloudFile = await this.s3Service.uploadFile({
+            bucket: cloudFile.bucket,
+            key: thumbnailKey,
+            body: thumbnailBuffer,
+            contentType: 'image/jpeg',
+            acl: 'public-read',
+            metadata: {
+              sourceKey: cloudFile.key,
+              type: 'thumbnail'
+            }
+          })
+
+          // Cleanup temp files
+          await fs.unlink(tempFilePath).catch(() => {})
+          await fs.unlink(tempThumbnailPath).catch(() => {})
+
+          return thumbnailCloudFile
+        }
+
+        // Cleanup temp files on failure
+        await fs.unlink(tempFilePath).catch(() => {})
+        await fs.unlink(tempThumbnailPath).catch(() => {})
+        
+      } else if (this.isImageFile(`image/${extension}`) && this.s3Service) {
+        // For images, create a resized thumbnail
+        // Using the original as thumbnail for now - in production, use sharp or similar
+        const thumbnailKey = cloudFile.key.replace(`.${extension}`, '_thumb.jpg')
+        
+        return await this.s3Service.uploadFile({
+          bucket: cloudFile.bucket,
+          key: thumbnailKey,
+          body: originalBuffer,
+          contentType: 'image/jpeg',
+          acl: 'public-read',
+          metadata: {
+            sourceKey: cloudFile.key,
+            type: 'thumbnail'
+          }
+        })
+      }
+
+      return undefined
+    } catch (error) {
+      console.error('Failed to generate cloud thumbnail:', error)
+      return undefined
+    }
+  }
+
   private async generateThumbnail(filePath: string, extension: string): Promise<string | undefined> {
     try {
       const thumbnailDir = path.join(path.dirname(filePath), 'thumbnails')
@@ -155,7 +286,7 @@ export class MediaUploadService {
         // Use FFmpeg to generate video thumbnail
         const { FFmpegProcessor } = await import('./ffmpeg-processor')
         const processor = new FFmpegProcessor()
-        const success = await processor.generateThumbnail(filePath, thumbnailPath)
+        const success = await processor.generateThumbnail(filePath, 1, thumbnailPath)
         return success ? thumbnailPath : undefined
       } else if (this.isImageFile(`image/${extension}`)) {
         // For images, we could use sharp or similar library to resize
@@ -263,6 +394,104 @@ export class MediaUploadService {
       console.error('Cleanup failed:', error)
       return 0
     }
+  }
+
+  // Cloud storage methods
+  async getPresignedUploadUrl(fileName: string, contentType: string, userId: string, purpose: string): Promise<{
+    uploadUrl: string
+    key: string
+    fields?: Record<string, string>
+  } | null> {
+    if (!this.s3Service) {
+      return null
+    }
+
+    try {
+      const fileExtension = this.getFileExtension(fileName)
+      const uniqueKey = `media/${userId}/${purpose}/${Date.now()}-${uuidv4()}.${fileExtension}`
+      
+      const uploadUrl = await this.s3Service.getPresignedUploadUrl({
+        bucket: process.env.AWS_S3_BUCKET!,
+        key: uniqueKey,
+        contentType,
+        expires: 3600, // 1 hour
+        metadata: {
+          userId,
+          purpose,
+          originalName: fileName
+        }
+      })
+
+      return {
+        uploadUrl,
+        key: uniqueKey
+      }
+    } catch (error) {
+      console.error('Failed to generate presigned URL:', error)
+      return null
+    }
+  }
+
+  async getPresignedDownloadUrl(s3Key: string, expiresIn = 3600): Promise<string | null> {
+    if (!this.s3Service) {
+      return null
+    }
+
+    try {
+      return await this.s3Service.getPresignedDownloadUrl(
+        process.env.AWS_S3_BUCKET!,
+        s3Key,
+        expiresIn
+      )
+    } catch (error) {
+      console.error('Failed to generate download URL:', error)
+      return null
+    }
+  }
+
+  async deleteCloudFile(s3Key: string): Promise<boolean> {
+    if (!this.s3Service) {
+      return false
+    }
+
+    try {
+      return await this.s3Service.deleteFile(process.env.AWS_S3_BUCKET!, s3Key)
+    } catch (error) {
+      console.error('Failed to delete cloud file:', error)
+      return false
+    }
+  }
+
+  async moveCloudFile(sourceKey: string, destKey: string): Promise<boolean> {
+    if (!this.s3Service) {
+      return false
+    }
+
+    try {
+      const bucket = process.env.AWS_S3_BUCKET!
+      await this.s3Service.moveFile(bucket, sourceKey, bucket, destKey)
+      return true
+    } catch (error) {
+      console.error('Failed to move cloud file:', error)
+      return false
+    }
+  }
+
+  getOptimizedUrl(s3Key: string, transformations?: {
+    width?: number
+    height?: number
+    quality?: number
+    format?: 'webp' | 'avif' | 'jpg' | 'png'
+  }): string | null {
+    if (!this.s3Service) {
+      return null
+    }
+
+    return this.s3Service.getOptimizedUrl(s3Key, transformations)
+  }
+
+  isCloudStorageEnabled(): boolean {
+    return this.useCloudStorage && this.s3Service !== null
   }
 }
 

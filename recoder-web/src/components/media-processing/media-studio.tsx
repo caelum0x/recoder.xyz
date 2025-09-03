@@ -8,8 +8,13 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VideoEditor } from './video-editor'
+import { AudioProcessor } from './audio-processor'
+import { TemplateGallery } from './template-gallery'
+import { BatchProcessor } from './batch-processor'
+import { ExportManager } from './export-manager'
+import { JobProgressTracker } from './job-progress-tracker'
 
-import { Upload, Film, Music, Palette, Package, Download, Zap } from 'lucide-react'
+import { Upload, Film, Music, Palette, Package, Download, Zap, Activity } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface MediaFile {
@@ -117,6 +122,7 @@ export function MediaStudio() {
       case 'templates': return <Palette className="w-4 h-4" />
       case 'batch': return <Package className="w-4 h-4" />
       case 'export': return <Download className="w-4 h-4" />
+      case 'progress': return <Activity className="w-4 h-4" />
       default: return null
     }
   }
@@ -149,7 +155,7 @@ export function MediaStudio() {
 
       <div className="flex-1 container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               {getTabIcon('upload')}
               Upload
@@ -173,6 +179,10 @@ export function MediaStudio() {
             <TabsTrigger value="export" className="flex items-center gap-2">
               {getTabIcon('export')}
               Export
+            </TabsTrigger>
+            <TabsTrigger value="progress" className="flex items-center gap-2">
+              {getTabIcon('progress')}
+              Progress
             </TabsTrigger>
           </TabsList>
 
@@ -295,6 +305,10 @@ export function MediaStudio() {
 
           <TabsContent value="export" className="h-full">
             <ExportManager selectedFiles={selectedFiles} files={files} />
+          </TabsContent>
+
+          <TabsContent value="progress" className="h-full">
+            <JobProgressTracker />
           </TabsContent>
         </Tabs>
       </div>
