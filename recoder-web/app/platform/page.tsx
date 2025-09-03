@@ -23,6 +23,8 @@ import PerformanceDashboard from '@/components/performance-dashboard';
 import UIGenerator from '@/components/ui-generator';
 import BusinessIntelligenceDashboard from '@/components/business-intelligence-dashboard';
 import AITestingSuite from '@/components/ai-testing-suite';
+import SocialMediaMobile from '@/components/mobile/SocialMediaMobile';
+import MobileDashboard from '@/components/mobile/MobileDashboard';
 
 // 🚀 RECODER PLATFORM - COMPLETE DEVELOPER ECOSYSTEM
 // All systems integrated into one powerful platform
@@ -41,6 +43,30 @@ interface PlatformSystem {
 }
 
 const PLATFORM_SYSTEMS: PlatformSystem[] = [
+  {
+    id: 'social-media-automation',
+    name: 'Social Media Marketing Automation',
+    description: 'Complete social media management with AI content generation and real platform integration',
+    icon: Globe,
+    status: 'live',
+    category: 'analytics',
+    features: ['AI Content Generation', 'Multi-Platform Posting', 'Campaign Management', 'Real-time Analytics'],
+    component: SocialMediaMobile,
+    killsCompetitor: 'Hootsuite & Buffer & Sprout Social',
+    revolutionaryFeature: 'AI-powered content generation with real social media APIs and advanced automation'
+  },
+  {
+    id: 'mobile-dashboard',
+    name: 'Mobile Command Center',
+    description: 'Complete mobile management dashboard for all platform systems',
+    icon: Smartphone,
+    status: 'live',
+    category: 'analytics',
+    features: ['Mobile Optimization', 'Real-time Monitoring', 'Quick Actions', 'System Integration'],
+    component: MobileDashboard,
+    killsCompetitor: 'Mobile-first approach',
+    revolutionaryFeature: 'Complete platform management from mobile devices with native-like experience'
+  },
   {
     id: 'live-development',
     name: 'Live Development Studio',
@@ -193,7 +219,8 @@ export default function PlatformPage() {
     { id: 'development', name: 'Development', count: PLATFORM_SYSTEMS.filter(s => s.category === 'development').length },
     { id: 'infrastructure', name: 'Infrastructure', count: PLATFORM_SYSTEMS.filter(s => s.category === 'infrastructure').length },
     { id: 'security', name: 'Security', count: PLATFORM_SYSTEMS.filter(s => s.category === 'security').length },
-    { id: 'analytics', name: 'Analytics', count: PLATFORM_SYSTEMS.filter(s => s.category === 'analytics').length },
+    { id: 'analytics', name: 'Analytics & Marketing', count: PLATFORM_SYSTEMS.filter(s => s.category === 'analytics').length },
+    { id: 'collaboration', name: 'Collaboration', count: PLATFORM_SYSTEMS.filter(s => s.category === 'collaboration').length },
   ];
 
   const filteredSystems = activeCategory === 'all' 
@@ -306,7 +333,7 @@ export default function PlatformPage() {
             <div className="bg-gradient-to-r from-red-600 via-orange-600 to-yellow-600 text-white p-6 rounded-2xl shadow-2xl border border-red-400/50">
               <div className="text-2xl font-bold mb-2">💀 COMPETITION ANNIHILATION MODE 💀</div>
               <div className="text-lg opacity-90">
-                Cursor • v0.dev • Bolt.new • Terraform • SonarQube • DataDog • Figma → <span className="font-bold">DESTROYED</span>
+                Cursor • v0.dev • Bolt.new • Terraform • SonarQube • DataDog • Figma • Hootsuite • Buffer • Sprout Social → <span className="font-bold">DESTROYED</span>
               </div>
             </div>
           </div>
@@ -508,7 +535,7 @@ export default function PlatformPage() {
         </div>
 
         {/* Quick Access Links */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Link href="/chats" className="group">
             <Card className="h-full hover:shadow-lg transition-all group-hover:-translate-y-1">
               <CardContent className="p-6 text-center">
@@ -519,6 +546,22 @@ export default function PlatformPage() {
                 <p className="text-sm text-gray-600 mb-4">Multi-AI chat with smart routing</p>
                 <div className="flex items-center justify-center text-blue-600 group-hover:translate-x-1 transition-transform">
                   <span className="text-sm font-medium">Launch Chat</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/social" className="group">
+            <Card className="h-full hover:shadow-lg transition-all group-hover:-translate-y-1">
+              <CardContent className="p-6 text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📱</span>
+                </div>
+                <h3 className="font-bold text-gray-900 mb-2">Social Media</h3>
+                <p className="text-sm text-gray-600 mb-4">AI-powered social media automation</p>
+                <div className="flex items-center justify-center text-pink-600 group-hover:translate-x-1 transition-transform">
+                  <span className="text-sm font-medium">Manage Social</span>
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </div>
               </CardContent>
