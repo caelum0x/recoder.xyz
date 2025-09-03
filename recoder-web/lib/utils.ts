@@ -1,175 +1,241 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-// shadcn/ui cn utility for combining class names
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function extractFirstCodeBlock(input: string) {
-  // 1) We use a more general pattern for the code fence:
-  //    - ^```([^\n]*) captures everything after the triple backticks up to the newline.
-  //    - ([\s\S]*?) captures the *body* of the code block (non-greedy).
-  //    - Then we look for a closing backticks on its own line (\n```).
-  // The 'm' (multiline) flag isn't strictly necessary here, but can help if input is multiline.
-  // The '([\s\S]*?)' is a common trick to match across multiple lines non-greedily.
-  const match = input.match(/```([^\n]*)\n([\s\S]*?)\n```/);
-
-  if (match) {
-    const fenceTag = match[1] || ""; // e.g. "tsx{filename=Calculator.tsx}"
-    const code = match[2]; // The actual code block content
-    const fullMatch = match[0]; // Entire matched string including backticks
-
-    // We'll parse the fenceTag to extract optional language and filename
-    let language: string | null = null;
-    let filename: { name: string; extension: string } | null = null;
-
-    // Attempt to parse out the language, which we assume is the leading alphanumeric part
-    // Example: fenceTag = "tsx{filename=Calculator.tsx}"
-    const langMatch = fenceTag.match(/^([A-Za-z0-9]+)/);
-    if (langMatch) {
-      language = langMatch[1];
-    }
-
-    // Attempt to parse out a filename from braces, e.g. {filename=Calculator.tsx}
-    const fileMatch = fenceTag.match(/{\s*filename\s*=\s*([^}]+)\s*}/);
-    if (fileMatch) {
-      filename = parseFileName(fileMatch[1]);
-    }
-
-    return { code, language, filename, fullMatch };
-  }
-  return null; // No code block found
-}
-
-function parseFileName(fileName: string): { name: string; extension: string } {
-  // Split the string at the last dot
-  const lastDotIndex = fileName.lastIndexOf(".");
-  if (lastDotIndex === -1) {
-    // No dot found
-    return { name: fileName, extension: "" };
-  }
-  return {
-    name: fileName.slice(0, lastDotIndex),
-    extension: fileName.slice(lastDotIndex + 1),
+// Code processing utilities - interface for chat components
+interface CodeFencePart {
+  type: 'text' | 'first-code-fence' | 'first-code-fence-generating';
+  content: string;
+  language?: string;
+  filename?: {
+    name: string;
+    extension: string;
   };
 }
 
-export function splitByFirstCodeFence(markdown: string) {
-  const result: {
-    type: "text" | "first-code-fence" | "first-code-fence-generating";
-    content: string;
-    filename: { name: string; extension: string };
-    language: string;
-  }[] = [];
-
-  const lines = markdown.split("\n");
-
-  let inFirstCodeFence = false; // Are we currently inside the first code fence?
-  let codeFenceFound = false; // Have we fully closed the first code fence?
-  let textBuffer: string[] = [];
-  let codeBuffer: string[] = [];
-
-  // We'll store these when we open the code fence
-  let fenceTag = ""; // e.g. "tsx{filename=Calculator.tsx}"
-  let extractedFilename: string | null = null;
-
-  // Regex to match an entire code fence line, e.g. ```tsx{filename=Calculator.tsx}
-  const codeFenceRegex = /^```([^\n]*)$/;
-
-  for (const line of lines) {
-    const match = line.match(codeFenceRegex);
-
-    if (!codeFenceFound) {
-      if (match && !inFirstCodeFence) {
-        // -- OPENING the first code fence --
-        inFirstCodeFence = true;
-        fenceTag = match[1] || ""; // e.g. tsx{filename=Calculator.tsx}
-
-        // Attempt to extract filename from {filename=...}
-        const fileMatch = fenceTag.match(/{\s*filename\s*=\s*([^}]+)\s*}/);
-        extractedFilename = fileMatch ? fileMatch[1] : null;
-
-        // Flush any accumulated text into the result
-        if (textBuffer.length > 0) {
-          result.push({
-            type: "text",
-            content: textBuffer.join("\n"),
-            filename: { name: "", extension: "" },
-            language: "",
-          });
-          textBuffer = [];
-        }
-        // Don't add the fence line itself to codeBuffer
-      } else if (match && inFirstCodeFence) {
-        // -- CLOSING the first code fence --
-        inFirstCodeFence = false;
-        codeFenceFound = true;
-
-        // Parse the extracted filename into { name, extension }
-        const parsedFilename = extractedFilename
-          ? parseFileName(extractedFilename)
-          : { name: "", extension: "" };
-
-        // Extract language from the portion of fenceTag before '{'
-        const bracketIndex = fenceTag.indexOf("{");
-        const language =
-          bracketIndex > -1
-            ? fenceTag.substring(0, bracketIndex).trim()
-            : fenceTag.trim();
-
-        result.push({
-          type: "first-code-fence",
-          // content: `\`\`\`${fenceTag}\n${codeBuffer.join("\n")}\n\`\`\``,
-          content: codeBuffer.join("\n"),
-          filename: parsedFilename,
-          language,
+export function splitByFirstCodeFence(content: string): CodeFencePart[] {
+  const parts: CodeFencePart[] = [];
+  
+  // Match code blocks with optional language and filename
+  const codeBlockRegex = /```(\w*)?(?:\s*(?:\/\/|#)\s*filename:\s*([^\n]+))?\n?([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+  let isFirstCodeBlock = true;
+  
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    // Add text before code block if any
+    if (match.index > lastIndex) {
+      const textContent = content.slice(lastIndex, match.index);
+      if (textContent.trim()) {
+        parts.push({
+          type: 'text',
+          content: textContent
         });
-
-        // Reset code buffer
-        codeBuffer = [];
-      } else if (inFirstCodeFence) {
-        // We are inside the first code fence
-        codeBuffer.push(line);
-      } else {
-        // Outside any code fence
-        textBuffer.push(line);
       }
-    } else {
-      // The first code fence has already been processed; treat all remaining lines as text
-      textBuffer.push(line);
+    }
+    
+    const [, language = '', filenameComment = '', code = ''] = match;
+    
+    // Parse filename from comment or generate from language
+    let filename = { name: 'code', extension: language || 'txt' };
+    if (filenameComment.trim()) {
+      const fullFilename = filenameComment.trim();
+      const lastDotIndex = fullFilename.lastIndexOf('.');
+      if (lastDotIndex > 0) {
+        filename = {
+          name: fullFilename.substring(0, lastDotIndex),
+          extension: fullFilename.substring(lastDotIndex + 1)
+        };
+      } else {
+        filename = { name: fullFilename, extension: language || 'txt' };
+      }
+    } else if (language) {
+      // Generate filename based on language
+      const extensions: { [key: string]: string } = {
+        'javascript': 'js',
+        'typescript': 'ts',
+        'jsx': 'jsx',
+        'tsx': 'tsx',
+        'python': 'py',
+        'java': 'java',
+        'cpp': 'cpp',
+        'c': 'c',
+        'html': 'html',
+        'css': 'css',
+        'json': 'json',
+        'sql': 'sql',
+        'bash': 'sh',
+        'shell': 'sh'
+      };
+      filename = {
+        name: 'main',
+        extension: extensions[language.toLowerCase()] || language
+      };
+    }
+    
+    // Determine if this is being generated (incomplete code block)
+    const isGenerating = content.length === match.index + match[0].length && 
+                        content.endsWith('```') === false;
+    
+    parts.push({
+      type: isFirstCodeBlock ? (isGenerating ? 'first-code-fence-generating' : 'first-code-fence') : 'first-code-fence',
+      content: code,
+      language: language || 'text',
+      filename
+    });
+    
+    isFirstCodeBlock = false;
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add remaining text after last code block
+  if (lastIndex < content.length) {
+    const remainingContent = content.slice(lastIndex);
+    if (remainingContent.trim()) {
+      parts.push({
+        type: 'text',
+        content: remainingContent
+      });
     }
   }
-
-  // If the first code fence was never closed
-  if (inFirstCodeFence) {
-    const parsedFilename = extractedFilename
-      ? parseFileName(extractedFilename)
-      : { name: "", extension: "" };
-
-    // Extract language from the portion of fenceTag before '{'
-    const bracketIndex = fenceTag.indexOf("{");
-    const language =
-      bracketIndex > -1
-        ? fenceTag.substring(0, bracketIndex).trim()
-        : fenceTag.trim();
-
-    result.push({
-      type: "first-code-fence-generating",
-      // content: `\`\`\`${fenceTag}\n${codeBuffer.join("\n")}`,
-      content: codeBuffer.join("\n"),
-      filename: parsedFilename,
-      language,
-    });
-  } else if (textBuffer.length > 0) {
-    // Flush any remaining text
-    result.push({
-      type: "text",
-      content: textBuffer.join("\n"),
-      filename: { name: "", extension: "" },
-      language: "",
+  
+  // If no code blocks found, return the entire content as text
+  if (parts.length === 0) {
+    parts.push({
+      type: 'text',
+      content
     });
   }
+  
+  return parts;
+}
 
-  return result;
+interface CodeBlock {
+  code: string;
+  language: string;
+  filename?: {
+    name: string;
+    extension: string;
+  };
+}
+
+export function extractFirstCodeBlock(content: string): CodeBlock {
+  const match = content.match(/```(\w*)?(?:\s*(?:\/\/|#)\s*filename:\s*([^\n]+))?\n?([\s\S]*?)```/);
+  
+  if (!match) {
+    return { code: '', language: '' };
+  }
+  
+  const [, language = '', filenameComment = '', code = ''] = match;
+  
+  // Parse filename from comment or generate from language
+  let filename: { name: string; extension: string } | undefined;
+  if (filenameComment.trim()) {
+    const fullFilename = filenameComment.trim();
+    const lastDotIndex = fullFilename.lastIndexOf('.');
+    if (lastDotIndex > 0) {
+      filename = {
+        name: fullFilename.substring(0, lastDotIndex),
+        extension: fullFilename.substring(lastDotIndex + 1)
+      };
+    } else {
+      filename = { name: fullFilename, extension: language || 'txt' };
+    }
+  } else if (language) {
+    // Generate filename based on language
+    const extensions: { [key: string]: string } = {
+      'javascript': 'js',
+      'typescript': 'ts',
+      'jsx': 'jsx',
+      'tsx': 'tsx',
+      'python': 'py',
+      'java': 'java',
+      'cpp': 'cpp',
+      'c': 'c',
+      'html': 'html',
+      'css': 'css',
+      'json': 'json',
+      'sql': 'sql',
+      'bash': 'sh',
+      'shell': 'sh'
+    };
+    filename = {
+      name: 'main',
+      extension: extensions[language.toLowerCase()] || language
+    };
+  }
+  
+  return {
+    language: language || 'text',
+    code: code,
+    filename
+  };
+}
+
+// Format file size
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Format duration in milliseconds to human readable
+export function formatDuration(milliseconds: number): string {
+  const seconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  } else {
+    return `${seconds}s`;
+  }
+}
+
+// Debounce function
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
+// Throttle function
+export function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle: boolean;
+  
+  return (...args: Parameters<T>) => {
+    if (!inThrottle) {
+      func(...args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
+}
+
+// Generate random ID
+export function generateId(length: number = 8): string {
+  return Math.random().toString(36).substring(2, 2 + length);
+}
+
+// Sleep utility
+export function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

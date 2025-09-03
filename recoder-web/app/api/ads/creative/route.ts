@@ -456,7 +456,7 @@ function predictCreativePerformance(creativeData: any, platform: string): any {
 }
 
 function generatePerformanceRecommendations(creativeData: any, score: number): string[] {
-  const recommendations = [];
+  const recommendations: string[] = [];
   
   if (score < 70) {
     recommendations.push('Consider adding urgency or scarcity elements to the headline');
