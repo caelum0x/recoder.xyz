@@ -1,0 +1,150 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ... existing models ...
+
+model MediaFile {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String?
+  filename    String
+  originalName String
+  filePath    String
+  size        Int
+  format      String
+  mimeType    String
+  purpose     String   // general, campaign, template, etc.
+  metadata    Json     @default({})
+  thumbnailPath String?
+  deleted     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processingJobs  ProcessingJob[]
+  templateUsages  TemplateUsage[]
+
+  @@map("media_files")
+}
+
+model ProcessingJob {
+  id                String   @id @default(cuid())
+  userId            String
+  fileId            String
+  templateId        String?
+  operation         String
+  parameters        Json     @default({})
+  outputFormat      String?
+  quality           String   @default("medium")
+  priority          String   @default("normal")
+  status            String   @default("queued") // queued, processing, completed, failed
+  progress          Float    @default(0)
+  estimatedDuration Int?     // in seconds
+  actualDuration    Int?     // in seconds
+  outputFilePath    String?
+  outputFileSize    Int?
+  errorMessage      String?
+  metadata          Json     @default({})
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  file       MediaFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  batchJob   BatchJob? @relation(fields: [batchJobId], references: [id])
+  batchJobId String?
+
+  @@map("processing_jobs")
+}
+
+model BatchJob {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  fileIds         String[]
+  operations      Json     @default({})
+  outputFormat    String?
+  quality         String   @default("medium")
+  status          String   @default("queued") // queued, processing, completed, failed
+  totalFiles      Int
+  processedFiles  Int      @default(0)
+  progress        Float    @default(0)
+  estimatedDuration Int?   // in seconds
+  actualDuration    Int?   // in seconds
+  metadata        Json     @default({})
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processingJobs ProcessingJob[]
+
+  @@map("batch_jobs")
+}
+
+model CampaignTemplate {
+  id            String   @id @default(cuid())
+  name          String
+  description   String
+  category      String   // social, ads, presentations, marketing, branding
+  platforms     String[] // instagram, tiktok, youtube, facebook, etc.
+  format        String   // video, image, audio, mixed
+  operations    Json     @default({})
+  customizations Json    @default({})
+  previewUrl    String?
+  featured      Boolean  @default(false)
+  popularity    Int      @default(0)
+  active        Boolean  @default(true)
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  creator User?           @relation(fields: [createdBy], references: [id])
+  usages  TemplateUsage[]
+
+  @@map("campaign_templates")
+}
+
+model TemplateUsage {
+  id             String   @id @default(cuid())
+  userId         String
+  templateId     String
+  projectId      String?
+  customizations Json     @default({})
+  resultFileIds  String[]
+  metadata       Json     @default({})
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@map("template_usages")
+}
+
+// Add to existing User model
+model User {
+  // ... existing fields ...
+  
+  // Media processing relations
+  mediaFiles      MediaFile[]
+  processingJobs  ProcessingJob[]
+  batchJobs       BatchJob[]
+  templateUsages  TemplateUsage[]
+  createdTemplates CampaignTemplate[]
+}

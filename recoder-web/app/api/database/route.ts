@@ -40,7 +40,7 @@ interface FieldDefinition {
 }
 
 interface RelationshipDefinition {
-  type: 'one-to-one' | 'one-to-many' | 'many-to-many';
+  type: 'one-to-one' | 'one-to-many' | 'many-to-many' | 'many-to-one';
   target: string;
   foreignKey?: string;
   referencedKey?: string;
@@ -141,7 +141,12 @@ class AutoDatabaseGenerator {
     scalingNeeds: 'low' | 'medium' | 'high';
     budget: 'free' | 'startup' | 'enterprise';
   }) {
-    const recommendations = [];
+    const recommendations: Array<{
+      database: string;
+      type: 'postgresql' | 'mysql' | 'mongodb';
+      score: number;
+      reasoning: string[];
+    }> = [];
 
     if (requirements.realTimeNeeds || requirements.projectType.includes('chat')) {
       recommendations.push({
@@ -225,7 +230,10 @@ class AutoDatabaseGenerator {
   }
 
   private extractEntityPatterns(description: string) {
-    const patterns = [];
+    const patterns: Array<{
+      name: string;
+      context: string[];
+    }> = [];
 
     // Look for common entity indicators
     const entityKeywords = ['user', 'product', 'order', 'post', 'comment', 'category', 'tag', 'file', 'image'];
@@ -246,7 +254,7 @@ class AutoDatabaseGenerator {
   private extractContext(description: string, keyword: string): string[] {
     const words = description.toLowerCase().split(' ');
     const keywordIndex = words.indexOf(keyword);
-    const context = [];
+    const context: string[] = [];
 
     // Get surrounding words for context
     for (let i = Math.max(0, keywordIndex - 3); i < Math.min(words.length, keywordIndex + 4); i++) {
