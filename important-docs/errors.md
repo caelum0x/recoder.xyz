@@ -996,3 +996,660 @@ Untracked Files (9 new):
 - **Response Time**: < 500ms API responses
 - **Error Rate**: < 0.1% failed generations
 - **Scaling**: Support 100,000 concurrent users
+ *  Executing task: npm run build 
+
+
+> recoder@1.0.0 build
+> pnpm run build:all
+
+
+> recoder@1.0.0 build:all /Users/arhansubasi/recoder.xyz
+> npm-run-all --parallel build:shared build:packages build:core && npm-run-all --parallel build:web build:chat build:mobile build:desktop build:extension build:browser-extension
+
+
+> recoder@1.0.0 build:core /Users/arhansubasi/recoder.xyz
+> npm-run-all --parallel build:backend build:engine
+
+
+> recoder@1.0.0 build:packages /Users/arhansubasi/recoder.xyz
+> npm-run-all --parallel build:cli build:router build:analytics build:intelligence build:plugins build:security build:web-ai
+
+
+> recoder@1.0.0 build:shared /Users/arhansubasi/recoder.xyz
+> cd packages/shared && pnpm build
+
+
+> recoder-shared@1.0.0 build /Users/arhansubasi/recoder.xyz/packages/shared
+> tsc
+
+
+> recoder@1.0.0 build:cli /Users/arhansubasi/recoder.xyz
+> cd packages/cli && pnpm build
+
+
+> recoder@1.0.0 build:intelligence /Users/arhansubasi/recoder.xyz
+> cd packages/intelligence && pnpm build
+
+
+> recoder@1.0.0 build:web-ai /Users/arhansubasi/recoder.xyz
+> cd packages/web-ai-assistant && pnpm build
+
+
+> recoder@1.0.0 build:router /Users/arhansubasi/recoder.xyz
+> cd packages/recoder-cli-router && pnpm build
+
+
+> recoder@1.0.0 build:backend /Users/arhansubasi/recoder.xyz
+> cd backend && pnpm build || echo 'Backend build not configured'
+
+
+> recoder@1.0.0 build:security /Users/arhansubasi/recoder.xyz
+> cd packages/security && pnpm build
+
+
+> recoder@1.0.0 build:engine /Users/arhansubasi/recoder.xyz
+> cd production-engine && pnpm build
+
+
+> recoder@1.0.0 build:analytics /Users/arhansubasi/recoder.xyz
+> cd packages/analytics && pnpm build
+
+
+> recoder@1.0.0 build:plugins /Users/arhansubasi/recoder.xyz
+> cd packages/plugins && pnpm build
+
+
+> recoder-cli@1.0.1 build /Users/arhansubasi/recoder.xyz/packages/cli
+> tsc -p tsconfig.build.json
+
+
+> recoder-cli-router@2.3.1 build /Users/arhansubasi/recoder.xyz/packages/recoder-cli-router
+> npm-run-all build:esbuild build:copy
+
+
+> backend@1.0.0 build /Users/arhansubasi/recoder.xyz/backend
+> tsc
+
+
+> @recoder/web-ai-assistant@1.0.0 build /Users/arhansubasi/recoder.xyz/packages/web-ai-assistant
+> tsc
+
+
+> recoder-intelligence@1.0.0 build /Users/arhansubasi/recoder.xyz/packages/intelligence
+> tsc
+
+
+> recoder-analytics@1.0.0 build /Users/arhansubasi/recoder.xyz/packages/analytics
+> tsc --noEmitOnError false --skipLibCheck
+
+
+> recoder-security@1.0.0 build /Users/arhansubasi/recoder.xyz/packages/security
+> tsc
+
+
+> @recoder/production-engine@2.0.0 build /Users/arhansubasi/recoder.xyz/production-engine
+> tsc
+
+
+> recoder-plugins@1.0.0 build /Users/arhansubasi/recoder.xyz/packages/plugins
+> tsc
+
+
+> recoder-cli-router@2.3.1 build:esbuild /Users/arhansubasi/recoder.xyz/packages/recoder-cli-router
+> esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js --external:vscode --external:@roo-code/types --external:@musistudio/llms --external:tiktoken --external:node-cache --external:sanitize-filename --external:axios --external:openai --external:@anthropic-ai/sdk --external:@anthropic-ai/vertex-sdk --external:google-auth-library --external:@cerebras/cerebras_cloud_sdk --external:@aws-sdk/client-bedrock-runtime --external:@aws-sdk/credential-providers --external:@mistralai/mistralai --external:@google/genai --external:@lmstudio/sdk --external:@dotenvx/dotenvx --external:dotenv --external:uuid --external:fastify --external:zod
+
+▲ [WARNING] The condition "types" here will never be used as it comes after both "import" and "require" [package.json]
+
+    ../shared/package.json:14:6:
+      14 │       "types": "./dist/index.d.ts"
+         ╵       ~~~~~~~
+
+  The "import" condition comes earlier and will be used for all "import" statements:
+
+    ../shared/package.json:12:6:
+      12 │       "import": "./dist/index.js",
+         ╵       ~~~~~~~~
+
+  The "require" condition comes earlier and will be used for all "require" calls:
+
+    ../shared/package.json:13:6:
+      13 │       "require": "./dist/index.js",
+         ╵       ~~~~~~~~~
+
+▲ [WARNING] The condition "types" here will never be used as it comes after both "import" and "require" [package.json]
+
+    ../shared/package.json:20:6:
+      20 │       "types": "./dist/types/ai-models.d.ts"
+         ╵       ~~~~~~~
+
+  The "import" condition comes earlier and will be used for all "import" statements:
+
+    ../shared/package.json:18:6:
+      18 │       "import": "./dist/types/ai-models.js",
+         ╵       ~~~~~~~~
+
+  The "require" condition comes earlier and will be used for all "require" calls:
+
+    ../shared/package.json:19:6:
+      19 │       "require": "./dist/types/ai-models.js",
+         ╵       ~~~~~~~~~
+
+▲ [WARNING] The condition "types" here will never be used as it comes after both "import" and "require" [package.json]
+
+    ../shared/package.json:26:6:
+      26 │       "types": "./dist/types/*.d.ts"
+         ╵       ~~~~~~~
+
+  The "import" condition comes earlier and will be used for all "import" statements:
+
+    ../shared/package.json:24:6:
+      24 │       "import": "./dist/types/*.js",
+         ╵       ~~~~~~~~
+
+  The "require" condition comes earlier and will be used for all "require" calls:
+
+    ../shared/package.json:25:6:
+      25 │       "require": "./dist/types/*.js",
+         ╵       ~~~~~~~~~
+
+▲ [WARNING] The condition "types" here will never be used as it comes after both "import" and "require" [package.json]
+
+    ../shared/package.json:32:6:
+      32 │       "types": "./dist/collaboration/index.d.ts"
+         ╵       ~~~~~~~
+
+  The "import" condition comes earlier and will be used for all "import" statements:
+
+    ../shared/package.json:30:6:
+      30 │       "import": "./dist/collaboration/index.js",
+         ╵       ~~~~~~~~
+
+  The "require" condition comes earlier and will be used for all "require" calls:
+
+    ../shared/package.json:31:6:
+      31 │       "require": "./dist/collaboration/index.js",
+         ╵       ~~~~~~~~~
+
+▲ [WARNING] The condition "types" here will never be used as it comes after both "import" and "require" [package.json]
+
+    ../shared/package.json:38:6:
+      38 │       "types": "./dist/collaboration/*.d.ts"
+         ╵       ~~~~~~~
+
+  The "import" condition comes earlier and will be used for all "import" statements:
+
+    ../shared/package.json:36:6:
+      36 │       "import": "./dist/collaboration/*.js",
+         ╵       ~~~~~~~~
+
+  The "require" condition comes earlier and will be used for all "require" calls:
+
+    ../shared/package.json:37:6:
+      37 │       "require": "./dist/collaboration/*.js",
+         ╵       ~~~~~~~~~
+
+5 warnings
+
+  dist/cli.js  875.1kb
+
+⚡ Done in 320ms
+
+> recoder-cli-router@2.3.1 build:copy /Users/arhansubasi/recoder.xyz/packages/recoder-cli-router
+> shx cp ../../node_modules/tiktoken/tiktoken_bg.wasm dist/tiktoken_bg.wasm || shx cp node_modules/tiktoken/tiktoken_bg.wasm dist/tiktoken_bg.wasm || echo 'Warning: tiktoken WASM file not found, skipping copy'
+
+
+> recoder@1.0.0 build:desktop /Users/arhansubasi/recoder.xyz
+> cd recoder-desktop && pnpm build
+
+
+> recoder@1.0.0 build:mobile /Users/arhansubasi/recoder.xyz
+> cd recoder-chat-mobile && pnpm run build || npx expo export -p web
+
+
+> recoder@1.0.0 build:web /Users/arhansubasi/recoder.xyz
+> cd recoder-web && pnpm build
+
+
+> recoder@1.0.0 build:chat /Users/arhansubasi/recoder.xyz
+> cd recoder-chat && pnpm build
+
+
+> recoder@1.0.0 build:extension /Users/arhansubasi/recoder.xyz
+> cd recoder-extension/src && pnpm bundle
+
+
+> recoder@1.0.0 build:browser-extension /Users/arhansubasi/recoder.xyz
+> cd browser-extension && echo 'Browser extension ready'
+
+Browser extension ready
+
+> recoder-web-platform@1.0.0 build /Users/arhansubasi/recoder.xyz/recoder-web
+> next build
+
+
+> recoder-desktop@1.0.0 prebuild /Users/arhansubasi/recoder.xyz/recoder-desktop
+> node scripts/build-apps.js
+
+
+> recoder-chat-mobile@1.0.0 build /Users/arhansubasi/recoder.xyz/recoder-chat-mobile
+> expo export
+
+🏗️  Building Recoder Desktop unified application...
+📁 Project root: /Users/arhansubasi/recoder.xyz
+📁 Desktop root: /Users/arhansubasi/recoder.xyz/recoder-desktop
+🚀 Starting build process for all apps...
+
+🔨 Building recoder-extension...
+📂 Changed to: /Users/arhansubasi/recoder.xyz/recoder-extension
+🔨 Running: pnpm vsix
+
+> ai-chatbot@3.1.0 build /Users/arhansubasi/recoder.xyz/recoder-chat
+> next build
+
+ WARN  Unsupported engine: wanted: {"node":"20.19.2"} (current: {"node":"v24.3.0","pnpm":"10.8.1"})
+
+> recoder-vscode@1.0.0 bundle /Users/arhansubasi/recoder.xyz/recoder-extension/src
+> node esbuild.mjs
+
+[extension] Cleaning dist directory: /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+[esbuild-problem-matcher#onStart]
+env: load .env.local .env.production
+env: export DATABASE_URL DIRECT_URL POSTGRES_URL NEXTAUTH_URL NEXTAUTH_SECRET AUTH_SECRET NEXTAUTH_URL_CHAT UNIFIED_AUTH_SECRET JWT_SECRET DODO_PAYMENTS_API_KEY DODO_API_BASE_URL DODO_WEBHOOK_SECRET NEXT_PUBLIC_RETURN_URL NEXT_PUBLIC_CANCEL_URL ANTHROPIC_API_KEY ANTHROPIC_BASE_URL GROQ_API_KEY GROQ_BASE_URL GOOGLE_API_KEY GOOGLE_AI_API_KEY OPENAI_API_KEY OPENAI_BASE_URL MISTRAL_API_KEY TOGETHER_API_KEY OPENROUTER_API_KEY DEEPSEEK_API_KEY DEEPSEEK_BASE_URL XAI_API_KEY FIREWORKS_API_KEY CEREBRAS_API_KEY OLLAMA_BASE_URL LM_STUDIO_BASE_URL AWS_REGION GOOGLE_APPLICATION_CREDENTIALS GOOGLE_REGION SECURITY_SCAN_ENABLED VULNERABILITY_CHECK_ENABLED RATE_LIMIT_REQUESTS_PER_MINUTE RATE_LIMIT_ENABLED ANALYTICS_ENABLED NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_CHAT_URL NEXT_PUBLIC_API_URL NEXT_PUBLIC_ENGINE_URL WEB_PLATFORM_PORT CHAT_PLATFORM_PORT BACKEND_API_PORT PRODUCTION_ENGINE_PORT SKIP_ENV_VALIDATION BUILD_ANALYZE LOG_LEVEL FEATURE_REASONING_ENGINE FEATURE_BLOCKCHAIN_AGENT FEATURE_MOBILE_AGENT FEATURE_DEPLOYMENT_PIPELINE EXTENSION_API_BASE_URL EXTENSION_AUTH_PROVIDER EXTENSION_TELEMETRY_ENABLED DOCKER_REGISTRY KUBERNETES_NAMESPACE DEPLOYMENT_ENVIRONMENT HEALTH_CHECK_ENABLED METRICS_ENDPOINT STATUS_ENDPOINT USAGE_TRACKING_ENABLED COST_MONITORING_ENABLED BILLING_CYCLE FREE_TIER_REQUESTS LAUNCH_READY WEB_PLATFORM_READY CHAT_PLATFORM_READY DATABASE_READY AUTH_READY PAYMENTS_READY AI_PROVIDERS_READY SECURITY_READY MONITORING_READY
+ WARN  Unsupported engine: wanted: {"node":"20.19.2"} (current: {"node":"v24.3.0","pnpm":"10.8.1"})
+
+> recoder@ vsix /Users/arhansubasi/recoder.xyz/recoder-extension
+> turbo vsix --log-order grouped --output-logs new-only
+
+╭──────────────────────────────────────────────────────────────────────────╮
+│                                                                          │
+│                     Update available v2.5.5 ≫ v2.5.6                     │
+│    Changelog: https://github.com/vercel/turborepo/releases/tag/v2.5.6    │
+│          Run "pnpm dlx @turbo/codemod@latest update" to update           │
+│                                                                          │
+│          Follow @turborepo for updates: https://x.com/turborepo          │
+╰──────────────────────────────────────────────────────────────────────────╯
+   ▲ Next.js 15.1.4
+   - Environments: .env.local, .env.production, .env
+
+   Creating an optimized production build ...
+turbo 2.5.5
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/arhansubasi/recoder.xyz/pnpm-lock.yaml as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * /Users/arhansubasi/recoder.xyz/recoder-chat/package-lock.json
+
+   ▲ Next.js 15.5.0
+   - Environments: .env.local, .env.production, .env
+
+   Creating an optimized production build ...
+• Packages in scope: @recoder/unified-auth, @roo-code/build, @roo-code/cloud, @roo-code/config-eslint, @roo-code/config-typescript, @roo-code/evals, @roo-code/ipc, @roo-code/playwright-e2e, @roo-code/storybook, @roo-code/telemetry, @roo-code/types, @roo-code/vscode-e2e, @roo-code/vscode-nightly, @roo-code/vscode-webview, @roo-code/web-evals, @roo-code/web-roo-code, recoder-vscode
+• Running vsix in 17 packages
+• Remote caching disabled
+@roo-code/types:build: cache hit, suppressing logs a8000386f07a5569
+@roo-code/build:build: cache hit, suppressing logs 9bea3ff8b4d057d4
+@recoder/unified-auth:build: cache hit, suppressing logs 4fecde5c768b0a9e
+Starting Metro Bundler
+[copyPaths] Copied ../README.md to README.md
+[copyPaths] Copied ../CHANGELOG.md to CHANGELOG.md
+[copyPaths] Copied ../LICENSE to LICENSE
+[copyPaths] Optional file not found: ../.env
+@roo-code/vscode-webview:build: cache hit, suppressing logs 6d23e71fc24fbb35
+[copyPaths] Copied 911 files from node_modules/vscode-material-icons/generated to assets/vscode-material-icons
+[copyPaths] Copied 3 files from ../webview-ui/audio to webview-ui/audio
+[copyPaths] Copied 13 files from walkthrough to walkthrough
+[copyWasms] Copied tiktoken WASMs to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+[copyWasms] Copied tiktoken WASMs to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist/workers
+[copyWasms] Copied tree-sitter.wasm to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+[copyWasms] Copied 35 tree-sitter language wasms to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+[copyLocales] Copied 132 locale files to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist/i18n/locales
+[esbuild-problem-matcher#onEnd]
+recoder-vscode:bundle: cache miss, executing e6a44d43edf1a18d
+recoder-vscode:bundle: 
+recoder-vscode:bundle:  WARN  Unsupported engine: wanted: {"node":"20.19.2"} (current: {"node":"v24.3.0","pnpm":"10.8.1"})
+recoder-vscode:bundle: 
+recoder-vscode:bundle: > recoder-vscode@1.0.0 bundle /Users/arhansubasi/recoder.xyz/recoder-extension/src
+recoder-vscode:bundle: > node esbuild.mjs
+recoder-vscode:bundle: 
+recoder-vscode:bundle: [extension] Cleaning dist directory: /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:bundle: [esbuild-problem-matcher#onStart]
+recoder-vscode:bundle: [copyPaths] Copied ../README.md to README.md
+recoder-vscode:bundle: [copyPaths] Copied ../CHANGELOG.md to CHANGELOG.md
+recoder-vscode:bundle: [copyPaths] Copied ../LICENSE to LICENSE
+recoder-vscode:bundle: [copyPaths] Optional file not found: ../.env
+recoder-vscode:bundle: [copyPaths] Copied 911 files from node_modules/vscode-material-icons/generated to assets/vscode-material-icons
+recoder-vscode:bundle: [copyPaths] Copied 3 files from ../webview-ui/audio to webview-ui/audio
+recoder-vscode:bundle: [copyPaths] Copied 13 files from walkthrough to walkthrough
+recoder-vscode:bundle: [copyWasms] Copied tiktoken WASMs to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:bundle: [copyWasms] Copied tiktoken WASMs to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist/workers
+recoder-vscode:bundle: [copyWasms] Copied tree-sitter.wasm to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:bundle: [copyWasms] Copied 35 tree-sitter language wasms to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:bundle: [copyLocales] Copied 132 locale files to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist/i18n/locales
+recoder-vscode:bundle: [esbuild-problem-matcher#onEnd]
+Waiting for Watchman `query` (10s)...
+recoder-vscode:vsix: cache miss, executing b2337a4d3f0f0df5
+recoder-vscode:vsix: 
+recoder-vscode:vsix:  WARN  Unsupported engine: wanted: {"node":"20.19.2"} (current: {"node":"v24.3.0","pnpm":"10.8.1"})
+recoder-vscode:vsix: 
+recoder-vscode:vsix: > recoder-vscode@1.0.0 vsix /Users/arhansubasi/recoder.xyz/recoder-extension/src
+recoder-vscode:vsix: > mkdirp ../bin && vsce package --no-dependencies --out ../bin
+recoder-vscode:vsix: 
+recoder-vscode:vsix: Executing prepublish script 'npm run vscode:prepublish'...
+recoder-vscode:vsix: (node:70544) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+recoder-vscode:vsix: (Use `node --trace-deprecation ...` to show where the warning was created)
+recoder-vscode:vsix: npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm.
+recoder-vscode:vsix: 
+recoder-vscode:vsix: > recoder-vscode@1.0.0 vscode:prepublish
+recoder-vscode:vsix: > pnpm bundle --production
+recoder-vscode:vsix: 
+ WARN  Unsupported engine: wanted: {"node":"20.19.2"} (current: {"node":"v24.3.0","pnpm":"10.8.1"})
+recoder-vscode:vsix: 
+recoder-vscode:vsix: > recoder-vscode@1.0.0 bundle /Users/arhansubasi/recoder.xyz/recoder-extension/src
+recoder-vscode:vsix: > node esbuild.mjs --production
+recoder-vscode:vsix: 
+recoder-vscode:vsix: [extension] Cleaning dist directory: /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:vsix: [esbuild-problem-matcher#onStart]
+recoder-vscode:vsix: [copyPaths] Copied ../README.md to README.md
+recoder-vscode:vsix: [copyPaths] Copied ../CHANGELOG.md to CHANGELOG.md
+recoder-vscode:vsix: [copyPaths] Copied ../LICENSE to LICENSE
+recoder-vscode:vsix: [copyPaths] Optional file not found: ../.env
+recoder-vscode:vsix: [copyPaths] Copied 911 files from node_modules/vscode-material-icons/generated to assets/vscode-material-icons
+recoder-vscode:vsix: [copyPaths] Copied 3 files from ../webview-ui/audio to webview-ui/audio
+recoder-vscode:vsix: [copyPaths] Copied 13 files from walkthrough to walkthrough
+recoder-vscode:vsix: [copyWasms] Copied tiktoken WASMs to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:vsix: [copyWasms] Copied tiktoken WASMs to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist/workers
+recoder-vscode:vsix: [copyWasms] Copied tree-sitter.wasm to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:vsix: [copyWasms] Copied 35 tree-sitter language wasms to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist
+recoder-vscode:vsix: [copyLocales] Copied 132 locale files to /Users/arhansubasi/recoder.xyz/recoder-extension/src/dist/i18n/locales
+recoder-vscode:vsix: [esbuild-problem-matcher#onEnd]
+ WARNING  Using '*' activation is usually a bad idea as it impacts performance.
+recoder-vscode:vsix: More info: https://code.visualstudio.com/api/references/activation-events#Start-up
+recoder-vscode:vsix: Use --allow-star-activation to bypass.
+recoder-vscode:vsix: ue? [y/N] 
+recoder-vscode:vsix:  ERROR  Aborted
+recoder-vscode:vsix:  ELIFECYCLE  Command failed with exit code 1.
+recoder-vscode:vsix: ERROR: command finished with error: command (/Users/arhansubasi/recoder.xyz/recoder-extension/src) /Users/arhansubasi/Library/pnpm/.tools/pnpm/10.8.1/bin/pnpm run vsix exited (1)
+recoder-vscode#vsix: command (/Users/arhansubasi/recoder.xyz/recoder-extension/src) /Users/arhansubasi/Library/pnpm/.tools/pnpm/10.8.1/bin/pnpm run vsix exited (1)
+
+ Tasks:    5 successful, 6 total
+Cached:    4 cached, 6 total
+  Time:    33.075s 
+Failed:    recoder-vscode#vsix
+
+ ERROR  run failed: command  exited (1)
+ ELIFECYCLE  Command failed with exit code 1.
+❌ Failed to build recoder-extension: Command failed: pnpm vsix
+
+🔨 Building recoder-chat...
+📂 Changed to: /Users/arhansubasi/recoder.xyz/recoder-chat
+🔨 Running: pnpm run build
+
+> ai-chatbot@3.1.0 build /Users/arhansubasi/recoder.xyz/recoder-chat
+> next build
+
+Waiting for Watchman `query` (30s)...
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/arhansubasi/recoder.xyz/pnpm-lock.yaml as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * /Users/arhansubasi/recoder.xyz/recoder-chat/package-lock.json
+
+   ▲ Next.js 15.5.0
+   - Environments: .env.local, .env.production, .env
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 38.2s
+   Skipping validation of types
+   Linting  . ⨯ ESLint: Failed to load plugin '@nx' declared in '../.eslintrc.json': Cannot find module 'nx/src/plugins/js/utils/register' Require stack: - /Users/arhansubasi/recoder.xyz/node_modules/@nx/js/src/internal.js - /Users/arhansubasi/recoder.xyz/node_modules/@nx/eslint-plugin/src/rules/enforce-module-boundaries.js - /Users/arhansubasi/recoder.xyz/node_modules/@nx/eslint-plugin/src/index.js - /Users/arhansubasi/recoder.xyz/recoder-chat/node_modules/@eslint/eslintrc/dist/eslintrc.cjs
+ ✓ Linting    
+Waiting for Watchman `query` (50s)...
+ ✓ Collecting page data    
+🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+   Generating static pages (8/25)  [=== ] ✓ Compiled successfully in 22.3s
+   Generating static pages (19/25)  [==  ]   Skipping validation of types
+ ✓ Generating static pages (25/25)
+   Linting  ..🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+   Collecting build traces  .. ⨯ ESLint: Failed to load plugin '@nx' declared in '../.eslintrc.json': Cannot find module 'nx/src/plugins/js/utils/register' Require stack: - /Users/arhansubasi/recoder.xyz/node_modules/@nx/js/src/internal.js - /Users/arhansubasi/recoder.xyz/node_modules/@nx/eslint-plugin/src/rules/enforce-module-boundaries.js - /Users/arhansubasi/recoder.xyz/node_modules/@nx/eslint-plugin/src/index.js - /Users/arhansubasi/recoder.xyz/recoder-chat/node_modules/@eslint/eslintrc/dist/eslintrc.cjs
+ ✓ Linting    
+ ✓ Collecting page data    
+   Collecting build traces  ...🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+🔥 Warming up AI models...
+💾 Cache MISS
+⚠️ Model warmup partially completed: Ollama error: Not Found
+Watchman `query` finished after 71.4s.
+ ✓ Generating static pages (25/25)
+                              iOS node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d80
+Android Bundled 31305ms node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-router/entry.js (1036 modules)
+iOS node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+ ✓ Collecting build traces    
+ ✓ Finalizing page optimization    
+
+Route (app)                                 Size  First Load JS    
+┌ ƒ /                                      164 B         833 kB
+├ ○ /_not-found                             1 kB         103 kB
+├ ƒ /ai                                  5.51 kB         107 kB
+├ ƒ /api/auth/[...nextauth]                163 B         102 kB
+├ ƒ /api/auth/guest                        163 B         102 kB
+├ ƒ /api/auth/sync                         163 B         102 kB
+├ ƒ /api/chat                              163 B         102 kB
+├ ƒ /api/chat/[id]/stream                  163 B         102 kB
+├ ƒ /api/collaboration/websocket           163 B         102 kB
+├ ƒ /api/debug/env                         163 B         102 kB
+├ ƒ /api/document                          163 B         102 kB
+├ ƒ /api/files/upload                      163 B         102 kB
+├ ƒ /api/history                           163 B         102 kB
+├ ƒ /api/suggestions                       163 B         102 kB
+├ ƒ /api/user/profile                      163 B         102 kB
+├ ƒ /api/vote                              163 B         102 kB
+├ ƒ /channels                            4.47 kB         106 kB
+├ ƒ /chat/[id]                             164 B         833 kB
+├ ƒ /files                               4.81 kB         107 kB
+├ ○ /login                               2.48 kB         141 kB
+├ ƒ /messages                            4.63 kB         106 kB
+├ ○ /opengraph-image-12cog0.png              0 B            0 B
+├ ○ /register                            2.16 kB         141 kB
+├ ƒ /settings                            4.95 kB         107 kB
+└ ○ /twitter-image-12cog0.png                0 B            0 B
++ First Load JS shared by all             102 kB
+  ├ chunks/1255-15f04a30ae2c7791.js      45.5 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js  54.2 kB
+  └ other shared chunks (total)          1.96 kB
+
+
+ƒ Middleware                             53.6 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+iOS Bundled 36962ms node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-router/entry.js (1046 modules)
+Static rendering is enabled. Learn more
+Web node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+Web node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+ter/entry.js ▓▓▓▓▓▓▓░░░░░░░░░ 44.0% (290/437)
+λ node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-route
+ ✓ Finalizing page optimization    
+
+Route (app)                                 Size  First Load JS    
+┌ ƒ /                                      164 B         833 kB
+├ ○ /_not-found                             1 kB         103 kB
+├ ƒ /ai                                  5.51 kB         107 kB
+├ ƒ /api/auth/[...nextauth]                163 B         102 kB
+├ ƒ /api/auth/guest                        163 B         102 kB
+├ ƒ /api/auth/sync                         163 B         102 kB
+├ ƒ /api/chat                              163 B         102 kB
+├ ƒ /api/chat/[id]/stream                  163 B         102 kB
+├ ƒ /api/collaboration/websocket           163 B         102 kB
+├ ƒ /api/debug/env                         163 B         102 kB
+├ ƒ /api/document                          163 B         102 kB
+├ ƒ /api/files/upload                      163 B         102 kB
+├ ƒ /api/history                           163 B         102 kB
+├ ƒ /api/suggestions                       163 B         102 kB
+├ ƒ /api/user/profile                      163 B         102 kB
+├ ƒ /api/vote                              163 B         102 kB
+├ ƒ /channels                            4.47 kB         106 kB
+├ ƒ /chat/[id]                             164 B         833 kB
+├ ƒ /files                               4.81 kB         107 kB
+├ ○ /login                               2.48 kB         141 kB
+├ ƒ /messages                            4.63 kB         106 kB
+├ ○ /opengraph-image-12cog0.png              0 B            0 B
+├ ○ /register                            2.16 kB         141 kB
+├ ƒ /settings                            4.95 kB         107 kB
+└ ○ /twitter-image-12cog0.png                0 B            0 B
++ First Load JS shared by all             102 kB
+  ├ chunks/1255-15f04a30ae2c7791.js      45.5 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js  54.2 kB
+  └ other shared chunks (total)          1.96 kB
+
+
+ƒ Middleware                             53.6 kB
+
+Web node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+ter/entry.js ▓▓▓▓▓▓▓▓░░░░░░░░ 56.0% (399/533)
+λ node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-route
+r/node/render.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 59.5% (395/512)✅ Copied /Users/arhansubasi/recoder.xyz/recoder-chat/.next to /Users/arhansubasi/recoder.xyz/recoder-desktop/app-bundles/chat
+✅ Successfully built recoder-chat
+
+Web node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+ter/entry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 58.4% (414/552)
+λ node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-route
+r/node/render.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 61.9% (422/548)
+Web node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+ter/entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 66.2% (488/600)
+λ node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-route
+Web node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+Web Bundled 30172ms node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-router/entry.js (766 modules)
+λ Bundled 30458ms node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-router/node/render.js (789 modules)
+TypeError: Cannot read properties of undefined (reading 'S')
+TypeError: Cannot read properties of undefined (reading 'S')
+    at factory (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/react-dom@19.1.1_react@18.3.1/node_modules/react-dom/cjs/react-dom-client.production.js:3100:56)
+    at loadModuleImplementation (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:277:5)
+    at guardedLoadModule (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:184:12)
+    at require (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:92:7)
+    at factory (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/react-dom@19.1.1_react@18.3.1/node_modules/react-dom/client.js:35:20)
+    at loadModuleImplementation (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:277:5)
+    at guardedLoadModule (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:184:12)
+    at r (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:92:7)
+    at factory (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/react-native-web@0.19.13_encoding@0.1.13_react-dom@19.1.1_react@18.3.1__react@18.3.1/node_modules/react-native-web/dist/exports/render/index.js:13:1)
+    at g (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:277:5)
+ ELIFECYCLE  Command failed with exit code 1.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm.
+env: load .env.local .env.production
+env: export DATABASE_URL DIRECT_URL POSTGRES_URL NEXTAUTH_URL NEXTAUTH_SECRET AUTH_SECRET NEXTAUTH_URL_CHAT UNIFIED_AUTH_SECRET JWT_SECRET DODO_PAYMENTS_API_KEY DODO_API_BASE_URL DODO_WEBHOOK_SECRET NEXT_PUBLIC_RETURN_URL NEXT_PUBLIC_CANCEL_URL ANTHROPIC_API_KEY ANTHROPIC_BASE_URL GROQ_API_KEY GROQ_BASE_URL GOOGLE_API_KEY GOOGLE_AI_API_KEY OPENAI_API_KEY OPENAI_BASE_URL MISTRAL_API_KEY TOGETHER_API_KEY OPENROUTER_API_KEY DEEPSEEK_API_KEY DEEPSEEK_BASE_URL XAI_API_KEY FIREWORKS_API_KEY CEREBRAS_API_KEY OLLAMA_BASE_URL LM_STUDIO_BASE_URL AWS_REGION GOOGLE_APPLICATION_CREDENTIALS GOOGLE_REGION SECURITY_SCAN_ENABLED VULNERABILITY_CHECK_ENABLED RATE_LIMIT_REQUESTS_PER_MINUTE RATE_LIMIT_ENABLED ANALYTICS_ENABLED NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_CHAT_URL NEXT_PUBLIC_API_URL NEXT_PUBLIC_ENGINE_URL WEB_PLATFORM_PORT CHAT_PLATFORM_PORT BACKEND_API_PORT PRODUCTION_ENGINE_PORT SKIP_ENV_VALIDATION BUILD_ANALYZE LOG_LEVEL FEATURE_REASONING_ENGINE FEATURE_BLOCKCHAIN_AGENT FEATURE_MOBILE_AGENT FEATURE_DEPLOYMENT_PIPELINE EXTENSION_API_BASE_URL EXTENSION_AUTH_PROVIDER EXTENSION_TELEMETRY_ENABLED DOCKER_REGISTRY KUBERNETES_NAMESPACE DEPLOYMENT_ENVIRONMENT HEALTH_CHECK_ENABLED METRICS_ENDPOINT STATUS_ENDPOINT USAGE_TRACKING_ENABLED COST_MONITORING_ENABLED BILLING_CYCLE FREE_TIER_REQUESTS LAUNCH_READY WEB_PLATFORM_READY CHAT_PLATFORM_READY DATABASE_READY AUTH_READY PAYMENTS_READY AI_PROVIDERS_READY SECURITY_READY MONITORING_READY
+Starting Metro Bundler
+Static rendering is enabled. Learn more
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (10s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Waiting for Watchman `watch-project` (30s)...
+Watchman `watch-project` finished after 41.5s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.4s.
+Watchman `watch-project` finished after 41.5s.
+Watchman `watch-project` finished after 41.5s.
+Watchman `watch-project` finished after 41.5s.
+Watchman `watch-project` finished after 41.5s.
+Watchman `watch-project` finished after 41.5s.
+Watchman `watch-project` finished after 41.5s.
+λ Bundled 1454ms node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-router/node/render.js (718 modules)
+Web node_modules/.pnpm/expo-router@4.0.21_febe6485db44466df6f65d804b47afa3/node_modules/expo-rou
+ter/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 100.0% (766/766)TypeError: Cannot read properties of undefined (reading 'S')
+TypeError: Cannot read properties of undefined (reading 'S')
+    at factory (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/react-dom@19.1.1_react@18.3.1/node_modules/react-dom/cjs/react-dom-client.production.js:3100:56)
+    at loadModuleImplementation (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:277:5)
+    at guardedLoadModule (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:184:12)
+    at require (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:92:7)
+    at factory (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/react-dom@19.1.1_react@18.3.1/node_modules/react-dom/client.js:35:20)
+    at loadModuleImplementation (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:277:5)
+    at guardedLoadModule (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:184:12)
+    at r (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:92:7)
+    at factory (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/react-native-web@0.19.13_encoding@0.1.13_react-dom@19.1.1_react@18.3.1__react@18.3.1/node_modules/react-native-web/dist/exports/render/index.js:13:1)
+    at g (/Users/arhansubasi/recoder.xyz/node_modules/.pnpm/metro-runtime@0.81.5/node_modules/metro-runtime/src/polyfills/require.js:277:5)
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed.
+ ELIFECYCLE  Command failed.
+ERROR: "build:mobile" exited with 1.
+ ELIFECYCLE  Command failed.
+ ELIFECYCLE  Command failed with exit code 1.
+
+ *  The terminal process "/bin/zsh '-l', '-c', 'npm run build'" terminated with exit code: 1. 
+ *  Terminal will be reused by tasks, press any key to close it. 
