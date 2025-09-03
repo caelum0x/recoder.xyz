@@ -51,7 +51,7 @@ export const authOptions: NextAuthOptions = {
           id: profile.id.toString(),
           name: profile.name || profile.login,
           email: profile.email,
-          image: profile.avatar_url,
+          image: profile.avatar_url || undefined,
           plan: 'FREE' as PlanType,
           emailVerified: true,
         };
@@ -67,9 +67,9 @@ export const authOptions: NextAuthOptions = {
           id: profile.sub,
           name: profile.name,
           email: profile.email,
-          image: profile.picture,
+          image: profile.picture || undefined,
           plan: 'FREE' as PlanType,
-          emailVerified: profile.email_verified,
+          emailVerified: Boolean(profile.email_verified),
         };
       },
     }),
@@ -83,9 +83,9 @@ export const authOptions: NextAuthOptions = {
           id: profile.id,
           name: profile.username,
           email: profile.email,
-          image: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null,
+          image: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : undefined,
           plan: 'FREE' as PlanType,
-          emailVerified: profile.verified,
+          emailVerified: Boolean(profile.verified),
         };
       },
     }),
@@ -224,7 +224,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.plan = user.plan;
-        token.emailVerified = user.emailVerified;
+        token.emailVerified = Boolean(user.emailVerified);
       }
 
       // Update session (when user updates profile, plan changes, etc.)
@@ -281,7 +281,6 @@ export const authOptions: NextAuthOptions = {
 
   pages: {
     signIn: '/auth/signin',
-    signUp: '/auth/signup',
     error: '/auth/error',
     verifyRequest: '/auth/verify-request',
   },
