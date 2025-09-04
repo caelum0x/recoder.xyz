@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { 
   Activity, TrendingUp, TrendingDown, Zap, 
   AlertTriangle, CheckCircle, XCircle, Clock,
-  Cpu, Memory, HardDrive, Network, Database,
+  Cpu, MemoryStick, HardDrive, Network, Database,
   RefreshCw, Settings, Download, Play, Pause
 } from 'lucide-react'
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -390,7 +390,7 @@ export function PerformanceDashboard() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <Memory className="w-4 h-4" />
+                  <MemoryStick className="w-4 h-4" />
                   Memory Usage
                 </CardTitle>
               </CardHeader>

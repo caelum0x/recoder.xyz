@@ -103,7 +103,7 @@ export default function MobileNavigation({ user, notifications = 0 }: MobileNavi
   ];
 
   const isActiveRoute = (href: string) => {
-    return pathname === href || pathname.startsWith(href + '/');
+    return pathname === href || (pathname && pathname.startsWith(href + '/'));
   };
 
   const handleQuickAction = (action: string) => {

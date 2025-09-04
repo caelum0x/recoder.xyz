@@ -172,7 +172,7 @@ class AdvancedCacheSystem {
     const beforeCount = this.cache.size;
     const cutoff = Date.now() - this.DEFAULT_TTL;
 
-    for (const [key, entry] of this.cache.entries()) {
+    for (const [key, entry] of Array.from(this.cache.entries())) {
       if (entry.timestamp < cutoff) {
         this.cache.delete(key);
       }

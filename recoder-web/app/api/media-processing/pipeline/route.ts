@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../lib/auth'
-import { mediaProcessingPipeline } from '../../../lib/media-processing/pipeline-orchestrator'
-import { rateLimit } from '../../../lib/rate-limit'
+import { auth } from '@/lib/auth'
+import { MediaProcessingPipeline } from '@/lib/media-processing/pipeline-orchestrator'
+import { rateLimit } from '@/lib/rate-limit'
+
+// Initialize pipeline instance
+const mediaProcessingPipeline = new MediaProcessingPipeline()
 
 export async function POST(request: NextRequest) {
   try {
