@@ -43,10 +43,11 @@ try {
   ({ Storage } = require('@google-cloud/storage'));
   ({ CloudSQL } = require('@google-cloud/sql'));
 } catch (error) {
-  console.log('Google Cloud SDK not installed, using fallback implementations');
-  Compute = class { constructor() {} };
-  Storage = class { constructor() {} };
-  CloudSQL = class { constructor() {} };
+  console.log('Google Cloud SDK not available, using fallback implementations');
+  // Provide fallback implementations that won't break the build
+  Compute = null;
+  Storage = null;
+  CloudSQL = null;
 }
 
 // Real Azure imports (conditional)

@@ -1,7 +1,7 @@
 // User profile API endpoint for Recoder Web
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
-import { userManager } from '../../../../lib/user-management';
+import { userManager } from '@/lib/user-management';
 
 export async function GET(request: NextRequest) {
   try {

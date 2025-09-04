@@ -33,6 +33,7 @@ export interface PerformanceMetrics {
 }
 
 export interface ProcessingMetrics {
+  timestamp: Date
   queueLength: number
   activeJobs: number
   completedJobs: number
@@ -43,6 +44,7 @@ export interface ProcessingMetrics {
 }
 
 export interface CacheMetrics {
+  timestamp: Date
   hits: number
   misses: number
   hitRate: number
@@ -108,6 +110,11 @@ export class PerformanceMonitor extends EventEmitter {
 
     this.isRunning = false
     this.emit('monitoring_stopped')
+  }
+
+  // Check if monitoring is running
+  isMonitoringRunning(): boolean {
+    return this.isRunning
   }
 
   private async collectMetrics() {
@@ -191,6 +198,7 @@ export class PerformanceMonitor extends EventEmitter {
     const hourAgo = now - (60 * 60 * 1000)
     
     return {
+      timestamp: new Date(),
       queueLength: Math.floor(Math.random() * 20),
       activeJobs: Math.floor(Math.random() * 10),
       completedJobs: Math.floor(Math.random() * 100) + 50,
@@ -207,6 +215,7 @@ export class PerformanceMonitor extends EventEmitter {
     const misses = Math.floor(Math.random() * 200) + 10
     
     return {
+      timestamp: new Date(),
       hits,
       misses,
       hitRate: (hits / (hits + misses)) * 100,
@@ -494,7 +503,7 @@ export class PerformanceMonitor extends EventEmitter {
       ? historical.processing.reduce((sum, m) => sum + m.errorRate, 0) / historical.processing.length
       : 0
 
-    const recommendations = []
+    const recommendations: string[] = []
     if (avgCpuUsage > 70) recommendations.push('Consider adding more CPU cores or optimizing processing algorithms')
     if (avgMemoryUsage > 80) recommendations.push('Memory usage is high, consider increasing available RAM')
     if (avgQueueLength > 20) recommendations.push('Processing queue is consistently long, consider scaling horizontally')

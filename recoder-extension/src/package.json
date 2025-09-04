@@ -50,7 +50,7 @@
 		"recoder.xyz"
 	],
 	"activationEvents": [
-		"*"
+		"onStartupFinished"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {

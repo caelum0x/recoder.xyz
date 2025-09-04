@@ -12,12 +12,12 @@ interface RateLimitResult {
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
 export async function rateLimit(
-  request: NextRequest,
+  request: any, // Use any to avoid type conflicts between different Next.js versions
   identifier: string,
   limit: number,
   windowMs: number
 ): Promise<RateLimitResult> {
-  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+  const ip = request.headers?.get('x-forwarded-for') || request.headers?.get('x-real-ip') || 'unknown';
   const key = `${identifier}:${ip}`;
   const now = Date.now();
   
