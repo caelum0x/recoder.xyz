@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../../lib/auth'
-import { getS3Service } from '../../../../lib/cloud-storage/aws-s3-service'
+import { getS3Service } from '@/lib/cloud-storage/aws-s3-service'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(request: NextRequest) {

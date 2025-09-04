@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../../lib/auth'
-import { prisma } from '../../../../../lib/prisma'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
@@ -187,7 +187,7 @@ async function getOverviewAnalytics(userId: string, startDate: Date, endDate: Da
         averageProcessingTime: processingTimeStats._avg.progress || 0
       },
       recentFiles,
-      popularOperations: popularOperations.map(op => ({
+      popularOperations: popularOperations.map((op: any) => ({
         operation: op.operation,
         count: op._count.operation
       })),
@@ -203,18 +203,18 @@ async function getProcessingAnalytics(userId: string, startDate: Date, endDate: 
   // Daily processing statistics
   const dailyStats = await prisma.$queryRaw`
     SELECT 
-      DATE(created_at) as date,
+      DATE("createdAt") as date,
       COUNT(*) as total_jobs,
       COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_jobs,
       COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_jobs,
       COUNT(CASE WHEN status = 'processing' THEN 1 END) as processing_jobs,
       COUNT(CASE WHEN status = 'queued' THEN 1 END) as queued_jobs
-    FROM processing_jobs 
-    WHERE user_id = ${userId} 
-      AND created_at >= ${startDate}
-      AND created_at <= ${endDate}
-    GROUP BY DATE(created_at)
-    ORDER BY DATE(created_at)
+    FROM "ProcessingJob" 
+    WHERE "userId" = ${userId} 
+      AND "createdAt" >= ${startDate}
+      AND "createdAt" <= ${endDate}
+    GROUP BY DATE("createdAt")
+    ORDER BY DATE("createdAt")
   `
 
   // Operations breakdown
@@ -233,17 +233,17 @@ async function getProcessingAnalytics(userId: string, startDate: Date, endDate: 
     SELECT 
       operation,
       type,
-      AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration,
-      MIN(EXTRACT(EPOCH FROM (completed_at - started_at))) as min_duration,
-      MAX(EXTRACT(EPOCH FROM (completed_at - started_at))) as max_duration,
+      AVG(EXTRACT(EPOCH FROM ("completedAt" - "startedAt"))) as avg_duration,
+      MIN(EXTRACT(EPOCH FROM ("completedAt" - "startedAt"))) as min_duration,
+      MAX(EXTRACT(EPOCH FROM ("completedAt" - "startedAt"))) as max_duration,
       COUNT(*) as job_count
-    FROM processing_jobs 
-    WHERE user_id = ${userId}
+    FROM "ProcessingJob" 
+    WHERE "userId" = ${userId}
       AND status = 'completed'
-      AND started_at IS NOT NULL 
-      AND completed_at IS NOT NULL
-      AND created_at >= ${startDate}
-      AND created_at <= ${endDate}
+      AND "startedAt" IS NOT NULL 
+      AND "completedAt" IS NOT NULL
+      AND "createdAt" >= ${startDate}
+      AND "createdAt" <= ${endDate}
     GROUP BY operation, type
     ORDER BY avg_duration DESC
   `
@@ -281,16 +281,16 @@ async function getStorageAnalytics(userId: string, startDate: Date, endDate: Dat
   // Storage growth over time
   const storageGrowth = await prisma.$queryRaw`
     SELECT 
-      DATE(created_at) as date,
-      SUM(file_size) as daily_storage,
+      DATE("createdAt") as date,
+      SUM("fileSize") as daily_storage,
       COUNT(*) as files_count
-    FROM media_files 
-    WHERE user_id = ${userId} 
+    FROM "MediaFile" 
+    WHERE "userId" = ${userId} 
       AND deleted = false
-      AND created_at >= ${startDate}
-      AND created_at <= ${endDate}
-    GROUP BY DATE(created_at)
-    ORDER BY DATE(created_at)
+      AND "createdAt" >= ${startDate}
+      AND "createdAt" <= ${endDate}
+    GROUP BY DATE("createdAt")
+    ORDER BY DATE("createdAt")
   `
 
   // Largest files
@@ -353,27 +353,27 @@ async function getUsageAnalytics(userId: string, startDate: Date, endDate: Date)
   // Usage by hour of day
   const usageByHour = await prisma.$queryRaw`
     SELECT 
-      EXTRACT(HOUR FROM created_at) as hour,
+      EXTRACT(HOUR FROM "createdAt") as hour,
       COUNT(*) as event_count
-    FROM analytics_events 
-    WHERE user_id = ${userId}
-      AND created_at >= ${startDate}
-      AND created_at <= ${endDate}
+    FROM "AnalyticsEvent" 
+    WHERE "userId" = ${userId}
+      AND "createdAt" >= ${startDate}
+      AND "createdAt" <= ${endDate}
       AND type IN ('media_upload', 'media_processing_started', 'template_usage')
-    GROUP BY EXTRACT(HOUR FROM created_at)
+    GROUP BY EXTRACT(HOUR FROM "createdAt")
     ORDER BY hour
   `
 
   // Most active days
   const mostActiveDays = await prisma.$queryRaw`
     SELECT 
-      DATE(created_at) as date,
+      DATE("createdAt") as date,
       COUNT(*) as activity_count
-    FROM analytics_events 
-    WHERE user_id = ${userId}
-      AND created_at >= ${startDate}
-      AND created_at <= ${endDate}
-    GROUP BY DATE(created_at)
+    FROM "AnalyticsEvent" 
+    WHERE "userId" = ${userId}
+      AND "createdAt" >= ${startDate}
+      AND "createdAt" <= ${endDate}
+    GROUP BY DATE("createdAt")
     ORDER BY activity_count DESC
     LIMIT 10
   `
@@ -401,10 +401,10 @@ async function getPerformanceAnalytics(userId: string, startDate: Date, endDate:
         ELSE NULL END) as avg_processing_time,
       COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful_jobs,
       COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_jobs
-    FROM processing_jobs 
-    WHERE user_id = ${userId}
-      AND created_at >= ${startDate}
-      AND created_at <= ${endDate}
+    FROM "ProcessingJob" 
+    WHERE "userId" = ${userId}
+      AND "createdAt" >= ${startDate}
+      AND "createdAt" <= ${endDate}
     GROUP BY operation, type
     ORDER BY total_jobs DESC
   `
@@ -416,11 +416,11 @@ async function getPerformanceAnalytics(userId: string, startDate: Date, endDate:
       AVG(EXTRACT(EPOCH FROM (started_at - created_at))) as avg_queue_time,
       MIN(EXTRACT(EPOCH FROM (started_at - created_at))) as min_queue_time,
       MAX(EXTRACT(EPOCH FROM (started_at - created_at))) as max_queue_time
-    FROM processing_jobs 
-    WHERE user_id = ${userId}
-      AND started_at IS NOT NULL
-      AND created_at >= ${startDate}
-      AND created_at <= ${endDate}
+    FROM "ProcessingJob" 
+    WHERE "userId" = ${userId}
+      AND "startedAt" IS NOT NULL
+      AND "createdAt" >= ${startDate}
+      AND "createdAt" <= ${endDate}
     GROUP BY operation
     ORDER BY avg_queue_time DESC
   `

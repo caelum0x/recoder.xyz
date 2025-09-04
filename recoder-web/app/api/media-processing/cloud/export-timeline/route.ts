@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../../../lib/auth'
+import auth from '../../../../../../lib/auth'
 import { getS3Service } from '../../../../../lib/cloud-storage/aws-s3-service'
 import { FFmpegProcessor } from '../../../../../lib/media-processing/ffmpeg-processor'
 import { v4 as uuidv4 } from 'uuid'

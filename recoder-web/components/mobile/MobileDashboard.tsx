@@ -167,13 +167,13 @@ export default function MobileDashboard() {
         <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <DollarSign className="h-6 w-6 opacity-80" />
-            <span className={`text-xs flex items-center ${dashboardData?.overview.revenueGrowth >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-              {dashboardData?.overview.revenueGrowth >= 0 ? (
+            <span className={`text-xs flex items-center ${(dashboardData?.overview?.revenueGrowth ?? 0) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+              {(dashboardData?.overview?.revenueGrowth ?? 0) >= 0 ? (
                 <ArrowUpRight className="h-3 w-3 mr-1" />
               ) : (
                 <ArrowDownRight className="h-3 w-3 mr-1" />
               )}
-              {Math.abs(dashboardData?.overview.revenueGrowth || 0)}%
+              {Math.abs(dashboardData?.overview?.revenueGrowth ?? 0)}%
             </span>
           </div>
           <div className="text-2xl font-bold">{formatCurrency(dashboardData?.overview.totalRevenue || 0)}</div>
@@ -183,13 +183,13 @@ export default function MobileDashboard() {
         <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-2xl p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <Users className="h-6 w-6 opacity-80" />
-            <span className={`text-xs flex items-center ${dashboardData?.overview.userGrowth >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-              {dashboardData?.overview.userGrowth >= 0 ? (
+            <span className={`text-xs flex items-center ${(dashboardData?.overview?.userGrowth ?? 0) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+              {(dashboardData?.overview?.userGrowth ?? 0) >= 0 ? (
                 <ArrowUpRight className="h-3 w-3 mr-1" />
               ) : (
                 <ArrowDownRight className="h-3 w-3 mr-1" />
               )}
-              {Math.abs(dashboardData?.overview.userGrowth || 0)}%
+              {Math.abs(dashboardData?.overview?.userGrowth ?? 0)}%
             </span>
           </div>
           <div className="text-2xl font-bold">{formatNumber(dashboardData?.overview.activeUsers || 0)}</div>
@@ -199,13 +199,13 @@ export default function MobileDashboard() {
         <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <Target className="h-6 w-6 opacity-80" />
-            <span className={`text-xs flex items-center ${dashboardData?.overview.campaignGrowth >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-              {dashboardData?.overview.campaignGrowth >= 0 ? (
+            <span className={`text-xs flex items-center ${(dashboardData?.overview?.campaignGrowth ?? 0) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+              {(dashboardData?.overview?.campaignGrowth ?? 0) >= 0 ? (
                 <ArrowUpRight className="h-3 w-3 mr-1" />
               ) : (
                 <ArrowDownRight className="h-3 w-3 mr-1" />
               )}
-              {Math.abs(dashboardData?.overview.campaignGrowth || 0)}%
+              {Math.abs(dashboardData?.overview?.campaignGrowth ?? 0)}%
             </span>
           </div>
           <div className="text-2xl font-bold">{dashboardData?.overview.campaigns}</div>
@@ -215,13 +215,13 @@ export default function MobileDashboard() {
         <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <MousePointer className="h-6 w-6 opacity-80" />
-            <span className={`text-xs flex items-center ${dashboardData?.overview.conversionGrowth >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-              {dashboardData?.overview.conversionGrowth >= 0 ? (
+            <span className={`text-xs flex items-center ${(dashboardData?.overview?.conversionGrowth ?? 0) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+              {(dashboardData?.overview?.conversionGrowth ?? 0) >= 0 ? (
                 <ArrowUpRight className="h-3 w-3 mr-1" />
               ) : (
                 <ArrowDownRight className="h-3 w-3 mr-1" />
               )}
-              {Math.abs(dashboardData?.overview.conversionGrowth || 0)}%
+              {Math.abs(dashboardData?.overview?.conversionGrowth ?? 0)}%
             </span>
           </div>
           <div className="text-2xl font-bold">{dashboardData?.overview.conversion}%</div>

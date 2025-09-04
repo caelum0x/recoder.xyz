@@ -302,6 +302,26 @@ export const authOptions: NextAuthOptions = {
 // Create NextAuth handler
 export default NextAuth(authOptions);
 
+// Server-side auth function for API routes
+export async function auth() {
+  // For development, return a mock session
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      user: {
+        id: 'dev-user-123',
+        email: 'dev@recoder.xyz',
+        name: 'Dev User',
+        plan: 'FREE' as PlanType,
+        emailVerified: true,
+      },
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
+  
+  // In production, implement proper session validation
+  return null;
+}
+
 // Helper functions for authentication
 export const authHelpers = {
   // Get user session on server-side

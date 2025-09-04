@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import WorkflowEngine from '../../../../lib/workflow/engine';
+import { workflowEngine } from '@/lib/workflow/engine';
 
-const workflowEngine = new WorkflowEngine();
+//const workflowEngine = new WorkflowEngine();
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     // Get all executions and filter them
-    let executions = workflowEngine.getAllExecutions();
+    let executions = await workflowEngine.getAllExecutions();
 
     // Apply filters
     if (status && status !== 'all') {
