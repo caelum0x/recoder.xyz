@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../lib/auth'
-import { performanceMonitor } from '../../../../lib/media-processing/performance-monitor'
-import { rateLimit } from '../../../../lib/rate-limit'
+import { auth } from '@/lib/auth'
+import { performanceMonitor } from '@/lib/media-processing/performance-monitor'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
   try {

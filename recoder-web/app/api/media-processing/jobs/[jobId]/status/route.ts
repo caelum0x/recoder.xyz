@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../../../../lib/auth'
-import { prisma } from '../../../../../../../lib/prisma'
-import { FFmpegProcessor } from '../../../../../../lib/media-processing/ffmpeg-processor'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { FFmpegProcessor } from '@/lib/media-processing/ffmpeg-processor'
 
 const ffmpegProcessor = new FFmpegProcessor()
 

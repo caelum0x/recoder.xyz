@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../../lib/auth'
-import { prisma } from '../../../../../lib/prisma'
-import { FFmpegProcessor } from '../../../../lib/media-processing/ffmpeg-processor'
-import { ProcessingQueue } from '../../../../lib/media-processing/processing-queue'
-import { BatchProcessor } from '../../../../lib/media-processing/batch-processor'
-import { rateLimit } from '../../../../lib/rate-limit'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { FFmpegProcessor } from '@/lib/media-processing/ffmpeg-processor'
+import { ProcessingQueue } from '@/lib/media-processing/processing-queue'
+import { BatchProcessor } from '@/lib/media-processing/batch-processor'
+import { rateLimit } from '@/lib/rate-limit'
 
 const batchProcessor = new BatchProcessor()
 

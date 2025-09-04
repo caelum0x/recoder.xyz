@@ -1,6 +1,6 @@
-import NextAuth from 'next-auth';
-import Google from 'next-auth/providers/google';
-import GitHub from 'next-auth/providers/github';
+import NextAuth, { NextAuthOptions } from 'next-auth';
+import GoogleProvider from 'next-auth/providers/google';
+import GitHubProvider from 'next-auth/providers/github';
 
 export interface RecoderUser {
   id: string;
@@ -17,13 +17,13 @@ export interface RecoderSession {
   expires: string;
 }
 
-const authConfig = {
+const authConfig: NextAuthOptions = {
   providers: [
-    Google({
+    GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
-    GitHub({
+    GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     }),
@@ -66,18 +66,29 @@ const authConfig = {
       return session;
     },
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };
 
 export const createAuth = (options: { baseUrl?: string } = {}) => {
-  return NextAuth({
+  const handler = NextAuth({
     ...authConfig,
+    ...options,
   });
+  
+  // For NextAuth v4 compatibility, return handlers object
+  return {
+    handlers: {
+      GET: handler,
+      POST: handler,
+    },
+    auth: handler,
+    signIn: () => {}, // Placeholder - use signIn from next-auth/react on client
+    signOut: () => {}, // Placeholder - use signOut from next-auth/react on client
+  };
 };
 
 // Default export for main app
-export const {
-  handlers: { GET, POST },
-  auth,
-  signIn,
-  signOut,
-} = createAuth();
+const authInstance = createAuth();
+export const handlers = authInstance.handlers;
+export const auth = authInstance.auth;
+export const { GET, POST } = handlers;

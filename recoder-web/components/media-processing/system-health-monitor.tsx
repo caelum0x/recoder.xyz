@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { 
   Activity, CheckCircle, XCircle, AlertTriangle, 
   Server, Database, Cloud, Zap, RefreshCw,
-  Cpu, Memory, HardDrive, Network, Timer
+  Cpu, MemoryStick, HardDrive, Network, Timer
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -381,7 +381,7 @@ export function SystemHealthMonitor() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Memory className="w-4 h-4" />
+              <MemoryStick className="w-4 h-4" />
               Memory Usage
             </CardTitle>
           </CardHeader>

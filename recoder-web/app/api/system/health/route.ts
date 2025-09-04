@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../lib/auth'
-import { performanceMonitor } from '../../../../lib/media-processing/performance-monitor'
-import { mediaProcessingPipeline } from '../../../../lib/media-processing/pipeline-orchestrator'
+import { auth } from '@/lib/auth'
+import { performanceMonitor } from '@/lib/media-processing/performance-monitor'
+import { MediaProcessingPipeline } from '@/lib/media-processing/pipeline-orchestrator'
+
+// Initialize pipeline instance
+const mediaProcessingPipeline = new MediaProcessingPipeline()
 
 export async function GET(request: NextRequest) {
   try {
@@ -92,7 +95,7 @@ export async function GET(request: NextRequest) {
       success: true,
       health,
       monitoring: {
-        isRunning: performanceMonitor.isRunning || false,
+        isRunning: performanceMonitor.isMonitoringRunning(),
         uptime: process.uptime(),
         nodeVersion: process.version,
         platform: process.platform
@@ -215,7 +218,7 @@ async function checkProcessingHealth() {
       uptime,
       lastCheck: new Date(),
       queueLength: stats.queueLength,
-      activeJobs: stats.activeJobs
+      processingJobs: stats.processingJobs
     }
   } catch (error) {
     return {

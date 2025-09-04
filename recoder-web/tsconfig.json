@@ -41,6 +41,9 @@
     "**/*.test.ts",
     "**/__tests__/**/*",
     "api/providers/**/*",
-    "lib/api/**/*"
+    "lib/api/**/*",
+    "../lib/**/*",
+    "../components/**/*",
+    "../app/**/*"
   ]
 }
