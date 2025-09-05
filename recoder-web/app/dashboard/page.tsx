@@ -7,6 +7,8 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useState, useEffect } from "react";
 import { redirect } from "next/navigation";
 import { getUserChats, getUserStats } from "@/app/(main)/actions";
+import { WelcomeWizard } from "@/components/onboarding/welcome-wizard";
+import { useOnboarding } from "@/hooks/use-onboarding";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -52,6 +54,7 @@ interface UsageStats {
 
 export default function Dashboard() {
   const { user, session, loading } = useAuth();
+  const onboarding = useOnboarding();
   const [stats, setStats] = useState<UserStats>({
     generationsToday: 0,
     generationsTotal: 0,
@@ -168,6 +171,13 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Welcome Wizard */}
+      <WelcomeWizard
+        isOpen={onboarding.showWelcomeWizard}
+        onClose={onboarding.closeWelcomeWizard}
+        onComplete={onboarding.markOnboardingCompleted}
+      />
+      
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
