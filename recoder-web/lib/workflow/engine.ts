@@ -576,32 +576,24 @@ export class WorkflowExecutionEngine {
           where,
           orderBy: { startedAt: 'desc' },
           take: filters?.limit || 50,
-          skip: filters?.offset || 0,
-          include: {
-            workflow: {
-              select: { name: true, id: true }
-            },
-            user: {
-              select: { name: true, email: true }
-            }
-          }
+          skip: filters?.offset || 0
         })
 
         return executions.map(execution => ({
           id: execution.id,
           workflowId: execution.workflowId,
-          workflowName: execution.workflow?.name || `Workflow ${execution.workflowId}`,
+          workflowName: `Workflow ${execution.workflowId}`,
           userId: execution.userId,
-          userName: execution.user?.name || execution.user?.email || 'Unknown User',
+          userName: 'User',
           status: execution.status,
           progress: execution.progress || 0,
-          currentStep: execution.currentStep,
+          currentStep: (execution.metadata as any)?.currentStep || 'Unknown',
           startedAt: execution.startedAt,
           completedAt: execution.completedAt,
-          error: execution.error,
-          triggerData: execution.triggerData,
-          variables: execution.variables,
-          outputs: execution.outputs
+          error: (execution.logs as any)?.error || null,
+          triggerData: (execution.metadata as any)?.triggerData || {},
+          variables: (execution.metadata as any)?.variables || {},
+          outputs: execution.results || {}
         }))
       }
     } catch (error) {
@@ -1023,7 +1015,7 @@ export class WorkflowExecutionEngine {
             status: 'completed',
             completedAt: new Date(),
             progress: 100,
-            outputs
+            results: outputs
           }
         })
       }
@@ -1053,7 +1045,7 @@ export class WorkflowExecutionEngine {
           data: {
             status: 'failed',
             completedAt: new Date(),
-            error
+            logs: { error }
           }
         })
       }

@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
           console.error('FFmpeg processing error:', error)
           return NextResponse.json({ 
             error: 'FFmpeg processing failed',
-            details: error.message 
+            details: error instanceof Error ? error.message : 'Unknown error'
           }, { status: 500 })
         }
       }
@@ -409,7 +409,7 @@ function extendPipelineForOptimization() {
         } catch (uploadError) {
           const failedFile = {
             ...optimizedFile,
-            uploadError: uploadError.message,
+            uploadError: uploadError instanceof Error ? uploadError.message : 'Upload failed',
             uploadSuccess: false
           }
           uploadedFiles.push(failedFile)

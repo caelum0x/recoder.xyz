@@ -289,6 +289,48 @@
 - [ ] Mobile-first responsive design
 - [ ] Enterprise-grade security and compliance
 
+  ☐ 🌐 Create unified session management across web, CLI, and router
+     ☐ 🌐 Build web dashboard showing CLI usage, billing, and router stats
+     ☐ 🔐 Implement CLI auth redirect to recoder.xyz/auth with return tokens
+     ☐ 🔐 Create CLI device flow authentication (CLI generates code, user enters on web)
+     ☐ 🔐 Add CLI API key generation from web dashboard
+     ☐ 🔐 Implement CLI session refresh and token management
+     ☐ 💳 Create web billing pages (pricing, checkout, account management)
+     ☐ 💳 Implement Stripe checkout integration for CLI subscription upgrades
+     ☐ 💳 Build billing dashboard showing CLI usage and costs
+     ☐ 💳 Add CLI quota warnings with upgrade prompts linking to web
+     ☐ 🔄 Connect CLI router to main backend for shared API key pools
+     ☐ 🔄 Implement router cost optimization data sharing with main platform
+     ☐ 🔄 Add router analytics integration with main web dashboard
+     ☐ 🔄 Create router subscription management through web interface
+     ☐ 🚀 Deploy main recoder.xyz backend API with CLI endpoints
+     ☐ 🚀 Deploy production engine with billing and auth integration
+     ☐ 🚀 Set up database for user management, billing, and CLI sessions
+     ☐ 🚀 Configure Redis for session management and API key caching
+     ☐ 🌍 Deploy recoder.xyz main website with CLI integration pages
+     ☐ 🌍 Build and deploy authentication flow pages for CLI users
+     ☐ 🌍 Deploy billing and subscription management pages
+     ☐ 🌍 Create CLI onboarding and download pages
+     ☐ 📦 Publish @recoder/cli to npm with proper installation flow
+     ☐ 📦 Create CLI auto-update mechanism connected to main backend
+     ☐ 📦 Add CLI telemetry and error reporting to main platform
+     ☐ 📦 Build CLI installation verification and health checks
+     ☐ ⚙️ Publish recoder-cli-router to npm with enterprise features
+     ☐ ⚙️ Create router enterprise licensing and billing integration
+     ☐ ⚙️ Add router team management through web dashboard
+     ☐ ⚙️ Implement router usage analytics and optimization reporting
+     ☐ 👤 Create seamless CLI onboarding: download -> install -> auth -> first request
+     ☐ 👤 Build upgrade flow: CLI quota exceeded -> web upgrade -> seamless CLI resume
+     ☐ 👤 Implement account management: web dashboard managing CLI/router settings
+     ☐ 👤 Create support flow: CLI issues -> web support portal with context
+     ☐ 🧪 End-to-end test: user registers on web -> downloads CLI -> makes requests
+     ☐ 🧪 Test billing flow: CLI hits quota -> redirects to web -> upgrades -> CLI resumes
+     ☐ 🧪 Test router integration: download router -> connect to web account -> optimize costs
+     ☐ 🧪 Load test complete system: web + CLI + router + production engine
+     ☐ 📊 Deploy monitoring for CLI usage, errors, and performance
+     ☐ 📊 Set up billing and revenue tracking across all platforms
+     ☐ 📊 Create admin dashboard for managing CLI users and subscriptions
+     ☐ 📊 Implement alerting for CLI issues, quota limits, and payment failures
 ---
 
 ## 🔥 EXECUTION STRATEGY

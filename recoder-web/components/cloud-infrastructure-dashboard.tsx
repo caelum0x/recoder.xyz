@@ -312,7 +312,7 @@ export default function CloudInfrastructureDashboard() {
       resources: template.resources.map(type => ({
         type: type as any,
         config: getDefaultConfig(type)
-      }))
+      })) as any
     }));
   };
 

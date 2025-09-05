@@ -358,19 +358,19 @@ export function IntegrationHub() {
 
             <div className="flex-1 overflow-hidden">
               <TabsContent value="palette" className="h-full p-0 m-0">
-                <NodePalette integrations={integrations} />
+                <NodePalette integrations={integrations as any} />
               </TabsContent>
 
               <TabsContent value="integrations" className="h-full p-0 m-0">
                 <IntegrationManager 
-                  integrations={integrations}
+                  integrations={integrations as any}
                   onIntegrationUpdate={setIntegrations}
                 />
               </TabsContent>
 
               <TabsContent value="monitor" className="h-full p-0 m-0">
                 <ExecutionMonitor 
-                  executions={executionLogs}
+                  executions={executionLogs as any}
                   selectedWorkflow={selectedWorkflow}
                 />
               </TabsContent>

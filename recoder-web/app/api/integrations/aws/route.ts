@@ -134,8 +134,8 @@ async function uploadToS3(data: any) {
     bucket: result.Bucket,
     key: result.Key,
     etag: result.ETag,
-    version_id: result.VersionId,
-    server_side_encryption: result.ServerSideEncryption
+    version_id: (result as any).VersionId,
+    server_side_encryption: (result as any).ServerSideEncryption
   };
 }
 
@@ -394,7 +394,7 @@ async function sendSQSMessage(data: any) {
 
   return {
     message_id: result.MessageId,
-    md5_of_body: result.MD5OfBody,
+    md5_of_body: (result as any).MD5OfBody,
     md5_of_message_attributes: result.MD5OfMessageAttributes,
     sequence_number: result.SequenceNumber
   };

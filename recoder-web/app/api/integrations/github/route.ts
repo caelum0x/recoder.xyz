@@ -489,8 +489,8 @@ async function getPullRequests(octokit: Octokit, owner: string, repo: string, pa
         sha: pr.base.sha,
         repo: pr.base.repo?.name
       },
-      mergeable: pr.mergeable,
-      merged: pr.merged,
+      mergeable: (pr as any).mergeable,
+      merged: (pr as any).merged,
       merged_at: pr.merged_at,
       created_at: pr.created_at,
       updated_at: pr.updated_at,

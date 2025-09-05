@@ -1,26 +1,27 @@
-// next.config.js
-module.exports = {
-  reactStrictMode: true,
-  output: 'standalone',
-  images: {
-    unoptimized: true,
-  },
-  // Disable ESLint during builds for production deployment
-  eslint: {
-    ignoreDuringBuilds: true,
+
+// Build performance optimizations added by build-fix.js
+const nextConfig = {
+  experimental: {
+    turbo: {
+      rules: {
+        '*.svg': ['@svgr/webpack'],
+      },
+    },
+    typedRoutes: false, // Disable to reduce type checking overhead
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
+    tsconfigPath: './tsconfig.build.json',
   },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      };
-    }
-    return config;
+  eslint: {
+    ignoreDuringBuilds: true, // Focus on TS errors first
   },
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  // swcMinify is now default in Next.js 15, remove this line
+  poweredByHeader: false,
+  compress: true,
 };
+
+module.exports = nextConfig;

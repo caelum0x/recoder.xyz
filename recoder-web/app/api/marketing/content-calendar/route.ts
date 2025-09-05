@@ -299,7 +299,7 @@ async function bulkCreateEntries(bulkData: any[]) {
         const createdEntry = await createCalendarEntry(entry);
         return { success: true, entry: createdEntry, index };
       } catch (error) {
-        return { success: false, error: error.message, index };
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', index };
       }
     })
   );
@@ -325,7 +325,7 @@ async function autoScheduleContent(params: any) {
     avoid_conflicts
   } = params;
 
-  const scheduledContent = [];
+  const scheduledContent: any[] = [];
   const startDate = new Date(date_range.start);
   const endDate = new Date(date_range.end);
   
@@ -535,7 +535,7 @@ async function generateSEOSuggestions(content: string, keywords: string[]) {
 
 function generateSocialPromotionSchedule(publishDate: string, contentType: string) {
   const publishTime = new Date(publishDate);
-  const promotions = {};
+  const promotions: any = {};
 
   if (contentType === 'blog_post' || contentType === 'case_study') {
     // Schedule Twitter post 1 hour after publish

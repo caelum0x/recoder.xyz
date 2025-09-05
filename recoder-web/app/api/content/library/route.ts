@@ -196,9 +196,9 @@ async function handleFileUpload(request: NextRequest, user: any, body: any) {
       };
 
       // Optimize image
-      processedBuffer = await image
+      processedBuffer = Buffer.from(await image
         .jpeg({ quality: 85, progressive: true })
-        .toBuffer();
+        .toBuffer());
 
       // Generate thumbnails
       const thumbnailBuffer = await image
@@ -369,7 +369,7 @@ async function generateContentVariants(user: any, body: any) {
     }
 
     const originalContent = contentResult.rows[0];
-    const variants = [];
+    const variants: any[] = [];
 
     // Generate platform-specific variants
     for (const platform of platforms) {
@@ -678,14 +678,14 @@ async function bulkImportContent(user: any, body: any) {
     return NextResponse.json({ error: 'Content items array required' }, { status: 400 });
   }
 
-  const results = [];
+  const results: Array<{success: boolean; item?: any; error?: string}> = [];
   
   for (const item of content_items) {
     try {
       const result = await createContentItem(user, { ...item, team_id });
       results.push({ success: true, item: result });
     } catch (error) {
-      results.push({ success: false, error: error.message, item });
+      results.push({ success: false, error: error instanceof Error ? error.message : 'Unknown error', item });
     }
   }
 
