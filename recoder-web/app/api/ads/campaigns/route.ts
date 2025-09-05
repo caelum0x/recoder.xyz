@@ -93,7 +93,7 @@ export const POST = requireSubscription(['pro', 'agency', 'enterprise'], async (
     } catch (platformError) {
       console.error('Platform campaign creation failed:', platformError);
       // Campaign exists in our DB but failed on platform
-      adCampaign.platform_error = platformError.message;
+      adCampaign.platform_error = platformError instanceof Error ? platformError.message : 'Platform error occurred';
     }
 
     return NextResponse.json({
@@ -166,7 +166,7 @@ export const GET = requireAuth(async (request: NextRequest, user: any) => {
           return {
             ...campaign,
             metrics: null,
-            sync_error: error.message
+            sync_error: error instanceof Error ? error.message : 'Sync error occurred'
           };
         }
       })

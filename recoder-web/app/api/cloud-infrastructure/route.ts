@@ -123,10 +123,10 @@ interface InfrastructureStack {
 }
 
 class CloudInfrastructureManager {
-  private awsEc2Client: EC2Client;
-  private awsRdsClient: RDSClient;
-  private awsS3Client: S3Client;
-  private awsCfClient: CloudFormationClient;
+  private awsEc2Client!: EC2Client;
+  private awsRdsClient!: RDSClient;
+  private awsS3Client!: S3Client;
+  private awsCfClient!: CloudFormationClient;
   private gcpCompute: any;
   private gcpStorage: any;
   private gcpSql: any;

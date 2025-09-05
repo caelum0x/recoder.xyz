@@ -120,37 +120,37 @@ export class FFmpegProcessor {
     try {
       await execAsync(`${this.ffmpegPath} -version`);
     } catch (error) {
-      throw new Error('FFmpeg is not installed or not found in PATH');
+      console.warn('FFmpeg not available:', error);
+      throw new Error('FFmpeg is required but not installed. Please install FFmpeg: https://ffmpeg.org/download.html');
     }
   }
 
   async getMediaInfo(filePath: string): Promise<MediaInfo> {
     try {
-      const { stdout } = await execAsync(
-        `${this.ffmpegPath} -i "${filePath}" -f null - 2>&1`
+      const { stdout, stderr } = await execAsync(
+        `${this.ffprobePath} -v quiet -print_format json -show_format -show_streams "${filePath}"`
       );
-
-      const durationMatch = stdout.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
-      const videoMatch = stdout.match(/Video: (.+?),.*?(\d+)x(\d+).*?(\d+(?:\.\d+)?) fps/);
-      const audioMatch = stdout.match(/Audio: (.+?),.*?(\d+) Hz/);
-      const bitrateMatch = stdout.match(/bitrate: (\d+) kb\/s/);
-
-      const duration = durationMatch 
-        ? parseInt(durationMatch[1]) * 3600 + parseInt(durationMatch[2]) * 60 + parseFloat(durationMatch[3])
-        : 0;
-
-      const width = videoMatch ? parseInt(videoMatch[2]) : 0;
-      const height = videoMatch ? parseInt(videoMatch[3]) : 0;
-      const fps = videoMatch ? parseFloat(videoMatch[4]) : 0;
-      const videoCodec = videoMatch ? videoMatch[1].split(' ')[0] : undefined;
-      const audioCodec = audioMatch ? audioMatch[1].split(' ')[0] : undefined;
-      const bitrate = bitrateMatch ? parseInt(bitrateMatch[1]) : 0;
-
+      
+      if (stderr) {
+        throw new Error(`FFprobe error: ${stderr}`);
+      }
+      
+      const data = JSON.parse(stdout);
+      const videoStream = data.streams?.find((s: any) => s.codec_type === 'video');
+      const audioStream = data.streams?.find((s: any) => s.codec_type === 'audio');
+      
+      const duration = parseFloat(data.format?.duration) || 0;
+      const width = videoStream?.width || 0;
+      const height = videoStream?.height || 0;
+      const fps = videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : 0;
+      const videoCodec = videoStream?.codec_name;
+      const audioCodec = audioStream?.codec_name;
+      const bitrate = parseInt(data.format?.bit_rate) || 0;
+      
       const stats = await fs.stat(filePath);
       const fileSize = stats.size;
-
       const aspectRatio = width && height ? `${width}:${height}` : '16:9';
-
+      
       return {
         duration,
         width,
@@ -161,12 +161,26 @@ export class FFmpegProcessor {
         audioCodec,
         bitrate,
         fileSize,
-        hasAudio: !!audioMatch,
-        hasVideo: !!videoMatch,
+        hasAudio: !!audioStream,
+        hasVideo: !!videoStream,
         aspectRatio
       };
+
     } catch (error) {
+      if (!this.isFFmpegAvailable()) {
+        throw new Error('FFmpeg/FFprobe is required for media processing. Please install FFmpeg.');
+      }
       throw new Error(`Failed to get media info: ${error}`);
+    }
+  }
+  
+  private async isFFmpegAvailable(): Promise<boolean> {
+    try {
+      await execAsync(`${this.ffmpegPath} -version`);
+      await execAsync(`${this.ffprobePath} -version`);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -814,6 +828,106 @@ export class FFmpegProcessor {
       'center': { x: '(W-w)/2', y: '(H-h)/2' }
     };
     return positions[position as keyof typeof positions] || positions['bottom-right'];
+  }
+
+  /**
+   * Get FFmpeg capabilities and supported formats
+   */
+  async getCapabilities(): Promise<{ supportsMultiFormat: boolean; supportedFormats: string[] }> {
+    try {
+      const { stdout } = await execAsync(`${this.ffmpegPath} -formats`);
+      const supportedFormats = stdout.split('\n')
+        .filter(line => line.includes('E')) // Encoding supported
+        .map(line => line.split(' ').pop()?.trim())
+        .filter(Boolean);
+
+      return {
+        supportsMultiFormat: supportedFormats.length > 10,
+        supportedFormats: supportedFormats as string[]
+      };
+    } catch (error) {
+      console.error('Failed to get FFmpeg capabilities:', error);
+      return {
+        supportsMultiFormat: false,
+        supportedFormats: ['mp4', 'webm', 'mov'] // Basic fallback
+      };
+    }
+  }
+
+  /**
+   * Analyze file with detailed metadata
+   */
+  async analyzeFile(filePath: string): Promise<MediaInfo & { 
+    quality: { score: number; issues: string[] }; 
+    optimization: { potential: number; recommendations: string[] };
+  }> {
+    try {
+      const mediaInfo = await this.getMediaInfo(filePath);
+      const stats = await fs.stat(filePath);
+      
+      // Calculate quality score
+      const qualityScore = this.calculateQualityScore(mediaInfo);
+      const qualityIssues = this.identifyQualityIssues(mediaInfo);
+      
+      // Calculate optimization potential
+      const optimizationPotential = this.calculateOptimizationPotential(mediaInfo, stats.size);
+      const recommendations = this.generateOptimizationRecommendations(mediaInfo);
+
+      return {
+        ...mediaInfo,
+        quality: {
+          score: qualityScore,
+          issues: qualityIssues
+        },
+        optimization: {
+          potential: optimizationPotential,
+          recommendations
+        }
+      };
+    } catch (error) {
+      console.error('File analysis failed:', error);
+      throw new Error(`Failed to analyze file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private calculateQualityScore(info: MediaInfo): number {
+    let score = 100;
+    
+    if (info.bitrate < 500000) score -= 20; // Low bitrate
+    if (info.fps < 24) score -= 15; // Low frame rate
+    if (info.width < 720) score -= 10; // Low resolution
+    if (!info.hasAudio && info.hasVideo) score -= 5; // Missing audio
+    
+    return Math.max(0, score);
+  }
+
+  private identifyQualityIssues(info: MediaInfo): string[] {
+    const issues: string[] = [];
+    
+    if (info.bitrate < 500000) issues.push('Low bitrate detected');
+    if (info.fps < 24) issues.push('Low frame rate');
+    if (info.width < 720) issues.push('Low resolution');
+    if (!info.hasAudio && info.hasVideo) issues.push('Video has no audio track');
+    
+    return issues;
+  }
+
+  private calculateOptimizationPotential(info: MediaInfo, fileSize: number): number {
+    const avgBitrate = (fileSize * 8) / info.duration;
+    const theoreticalOptimal = info.width * info.height * info.fps * 0.1; // Rough estimate
+    
+    return Math.min(80, Math.max(0, ((avgBitrate - theoreticalOptimal) / avgBitrate) * 100));
+  }
+
+  private generateOptimizationRecommendations(info: MediaInfo): string[] {
+    const recommendations: string[] = [];
+    
+    if (info.bitrate > 5000000) recommendations.push('Reduce bitrate for web delivery');
+    if (info.fps > 30) recommendations.push('Consider reducing frame rate to 30fps');
+    if (info.width > 1920) recommendations.push('Resize to 1080p for most platforms');
+    if (info.audioCodec !== 'aac') recommendations.push('Convert audio to AAC format');
+    
+    return recommendations;
   }
 
   // Existing methods from original file follow...

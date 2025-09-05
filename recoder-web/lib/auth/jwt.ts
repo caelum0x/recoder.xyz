@@ -1,8 +1,12 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 
 export interface JWTPayload {
   userId: string;
@@ -14,10 +18,13 @@ export interface JWTPayload {
 
 export class JWTService {
   static generateToken(payload: JWTPayload): string {
-    return jwt.sign(payload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-      issuer: 'social-media-platform'
-    });
+    if (!JWT_SECRET) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+    const options = {
+      expiresIn: JWT_EXPIRES_IN
+    } as SignOptions;
+    return jwt.sign(payload, JWT_SECRET, options);
   }
 
   static verifyToken(token: string): JWTPayload {

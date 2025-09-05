@@ -81,6 +81,7 @@ model User {
   templateUsages TemplateUsage[]
   analyticsEvents AnalyticsEvent[]
   subscription   Subscription?
+  workflowExecutions WorkflowExecution[]
 }
 
 model VerificationToken {
@@ -606,4 +607,26 @@ model Subscription {
 
   @@index([userId])
   @@index([status])
+}
+
+model WorkflowExecution {
+  id          String   @id @default(cuid())
+  workflowId  String
+  userId      String
+  status      String   // pending, running, completed, failed, cancelled
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  progress    Int      @default(0)
+  results     Json?
+  logs        Json?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workflowId])
+  @@index([status])
+  @@index([startedAt])
 }

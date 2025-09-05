@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -28,36 +28,8 @@ import {
   Activity,
   TrendingUp
 } from 'lucide-react'
-// import { useMediaProcessingSocket, JobProgress } from '@/hooks/useMediaProcessingSocket'
-
-// Mock socket hook for now
-const useMediaProcessingSocket = () => ({
-  jobProgress: {} as any,
-  isConnected: false,
-  activeJobs: [] as JobProgress[],
-  jobStatuses: new Map(),
-  refreshActiveJobs: () => {},
-  subscribeToJob: () => {},
-  unsubscribeFromJob: () => {},
-  hasActiveJobs: false
-})
-
-type JobProgress = {
-  jobId: string
-  status: string
-  progress: number
-  error?: string
-  metadata?: {
-    type?: string
-    fileName?: string
-    operation?: string
-    fileSize?: number
-    createdAt?: string
-  }
-  estimatedTimeRemaining?: number
-  currentStep?: string
-  outputUrl?: string
-}
+import { useMediaProcessingSocket } from '@/hooks/useMediaProcessingSocket'
+// import { JobProgress } from '@/types/media-processing'
 import { toast } from 'sonner'
 
 interface JobProgressTrackerProps {
@@ -66,7 +38,7 @@ interface JobProgressTrackerProps {
 
 export function JobProgressTracker({ className }: JobProgressTrackerProps) {
   const [selectedTab, setSelectedTab] = useState('active')
-  const [completedJobs, setCompletedJobs] = useState<JobProgress[]>([])
+  const [completedJobs, setCompletedJobs] = useState<any[]>([])
 
   const {
     isConnected,
@@ -77,38 +49,25 @@ export function JobProgressTracker({ className }: JobProgressTrackerProps) {
     unsubscribeFromJob,
     hasActiveJobs
   } = useMediaProcessingSocket({
-    onJobProgress: (progress) => {
+    onJobProgress: () => {
       // Optional: Add custom handling for progress updates
-      console.log(`Job ${progress.jobId} progress: ${progress.progress}%`)
     },
-    onJobComplete: (jobId, outputUrl) => {
-      const job = jobStatuses[jobId]
+    onJobComplete: (result: any) => {
+      const job = jobStatuses[result.jobId || result]
       if (job) {
         setCompletedJobs(prev => [job, ...prev.slice(0, 19)]) // Keep last 20
         toast.success(`Processing completed: ${job.metadata?.fileName || 'File'}`, {
-          action: outputUrl ? {
+          action: result.outputUrl ? {
             label: 'Download',
-            onClick: () => window.open(outputUrl, '_blank')
+            onClick: () => window.open(result.outputUrl, '_blank')
           } : undefined
         })
       }
     },
-    onJobError: (jobId, error) => {
+    onJobError: (jobId: string, error: string) => {
       const job = jobStatuses[jobId]
       toast.error(`Processing failed: ${job?.metadata?.fileName || jobId}`, {
         description: error
-      })
-    },
-    onNotification: (notification) => {
-      const toastFn = {
-        success: toast.success,
-        error: toast.error,
-        info: toast.info,
-        warning: toast.warning
-      }[notification.type]
-
-      toastFn(notification.title, {
-        description: notification.message
       })
     }
   })
@@ -157,7 +116,7 @@ export function JobProgressTracker({ className }: JobProgressTrackerProps) {
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`
   }
 
-  const JobCard = ({ job }: { job: JobProgress }) => (
+  const JobCard = ({ job }: { job: any }) => (
     <Card className="mb-4">
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
@@ -243,7 +202,7 @@ export function JobProgressTracker({ className }: JobProgressTrackerProps) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => unsubscribeFromJob(job.jobId)}
+              onClick={() => unsubscribeFromJob('')}
             >
               <Square className="w-4 h-4 mr-1" />
               Stop Tracking

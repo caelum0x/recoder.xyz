@@ -97,9 +97,9 @@ async function sendSMS(data: any) {
     statusCallback: data.status_callback,
     maxPrice: data.max_price,
     validityPeriod: data.validity_period,
-    forceDelivery: data.force_delivery,
-    provideFeedback: data.provide_feedback,
-    attemptLimit: data.attempt_limit,
+    // forceDelivery: data.force_delivery,  // Deprecated
+    // provideFeedback: data.provide_feedback,  // Deprecated
+    // attemptLimit: data.attempt_limit,  // Not supported in current API
     shortenUrls: data.shorten_urls
   });
 
@@ -296,8 +296,8 @@ async function lookupPhone(data: any) {
     phone_number: phoneNumber.phoneNumber,
     national_format: phoneNumber.nationalFormat,
     country_code: phoneNumber.countryCode,
-    valid: phoneNumber.valid,
-    validation_errors: phoneNumber.validationErrors,
+    valid: (phoneNumber as any).valid,
+    validation_errors: (phoneNumber as any).validationErrors,
     caller_name: phoneNumber.callerName,
     carrier: phoneNumber.carrier,
     add_ons: phoneNumber.addOns
@@ -306,7 +306,7 @@ async function lookupPhone(data: any) {
 
 // Create conference call
 async function createConference(data: any) {
-  const conference = await client.conferences.create({
+  const conference = await (client.conferences as any).create({
     friendlyName: data.friendly_name || `Conference-${Date.now()}`,
     statusCallback: data.status_callback,
     statusCallbackMethod: data.status_callback_method,
@@ -345,7 +345,7 @@ async function listMessages(data: any = {}) {
     messages: messages.map(message => ({
       sid: message.sid,
       account_sid: message.accountSid,
-      service_sid: message.serviceSid,
+      service_sid: (message as any).serviceSid,
       from: message.from,
       to: message.to,
       body: message.body,

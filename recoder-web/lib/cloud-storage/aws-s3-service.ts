@@ -119,6 +119,25 @@ export class AWSS3Service {
   }
 
   /**
+   * Check if file exists in S3
+   */
+  async fileExists(key: string, bucket?: string): Promise<boolean> {
+    try {
+      const headCommand = new HeadObjectCommand({
+        Bucket: bucket || this.bucketName,
+        Key: key
+      })
+      await this.s3Client.send(headCommand)
+      return true
+    } catch (error: any) {
+      if (error.name === 'NoSuchKey' || error.name === 'NotFound') {
+        return false
+      }
+      throw error
+    }
+  }
+
+  /**
    * Upload media file with optimized settings
    */
   async uploadMediaFile(

@@ -186,12 +186,12 @@ export function WorkflowCanvas({
 
   const onConnect: OnConnect = useCallback(
     (params: Connection) => {
-      const edge: Edge = {
+      const edge = {
         ...params,
         id: `edge-${params.source}-${params.target}`,
         type: 'custom',
         animated: true,
-      };
+      } as Edge;
       setEdges(eds => addEdge(edge, eds));
     },
     [setEdges]
@@ -287,7 +287,7 @@ export function WorkflowCanvas({
   return (
     <div className="h-full w-full relative" ref={reactFlowWrapper}>
       <div 
-        ref={drop} 
+        ref={drop as any} 
         className={`h-full ${isOver ? 'bg-blue-50' : ''}`}
       >
         <ReactFlowProvider>
@@ -341,7 +341,7 @@ export function WorkflowCanvas({
 
             {/* Instructions Panel */}
             {nodes.length === 0 && (
-              <Panel position="center">
+              <Panel position="top-center">
                 <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-lg max-w-md">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     Start Building Your Workflow

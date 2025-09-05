@@ -134,7 +134,7 @@ class RealPerformanceMonitor {
       this.databaseAvailable = true;
       console.log('✅ Database connection established');
     } catch (error) {
-      console.warn('⚠️ Database not available, using in-memory fallbacks:', error.message);
+      console.warn('⚠️ Database not available, using in-memory fallbacks:', error instanceof Error ? error.message : 'Unknown error');
       this.databaseAvailable = false;
       this.prisma = null;
     }

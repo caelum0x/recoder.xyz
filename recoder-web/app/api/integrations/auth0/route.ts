@@ -7,9 +7,8 @@ import { ManagementClient, AuthenticationClient } from 'auth0';
 const management = new ManagementClient({
   domain: process.env.AUTH0_DOMAIN || '',
   clientId: process.env.AUTH0_M2M_CLIENT_ID || '',
-  clientSecret: process.env.AUTH0_M2M_CLIENT_SECRET || '',
-  scope: 'read:users write:users create:users update:users delete:users read:user_metadata update:user_metadata read:roles write:roles create:roles update:roles delete:roles read:organizations write:organizations create:organizations update:organizations delete:organizations'
-});
+  clientSecret: process.env.AUTH0_M2M_CLIENT_SECRET || ''
+}) as any; // Type assertion for Auth0 API compatibility
 
 const auth = new AuthenticationClient({
   domain: process.env.AUTH0_DOMAIN || '',
@@ -582,7 +581,7 @@ async function sendVerificationEmail(userId: string) {
 
 // Change password
 async function changePassword(data: any) {
-  const ticket = await auth.requestChangePasswordEmail({
+  const ticket = await (auth as any).requestChangePasswordEmail({
     email: data.email,
     connection: data.connection || 'Username-Password-Authentication'
   });

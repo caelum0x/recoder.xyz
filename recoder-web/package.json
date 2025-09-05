@@ -29,6 +29,8 @@
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
     "build": "next build",
+    "build:optimized": "tsc --noEmit --project tsconfig.build.json && next build",
+    "build:fast": "SKIP_TYPE_CHECK=true next build",
     "build:analyze": "ANALYZE=true next build",
     "build:production": "NODE_ENV=production prisma generate && prisma migrate deploy && next build",
     "start": "next start",

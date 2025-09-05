@@ -303,7 +303,7 @@ async function getChannels(slack: WebClient, params: any = {}) {
       pending_connected_team_ids: channel.pending_connected_team_ids,
       is_pending_ext_shared: channel.is_pending_ext_shared,
       is_member: channel.is_member,
-      is_open: channel.is_open,
+      is_open: (channel as any).is_open,
       topic: channel.topic,
       purpose: channel.purpose,
       num_members: channel.num_members
@@ -317,7 +317,7 @@ async function createChannel(slack: WebClient, data: any) {
     name: data.name,
     is_private: data.is_private || false,
     user_ids: data.user_ids
-  });
+  } as any);
 
   return {
     channel: {
@@ -450,11 +450,11 @@ async function getUserInfo(slack: WebClient, user: string) {
 
 async function setUserStatus(slack: WebClient, data: any) {
   const result = await slack.users.profile.set({
-    profile: JSON.stringify({
+    profile: {
       status_text: data.status_text,
       status_emoji: data.status_emoji,
       status_expiration: data.status_expiration
-    })
+    } as any
   });
 
   return {
@@ -528,7 +528,7 @@ async function getConversationHistory(slack: WebClient, channel: string, params:
       latest_reply: message.latest_reply,
       reply_users: message.reply_users,
       reactions: message.reactions,
-      permalink: message.permalink
+      permalink: (message as any).permalink
     })) || [],
     has_more: result.has_more,
     pin_count: result.pin_count,
@@ -961,7 +961,7 @@ async function getWorkspaceInfo(slack: WebClient) {
       icon: result.team?.icon,
       avatar_base_url: result.team?.avatar_base_url,
       is_verified: result.team?.is_verified,
-      plan: result.team?.plan
+      plan: (result.team as any)?.plan
     }
   };
 }

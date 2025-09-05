@@ -60,10 +60,10 @@ export default function CodeViewer({
   );
 
   const code = streamApp ? streamApp.content : app?.code || "";
-  const language = streamApp ? streamApp.language : app?.language || "";
-  const title = streamApp ? streamApp.filename.name : app?.filename?.name || "";
+  const language = streamApp ? streamApp.language : app?.language || "text";
+  const title = streamApp ? (streamApp.filename?.name || 'Unnamed') : (app?.filename?.name || 'Unnamed');
   const layout = ["python", "ts", "js", "javascript", "typescript"].includes(
-    language,
+    language || '',
   )
     ? "two-up"
     : "tabbed";
@@ -91,7 +91,7 @@ export default function CodeViewer({
     const hasDatabase = /database|prisma|mongoose|sequelize|db\./i.test(codeContent);
     const hasAPI = /fetch|axios|api|endpoint|\/api/i.test(codeContent);
     const hasAuth = /auth|login|session|jwt|token/i.test(codeContent);
-    const isReactApp = /react|jsx|tsx|component/i.test(codeContent) || language.includes('react');
+    const isReactApp = /react|jsx|tsx|component/i.test(codeContent) || (language && language.includes('react'));
     
     return {
       hasDatabase,
@@ -183,7 +183,7 @@ model User {
     return files;
   };
 
-  const editorFiles = createFileStructure(code, title, language);
+  const editorFiles = createFileStructure(code, title, language || 'text');
 
   return (
     <>
@@ -325,7 +325,7 @@ model User {
                 initial={streamAppIsGenerating ? "smooth" : false}
               >
                 <StickToBottom.Content>
-                  <SyntaxHighlighter code={code} language={language} />
+                  <SyntaxHighlighter code={code} language={language || 'text'} />
                 </StickToBottom.Content>
               </StickToBottom>
             )
@@ -386,7 +386,7 @@ model User {
                 height="100%"
               />
             ) : (
-              <SyntaxHighlighter code={code} language={language} />
+              <SyntaxHighlighter code={code} language={language || 'text'} />
             )}
           </div>
           <div className="flex h-1/2 flex-col">
@@ -429,7 +429,7 @@ model User {
                 ) : (
                   <CodeRunner
                     onRequestFix={onRequestFix}
-                    language={language}
+                    language={language || 'text'}
                     code={code}
                     key={refresh}
                   />

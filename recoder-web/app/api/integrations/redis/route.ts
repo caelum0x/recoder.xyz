@@ -145,13 +145,13 @@ async function setKey(config: any, data: any) {
     if (data.options) {
       const args: any[] = [data.key, data.value];
       
-      if (data.options.ex) args.push('EX', data.options.ex);
-      if (data.options.px) args.push('PX', data.options.px);
+      if (data.options.ex) args.push('EX', data.options.ex.toString());
+      if (data.options.px) args.push('PX', data.options.px.toString());
       if (data.options.nx) args.push('NX');
       if (data.options.xx) args.push('XX');
       if (data.options.keepttl) args.push('KEEPTTL');
       
-      result = await redis.set(...args);
+      result = await redis.set(data.key, data.value, ...args.slice(2));
     } else {
       result = await redis.set(data.key, data.value);
       
@@ -301,7 +301,7 @@ async function hashSet(config: any, data: any) {
       for (const [field, value] of Object.entries(data.fields)) {
         args.push(field, value as string);
       }
-      result = await redis.hmset(...args);
+      result = await redis.hmset(...(args as [string, ...string[]]));
     } else {
       // HSET for single field
       result = await redis.hset(data.key, data.field, data.value);
@@ -420,7 +420,7 @@ async function sortedSetAdd(config: any, data: any) {
       args.push(data.score, data.member);
     }
     
-    const addedCount = await redis.zadd(...args);
+    const addedCount = await redis.zadd(...(args as [string, ...Array<string | number>]));
     const totalMembers = await redis.zcard(data.key);
     
     return {
@@ -453,7 +453,7 @@ async function streamAdd(config: any, data: any) {
       args.push(field, value as string);
     }
     
-    const id = await redis.xadd(...args);
+    const id = await redis.xadd(...(args as [string, string, ...string[]]));
     
     return {
       stream: data.stream,
@@ -555,14 +555,15 @@ async function getClusterInfo(config: any, data: any) {
   try {
     const info = await redis.info();
     const dbsize = await redis.dbsize();
-    const memory = await redis.memory('usage');
+    const memory = await redis.memory('STATS');
     
     // Try to get cluster info if available
-    let clusterInfo = null;
+    let clusterInfo: string | null = null;
     try {
-      clusterInfo = await redis.cluster('info');
+      clusterInfo = await redis.cluster('INFO');
     } catch (e) {
       // Not a cluster setup
+      clusterInfo = null;
     }
     
     return {

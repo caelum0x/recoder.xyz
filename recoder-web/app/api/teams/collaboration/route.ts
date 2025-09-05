@@ -46,17 +46,17 @@ export const GET = requireAuth(async (request: NextRequest, user: any) => {
 
     switch (type) {
       case 'members':
-        return await getTeamMembers(user, teamId);
+        return await getTeamMembers(user, teamId || '');
       case 'tasks':
-        return await getTeamTasks(user, teamId);
+        return await getTeamTasks(user, teamId || '');
       case 'approvals':
-        return await getPendingApprovals(user, teamId);
+        return await getPendingApprovals(user, teamId || '');
       case 'activity':
-        return await getTeamActivity(user, teamId);
+        return await getTeamActivity(user, teamId || '');
       case 'workspace':
-        return await getWorkspaceData(user, teamId);
+        return await getWorkspaceData(user, teamId || '');
       default:
-        return await getCollaborationOverview(user, teamId);
+        return await getCollaborationOverview(user, teamId || '');
     }
   } catch (error) {
     console.error('Collaboration fetch error:', error);
