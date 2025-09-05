@@ -335,7 +335,8 @@ export async function POST(request: NextRequest) {
 }
 
 // WebSocket endpoint for real-time performance monitoring
-export async function WEBSOCKET(request: NextRequest) {
+// WebSocket handler for performance monitoring (non-standard HTTP method)
+async function handleWebSocket(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) {

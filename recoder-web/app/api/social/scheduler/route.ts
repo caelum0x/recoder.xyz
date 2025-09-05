@@ -67,13 +67,20 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Social scheduler error:', error);
     return NextResponse.json(
-      { error: error.message || 'Social media operation failed' },
+      { error: error instanceof Error ? error.message : 'Social media operation failed' },
       { status: 500 }
     );
   }
 }
 
-async function schedulePost({ platform, content, scheduled_time, media_urls, hashtags, user_tokens }) {
+async function schedulePost({ platform, content, scheduled_time, media_urls, hashtags, user_tokens }: {
+  platform: string;
+  content: string;
+  scheduled_time: string;
+  media_urls: string[];
+  hashtags: string[];
+  user_tokens: any;
+}) {
   // Store in database with actual scheduling
   const scheduledPost = {
     id: generatePostId(),
@@ -100,7 +107,13 @@ async function schedulePost({ platform, content, scheduled_time, media_urls, has
   return { post_id: scheduledPost.id };
 }
 
-async function postNow({ platform, content, media_urls, hashtags, user_tokens }) {
+async function postNow({ platform, content, media_urls, hashtags, user_tokens }: {
+  platform: string;
+  content: string;
+  media_urls: string[];
+  hashtags: string[];
+  user_tokens: any;
+}) {
   const fullContent = content + (hashtags.length > 0 ? ' ' + hashtags.map(h => `#${h}`).join(' ') : '');
 
   switch (platform) {
@@ -115,7 +128,7 @@ async function postNow({ platform, content, media_urls, hashtags, user_tokens })
   }
 }
 
-async function postToTwitter(content, media_urls, user_tokens) {
+async function postToTwitter(content: string, media_urls: string[], user_tokens: any) {
   if (!user_tokens.twitter) {
     throw new Error('Twitter OAuth tokens not provided');
   }
@@ -151,10 +164,15 @@ async function postToTwitter(content, media_urls, user_tokens) {
     }
 
     // Post tweet
-    const tweet = await rwClient.v2.tweet({
-      text: content,
-      ...(mediaIds.length > 0 && { media: { media_ids: mediaIds } })
-    });
+    const tweetPayload: any = {
+      text: content
+    };
+    
+    if (mediaIds.length > 0) {
+      tweetPayload.media = { media_ids: mediaIds as [string] | [string, string] | [string, string, string] | [string, string, string, string] };
+    }
+
+    const tweet = await rwClient.v2.tweet(tweetPayload);
 
     return {
       post_id: tweet.data.id,
@@ -164,11 +182,11 @@ async function postToTwitter(content, media_urls, user_tokens) {
 
   } catch (error) {
     console.error('Twitter posting failed:', error);
-    throw new Error(`Twitter posting failed: ${error.message}`);
+    throw new Error(`Twitter posting failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-async function postToLinkedIn(content, media_urls, user_tokens) {
+async function postToLinkedIn(content: string, media_urls: string[], user_tokens: any) {
   if (!user_tokens.linkedin) {
     throw new Error('LinkedIn OAuth tokens not provided');
   }
@@ -206,7 +224,7 @@ async function postToLinkedIn(content, media_urls, user_tokens) {
 
     // Upload media if provided
     if (media_urls.length > 0) {
-      const mediaAssets = [];
+      const mediaAssets: any[] = [];
       
       for (const mediaUrl of media_urls) {
         try {
@@ -279,11 +297,11 @@ async function postToLinkedIn(content, media_urls, user_tokens) {
 
   } catch (error) {
     console.error('LinkedIn posting failed:', error);
-    throw new Error(`LinkedIn posting failed: ${error.message}`);
+    throw new Error(`LinkedIn posting failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-async function postToFacebook(content, media_urls, user_tokens) {
+async function postToFacebook(content: string, media_urls: string[], user_tokens: any) {
   if (!user_tokens.facebook) {
     throw new Error('Facebook OAuth tokens not provided');
   }
@@ -305,7 +323,7 @@ async function postToFacebook(content, media_urls, user_tokens) {
         postData.link = media_urls[0];
       } else {
         // Multiple images - need to upload as media objects first
-        const mediaIds = [];
+        const mediaIds: any[] = [];
         
         for (const mediaUrl of media_urls) {
           try {
@@ -357,11 +375,11 @@ async function postToFacebook(content, media_urls, user_tokens) {
 
   } catch (error) {
     console.error('Facebook posting failed:', error);
-    throw new Error(`Facebook posting failed: ${error.message}`);
+    throw new Error(`Facebook posting failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-async function generateContentWithAI(params) {
+async function generateContentWithAI(params: any) {
   const { topic, platform, tone, target_audience, include_hashtags, max_length } = params;
 
   // Use actual Together AI API for content generation
@@ -418,11 +436,11 @@ Make it engaging, authentic, and platform-appropriate. Focus on driving real eng
 
   } catch (error) {
     console.error('AI content generation failed:', error);
-    throw new Error(`Content generation failed: ${error.message}`);
+    throw new Error(`Content generation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-async function executeScheduledPost(scheduledPost) {
+async function executeScheduledPost(scheduledPost: any) {
   try {
     const result = await postNow({
       platform: scheduledPost.platform,
@@ -461,6 +479,12 @@ export async function GET(request: NextRequest) {
 
     if (action === 'analytics') {
       const platform = searchParams.get('platform');
+      if (!platform) {
+        return NextResponse.json(
+          { error: 'Platform parameter required' },
+          { status: 400 }
+        );
+      }
       const analytics = await getRealAnalytics(platform);
       return NextResponse.json({ analytics });
     }

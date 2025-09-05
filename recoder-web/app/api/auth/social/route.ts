@@ -9,6 +9,13 @@ export async function GET(request: NextRequest) {
     const provider = searchParams.get('provider');
     const action = searchParams.get('action');
 
+    if (!provider) {
+      return NextResponse.json(
+        { error: 'Provider is required' },
+        { status: 400 }
+      );
+    }
+
     if (action === 'initiate') {
       return await initiateOAuth(provider);
     }
@@ -29,7 +36,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Social auth error:', error);
     return NextResponse.json(
-      { error: error.message || 'Authentication failed' },
+      { error: error instanceof Error ? error.message : 'Authentication failed' },
       { status: 500 }
     );
   }
@@ -74,7 +81,7 @@ async function initiateTwitterOAuth() {
 
   } catch (error) {
     console.error('Twitter OAuth initiation failed:', error);
-    throw new Error(`Twitter OAuth failed: ${error.message}`);
+    throw new Error(`Twitter OAuth failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -102,7 +109,7 @@ async function initiateLinkedInOAuth() {
 
   } catch (error) {
     console.error('LinkedIn OAuth initiation failed:', error);
-    throw new Error(`LinkedIn OAuth failed: ${error.message}`);
+    throw new Error(`LinkedIn OAuth failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -128,7 +135,7 @@ async function initiateFacebookOAuth() {
 
   } catch (error) {
     console.error('Facebook OAuth initiation failed:', error);
-    throw new Error(`Facebook OAuth failed: ${error.message}`);
+    throw new Error(`Facebook OAuth failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -201,7 +208,7 @@ async function handleTwitterCallback(searchParams: URLSearchParams) {
 
   } catch (error) {
     console.error('Twitter callback failed:', error);
-    throw new Error(`Twitter authentication failed: ${error.message}`);
+    throw new Error(`Twitter authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -285,7 +292,7 @@ async function handleLinkedInCallback(searchParams: URLSearchParams) {
 
   } catch (error) {
     console.error('LinkedIn callback failed:', error);
-    throw new Error(`LinkedIn authentication failed: ${error.message}`);
+    throw new Error(`LinkedIn authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -357,7 +364,7 @@ async function handleFacebookCallback(searchParams: URLSearchParams) {
 
   } catch (error) {
     console.error('Facebook callback failed:', error);
-    throw new Error(`Facebook authentication failed: ${error.message}`);
+    throw new Error(`Facebook authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -397,7 +404,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Social auth POST error:', error);
     return NextResponse.json(
-      { error: error.message || 'Operation failed' },
+      { error: error instanceof Error ? error.message : 'Operation failed' },
       { status: 500 }
     );
   }

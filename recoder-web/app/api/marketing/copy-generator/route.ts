@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function generateCopyVariations(params: CopyGeneratorRequest) {
-  const variations = [];
+  const variations: any[] = [];
   
   // Generate 3 variations using different approaches
   for (let i = 0; i < 3; i++) {
@@ -331,8 +331,8 @@ function generateFallbackCopy(params: CopyGeneratorRequest, variationIndex: numb
 async function analyzeCopyPerformance(variations: any[]) {
   const analysis = {
     overall_score: 0,
-    strengths: [],
-    improvements: [],
+    strengths: [] as string[],
+    improvements: [] as string[],
     predicted_metrics: {
       click_through_rate: 0,
       conversion_rate: 0,

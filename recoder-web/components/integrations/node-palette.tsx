@@ -70,7 +70,7 @@ function DraggableNode({ node, disabled }: { node: NodeTemplate; disabled?: bool
 
   return (
     <div
-      ref={drag}
+      ref={drag as any}
       className={`
         group relative p-3 rounded-lg border cursor-grab transition-all duration-200
         ${isDragging ? 'opacity-50 rotate-3 scale-105' : ''}

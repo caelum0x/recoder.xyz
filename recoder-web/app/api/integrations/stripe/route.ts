@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 // Complete Stripe API integration with webhooks, subscriptions, and payments
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_', {
-  apiVersion: '2023-10-16',
+  apiVersion: '2025-08-27.basil',
 });
 
 interface StripeAction {
@@ -146,8 +146,7 @@ async function createSubscription(data: any) {
     payment_settings: data.payment_settings,
     expand: ['latest_invoice.payment_intent'],
     trial_period_days: data.trial_period_days,
-    coupon: data.coupon,
-    discount: data.discount,
+    discounts: data.coupon ? [{ coupon: data.coupon }] : undefined,
     metadata: data.metadata || {},
     collection_method: data.collection_method || 'charge_automatically',
     billing_cycle_anchor: data.billing_cycle_anchor,
@@ -157,11 +156,11 @@ async function createSubscription(data: any) {
   return {
     subscription_id: subscription.id,
     status: subscription.status,
-    current_period_start: subscription.current_period_start,
-    current_period_end: subscription.current_period_end,
-    trial_end: subscription.trial_end,
+    current_period_start: (subscription as any).current_period_start,
+    current_period_end: (subscription as any).current_period_end,
+    trial_end: (subscription as any).trial_end,
     latest_invoice: subscription.latest_invoice,
-    items: subscription.items.data
+    items: (subscription as any).items?.data
   };
 }
 
@@ -364,10 +363,12 @@ async function createProduct(data: any) {
     name: data.name,
     description: data.description,
     images: data.images,
-    metadata: data.metadata || {},
+    metadata: {
+      ...data.metadata || {},
+      features: data.features ? JSON.stringify(data.features) : undefined
+    },
     active: data.active !== false,
     default_price_data: data.default_price_data,
-    features: data.features,
     package_dimensions: data.package_dimensions,
     shippable: data.shippable,
     statement_descriptor: data.statement_descriptor,
@@ -426,7 +427,7 @@ async function cancelSubscription(data: any) {
     subscription_id: subscription.id,
     status: subscription.status,
     canceled_at: subscription.canceled_at,
-    current_period_end: subscription.current_period_end
+    current_period_end: (subscription as any).current_period_end
   };
 }
 

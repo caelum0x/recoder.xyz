@@ -40,6 +40,7 @@ interface PerformanceMetrics {
     hitRate: number
     size: number
     maxSize: number
+    evictions: number
   }
 }
 

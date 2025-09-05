@@ -402,7 +402,7 @@ export const projectDb = {
         'DELETE FROM projects WHERE id = $1 AND user_id = $2',
         [id, userId]
       );
-      return result.rowCount > 0;
+      return (result.rowCount ?? 0) > 0;
     });
   }
 };

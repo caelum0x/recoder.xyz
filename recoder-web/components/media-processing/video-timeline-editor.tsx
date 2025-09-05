@@ -386,11 +386,12 @@ export function VideoTimelineEditor({ selectedFiles, files, onProcessingComplete
   }
 
   const addKeyframe = (clipId: string, property: string, value: any) => {
+    const clip = selectedClip as any
     updateClip(clipId, {
       keyframes: {
-        ...selectedClip?.keyframes,
+        ...clip?.keyframes,
         [currentTime]: {
-          ...selectedClip?.keyframes?.[currentTime],
+          ...clip?.keyframes?.[currentTime],
           [property]: value
         }
       }
@@ -760,7 +761,7 @@ export function VideoTimelineEditor({ selectedFiles, files, onProcessingComplete
 
   // Timeline ruler
   const renderTimelineRuler = () => {
-    const rulers = []
+    const rulers: React.ReactElement[] = []
     const step = zoom < 0.5 ? 10 : zoom < 1 ? 5 : 1
     
     for (let i = 0; i <= project.duration; i += step) {

@@ -569,7 +569,7 @@ async function executeTransaction(config: any, data: any) {
     await client.connect();
     await client.query('BEGIN');
     
-    const results = [];
+    const results: Array<{query: any; success: boolean; row_count?: number | null; rows?: any[][]; command?: string; error?: string; code?: any}> = [];
     
     for (const operation of data.operations) {
       try {

@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 export interface PipelineJob {
   id: string
   userId: string
-  type: 'upload' | 'process' | 'export' | 'batch'
+  type: 'upload' | 'process' | 'export' | 'batch' | 'optimize' | 'analyze'
   status: 'queued' | 'processing' | 'completed' | 'failed'
   progress: number
   stage: string
@@ -141,7 +141,7 @@ export class MediaProcessingPipeline {
     return jobId
   }
 
-  private async queueProcessingJob(params: {
+  public async queueProcessingJob(params: {
     type: PipelineJob['type']
     userId: string
     input: any
@@ -268,7 +268,7 @@ export class MediaProcessingPipeline {
         job.progress += Math.floor(50 / formats.length)
       } catch (error) {
         console.error(`Format ${format} processing failed:`, error)
-        outputs.push({ format, error: error.message })
+        outputs.push({ format, error: error instanceof Error ? error.message : 'Unknown error' })
       }
     }
 
@@ -341,7 +341,7 @@ export class MediaProcessingPipeline {
           index: i,
           fileName: file.name,
           success: false,
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }

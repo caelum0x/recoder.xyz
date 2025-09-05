@@ -976,7 +976,7 @@ export function KeywordResearchDashboard() {
                           <div className="grid grid-cols-4 gap-2 text-xs">
                             {Object.entries(cluster.intent_distribution).map(([intent, percentage]) => (
                               <div key={intent} className="text-center">
-                                <div className="font-medium">{percentage}%</div>
+                                <div className="font-medium">{String(percentage)}%</div>
                                 <div className="text-gray-600 capitalize">{intent}</div>
                               </div>
                             ))}
