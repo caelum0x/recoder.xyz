@@ -119,14 +119,14 @@ function AssistantMessage({
                 </div>
                 <div className="flex flex-col gap-0.5 text-left leading-none">
                   <div className="text-sm font-medium leading-none">
-                    {toTitleCase(part.filename.name)}{" "}
+                    {part.filename?.name ? toTitleCase(part.filename.name) : 'Unnamed'}{" "}
                     {version !== 1 && `v${version}`}
                   </div>
                   <div className="text-xs leading-none text-gray-500">
-                    {part.filename.name}
+                    {part.filename?.name || 'unnamed'}
                     {version !== 1 && `-v${version}`}
                     {"."}
-                    {part.filename.extension}
+                    {part.filename?.extension || 'txt'}
                   </div>
                 </div>
                 <div className="ml-auto">
@@ -145,14 +145,14 @@ function AssistantMessage({
                 </div>
                 <div className="flex flex-col gap-0.5 text-left leading-none">
                   <div className="text-sm font-medium leading-none">
-                    {toTitleCase(part.filename.name)}{" "}
+                    {part.filename?.name ? toTitleCase(part.filename.name) : 'Unnamed'}{" "}
                     {version !== 1 && `v${version}`}
                   </div>
                   <div className="text-xs leading-none text-gray-500">
-                    {part.filename.name}
+                    {part.filename?.name || 'unnamed'}
                     {version !== 1 && `-v${version}`}
                     {"."}
-                    {part.filename.extension}
+                    {part.filename?.extension || 'txt'}
                   </div>
                 </div>
                 <div className="ml-auto">

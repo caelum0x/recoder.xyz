@@ -100,7 +100,7 @@ export const POST = requireSubscription(['pro', 'agency', 'enterprise'], async (
         ad.platform_status = 'PAUSED';
       } catch (platformError) {
         console.error('Platform ad creation failed:', platformError);
-        ad.platform_error = platformError.message;
+        ad.platform_error = platformError instanceof Error ? platformError.message : 'Platform error occurred';
       }
 
       return NextResponse.json({
@@ -396,7 +396,7 @@ function generateFallbackCreative(params: any): any {
 }
 
 function generateCreativeVariations(baseCreative: any, adFormat: string): any[] {
-  const variations = [];
+  const variations: any[] = [];
   
   // Headline variations
   const headlineVariations = [

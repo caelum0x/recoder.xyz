@@ -7,7 +7,7 @@
     ],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": false,
+    "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
@@ -27,19 +27,25 @@
       ]
     },
     "target": "ES2017",
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitAny": false
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
     "next-env.d.ts",
-    ".next/types/**/*.ts"
+    "**/*.ts",
+    "**/*.tsx"
   ],
   "exclude": [
     "node_modules",
+    ".next",
+    "dist",
+    "build",
     "**/*.spec.ts",
     "**/*.test.ts",
     "**/__tests__/**/*",
+    "**/*.stories.*",
+    "coverage",
     "api/providers/**/*",
     "lib/api/**/*",
     "../lib/**/*",

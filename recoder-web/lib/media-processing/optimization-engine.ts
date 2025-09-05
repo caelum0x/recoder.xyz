@@ -86,7 +86,7 @@ export class MediaOptimizationEngine {
       ? this.config.targetPlatforms.filter(p => platforms.includes(p.name))
       : this.config.targetPlatforms
 
-    const optimizedOutputs = []
+    const optimizedOutputs: Array<any> = []
     let totalOriginalSize = 0
     let totalOptimizedSize = 0
 
@@ -294,7 +294,7 @@ export class MediaOptimizationEngine {
   }
 
   private buildOptimizationFilters(platform: Platform, settings: any): string[] {
-    const filters = []
+    const filters = [] as string[]
     
     // Platform-specific optimizations
     switch (platform.name) {
@@ -352,7 +352,7 @@ export class MediaOptimizationEngine {
     mediaInfo: any,
     optimizedOutputs: any[]
   ): string[] {
-    const recommendations = []
+    const recommendations = [] as string[]
     
     // Check if original resolution is unnecessarily high
     if (mediaInfo.width > 1920) {

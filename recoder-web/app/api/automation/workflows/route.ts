@@ -88,15 +88,15 @@ export const GET = requireAuth(async (request: NextRequest, user: any) => {
 
     switch (type) {
       case 'rules':
-        return await getAutomationRules(user, teamId, status);
+        return await getAutomationRules(user, teamId || undefined, status || undefined);
       case 'executions':
-        return await getExecutionHistory(user, teamId);
+        return await getExecutionHistory(user, teamId || undefined);
       case 'templates':
         return await getWorkflowTemplates(user);
       case 'analytics':
-        return await getWorkflowAnalytics(user, teamId);
+        return await getWorkflowAnalytics(user, teamId || undefined);
       default:
-        return await getAutomationOverview(user, teamId);
+        return await getAutomationOverview(user, teamId || undefined);
     }
   } catch (error) {
     console.error('Workflow fetch error:', error);
@@ -425,8 +425,6 @@ async function registerWorkflow(rule: any) {
     try {
       const job = cron.schedule(trigger.schedule, async () => {
         await executeWorkflow(rule, false);
-      }, {
-        scheduled: false
       });
 
       job.start();
@@ -463,7 +461,12 @@ async function unregisterWorkflow(ruleId: string) {
 
 async function executeWorkflow(rule: any, testMode: boolean = false) {
   const actions = JSON.parse(rule.actions);
-  const results = [];
+  const results: Array<{
+    action: any;
+    success: boolean;
+    result?: any;
+    error?: string;
+  }> = [];
 
   console.log(`${testMode ? 'Testing' : 'Executing'} workflow: ${rule.name}`);
 
@@ -475,12 +478,12 @@ async function executeWorkflow(rule: any, testMode: boolean = false) {
         success: true,
         result: result
       });
-    } catch (error) {
-      console.error(`Action ${action.type} failed:`, error);
+    } catch (err: unknown) {
+      console.error(`Action ${action.type} failed:`, err);
       results.push({
         action: action.type,
         success: false,
-        error: error.message
+        error: err instanceof Error ? err.message : String(err)
       });
     }
 
@@ -811,7 +814,8 @@ async function importWorkflowTemplate(user: any, body: any) {
 }
 
 // Event-based trigger handler
-export async function triggerEventBasedWorkflows(eventType: string, eventData: any) {
+// Utility function for triggering event-based workflows (not an HTTP handler)
+async function triggerEventBasedWorkflows(eventType: string, eventData: any) {
   const eventWorkflows = Array.from(activeWorkflows.values()).filter(rule => 
     rule.trigger_type === 'event_based' && 
     JSON.parse(rule.trigger_conditions).event === eventType
@@ -828,7 +832,8 @@ export async function triggerEventBasedWorkflows(eventType: string, eventData: a
 }
 
 // Performance-based trigger checker
-export async function checkPerformanceBasedTriggers() {
+// Utility function for performance triggers (not an HTTP handler)
+async function checkPerformanceBasedTriggers() {
   const performanceWorkflows = Array.from(activeWorkflows.values()).filter(rule => 
     rule.trigger_type === 'performance_based'
   );

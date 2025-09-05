@@ -2,22 +2,19 @@ import { Pool, PoolClient } from 'pg';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-// Database connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-
 // Database client wrapper with connection pooling
 export class DatabaseClient {
   private static instance: DatabaseClient;
   private pool: Pool;
 
   private constructor() {
-    this.pool = pool;
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
   }
 
   public static getInstance(): DatabaseClient {
@@ -64,25 +61,26 @@ export class EncryptionService {
 
   static encrypt(text: string): string {
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher(this.algorithm, this.key);
-    cipher.setAAD(Buffer.from('social-media-platform'));
+    const cipher = crypto.createCipheriv('aes-256-gcm', this.key, iv);
     
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     
     const authTag = cipher.getAuthTag();
-    
     return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
   }
 
   static decrypt(encryptedText: string): string {
     const parts = encryptedText.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid encrypted text format');
+    }
+    
     const iv = Buffer.from(parts[0], 'hex');
     const authTag = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];
     
-    const decipher = crypto.createDecipher(this.algorithm, this.key);
-    decipher.setAAD(Buffer.from('social-media-platform'));
+    const decipher = crypto.createDecipheriv('aes-256-gcm', this.key, iv);
     decipher.setAuthTag(authTag);
     
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
@@ -244,11 +242,13 @@ export class SocialAccountService {
       RETURNING *
     `;
 
-    const result = await this.db.query(query, [
+    const params: any[] = [
       userId, teamId, platform, platformUserId, username, displayName,
       profileImageUrl, followerCount, encryptedAccessToken, encryptedRefreshToken,
       tokenExpiresAt, permissions
-    ]);
+    ];
+    
+    const result = await this.db.query(query, params);
 
     const account = result.rows[0];
     // Don't return encrypted tokens
@@ -297,8 +297,8 @@ export class SocialAccountService {
     followingCount?: number;
     verified?: boolean;
   }) {
-    const updateFields = [];
-    const values = [accountId];
+    const updateFields: string[] = [];
+    const values: (string | number | boolean)[] = [accountId];
 
     if (metrics.followerCount !== undefined) {
       updateFields.push(`follower_count = $${values.length + 1}`);
@@ -364,11 +364,13 @@ export class PostService {
       RETURNING *
     `;
 
-    const result = await this.db.query(query, [
+    const params: any[] = [
       userId, teamId, campaignId, socialAccountId, platform, content,
       mediaUrls, hashtags, mentions, postType, scheduledFor,
       approvalRequired, userId
-    ]);
+    ];
+    
+    const result = await this.db.query(query, params);
 
     return result.rows[0];
   }
@@ -391,7 +393,7 @@ export class PostService {
       WHERE p.user_id = $1
     `;
     
-    const values = [userId];
+    const values: any[] = [userId];
 
     if (teamId) {
       query += ` AND (p.team_id = $${values.length + 1} OR p.team_id IS NULL)`;
@@ -431,8 +433,8 @@ export class PostService {
     postedAt?: Date;
     failureReason?: string;
   }) {
-    const updates = ['status = $2', 'updated_at = NOW()'];
-    const values = [postId, status];
+    const updates: string[] = ['status = $2', 'updated_at = NOW()'];
+    const values: any[] = [postId, status];
 
     if (additionalData?.platformPostId) {
       updates.push(`platform_post_id = $${values.length + 1}`);
@@ -478,7 +480,7 @@ export class PostService {
     `;
 
     const result = await this.db.query(query, [limit]);
-    return result.rows.map(post => ({
+    return result.rows.map((post: any) => ({
       ...post,
       accessToken: EncryptionService.decrypt(post.access_token),
       refreshToken: post.refresh_token ? EncryptionService.decrypt(post.refresh_token) : undefined
@@ -538,13 +540,15 @@ export class AnalyticsService {
         custom_metrics = EXCLUDED.custom_metrics
     `;
 
-    await this.db.query(query, [
+    const params: any[] = [
       date, userId, teamId, accountId, postId, adId, platform, metricType,
       metrics.impressions || 0, metrics.reach || 0, metrics.engagement || 0,
       metrics.likes || 0, metrics.comments || 0, metrics.shares || 0,
       metrics.clicks || 0, metrics.spend || 0, 
       JSON.stringify(metrics.customMetrics || {})
-    ]);
+    ];
+    
+    await this.db.query(query, params);
   }
 
   async getAnalyticsSummary(userId: string, options: {
@@ -572,7 +576,7 @@ export class AnalyticsService {
       WHERE user_id = $1 AND date BETWEEN $2 AND $3
     `;
     
-    const values = [userId, startDate, endDate];
+    const values: any[] = [userId, startDate, endDate];
 
     if (platform) {
       query += ` AND platform = $${values.length + 1}`;

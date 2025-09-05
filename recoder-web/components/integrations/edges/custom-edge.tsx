@@ -26,10 +26,8 @@ export function CustomEdge({
   const [edgePath, labelX, labelY] = getStraightPath({
     sourceX,
     sourceY,
-    sourcePosition,
     targetX,
     targetY,
-    targetPosition,
   });
 
   const onEdgeClick = () => {

@@ -448,7 +448,7 @@ async function generateAdScript(params: ContentGenerationAction): Promise<Genera
     brand_voice
   } = params;
 
-  const duration = custom_duration || getDurationInSeconds(script_duration);
+  const duration = custom_duration || (script_duration === '30s' ? 30 : script_duration === '60s' ? 60 : 30);
   
   const adScriptPrompt = `
     Create a compelling ${ad_script_type} ad script for: ${prompt}
@@ -492,7 +492,7 @@ async function generateAdScript(params: ContentGenerationAction): Promise<Genera
     generation_time: 0,
     quality_score: calculateQualityScore(parsedContent, null, contentMetrics),
     plagiarism_check: await checkPlagiarism(parsedContent.content),
-    variations: generateAdScriptVariations(parsedContent.content, tone, target_audience, duration),
+    variations: generateAdVariations(parsedContent.content, tone, target_audience),
     cta_suggestions: generateCTASuggestions('ad_script', target_audience),
     seo_analysis: {
       keyword_density: calculateKeywordDensity(parsedContent.content, keywords),
@@ -1239,7 +1239,7 @@ function calculateSEOScore(content: string, keywords: string[], readabilityScore
 }
 
 function generateSEOSuggestions(content: string, keywords: string[], readabilityScore: number, seoScore: number): string[] {
-  const suggestions = [];
+  const suggestions: string[] = [];
   
   if (seoScore < 70) {
     suggestions.push('Improve overall SEO optimization');

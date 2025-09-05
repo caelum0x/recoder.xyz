@@ -395,7 +395,7 @@ export function MediaProcessingHub() {
         </TabsContent>
 
         <TabsContent value="editor" className="mt-6">
-          <VideoTimelineEditor />
+          <VideoTimelineEditor selectedFiles={[]} files={[]} />
         </TabsContent>
 
         <TabsContent value="jobs" className="mt-6">

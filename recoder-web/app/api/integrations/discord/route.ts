@@ -455,7 +455,7 @@ async function getUserInfo(token: string, data: any) {
 
   const user = await rest.get(Routes.user(data.user_id)) as any;
   
-  let member = null;
+  let member: any = null;
   if (data.guild_id) {
     try {
       member = await rest.get(Routes.guildMember(data.guild_id, data.user_id)) as any;

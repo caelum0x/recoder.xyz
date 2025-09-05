@@ -223,7 +223,12 @@ async function analyzeContentStructure(content: string) {
 }
 
 async function generateOptimizationSuggestions(content: string, keywords: string[], optimizationType: string) {
-  const suggestions = [];
+  const suggestions: Array<{
+    type: string;
+    priority: string;
+    suggestion: string;
+    impact: string;
+  }> = [];
   
   // SEO Suggestions
   if (!content.match(/<title[^>]*>/i) && !content.match(/^#\s/m)) {
@@ -371,7 +376,7 @@ function getReadingLevel(score: number): string {
 }
 
 function generateReadabilityRecommendations(score: number, avgSentenceLength: number, complexWordRatio: number): string[] {
-  const recommendations = [];
+  const recommendations = [] as string[];
   
   if (score < 60) recommendations.push('Simplify sentence structure and use shorter sentences');
   if (avgSentenceLength > 20) recommendations.push('Break down sentences longer than 20 words');
@@ -390,7 +395,7 @@ function getEmotionalTone(score: number): string {
 }
 
 function generateSentimentRecommendations(sentiment: string, score: number): string[] {
-  const recommendations = [];
+  const recommendations = [] as string[];
   
   if (sentiment === 'negative') {
     recommendations.push('Consider adding more positive language to balance the tone');

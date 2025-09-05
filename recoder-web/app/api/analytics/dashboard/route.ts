@@ -11,22 +11,22 @@ export const GET = requireAuth(async (request: NextRequest, user: any) => {
     const campaignId = searchParams.get('campaign_id');
 
     // Get overview metrics
-    const overview = await getOverviewMetrics(user.userId, startDate, endDate, platform);
+    const overview = await getOverviewMetrics(user.userId, startDate || '30d', endDate || 'now', platform || 'all');
     
     // Get platform breakdown
-    const platformBreakdown = await getPlatformBreakdown(user.userId, startDate, endDate);
+    const platformBreakdown = await getPlatformBreakdown(user.userId, startDate || '30d', endDate || 'now');
     
     // Get content performance
-    const contentPerformance = await getContentPerformance(user.userId, startDate, endDate, platform);
+    const contentPerformance = await getContentPerformance(user.userId, startDate || '30d', endDate || 'now', platform || 'all');
     
     // Get campaign performance
-    const campaignPerformance = await getCampaignPerformance(user.userId, startDate, endDate, campaignId);
+    const campaignPerformance = await getCampaignPerformance(user.userId, startDate || '30d', endDate || 'now', campaignId || undefined);
     
     // Get audience insights
-    const audienceInsights = await getAudienceInsights(user.userId, startDate, endDate, platform);
+    const audienceInsights = await getAudienceInsights(user.userId, startDate || '30d', endDate || 'now', platform || 'all');
     
     // Get competitor analysis
-    const competitorData = await getCompetitorAnalysis(user.userId, platform);
+    const competitorData = await getCompetitorAnalysis(user.userId, platform || undefined);
     
     // Get real-time metrics
     const realTimeMetrics = await getRealTimeMetrics(user.userId);
@@ -97,8 +97,8 @@ async function getOverviewMetrics(userId: string, startDate: string, endDate: st
 
   return {
     ...metrics,
-    engagement_rate: parseFloat(engagementRate),
-    reach_rate: parseFloat(reachRate),
+    engagement_rate: parseFloat(engagementRate.toString()),
+    reach_rate: parseFloat(reachRate.toString()),
     net_followers: metrics.followers_gained - metrics.followers_lost,
     cost_per_engagement: metrics.total_spend > 0 && metrics.total_engagement > 0
       ? (metrics.total_spend / metrics.total_engagement).toFixed(4)
