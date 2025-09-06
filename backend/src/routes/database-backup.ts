@@ -5,7 +5,7 @@
  */
 
 import express from 'express';
-import { Logger } from 'recoder-shared';
+import { Logger } from '../utils/logger';
 import { createDatabaseBackupService, BackupConfig, RestoreOptions } from '../services/database-backup';
 
 const router = express.Router();

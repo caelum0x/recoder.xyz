@@ -57,7 +57,7 @@ class EnhancedPrismaClient {
     });
   }
 
-  // Expose all Prisma methods
+  // Expose all Prisma methods - matching actual schema models
   get user() { return this.client.user; }
   get project() { return this.client.project; }
   get template() { return this.client.template; }
@@ -101,13 +101,21 @@ class EnhancedPrismaClient {
   get responsiveConfig() { return this.client.responsiveConfig; }
   get deviceAnalytics() { return this.client.deviceAnalytics; }
   
+  // Translation table
+  get translation() { return this.client.translation; }
+  
+  // Multi-tenant tables
+  get tenant() { return this.client.tenant; }
+  get tenantUser() { return this.client.tenantUser; }
+  get tenantUsage() { return this.client.tenantUsage; }
+  
+  // Role management
+  get role() { return this.client.role; }
+  get userRole() { return this.client.userRole; }
+  
   // Aliases for usage tracking service compatibility
   get usage() { return this.client.dodoUsage; }
   get charge() { return this.client.dodoCharge; }
-  
-  // Missing models for RBAC service
-  get role() { return this.client.role; }
-  get userRole() { return this.client.userRole; }
 
   // Expose Prisma methods
   get $connect() { return this.client.$connect.bind(this.client); }

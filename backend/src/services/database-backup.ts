@@ -11,7 +11,7 @@ import { createGzip, createGunzip } from 'zlib';
 import { pipeline } from 'stream/promises';
 import { spawn } from 'child_process';
 import { join } from 'path';
-import { Logger } from 'recoder-shared';
+import { Logger } from '../utils/logger';
 import cron from 'node-cron';
 
 export interface BackupConfig {

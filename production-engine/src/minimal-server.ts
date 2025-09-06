@@ -3,10 +3,10 @@
  * Provides essential functionality without complex dependencies
  */
 
-import express from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
 
-const app = express();
+const app: Express = express();
 const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
 
 // Middleware

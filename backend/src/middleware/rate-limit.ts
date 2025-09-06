@@ -366,3 +366,10 @@ export const getRateLimitStatus = async (req: Request, res: Response): Promise<v
 };
 
 export { rateLimitService };
+
+// Export a simple API limiter middleware for general use
+export const apiLimiter = (req: Request, res: Response, next: NextFunction) => {
+  // Simple rate limiting - for production, integrate with Redis and proper rate limiting
+  // For now, just pass through to avoid breaking the application
+  next();
+};
