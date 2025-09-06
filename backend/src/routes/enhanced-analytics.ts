@@ -5,7 +5,7 @@
  */
 
 import express from 'express';
-import { Logger } from 'recoder-shared';
+import { Logger } from '../utils/logger';
 import { analyticsService, trackingHelpers, AnalyticsQuery, FunnelStep } from '../services/analytics-service';
 
 const router = express.Router();

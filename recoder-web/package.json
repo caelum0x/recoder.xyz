@@ -47,7 +47,12 @@
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "health": "curl -f http://localhost:3000/api/health || exit 1",
-    "validate": "npm run type-check && npm run lint"
+    "validate": "npm run type-check && npm run lint",
+    "clean": "rm -rf .next node_modules/.cache",
+    "reinstall": "rm -rf node_modules package-lock.json && npm install",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
+    "prisma:reset": "prisma migrate reset --force"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.59.0",
@@ -106,7 +111,6 @@
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.1.6",
-    "@roo-code/types": "^1.0.1",
     "@sendgrid/client": "^8.1.5",
     "@sendgrid/mail": "^8.1.5",
     "@slack/events-api": "^3.0.1",
@@ -162,17 +166,8 @@
     "react-syntax-highlighter": "^15.6.1",
     "reactflow": "^11.11.4",
     "recharts": "^3.1.0",
-    "recoder-analytics": "^1.0.0",
-    "recoder-cli": "^1.0.1",
     "recoder-cli-router": "^2.3.1",
-    "recoder-intelligence": "^1.0.0",
-    "recoder-performance": "^1.0.0",
-    "recoder-plugins": "^1.0.0",
-    "recoder-security": "^1.0.0",
-    "recoder-shared": "^1.0.0",
-    "recoder-web-ai-assistant": "^1.0.0",
     "redis": "^5.8.2",
-    "roo-code-types": "^1.0.1",
     "sanitize-filename": "^1.6.3",
     "sharp": "^0.34.3",
     "shiki": "^1.27.2",
@@ -201,14 +196,14 @@
     "@types/react-dom": "^19",
     "@types/react-dropzone": "^4.2.2",
     "@types/sanitize-filename": "^1.1.28",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8",
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
+    "eslint": "^8.57.1",
     "eslint-config-next": "^15.1.4",
     "postcss": "^8",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.10",
     "tailwindcss": "^3.4.17",
-    "typescript": "5.9.2"
+    "typescript": "^5.7.2"
   }
 }

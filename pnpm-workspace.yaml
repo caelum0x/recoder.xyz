@@ -1,13 +1,4 @@
 packages:
-  # Core packages
-  - "packages/*"
-  
-  # Platform applications  
-  - "recoder-chat-mobile"
-  - "recoder-desktop"
-  - "recoder-extension"
-  - "browser-extension"
-  
   # Backend services
   - "production-engine"
   - "backend"
@@ -30,3 +21,12 @@ exclude:
   - "**/coverage/**"
   - "**/.turbo/**"
   - "**/.nx/**"
+  # Exclude all published packages (should be installed from npm)
+  - "packages"
+  - "packages-local-backup"
+  # Exclude problematic platform apps for now
+  - "recoder-chat-mobile"
+  - "recoder-desktop"
+  - "recoder-extension"
+  - "browser-extension"
+  - "browser-extension"
