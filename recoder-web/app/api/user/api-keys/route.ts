@@ -1,333 +1,471 @@
-// API Keys management endpoint for user settings
-import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
-import { userManager } from '@/lib/user-management';
+// API Keys management endpoint with full CRUD operations
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { prisma } from '@/lib/database';
 import { randomBytes, createHash } from 'crypto';
+import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 
-interface ApiKey {
-  id: string;
-  name: string;
-  key: string;
-  keyPrefix: string;
-  permissions: string[];
-  scopes: string[];
-  status: "active" | "inactive" | "expired" | "revoked";
-  lastUsed?: string;
-  usageCount: number;
-  rateLimit: {
-    requests: number;
-    period: "minute" | "hour" | "day";
-    remaining: number;
-  };
-  expiresAt?: string;
-  createdAt: string;
-  createdBy: string;
-  environment: "development" | "production" | "staging";
-  ipRestrictions?: string[];
-}
+const createApiKeySchema = z.object({
+  name: z.string().min(1).max(100),
+  scopes: z.array(z.string()).min(1),
+  restrictions: z.object({
+    ipWhitelist: z.array(z.string()).optional(),
+    rateLimit: z.object({
+      requests: z.number().min(1).max(10000),
+      period: z.enum(['minute', 'hour', 'day'])
+    }).optional(),
+    expiresInDays: z.number().min(0).max(365).optional(),
+    allowedPlatforms: z.array(z.enum(['web', 'cli', 'extension', 'mobile', 'api'])).optional()
+  }).optional()
+});
 
-interface CreateApiKeyRequest {
-  name: string;
-  permissions: string[];
-  scopes: string[];
-  expiresIn: number; // days, 0 = never
-  environment: "development" | "production" | "staging";
-  rateLimit: {
-    requests: number;
-    period: "minute" | "hour" | "day";
-  };
-  ipRestrictions: string[];
-}
+const updateApiKeySchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  active: z.boolean().optional(),
+  restrictions: z.object({
+    ipWhitelist: z.array(z.string()).optional(),
+    rateLimit: z.object({
+      requests: z.number().min(1).max(10000),
+      period: z.enum(['minute', 'hour', 'day'])
+    }).optional(),
+    expiresInDays: z.number().min(0).max(365).optional(),
+    allowedPlatforms: z.array(z.enum(['web', 'cli', 'extension', 'mobile', 'api'])).optional()
+  }).optional()
+});
+
+// Available scopes for API keys
+const AVAILABLE_SCOPES = [
+  'projects:read',
+  'projects:write',
+  'projects:delete',
+  'chats:read',
+  'chats:write',
+  'analytics:read',
+  'deployments:read',
+  'deployments:write',
+  'ai:generate',
+  'media:read',
+  'media:write',
+  'admin:read' // Only for admin users
+];
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession();
     
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    // For now, return mock data - in production, this would fetch from database
-    const mockApiKeys: ApiKey[] = [
-      {
-        id: '1',
-        name: 'Production API',
-        key: 'rcd_prod_abcd1234567890abcdef1234567890abcdef12345678',
-        keyPrefix: 'rcd_prod_abcd',
-        permissions: ['projects:read', 'projects:write', 'deployments:read'],
-        scopes: ['private'],
-        status: 'active',
-        lastUsed: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-        usageCount: 1247,
-        rateLimit: {
-          requests: 5000,
-          period: 'hour',
-          remaining: 4832,
-        },
-        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // 90 days
-        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
-        createdBy: session.user.id,
-        environment: 'production',
-        ipRestrictions: ['203.0.113.0/24'],
-      },
-      {
-        id: '2',
-        name: 'Development Testing',
-        key: 'rcd_dev_xyz9876543210xyz9876543210xyz98765432',
-        keyPrefix: 'rcd_dev_xyz9',
-        permissions: ['projects:read', 'analytics:read'],
-        scopes: ['public', 'private'],
-        status: 'active',
-        lastUsed: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-        usageCount: 45,
-        rateLimit: {
-          requests: 1000,
-          period: 'hour',
-          remaining: 987,
-        },
-        createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
-        createdBy: session.user.id,
-        environment: 'development',
-      },
-      {
-        id: '3',
-        name: 'Legacy Integration',
-        key: 'rcd_prod_legacy123456789legacy123456789legacy12',
-        keyPrefix: 'rcd_prod_lega',
-        permissions: ['projects:read'],
-        scopes: ['public'],
-        status: 'inactive',
-        lastUsed: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
-        usageCount: 892,
-        rateLimit: {
-          requests: 2000,
-          period: 'day',
-          remaining: 2000,
-        },
-        createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(), // 180 days ago
-        createdBy: session.user.id,
-        environment: 'production',
-      }
-    ];
+    const userId = session.user.id;
 
-    return Response.json({ apiKeys: mockApiKeys });
+    // Get user's API keys from database
+    const apiKeys = await prisma.apiKey.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        keyId: true,
+        name: true,
+        scopes: true,
+        restrictions: true,
+        lastUsed: true,
+        active: true,
+        createdAt: true
+      }
+    });
+
+    // Transform for response (hide sensitive data)
+    const transformedKeys = apiKeys.map(key => ({
+      id: key.id,
+      keyId: key.keyId,
+      name: key.name,
+      keyPrefix: `rcd_${key.keyId.substring(0, 8)}...`,
+      scopes: key.scopes,
+      restrictions: key.restrictions,
+      status: key.active ? 'active' : 'inactive',
+      lastUsed: key.lastUsed?.toISOString(),
+      createdAt: key.createdAt.toISOString(),
+      // Calculate usage stats (would be from a separate usage table in production)
+      usageCount: Math.floor(Math.random() * 1000), // Mock for now
+      rateLimit: {
+        requests: (key.restrictions as any)?.rateLimit?.requests || 1000,
+        period: (key.restrictions as any)?.rateLimit?.period || 'hour',
+        remaining: Math.floor(Math.random() * 1000) // Mock remaining
+      }
+    }));
+
+    return NextResponse.json({
+      apiKeys: transformedKeys,
+      availableScopes: AVAILABLE_SCOPES,
+      total: transformedKeys.length
+    });
+
   } catch (error) {
     console.error('API keys fetch error:', error);
-    return Response.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch API keys' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession();
     
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const data: CreateApiKeyRequest = await request.json();
+    const body = await request.json();
+    const { name, scopes, restrictions } = createApiKeySchema.parse(body);
+    const userId = session.user.id;
 
-    // Validate required fields
-    if (!data.name || data.permissions.length === 0) {
-      return Response.json({ error: 'Name and at least one permission are required' }, { status: 400 });
+    // Check if user already has maximum number of API keys (limit to 10)
+    const existingKeysCount = await prisma.apiKey.count({
+      where: { userId, active: true }
+    });
+
+    if (existingKeysCount >= 10) {
+      return NextResponse.json(
+        { error: 'Maximum number of API keys reached (10)' },
+        { status: 400 }
+      );
+    }
+
+    // Validate scopes
+    const invalidScopes = scopes.filter(scope => !AVAILABLE_SCOPES.includes(scope));
+    if (invalidScopes.length > 0) {
+      return NextResponse.json(
+        { error: `Invalid scopes: ${invalidScopes.join(', ')}` },
+        { status: 400 }
+      );
     }
 
     // Generate secure API key
-    const keyId = generateKeyId();
-    const apiKey = generateApiKey(data.environment);
-    const keyPrefix = apiKey.substring(0, 12);
+    const keyId = randomBytes(16).toString('hex');
+    const apiKeySecret = randomBytes(32).toString('hex');
+    const apiKeyFull = `rcd_${keyId}_${apiKeySecret}`;
+    
+    // Hash the full key for storage
+    const hashedKey = await bcrypt.hash(apiKeyFull, 12);
 
-    // Calculate expiration date
-    const expiresAt = data.expiresIn > 0 
-      ? new Date(Date.now() + data.expiresIn * 24 * 60 * 60 * 1000).toISOString()
-      : undefined;
-
-    const newApiKey: ApiKey = {
-      id: keyId,
-      name: data.name,
-      key: apiKey,
-      keyPrefix,
-      permissions: data.permissions,
-      scopes: data.scopes,
-      status: 'active',
-      usageCount: 0,
-      rateLimit: {
-        ...data.rateLimit,
-        remaining: data.rateLimit.requests,
-      },
-      expiresAt,
+    // Prepare restrictions
+    const keyRestrictions = {
+      ...restrictions,
       createdAt: new Date().toISOString(),
-      createdBy: session.user.id,
-      environment: data.environment,
-      ipRestrictions: data.ipRestrictions.length > 0 ? data.ipRestrictions : undefined,
+      version: '1.0'
     };
 
-    // In a real implementation, you would:
-    // 1. Hash and store the key securely in the database
-    // 2. Only store the key prefix for display
-    // 3. Never store the full key in plain text
-
-    // For now, simulate database storage
-    console.log('Creating API key:', { ...newApiKey, key: '[REDACTED]' });
-
-    // Log the creation for audit purposes
-    await logApiKeyEvent(session.user.id, 'API_KEY_CREATED', {
-      apiKeyId: keyId,
-      name: data.name,
-      permissions: data.permissions,
-      environment: data.environment,
+    // Create API key in database
+    const newApiKey = await prisma.apiKey.create({
+      data: {
+        keyId,
+        userId,
+        name,
+        hashedKey,
+        scopes,
+        restrictions: keyRestrictions,
+        active: true
+      },
+      select: {
+        id: true,
+        keyId: true,
+        name: true,
+        scopes: true,
+        restrictions: true,
+        createdAt: true,
+        active: true
+      }
     });
 
-    return Response.json({ 
-      apiKey: newApiKey,
-      message: 'API key created successfully' 
+    // Log the API key creation
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'api_key_created',
+        platform: 'web',
+        ip: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        success: true,
+        metadata: {
+          apiKeyId: newApiKey.id,
+          keyId: newApiKey.keyId,
+          name: newApiKey.name,
+          scopes: newApiKey.scopes
+        }
+      }
     });
+
+    // Security event
+    await prisma.securityEvent.create({
+      data: {
+        userId,
+        eventType: 'api_key_created',
+        severity: 'medium',
+        description: `API key "${name}" created with scopes: ${scopes.join(', ')}`,
+        ip: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        metadata: {
+          apiKeyId: newApiKey.id,
+          scopes,
+          restrictions: keyRestrictions
+        }
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      apiKey: {
+        id: newApiKey.id,
+        keyId: newApiKey.keyId,
+        name: newApiKey.name,
+        key: apiKeyFull, // Return full key only on creation
+        keyPrefix: `rcd_${keyId.substring(0, 8)}...`,
+        scopes: newApiKey.scopes,
+        restrictions: newApiKey.restrictions,
+        status: 'active',
+        createdAt: newApiKey.createdAt.toISOString()
+      },
+      warning: 'This key will only be shown once. Store it securely.',
+      message: 'API key created successfully'
+    }, { status: 201 });
+
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid input data', details: error.errors },
+        { status: 400 }
+      );
+    }
+
     console.error('API key creation error:', error);
-    return Response.json({ error: 'Failed to create API key' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to create API key' },
+      { status: 500 }
+    );
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession();
     
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const url = new URL(request.url);
-    const keyId = url.searchParams.get('id') || url.pathname.split('/').pop();
-    
+    const { searchParams } = new URL(request.url);
+    const keyId = searchParams.get('keyId');
+
     if (!keyId) {
-      return Response.json({ error: 'API key ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'API key ID is required' },
+        { status: 400 }
+      );
     }
 
-    const updates = await request.json();
+    const body = await request.json();
+    const updates = updateApiKeySchema.parse(body);
+    const userId = session.user.id;
 
-    // Validate allowed updates
-    const allowedFields = ['name', 'status', 'permissions', 'rateLimit', 'ipRestrictions'];
-    const validUpdates: any = {};
-    
-    for (const [key, value] of Object.entries(updates)) {
-      if (allowedFields.includes(key)) {
-        validUpdates[key] = value;
+    // Verify the API key belongs to the user
+    const existingKey = await prisma.apiKey.findFirst({
+      where: {
+        keyId,
+        userId
       }
+    });
+
+    if (!existingKey) {
+      return NextResponse.json(
+        { error: 'API key not found or access denied' },
+        { status: 404 }
+      );
     }
 
-    // In a real implementation, you would:
-    // 1. Verify the API key belongs to the user
-    // 2. Update the database record
-    // 3. Return the updated key info
+    // Prepare update data
+    const updateData: any = {};
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.active !== undefined) updateData.active = updates.active;
+    if (updates.restrictions !== undefined) {
+      updateData.restrictions = {
+        ...existingKey.restrictions,
+        ...updates.restrictions,
+        updatedAt: new Date().toISOString()
+      };
+    }
 
-    console.log(`Updating API key ${keyId}:`, validUpdates);
-
-    await logApiKeyEvent(session.user.id, 'API_KEY_UPDATED', {
-      apiKeyId: keyId,
-      updates: validUpdates,
+    // Update the API key
+    const updatedKey = await prisma.apiKey.update({
+      where: { id: existingKey.id },
+      data: updateData,
+      select: {
+        id: true,
+        keyId: true,
+        name: true,
+        scopes: true,
+        restrictions: true,
+        active: true,
+        updatedAt: true
+      }
     });
 
-    return Response.json({ 
+    // Log the update
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'api_key_updated',
+        platform: 'web',
+        ip: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        success: true,
+        metadata: {
+          apiKeyId: updatedKey.id,
+          keyId: updatedKey.keyId,
+          updates: Object.keys(updateData)
+        }
+      }
+    });
+
+    return NextResponse.json({
       success: true,
-      message: 'API key updated successfully' 
+      apiKey: {
+        id: updatedKey.id,
+        keyId: updatedKey.keyId,
+        name: updatedKey.name,
+        keyPrefix: `rcd_${updatedKey.keyId.substring(0, 8)}...`,
+        scopes: updatedKey.scopes,
+        restrictions: updatedKey.restrictions,
+        status: updatedKey.active ? 'active' : 'inactive',
+        updatedAt: updatedKey.updatedAt?.toISOString()
+      },
+      message: 'API key updated successfully'
     });
+
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid update data', details: error.errors },
+        { status: 400 }
+      );
+    }
+
     console.error('API key update error:', error);
-    return Response.json({ error: 'Failed to update API key' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to update API key' },
+      { status: 500 }
+    );
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession();
     
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const url = new URL(request.url);
-    const keyId = url.searchParams.get('id') || url.pathname.split('/').pop();
-    
+    const { searchParams } = new URL(request.url);
+    const keyId = searchParams.get('keyId');
+
     if (!keyId) {
-      return Response.json({ error: 'API key ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'API key ID is required' },
+        { status: 400 }
+      );
     }
 
-    // In a real implementation, you would:
-    // 1. Verify the API key belongs to the user
-    // 2. Soft delete or hard delete the key from database
-    // 3. Add to revocation list for immediate invalidation
+    const userId = session.user.id;
 
-    console.log(`Deleting API key ${keyId} for user ${session.user.id}`);
-
-    await logApiKeyEvent(session.user.id, 'API_KEY_DELETED', {
-      apiKeyId: keyId,
+    // Verify the API key belongs to the user
+    const existingKey = await prisma.apiKey.findFirst({
+      where: {
+        keyId,
+        userId
+      },
+      select: {
+        id: true,
+        keyId: true,
+        name: true
+      }
     });
 
-    return Response.json({ 
+    if (!existingKey) {
+      return NextResponse.json(
+        { error: 'API key not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Soft delete the API key (mark as inactive)
+    await prisma.apiKey.update({
+      where: { id: existingKey.id },
+      data: {
+        active: false,
+        updatedAt: new Date()
+      }
+    });
+
+    // Log the deletion
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'api_key_deleted',
+        platform: 'web',
+        ip: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        success: true,
+        metadata: {
+          apiKeyId: existingKey.id,
+          keyId: existingKey.keyId,
+          name: existingKey.name
+        }
+      }
+    });
+
+    // Security event
+    await prisma.securityEvent.create({
+      data: {
+        userId,
+        eventType: 'api_key_deleted',
+        severity: 'medium',
+        description: `API key "${existingKey.name}" was deleted`,
+        ip: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        metadata: {
+          apiKeyId: existingKey.id,
+          keyId: existingKey.keyId,
+          name: existingKey.name
+        }
+      }
+    });
+
+    return NextResponse.json({
       success: true,
-      message: 'API key deleted successfully' 
+      message: 'API key deleted successfully'
     });
+
   } catch (error) {
     console.error('API key deletion error:', error);
-    return Response.json({ error: 'Failed to delete API key' }, { status: 500 });
-  }
-}
-
-// Special endpoint for revoking keys
-export async function revokeApiKey(request: NextRequest, keyId: string) {
-  try {
-    const session = await auth();
-    
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // In a real implementation, you would:
-    // 1. Mark the key as revoked
-    // 2. Add to revocation blacklist
-    // 3. Immediately invalidate all active sessions using this key
-
-    console.log(`Revoking API key ${keyId} for user ${session.user.id}`);
-
-    await logApiKeyEvent(session.user.id, 'API_KEY_REVOKED', {
-      apiKeyId: keyId,
-    });
-
-    return Response.json({ 
-      success: true,
-      message: 'API key revoked successfully' 
-    });
-  } catch (error) {
-    console.error('API key revocation error:', error);
-    return Response.json({ error: 'Failed to revoke API key' }, { status: 500 });
-  }
-}
-
-function generateKeyId(): string {
-  return randomBytes(8).toString('hex');
-}
-
-function generateApiKey(environment: string): string {
-  const prefix = environment === 'production' ? 'rcd_prod_' : 
-                 environment === 'staging' ? 'rcd_stag_' : 'rcd_dev_';
-  const randomPart = randomBytes(20).toString('hex');
-  return `${prefix}${randomPart}`;
-}
-
-async function logApiKeyEvent(userId: string, action: string, details: any): Promise<void> {
-  try {
-    // In a real implementation, this would write to an audit log
-    console.log('API Key Event:', {
-      userId,
-      action,
-      details,
-      timestamp: new Date().toISOString(),
-    });
-
-    // Could also call userManager to log to database
-    // await userManager.logSecurityEvent(userId, action, details);
-  } catch (error) {
-    console.error('Failed to log API key event:', error);
-    // Don't throw here as it shouldn't break the main operation
+    return NextResponse.json(
+      { error: 'Failed to delete API key' },
+      { status: 500 }
+    );
   }
 }

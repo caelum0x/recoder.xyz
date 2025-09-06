@@ -5,7 +5,7 @@
  */
 
 import express from 'express';
-import { Logger } from 'recoder-shared';
+import { Logger } from '../utils/logger';
 import axios from 'axios';
 
 // Define interfaces for compliance report structure
