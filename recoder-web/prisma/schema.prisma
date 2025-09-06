@@ -103,6 +103,11 @@ model User {
   
   // Data Export Relations
   dataExports  DataExport[]
+  
+  // Tooltip System Relations
+  tooltipInteractions TooltipInteraction[]
+  tooltipPreferences  TooltipPreferences?
+  tooltipFeedback     TooltipFeedback[]
 }
 
 model VerificationToken {
@@ -922,6 +927,114 @@ model DataExport {
 
   @@index([userId])
   @@index([status])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Tooltip System Models
+model Tooltip {
+  id              String   @id @default(cuid())
+  title           String   @db.VarChar(100)
+  content         String   @db.VarChar(500)
+  element         String   // CSS selector for target element
+  position        String   // top, bottom, left, right
+  trigger         String   // hover, click, focus, auto
+  delay           Int      @default(0) // Delay in ms before showing
+  duration        Int?     // Auto-hide duration in ms
+  context         String[] // Array of contexts where this tooltip applies
+  priority        String   @default("medium") // low, medium, high
+  category        String   // Category for grouping (onboarding, feature, help, etc.)
+  isActive        Boolean  @default(true)
+  customizable    Boolean  @default(true)
+  enabled         Boolean  @default(true)
+  
+  // Analytics fields
+  totalShows      Int      @default(0)
+  totalDismissals Int      @default(0)
+  totalClicks     Int      @default(0)
+  permanentDismissals Int  @default(0)
+  lastShown       DateTime?
+  
+  // Metadata and conditions
+  conditions      Json?    // User level, feature flags, etc.
+  metadata        Json?    // Additional tooltip data
+  
+  // Lifecycle fields
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+  disabledAt      DateTime?
+  disabledReason  String?
+  
+  // Relations
+  interactions    TooltipInteraction[]
+  feedback        TooltipFeedback[]
+  
+  @@index([isActive])
+  @@index([category])
+  @@index([priority])
+  @@index([context])
+  @@index([createdAt])
+}
+
+model TooltipInteraction {
+  id         String   @id @default(cuid())
+  userId     String
+  tooltipId  String
+  action     String   // shown, dismissed, clicked, completed
+  context    String   // Current context when interaction occurred
+  dismissed  Boolean  @default(false)
+  permanent  Boolean  @default(false) // Permanent dismissal
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tooltip    Tooltip  @relation(fields: [tooltipId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([tooltipId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([permanent])
+}
+
+model TooltipPreferences {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  showTooltips       Boolean  @default(true)
+  maxTooltipsPerDay  Int      @default(5)
+  preferredTrigger   String   @default("hover") // hover, click, focus, auto
+  enableTour         Boolean  @default(true)
+  skipSeen           Boolean  @default(false)
+  categories         String[] @default([]) // Enabled categories
+  contexts           String[] @default(["global"]) // Enabled contexts
+  autoHideDelay      Int      @default(5000) // Auto-hide delay in ms
+  enableAnimations   Boolean  @default(true)
+  position           String?  // Preferred position override
+  theme              String   @default("auto") // light, dark, auto
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model TooltipFeedback {
+  id        String   @id @default(cuid())
+  userId    String
+  tooltipId String
+  feedback  String   @db.Text
+  rating    Int?     // 1-5 rating
+  type      String   // dismissal, completion, suggestion
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tooltip   Tooltip  @relation(fields: [tooltipId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([tooltipId])
   @@index([type])
   @@index([createdAt])
 }

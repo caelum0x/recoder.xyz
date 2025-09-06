@@ -27,30 +27,3 @@ declare global {
     body: any;
   } | undefined;
 }
-
-// Polyfills for server environment
-if (typeof window === 'undefined') {
-  (global as any).window = {
-    location: {
-      href: 'http://localhost:3001',
-      origin: 'http://localhost:3001',
-      hostname: 'localhost'
-    }
-  };
-}
-
-if (typeof navigator === 'undefined') {
-  (global as any).navigator = {
-    userAgent: 'Node.js'
-  };
-}
-
-if (typeof localStorage === 'undefined') {
-  (global as any).localStorage = {
-    getItem: () => null,
-    setItem: () => {},
-    removeItem: () => {}
-  };
-}
-
-export {};

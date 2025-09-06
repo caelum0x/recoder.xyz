@@ -5,16 +5,19 @@
  */
 
 import express from 'express';
-import { Logger } from 'recoder-shared';
-import { CollaborationService } from '../../shared/src/collaboration';
+import { Logger } from '../utils/logger';
+import { CollaborationService } from 'recoder-shared/collaboration';
 
 const router = express.Router();
 
 // Global collaboration service instance
 let collaborationService: CollaborationService | null = null;
 
+// In-memory session tracking (for demo purposes)
+const sessionRegistry = new Map<string, any>();
+
 // Initialize collaboration service
-export function initializeCollaborationService(): CollaborationService {
+function initializeCollaborationService(): CollaborationService {
   if (!collaborationService) {
     collaborationService = new CollaborationService({
       websocketPort: parseInt(process.env.COLLAB_WEBSOCKET_PORT || '8080'),
@@ -37,19 +40,18 @@ function getCollaborationService(): CollaborationService {
 // GET /api/collaboration/sessions - List all collaboration sessions
 router.get('/sessions', async (req, res) => {
   try {
-    const service = getCollaborationService();
-    const sessions = service.getAllSessions();
+    const sessions = Array.from(sessionRegistry.values());
     
     const sessionData = sessions.map(session => ({
       id: session.id,
       name: session.name,
       createdAt: session.createdAt,
       createdBy: session.createdBy,
-      userCount: session.users.size,
-      aiAgentsEnabled: session.settings.allowAIAgents,
-      language: session.metadata.language,
-      description: session.metadata.description,
-      isActive: Array.from(session.users.values()).some(user => user.isActive)
+      userCount: session.userCount || 0,
+      aiAgentsEnabled: session.settings?.allowAIAgents || false,
+      language: session.metadata?.language || 'typescript',
+      description: session.metadata?.description || '',
+      isActive: session.isActive || false
     }));
 
     res.json({
@@ -106,6 +108,24 @@ router.post('/sessions', async (req, res) => {
       }
     });
 
+    // Store session in registry for API access
+    sessionRegistry.set(session.id, {
+      id: session.id,
+      name: session.name,
+      createdAt: session.createdAt,
+      createdBy: session.createdBy,
+      userCount: 1,
+      isActive: true,
+      settings: {
+        maxUsers: maxUsers || 10,
+        allowAIAgents: allowAIAgents !== false
+      },
+      metadata: {
+        description: description || '',
+        language: language || 'typescript'
+      }
+    });
+
     res.json({
       success: true,
       session: {
@@ -134,7 +154,7 @@ router.get('/sessions/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     const service = getCollaborationService();
     
-    const session = service.getSession(sessionId);
+    const session = sessionRegistry.get(sessionId);
     if (!session) {
       return res.status(404).json({
         success: false,
@@ -142,7 +162,13 @@ router.get('/sessions/:sessionId', async (req, res) => {
       });
     }
 
-    const analytics = service.getSessionAnalytics(sessionId);
+    try {
+      const analytics = service.getSessionAnalytics(sessionId);
+      session.analytics = analytics;
+    } catch (error) {
+      // Analytics might not be available, continue without it
+      Logger.warn(`Analytics not available for session ${sessionId}`);
+    }
 
     res.json({
       success: true,
@@ -151,11 +177,11 @@ router.get('/sessions/:sessionId', async (req, res) => {
         name: session.name,
         createdAt: session.createdAt,
         createdBy: session.createdBy,
-        users: Array.from(session.users.values()),
-        aiAgents: Array.from(session.aiAgents.values()),
+        users: [], // Would be populated from WebSocket connections
+        aiAgents: [], // Would be populated from AI agent system
         settings: session.settings,
         metadata: session.metadata,
-        analytics: analytics,
+        analytics: session.analytics || null,
         websocketUrl: `ws://localhost:${process.env.COLLAB_WEBSOCKET_PORT || 8080}/collaboration`
       }
     });
@@ -195,14 +221,18 @@ router.post('/sessions/:sessionId/join', async (req, res) => {
     const success = await service.joinSession(sessionId, user);
     
     if (success) {
-      const session = service.getSession(sessionId);
+      const session = sessionRegistry.get(sessionId);
+      if (session) {
+        session.userCount = (session.userCount || 0) + 1;
+      }
+      
       res.json({
         success: true,
         message: 'Successfully joined session',
         session: session ? {
           id: session.id,
           name: session.name,
-          userCount: session.users.size,
+          userCount: session.userCount,
           websocketUrl: `ws://localhost:${process.env.COLLAB_WEBSOCKET_PORT || 8080}/collaboration`
         } : null
       });

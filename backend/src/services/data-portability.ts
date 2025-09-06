@@ -9,7 +9,7 @@ import { createWriteStream, createReadStream } from 'fs';
 import { promises as fs } from 'fs';
 import { createGzip, createGunzip } from 'zlib';
 import { pipeline } from 'stream/promises';
-import { Logger } from 'recoder-shared';
+import { Logger } from '../utils/logger';
 import { Parser } from 'json2csv';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { join } from 'path';

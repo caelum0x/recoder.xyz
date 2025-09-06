@@ -1,6 +1,6 @@
 {
   "name": "recoder-shared",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Shared types, utilities, and configurations for Recoder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -65,12 +65,15 @@
     "axios": "^1.11.0",
     "chalk": "^4.1.2",
     "fs-extra": "^11.2.0",
+    "ioredis": "^5.7.0",
     "joi": "^17.11.0",
     "lodash": "^4.17.21",
     "socket.io-client": "^4.8.1",
     "tiktoken": "^1.0.22",
+    "tslib": "^2.8.1",
     "uuid": "^9.0.1",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
@@ -82,11 +85,9 @@
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "eslint": "^8.56.0",
-    "ioredis": "^5.7.0",
     "jest": "^29.7.0",
     "rimraf": "^5.0.5",
-    "typescript": "^5.3.3",
-    "ws": "^8.18.3"
+    "typescript": "^5.3.3"
   },
   "files": [
     "src/",

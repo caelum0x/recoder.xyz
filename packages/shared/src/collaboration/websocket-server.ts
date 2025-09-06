@@ -4,7 +4,7 @@
  * Cursor doesn't have real-time collaboration - we do!
  */
 
-import { WebSocketServer, WebSocket } from 'ws';
+import * as WebSocket from 'ws';
 import { createServer } from 'http';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
@@ -89,7 +89,7 @@ export interface AISuggestion {
 }
 
 export class CollaborationServer extends EventEmitter {
-  private wss!: WebSocketServer;
+  private wss!: WebSocket.WebSocketServer;
   private server: any;
   private sessions: Map<string, CollaborationSession> = new Map();
   private userSessions: Map<string, string> = new Map(); // userId -> sessionId
@@ -107,7 +107,7 @@ export class CollaborationServer extends EventEmitter {
     this.server = createServer();
     
     // Create WebSocket server
-    this.wss = new WebSocketServer({ 
+    this.wss = new WebSocket.WebSocketServer({ 
       server: this.server,
       path: '/collaboration'
     });

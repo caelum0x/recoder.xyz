@@ -5,7 +5,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { WebSocket } from 'ws';
+import * as WebSocket from 'ws';
 import { Logger } from '../utils/logger';
 import { CodeSyncEngine, CodeOperation, CodeDocument, ConflictResolution } from './code-sync-engine';
 import { CollaborationUser } from './websocket-server';
