@@ -130,6 +130,8 @@ const advancedRAGLearningRoutes = require('./routes/advanced-rag-learning');
 const predictiveErrorDetectionRoutes = require('./routes/predictive-error-detection');
 const multiModalAIRoutes = require('./routes/multi-modal-ai');
 const cliAuthRoutes = require('./routes/cli-auth');
+const analyticsExportRoutes = require('./routes/analytics-report-export');
+const userAccountRoutes = require('./routes/user-account');
 
 // Import middleware
 const { apiLimiter } = require('./middleware/rateLimit');
@@ -273,6 +275,17 @@ app.use('/api/advanced-rag-learning', advancedRAGLearningRoutes);
 app.use('/api/predictive-error-detection', predictiveErrorDetectionRoutes);
 app.use('/api/multi-modal-ai', multiModalAIRoutes);
 app.use('/api/cli-auth', cliAuthRoutes);
+app.use('/api/analytics/export', analyticsExportRoutes);
+app.use('/api/user/account', userAccountRoutes);
+
+// Advanced Analytics Report System Routes
+const analyticsReportExportRoutes = require('./routes/analytics-report-export');
+const analyticsReportSchedulingRoutes = require('./routes/analytics-report-scheduling'); 
+const analyticsReportSharingRoutes = require('./routes/analytics-report-sharing');
+
+app.use('/api/analytics/reports', analyticsReportExportRoutes);
+app.use('/api/analytics/reports', analyticsReportSchedulingRoutes);
+app.use('/api/analytics/reports', analyticsReportSharingRoutes);
 
 // Legacy API endpoints for backward compatibility
 app.get('/api/v1/status', (req: any, res: any) => {

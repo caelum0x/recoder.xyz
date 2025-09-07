@@ -52,6 +52,18 @@ model User {
   preferences     UserPreferences?
   translations    Translation[]
   userRoles       UserRole[]
+  
+  // Analytics Report Relations
+  analyticsReports        AnalyticsReport[]
+  reportExecutions        ReportExecution[]
+  reportExports           ReportExport[]
+  reportSchedules         ReportSchedule[]
+  scheduledExecutions     ScheduledExecution[]
+  sharedReports           ReportShare[] @relation("SharedReports")
+  receivedShares          ReportShareRecipient[] @relation("ReceivedShares")
+  reportShareAccesses     ReportShareAccess[]
+  authoredComments        ReportComment[] @relation("AuthoredComments")
+  moderatedComments       ReportComment[] @relation("ModeratedComments")
 
   @@map("users")
 }
@@ -1272,4 +1284,352 @@ model UserRole {
   @@unique([userId, roleId, tenantId], name: "userId_roleId_tenantId")
   @@index([userId, tenantId])
   @@map("user_roles")
+}
+
+// Advanced Analytics Report System Models
+model AnalyticsReport {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  slug            String    @unique
+  category        String    // usage, performance, financial, user_behavior, custom
+  type            String    // summary, detailed, comparative, trending, real_time
+  
+  // Report Configuration
+  dataSource      Json      @default("{}")  // Data source configuration
+  dimensions      Json      @default("[]")  // Report dimensions
+  metrics         Json      @default("[]")  // Report metrics
+  visualizations  Json      @default("[]")  // Chart and visualization configs
+  schedule        Json?     @default("{}")  // Schedule configuration
+  settings        Json      @default("{}")  // Report settings
+  
+  // Status and Tracking
+  isActive        Boolean   @default(true)
+  isPublic        Boolean   @default(false)
+  version         String    @default("1.0.0")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Foreign Keys
+  userId          String
+  
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions      ReportExecution[]
+  exports         ReportExport[]
+  schedules       ReportSchedule[]
+  shares          ReportShare[]
+  cache           ReportCache[]
+  comments        ReportComment[]
+  shareAccesses   ReportShareAccess[]
+  scheduledExecutions ScheduledExecution[]
+  
+  @@index([userId, category])
+  @@index([slug, isPublic])
+  @@index([type, isActive])
+  @@map("analytics_reports")
+}
+
+model ReportExecution {
+  id              String    @id @default(cuid())
+  status          String    @default("pending") // pending, running, completed, failed, cancelled
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  executionTime   Int?      // milliseconds
+  results         Json?     // Execution results
+  error           String?   // Error message if failed
+  rowCount        Int?      // Number of rows returned
+  cacheHit        Boolean   @default(false)
+  
+  // Configuration
+  parameters      Json      @default("{}")  // Execution parameters
+  metadata        Json      @default("{}")  // Additional metadata
+  
+  // Foreign Keys
+  reportId        String
+  userId          String
+  scheduleId      String?   // If triggered by schedule
+  
+  // Relations
+  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedule        ReportSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  
+  @@index([reportId, startedAt])
+  @@index([userId, status])
+  @@index([scheduleId, status])
+  @@map("report_executions")
+}
+
+model ReportExport {
+  id              String    @id @default(cuid())
+  format          String    // pdf, xlsx, csv, json, zip
+  status          String    @default("pending") // pending, processing, completed, failed
+  filePath        String?   // Path to exported file
+  fileUrl         String?   // Public URL if applicable
+  fileSize        Int?      // File size in bytes
+  downloadCount   Int       @default(0)
+  
+  // Export Configuration
+  options         Json      @default("{}")  // Export options
+  customization   Json      @default("{}")  // Customization settings
+  
+  // Security
+  expiresAt       DateTime? // Export expiration
+  accessToken     String?   // Access token for downloads
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+  lastDownloadAt  DateTime?
+  
+  // Foreign Keys
+  reportId        String
+  userId          String
+  
+  // Relations
+  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([reportId, format])
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+  @@map("report_exports")
+}
+
+model ReportSchedule {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  
+  // Schedule Configuration
+  schedule        Json      @default("{}")  // Frequency, time, timezone config
+  delivery        Json      @default("[]")  // Delivery method configurations
+  exportOptions   Json      @default("{}")  // Export format and options
+  
+  // Status and Tracking
+  isActive        Boolean   @default(true)
+  lastRun         DateTime?
+  nextRun         DateTime?
+  runCount        Int       @default(0)
+  failureCount    Int       @default(0)
+  
+  // Error Handling
+  lastError       String?
+  maxRetries      Int       @default(3)
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Foreign Keys
+  reportId        String
+  userId          String
+  
+  // Relations
+  report          AnalyticsReport     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions      ReportExecution[]
+  scheduledExecutions ScheduledExecution[]
+  
+  @@index([reportId, isActive])
+  @@index([userId, nextRun])
+  @@index([isActive, nextRun])
+  @@map("report_schedules")
+}
+
+model ScheduledExecution {
+  id              String    @id @default(cuid())
+  status          String    @default("pending") // pending, running, completed, failed
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  executionTime   Int?      // milliseconds
+  results         Json?     // Execution results
+  error           String?   // Error message if failed
+  deliveryResults Json?     // Delivery results for each method
+  
+  // Foreign Keys
+  scheduleId      String
+  reportId        String
+  userId          String
+  
+  // Relations
+  schedule        ReportSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([scheduleId, startedAt])
+  @@index([status, startedAt])
+  @@map("scheduled_executions")
+}
+
+model ReportShare {
+  id              String    @id @default(cuid())
+  shareType       String    // user, team, public, link
+  permission      String    // view, comment, edit, admin
+  shareToken      String?   @unique  // For link shares
+  publicUrl       String?   // Public URL for sharing
+  message         String?   // Message from sharer
+  
+  // Share Configuration
+  config          Json      @default("{}")  // Permission config, expiration, etc.
+  
+  // Access Control
+  isActive        Boolean   @default(true)
+  accessCount     Int       @default(0)
+  lastAccessedAt  DateTime?
+  expiresAt       DateTime? // Share expiration
+  revokedAt       DateTime?
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Foreign Keys
+  reportId        String
+  sharedBy        String    // User who shared
+  
+  // Relations
+  report          AnalyticsReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sharedByUser    User                  @relation("SharedReports", fields: [sharedBy], references: [id], onDelete: Cascade)
+  recipients      ReportShareRecipient[]
+  accesses        ReportShareAccess[]
+  comments        ReportComment[]
+  
+  @@index([reportId, isActive])
+  @@index([sharedBy, shareType])
+  @@index([shareToken, isActive])
+  @@map("report_shares")
+}
+
+model ReportShareRecipient {
+  id              String    @id @default(cuid())
+  recipientEmail  String
+  permission      String    // view, comment, edit, admin
+  status          String    @default("invited") // invited, active, declined, revoked
+  
+  // Access Tracking
+  lastAccessedAt  DateTime?
+  accessCount     Int       @default(0)
+  
+  // Management
+  invitedAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  
+  // Foreign Keys
+  shareId         String
+  recipientId     String?   // User ID if registered
+  
+  // Relations
+  share           ReportShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  recipient       User?       @relation("ReceivedShares", fields: [recipientId], references: [id], onDelete: SetNull)
+  
+  @@index([shareId, status])
+  @@index([recipientId, status])
+  @@index([recipientEmail, status])
+  @@map("report_share_recipients")
+}
+
+model ReportShareAccess {
+  id              String    @id @default(cuid())
+  accessType      String    // view, download, export, comment
+  ipAddress       String?
+  userAgent       String?
+  accessedAt      DateTime  @default(now())
+  
+  // Session Info
+  sessionId       String?
+  duration        Int?      // milliseconds
+  
+  // Metadata
+  metadata        Json      @default("{}")
+  
+  // Foreign Keys
+  shareId         String
+  reportId        String
+  userId          String?   // If logged in user
+  
+  // Relations
+  share           ReportShare     @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user            User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([shareId, accessedAt])
+  @@index([reportId, accessType])
+  @@index([userId, accessedAt])
+  @@map("report_share_accesses")
+}
+
+model ReportComment {
+  id              String    @id @default(cuid())
+  content         String
+  authorName      String?   // For anonymous comments
+  authorEmail     String?   // For anonymous comments
+  isPublic        Boolean   @default(false) // Public comments don't require login
+  isDeleted       Boolean   @default(false)
+  
+  // Thread Support
+  parentId        String?   // For reply threads
+  threadDepth     Int       @default(0)
+  
+  // Moderation
+  isModerated     Boolean   @default(false)
+  moderatedBy     String?
+  moderatedAt     DateTime?
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  
+  // Foreign Keys
+  reportId        String
+  shareId         String?   // If comment is on a shared report
+  userId          String?   // Null for anonymous comments
+  
+  // Relations
+  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  share           ReportShare?    @relation(fields: [shareId], references: [id], onDelete: SetNull)
+  user            User?           @relation("AuthoredComments", fields: [userId], references: [id], onDelete: SetNull)
+  moderator       User?           @relation("ModeratedComments", fields: [moderatedBy], references: [id], onDelete: SetNull)
+  parent          ReportComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies         ReportComment[] @relation("CommentReplies")
+  
+  @@index([reportId, isDeleted])
+  @@index([shareId, isDeleted])
+  @@index([userId, createdAt])
+  @@index([parentId, threadDepth])
+  @@map("report_comments")
+}
+
+model ReportCache {
+  id              String    @id @default(cuid())
+  cacheKey        String    @unique
+  data            Json      // Cached data
+  metadata        Json      @default("{}")
+  
+  // Cache Management
+  hitCount        Int       @default(0)
+  lastHitAt       DateTime?
+  expiresAt       DateTime
+  
+  // Data Info
+  dataSize        Int?      // Size in bytes
+  rowCount        Int?      // Number of rows
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  
+  // Foreign Keys
+  reportId        String
+  
+  // Relations
+  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  @@index([reportId, expiresAt])
+  @@index([cacheKey, expiresAt])
+  @@index([expiresAt]) // For cleanup
+  @@map("report_cache")
 }

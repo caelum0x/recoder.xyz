@@ -8,6 +8,7 @@
     "noImplicitAny": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
     "forceConsistentCasingInFileNames": false,
     "resolveJsonModule": true,
     "allowJs": true,
@@ -19,7 +20,14 @@
     "moduleResolution": "node",
     "types": ["node"],
     "typeRoots": ["./src/types", "./node_modules/@types"],
-    "noEmit": false
+    "noEmit": false,
+    "noImplicitReturns": false,
+    "noImplicitThis": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "allowSyntheticDefaultImports": true,
+    "allowUnreachableCode": true,
+    "allowUnusedLabels": true
   },
   "include": ["src/**/*"],
   "exclude": [

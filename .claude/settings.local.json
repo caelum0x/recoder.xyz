@@ -157,7 +157,10 @@
       "Bash(npx vercel:*)",
       "WebFetch(domain:worthy-truth-production.up.railway.app)",
       "WebFetch(domain:recoder.xyz)",
-      "WebFetch(domain:chat.recoder.xyz)"
+      "WebFetch(domain:chat.recoder.xyz)",
+      "Bash(pnpm prisma generate:*)",
+      "Bash(pnpm prisma migrate:*)",
+      "Bash(pntml prisma:*)"
     ],
     "deny": []
   }
