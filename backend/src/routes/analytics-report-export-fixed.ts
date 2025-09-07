@@ -1,0 +1,339 @@
+import { Router, Request, Response } from 'express';
+import { body, query, validationResult } from 'express-validator';
+import { authenticate } from '../middleware/auth';
+import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
+import { Parser } from 'json2csv';
+import { createCanvas } from 'canvas';
+import { Chart, ChartConfiguration } from 'chart.js';
+import 'chart.js/auto';
+import archiver from 'archiver';
+
+const router = Router();
+
+// Export formats enum
+export enum ExportFormat {
+  PDF = 'pdf',
+  EXCEL = 'excel',
+  CSV = 'csv',
+  JSON = 'json',
+  ZIP = 'zip'
+}
+
+interface ExportOptions {
+  includeCharts: boolean;
+  includeRawData: boolean;
+  chartDimensions: { width: number; height: number };
+  compression: boolean;
+  customBranding: boolean;
+}
+
+interface ExportResult {
+  buffer: Buffer;
+  contentType: string;
+  filename: string;
+}
+
+/**
+ * POST /api/analytics/reports/:reportId/export
+ * Export analytics report in various formats
+ */
+router.post('/reports/:reportId/export', [
+  authenticate,
+  body('format').isIn(Object.values(ExportFormat)),
+  body('options').optional().isObject(),
+  body('customization').optional().isObject(),
+], async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array()
+      });
+    }
+
+    const { reportId } = req.params;
+    const { format, options = {}, customization = {} }: {
+      format: ExportFormat;
+      options: Partial<ExportOptions>;
+      customization: any;
+    } = req.body;
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Mock report data (replace with actual Prisma query when models are added)
+    const report = {
+      id: reportId,
+      userId,
+      title: 'Analytics Report',
+      description: 'Sample analytics report',
+      createdAt: new Date(),
+      data: generateMockData(),
+      user: {
+        id: userId,
+        name: 'Test User',
+        email: 'test@example.com'
+      }
+    };
+
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found or access denied' });
+    }
+
+    // Check export limits (mock implementation)
+    const plan: 'free' | 'pro' | 'enterprise' = 'pro';
+    const exportLimits = { free: 10, pro: 100, enterprise: 1000 };
+    const monthlyExports = 5; // Mock count
+
+    if (monthlyExports >= exportLimits[plan as keyof typeof exportLimits]) {
+      return res.status(403).json({
+        error: `Export limit reached. ${plan} plan allows ${exportLimits[plan as keyof typeof exportLimits]} exports per month.`,
+        upgradeRequired: plan === 'free'
+      });
+    }
+
+    // Generate report data
+    const reportData = await generateReportData(report, options);
+
+    // Create export based on format
+    let exportResult;
+    const defaultOptions: ExportOptions = {
+      includeCharts: true,
+      includeRawData: true,
+      chartDimensions: { width: 800, height: 400 },
+      compression: false,
+      customBranding: plan !== 'free',
+      ...options
+    };
+
+    switch (format) {
+      case ExportFormat.PDF:
+        exportResult = await generatePDFExport(reportData, defaultOptions, customization);
+        break;
+      case ExportFormat.EXCEL:
+        exportResult = await generateExcelExport(reportData, defaultOptions, customization);
+        break;
+      case ExportFormat.CSV:
+        exportResult = await generateCSVExport(reportData, defaultOptions);
+        break;
+      case ExportFormat.JSON:
+        exportResult = await generateJSONExport(reportData, defaultOptions);
+        break;
+      case ExportFormat.ZIP:
+        exportResult = await generateZIPExport(reportData, defaultOptions, customization);
+        break;
+      default:
+        return res.status(400).json({ error: 'Unsupported export format' });
+    }
+
+    // Log export activity (mock implementation)
+    console.log(`Export completed: ${reportId} by ${userId} in ${format} format`);
+
+    // Set appropriate headers and send file
+    res.setHeader('Content-Type', exportResult.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
+    res.setHeader('Content-Length', exportResult.buffer.length);
+    res.send(exportResult.buffer);
+
+  } catch (error) {
+    console.error('Analytics export error:', error);
+    res.status(500).json({ error: 'Failed to export analytics report' });
+  }
+});
+
+/**
+ * GET /api/analytics/reports/:reportId/export/history
+ * Get export history for a report
+ */
+router.get('/reports/:reportId/export/history', [
+  authenticate,
+  query('page').optional().isInt({ min: 1 }),
+  query('limit').optional().isInt({ min: 1, max: 100 }),
+], async (req: Request, res: Response) => {
+  try {
+    const { reportId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const userId = req.user?.id;
+
+    // Mock implementation (replace with actual Prisma queries)
+    const mockExports = Array.from({ length: limit }, (_, i) => ({
+      id: `export-${i + 1}`,
+      reportId,
+      userId,
+      format: Object.values(ExportFormat)[i % Object.values(ExportFormat).length],
+      createdAt: new Date(Date.now() - i * 24 * 60 * 60 * 1000),
+      fileSize: Math.floor(Math.random() * 1000000),
+      downloadCount: Math.floor(Math.random() * 10),
+      status: 'completed',
+      report: {
+        name: 'Sample Report',
+        category: 'analytics'
+      }
+    }));
+
+    const totalCount = 50; // Mock total
+
+    res.json({
+      exports: mockExports,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNext: page * limit < totalCount,
+        hasPrevious: page > 1
+      }
+    });
+
+  } catch (error) {
+    console.error('Export history error:', error);
+    res.status(500).json({ error: 'Failed to fetch export history' });
+  }
+});
+
+// Helper functions
+function generateMockData() {
+  return Array.from({ length: 100 }, (_, i) => ({
+    id: i + 1,
+    date: new Date(Date.now() - (99 - i) * 24 * 60 * 60 * 1000),
+    value: Math.floor(Math.random() * 1000),
+    category: ['A', 'B', 'C'][Math.floor(Math.random() * 3)]
+  }));
+}
+
+async function generateReportData(report: any, options: any) {
+  return {
+    ...report,
+    processedData: report.data,
+    charts: [
+      {
+        type: 'line',
+        title: 'Trend Analysis',
+        data: report.data.slice(0, 30)
+      }
+    ]
+  };
+}
+
+async function generatePDFExport(reportData: any, options: ExportOptions, customization: any): Promise<ExportResult> {
+  const doc = new PDFDocument();
+  const chunks: Buffer[] = [];
+
+  doc.on('data', chunk => chunks.push(chunk));
+  
+  return new Promise((resolve) => {
+    doc.on('end', () => {
+      const buffer = Buffer.concat(chunks);
+      resolve({
+        buffer,
+        contentType: 'application/pdf',
+        filename: `${reportData.title.replace(/\s+/g, '-')}.pdf`
+      });
+    });
+
+    // Generate PDF content
+    doc.fontSize(20).text(reportData.title, { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`Generated: ${new Date().toISOString()}`);
+    doc.text(`Total Records: ${reportData.data.length}`);
+    doc.moveDown();
+
+    // Add data table
+    if (reportData.data.length > 0) {
+      const headers = Object.keys(reportData.data[0]);
+      doc.text(headers.join(' | '));
+      doc.moveDown(0.5);
+      
+      reportData.data.slice(0, 20).forEach((row: any) => {
+        doc.text(Object.values(row).join(' | '));
+      });
+    }
+
+    doc.end();
+  });
+}
+
+async function generateExcelExport(reportData: any, options: ExportOptions, customization: any): Promise<ExportResult> {
+  const workbook = new ExcelJS.Workbook();
+  
+  // Main data sheet
+  const worksheet = workbook.addWorksheet('Data');
+  if (reportData.data.length > 0) {
+    const headers = Object.keys(reportData.data[0]);
+    worksheet.addRow(headers);
+    reportData.data.forEach((row: any) => {
+      worksheet.addRow(Object.values(row));
+    });
+  }
+
+  // Summary sheet
+  const summarySheet = workbook.addWorksheet('Summary');
+  summarySheet.addRow(['Report Title', reportData.title]);
+  summarySheet.addRow(['Generated', new Date().toISOString()]);
+  summarySheet.addRow(['Total Records', reportData.data.length]);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  
+  return {
+    buffer: Buffer.from(buffer),
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    filename: `${reportData.title.replace(/\s+/g, '-')}.xlsx`
+  };
+}
+
+async function generateCSVExport(reportData: any, options: ExportOptions): Promise<ExportResult> {
+  const parser = new Parser();
+  const csv = parser.parse(reportData.data);
+  
+  return {
+    buffer: Buffer.from(csv),
+    contentType: 'text/csv',
+    filename: `${reportData.title.replace(/\s+/g, '-')}.csv`
+  };
+}
+
+async function generateJSONExport(reportData: any, options: ExportOptions): Promise<ExportResult> {
+  const json = JSON.stringify(reportData, null, 2);
+  
+  return {
+    buffer: Buffer.from(json),
+    contentType: 'application/json',
+    filename: `${reportData.title.replace(/\s+/g, '-')}.json`
+  };
+}
+
+async function generateZIPExport(reportData: any, options: ExportOptions, customization: any): Promise<ExportResult> {
+  const archive = archiver('zip');
+  const chunks: Buffer[] = [];
+
+  archive.on('data', chunk => chunks.push(chunk));
+
+  return new Promise(async (resolve, reject) => {
+    archive.on('end', () => {
+      const buffer = Buffer.concat(chunks);
+      resolve({
+        buffer,
+        contentType: 'application/zip',
+        filename: `${reportData.title.replace(/\s+/g, '-')}-export.zip`
+      });
+    });
+
+    archive.on('error', reject);
+
+    // Add files to archive
+    const csvResult = await generateCSVExport(reportData, options);
+    const jsonResult = await generateJSONExport(reportData, options);
+    
+    archive.append(csvResult.buffer, { name: csvResult.filename });
+    archive.append(jsonResult.buffer, { name: jsonResult.filename });
+    
+    archive.finalize();
+  });
+}
+
+export default router;
