@@ -150,6 +150,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
     "@qwen-code/qwen-code": "^0.0.7",
+    "@radix-ui/react-progress": "^1.1.7",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.15.5",
@@ -158,6 +159,7 @@
     "chalk": "^4.1.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.23.12",
     "fs-extra": "^11.2.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.446.0",
@@ -170,7 +172,7 @@
     "recoder-cli-router": "^2.3.1",
     "recoder-web-ai-assistant": "^1.0.0",
     "redis": "^5.7.0",
-    "tailwind-merge": "^2.5.2",
+    "tailwind-merge": "^2.6.0",
     "tailwindcss": "^3.4.1",
     "yjs": "^13.6.27",
     "zod": "^3.25.76"
