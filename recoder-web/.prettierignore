@@ -1,0 +1,90 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production builds
+.next/
+out/
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Test results
+test-results/
+playwright-report/
+
+# Cache directories
+.cache/
+.parcel-cache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Lock files (preserve formatting)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated files
+*.d.ts.map
+*.js.map
+
+# Database
+*.db
+*.sqlite
+
+# Prisma
+prisma/migrations/
+
+# Documentation build
+docs/.vitepress/dist
+docs/.vitepress/cache
+
+# Temporary files
+*.tmp
+*.temp
+
+# Generated API documentation
+api-docs/
+
+# Bundle analyzer reports
+.next/analyze/
+
+# Storybook build outputs
+storybook-static/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Husky
+.husky/_/

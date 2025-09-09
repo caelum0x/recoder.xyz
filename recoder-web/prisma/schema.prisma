@@ -83,6 +83,11 @@ model User {
   campaignTemplates CampaignTemplate[]
   templateUsages TemplateUsage[]
   analyticsEvents AnalyticsEvent[]
+  analyticsDashboards AnalyticsDashboard[]
+  dashboardCollaborations DashboardCollaborator[]
+  dashboardInvitations DashboardCollaborator[] @relation("DashboardInviter")
+  dashboardViews DashboardView[]
+  analyticsMetrics AnalyticsMetric[]
   subscription   Subscription?
   workflowExecutions WorkflowExecution[]
   
@@ -611,20 +616,6 @@ model TemplateUsage {
   @@index([createdAt])
 }
 
-model AnalyticsEvent {
-  id                String   @id @default(cuid())
-  userId            String
-  type              String   // media_upload, processing_complete, template_usage, etc.
-  metadata          Json?
-  createdAt         DateTime @default(now())
-
-  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([type])
-  @@index([createdAt])
-}
-
 model Subscription {
   id                String   @id @default(cuid())
   userId            String   @unique
@@ -1039,4 +1030,100 @@ model TooltipFeedback {
   @@index([createdAt])
 }
 
+// Analytics Dashboard Models
+model AnalyticsDashboard {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  layout      String   @default("grid") // grid, masonry, flow
+  gridSize    Json     @default("{\"columns\": 4, \"rowHeight\": 200}")
+  widgets     Json     @default("[]") // Array of widget configurations
+  widgetCount Int      @default(0)
+  settings    Json     @default("{\"autoRefresh\": false, \"refreshInterval\": 30000, \"theme\": \"light\", \"showGrid\": true, \"allowResize\": true}")
+  sharing     Json     @default("{\"isPublic\": false, \"permissions\": [\"view\"]}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String
 
+  // Relations
+  user          User                    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  collaborators DashboardCollaborator[]
+  views         DashboardView[]
+
+  @@map("analytics_dashboards")
+}
+
+model DashboardCollaborator {
+  id          String   @id @default(cuid())
+  dashboardId String
+  userId      String
+  permission  String   @default("view") // view, edit, admin
+  invitedBy   String
+  invitedAt   DateTime @default(now())
+  acceptedAt  DateTime?
+
+  // Relations
+  dashboard AnalyticsDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inviter   User               @relation("DashboardInviter", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardId, userId])
+  @@map("dashboard_collaborators")
+}
+
+model DashboardView {
+  id          String   @id @default(cuid())
+  dashboardId String
+  userId      String?
+  sessionId   String?
+  viewedAt    DateTime @default(now())
+  duration    Int?     // Duration in seconds
+  userAgent   String?
+  ip          String?
+
+  // Relations
+  dashboard AnalyticsDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("dashboard_views")
+}
+
+model AnalyticsMetric {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  type        String   // counter, gauge, histogram, summary
+  description String?
+  category    String?
+  unit        String?
+  value       Float
+  metadata    Json     @default("{}")
+  timestamp   DateTime @default(now())
+  userId      String?
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name, timestamp])
+  @@index([category, timestamp])
+  @@map("analytics_metrics")
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  name       String
+  category   String?
+  properties Json     @default("{}")
+  userId     String?
+  sessionId  String?
+  timestamp  DateTime @default(now())
+  userAgent  String?
+  ip         String?
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name, timestamp])
+  @@index([category, timestamp])
+  @@index([userId, timestamp])
+  @@map("analytics_events")
+}

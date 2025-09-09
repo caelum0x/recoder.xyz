@@ -27,7 +27,8 @@
     "noUnusedParameters": false,
     "allowSyntheticDefaultImports": true,
     "allowUnreachableCode": true,
-    "allowUnusedLabels": true
+    "allowUnusedLabels": true,
+    "downlevelIteration": true
   },
   "include": ["src/**/*"],
   "exclude": [
@@ -38,7 +39,6 @@
     "**/*.spec.ts",
     "src/api/providers/**/*",
     "src/api/transform/**/*",
-    "src/middleware/**/*",
     "src/routes/cost-optimization.ts",
     "src/routes/data-portability.ts", 
     "src/routes/i18n.ts",

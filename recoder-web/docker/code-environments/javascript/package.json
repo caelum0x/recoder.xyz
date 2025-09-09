@@ -1,0 +1,60 @@
+{
+  "name": "javascript-code-environment",
+  "version": "1.0.0",
+  "description": "Sandboxed JavaScript code execution environment",
+  "main": "execute.js",
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "axios": "^1.6.0",
+    "express": "^4.18.2",
+    "moment": "^2.29.4",
+    "uuid": "^9.0.1",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "validator": "^13.11.0",
+    "chalk": "^4.1.2",
+    "fs-extra": "^11.1.1",
+    "path": "^0.12.7",
+    "crypto": "^1.0.1",
+    "util": "^0.12.5",
+    "stream": "^0.0.2",
+    "events": "^3.3.0",
+    "buffer": "^6.0.3",
+    "process": "^0.11.10",
+    "os": "^0.1.2",
+    "url": "^0.11.3",
+    "querystring": "^0.2.1",
+    "http": "^0.0.1-security",
+    "https": "^1.0.0",
+    "net": "^1.0.2",
+    "tls": "^0.0.1",
+    "dns": "^0.2.2",
+    "readline": "^1.3.0",
+    "child_process": "^1.0.2",
+    "cluster": "^0.7.7",
+    "worker_threads": "^0.1.0",
+    "assert": "^2.0.0",
+    "timers": "^0.1.1",
+    "console": "^0.7.2",
+    "vm": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "typescript": "^5.2.2",
+    "ts-node": "^10.9.1"
+  },
+  "scripts": {
+    "test": "node test.js",
+    "execute": "node execute.js",
+    "install-package": "node package-manager.js install",
+    "list-packages": "node package-manager.js list"
+  },
+  "keywords": [
+    "javascript",
+    "code-execution",
+    "sandbox",
+    "docker"
+  ],
+  "author": "Recoder.xyz",
+  "license": "MIT"
+}

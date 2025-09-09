@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Return file as download
-    return new NextResponse(exportContent, {
+    return new NextResponse(exportContent as BodyInit, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,
@@ -183,7 +183,13 @@ async function generateExportData(
 
 function generateTimeSeriesData(timeRange: string) {
   const days = getTimeRangeDays(timeRange);
-  const data = [];
+  const data: Array<{
+    date: string;
+    sessions: number;
+    aiRequests: number;
+    errors: number;
+    cost: number;
+  }> = [];
   const now = new Date();
   
   for (let i = days - 1; i >= 0; i--) {
@@ -214,7 +220,7 @@ function getTimeRangeDays(timeRange: string): number {
 }
 
 function generateCSV(data: any): string {
-  const csvRows = [];
+  const csvRows: string[] = [];
   
   // Add metadata
   csvRows.push('Analytics Export Report');

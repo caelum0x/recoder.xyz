@@ -1,0 +1,296 @@
+/* Accessibility Enhancements */
+
+/* High Contrast Mode */
+.high-contrast {
+  --background: #000000 !important;
+  --foreground: #ffffff !important;
+  --muted: #1a1a1a !important;
+  --muted-foreground: #e5e5e5 !important;
+  --border: #ffffff !important;
+  --primary: #ffffff !important;
+  --primary-foreground: #000000 !important;
+  --secondary: #333333 !important;
+  --secondary-foreground: #ffffff !important;
+  --accent: #ffff00 !important;
+  --accent-foreground: #000000 !important;
+  --destructive: #ff0000 !important;
+  --destructive-foreground: #ffffff !important;
+  --ring: #ffffff !important;
+}
+
+.high-contrast * {
+  border-color: var(--border) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.high-contrast button {
+  border: 2px solid var(--border) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.high-contrast button:hover {
+  background-color: var(--foreground) !important;
+  color: var(--background) !important;
+}
+
+.high-contrast input,
+.high-contrast textarea,
+.high-contrast select {
+  border: 2px solid var(--border) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.high-contrast a {
+  color: #ffff00 !important;
+  text-decoration: underline !important;
+}
+
+.high-contrast a:hover {
+  color: #ffffff !important;
+  background-color: #0000ff !important;
+}
+
+/* Reduced Motion */
+.reduce-motion,
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Large Focus Indicators */
+.large-focus *:focus,
+.large-focus *:focus-visible {
+  outline: 4px solid #0066cc !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 8px rgba(0, 102, 204, 0.2) !important;
+}
+
+.large-focus button:focus,
+.large-focus input:focus,
+.large-focus textarea:focus,
+.large-focus select:focus,
+.large-focus a:focus {
+  outline: 4px solid #0066cc !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 8px rgba(0, 102, 204, 0.2) !important;
+}
+
+/* Color Blind Friendly */
+.color-blind-friendly {
+  --success-color: #0066cc;
+  --error-color: #cc0000;
+  --warning-color: #ff6600;
+  --info-color: #6600cc;
+}
+
+.color-blind-friendly .text-green-600,
+.color-blind-friendly .text-green-500 {
+  color: var(--success-color) !important;
+}
+
+.color-blind-friendly .text-red-600,
+.color-blind-friendly .text-red-500 {
+  color: var(--error-color) !important;
+}
+
+.color-blind-friendly .text-yellow-600,
+.color-blind-friendly .text-yellow-500 {
+  color: var(--warning-color) !important;
+}
+
+.color-blind-friendly .bg-green-100::after {
+  content: "✓";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.color-blind-friendly .bg-red-100::after {
+  content: "✗";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.color-blind-friendly .bg-yellow-100::after {
+  content: "⚠";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* Screen Reader Optimization */
+.screen-reader-optimized {
+  /* Ensure sufficient spacing for screen reader navigation */
+}
+
+.screen-reader-optimized h1,
+.screen-reader-optimized h2,
+.screen-reader-optimized h3,
+.screen-reader-optimized h4,
+.screen-reader-optimized h5,
+.screen-reader-optimized h6 {
+  margin-bottom: 1rem !important;
+}
+
+.screen-reader-optimized p {
+  margin-bottom: 0.75rem !important;
+}
+
+.screen-reader-optimized ul,
+.screen-reader-optimized ol {
+  margin-bottom: 1rem !important;
+}
+
+.screen-reader-optimized li {
+  margin-bottom: 0.25rem !important;
+}
+
+/* Enhanced Keyboard Navigation */
+.enhanced-keyboard-nav {
+  /* Skip to content link */
+}
+
+.enhanced-keyboard-nav .skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  z-index: 1000;
+  text-decoration: none;
+  border-radius: 0 0 4px 4px;
+}
+
+.enhanced-keyboard-nav .skip-to-content:focus {
+  top: 0;
+}
+
+.enhanced-keyboard-nav [tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* Ensure interactive elements have proper focus */
+.enhanced-keyboard-nav button,
+.enhanced-keyboard-nav input,
+.enhanced-keyboard-nav textarea,
+.enhanced-keyboard-nav select,
+.enhanced-keyboard-nav a,
+.enhanced-keyboard-nav [role="button"],
+.enhanced-keyboard-nav [role="link"],
+.enhanced-keyboard-nav [tabindex="0"] {
+  position: relative;
+}
+
+.enhanced-keyboard-nav button:focus,
+.enhanced-keyboard-nav input:focus,
+.enhanced-keyboard-nav textarea:focus,
+.enhanced-keyboard-nav select:focus,
+.enhanced-keyboard-nav a:focus,
+.enhanced-keyboard-nav [role="button"]:focus,
+.enhanced-keyboard-nav [role="link"]:focus,
+.enhanced-keyboard-nav [tabindex="0"]:focus {
+  z-index: 10;
+}
+
+/* Font Size Scaling */
+.font-large {
+  font-size: 1.125rem !important;
+}
+
+.font-extra-large {
+  font-size: 1.375rem !important;
+}
+
+/* Custom properties for dynamic font sizing */
+:root {
+  --base-font-size: 16px;
+}
+
+body {
+  font-size: var(--base-font-size);
+}
+
+/* Responsive text scaling */
+@media (max-width: 768px) {
+  :root[style*="--base-font-size: 18px"] {
+    --base-font-size: 16px;
+  }
+  
+  :root[style*="--base-font-size: 22px"] {
+    --base-font-size: 18px;
+  }
+}
+
+/* Screen Reader Only Content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus-visible polyfill */
+.js-focus-visible :focus:not(.focus-visible) {
+  outline: none;
+}
+
+/* High contrast focus for Windows High Contrast Mode */
+@media (prefers-contrast: high) {
+  *:focus {
+    outline: 3px solid;
+    outline-offset: 2px;
+  }
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Respect user's color scheme preferences */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light-theme) {
+    color-scheme: dark;
+  }
+}
+
+/* Ensure minimum tap target size for mobile */
+@media (max-width: 768px) {
+  button, 
+  input[type="button"], 
+  input[type="submit"], 
+  input[type="reset"], 
+  a,
+  [role="button"],
+  [tabindex="0"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
