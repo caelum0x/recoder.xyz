@@ -5,9 +5,9 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import * as jwt from 'jsonwebtoken';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { rateLimit } from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../database/prisma';

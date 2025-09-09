@@ -117,6 +117,11 @@ class EnhancedPrismaClient {
   get usage() { return this.client.dodoUsage; }
   get charge() { return this.client.dodoCharge; }
 
+  // Game development models
+  get codeGeneration() { return this.client.codeGeneration; }
+  get gameBuild() { return this.client.gameBuild; }
+  get gameAsset() { return this.client.gameAsset; }
+
   // Expose Prisma methods
   get $connect() { return this.client.$connect.bind(this.client); }
   get $disconnect() { return this.client.$disconnect.bind(this.client); }

@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { authenticate } from '../middleware/auth';
-import ExcelJS from 'exceljs';
-import PDFDocument from 'pdfkit';
+import * as ExcelJS from 'exceljs';
+import PDFDocument = require('pdfkit');
 import { Parser } from 'json2csv';
 import { createCanvas } from 'canvas';
 import { Chart, ChartConfiguration } from 'chart.js';
 import 'chart.js/auto';
-import archiver from 'archiver';
+import archiver = require('archiver');
 
 const router = Router();
 
@@ -84,8 +84,9 @@ router.post('/reports/:reportId/export', [
       return res.status(404).json({ error: 'Report not found or access denied' });
     }
 
-    // Check export limits (mock implementation)
-    const plan: 'free' | 'pro' | 'enterprise' = 'pro';
+    // Get user's plan from their subscription
+    const userPlan = req.user?.subscriptionPlan || 'free';
+    const plan: 'free' | 'pro' | 'enterprise' = userPlan as 'free' | 'pro' | 'enterprise';
     const exportLimits = { free: 10, pro: 100, enterprise: 1000 };
     const monthlyExports = 5; // Mock count
 

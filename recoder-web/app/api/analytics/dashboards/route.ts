@@ -220,7 +220,11 @@ export async function POST(request: NextRequest) {
 
 // Helper function to generate mock time series data
 function generateMockTimeSeriesData(type: string, days: number) {
-  const data = [];
+  const data: Array<{
+    date: string;
+    value: number;
+    timestamp: string;
+  }> = [];
   const now = new Date();
   
   for (let i = days - 1; i >= 0; i--) {

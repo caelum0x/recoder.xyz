@@ -21,6 +21,7 @@ model User {
   apiKey          String?   @unique
   refreshToken    String?
   lastLoginAt     DateTime?
+  avatar          String?   // User avatar URL for mobile API
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -65,17 +66,30 @@ model User {
   authoredComments        ReportComment[] @relation("AuthoredComments")
   moderatedComments       ReportComment[] @relation("ModeratedComments")
 
+  // Mobile and Game Development Relations
+  gameAssets              GameAsset[]
+  gameBuilds              GameBuild[]
+  codeGenerations         CodeGeneration[]
+  mobileAnalytics         MobileAnalytics[]
+  pushNotifications       PushNotification[]
+  offlineActions          OfflineAction[]
+  mobileSessions          MobileSession[]
+
   @@map("users")
 }
 
 model Project {
   id                      String    @id @default(cuid())
   name                    String
-  type                    String    // web, mobile, desktop, api, blockchain, ai
+  type                    String    // web, mobile, desktop, api, blockchain, ai, game
   description             String?
   status                  String    @default("planning") // planning, active, completed, archived
+  framework               String?   // React, Vue, Unity, Unreal, etc.
+  language                String?   // TypeScript, JavaScript, C#, C++, etc.
+  isPrivate               Boolean   @default(false)
   config                  Json      @default("{}")
   structure               Json?
+  metadata                Json?     @default("{}")  // Additional project metadata
   lastGenerated           DateTime?
   generatedCodeMetadata   Json?
   createdAt               DateTime  @default(now())
@@ -92,6 +106,9 @@ model Project {
   usageRecords            UsageRecord[]
   analytics               UsageAnalytics[]
   knowledgeBases          CodebaseKnowledge[]
+  gameAssets              GameAsset[]
+  gameBuilds              GameBuild[]
+  codeGenerations         CodeGeneration[]
 
   @@map("projects")
 }
@@ -409,23 +426,28 @@ model OAuthAccount {
 
 // Device Management for Cross-Platform Sync
 model UserDevice {
-  id            String    @id @default(cuid())
-  name          String    // User-friendly device name
-  deviceType    String    // web, cli, extension, mobile, desktop
-  platform      String    // windows, macos, linux, android, ios, browser
-  deviceId      String    // Unique device identifier
-  pushToken     String?   // For push notifications
-  lastActiveAt  DateTime  @default(now())
-  isActive      Boolean   @default(true)
-  metadata      Json      @default("{}")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                      String    @id @default(cuid())
+  name                    String    // User-friendly device name
+  deviceType              String    // web, cli, extension, mobile, desktop
+  platform                String    // windows, macos, linux, android, ios, browser
+  deviceId                String    // Unique device identifier
+  pushToken               String?   // For push notifications
+  version                 String?   // Device OS/app version
+  model                   String?   // Device model
+  lastActiveAt            DateTime  @default(now())
+  lastSeenAt              DateTime?
+  lastSyncAt              DateTime?
+  notificationPreferences Json?     @default("{}")
+  isActive                Boolean   @default(true)
+  metadata                Json      @default("{}")
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   // Foreign keys
-  userId        String
+  userId                  String
 
   // Relations
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@map("user_devices")
@@ -1632,4 +1654,243 @@ model ReportCache {
   @@index([cacheKey, expiresAt])
   @@index([expiresAt]) // For cleanup
   @@map("report_cache")
+}
+
+// Mobile-specific models
+model MobileSession {
+  id                String    @id @default(cuid())
+  sessionToken      String    @unique
+  deviceId          String
+  pushToken         String?
+  platform          String    // ios, android
+  version           String    // app version
+  isActive          Boolean   @default(true)
+  lastActiveAt      DateTime  @default(now())
+  metadata          Json      @default("{}")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Foreign keys
+  userId            String
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("mobile_sessions")
+}
+
+model MobileAnalytics {
+  id                String    @id @default(cuid())
+  event             String    // app_open, screen_view, feature_used, etc.
+  platform          String    // ios, android
+  deviceInfo        Json      @default("{}")
+  screenSize        Json?     @default("{}")
+  appVersion        String?
+  osVersion         String?
+  networkType       String?   // wifi, cellular, offline
+  duration          Int?      // session duration in milliseconds
+  metadata          Json      @default("{}")
+  timestamp         DateTime  @default(now())
+  
+  // Foreign keys
+  userId            String?
+  sessionId         String?
+  
+  // Relations
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, timestamp])
+  @@index([event, platform])
+  @@map("mobile_analytics")
+}
+
+model PushNotification {
+  id                String    @id @default(cuid())
+  title             String
+  body              String
+  data              Json      @default("{}")
+  targetPlatform    String[]  @default([]) // ios, android, all
+  deviceTokens      String[]  @default([])
+  status            String    @default("pending") // pending, sent, delivered, failed
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  errorMessage      String?
+  metadata          Json      @default("{}")
+  createdAt         DateTime  @default(now())
+  
+  // Foreign keys
+  userId            String
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, status])
+  @@index([status, sentAt])
+  @@map("push_notifications")
+}
+
+model OfflineAction {
+  id                String    @id @default(cuid())
+  actionType        String    // create, update, delete
+  resourceType      String    // project, file, generation, etc.
+  resourceId        String?
+  actionData        Json      @default("{}")
+  uuid              String    @unique  // Client-generated UUID for deduplication
+  deviceId          String
+  status            String    @default("pending") // pending, synced, conflict, failed
+  conflictData      Json?     // Conflict resolution data
+  syncedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  
+  // Foreign keys
+  userId            String
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, status])
+  @@index([deviceId, status])
+  @@map("offline_actions")
+}
+
+// Game Development Models
+model GameAsset {
+  id                String    @id @default(cuid())
+  name              String
+  assetType         String    // texture, model, audio, animation, script, prefab, material, shader
+  category          String?   // UI, Environment, Character, etc.
+  filePath          String?   // Path to asset file
+  fileUrl           String?   // URL to asset file
+  fileSize          Int?      // File size in bytes
+  format            String?   // File format: .png, .fbx, .wav, .cs, etc.
+  resolution        String?   // For textures: 1024x1024, etc.
+  duration          Float?    // For audio/video: duration in seconds
+  tags              String[]  @default([])
+  dependencies      String[]  @default([]) // Asset dependencies
+  metadata          Json      @default("{}")
+  status            String    @default("active") // active, deprecated, deleted
+  version           String    @default("1.0.0")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Foreign keys
+  userId            String
+  projectId         String?   // Can belong to main project
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, assetType])
+  @@index([projectId, assetType])
+  @@map("game_assets")
+}
+
+model GameBuild {
+  id                String    @id @default(cuid())
+  buildNumber       String
+  buildName         String?
+  platforms         String[]  @default([]) // Windows, Mac, Linux, iOS, Android, WebGL
+  status            String    @default("queued") // queued, building, completed, failed, cancelled
+  buildType         String    @default("development") // development, release, distribution
+  buildSettings     Json      @default("{}")
+  
+  // Build Details
+  engineVersion     String?
+  buildSize         Int?      // Build size in bytes
+  buildPath         String?   // Path to build files
+  buildUrl          String?   // URL to download build
+  cloudBuild        Boolean   @default(false)
+  autoPublish       Boolean   @default(false)
+  
+  // Timing
+  queuedAt          DateTime  @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  buildDuration     Int?      // Build time in milliseconds
+  
+  // Logs and Errors
+  buildLog          String?   // Build output logs
+  errorLog          String?   // Error logs
+  warningLog        String?   // Warning logs
+  
+  // Publishing
+  publishStatus     String    @default("not_published") // not_published, publishing, published, failed
+  publishedAt       DateTime?
+  publishUrl        String?   // URL where build is published
+  
+  // Metadata
+  metadata          Json      @default("{}")
+  tags              String[]  @default([])
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Foreign keys
+  userId            String
+  projectId         String?
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, status])
+  @@index([projectId, status])
+  @@index([status, queuedAt])
+  @@map("game_builds")
+}
+
+model CodeGeneration {
+  id                String    @id @default(cuid())
+  prompt            String    // Original prompt
+  generatedCode     String?   // Generated code content
+  type              String    // script, component, shader, blueprint, etc.
+  framework         String?   // Unity, React, Unreal, etc.
+  language          String    // C#, JavaScript, TypeScript, HLSL, etc.
+  
+  // Generation Details
+  aiProvider        String?   // anthropic, openai, etc.
+  model             String?   // claude-3-sonnet, gpt-4, etc.
+  tokensUsed        Int?      // Tokens consumed
+  generationTime    Int?      // Generation time in milliseconds
+  complexity        String?   // simple, intermediate, advanced
+  
+  // Code Details
+  files             Json      @default("[]") // Generated files list
+  dependencies      String[]  @default([]) // Required dependencies
+  instructions      String?   // Implementation instructions
+  tests             String?   // Generated test code
+  documentation     String?   // Generated documentation
+  
+  // Quality and Status
+  status            String    @default("completed") // pending, processing, completed, failed
+  quality           String?   // AI-assessed quality: excellent, good, average, poor
+  validated         Boolean   @default(false)
+  validationResults Json?     // Validation results
+  
+  // Usage and Feedback
+  used              Boolean   @default(false) // Whether code was used
+  userRating        Int?      // User rating 1-5
+  feedback          String?   // User feedback
+  
+  // Metadata
+  metadata          Json      @default("{}")
+  version           String    @default("1.0.0")
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Foreign keys
+  userId            String
+  projectId         String?
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, createdAt])
+  @@index([projectId, type])
+  @@index([framework, language])
+  @@map("code_generations")
 }

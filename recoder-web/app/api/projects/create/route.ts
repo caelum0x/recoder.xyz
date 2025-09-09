@@ -122,7 +122,8 @@ Format as valid JSON with clear structure.`;
         ai: ['Python', 'FastAPI', 'TensorFlow', 'OpenAI API', 'Docker'],
         blockchain: ['Solidity', 'Hardhat', 'Web3.js', 'Ethereum', 'IPFS'],
         fullstack: ['React', 'Node.js', 'PostgreSQL', 'Prisma', 'Docker'],
-        microservice: ['Node.js', 'Docker', 'Kubernetes', 'PostgreSQL', 'Redis']
+        microservice: ['Node.js', 'Docker', 'Kubernetes', 'PostgreSQL', 'Redis'],
+        pwa: ['React', 'Next.js', 'TypeScript', 'Workbox', 'Web Push API', 'IndexedDB']
       };
 
       let baseTech = techStacks[projectType] || techStacks.web;
@@ -156,7 +157,8 @@ Format as valid JSON with clear structure.`;
         ai: { time: 10, budget: 35000, health: 88 },
         blockchain: { time: 16, budget: 55000, health: 82 },
         fullstack: { time: 14, budget: 40000, health: 87 },
-        microservice: { time: 20, budget: 75000, health: 85 }
+        microservice: { time: 20, budget: 75000, health: 85 },
+        pwa: { time: 6, budget: 20000, health: 92 }
       };
 
       const base = baseMetrics[type as keyof typeof baseMetrics] || baseMetrics.web;
