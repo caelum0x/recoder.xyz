@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { ProjectCreationModal } from '@/components/projects/create-project-modal';
 import { 
   FolderOpen, 
   Code2, 
@@ -64,7 +65,7 @@ interface Project {
   id: string;
   name: string;
   description: string;
-  type: 'web' | 'mobile' | 'ai' | 'blockchain' | 'fullstack' | 'microservice';
+  type: 'web' | 'mobile' | 'ai' | 'blockchain' | 'fullstack' | 'microservice' | 'pwa';
   status: 'planning' | 'development' | 'testing' | 'deployed' | 'maintenance' | 'archived';
   technology: string[];
   progress: number;
@@ -487,6 +488,7 @@ export default function ProjectsPage() {
                   <SelectItem value="ai" className="rounded-lg">🤖 AI Project</SelectItem>
                   <SelectItem value="blockchain" className="rounded-lg">⛓️ Blockchain</SelectItem>
                   <SelectItem value="fullstack" className="rounded-lg">🏗️ Full Stack</SelectItem>
+                  <SelectItem value="pwa" className="rounded-lg">📱 Progressive Web App</SelectItem>
                   <SelectItem value="microservice" className="rounded-lg">🔧 Microservice</SelectItem>
                 </SelectContent>
               </Select>
@@ -995,7 +997,10 @@ export default function ProjectsPage() {
             {/* Call to Action */}
             <div className="text-center mt-12 pt-8 border-t border-gray-200/50">
               <h4 className="text-lg font-bold text-gray-900 mb-3">Ready to Transform Your Development Workflow?</h4>
-              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105">
+              <Button 
+                onClick={() => setShowCreateModal(true)}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105"
+              >
                 <Plus className="h-5 w-5 mr-2" />
                 Start Your First Project
               </Button>
@@ -1003,6 +1008,17 @@ export default function ProjectsPage() {
           </div>
         </div>
       </div>
+
+      {/* Project Creation Modal */}
+      <ProjectCreationModal 
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onProjectCreated={(project) => {
+          console.log('New project created:', project);
+          // Refresh projects list or add to current list
+          // setProjects(prev => [project, ...prev]);
+        }}
+      />
     </div>
   );
 }

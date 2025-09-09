@@ -1,0 +1,360 @@
+// Business Operations Database Schema - Revenue Analytics and Business Intelligence
+// Add these models to your main prisma schema
+
+model Subscription {
+  id              String   @id @default(cuid())
+  userId          String
+  plan            String   // free, pro, enterprise
+  amount          Float    // Monthly amount in dollars
+  billingCycle    String   // monthly, yearly
+  status          String   // active, cancelled, past_due, unpaid
+  stripeSubscriptionId String?
+  stripePriceId   String?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialStart      DateTime?
+  trialEnd        DateTime?
+  cancelledAt     DateTime?
+  cancelAtPeriodEnd Boolean @default(false)
+  metadata        Json?    // Additional subscription metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments        Payment[]
+  changes         SubscriptionChange[]
+  refunds         Refund[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([plan])
+  @@index([createdAt])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  subscriptionId  String?
+  amount          Float    // Amount in dollars
+  currency        String   @default("usd")
+  status          String   // pending, completed, failed, refunded
+  type            String   // subscription, one_time, upgrade, addon
+  stripePaymentIntentId String?
+  stripeChargeId  String?
+  paymentMethod   String?  // card, bank, paypal, etc.
+  description     String?
+  metadata        Json?
+  failureReason   String?
+  refundedAmount  Float?   @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription    Subscription? @relation(fields: [subscriptionId], references: [id])
+  refunds         Refund[]
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model SubscriptionChange {
+  id              String   @id @default(cuid())
+  subscriptionId  String
+  userId          String
+  changeType      String   // upgrade, downgrade, plan_change, addon_add, addon_remove
+  fromPlan        String?
+  toPlan          String?
+  fromAmount      Float?
+  toAmount        Float?
+  proratedAmount  Float?   // Prorated amount for plan changes
+  effectiveDate   DateTime
+  reason          String?  // User-provided reason for change
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  // Relations
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([userId])
+  @@index([changeType])
+  @@index([effectiveDate])
+  @@map("subscription_changes")
+}
+
+model Refund {
+  id              String   @id @default(cuid())
+  paymentId       String
+  subscriptionId  String?
+  userId          String
+  amount          Float    // Refund amount in dollars
+  currency        String   @default("usd")
+  status          String   // pending, processed, failed, cancelled
+  reason          String   // requested_by_customer, fraud, duplicate, etc.
+  description     String?
+  stripeRefundId  String?
+  processingFee   Float?   @default(0)
+  netRefund       Float?   // Amount after processing fees
+  processedAt     DateTime?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  payment         Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  subscription    Subscription? @relation(fields: [subscriptionId], references: [id])
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([subscriptionId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("refunds")
+}
+
+model MarketingExpense {
+  id              String   @id @default(cuid())
+  campaignName    String
+  channel         String   // google_ads, facebook, linkedin, twitter, etc.
+  amount          Float    // Spend amount in dollars
+  currency        String   @default("usd")
+  date            DateTime
+  campaignId      String?  // External campaign ID
+  impressions     Int?
+  clicks          Int?
+  conversions     Int?
+  ctr             Float?   // Click-through rate
+  cpc             Float?   // Cost per click
+  cpa             Float?   // Cost per acquisition
+  roas            Float?   // Return on ad spend
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([channel])
+  @@index([date])
+  @@index([campaignName])
+  @@map("marketing_expenses")
+}
+
+model RevenueMetric {
+  id              String   @id @default(cuid())
+  date            DateTime
+  period          String   // daily, weekly, monthly
+  totalRevenue    Float
+  subscriptionRevenue Float
+  oneTimeRevenue  Float
+  refunds         Float
+  netRevenue      Float
+  mrr             Float    // Monthly recurring revenue
+  arr             Float    // Annual recurring revenue
+  newSubscriptions Int
+  cancelledSubscriptions Int
+  upgrades        Int
+  downgrades      Int
+  churnRate       Float
+  newCustomers    Int
+  payingCustomers Int
+  cac             Float    // Customer acquisition cost
+  arpu            Float    // Average revenue per user
+  ltv             Float    // Customer lifetime value
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  @@unique([date, period])
+  @@index([date])
+  @@index([period])
+  @@map("revenue_metrics")
+}
+
+model CustomerLifetimeValue {
+  id              String   @id @default(cuid())
+  userId          String
+  cohortMonth     DateTime // Month when user signed up
+  totalRevenue    Float    // Total revenue from this customer
+  monthsActive    Int      // Number of months customer has been active
+  averageMonthlyRevenue Float
+  predictedLtv    Float    // Predicted lifetime value
+  churnProbability Float   // Probability of churning (0-1)
+  segments        String[] // Customer segments (high_value, at_risk, etc.)
+  lastCalculated  DateTime
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([cohortMonth])
+  @@index([totalRevenue])
+  @@index([churnProbability])
+  @@map("customer_lifetime_values")
+}
+
+model CohortAnalysis {
+  id              String   @id @default(cuid())
+  cohortMonth     DateTime // Month when cohort signed up
+  period          Int      // Months since signup (0, 1, 2, 3...)
+  cohortSize      Int      // Original size of cohort
+  activeUsers     Int      // Users still active in this period
+  retentionRate   Float    // Percentage still active
+  revenue         Float    // Revenue from this cohort in this period
+  cumulativeRevenue Float  // Total revenue from cohort up to this period
+  averageRevenue  Float    // Average revenue per user in cohort
+  createdAt       DateTime @default(now())
+
+  @@unique([cohortMonth, period])
+  @@index([cohortMonth])
+  @@index([period])
+  @@map("cohort_analysis")
+}
+
+model CustomReport {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  type            String   // revenue_analytics, user_engagement, feature_adoption, etc.
+  query           Json     // Report configuration/query parameters
+  schedule        String?  // cron expression for scheduled reports
+  recipients      String[] // Email addresses for scheduled reports
+  isActive        Boolean  @default(true)
+  lastRun         DateTime?
+  nextRun         DateTime?
+  format          String   @default("pdf") // pdf, csv, excel
+  createdBy       String
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  creator         User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  executions      ReportExecution[]
+
+  @@index([createdBy])
+  @@index([type])
+  @@index([isActive])
+  @@index([nextRun])
+  @@map("custom_reports")
+}
+
+model ReportExecution {
+  id              String   @id @default(cuid())
+  reportId        String
+  status          String   // running, completed, failed
+  startedAt       DateTime
+  completedAt     DateTime?
+  duration        Int?     // Execution time in milliseconds
+  recordCount     Int?     // Number of records processed
+  fileSize        Int?     // Size of generated file in bytes
+  filePath        String?  // Path to generated file
+  error           String?  // Error message if failed
+  executedBy      String?  // User who triggered execution (null for scheduled)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  // Relations
+  report          CustomReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  executor        User?        @relation(fields: [executedBy], references: [id])
+
+  @@index([reportId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("report_executions")
+}
+
+model BusinessAlert {
+  id              String   @id @default(cuid())
+  name            String
+  type            String   // revenue_drop, churn_spike, goal_reached, etc.
+  metric          String   // mrr, churn_rate, new_signups, etc.
+  condition       Json     // Alert condition configuration
+  threshold       Float
+  operator        String   // greater_than, less_than, equals, etc.
+  isActive        Boolean  @default(true)
+  channels        String[] // email, slack, webhook, etc.
+  recipients      Json     // Channel-specific recipient configuration
+  lastTriggered   DateTime?
+  triggerCount    Int      @default(0)
+  createdBy       String
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  creator         User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  triggers        AlertTrigger[]
+
+  @@index([createdBy])
+  @@index([type])
+  @@index([metric])
+  @@index([isActive])
+  @@map("business_alerts")
+}
+
+model AlertTrigger {
+  id              String   @id @default(cuid())
+  alertId         String
+  value           Float    // The value that triggered the alert
+  threshold       Float    // The threshold that was crossed
+  message         String   // Generated alert message
+  severity        String   // low, medium, high, critical
+  acknowledged    Boolean  @default(false)
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  resolved        Boolean  @default(false)
+  resolvedAt      DateTime?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  // Relations
+  alert           BusinessAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  acknowledger    User?         @relation(fields: [acknowledgedBy], references: [id])
+
+  @@index([alertId])
+  @@index([acknowledged])
+  @@index([resolved])
+  @@index([createdAt])
+  @@map("alert_triggers")
+}
+
+// Add these relations to your existing User model:
+model User {
+  // ... existing fields ...
+  
+  // Business Operations Relations
+  subscriptions        Subscription[]
+  payments             Payment[]
+  subscriptionChanges  SubscriptionChange[]
+  refunds              Refund[]
+  lifetimeValue        CustomerLifetimeValue?
+  customReports        CustomReport[]
+  reportExecutions     ReportExecution[]
+  businessAlerts       BusinessAlert[]
+  alertAcknowledgments AlertTrigger[]
+  
+  // Additional user fields for business analytics
+  acquisitionChannel   String?   // organic, paid_search, social, referral, etc.
+  acquisitionSource    String?   // Specific source (google, facebook, friend, etc.)
+  acquisitionCampaign  String?   // Marketing campaign that acquired user
+  firstPurchaseAt      DateTime? // When user made first purchase
+  lastPurchaseAt       DateTime? // Most recent purchase
+  totalRevenue         Float?    @default(0) // Total revenue from user
+  averageOrderValue    Float?    // Average purchase amount
+  purchaseFrequency    Float?    // Purchases per month
+  churnRisk            String?   // low, medium, high
+  customerSegment      String?   // vip, regular, at_risk, churned
+  country              String?   // For geographic analysis
+  userType             String?   // individual, business, enterprise
+  companySize          String?   // 1-10, 11-50, 51-200, 200+
+  industry             String?   // tech, finance, healthcare, etc.
+}

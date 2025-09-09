@@ -5,6 +5,7 @@ import { AnalyticsProvider } from "@/components/providers/analytics-provider";
 import AuthProvider from "@/lib/auth/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
+import PWAInitializer from "@/components/pwa/pwa-initializer";
 import "./globals.css";
 
 const brandConfig = getBrandConfig();
@@ -21,7 +22,9 @@ export const metadata: Metadata = {
   description,
   icons: {
     icon: "/favicon.ico",
+    apple: "/icons/apple-icon-180.png",
   },
+  manifest: "/api/pwa/manifest",
   openGraph: {
     images: [ogimage],
     title,
@@ -37,6 +40,21 @@ export const metadata: Metadata = {
     title,
     description,
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: brandConfig.fullName,
+  },
+  applicationName: brandConfig.fullName,
+  category: "productivity",
+  keywords: [
+    "AI development",
+    "code generation", 
+    "progressive web app",
+    "developer tools",
+    "real-time collaboration",
+    "offline development"
+  ]
 };
 
 export default function RootLayout({
@@ -58,6 +76,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <AnalyticsProvider>
+              <PWAInitializer />
               {children}
               <Toaster />
             </AnalyticsProvider>

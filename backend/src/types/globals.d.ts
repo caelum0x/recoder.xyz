@@ -3,6 +3,8 @@
  * Handles browser API mocks for server-side compatibility
  */
 
+import { Request as ExpressRequest } from 'express';
+
 declare global {
   var window: {
     location: {
@@ -26,4 +28,17 @@ declare global {
     createElement(tagName: string): any;
     body: any;
   } | undefined;
+}
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: {
+      id: string;
+      email: string;
+      role: string;
+      subscriptionPlan?: string;
+      subscriptionStatus?: string;
+      emailVerified?: boolean;
+    };
+  }
 }

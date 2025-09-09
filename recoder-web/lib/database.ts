@@ -1,6 +1,10 @@
 // Unified database connection and utilities for Recoder.xyz
 import { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
+import { getPrisma } from './prisma';
+
+// Export prisma instance for API routes
+export const prisma = getPrisma();
 
 // Database configuration
 const dbConfig = {
