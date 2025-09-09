@@ -1,0 +1,13 @@
+{
+  "*.{js,jsx,ts,tsx,json,css,md}": [
+    "prettier --write",
+    "git add"
+  ],
+  "*.{js,jsx,ts,tsx}": [
+    "eslint --fix --max-warnings=0",
+    "git add"
+  ],
+  "*.{ts,tsx}": [
+    "tsc --noEmit"
+  ]
+}

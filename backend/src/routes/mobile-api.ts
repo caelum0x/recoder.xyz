@@ -1,0 +1,816 @@
+import { Router } from 'express';
+import { authenticate, hashPassword } from '../middleware/auth';
+import { checkRateLimit } from '../middleware/rate-limit';
+import { validateRequest } from '../middleware/validation';
+import { z } from 'zod';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { prisma } from '../database/prisma';
+import { Request, Response } from 'express';
+import { rateLimit } from 'express-rate-limit';
+
+const router = Router();
+
+// Validation schemas
+const mobileAuthSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  deviceInfo: z.object({
+    deviceId: z.string(),
+    platform: z.enum(['ios', 'android']),
+    version: z.string(),
+    model: z.string().optional(),
+    pushToken: z.string().optional()
+  })
+});
+
+const mobileProjectSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  type: z.enum(['web', 'mobile', 'fullstack', 'api', 'blockchain', 'game']),
+  framework: z.string().optional(),
+  language: z.string().optional(),
+  aiModel: z.string().optional(),
+  isPrivate: z.boolean().default(false)
+});
+
+const mobileCodeGenerationSchema = z.object({
+  prompt: z.string().min(1).max(5000),
+  projectId: z.string().uuid().optional(),
+  type: z.enum(['component', 'page', 'api', 'full-app', 'feature']),
+  framework: z.string().optional(),
+  language: z.string().optional(),
+  includeTests: z.boolean().default(false),
+  includeComments: z.boolean().default(true),
+  complexity: z.enum(['simple', 'intermediate', 'advanced']).default('intermediate')
+});
+
+const mobileOfflineSyncSchema = z.object({
+  actions: z.array(z.object({
+    type: z.enum(['create', 'update', 'delete']),
+    resource: z.string(),
+    data: z.any(),
+    timestamp: z.number(),
+    uuid: z.string()
+  })),
+  deviceId: z.string(),
+  lastSyncTime: z.number()
+});
+
+// Rate limiting for mobile endpoints
+const mobileRateLimit = checkRateLimit(1000);
+
+const authRateLimit = checkRateLimit(500);
+
+// Mobile Authentication
+router.post('/auth/login', authRateLimit, validateRequest(mobileAuthSchema), async (req: Request, res: Response) => {
+  try {
+    const { email, password, deviceInfo } = req.body;
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email }
+      // Don't include subscription relation, use the string field instead
+    });
+
+    if (!user || !await bcrypt.compare(password, user.password)) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid email or password' 
+      });
+    }
+
+    // Update or create device record
+    await prisma.userDevice.upsert({
+      where: {
+        userId_deviceId: {
+          userId: user.id,
+          deviceId: deviceInfo.deviceId
+        }
+      },
+      update: {
+        platform: deviceInfo.platform,
+        version: deviceInfo.version,
+        model: deviceInfo.model,
+        pushToken: deviceInfo.pushToken,
+        lastSeenAt: new Date()
+      },
+      create: {
+        userId: user.id,
+        name: deviceInfo.deviceName || `${deviceInfo.platform} Device`,
+        deviceType: 'mobile',
+        deviceId: deviceInfo.deviceId,
+        platform: deviceInfo.platform,
+        version: deviceInfo.version,
+        model: deviceInfo.model,
+        pushToken: deviceInfo.pushToken,
+        lastSeenAt: new Date()
+      }
+    });
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email,
+        deviceId: deviceInfo.deviceId,
+        isMobile: true
+      },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '30d' }
+    );
+
+    // Generate refresh token
+    const refreshToken = jwt.sign(
+      { userId: user.id, deviceId: deviceInfo.deviceId, type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret',
+      { expiresIn: '90d' }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          // avatar: user.avatar, // Avatar field doesn't exist in schema
+          subscription: user.subscription
+        },
+        expiresIn: 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
+      }
+    });
+  } catch (error) {
+    console.error('Mobile login error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Authentication failed' 
+    });
+  }
+});
+
+// Token refresh
+router.post('/auth/refresh', mobileRateLimit, async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Refresh token required'
+      });
+    }
+
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret'
+    ) as any;
+
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid refresh token'
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId }
+      // No include needed - using subscription string field
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Generate new tokens
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email,
+        deviceId: decoded.deviceId,
+        isMobile: true
+      },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '30d' }
+    );
+
+    const newRefreshToken = jwt.sign(
+      { userId: user.id, deviceId: decoded.deviceId, type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret',
+      { expiresIn: '90d' }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        refreshToken: newRefreshToken,
+        expiresIn: 30 * 24 * 60 * 60 * 1000
+      }
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(401).json({
+      success: false,
+      error: 'Token refresh failed'
+    });
+  }
+});
+
+// Get user profile optimized for mobile
+router.get('/profile', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        // subscription: true, // Don't include - causing type conflicts
+        _count: {
+          select: {
+            projects: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Get mobile-specific stats
+    const recentProjects = await prisma.project.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        status: true,
+        updatedAt: true
+        // framework: true // This field doesn't exist in the schema
+      }
+    });
+
+    // Get usage stats for mobile dashboard
+    const today = new Date();
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    const usageStats = await prisma.usageRecord.aggregate({
+      where: {
+        userId,
+        timestamp: { gte: thisMonth }
+      },
+      _sum: {
+        tokens: true,
+        duration: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          // avatar: user.avatar, // Avatar field doesn't exist in schema
+          createdAt: user.createdAt,
+          subscription: user.subscription
+        },
+        stats: {
+          totalProjects: user._count.projects,
+          tokensUsedThisMonth: usageStats._sum.tokens || 0,
+          apiCallsThisMonth: usageStats._sum.duration || 0
+        },
+        recentProjects
+      }
+    });
+  } catch (error) {
+    console.error('Mobile profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch profile'
+    });
+  }
+});
+
+// Mobile-optimized project creation
+router.post('/projects', authenticate, mobileRateLimit, validateRequest(mobileProjectSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { name, description, type, framework, language, aiModel, isPrivate } = req.body;
+
+    // Check user limits
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { 
+        // subscription: true, // Don't include - causing type conflicts
+        _count: { select: { projects: true } }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Project limits based on subscription
+    const maxProjects = user.subscription === 'free' ? 3 :
+                       user.subscription === 'pro' ? 50 :
+                       user.subscription === 'enterprise' ? 500 : 3;
+
+    if (user._count.projects >= maxProjects) {
+      return res.status(403).json({
+        success: false,
+        error: `Project limit reached (${maxProjects}). Upgrade your plan to create more projects.`,
+        upgradeRequired: true
+      });
+    }
+
+    const project = await prisma.project.create({
+      data: {
+        userId,
+        name,
+        description,
+        type,
+        status: 'planning' // Use valid default status from schema
+        // framework, // Not in schema
+        // language, // Not in schema 
+        // aiModel, // Not in schema
+        // isPrivate, // Not in schema
+        // mobileOptimized: true // Not in schema
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: project
+    });
+  } catch (error) {
+    console.error('Mobile project creation error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create project'
+    });
+  }
+});
+
+// Get projects optimized for mobile
+router.get('/projects', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { page = '1', limit = '10', type, search } = req.query;
+    
+    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    const take = parseInt(limit as string);
+
+    const where: any = { userId };
+    if (type && type !== 'all') {
+      where.type = type;
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { description: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    const [projects, total] = await Promise.all([
+      prisma.project.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          type: true,
+          framework: true,
+          language: true,
+          status: true,
+          isPrivate: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              usageRecords: true
+            }
+          }
+        }
+      }),
+      prisma.project.count({ where })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        projects,
+        pagination: {
+          page: parseInt(page as string),
+          limit: parseInt(limit as string),
+          total,
+          pages: Math.ceil(total / parseInt(limit as string))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Mobile projects error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch projects'
+    });
+  }
+});
+
+// Mobile code generation
+router.post('/generate', authenticate, mobileRateLimit, validateRequest(mobileCodeGenerationSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { prompt, projectId, type, framework, language, includeTests, includeComments, complexity } = req.body;
+
+    // Check user limits and subscription
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+      // Don't include subscription - using string field
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Check generation limits
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayUsage = await prisma.usageRecord.aggregate({
+      where: {
+        userId,
+        createdAt: { gte: today }
+      },
+      _sum: {
+        apiCalls: true
+      }
+    });    const dailyLimit = user.subscription === 'free' ? 10 :
+                      user.subscription === 'pro' ? 100 :
+                      user.subscription === 'enterprise' ? 1000 : 10;
+
+    if ((todayUsage._sum.apiCalls || 0) >= dailyLimit) {
+      return res.status(429).json({
+        success: false,
+        error: `Daily generation limit reached (${dailyLimit}). Upgrade your plan for more generations.`,
+        upgradeRequired: true
+      });
+    }
+
+    // Enhanced prompt for mobile-optimized generation
+    const enhancedPrompt = `
+Generate ${type} code for mobile app development:
+${prompt}
+
+Requirements:
+- Framework: ${framework || 'React Native'}
+- Language: ${language || 'TypeScript'}
+- Complexity: ${complexity}
+- Include tests: ${includeTests}
+- Include comments: ${includeComments}
+- Mobile-optimized: true
+- Responsive design: true
+- Performance optimized: true
+- Accessibility compliant: true
+
+Generate production-ready, well-structured code with proper error handling, loading states, and mobile UX considerations.
+`;
+
+    // Create generation record
+    const generation = await prisma.usageRecord.create({
+      data: {
+        userId,
+        projectId: projectId || null,
+        prompt: enhancedPrompt,
+        type,
+        framework,
+        language,
+        status: 'processing',
+        isMobile: true,
+        complexity
+      }
+    });
+
+    // Simulate AI generation (replace with actual AI service call)
+    const generatedCode = await generateMobileCode({
+      prompt: enhancedPrompt,
+      type,
+      framework,
+      language,
+      includeTests,
+      includeComments,
+      complexity
+    });
+
+    // Update generation record
+    await prisma.usageRecord.update({
+      where: { id: generation.id },
+      data: {
+        generatedCode: generatedCode.code,
+        files: generatedCode.files,
+        status: 'completed',
+        tokensUsed: generatedCode.tokensUsed
+      }
+    });
+
+    // Record usage
+    await prisma.usage.create({
+      data: {
+        userId,
+        type: 'code_generation',
+        tokensUsed: generatedCode.tokensUsed,
+        apiCalls: 1,
+        metadata: {
+          generationType: type,
+          framework,
+          language,
+          complexity,
+          isMobile: true
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: generation.id,
+        code: generatedCode.code,
+        files: generatedCode.files,
+        tokensUsed: generatedCode.tokensUsed,
+        explanation: generatedCode.explanation
+      }
+    });
+  } catch (error) {
+    console.error('Mobile code generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Code generation failed'
+    });
+  }
+});
+
+// Offline sync endpoint
+router.post('/sync', authenticate, mobileRateLimit, validateRequest(mobileOfflineSyncSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { actions, deviceId, lastSyncTime } = req.body;
+
+    const syncResults = [];
+    const conflicts = [];
+
+    // Process each action
+    for (const action of actions) {
+      try {
+        let result;
+        
+        switch (action.resource) {
+          case 'project':
+            result = await syncProjectAction(userId, action);
+            break;
+          case 'file':
+            result = await syncFileAction(userId, action);
+            break;
+          case 'generation':
+            result = await syncGenerationAction(userId, action);
+            break;
+          default:
+            throw new Error(`Unsupported resource type: ${action.resource}`);
+        }
+
+        if (result.conflict) {
+          conflicts.push({
+            uuid: action.uuid,
+            resource: action.resource,
+            conflict: result.conflict
+          });
+        } else {
+          syncResults.push({
+            uuid: action.uuid,
+            success: true,
+            data: result.data
+          });
+        }
+      } catch (error) {
+        syncResults.push({
+          uuid: action.uuid,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    // Get changes since last sync
+    const serverChanges = await getServerChangesSince(userId, lastSyncTime);
+
+    // Update device sync time
+    await prisma.userDevice.updateMany({
+      where: {
+        userId,
+        deviceId
+      },
+      data: {
+        lastSyncAt: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        syncResults,
+        conflicts,
+        serverChanges,
+        syncTime: Date.now()
+      }
+    });
+  } catch (error) {
+    console.error('Mobile sync error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Sync failed'
+    });
+  }
+});
+
+// Push notification registration
+router.post('/notifications/register', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { pushToken, deviceId, preferences } = req.body;
+
+    await prisma.userDevice.updateMany({
+      where: {
+        userId,
+        deviceId
+      },
+      data: {
+        pushToken,
+        notificationPreferences: preferences
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Push notifications registered successfully'
+    });
+  } catch (error) {
+    console.error('Push notification registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to register push notifications'
+    });
+  }
+});
+
+// Get mobile app configuration
+router.get('/config', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+      // Don't include subscription - using string field
+    });
+
+    const config = {
+      features: {
+        codeGeneration: true,
+        offlineMode: user?.subscription !== 'free',
+        realTimeSync: user?.subscription === 'pro' || user?.subscription === 'enterprise',
+        advancedTemplates: user?.subscription !== 'free',
+        collaboration: user?.subscription === 'enterprise',
+        customModels: user?.subscription === 'enterprise'
+      },
+      limits: {
+        dailyGenerations: user?.subscription === 'free' ? 10 : 
+                         user?.subscription === 'pro' ? 100 : 1000,
+        projectLimit: user?.subscription === 'free' ? 3 : 
+                     user?.subscription === 'pro' ? 50 : 500,
+        fileSize: user?.subscription === 'free' ? 1024 * 1024 : // 1MB
+                 user?.subscription === 'pro' ? 10 * 1024 * 1024 : // 10MB
+                 50 * 1024 * 1024 // 50MB
+      },
+      models: {
+        available: user?.subscription?.tier === 'free' ? 
+          ['gpt-3.5-turbo', 'claude-3-haiku'] :
+          user?.subscription?.tier === 'pro' ?
+          ['gpt-3.5-turbo', 'gpt-4', 'claude-3-sonnet', 'claude-3-haiku'] :
+          ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
+      }
+    };
+
+    res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    console.error('Mobile config error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch configuration'
+    });
+  }
+});
+
+// Helper functions
+async function generateMobileCode(params: any) {
+  // This would integrate with your AI service
+  // For now, returning a mock response
+  return {
+    code: `// Generated ${params.type} code for ${params.framework}
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+
+const MyComponent = () => {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Generated Component</Text>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+});
+
+export default MyComponent;`,
+    files: [
+      {
+        path: 'MyComponent.tsx',
+        content: '// Component code here'
+      }
+    ],
+    tokensUsed: 150,
+    explanation: 'Generated a React Native component with proper styling and TypeScript support.'
+  };
+}
+
+async function syncProjectAction(userId: string, action: any) {
+  // Implementation for project sync
+  return { data: action.data };
+}
+
+async function syncFileAction(userId: string, action: any) {
+  // Implementation for file sync
+  return { data: action.data };
+}
+
+async function syncGenerationAction(userId: string, action: any) {
+  // Implementation for generation sync
+  return { data: action.data };
+}
+
+async function getServerChangesSince(userId: string, timestamp: number) {
+  // Get changes from server since timestamp
+  const since = new Date(timestamp);
+  
+  const changes = await Promise.all([
+    prisma.project.findMany({
+      where: {
+        userId,
+        updatedAt: { gt: since }
+      },
+      select: {
+        id: true,
+        name: true,
+        updatedAt: true,
+        type: true
+      }
+    }),
+    // Add other resources as needed
+  ]);
+
+  return {
+    projects: changes[0]
+  };
+}
+
+export default router;

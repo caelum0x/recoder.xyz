@@ -1,0 +1,43 @@
+{
+  "name": "real-sandbox-service",
+  "version": "1.0.0",
+  "description": "Industry-standard code sandbox service with real isolation and resource monitoring",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "docker:build": "docker build -t sandbox-service .",
+    "docker:run": "docker run -p 3001:3001 -v /var/run/docker.sock:/var/run/docker.sock sandbox-service",
+    "install:languages": "npm run install:python && npm run install:java && npm run install:go",
+    "install:python": "docker pull python:3.11-alpine",
+    "install:java": "docker pull openjdk:17-alpine",
+    "install:go": "docker pull golang:1.21-alpine",
+    "test": "jest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "vm2": "^3.9.19",
+    "dockerode": "^4.0.2",
+    "ws": "^8.14.2",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "eslint": "^8.55.0"
+  },
+  "keywords": [
+    "sandbox",
+    "code-execution",
+    "docker",
+    "vm2",
+    "security",
+    "isolation"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
