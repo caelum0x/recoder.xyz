@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { UserDevice } = require('../models/index');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const crypto = require('crypto');
 
 const router = express.Router();
@@ -44,7 +44,7 @@ const router = express.Router();
  *       400:
  *         description: Device already registered or validation error
  */
-router.post('/register', authenticateToken, [
+router.post('/register', authenticate, [
   body('name')
     .isString()
     .isLength({ min: 1, max: 100 })
@@ -82,7 +82,7 @@ router.post('/register', authenticateToken, [
     const { name, deviceType, platform, deviceId, pushToken } = req.body;
 
     // Check if device is already registered for this user
-    const existingDevice = await UserDevice.findOne({
+    const existingDevice = await prisma.userDevice.findOne({
       where: { userId, deviceId }
     });
 
@@ -117,7 +117,7 @@ router.post('/register', authenticateToken, [
     }
 
     // Create new device
-    const device = await UserDevice.create({
+    const device = await prisma.userDevice.create({
       userId,
       name,
       deviceType,
@@ -163,11 +163,11 @@ router.post('/register', authenticateToken, [
  *       200:
  *         description: Devices retrieved successfully
  */
-router.get('/', authenticateToken, async (req, res, next) => {
+router.get('/', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    const devices = await UserDevice.findAll({
+    const devices = await prisma.userDevice.findAll({
       where: { userId, isActive: true },
       attributes: ['id', 'name', 'deviceType', 'platform', 'lastActiveAt', 'createdAt', 'updatedAt'],
       order: [['lastActiveAt', 'DESC']]
@@ -215,13 +215,13 @@ router.get('/', authenticateToken, async (req, res, next) => {
  *       404:
  *         description: Device not found
  */
-router.post('/:deviceId/heartbeat', authenticateToken, async (req, res, next) => {
+router.post('/:deviceId/heartbeat', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { deviceId } = req.params;
     const { metadata } = req.body;
 
-    const device = await UserDevice.findOne({
+    const device = await prisma.userDevice.findOne({
       where: { userId, deviceId, isActive: true }
     });
 
@@ -287,7 +287,7 @@ router.post('/:deviceId/heartbeat', authenticateToken, async (req, res, next) =>
  *       404:
  *         description: Device not found
  */
-router.put('/:deviceId', authenticateToken, [
+router.put('/:deviceId', authenticate, [
   body('name')
     .optional()
     .isString()
@@ -315,7 +315,7 @@ router.put('/:deviceId', authenticateToken, [
     const { deviceId } = req.params;
     const { name, pushToken } = req.body;
 
-    const device = await UserDevice.findOne({
+    const device = await prisma.userDevice.findOne({
       where: { userId, deviceId, isActive: true }
     });
 
@@ -376,12 +376,12 @@ router.put('/:deviceId', authenticateToken, [
  *       404:
  *         description: Device not found
  */
-router.delete('/:deviceId', authenticateToken, async (req, res, next) => {
+router.delete('/:deviceId', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { deviceId } = req.params;
 
-    const device = await UserDevice.findOne({
+    const device = await prisma.userDevice.findOne({
       where: { userId, deviceId, isActive: true }
     });
 

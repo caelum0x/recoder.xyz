@@ -1,15 +1,43 @@
 // Security and Compliance API - Comprehensive security scanning and compliance monitoring
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/database';
+import { prisma } from '../../../../lib/database';
 import { z } from 'zod';
-import rateLimit from '@/lib/rate-limit';
+import rateLimit from '../../../../lib/rate-limit';
 import { v4 as uuidv4 } from 'uuid';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import crypto from 'crypto';
-import fs from 'fs-extra';
-import path from 'path';
+import * as crypto from 'crypto';
+import * as fs from 'fs-extra';
+import * as path from 'path';
+
+// Type definitions for better type safety
+interface UserSession {
+  user: {
+    id: string;
+    email?: string;
+    name?: string;
+  };
+}
+
+interface SecurityScanResult {
+  securityScore: number;
+  vulnerabilities: {
+    total: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    details: any[];
+  };
+  recommendations: any[];
+}
+
+interface ComplianceAuditResult {
+  complianceScore: number;
+  checks: any[];
+  recommendations: any[];
+}
 
 const execAsync = promisify(exec);
 
@@ -55,10 +83,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession() as UserSession | null;
     
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -71,17 +108,7 @@ export async function POST(request: NextRequest) {
       const project = await prisma.project.findFirst({
         where: {
           id: validatedData.projectId,
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id,
-                  role: { in: ['admin', 'editor'] }
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       });
 
@@ -97,8 +124,9 @@ export async function POST(request: NextRequest) {
           scanType: validatedData.scanType,
           scope: validatedData.scope || {},
           compliance: validatedData.compliance || {},
+          severity: validatedData.compliance?.severity || 'medium',
           status: 'queued',
-          createdBy: session.user.id,
+          createdBy: user.id,
           metadata: {
             initiatedAt: new Date().toISOString(),
             version: '1.0.0'
@@ -112,8 +140,9 @@ export async function POST(request: NextRequest) {
       // Log scan creation
       await prisma.auditLog.create({
         data: {
-          userId: session.user.id,
+          userId: user.id,
           action: 'security_scan_create',
+          resource: 'security',
           platform: 'security',
           success: true,
           metadata: {
@@ -136,17 +165,7 @@ export async function POST(request: NextRequest) {
       const project = await prisma.project.findFirst({
         where: {
           id: validatedData.projectId,
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id,
-                  role: { in: ['admin', 'editor'] }
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       });
 
@@ -159,12 +178,12 @@ export async function POST(request: NextRequest) {
         data: {
           id: uuidv4(),
           projectId: validatedData.projectId,
-          standard: validatedData.standard,
+          framework: validatedData.standard,
           auditType: validatedData.auditType,
           scope: validatedData.scope,
           assessor: validatedData.assessor,
           status: 'in_progress',
-          createdBy: session.user.id,
+          createdBy: user.id,
           metadata: {
             initiatedAt: new Date().toISOString()
           }
@@ -177,8 +196,9 @@ export async function POST(request: NextRequest) {
       // Log audit creation
       await prisma.auditLog.create({
         data: {
-          userId: session.user.id,
+          userId: user.id,
           action: 'compliance_audit_create',
+          resource: 'compliance',
           platform: 'security',
           success: true,
           metadata: {
@@ -209,18 +229,8 @@ export async function POST(request: NextRequest) {
       // Check access
       const hasAccess = await prisma.project.findFirst({
         where: {
-          id: scan.projectId,
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id,
-                  role: { in: ['admin', 'editor'] }
-                }
-              }
-            }
-          ]
+          id: scan.projectId!,
+          userId: session.user.id
         }
       });
 
@@ -229,7 +239,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Execute remediation
-      const remediation = await executeRemediation(scan, vulnerabilityId, remediationAction, session.user.id);
+      const remediation = await executeRemediation(scan, vulnerabilityId, remediationAction, user.id);
 
       return NextResponse.json({
         remediation,
@@ -259,8 +269,17 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -314,16 +333,7 @@ export async function GET(request: NextRequest) {
       // Get security scans
       const whereConditions: any = {
         project: {
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       };
 
@@ -350,16 +360,7 @@ export async function GET(request: NextRequest) {
       // Get compliance audits
       const whereConditions: any = {
         project: {
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       };
 
@@ -384,12 +385,12 @@ export async function GET(request: NextRequest) {
 
     } else if (type === 'vulnerabilities') {
       // Get vulnerabilities summary
-      const vulnerabilities = await getVulnerabilitiesSummary(session.user.id, projectId, severity);
+      const vulnerabilities = await getVulnerabilitiesSummary(user.id, projectId ?? undefined, severity ?? undefined);
       return NextResponse.json({ vulnerabilities });
 
     } else {
       // Get security overview
-      const overview = await getSecurityOverview(session.user.id, projectId);
+      const overview = await getSecurityOverview(user.id, projectId || undefined);
       return NextResponse.json({ overview });
     }
 
@@ -418,8 +419,8 @@ async function executeSecurityScan(scan: any, project: any) {
       }
     });
 
-    let vulnerabilities = [];
-    let complianceIssues = [];
+    let vulnerabilities: any[] = [];
+    let complianceIssues: any[] = [];
     let securityScore = 100;
 
     // Execute different types of security scans
@@ -541,7 +542,7 @@ async function executeComplianceAudit(audit: any, project: any) {
     
     // Calculate compliance score
     const totalChecks = complianceResults.checks.length;
-    const passedChecks = complianceResults.checks.filter(c => c.status === 'pass').length;
+    const passedChecks = complianceResults.checks.filter((c: any) => c.status === 'pass').length;
     const complianceScore = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
 
     // Generate compliance report
@@ -755,12 +756,12 @@ async function performComplianceChecks(project: any, standard: string, scope: an
 
   return {
     standard,
-    checks: checksMap[standard] || [],
+    checks: checksMap[standard as keyof typeof checksMap] || [],
     summary: {
-      total: checksMap[standard]?.length || 0,
-      passed: checksMap[standard]?.filter(c => c.status === 'pass').length || 0,
-      failed: checksMap[standard]?.filter(c => c.status === 'fail').length || 0,
-      partial: checksMap[standard]?.filter(c => c.status === 'partial').length || 0
+      total: checksMap[standard as keyof typeof checksMap]?.length || 0,
+      passed: checksMap[standard as keyof typeof checksMap]?.filter((c: any) => c.status === 'pass').length || 0,
+      failed: checksMap[standard as keyof typeof checksMap]?.filter((c: any) => c.status === 'fail').length || 0,
+      partial: checksMap[standard as keyof typeof checksMap]?.filter((c: any) => c.status === 'partial').length || 0
     }
   };
 }
@@ -852,7 +853,7 @@ function getNextAuditDate(standard: string) {
     'ISO27001': 12
   };
 
-  const interval = auditIntervals[standard] || 12;
+  const interval = auditIntervals[standard as keyof typeof auditIntervals] || 12;
   const nextDate = new Date();
   nextDate.setMonth(nextDate.getMonth() + interval);
   return nextDate.toISOString();
@@ -922,14 +923,7 @@ async function executeRemediationInBackground(remediation: any) {
 async function getVulnerabilitiesSummary(userId: string, projectId?: string, severity?: string) {
   const whereConditions: any = {
     project: {
-      OR: [
-        { userId },
-        { 
-          collaborators: {
-            some: { userId }
-          }
-        }
-      ]
+      userId
     },
     status: 'completed'
   };
@@ -950,16 +944,19 @@ async function getVulnerabilitiesSummary(userId: string, projectId?: string, sev
 
   // Aggregate vulnerabilities
   const vulnerabilities = scans.reduce((acc, scan) => {
-    if (scan.results?.vulnerabilities?.details) {
-      acc.push(...scan.results.vulnerabilities.details.map((v: any) => ({
-        ...v,
-        scanId: scan.id,
-        projectName: scan.project.name,
-        scanDate: scan.createdAt
-      })));
+    if ((scan.results as any)?.vulnerabilities?.details) {
+      const vulnerabilityDetails = (scan.results as any).vulnerabilities.details;
+      vulnerabilityDetails.forEach((v: any) => {
+        acc.push({
+          ...v,
+          scanId: scan.id,
+          projectName: scan.project?.name || 'Unknown Project',
+          scanDate: scan.createdAt
+        });
+      });
     }
     return acc;
-  }, []);
+  }, [] as any[]);
 
   // Filter by severity if specified
   const filteredVulns = severity 
@@ -981,14 +978,7 @@ async function getVulnerabilitiesSummary(userId: string, projectId?: string, sev
 async function getSecurityOverview(userId: string, projectId?: string) {
   const whereConditions: any = {
     project: {
-      OR: [
-        { userId },
-        { 
-          collaborators: {
-            some: { userId }
-          }
-        }
-      ]
+      userId
     }
   };
 
@@ -1018,15 +1008,15 @@ async function getSecurityOverview(userId: string, projectId?: string) {
   ]);
 
   // Calculate overall security score
-  const completedScans = scans.filter(s => s.status === 'completed' && s.results?.securityScore);
-  const avgSecurityScore = completedScans.length > 0 
-    ? Math.round(completedScans.reduce((sum, s) => sum + s.results.securityScore, 0) / completedScans.length)
+  const completedScans = scans.filter(s => s.status === 'completed' && (s.results as any)?.securityScore);
+  const avgSecurityScore = completedScans.length > 0
+    ? Math.round(completedScans.reduce((sum, s) => sum + (s.results as any).securityScore, 0) / completedScans.length)
     : 0;
 
   // Calculate compliance score
-  const completedAudits = audits.filter(a => a.status === 'completed' && a.results?.complianceScore);
+  const completedAudits = audits.filter(a => a.status === 'completed' && (a.results as any)?.complianceScore);
   const avgComplianceScore = completedAudits.length > 0
-    ? Math.round(completedAudits.reduce((sum, a) => sum + a.results.complianceScore, 0) / completedAudits.length)
+    ? Math.round(completedAudits.reduce((sum, a) => sum + (a.results as any).complianceScore, 0) / completedAudits.length)
     : 0;
 
   return {

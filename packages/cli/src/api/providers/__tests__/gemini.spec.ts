@@ -2,7 +2,7 @@
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { type ModelInfo, geminiDefaultModelId } from "@recoder/shared"
+import { type ModelInfo, geminiDefaultModelId } from "recoder-shared"
 
 import { GeminiHandler } from "../gemini"
 

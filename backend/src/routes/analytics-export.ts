@@ -64,7 +64,7 @@ const validateRequest = (req: express.Request, res: express.Response, next: expr
       details: errors.array()
     });
   }
-  next();
+  return next();
 };
 
 /**
@@ -205,7 +205,7 @@ router.get('/templates',
       res.json({
         success: true,
         templates,
-        customBrandingAvailable: ['pro', 'enterprise'].includes(req.user.subscriptionPlan || ''),
+        customBrandingAvailable: ['pro', 'enterprise'].includes(req.user?.subscriptionPlan || ''),
         supportedFormats: {
           pdf: ['standard', 'executive', 'detailed', 'summary'],
           excel: ['standard', 'detailed'],

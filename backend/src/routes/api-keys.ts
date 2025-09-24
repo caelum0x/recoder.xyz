@@ -7,6 +7,7 @@ import { authenticateUser, requireSubscription } from '../middleware/auth';
 import { ApiKeyService } from '../models/api-key';
 import { getRateLimitStatus } from '../middleware/rate-limit';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error-helpers';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ const validateRequest = (req: express.Request, res: express.Response, next: expr
       details: errors.array()
     });
   }
-  next();
+  return next();
 };
 
 /**
@@ -30,7 +31,7 @@ router.get('/',
   authenticateUser,
   async (req, res) => {
     try {
-      const apiKeys = await ApiKeyService.listApiKeys(req.user.id);
+      const apiKeys = await ApiKeyService.listApiKeys(req.user?.id || '');
       
       res.json({
         success: true,
@@ -42,7 +43,7 @@ router.get('/',
       
     } catch (error) {
       logger.error('Failed to list API keys', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id
       });
       
@@ -127,7 +128,7 @@ router.post('/',
       
     } catch (error) {
       logger.error('Failed to generate API key', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         body: req.body
       });
@@ -175,7 +176,7 @@ router.get('/:keyId',
       
     } catch (error) {
       logger.error('Failed to get API key', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         keyId: req.params.keyId
       });
@@ -242,7 +243,7 @@ router.put('/:keyId',
       
     } catch (error) {
       logger.error('Failed to update API key', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         keyId: req.params.keyId
       });
@@ -287,7 +288,7 @@ router.delete('/:keyId',
       
     } catch (error) {
       logger.error('Failed to revoke API key', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         keyId: req.params.keyId
       });
@@ -345,7 +346,7 @@ router.get('/:keyId/usage',
       
     } catch (error) {
       logger.error('Failed to get API key usage', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         keyId: req.params.keyId
       });
@@ -393,7 +394,7 @@ router.get('/:keyId/rate-limit',
       
     } catch (error) {
       logger.error('Failed to get rate limit status', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         keyId: req.params.keyId
       });
@@ -453,7 +454,7 @@ router.post('/regenerate/:keyId',
       
     } catch (error) {
       logger.error('Failed to regenerate API key', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         keyId: req.params.keyId
       });

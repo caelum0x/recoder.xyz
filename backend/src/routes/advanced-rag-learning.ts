@@ -1,13 +1,13 @@
 // Advanced RAG Learning API Routes
 // RESTful endpoints for self-learning RAG system with pattern recognition
 
-const express = require('express');
-const { body, query, validationResult } = require('express-validator');
-const rateLimit = require('express-rate-limit');
-
+import express = require('express');
+import { body, query, validationResult } from 'express-validator';
+import rateLimit from 'express-rate-limit';
 import { advancedRAGLearning } from '../services/advanced-rag-learning';
 import { authenticateUser } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error-helpers';
 
 const router = express.Router();
 
@@ -94,7 +94,7 @@ router.post('/query', [
     res.status(500).json({
       success: false,
       error: 'Failed to process learning query',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -152,7 +152,7 @@ router.post('/feedback', [
     res.status(500).json({
       success: false,
       error: 'Failed to process feedback',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -199,7 +199,7 @@ router.get('/recommendations', [
     res.status(500).json({
       success: false,
       error: 'Failed to get recommendations',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -263,7 +263,7 @@ router.post('/analyze-codebase', [
     res.status(500).json({
       success: false,
       error: 'Failed to analyze codebase',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -307,7 +307,7 @@ router.get('/analytics', [
     res.status(500).json({
       success: false,
       error: 'Failed to get learning analytics',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -377,7 +377,7 @@ router.get('/patterns', [
     res.status(500).json({
       success: false,
       error: 'Failed to get patterns',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -422,7 +422,7 @@ router.post('/pattern/reinforce', [
     res.status(500).json({
       success: false,
       error: 'Failed to reinforce pattern',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -485,7 +485,7 @@ router.get('/insights', [
     res.status(500).json({
       success: false,
       error: 'Failed to get insights',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -539,7 +539,7 @@ router.get('/system/status', async (req: any, res: any) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get system status',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? getErrorMessage(error) : String(error)) : undefined
     });
   }
 });
@@ -547,7 +547,7 @@ router.get('/system/status', async (req: any, res: any) => {
 // Error handling middleware
 router.use((error: any, req: any, res: any, next: any) => {
   logger.error('Advanced RAG learning API error:', {
-    error: error.message,
+    error: getErrorMessage(error),
     stack: error.stack,
     url: req.url,
     method: req.method,
@@ -557,7 +557,7 @@ router.use((error: any, req: any, res: any, next: any) => {
   res.status(error.status || 500).json({
     success: false,
     error: 'Advanced RAG learning service error',
-    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    message: process.env.NODE_ENV === 'development' ? getErrorMessage(error) : 'Internal server error'
   });
 });
 

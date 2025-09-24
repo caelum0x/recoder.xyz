@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 
 import { aiCostOptimizer } from '../services/ai-cost-optimizer';
 import { costAnalyticsDashboard } from '../services/cost-analytics-dashboard';
-import { authenticateRequest } from '../middleware/auth';
+import { authenticateUser } from '../middleware/auth';
 import { logger } from '../utils/logger';
 
 const router = express.Router();
@@ -25,7 +25,7 @@ const costOptimizationLimiter = rateLimit({
 });
 
 router.use(costOptimizationLimiter);
-router.use(authenticateRequest);
+router.use(authenticateUser);
 
 /**
  * GET /api/cost-optimization/analytics

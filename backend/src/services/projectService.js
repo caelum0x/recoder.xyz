@@ -1,4 +1,4 @@
-const { Project, Template, Agent, User } = require('../models');
+const { prisma } = require('../database/prisma');
 const { logger } = require('../utils/logger');
 const { codeService } = require('./codeService');
 const { structureService } = require('./structureService');
@@ -8,15 +8,17 @@ class ProjectService {
     try {
       const { name, type, description, config, templateId, userId } = projectData;
 
-      // Create project
-      const project = await Project.create({
-        name,
-        type,
-        description,
-        config: config || {},
-        templateId,
-        userId,
-        status: 'planning'
+      // Create project using Prisma
+      const project = await prisma.project.create({
+        data: {
+          name,
+          type,
+          description,
+          config: config || {},
+          templateId,
+          userId,
+          status: 'planning'
+        }
       });
 
       // Initialize project structure if template is provided
@@ -34,7 +36,9 @@ class ProjectService {
 
   async initializeFromTemplate(project, templateId) {
     try {
-      const template = await Template.findByPk(templateId);
+      const template = await prisma.template.findUnique({
+        where: { id: templateId }
+      });
       if (!template) {
         throw new Error('Template not found');
       }
@@ -43,9 +47,12 @@ class ProjectService {
       const structure = await structureService.generateFromTemplate(template.structure, project.config);
       
       // Update project with generated structure
-      await project.update({
-        structure,
-        config: { ...project.config, templateStructure: template.structure }
+      await prisma.project.update({
+        where: { id: project.id },
+        data: {
+          structure,
+          config: { ...project.config, templateStructure: template.structure }
+        }
       });
 
       logger.info(`Project initialized from template: ${templateId}`);
@@ -57,14 +64,19 @@ class ProjectService {
 
   async updateProject(projectId, updateData) {
     try {
-      const project = await Project.findByPk(projectId);
+      const project = await prisma.project.findUnique({
+        where: { id: projectId }
+      });
       if (!project) {
         throw new Error('Project not found');
       }
 
-      await project.update(updateData);
+      const updatedProject = await prisma.project.update({
+        where: { id: projectId },
+        data: updateData
+      });
       logger.info(`Project updated: ${projectId}`);
-      return project;
+      return updatedProject;
     } catch (error) {
       logger.error('Failed to update project:', error);
       throw error;
@@ -81,7 +93,10 @@ class ProjectService {
       const structure = await structureService.generateProjectStructure(project.type, project.config);
       
       // Save generated structure
-      await project.update({ structure });
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { structure }
+      });
       
       return structure;
     } catch (error) {
@@ -102,12 +117,15 @@ class ProjectService {
       });
 
       // Update project with generated code metadata
-      await project.update({
-        lastGenerated: new Date(),
-        generatedCodeMetadata: {
-          filesGenerated: generatedCode.files ? generatedCode.files.length : 0,
-          linesGenerated: generatedCode.totalLines || 0,
-          options
+      await prisma.project.update({
+        where: { id: project.id },
+        data: {
+          lastGenerated: new Date(),
+          generatedCodeMetadata: {
+            filesGenerated: generatedCode.files ? generatedCode.files.length : 0,
+            linesGenerated: generatedCode.totalLines || 0,
+            options
+          }
         }
       });
 
@@ -121,39 +139,44 @@ class ProjectService {
 
   async cloneProject(projectId, newData) {
     try {
-      const originalProject = await Project.findByPk(projectId, {
-        include: [
-          { model: Template, as: 'template' },
-          { model: Agent, as: 'agents' }
-        ]
+      const originalProject = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: {
+          template: true,
+          agents: true
+        }
       });
 
       if (!originalProject) {
         throw new Error('Project not found');
       }
 
-      const clonedProject = await Project.create({
-        name: newData.name || `${originalProject.name} (Copy)`,
-        type: originalProject.type,
-        description: newData.description || originalProject.description,
-        config: { ...originalProject.config, ...newData.config },
-        structure: originalProject.structure,
-        templateId: originalProject.templateId,
-        userId: newData.userId || originalProject.userId,
-        status: 'planning'
+      const clonedProject = await prisma.project.create({
+        data: {
+          name: newData.name || `${originalProject.name} (Copy)`,
+          type: originalProject.type,
+          description: newData.description || originalProject.description,
+          config: { ...originalProject.config, ...newData.config },
+          structure: originalProject.structure,
+          templateId: originalProject.templateId,
+          userId: newData.userId || originalProject.userId,
+          status: 'planning'
+        }
       });
 
       // Clone agents if requested
       if (newData.cloneAgents && originalProject.agents) {
         for (const agent of originalProject.agents) {
-          await Agent.create({
-            name: agent.name,
-            type: agent.type,
-            description: agent.description,
-            config: agent.config,
-            projectId: clonedProject.id,
-            userId: clonedProject.userId,
-            status: 'inactive'
+          await prisma.agent.create({
+            data: {
+              name: agent.name,
+              type: agent.type,
+              description: agent.description,
+              config: agent.config,
+              projectId: clonedProject.id,
+              userId: clonedProject.userId,
+              status: 'inactive'
+            }
           });
         }
       }
@@ -168,16 +191,22 @@ class ProjectService {
 
   async deleteProject(projectId) {
     try {
-      const project = await Project.findByPk(projectId);
+      const project = await prisma.project.findUnique({
+        where: { id: projectId }
+      });
       if (!project) {
         throw new Error('Project not found');
       }
 
       // Delete associated agents
-      await Agent.destroy({ where: { projectId } });
+      await prisma.agent.deleteMany({
+        where: { projectId }
+      });
 
       // Delete project
-      await project.destroy();
+      await prisma.project.delete({
+        where: { id: projectId }
+      });
       
       logger.info(`Project deleted: ${projectId}`);
       return true;
@@ -189,12 +218,16 @@ class ProjectService {
 
   async getProjectMetrics(projectId) {
     try {
-      const project = await Project.findByPk(projectId);
+      const project = await prisma.project.findUnique({
+        where: { id: projectId }
+      });
       if (!project) {
         throw new Error('Project not found');
       }
 
-      const agents = await Agent.findAll({ where: { projectId } });
+      const agents = await prisma.agent.findMany({
+        where: { projectId }
+      });
       const activeAgents = agents.filter(agent => agent.status === 'active');
 
       return {
@@ -225,21 +258,26 @@ class ProjectService {
         whereClause.status = filters.status;
       }
 
-      const projects = await Project.findAll({
+      const projects = await prisma.project.findMany({
         where: whereClause,
-        include: [
-          {
-            model: Template,
-            as: 'template',
-            attributes: ['id', 'name', 'category']
+        include: {
+          template: {
+            select: {
+              id: true,
+              name: true,
+              category: true
+            }
           },
-          {
-            model: Agent,
-            as: 'agents',
-            attributes: ['id', 'name', 'type', 'status']
+          agents: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              status: true
+            }
           }
-        ],
-        order: [['createdAt', 'DESC']]
+        },
+        orderBy: { createdAt: 'desc' }
       });
 
       return projects;
@@ -256,14 +294,19 @@ class ProjectService {
         throw new Error(`Invalid status: ${status}`);
       }
 
-      const project = await Project.findByPk(projectId);
+      const project = await prisma.project.findUnique({
+        where: { id: projectId }
+      });
       if (!project) {
         throw new Error('Project not found');
       }
 
-      await project.update({ status });
+      const updatedProject = await prisma.project.update({
+        where: { id: projectId },
+        data: { status }
+      });
       logger.info(`Project status updated: ${projectId} -> ${status}`);
-      return project;
+      return updatedProject;
     } catch (error) {
       logger.error('Failed to update project status:', error);
       throw error;

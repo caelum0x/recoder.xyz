@@ -9,42 +9,204 @@ import * as crypto from 'crypto';
 
 const router = express.Router();
 
-// Raw body parser for webhook signature verification
-router.use('/dodo', express.raw({ type: 'application/json' }));
+// Health check endpoint for webhook service
+router.get('/health', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Webhook service is healthy',
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      '/api/webhooks/dodo - DODO Payments webhook handler',
+      '/api/webhooks/test - Test webhook endpoint',
+      '/api/webhooks/health - Health check'
+    ]
+  });
+});
+
+// Test webhook endpoint for development
+router.post('/test', express.json(), async (req: Request, res: Response): Promise<void> => {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(404).json({ success: false, error: 'Test endpoint not available in production' });
+    return;
+  }
+
+  try {
+    logger.info('Test webhook received', { body: req.body, headers: req.headers });
+    
+    res.json({
+      success: true,
+      message: 'Test webhook received successfully',
+      receivedData: req.body,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Test webhook error', { error });
+    res.status(500).json({ success: false, error: 'Test webhook failed' });
+  }
+});
+
+// Raw body parser specifically for webhook signature verification
+router.use('/dodo', express.raw({ 
+  type: 'application/json',
+  limit: '1mb' // Prevent large payloads
+}));
 
 /**
  * POST /api/webhooks/dodo
- * Handle DODO Payments webhooks
+ * Handle DODO Payments webhooks with enhanced error handling
  */
-router.post('/dodo', async (req: Request, res: Response) => {
+router.post('/dodo', async (req: Request, res: Response): Promise<void> => {
+  let event: WebhookEvent;
+  
   try {
     const signature = req.headers['x-dodo-signature'] as string;
-    const payload = req.body.toString();
-
-    // Verify webhook signature (simplified for now)
+    const timestamp = req.headers['x-dodo-timestamp'] as string;
+    
+    // Basic validation
     if (!signature) {
-      logger.warn('Missing DODO webhook signature');
-      return res.status(400).json({
+      logger.warn('Missing DODO webhook signature', { ip: req.ip });
+      res.status(400).json({
         success: false,
-        error: 'Missing signature'
+        error: 'Missing signature',
+        code: 'WEBHOOK_SIGNATURE_MISSING'
       });
+      return;
     }
 
-    const event = JSON.parse(payload);
-    logger.info('DODO webhook received', { eventType: event.type, eventId: event.id });
+    if (!req.body || req.body.length === 0) {
+      logger.warn('Empty webhook payload received', { ip: req.ip });
+      res.status(400).json({
+        success: false,
+        error: 'Empty payload',
+        code: 'WEBHOOK_EMPTY_PAYLOAD'
+      });
+      return;
+    }
+
+    // Convert buffer to string safely
+    let payload: string;
+    try {
+      payload = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : req.body;
+    } catch (bufferError) {
+      logger.error('Failed to convert webhook payload to string', { error: bufferError });
+      res.status(400).json({
+        success: false,
+        error: 'Invalid payload encoding',
+        code: 'WEBHOOK_ENCODING_ERROR'
+      });
+      return;
+    }
+
+    // Parse JSON with proper error handling
+    try {
+      event = JSON.parse(payload);
+    } catch (parseError) {
+      logger.error('Failed to parse webhook JSON payload', { 
+        error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+        payloadLength: payload.length,
+        payloadPreview: payload.substring(0, 100)
+      });
+      res.status(400).json({
+        success: false,
+        error: 'Invalid JSON payload',
+        code: 'WEBHOOK_JSON_PARSE_ERROR'
+      });
+      return;
+    }
+
+    // Validate webhook event structure
+    if (!event || typeof event !== 'object') {
+      logger.warn('Invalid webhook event structure', { event });
+      res.status(400).json({
+        success: false,
+        error: 'Invalid event structure',
+        code: 'WEBHOOK_INVALID_STRUCTURE'
+      });
+      return;
+    }
+
+    if (!event.type || !event.data) {
+      logger.warn('Missing required webhook event fields', { 
+        hasType: !!event.type, 
+        hasData: !!event.data,
+        eventKeys: Object.keys(event)
+      });
+      res.status(400).json({
+        success: false,
+        error: 'Missing required event fields (type, data)',
+        code: 'WEBHOOK_MISSING_FIELDS'
+      });
+      return;
+    }
+
+    // Enhanced signature verification (for production)
+    if (process.env.NODE_ENV === 'production') {
+      const expectedSignature = generateWebhookSignature(payload, process.env.DODO_WEBHOOK_SECRET);
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+        logger.warn('Invalid webhook signature', { 
+          providedSignature: signature.substring(0, 10) + '...',
+          ip: req.ip 
+        });
+        res.status(401).json({
+          success: false,
+          error: 'Invalid signature',
+          code: 'WEBHOOK_SIGNATURE_INVALID'
+        });
+        return;
+      }
+    }
+
+    logger.info('DODO webhook received and validated', { 
+      eventType: event.type, 
+      eventId: event.id,
+      timestamp: timestamp,
+      ip: req.ip
+    });
 
     // Process webhook event
     await processWebhookEvent(event);
 
-    res.json({ success: true });
+    res.json({ 
+      success: true,
+      message: 'Webhook processed successfully',
+      eventId: event.id,
+      eventType: event.type
+    });
+
   } catch (error) {
-    logger.error('Failed to process DODO webhook', { error: error instanceof Error ? error.message : 'Unknown error' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    logger.error('Webhook processing failed', { 
+      error: errorMessage,
+      stack: errorStack,
+      eventType: event?.type,
+      eventId: event?.id,
+      ip: req.ip
+    });
+    
     res.status(500).json({
       success: false,
-      error: 'Webhook processing failed'
+      error: 'Webhook processing failed',
+      code: 'WEBHOOK_PROCESSING_ERROR',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     });
   }
 });
+
+/**
+ * Generate webhook signature for verification
+ */
+function generateWebhookSignature(payload: string, secret?: string): string {
+  if (!secret) {
+    return 'no-secret-configured';
+  }
+  
+  return crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex');
+}
 
 /**
  * Process different types of webhook events
@@ -199,56 +361,145 @@ async function handleSubscriptionExpired(data: Record<string, any>) {
 }
 
 /**
- * Handle payment succeeded event
+ * Handle payment succeeded event with enhanced validation and error handling
  */
 async function handlePaymentSucceeded(data: Record<string, any>) {
   try {
+    // Validate required fields
     const { payment_id, subscription_id, amount, currency } = data;
 
-    // Find subscription
-    const subscription = await prisma.dodoSubscription.findFirst({
-      where: { dodoSubscriptionId: subscription_id }
-    });
-
-    if (!subscription) {
-      logger.warn('Subscription not found for payment succeeded event', { subscriptionId: subscription_id });
-      return;
+    if (!payment_id || !subscription_id || amount === undefined || !currency) {
+      logger.error('Missing required fields in payment succeeded event', { 
+        hasPaymentId: !!payment_id,
+        hasSubscriptionId: !!subscription_id,
+        hasAmount: amount !== undefined,
+        hasCurrency: !!currency,
+        data 
+      });
+      throw new Error('Missing required payment fields');
     }
 
-    // Record successful payment
-    await prisma.dodoCharge.upsert({
-      where: { dodoChargeId: payment_id },
-      update: {
-        status: 'succeeded',
-        amount: amount,
-        currency: currency
-      },
-      create: {
-        id: crypto.randomUUID(),
-        subscriptionId: subscription.id,
-        dodoChargeId: payment_id,
-        amount: amount,
-        currency: currency,
-        description: 'Payment succeeded',
-        status: 'succeeded'
+    // Validate amount is a positive number
+    const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      logger.error('Invalid payment amount', { amount, numericAmount });
+      throw new Error('Invalid payment amount');
+    }
+
+    // Find subscription with error handling
+    const subscription = await prisma.dodoSubscription.findFirst({
+      where: { dodoSubscriptionId: subscription_id },
+      include: {
+        user: {
+          select: { id: true, email: true, name: true }
+        }
       }
     });
 
-    // Update subscription to active
-    await prisma.dodoSubscription.update({
-      where: { id: subscription.id },
-      data: { status: 'active' }
+    if (!subscription) {
+      logger.warn('Subscription not found for payment succeeded event', { 
+        subscriptionId: subscription_id,
+        paymentId: payment_id 
+      });
+      throw new Error(`Subscription not found: ${subscription_id}`);
+    }
+
+    // Check if payment already processed to prevent duplicates
+    const existingCharge = await prisma.dodoCharge.findFirst({
+      where: { dodoChargeId: payment_id }
     });
 
-    // Update user's subscription status
-    await prisma.user.update({
-      where: { id: subscription.userId },
-      data: { subscription: 'active' }
+    if (existingCharge && existingCharge.status === 'succeeded') {
+      logger.info('Payment already processed, skipping', { 
+        paymentId: payment_id,
+        existingChargeId: existingCharge.id 
+      });
+      return;
+    }
+
+    // Use transaction to ensure data consistency
+    await prisma.$transaction(async (tx) => {
+      // Record successful payment
+      await tx.dodoCharge.upsert({
+        where: { dodoChargeId: payment_id },
+        update: {
+          status: 'succeeded',
+          amount: numericAmount,
+          currency: currency.toUpperCase(),
+          processedAt: new Date()
+        },
+        create: {
+          id: crypto.randomUUID(),
+          subscriptionId: subscription.id,
+          dodoChargeId: payment_id,
+          amount: numericAmount,
+          currency: currency.toUpperCase(),
+          description: 'Payment succeeded',
+          status: 'succeeded',
+          processedAt: new Date()
+        }
+      });
+
+      // Update subscription to active and set next billing date
+      const nextBillingDate = new Date();
+      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1); // Assume monthly billing
+
+      await tx.dodoSubscription.update({
+        where: { id: subscription.id },
+        data: { 
+          status: 'active',
+          lastPaymentAt: new Date(),
+          nextBillingDate: nextBillingDate
+        }
+      });
+
+      // Update user's subscription status
+      await tx.user.update({
+        where: { id: subscription.userId },
+        data: { 
+          subscription: 'active',
+          subscriptionStatus: 'active'
+        }
+      });
+
+      // Create audit log entry
+      await tx.auditLog.create({
+        data: {
+          userId: subscription.userId,
+          action: 'payment_succeeded',
+          resource: 'payment',
+          resourceId: payment_id,
+          metadata: {
+            amount: numericAmount,
+            currency: currency,
+            subscriptionId: subscription_id,
+            timestamp: new Date()
+          }
+        }
+      });
     });
 
-    logger.info('Payment succeeded event processed', { paymentId: payment_id, subscriptionId: subscription_id });
+    logger.info('Payment succeeded event processed successfully', { 
+      paymentId: payment_id, 
+      subscriptionId: subscription_id,
+      userId: subscription.userId,
+      userEmail: subscription.user.email,
+      amount: numericAmount,
+      currency: currency
+    });
+
   } catch (error) {
-    logger.error('Failed to handle payment succeeded event', { error: error instanceof Error ? error.message : 'Unknown error', data });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Failed to handle payment succeeded event', { 
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      data,
+      paymentId: data?.payment_id,
+      subscriptionId: data?.subscription_id
+    });
+    
+    // Re-throw error to be handled by the main webhook handler
+    throw error;
   }
 }
 

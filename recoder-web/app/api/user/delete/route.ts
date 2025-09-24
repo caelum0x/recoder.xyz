@@ -159,7 +159,7 @@ async function verifyUserPassword(userId: string, password: string): Promise<boo
 async function getUserOwnedTeams(userId: string): Promise<any[]> {
   try {
     // Mock implementation - in production, query database for teams where user is owner
-    const mockOwnedTeams = [
+    const mockOwnedTeams: any[] = [
       // Return empty array to allow deletion for demo
       // In real implementation, this would return actual teams
     ];

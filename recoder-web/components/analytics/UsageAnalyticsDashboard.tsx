@@ -385,7 +385,7 @@ const UsageAnalyticsDashboard: React.FC = () => {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ provider, percentage }) => `${provider}: ${percentage}%`}
+                      label={(props: any) => `${props.name || props.segment || props.category || props.cycle || props.period || "Item"}: ${props.value || props.customerCount || props.totalRevenue || props.count || 0}`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="tokens"

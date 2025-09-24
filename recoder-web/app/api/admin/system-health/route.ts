@@ -62,16 +62,16 @@ export async function GET(request: NextRequest) {
       
       switch (period) {
         case 'hour':
-          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+          startDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // 24 hours
           break;
         case 'day':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
           break;
         case 'week':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
           break;
         case 'month':
-          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(); // 90 days
+          startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(); // 90 days
           break;
       }
     }
@@ -80,30 +80,48 @@ export async function GET(request: NextRequest) {
     const systemOverview = await getSystemOverview();
     
     // Get performance metrics
-    const performanceMetrics = await getPerformanceMetrics(new Date(startDate), new Date(endDate));
+    const performanceMetrics = await getPerformanceMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get error tracking
-    const errorMetrics = await getErrorMetrics(new Date(startDate), new Date(endDate));
+    const errorMetrics = await getErrorMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get database health
     const databaseHealth = await getDatabaseHealth();
     
     // Get API health metrics
-    const apiHealth = await getAPIHealthMetrics(new Date(startDate), new Date(endDate));
+    const apiHealth = await getAPIHealthMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get resource usage
     const resourceUsage = await getResourceUsage();
     
     // Get uptime metrics
-    const uptimeMetrics = await getUptimeMetrics(new Date(startDate), new Date(endDate));
+    const uptimeMetrics = await getUptimeMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get security metrics
-    const securityMetrics = await getSecurityMetrics(new Date(startDate), new Date(endDate));
+    const securityMetrics = await getSecurityMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
 
     // Get detailed metrics if requested
     let detailedMetrics = null;
     if (includeDetailedMetrics) {
-      detailedMetrics = await getDetailedSystemMetrics(new Date(startDate), new Date(endDate));
+      detailedMetrics = await getDetailedSystemMetrics(
+        startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+        endDate ? new Date(endDate) : new Date()
+      );
     }
 
     return NextResponse.json({
@@ -132,11 +150,11 @@ export async function GET(request: NextRequest) {
 
 async function getSystemOverview() {
   const now = new Date();
-  const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
   
   // Get system uptime (simplified - in production use actual uptime tracking)
-  const systemStartTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Mock: 30 days ago
-  const uptimeHours = (now.getTime() - systemStartTime.getTime()) / (1000 * 60 * 60);
+  const systemStartTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Mock: 30 days ago
+  const uptimeHours = (Date.now() - systemStartTime.getTime()) / (1000 * 60 * 60);
 
   // Get total requests in last 24h
   const totalRequests = await prisma.auditLog.count({
@@ -566,7 +584,7 @@ async function getDetailedSystemMetrics(startDate: Date, endDate: Date) {
     by: ['userId'],
     where: {
       createdAt: { gte: startDate, lte: endDate },
-      userId: { not: null }
+      userId: { not: '' }
     },
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
@@ -591,7 +609,7 @@ async function getDetailedSystemMetrics(startDate: Date, endDate: Date) {
   return {
     mostActiveUsers: activeUsers.map(user => ({
       userId: user.userId,
-      requestCount: user._count.id
+      requestCount: typeof user._count === 'object' && user._count ? Object.values(user._count)[0] as number || 0 : 0
     })),
     slowestEndpoints: Array.isArray(slowEndpoints) ? slowEndpoints.map((row: any) => ({
       endpoint: row.action,

@@ -3,6 +3,35 @@ import { unifiedAI } from '@/lib/unified-ai-provider';
 import { AnthropicHandler } from '@/lib/api/providers/anthropic';
 import { OpenRouterHandler } from '@/lib/api/providers/openrouter';
 
+// Track AI usage for cost monitoring
+async function trackAIUsage(model: string, inputText: string, outputText: string, feature: string = 'ai_consensus') {
+  try {
+    const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+    const inputTokens = estimateTokens(inputText);
+    const outputTokens = estimateTokens(outputText);
+    
+    await fetch('/api/usage/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: model.includes('claude') ? 'anthropic' : 
+                 model.includes('gpt') ? 'openai' : 'consensus',
+        model,
+        inputTokens,
+        outputTokens,
+        feature,
+        platform: 'recoder-web',
+        metadata: { 
+          endpoint: '/api/real-ai-consensus',
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+  } catch (error) {
+    console.error('Usage tracking failed:', error);
+  }
+}
+
 // 🧠 REAL AI CONSENSUS SYSTEM - INTEGRATED WITH EXISTING RECODER-WEB INFRASTRUCTURE
 // Uses the actual AI providers and orchestration system already in the codebase
 
@@ -424,6 +453,15 @@ Respond in JSON format:
     const totalProcessingTime = Date.now() - startTime;
 
     console.log(`🎯 Consensus complete: Score ${avgScore.toFixed(1)}/100, Agreement ${(agreementLevel * 100).toFixed(1)}%, Cost $${totalCost.toFixed(4)}, Time ${totalProcessingTime}ms`);
+
+    // Track total consensus usage
+    const allFeedback = validations.map(v => v.rawResponse).join('\n');
+    await trackAIUsage(
+      'ai-consensus-engine',
+      prompt + '\n' + code,
+      allFeedback,
+      'ai_consensus_validation'
+    );
 
     return {
       consensusReached,

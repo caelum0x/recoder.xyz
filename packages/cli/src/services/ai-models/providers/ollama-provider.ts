@@ -8,7 +8,7 @@ import { promisify } from 'util';
 import fs from 'fs-extra';
 import path from 'path';
 import { BaseModelProvider } from '../base-provider';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   ModelMetadata,
   ModelRequest,
@@ -22,7 +22,7 @@ import {
   ModelCapabilities,
   ModelLimits,
   ModelSpecialization
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 
 const execAsync = promisify(exec);
 

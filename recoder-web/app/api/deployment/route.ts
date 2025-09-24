@@ -220,12 +220,12 @@ class DeploymentAutomator {
     }
 
     // Complexity match
-    const complexityScore = {
+    const complexityScore: Record<string, number> = {
       simple: platform.setupComplexity === 'simple' ? 15 : 0,
       medium: platform.setupComplexity === 'medium' ? 15 : 5,
       complex: platform.setupComplexity === 'complex' ? 15 : -5
     };
-    score += complexityScore[config.complexity];
+    score += complexityScore[config.complexity] || 0;
 
     // Traffic handling
     if (config.expectedTraffic === 'high' && platform.autoScaling) {
@@ -318,7 +318,7 @@ class DeploymentAutomator {
   }
 
   private generateDeploymentUrl(platform: string, projectName: string): string {
-    const urlMappings = {
+    const urlMappings: Record<string, string> = {
       'vercel': `https://${projectName}.vercel.app`,
       'netlify': `https://${projectName}.netlify.app`,
       'railway': `https://${projectName}.railway.app`,
@@ -355,7 +355,7 @@ class DeploymentAutomator {
    * Auto-configure database for deployment
    */
   async setupDatabase(platform: string, dbConfig: any): Promise<any> {
-    const dbSetupCommands = {
+    const dbSetupCommands: Record<string, string[]> = {
       'railway': [
         'railway add postgresql',
         'railway variables set DATABASE_URL=$DATABASE_URL',

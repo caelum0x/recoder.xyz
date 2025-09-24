@@ -8,8 +8,8 @@ import bcrypt from 'bcryptjs';
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(100),
-  scopes: z.array(z.string()).min(1),
-  restrictions: z.object({
+  permissions: z.array(z.string()).min(1),
+  rateLimit: z.object({
     ipWhitelist: z.array(z.string()).optional(),
     rateLimit: z.object({
       requests: z.number().min(1).max(10000),
@@ -22,8 +22,8 @@ const createApiKeySchema = z.object({
 
 const updateApiKeySchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  active: z.boolean().optional(),
-  restrictions: z.object({
+  isActive: z.boolean().optional(),
+  rateLimit: z.object({
     ipWhitelist: z.array(z.string()).optional(),
     rateLimit: z.object({
       requests: z.number().min(1).max(10000),
@@ -61,7 +61,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const userId = session.user.id;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
 
     // Get user's API keys from database
     const apiKeys = await prisma.apiKey.findMany({
@@ -69,12 +78,12 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
-        lastUsed: true,
-        active: true,
+        permissions: true,
+        rateLimit: true,
+        lastUsedAt: true,
+        isActive: true,
         createdAt: true
       }
     });
@@ -82,19 +91,18 @@ export async function GET(request: NextRequest) {
     // Transform for response (hide sensitive data)
     const transformedKeys = apiKeys.map(key => ({
       id: key.id,
-      keyId: key.keyId,
+      keyPrefix: key.keyPrefix,
       name: key.name,
-      keyPrefix: `rcd_${key.keyId.substring(0, 8)}...`,
-      scopes: key.scopes,
-      restrictions: key.restrictions,
-      status: key.active ? 'active' : 'inactive',
-      lastUsed: key.lastUsed?.toISOString(),
+      permissions: key.permissions,
+      rateLimit: key.rateLimit,
+      status: key.isActive ? 'active' : 'inactive',
+      lastUsedAt: key.lastUsedAt?.toISOString(),
       createdAt: key.createdAt.toISOString(),
       // Calculate usage stats (would be from a separate usage table in production)
       usageCount: Math.floor(Math.random() * 1000), // Mock for now
-      rateLimit: {
-        requests: (key.restrictions as any)?.rateLimit?.requests || 1000,
-        period: (key.restrictions as any)?.rateLimit?.period || 'hour',
+      currentRateLimit: {
+        requests: (key.rateLimit as any)?.rateLimit?.requests || 1000,
+        period: (key.rateLimit as any)?.rateLimit?.period || 'hour',
         remaining: Math.floor(Math.random() * 1000) // Mock remaining
       }
     }));
@@ -125,13 +133,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const body = await request.json();
-    const { name, scopes, restrictions } = createApiKeySchema.parse(body);
-    const userId = session.user.id;
+    const { name, permissions, rateLimit: restrictions } = createApiKeySchema.parse(body);
+    const userId = user.id;
 
     // Check if user already has maximum number of API keys (limit to 10)
     const existingKeysCount = await prisma.apiKey.count({
-      where: { userId, active: true }
+      where: { userId, isActive: true }
     });
 
     if (existingKeysCount >= 10) {
@@ -141,11 +158,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate scopes
-    const invalidScopes = scopes.filter(scope => !AVAILABLE_SCOPES.includes(scope));
-    if (invalidScopes.length > 0) {
+    // Validate permissions
+    const invalidPermissions = permissions.filter(perm => !AVAILABLE_SCOPES.includes(perm));
+    if (invalidPermissions.length > 0) {
       return NextResponse.json(
-        { error: `Invalid scopes: ${invalidScopes.join(', ')}` },
+        { error: `Invalid permissions: ${invalidPermissions.join(', ')}` },
         { status: 400 }
       );
     }
@@ -168,22 +185,22 @@ export async function POST(request: NextRequest) {
     // Create API key in database
     const newApiKey = await prisma.apiKey.create({
       data: {
-        keyId,
+        keyPrefix: keyId,
+        keyHash: hashedKey,
         userId,
         name,
-        hashedKey,
-        scopes,
-        restrictions: keyRestrictions,
-        active: true
+        permissions,
+        rateLimit: keyRestrictions,
+        isActive: true
       },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
+        permissions: true,
+        rateLimit: true,
         createdAt: true,
-        active: true
+        isActive: true
       }
     });
 
@@ -192,46 +209,47 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         action: 'api_key_created',
+          resource: 'api',
+          resourceId: newApiKey.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           apiKeyId: newApiKey.id,
-          keyId: newApiKey.keyId,
+          keyPrefix: newApiKey.keyPrefix,
           name: newApiKey.name,
-          scopes: newApiKey.scopes
+          permissions: newApiKey.permissions
         }
       }
     });
 
-    // Security event
-    await prisma.securityEvent.create({
-      data: {
-        userId,
-        eventType: 'api_key_created',
-        severity: 'medium',
-        description: `API key "${name}" created with scopes: ${scopes.join(', ')}`,
-        ip: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown',
-        metadata: {
-          apiKeyId: newApiKey.id,
-          scopes,
-          restrictions: keyRestrictions
-        }
-      }
-    });
+    // TODO: Security event tracking (SecurityEvent model needs to be added to schema)
+    // await prisma.securityEvent.create({
+    //   data: {
+    //     userId,
+    //     eventType: 'api_key_created',
+    //     severity: 'medium',
+    //     description: `API key "${name}" created with permissions: ${permissions.join(', ')}`,
+    //     ip: request.headers.get('x-forwarded-for') || 'unknown',
+    //     userAgent: request.headers.get('user-agent') || 'unknown',
+    //     metadata: {
+    //       apiKeyId: newApiKey.id,
+    //       permissions,
+    //       rateLimit: keyRestrictions
+    //     }
+    //   }
+    // });
 
     return NextResponse.json({
       success: true,
       apiKey: {
         id: newApiKey.id,
-        keyId: newApiKey.keyId,
+        keyPrefix: `rcd_${keyId.substring(0, 8)}...`,
         name: newApiKey.name,
         key: apiKeyFull, // Return full key only on creation
-        keyPrefix: `rcd_${keyId.substring(0, 8)}...`,
-        scopes: newApiKey.scopes,
-        restrictions: newApiKey.restrictions,
+        permissions: newApiKey.permissions,
+        rateLimit: newApiKey.rateLimit,
         status: 'active',
         createdAt: newApiKey.createdAt.toISOString()
       },
@@ -276,14 +294,23 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const updates = updateApiKeySchema.parse(body);
-    const userId = session.user.id;
+    const userId = user.id;
 
     // Verify the API key belongs to the user
     const existingKey = await prisma.apiKey.findFirst({
       where: {
-        keyId,
+        id: keyId,
         userId
       }
     });
@@ -298,11 +325,11 @@ export async function PATCH(request: NextRequest) {
     // Prepare update data
     const updateData: any = {};
     if (updates.name !== undefined) updateData.name = updates.name;
-    if (updates.active !== undefined) updateData.active = updates.active;
-    if (updates.restrictions !== undefined) {
-      updateData.restrictions = {
-        ...existingKey.restrictions,
-        ...updates.restrictions,
+    if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+    if (updates.rateLimit !== undefined) {
+      updateData.rateLimit = {
+        ...(existingKey.rateLimit as object || {}),
+        ...updates.rateLimit,
         updatedAt: new Date().toISOString()
       };
     }
@@ -313,11 +340,11 @@ export async function PATCH(request: NextRequest) {
       data: updateData,
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
-        active: true,
+        permissions: true,
+        rateLimit: true,
+        isActive: true,
         updatedAt: true
       }
     });
@@ -327,13 +354,15 @@ export async function PATCH(request: NextRequest) {
       data: {
         userId,
         action: 'api_key_updated',
+          resource: 'api',
+          resourceId: updatedKey.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           apiKeyId: updatedKey.id,
-          keyId: updatedKey.keyId,
+          keyPrefix: updatedKey.keyPrefix,
           updates: Object.keys(updateData)
         }
       }
@@ -343,12 +372,11 @@ export async function PATCH(request: NextRequest) {
       success: true,
       apiKey: {
         id: updatedKey.id,
-        keyId: updatedKey.keyId,
+        keyPrefix: `rcd_${updatedKey.keyPrefix.substring(0, 8)}...`,
         name: updatedKey.name,
-        keyPrefix: `rcd_${updatedKey.keyId.substring(0, 8)}...`,
-        scopes: updatedKey.scopes,
-        restrictions: updatedKey.restrictions,
-        status: updatedKey.active ? 'active' : 'inactive',
+        permissions: updatedKey.permissions,
+        rateLimit: updatedKey.rateLimit,
+        status: updatedKey.isActive ? 'active' : 'inactive',
         updatedAt: updatedKey.updatedAt?.toISOString()
       },
       message: 'API key updated successfully'
@@ -391,17 +419,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const userId = session.user.id;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
 
     // Verify the API key belongs to the user
     const existingKey = await prisma.apiKey.findFirst({
       where: {
-        keyId,
+        id: keyId,
         userId
       },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true
       }
     });
@@ -417,7 +454,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.apiKey.update({
       where: { id: existingKey.id },
       data: {
-        active: false,
+        isActive: false,
         updatedAt: new Date()
       }
     });
@@ -427,34 +464,36 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId,
         action: 'api_key_deleted',
+          resource: 'api',
+          resourceId: existingKey.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           apiKeyId: existingKey.id,
-          keyId: existingKey.keyId,
+          keyPrefix: existingKey.keyPrefix,
           name: existingKey.name
         }
       }
     });
 
-    // Security event
-    await prisma.securityEvent.create({
-      data: {
-        userId,
-        eventType: 'api_key_deleted',
-        severity: 'medium',
-        description: `API key "${existingKey.name}" was deleted`,
-        ip: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown',
-        metadata: {
-          apiKeyId: existingKey.id,
-          keyId: existingKey.keyId,
-          name: existingKey.name
-        }
-      }
-    });
+    // TODO: Security event tracking (SecurityEvent model needs to be added to schema)
+    // await prisma.securityEvent.create({
+    //   data: {
+    //     userId,
+    //     eventType: 'api_key_deleted',
+    //     severity: 'medium',
+    //     description: `API key "${existingKey.name}" was deleted`,
+    //     ip: request.headers.get('x-forwarded-for') || 'unknown',
+    //     userAgent: request.headers.get('user-agent') || 'unknown',
+    //     metadata: {
+    //       apiKeyId: existingKey.id,
+    //       keyPrefix: existingKey.keyPrefix,
+    //       name: existingKey.name
+    //     }
+    //   }
+    // });
 
     return NextResponse.json({
       success: true,

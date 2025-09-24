@@ -10,7 +10,19 @@ interface CreateUnityProjectModalProps {
 }
 
 export default function CreateUnityProjectModal({ onClose, onSubmit }: CreateUnityProjectModalProps) {
-  const [formData, setFormData] = useState({
+  interface UnityProjectFormData {
+    name: string
+    description: string
+    template: string
+    unityVersion: string
+    platform: string[]
+    renderPipeline: string
+    features: string[]
+    isMultiplayer: boolean
+    analytics: boolean
+  }
+
+  const [formData, setFormData] = useState<UnityProjectFormData>({
     name: '',
     description: '',
     template: '3D',

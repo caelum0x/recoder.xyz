@@ -219,7 +219,7 @@ async function createTable(config: any, data: any) {
 }
 
 // Insert data with conflict resolution
-async function insertData(config: any, data: any) {
+async function insertData(config: any, data: any): Promise<any> {
   const pool = new Pool(config);
   
   try {
@@ -232,8 +232,8 @@ async function insertData(config: any, data: any) {
     if (data.values) {
       // Single or multiple rows
       const valueRows = Array.isArray(data.values[0]) ? data.values : [data.values];
-      const placeholders = valueRows.map((_, rowIndex) => 
-        `(${data.columns.map((_, colIndex) => `$${rowIndex * data.columns.length + colIndex + 1}`).join(', ')})`
+      const placeholders = valueRows.map((_: any, rowIndex: number) => 
+        `(${data.columns.map((_: any, colIndex: number) => `$${rowIndex * data.columns.length + colIndex + 1}`).join(', ')})`
       ).join(', ');
       
       query += ` VALUES ${placeholders}`;
@@ -291,6 +291,8 @@ async function insertData(config: any, data: any) {
         command: result.command,
         query: query
       };
+    } else {
+      throw new Error('Either values or select_query must be provided');
     }
   } finally {
     await pool.end();

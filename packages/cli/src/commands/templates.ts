@@ -9,7 +9,7 @@ import ora from 'ora';
 import boxen from 'boxen';
 import path from 'path';
 import fs from 'fs-extra';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { TemplateService } from '../services/template';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';

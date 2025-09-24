@@ -13,7 +13,7 @@ import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface DownloadOptions {
   onProgress?: (downloaded: number, total: number, speed: number) => void;

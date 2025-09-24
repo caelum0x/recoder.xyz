@@ -476,26 +476,28 @@ export async function GET(request: NextRequest) {
     // Get usage statistics for each template
     const templatesWithStats = await Promise.all(
       templates.map(async (template) => {
-        const usageCount = await prisma.dashboard.count({
-          where: {
-            metadata: {
-              path: ['templateId'],
-              equals: template.id
-            }
-          }
-        });
+        // TODO: Add metadata field to Dashboard model
+        const usageCount = 0; // await prisma.dashboard.count({
+        //   where: {
+        //     metadata: {
+        //       path: ['templateId'],
+        //       equals: template.id
+        //     }
+        //   }
+        // });
 
-        const recentUsage = await prisma.dashboard.count({
-          where: {
-            metadata: {
-              path: ['templateId'],
-              equals: template.id
-            },
-            createdAt: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
-            }
-          }
-        });
+        // TODO: Add metadata field to Dashboard model  
+        const recentUsage = 0; // await prisma.dashboard.count({
+        //   where: {
+        //     metadata: {
+        //       path: ['templateId'],
+        //       equals: template.id
+        //     },
+        //     createdAt: {
+        //       gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+        //     }
+        //   }
+        // });
 
         return {
           ...template,
@@ -656,13 +658,14 @@ export async function POST(request: NextRequest) {
           enableFullscreen: true,
           enablePrint: true
         },
-        metadata: {
-          templateId: template.id,
-          templateName: template.name,
-          templateVersion: '1.0',
-          createdFromTemplate: true,
-          customizations: customizations || {}
-        }
+        // TODO: Add metadata field to Dashboard schema
+        // metadata: {
+        //   templateId: template.id,
+        //   templateName: template.name,
+        //   templateVersion: '1.0',
+        //   createdFromTemplate: true,
+        //   customizations: customizations || {}
+        // }
       },
       include: {
         user: {
@@ -680,6 +683,8 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         action: 'dashboard_created_from_template',
+          resource: 'dashboard',
+          resourceId: newDashboard.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -708,7 +713,8 @@ export async function POST(request: NextRequest) {
         theme: newDashboard.theme,
         settings: newDashboard.settings,
         createdAt: newDashboard.createdAt.toISOString(),
-        user: newDashboard.user,
+        // TODO: Add user relation to Dashboard include
+        user: (newDashboard as any).user || null,
         template: {
           id: template.id,
           name: template.name,

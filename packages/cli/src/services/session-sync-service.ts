@@ -3,7 +3,7 @@
  * Handles synchronization of session data across CLI, web dashboard, and router
  * Enables real-time updates when user makes changes on any platform
  */
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from './backend-client';
 import { unifiedSessionManager } from './unified-session-manager';
 import { cliBillingRedirects } from './cli-billing-redirects';

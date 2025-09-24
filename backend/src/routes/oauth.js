@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { User, OAuthAccount } = require('../models/index');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -76,34 +76,34 @@ router.post('/google', [
     const tokenExpiresAt = new Date(Date.now() + expires_in * 1000);
 
     // Find or create user
-    let user = await User.findOne({ where: { email: googleUser.email } });
+    let user = await prisma.user.findOne({ where: { email: googleprisma.user.email } });
     let isNewUser = false;
 
     if (!user) {
       // Create new user
-      user = await User.create({
-        email: googleUser.email,
-        name: googleUser.name,
-        emailVerified: googleUser.verified_email,
+      user = await prisma.user.create({
+        email: googleprisma.user.email,
+        name: googleprisma.user.name,
+        emailVerified: googleprisma.user.verified_email,
         password: null // OAuth users don't have passwords
       });
       isNewUser = true;
     }
 
     // Find or create OAuth account
-    let oauthAccount = await OAuthAccount.findOne({
+    let oauthAccount = await prisma.oAuthAccount.findOne({
       where: {
         provider: 'google',
-        providerId: googleUser.id,
+        providerId: googleprisma.user.id,
         userId: user.id
       }
     });
 
     if (!oauthAccount) {
-      oauthAccount = await OAuthAccount.create({
+      oauthAccount = await prisma.oAuthAccount.create({
         provider: 'google',
-        providerId: googleUser.id,
-        email: googleUser.email,
+        providerId: googleprisma.user.id,
+        email: googleprisma.user.email,
         accessToken: access_token,
         refreshToken: refresh_token,
         tokenExpiresAt,
@@ -260,7 +260,7 @@ router.post('/github', [
     });
 
     const primaryEmail = emailResponse.data.find(email => email.primary);
-    const userEmail = primaryEmail?.email || githubUser.email;
+    const userEmail = primaryEmail?.email || githubprisma.user.email;
 
     if (!userEmail) {
       return res.status(400).json({
@@ -272,14 +272,14 @@ router.post('/github', [
     }
 
     // Find or create user
-    let user = await User.findOne({ where: { email: userEmail } });
+    let user = await prisma.user.findOne({ where: { email: userEmail } });
     let isNewUser = false;
 
     if (!user) {
       // Create new user
-      user = await User.create({
+      user = await prisma.user.create({
         email: userEmail,
-        name: githubUser.name || githubUser.login,
+        name: githubprisma.user.name || githubprisma.user.login,
         emailVerified: primaryEmail?.verified || false,
         password: null // OAuth users don't have passwords
       });
@@ -287,18 +287,18 @@ router.post('/github', [
     }
 
     // Find or create OAuth account
-    let oauthAccount = await OAuthAccount.findOne({
+    let oauthAccount = await prisma.oAuthAccount.findOne({
       where: {
         provider: 'github',
-        providerId: githubUser.id.toString(),
+        providerId: githubprisma.user.id.toString(),
         userId: user.id
       }
     });
 
     if (!oauthAccount) {
-      oauthAccount = await OAuthAccount.create({
+      oauthAccount = await prisma.oAuthAccount.create({
         provider: 'github',
-        providerId: githubUser.id.toString(),
+        providerId: githubprisma.user.id.toString(),
         email: userEmail,
         accessToken: access_token,
         scope,
@@ -391,7 +391,7 @@ router.post('/github', [
  *       404:
  *         description: OAuth account not found
  */
-router.delete('/disconnect/:provider', authenticateToken, async (req, res, next) => {
+router.delete('/disconnect/:provider', authenticate, async (req, res, next) => {
   try {
     const { provider } = req.params;
     const userId = req.user.id;
@@ -405,7 +405,7 @@ router.delete('/disconnect/:provider', authenticateToken, async (req, res, next)
       });
     }
 
-    const oauthAccount = await OAuthAccount.findOne({
+    const oauthAccount = await prisma.oAuthAccount.findOne({
       where: {
         provider,
         userId
@@ -422,7 +422,7 @@ router.delete('/disconnect/:provider', authenticateToken, async (req, res, next)
     }
 
     // Check if user has a password or other OAuth accounts
-    const user = await User.findByPk(userId, {
+    const user = await prisma.user.findByPk(userId, {
       include: [{ model: OAuthAccount }]
     });
 
@@ -466,11 +466,11 @@ router.delete('/disconnect/:provider', authenticateToken, async (req, res, next)
  *       200:
  *         description: Connected OAuth accounts retrieved
  */
-router.get('/accounts', authenticateToken, async (req, res, next) => {
+router.get('/accounts', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    const oauthAccounts = await OAuthAccount.findAll({
+    const oauthAccounts = await prisma.oAuthAccount.findAll({
       where: { userId, isActive: true },
       attributes: ['id', 'provider', 'email', 'createdAt', 'updatedAt']
     });

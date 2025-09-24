@@ -9,7 +9,7 @@ import { execSync } from 'child_process';
 import fetch from 'node-fetch';
 import semver from 'semver';
 import { createHash } from 'crypto';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface UpdateInfo {
   available: boolean;

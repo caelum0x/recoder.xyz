@@ -213,7 +213,7 @@ async function collectUserData(userId: string, includeFiles: boolean): Promise<E
           keyPrefix: 'rcd_prod_abcd',
           permissions: ['projects:read', 'projects:write'],
           createdAt: '2023-05-01T00:00:00Z',
-          lastUsed: '2023-12-01T00:00:00Z',
+          lastUsedAt: '2023-12-01T00:00:00Z',
           usageCount: 1247,
           // Actual key not included for security
         },

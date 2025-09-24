@@ -3,7 +3,7 @@
  * Combines multiple AI models for critical tasks requiring high accuracy
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { AIHub, TaskContext, AIResponse } from './ai-hub';
 import { AIRouter, PrivacyLevel } from './ai-router';
 import { AuthService } from './auth';

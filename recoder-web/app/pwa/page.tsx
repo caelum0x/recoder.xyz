@@ -19,7 +19,7 @@ export default function PWAPage() {
       </div>
 
       {/* Install prompt */}
-      <PWAInstallPrompt variant="card" autoShow={false} />
+      <PWAInstallPrompt />
 
       {/* Main PWA management interface */}
       <PWAManager />

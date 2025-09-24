@@ -3,7 +3,7 @@
  * Manages authentication sessions across web, CLI, and router platforms
  * Enables users to auth once on recoder.xyz and have seamless experience everywhere
  */
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from './backend-client';
 import { webCLIAuthBridge } from './web-cli-auth-bridge';
 import EventEmitter from 'events';

@@ -7,7 +7,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 // import { run as startRouter } from '../../../recoder-cli-router/src/index'; // Use built CLI instead
 import { spawn, exec } from 'child_process';
 import { promises as fs } from 'fs';

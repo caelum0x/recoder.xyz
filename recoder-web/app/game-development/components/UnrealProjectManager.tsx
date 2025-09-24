@@ -90,7 +90,11 @@ export default function UnrealProjectManager({ onStatsChange }: UnrealProjectMan
       }
     } catch (error) {
       console.error('Failed to create Unreal project:', error)
-      alert(error.message || 'Failed to create project')
+      alert(
+        typeof error === 'object' && error !== null && 'message' in error
+          ? (error as { message?: string }).message || 'Failed to create project'
+          : 'Failed to create project'
+      )
     }
   }
 

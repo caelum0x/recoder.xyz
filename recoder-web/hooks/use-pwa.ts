@@ -152,9 +152,9 @@ export function usePWA() {
         registration.showNotification(title, {
           icon: '/icon-192',
           badge: '/icon-192',
-          vibrate: [100, 50, 100],
+          // Note: vibrate is not part of standard NotificationOptions
           ...options,
-        });
+        } as any);
       });
     }
   };
@@ -195,7 +195,8 @@ async function registerServiceWorker() {
     // Background sync registration
     if ('sync' in window.ServiceWorkerRegistration.prototype) {
       try {
-        await registration.sync.register('background-sync');
+        // Note: sync property may not be available in all browsers
+        await (registration as any).sync?.register('background-sync');
         console.log('Background sync registered');
       } catch (error) {
         console.log('Background sync registration failed:', error);

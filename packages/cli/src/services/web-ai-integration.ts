@@ -3,7 +3,7 @@
  * Integrates the @recoder/web-ai-assistant package into CLI
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface AIAssistantConfig {
   enableCompletion: boolean;

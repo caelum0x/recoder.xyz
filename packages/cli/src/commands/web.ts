@@ -6,7 +6,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { getWebIntegration } from '../services/web-integration';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 const logger = Logger.getInstance();
 

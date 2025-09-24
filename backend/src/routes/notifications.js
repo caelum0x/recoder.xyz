@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { logger } = require('../utils/logger');
 
 const router = express.Router();
@@ -44,7 +44,7 @@ const router = express.Router();
  *       200:
  *         description: Notification sent successfully
  */
-router.post('/send', authenticateToken, [
+router.post('/send', authenticate, [
   body('type')
     .isIn(['info', 'success', 'warning', 'error', 'system'])
     .withMessage('Type must be one of: info, success, warning, error, system'),
@@ -171,7 +171,7 @@ router.post('/send', authenticateToken, [
  *       200:
  *         description: Broadcast sent successfully
  */
-router.post('/broadcast', authenticateToken, [
+router.post('/broadcast', authenticate, [
   body('channel')
     .isString()
     .isLength({ min: 1, max: 50 })
@@ -275,7 +275,7 @@ router.post('/broadcast', authenticateToken, [
  *       200:
  *         description: Device notification sent successfully
  */
-router.post('/device', authenticateToken, [
+router.post('/device', authenticate, [
   body('deviceId')
     .isString()
     .isLength({ min: 1 })
@@ -364,7 +364,7 @@ router.post('/device', authenticateToken, [
  *       200:
  *         description: Notification status retrieved successfully
  */
-router.get('/status', authenticateToken, (req, res, next) => {
+router.get('/status', authenticate, (req, res, next) => {
   try {
     // Get server instance
     const server = req.app.get('server');

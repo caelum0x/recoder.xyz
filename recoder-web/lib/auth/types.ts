@@ -8,10 +8,11 @@ export interface AuthUser {
   email: string;
   name: string;
   image?: string;
-  plan: 'FREE' | 'PRO' | 'ENTERPRISE';
+  plan?: 'FREE' | 'PRO' | 'ENTERPRISE';
   emailVerified: boolean;
   createdAt: string;
   updatedAt: string;
+  requires2FA?: boolean;
 }
 
 export interface AuthSession {

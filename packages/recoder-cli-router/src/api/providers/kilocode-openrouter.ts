@@ -1,12 +1,12 @@
-import { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
+import { ApiHandlerOptions, ModelRecord } from "recoder-shared"
 import { OpenRouterHandler } from "./openrouter"
 import { getModelParams } from "../transform/model-params"
 import { getModels } from "./fetchers/modelCache"
-import { DEEP_SEEK_DEFAULT_TEMPERATURE } from "@roo-code/types"
+import { DEEP_SEEK_DEFAULT_TEMPERATURE } from "roo-code-types"
 
 // Fallback kilocode default model (temporary fix for build issues)
 const kilocodeDefaultModelId = "claude-3-5-sonnet-20241022"
-import { getKiloBaseUriFromToken } from "@recoder/shared"
+import { getKiloBaseUriFromToken } from "recoder-shared"
 import { ApiHandlerCreateMessageMetadata } from ".."
 import OpenAI from "openai"
 import { getModelEndpoints } from "./fetchers/modelEndpointCache"

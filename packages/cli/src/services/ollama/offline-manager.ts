@@ -9,7 +9,7 @@
 import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface NetworkStatus {
   isOnline: boolean;

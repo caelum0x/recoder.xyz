@@ -7,7 +7,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { ollamaInstaller, OllamaInstaller, InstallationOptions, InstallationResult, InstallationProgress } from './installer';
 import { healthChecker, OllamaHealthChecker, HealthStatus } from './health-checker';
 import { modelManager, OllamaModelManager, ModelRecommendation, DownloadProgress } from './model-manager';

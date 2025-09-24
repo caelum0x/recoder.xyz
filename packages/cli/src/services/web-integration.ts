@@ -3,7 +3,7 @@
  * Integrates the @recoder/web package into CLI for dashboard functionality
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import path from 'path';
 import fs from 'fs-extra';
 

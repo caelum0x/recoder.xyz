@@ -10,7 +10,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 // import figlet from 'figlet';
 import boxen from 'boxen';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 // Import unified ecosystem components
 import { cliConfig, UnifiedConfigManager } from '../../shared/src/config/unified-config';
@@ -70,6 +70,7 @@ import { createCostDashboardCommand } from './commands/cost-dashboard';
 import { createDeployCommand } from './commands/deploy';
 import { AIOrchestrator } from './services/ai-orchestrator';
 import { ContextMemorySystem } from './services/context-memory';
+import { openRouterAI } from './services/openrouter-ai';
 
 // Production-ready command setup with unified configuration
 async function setupProductionCommands(program: Command): Promise<void> {
@@ -1257,6 +1258,199 @@ Make this a production-ready plan that can actually be executed.`;
     });
 }
 
+/**
+ * Start interactive chat session (Claude Code-style UX)
+ * Real AI chat with OpenRouter integration and smart routing
+ */
+async function startInteractiveChat() {
+  console.clear();
+  
+  // Simple, clean header like Claude Code
+  console.log(chalk.cyan('💬 Recoder AI Chat'));
+  console.log(chalk.gray('Powered by OpenRouter with smart AI routing\n'));
+  
+  // Check OpenRouter health
+  const healthStatus = await openRouterAI.healthCheck();
+  if (healthStatus.status === 'healthy') {
+    console.log(chalk.green(`✅ Connected to OpenRouter (${healthStatus.models} models available)`));
+  } else {
+    console.log(chalk.yellow(`⚠️ OpenRouter status: ${healthStatus.status}`));
+  }
+  
+  // Check authentication status for plan detection
+  let userPlan: 'free' | '$10/week' | '$20/month' | '$100/month' | '$200/month' | 'enterprise' = 'free';
+  let userSession: any = null;
+  
+  if (backendClient.isAuthenticated()) {
+    userSession = backendClient.getCurrentSession();
+    if (userSession) {
+      userPlan = userSession.plan || 'free';
+      console.log(chalk.green(`👤 Logged in as ${userSession.email} (${userPlan} plan)`));
+      
+      const availableModels = openRouterAI.getAvailableModels(userPlan);
+      const rateLimits = openRouterAI.getRateLimits(userPlan);
+      
+      console.log(chalk.blue(`🤖 Available Models: ${availableModels.length} premium models`));
+      console.log(chalk.gray(`📊 Rate Limits: ${rateLimits.requestsPerHour}/hour, ${rateLimits.requestsPerDay}/day`));
+      console.log(chalk.gray(`📊 Quota: ${userSession.quotas?.usedRequests || 0}/${userSession.quotas?.totalRequests || 0} requests used`));
+    }
+  } else {
+    console.log(chalk.yellow('⚠️ Not authenticated - using FREE tier (limited models)'));
+    console.log(chalk.gray('Upgrade: recoder auth login for premium models'));
+    
+    const freeModels = openRouterAI.getAvailableModels('free');
+    console.log(chalk.blue(`🆓 Free Models: ${freeModels.join(', ')}`));
+  }
+  
+  console.log(chalk.gray('\nType your message. Press Ctrl+C to exit.\n'));
+  
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  const conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
+  // Main chat loop with real AI
+  while (true) {
+    try {
+      const userMessage = await new Promise<string>((resolve) => {
+        rl.question(chalk.green('> '), resolve);
+      });
+
+      if (!userMessage.trim()) continue;
+      
+      // Add to conversation history
+      conversationHistory.push({ role: 'user', content: userMessage });
+      
+      console.log(chalk.cyan('\n🤖 '), { color: false });
+      
+      try {
+        // Check quota if authenticated
+        if (userSession) {
+          const hasQuota = await backendClient.checkQuota();
+          if (!hasQuota) {
+            console.log(chalk.red('❌ Quota exceeded. Please upgrade your plan or wait for reset.'));
+            console.log();
+            continue;
+          }
+        }
+
+        // Prepare messages for OpenRouter
+        const messages = [
+          {
+            role: 'system' as const,
+            content: 'You are Recoder, an AI coding assistant that generates real, production-ready code. You are helpful, knowledgeable, and focused on providing practical solutions.'
+          },
+          ...conversationHistory.slice(-10) // Keep last 10 messages for context
+        ];
+
+        // Get AI response from OpenRouter with smart routing
+        const startTime = Date.now();
+        const aiResponse = await openRouterAI.chat({
+          messages,
+          userPlan,
+          priority: 'quality',
+          contextType: 'chat'
+        });
+        const responseTime = Date.now() - startTime;
+        
+        // Add assistant response to history
+        conversationHistory.push({ role: 'assistant', content: aiResponse.content });
+        
+        // Display response
+        console.log(chalk.white(aiResponse.content));
+        console.log();
+        
+        // Show routing and cost info
+        console.log(chalk.gray(`Model: ${aiResponse.model} | Provider: ${aiResponse.provider}`));
+        console.log(chalk.gray(`Tokens: ${aiResponse.usage.inputTokens} in, ${aiResponse.usage.outputTokens} out`));
+        console.log(chalk.gray(`Cost: $${aiResponse.usage.cost.toFixed(6)} | Response: ${responseTime}ms`));
+        
+        if (aiResponse.routingInfo.costOptimization > 0) {
+          console.log(chalk.green(`💰 Cost Optimization: ${aiResponse.routingInfo.costOptimization}% vs Claude direct`));
+        }
+        
+        console.log();
+        
+        // Track usage if authenticated
+        if (userSession) {
+          await backendClient.trackUsage({
+            platform: 'cli',
+            command: 'chat',
+            tokens: aiResponse.usage.totalTokens,
+            model: aiResponse.model,
+            timestamp: new Date()
+          });
+          
+          // Track AI usage for analytics
+          await backendClient.trackAIUsage({
+            model: aiResponse.model,
+            provider: aiResponse.provider,
+            prompt: {
+              length: userMessage.length,
+              type: 'chat'
+            },
+            completion: {
+              length: aiResponse.content.length,
+              responseTime,
+              tokens: aiResponse.usage.totalTokens
+            },
+            metadata: {
+              costOptimization: aiResponse.routingInfo.costOptimization,
+              routingStrategy: aiResponse.routingInfo.routingStrategy
+            }
+          });
+        }
+        
+      } catch (error: any) {
+        if (error.message.includes('quota exceeded')) {
+          console.log(chalk.red('❌ Quota exceeded. Please upgrade your plan.'));
+        } else if (error.message.includes('rate limit')) {
+          console.log(chalk.yellow('⚠️ Rate limit exceeded. Please wait a moment.'));
+        } else if (error.response?.status === 401) {
+          console.log(chalk.red('❌ Authentication expired. Please run: recoder auth login'));
+        } else {
+          console.log(chalk.red(`❌ Error: ${error.message}`));
+          
+          // Fallback to free models if premium fails
+          if (userPlan !== 'free') {
+            console.log(chalk.yellow('🔄 Falling back to free models...'));
+            try {
+              const fallbackResponse = await openRouterAI.chat({
+                messages: [
+                  {
+                    role: 'system' as const,
+                    content: 'You are a helpful AI assistant. Provide concise, accurate responses.'
+                  },
+                  { role: 'user', content: userMessage }
+                ],
+                userPlan: 'free',
+                priority: 'cost',
+                contextType: 'chat'
+              });
+              
+              console.log(chalk.white(fallbackResponse.content));
+              console.log(chalk.gray(`\nFallback Model: ${fallbackResponse.model}`));
+              
+            } catch (fallbackError: any) {
+              console.log(chalk.red(`Fallback also failed: ${fallbackError.message}`));
+            }
+          }
+        }
+        console.log();
+      }
+      
+    } catch (error) {
+      console.log('\n' + chalk.gray('Goodbye! 👋'));
+      break;
+    }
+  }
+  
+  rl.close();
+}
+
 async function main() {
   let analyticsSessionId: string | null = null;
 
@@ -1347,9 +1541,9 @@ async function main() {
     // Handle natural language commands with REAL AI processing
     const args = process.argv.slice(2);
     
-    // If just "recoder" is called with no arguments, show help
+    // If just "recoder" is called with no arguments, start interactive chat session (like Claude Code)
     if (args.length === 0) {
-      program.help();
+      await startInteractiveChat();
       return;
     }
     

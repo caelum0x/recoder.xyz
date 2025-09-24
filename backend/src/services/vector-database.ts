@@ -182,7 +182,7 @@ export class VectorDatabaseService extends EventEmitter {
         this.pgvectorEnabled = true;
         logger.info('pgvector extension enabled');
       } catch (error) {
-        logger.warn('pgvector extension not available:', error.message);
+        logger.warn('pgvector extension not available:', error instanceof Error ? error.message : 'Unknown error');
         this.pgvectorEnabled = false;
       }
 
@@ -328,7 +328,7 @@ export class VectorDatabaseService extends EventEmitter {
             includeMetadata
           });
         } catch (error) {
-          logger.warn('Pinecone query failed, falling back to pgvector:', error.message);
+          logger.warn('Pinecone query failed, falling back to pgvector:', error instanceof Error ? error.message : 'Unknown error');
           if (this.pgvectorEnabled) {
             results = await this.queryPgVector(queryVector, { topK, threshold, filter });
           } else {
@@ -486,7 +486,7 @@ export class VectorDatabaseService extends EventEmitter {
             await this.waitForIndexReady(indexName);
           }
         } catch (error) {
-          logger.warn('Pinecone index creation failed:', error.message);
+          logger.warn('Pinecone index creation failed:', error instanceof Error ? error.message : 'Unknown error');
         }
       }
 
@@ -505,7 +505,7 @@ export class VectorDatabaseService extends EventEmitter {
             ON vector_embeddings (knowledge_base_id)
           `;
         } catch (error) {
-          logger.warn('pgvector index creation failed:', error.message);
+          logger.warn('pgvector index creation failed:', error instanceof Error ? error.message : 'Unknown error');
         }
       }
 
@@ -676,7 +676,7 @@ export class VectorDatabaseService extends EventEmitter {
 
         baseCorpus.push(...existingContent);
       } catch (dbError) {
-        logger.debug('Could not fetch existing content for corpus:', dbError.message);
+        logger.debug('Could not fetch existing content for corpus:', dbError instanceof Error ? dbError.message : 'Unknown error');
       }
 
       // Remove duplicates and filter for quality
@@ -691,7 +691,7 @@ export class VectorDatabaseService extends EventEmitter {
 
       return uniqueCorpus;
     } catch (error) {
-      logger.warn('Failed to build comprehensive corpus, using minimal corpus:', error.message);
+      logger.warn('Failed to build comprehensive corpus, using minimal corpus:', error instanceof Error ? error.message : 'Unknown error');
       
       // Minimal fallback corpus
       return [

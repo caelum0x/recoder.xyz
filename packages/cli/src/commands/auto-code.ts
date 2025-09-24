@@ -6,7 +6,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { AIOrchestrator } from '../services/ai-orchestrator';
 import { ProjectContextAnalyzer } from '../services/project-context';
 

@@ -66,14 +66,15 @@ router.post('/reports/:reportId/schedule', [
   body('schedule').isObject(),
   body('delivery').isArray().isLength({ min: 1, max: 10 }),
   body('exportOptions').isObject(),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Validation failed',
         details: errors.array()
       });
+      return;
     }
 
     const { reportId } = req.params;
@@ -93,7 +94,8 @@ router.post('/reports/:reportId/schedule', [
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     // Mock implementation for now
@@ -152,7 +154,7 @@ router.get('/reports/:reportId/schedules', [
   authenticate,
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { reportId } = req.params;
     const page = parseInt(req.query.page as string) || 1;

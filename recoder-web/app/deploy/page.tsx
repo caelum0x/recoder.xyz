@@ -144,7 +144,7 @@ export default function DeploymentPage() {
     }, 3000);
   };
 
-  const handleRollback = (deploymentId) => {
+  const handleRollback = (deploymentId: string) => {
     console.log('Rolling back to deployment:', deploymentId);
   };
 

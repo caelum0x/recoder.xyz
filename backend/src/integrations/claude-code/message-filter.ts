@@ -63,12 +63,12 @@ export function filterMessagesForClaudeCode(messages: any[]): any[] {
     if (Array.isArray(message.content)) {
       // Filter out image blocks and other unsupported content, keep only text
       const filteredContent = message.content
-        .filter(block => 
+        .filter((block: any) => 
           block.type === 'text' || 
           (typeof block === 'string') ||
           block.type === 'tool_result' // Keep tool results as they might contain text
         )
-        .map(block => {
+        .map((block: any) => {
           if (typeof block === 'string') {
             return filter.apply(block);
           }

@@ -3,7 +3,7 @@
  * Enforces usage limits, tracks consumption, and manages billing
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from './backend-client';
 
 export interface QuotaConfig {

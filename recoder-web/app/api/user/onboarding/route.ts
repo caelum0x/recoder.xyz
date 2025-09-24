@@ -317,4 +317,4 @@ async function logOnboardingEvent(userId: string, event: string, metadata: any):
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

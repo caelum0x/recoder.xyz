@@ -4,7 +4,7 @@
 
 import path from 'path';
 import { FileSystemUtils } from './filesystem';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface ProjectFramework {
   name: string;

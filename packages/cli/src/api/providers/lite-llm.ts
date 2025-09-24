@@ -1,11 +1,11 @@
 import OpenAI from "openai"
 import { Anthropic } from "@anthropic-ai/sdk" // Keep for type usage only
 
-import { litellmDefaultModelId, litellmDefaultModelInfo } from "@recoder/shared"
+import { litellmDefaultModelId, litellmDefaultModelInfo } from "recoder-shared"
 
-import { calculateApiCostOpenAI } from "@recoder/shared"
+import { calculateApiCostOpenAI } from "recoder-shared"
 
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
 
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { convertToOpenAiMessages } from "../transform/openai-format"

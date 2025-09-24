@@ -8,9 +8,9 @@ import {
 	OPENROUTER_DEFAULT_PROVIDER_NAME,
 	OPEN_ROUTER_PROMPT_CACHING_MODELS,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
-} from "@roo-code/types"
+} from "roo-code-types"
 
-import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
+import type { ApiHandlerOptions, ModelRecord } from "recoder-shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStreamChunk } from "../transform/stream"

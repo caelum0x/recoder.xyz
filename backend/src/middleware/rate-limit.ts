@@ -5,6 +5,7 @@ import { Request, Response, NextFunction } from 'express';
 import { createClient } from 'redis';
 import { ApiKeyService } from '../models/api-key';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error-helpers';
 
 // Extend Request type to include API key info
 declare global {
@@ -104,8 +105,9 @@ class RateLimitService {
         resetTime: windowStart + window
       };
       
-    } catch (error) {
-      logger.error('Rate limit check failed', { error: error.message, keyId });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
+      logger.error('Rate limit check failed', { error: errorMessage, keyId });
       
       // Fail open - allow request if Redis is down
       return {
@@ -157,8 +159,9 @@ class RateLimitService {
         resetTime: windowStart + window
       };
       
-    } catch (error) {
-      logger.error('Failed to get rate limit status', { error: error.message, keyId });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
+      logger.error('Failed to get rate limit status', { error: errorMessage, keyId });
       
       return {
         requests: { used: 0, limit: rateLimit.requests, remaining: rateLimit.requests },
@@ -217,11 +220,12 @@ export const authenticateApiKey = async (
       endpoint: req.path
     });
     
-    next();
+    return next();
     
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
     logger.error('API key authentication failed', {
-      error: error.message,
+      error: errorMessage,
       path: req.path,
       ip: req.ip
     });
@@ -282,16 +286,17 @@ export const checkRateLimit = (estimatedTokens: number = 1000) => {
         return;
       }
       
-      next();
+      return next();
       
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
       logger.error('Rate limit check failed', {
-        error: error.message,
+        error: errorMessage,
         keyId: req.apiKey.id
       });
       
       // Fail open - continue processing
-      next();
+      return next();
     }
   };
 };
@@ -319,7 +324,7 @@ export const requirePermission = (permission: string) => {
       return;
     }
     
-    next();
+    return next();
   };
 };
 
@@ -352,9 +357,10 @@ export const getRateLimitStatus = async (req: Request, res: Response): Promise<v
       }
     });
     
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
     logger.error('Failed to get rate limit status', {
-      error: error.message,
+      error: errorMessage,
       keyId: req.apiKey.id
     });
     
@@ -371,5 +377,5 @@ export { rateLimitService };
 export const apiLimiter = (req: Request, res: Response, next: NextFunction) => {
   // Simple rate limiting - for production, integrate with Redis and proper rate limiting
   // For now, just pass through to avoid breaking the application
-  next();
+  return next();
 };

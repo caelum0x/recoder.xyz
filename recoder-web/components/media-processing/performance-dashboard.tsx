@@ -143,6 +143,7 @@ export function PerformanceDashboard() {
       
       return () => clearInterval(interval)
     }
+    return undefined;
   }, [autoRefresh, refreshInterval, fetchCurrentMetrics])
 
   const startMonitoring = async () => {

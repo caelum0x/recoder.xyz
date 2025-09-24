@@ -7,8 +7,8 @@ import crypto from "crypto";
 // API Key schema for validation
 const apiKeySchema = z.object({
   name: z.string().min(1).max(100),
-  scopes: z.array(z.enum(['read', 'write', 'admin'])).min(1),
-  restrictions: z.record(z.any()).optional().default({}),
+  permissions: z.array(z.enum(['read', 'write', 'admin'])).min(1),
+  rateLimit: z.record(z.any()).optional().default({}),
 });
 
 // GET - Fetch user's API keys
@@ -31,11 +31,11 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         name: true,
-        scopes: true,
-        lastUsed: true,
-        active: true,
+        permissions: true,
+        lastUsedAt: true,
+        isActive: true,
         createdAt: true,
-        keyId: true, // Preview of the key
+        keyPrefix: true, // Preview of the key
       },
       orderBy: {
         createdAt: 'desc',
@@ -80,17 +80,17 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         name: validatedData.name,
-        keyId: keyId,
-        hashedKey: hashedKey,
-        scopes: validatedData.scopes,
-        restrictions: validatedData.restrictions,
-        active: true,
+        keyPrefix: keyId,
+        keyHash: hashedKey, // Required field in ApiKey model
+        permissions: (validatedData as any).scopes || validatedData.permissions,
+        rateLimit: (validatedData as any).restrictions || {},
+        isActive: true,
       },
       select: {
         id: true,
         name: true,
-        scopes: true,
-        keyId: true,
+        permissions: true,
+        keyPrefix: true,
         createdAt: true,
       },
     });
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         details: {
           apiKeyId: newApiKey.id,
           apiKeyName: newApiKey.name,
-          scopes: newApiKey.scopes,
+          permissions: newApiKey.permissions,
         },
       },
     });
@@ -180,9 +180,9 @@ export async function PUT(request: NextRequest) {
       select: {
         id: true,
         name: true,
-        scopes: true,
-        keyId: true,
-        active: true,
+        permissions: true,
+        keyPrefix: true,
+        isActive: true,
         createdAt: true,
       },
     });

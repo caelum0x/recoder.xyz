@@ -26,8 +26,11 @@ export default function Header() {
 
     if (showUserMenu) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
     }
+    return undefined;
   }, [showUserMenu]);
 
   const handleSignOut = async () => {
@@ -42,15 +45,16 @@ export default function Header() {
     <header className="web-header relative mx-auto flex w-full shrink-0 items-center justify-between py-6 z-50 px-6">
       {/* Enhanced Logo Section */}
       <Link href="/" className="flex items-center gap-3 group transition-all duration-300 hover:scale-105">
-        <div className="relative">
-          <Image
-            src="/recoder-logo.svg"
-            alt={brandConfig.fullName}
-            width={200}
-            height={48}
-            className="h-10 w-auto object-contain transition-all duration-300 group-hover:drop-shadow-lg"
-            priority
-          />
+        <div className="relative flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <span className="text-white font-bold text-lg">R</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Recoder
+            </span>
+            <span className="text-xs text-gray-500 font-medium -mt-1">AI Development Platform</span>
+          </div>
           <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10 blur-lg" />
         </div>
       </Link>
@@ -69,14 +73,16 @@ export default function Header() {
         >
           ⚡ CLI
         </Link>
-        <Link 
-          href="/chat" 
+        <a 
+          href="https://chat.recoder.xyz" 
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-sm font-semibold text-gray-700 hover:text-green-600 transition-colors duration-200 hover:scale-105"
         >
           💬 Chat
-        </Link>
+        </a>
         <Link 
-          href="/web-builder" 
+          href="/" 
           className="text-sm font-semibold text-gray-700 hover:text-orange-600 transition-colors duration-200 hover:scale-105"
         >
           🛠️ Builder

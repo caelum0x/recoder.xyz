@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/database';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import speakeasy from 'speakeasy';
 
 const deleteAccountSchema = z.object({
   password: z.string().min(1),
@@ -17,7 +19,7 @@ const deleteAccountSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password || '');
     if (!isPasswordValid) {
       return NextResponse.json(
         { error: 'Invalid password' },
@@ -74,7 +76,6 @@ export async function POST(request: NextRequest) {
       let twoFactorValid = false;
 
       if (twoFactorCode && user.totpSecret) {
-        const speakeasy = require('speakeasy');
         twoFactorValid = speakeasy.totp.verify({
           secret: user.totpSecret,
           encoding: 'base32',
@@ -83,9 +84,9 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (!twoFactorValid && backupCode && user.backupCodes) {
+      if (!twoFactorValid && backupCode && user.backupCodes && Array.isArray(user.backupCodes)) {
         for (const hashedCode of user.backupCodes) {
-          if (await bcrypt.compare(backupCode.toUpperCase(), hashedCode)) {
+          if (typeof hashedCode === 'string' && await bcrypt.compare(backupCode.toUpperCase(), hashedCode)) {
             twoFactorValid = true;
             break;
           }
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         status: 'processing',
-        type: 'account_deletion',
+        exportType: 'account_deletion',
         format: 'json'
       }
     });
@@ -117,7 +118,18 @@ export async function POST(request: NextRequest) {
     await prisma.dataExportData.create({
       data: {
         exportId: deletionRecord.id,
-        data: finalExport
+        dataType: 'account_deletion',
+        tableName: 'user_export',
+        data: {
+          exportMetadata: finalExport.exportMetadata,
+          userData: {
+            id: finalExport.userData.id,
+            email: finalExport.userData.email,
+            name: finalExport.userData.name,
+            createdAt: finalExport.userData.createdAt,
+            updatedAt: finalExport.userData.updatedAt
+          }
+        }
       }
     });
 
@@ -199,40 +211,18 @@ async function generateFinalExport(userId: string) {
   const userData = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      accounts: true,
-      sessions: true,
       chats: {
         include: { messages: true }
       },
       generatedApps: true,
-      settings: true,
-      usage: true,
-      userSessions: true,
       apiKeys: true,
       auditLogs: true,
-      projects: {
-        include: { deploymentHistory: true }
-      },
-      mediaFiles: true,
-      processingJobs: true,
-      batchJobs: true,
-      campaignTemplates: true,
-      templateUsages: true,
-      analyticsEvents: true,
-      subscription: true,
-      workflowExecutions: true,
-      privacySettings: true,
-      securitySettings: true,
-      dataExportRequests: true,
-      userAuditLogs: true,
-      teamMemberships: {
-        include: { team: true }
-      },
+      projects: true,
       integrations: true,
       webhooks: true,
-      notificationSettings: true,
-      notifications: true,
-      dataExports: true
+      dataExports: true,
+      userAuditLogs: true,
+      dataExportRequests: true
     }
   });
 
@@ -258,42 +248,19 @@ async function performAccountDeletion(userId: string) {
   // The order is important due to foreign key constraints
   
   // 1. Delete related records first (those that reference user)
-  await prisma.tooltipInteraction.deleteMany({ where: { userId } });
-  await prisma.tooltipFeedback.deleteMany({ where: { userId } });
-  await prisma.tooltipPreferences.deleteMany({ where: { userId } });
   await prisma.dataExportData.deleteMany({
     where: {
-      exportRequest: { userId }
+      export: { userId }
     }
   });
   await prisma.dataExportRequest.deleteMany({ where: { userId } });
   await prisma.userAuditLog.deleteMany({ where: { userId } });
-  await prisma.teamMember.deleteMany({ where: { userId } });
-  await prisma.userIntegration.deleteMany({ where: { userId } });
+  await prisma.integration.deleteMany({ where: { userId } });
   await prisma.webhook.deleteMany({ where: { userId } });
-  await prisma.notification.deleteMany({ where: { userId } });
-  await prisma.analyticsEvent.deleteMany({ where: { userId } });
-  await prisma.templateUsage.deleteMany({ where: { userId } });
-  await prisma.batchJob.deleteMany({ where: { userId } });
-  await prisma.processingJob.deleteMany({ where: { userId } });
-  await prisma.mediaFile.deleteMany({ where: { userId } });
-  await prisma.workflowExecution.deleteMany({ where: { userId } });
-  await prisma.deploymentHistory.deleteMany({
-    where: { project: { userId } }
-  });
   await prisma.project.deleteMany({ where: { userId } });
-  await prisma.aiConsensusLog.deleteMany({ where: { userId } });
-  await prisma.routerAnalytics.deleteMany({
-    where: { router: { userId } }
-  });
-  await prisma.routerUsage.deleteMany({
-    where: { router: { userId } }
-  });
-  await prisma.router.deleteMany({ where: { userId } });
+  await prisma.aIConsensusLog.deleteMany({ where: { userId } });
   await prisma.auditLog.deleteMany({ where: { userId } });
   await prisma.apiKey.deleteMany({ where: { userId } });
-  await prisma.userSession.deleteMany({ where: { userId } });
-  await prisma.usageStats.deleteMany({ where: { userId } });
   await prisma.message.deleteMany({
     where: { chat: { userId } }
   });
@@ -301,15 +268,10 @@ async function performAccountDeletion(userId: string) {
   await prisma.generatedApp.deleteMany({ where: { userId } });
   
   // 2. Delete settings and preferences
-  await prisma.userNotificationSettings.deleteMany({ where: { userId } });
-  await prisma.userSecuritySettings.deleteMany({ where: { userId } });
-  await prisma.userPrivacySettings.deleteMany({ where: { userId } });
   await prisma.userSettings.deleteMany({ where: { userId } });
-  await prisma.subscription.deleteMany({ where: { userId } });
   
   // 3. Delete auth-related records
-  await prisma.session.deleteMany({ where: { userId } });
-  await prisma.account.deleteMany({ where: { userId } });
+  // Skip session and account deletion as they don't exist
   
   // 4. Finally delete the user record
   await prisma.user.delete({ where: { id: userId } });
@@ -320,7 +282,7 @@ async function performAccountDeletion(userId: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -342,10 +304,7 @@ export async function GET(request: NextRequest) {
             chats: true,
             projects: true,
             generatedApps: true,
-            mediaFiles: true,
-            apiKeys: true,
-            userSessions: true,
-            notifications: true
+            apiKeys: true
           }
         }
       }
@@ -372,10 +331,7 @@ export async function GET(request: NextRequest) {
         chats: userStats._count.chats,
         projects: userStats._count.projects,
         generatedApps: userStats._count.generatedApps,
-        mediaFiles: userStats._count.mediaFiles,
-        apiKeys: userStats._count.apiKeys,
-        activeSessions: userStats._count.userSessions,
-        notifications: userStats._count.notifications
+        apiKeys: userStats._count.apiKeys
       },
       warnings: [
         'This action cannot be undone',

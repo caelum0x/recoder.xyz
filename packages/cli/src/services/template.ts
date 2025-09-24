@@ -6,7 +6,7 @@ import axios, { AxiosInstance } from 'axios';
 import path from 'path';
 import fs from 'fs-extra';
 import { ConfigManager } from '../utils/config';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface TemplateConfig {
   name: string;

@@ -6,7 +6,7 @@
  * all other AI models, providers, and agents for optimal performance.
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { AIHub } from './ai-hub';
 import { AgentManager } from './specialized-agents';
 

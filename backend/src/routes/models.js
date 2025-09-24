@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, query, param, validationResult } = require('express-validator');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { modelService } = require('../services/modelService');
 
 const router = express.Router();
@@ -36,7 +36,7 @@ const router = express.Router();
  *       200:
  *         description: Models retrieved successfully
  */
-router.get('/', authenticateToken, [
+router.get('/', authenticate, [
   query('provider')
     .optional()
     .isIn(['openai', 'anthropic', 'mistral', 'ollama'])
@@ -105,7 +105,7 @@ router.get('/', authenticateToken, [
  *       404:
  *         description: Model not found
  */
-router.get('/:modelId', authenticateToken, [
+router.get('/:modelId', authenticate, [
   param('modelId')
     .isString()
     .isLength({ min: 1 })
@@ -203,7 +203,7 @@ router.get('/:modelId', authenticateToken, [
  *       404:
  *         description: Model not found
  */
-router.post('/:modelId/chat', authenticateToken, [
+router.post('/:modelId/chat', authenticate, [
   param('modelId')
     .isString()
     .isLength({ min: 1 })
@@ -328,7 +328,7 @@ router.post('/:modelId/chat', authenticateToken, [
  *       404:
  *         description: Model not found
  */
-router.post('/:modelId/code', authenticateToken, [
+router.post('/:modelId/code', authenticate, [
   param('modelId')
     .isString()
     .isLength({ min: 1 })
@@ -442,7 +442,7 @@ router.post('/:modelId/code', authenticateToken, [
  *       404:
  *         description: Model not found
  */
-router.post('/:modelId/embedding', authenticateToken, [
+router.post('/:modelId/embedding', authenticate, [
   param('modelId')
     .isString()
     .isLength({ min: 1 })
@@ -528,7 +528,7 @@ router.post('/:modelId/embedding', authenticateToken, [
  *       404:
  *         description: Model not found
  */
-router.get('/:modelId/status', authenticateToken, [
+router.get('/:modelId/status', authenticate, [
   param('modelId')
     .isString()
     .isLength({ min: 1 })

@@ -1,4 +1,4 @@
-import { ModelInfo, lMStudioDefaultModelInfo } from "@recoder/shared"
+import { ModelInfo, lMStudioDefaultModelInfo } from "recoder-shared"
 import { LLM, LLMInfo, LLMInstanceInfo, LMStudioClient } from "@lmstudio/sdk"
 import axios from "axios"
 

@@ -628,7 +628,7 @@ export default function CodePlaygroundProfessional() {
                     contextmenu: true,
                     folding: true,
                     renderLineHighlight: 'all',
-                    occurrencesHighlight: true,
+                    occurrencesHighlight: 'singleFile',
                     selectionHighlight: true,
                   }}
                 />
@@ -768,7 +768,7 @@ export default function CodePlaygroundProfessional() {
                                     <span>{result.executionTime}ms</span>
                                   </div>
                                   <span className="text-muted-foreground">
-                                    {new Date(result.timestamp).toLocaleTimeString()}
+                                    {result.timestamp ? new Date(result.timestamp).toLocaleTimeString() : 'No timestamp'}
                                   </span>
                                 </div>
                               ))}

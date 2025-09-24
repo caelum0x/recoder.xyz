@@ -5,7 +5,7 @@
  * Includes precomputation for common patterns, model performance tracking, and adaptive thresholds.
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { ConsensusRequest, ConsensusResult, ModelResponse } from './hybrid-consensus';
 import * as crypto from 'crypto';
 import * as fs from 'fs';

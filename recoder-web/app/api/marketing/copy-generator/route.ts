@@ -309,7 +309,7 @@ function generateFallbackCopy(params: CopyGeneratorRequest, variationIndex: numb
     ]
   };
 
-  const categoryTemplates = templates[params.copy_type] || templates.ad_copy;
+  const categoryTemplates = templates[params.copy_type as keyof typeof templates] || templates.ad_copy;
   const selectedTemplate = categoryTemplates[variationIndex % categoryTemplates.length];
   
   let copy = selectedTemplate;

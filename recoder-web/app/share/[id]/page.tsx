@@ -18,7 +18,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID((await params).id);
 
-  let prompt = generatedApp?.prompt;
+  // Note: prompt field not available in GeneratedApp model, using description instead
+  let prompt = generatedApp?.description || "Generated app";
   if (typeof prompt !== "string") {
     notFound();
   }
@@ -28,7 +29,7 @@ export async function generateMetadata({
 
   return {
     title: "An app generated on LlamaCoder.io",
-    description: `Prompt: ${generatedApp?.prompt}`,
+    description: `Description: ${generatedApp?.description || "Generated app"}`,
     openGraph: {
       images: [`/api/og?${searchParams}`],
     },
@@ -59,7 +60,7 @@ export default async function Page({
 
   return (
     <div className="flex h-full w-full grow items-center justify-center">
-      <CodeRunner language="tsx" code={generatedApp.code} />
+      <CodeRunner language="tsx" code={generatedApp.sourceCode as string || "// No source code available"} />
     </div>
   );
 }

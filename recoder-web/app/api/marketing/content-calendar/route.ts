@@ -341,7 +341,7 @@ async function autoScheduleContent(params: any) {
 
   for (const content of content_pieces) {
     const platform = content.platform;
-    const preferredTimes = optimalTimes[platform] || ['12:00'];
+    const preferredTimes = optimalTimes[platform as keyof typeof optimalTimes] || ['12:00'];
     
     // Find optimal slot within date range
     let currentDate = new Date(startDate);
@@ -434,7 +434,7 @@ async function createFromTemplate(templateId: string, customData: any) {
     }
   };
 
-  const template = templates[templateId];
+  const template = templates[templateId as keyof typeof templates];
   if (!template) {
     throw new Error('Template not found');
   }

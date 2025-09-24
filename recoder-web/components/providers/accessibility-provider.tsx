@@ -101,9 +101,9 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
       // Check for screen reader specific APIs
       'speechSynthesis' in window ||
       // Check for high contrast preference (often used by screen reader users)
-      window.matchMedia('(prefers-contrast: high)').matches ||
+      (typeof window !== 'undefined' && (window as any).matchMedia?.('(prefers-contrast: high)')?.matches) ||
       // Check for reduced motion preference
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      (typeof window !== 'undefined' && (window as any).matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) ||
       // Check if user has previously enabled screen reader optimizations
       localStorage.getItem('screen-reader-optimized') === 'true';
 

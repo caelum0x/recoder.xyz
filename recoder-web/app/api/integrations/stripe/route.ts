@@ -381,7 +381,7 @@ async function createProduct(data: any) {
     product_id: product.id,
     name: product.name,
     description: product.description,
-    active: product.active,
+    isActive: product.active,
     created: product.created,
     metadata: product.metadata
   };
@@ -411,7 +411,7 @@ async function createPrice(data: any) {
     unit_amount: price.unit_amount,
     currency: price.currency,
     recurring: price.recurring,
-    active: price.active,
+    isActive: price.active,
     created: price.created
   };
 }

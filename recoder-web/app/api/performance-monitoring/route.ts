@@ -466,9 +466,9 @@ class RealPerformanceMonitor {
       });
 
       const totalRequests = performanceLogs.length;
-      const errorCount = performanceLogs.filter(log => !log.success).length;
+      const errorCount = performanceLogs.filter((log: { success: any; }) => !log.success).length;
       const avgResponseTime = totalRequests > 0 
-        ? performanceLogs.reduce((sum, log) => sum + log.duration, 0) / totalRequests 
+        ? performanceLogs.reduce((sum: any, log: { duration: any; }) => sum + log.duration, 0) / totalRequests 
         : 0;
 
       // Get active users from user sessions
@@ -678,7 +678,7 @@ class RealPerformanceMonitor {
       // Count active WebSocket connections and real-time activity
       const activeConnections = await this.prisma.userSession.count({
         where: {
-          lastUsed: {
+          lastUsedAt: {
             gte: new Date(Date.now() - 300000) // 5 minutes
           }
         }

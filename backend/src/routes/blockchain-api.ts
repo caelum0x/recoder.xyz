@@ -1,0 +1,361 @@
+/**
+ * Blockchain Compiler API Routes
+ * Multi-language blockchain smart contract compilation (Solidity, Rust, etc.)
+ */
+
+import { Router, Request, Response } from 'express';
+import { blockchainCompilerService } from '../services/blockchain-compiler';
+import { logger } from '../utils/logger';
+import { authenticate } from '../middleware/auth';
+import { error } from 'console';
+
+const router = Router();
+
+// Apply authentication to all routes
+router.use(authenticate);
+
+/**
+ * POST /api/blockchain/compile/solidity
+ * Compile Solidity smart contract using real compiler
+ */
+router.post('/compile/solidity', async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { source, contractName, version, optimization, optimizationRuns, evmVersion } = req.body;
+
+    if (!source || !contractName) {
+      return res.status(400).json({
+        error: 'Source code and contract name are required'
+      });
+    }
+
+    const result = await blockchainCompilerService.compileSolidity(source, contractName, {
+      version: version || '0.8.24',
+      optimization: optimization !== false,
+      optimizationRuns: optimizationRuns || 200,
+      evmVersion: evmVersion || 'london'
+    });
+
+    return res.json({
+      success: result.success,
+      warnings: result.warnings,
+      errors: result.errors,
+      bytecode: result.bytecode,
+      abi: result.abi,
+      metadata: result.metadata,
+      gasEstimate: result.gasEstimate,
+      compilationTime: result.compilationTime,
+      artifacts: result.artifacts
+    });
+
+  } catch (error) {
+    logger.error('Solidity compilation error:', error);
+    return res.status(500).json({
+      error: 'Solidity compilation failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/blockchain/compile/solana
+ * Compile Rust smart contract for Solana
+ */
+router.post('/compile/solana', async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { source, programName, features, release } = req.body;
+
+    if (!programName) {
+      return res.status(400).json({
+        error: 'Program name is required'
+      });
+    }
+
+    const result = await blockchainCompilerService.compileSolana(source, programName, {
+      features: features || [],
+      release: release || false
+    });
+
+    return res.json({
+      success: result.success,
+      warnings: result.warnings,
+      errors: result.errors,
+      programId: result.programId,
+      soFile: result.soFile,
+      keypair: result.keypair,
+      compilationTime: result.compilationTime
+    });
+
+  } catch (error) {
+    logger.error('Solana compilation error:', error);
+    return res.status(500).json({
+      error: 'Solana compilation failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/blockchain/compile/near
+ * Compile Rust smart contract for NEAR Protocol
+ */
+router.post('/compile/near', async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { source, contractName, release } = req.body;
+
+    if (!contractName) {
+      return res.status(400).json({
+        error: 'Contract name is required'
+      });
+    }
+
+    const result = await blockchainCompilerService.compileNear(source, contractName, {
+      release: release || false
+    });
+
+    return res.json({
+      success: result.success,
+      warnings: result.warnings,
+      errors: result.errors,
+      bytecode: result.bytecode, // WASM bytecode
+      compilationTime: result.compilationTime,
+      artifacts: result.artifacts
+    });
+
+  } catch (error) {
+    logger.error('NEAR compilation error:', error);
+    return res.status(500).json({
+      error: 'NEAR compilation failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/blockchain/versions
+ * Get supported compiler versions for all blockchain platforms
+ */
+router.get('/versions', async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const versions = await blockchainCompilerService.getSupportedVersions();
+    
+    return res.json({
+      platforms: {
+        solidity: {
+          versions: versions.solidity,
+          default: '0.8.24'
+        },
+        rust: {
+          versions: versions.rust,
+          default: '1.75.0'
+        },
+        solana: {
+          versions: versions.solana,
+          default: '1.16.0'
+        },
+        near: {
+          versions: versions.near,
+          default: '4.1.1'
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Failed to get compiler versions:', error);
+    return res.status(500).json({
+      error: 'Failed to get compiler versions'
+    });
+  }
+});
+
+/**
+ * GET /api/blockchain/health
+ * Health check for all blockchain compilers
+ */
+router.get('/health', async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const health = await blockchainCompilerService.healthCheck();
+    
+    const overall = Object.values(health).every(status => status) ? 'healthy' : 'degraded';
+    
+    return res.json({
+      status: overall,
+      compilers: {
+        solidity: health.solc ? 'available' : 'unavailable',
+        rust: health.rust ? 'available' : 'unavailable',
+        solana: health.solana ? 'available' : 'unavailable',
+        near: health.near ? 'available' : 'unavailable'
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Health check failed:', error);
+    return res.status(500).json({
+      status: 'error',
+      error: 'Health check failed'
+    });
+  }
+});
+
+/**
+ * POST /api/blockchain/templates
+ * Get smart contract templates for different platforms
+ */
+router.get('/templates/:platform', async (req: Request, res: Response) => {
+  try {
+    const { platform } = req.params;
+    
+    const templates: Record<string, any[]> = {
+      solidity: [
+        {
+          id: 'erc20',
+          name: 'ERC20 Token',
+          description: 'Standard ERC20 fungible token',
+          code: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract SimpleToken {
+    string public name = "SimpleToken";
+    string public symbol = "STK";
+    uint8 public decimals = 18;
+    uint256 public totalSupply = 1000000 * 10**decimals;
+    
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+    
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+    
+    constructor() {
+        balanceOf[msg.sender] = totalSupply;
+    }
+    
+    function transfer(address to, uint256 value) public returns (bool) {
+        require(balanceOf[msg.sender] >= value, "Insufficient balance");
+        balanceOf[msg.sender] -= value;
+        balanceOf[to] += value;
+        emit Transfer(msg.sender, to, value);
+        return true;
+    }
+}`
+        }
+      ],
+      solana: [
+        {
+          id: 'anchor_basic',
+          name: 'Basic Anchor Program',
+          description: 'Simple Anchor-based Solana program',
+          code: `use anchor_lang::prelude::*;
+
+declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+
+#[program]
+pub mod basic_program {
+    use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>, data: u64) -> Result<()> {
+        let account = &mut ctx.accounts.my_account;
+        account.data = data;
+        Ok(())
+    }
+
+    pub fn update(ctx: Context<Update>, data: u64) -> Result<()> {
+        let account = &mut ctx.accounts.my_account;
+        account.data = data;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(init, payer = user, space = 8 + 8)]
+    pub my_account: Account<'info, MyAccount>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Update<'info> {
+    #[account(mut)]
+    pub my_account: Account<'info, MyAccount>,
+}
+
+#[account]
+pub struct MyAccount {
+    pub data: u64,
+}`
+        }
+      ],
+      near: [
+        {
+          id: 'near_basic',
+          name: 'Basic NEAR Contract',
+          description: 'Simple NEAR Protocol smart contract',
+          code: `use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::{near_bindgen, env, Promise};
+
+#[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct Contract {
+    pub message: String,
+    pub counter: u64,
+}
+
+impl Default for Contract {
+    fn default() -> Self {
+        Self {
+            message: "Hello, World!".to_string(),
+            counter: 0,
+        }
+    }
+}
+
+#[near_bindgen]
+impl Contract {
+    pub fn get_message(&self) -> String {
+        self.message.clone()
+    }
+
+    pub fn set_message(&mut self, message: String) {
+        env::log_str(&format!("Setting message to: {}", message));
+        self.message = message;
+    }
+
+    pub fn increment(&mut self) {
+        self.counter += 1;
+        env::log_str(&format!("Counter incremented to: {}", self.counter));
+    }
+
+    pub fn get_counter(&self) -> u64 {
+        self.counter
+    }
+}`
+        }
+      ]
+    };
+
+    const platformTemplates = templates[platform.toLowerCase()];
+    if (!platformTemplates) {
+      return res.status(404).json({
+        error: 'Platform not supported',
+        supportedPlatforms: Object.keys(templates)
+      });
+    }
+
+    return res.json({
+      platform,
+      templates: platformTemplates
+    });
+
+  } catch (error) {
+    logger.error('Failed to get templates:', error);
+    return res.status(500).json({
+      error: 'Failed to get templates'
+    });
+  }
+});
+
+export default router;
+// CommonJS compatibility
+module.exports = router;

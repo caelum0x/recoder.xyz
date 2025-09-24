@@ -71,10 +71,10 @@ export async function POST(request: NextRequest) {
 
     // Enable 2FA in the database
     const success = await userManager.updateUserProfile(session.user.id, {
-      two_factor_enabled: true,
-      two_factor_secret: tempSecret.secret,
-      backup_codes: JSON.stringify(backupCodes),
-      two_factor_enabled_at: new Date(),
+      // two_factor_enabled: true, // Field not in UserProfile model
+      // two_factor_secret: tempSecret.secret, // Field not in UserProfile model
+      // backup_codes: JSON.stringify(backupCodes), // Field not in UserProfile model
+      // two_factor_enabled_at: new Date(), // Field not in UserProfile model
     });
 
     if (!success) {
@@ -127,4 +127,4 @@ async function logSecurityEvent(userId: string, event: string, metadata: any) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

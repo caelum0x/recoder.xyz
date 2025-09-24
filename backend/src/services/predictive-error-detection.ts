@@ -148,16 +148,16 @@ interface CodeContext {
 }
 
 export class PredictiveErrorDetectionService extends EventEmitter {
-  private errorPredictionModel: NeuralNetwork;
-  private qualityAnalysisModel: NeuralNetwork;
+  private errorPredictionModel!: NeuralNetwork;
+  private qualityAnalysisModel!: NeuralNetwork;
   private patternDatabase: Map<string, ErrorPattern> = new Map();
   private predictionHistory: Map<string, any[]> = new Map();
 
   // Error pattern recognition models
-  private syntaxErrorModel: NeuralNetwork;
-  private logicErrorModel: NeuralNetwork;
-  private performanceIssueModel: NeuralNetwork;
-  private securityVulnModel: NeuralNetwork;
+  private syntaxErrorModel!: NeuralNetwork;
+  private logicErrorModel!: NeuralNetwork;
+  private performanceIssueModel!: NeuralNetwork;
+  private securityVulnModel!: NeuralNetwork;
 
   constructor() {
     super();
@@ -689,7 +689,7 @@ export class PredictiveErrorDetectionService extends EventEmitter {
     const linesOfCode = context.content.split('\n').length;
     const estimatedHours = Math.round(linesOfCode * debtScore * 0.1);
 
-    const priority = [];
+    const priority: any[] = [];
     if (qualityScores[3] < 0.7) priority.push('Security fixes');
     if (qualityScores[2] < 0.6) priority.push('Performance optimization');
     if (qualityScores[1] < 0.5) priority.push('Readability improvement');
@@ -706,7 +706,7 @@ export class PredictiveErrorDetectionService extends EventEmitter {
     quality: QualityMetrics,
     context: CodeContext
   ): Promise<any[]> {
-    const recommendations = [];
+    const recommendations: any[] = [];
 
     // Error prevention recommendations
     for (const prediction of predictions.slice(0, 3)) {

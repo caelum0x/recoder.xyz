@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAuth } from '@/lib/auth'
+import { getServerSession } from 'next-auth'
+// TODO: Add verifyAuth export to @/lib/auth or use getServerSession
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await verifyAuth(request)
+    // TODO: Replace with proper auth verification
+    const session = await getServerSession()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.user.id
     const body = await request.json()
     
     // Forward to backend API
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Unreal Engine project creation error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create Unreal Engine project' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to create Unreal Engine project' },
       { status: 500 }
     )
   }

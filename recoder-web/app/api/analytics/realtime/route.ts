@@ -16,27 +16,27 @@ export async function GET(request: NextRequest) {
       systemPerformance
     ] = await Promise.all([
       // Active users (activity in last 5 minutes)
-      prisma.performanceLog.groupBy({
-        by: ['sessionId'],
+      prisma.auditLog.groupBy({
+        by: ['userId'],
         where: {
           timestamp: {
             gte: fiveMinutesAgo
           }
         }
-      }).then(result => result.length),
+      }).then((result: any) => result.length),
 
       // Current requests (activity in last minute)
-      prisma.performanceLog.count({
+      prisma.auditLog.count({
         where: {
           timestamp: {
             gte: oneMinuteAgo
           },
-          type: 'api_call'
+          action: 'api_call'
         }
       }),
 
       // Recent errors (last 5 minutes)
-      prisma.errorLog.count({
+      prisma.auditLog.count({
         where: {
           timestamp: {
             gte: fiveMinutesAgo
@@ -45,15 +45,15 @@ export async function GET(request: NextRequest) {
       }),
 
       // System performance (average response time in last 5 minutes)
-      prisma.performanceLog.findMany({
+      prisma.auditLog.findMany({
         where: {
           timestamp: {
             gte: fiveMinutesAgo
           },
-          type: 'api_call'
+          action: 'api_call'
         },
         select: {
-          duration: true,
+          metadata: true,
           success: true
         }
       })
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate system load based on performance
     const avgResponseTime = systemPerformance.length > 0 
-      ? systemPerformance.reduce((sum, p) => sum + p.duration, 0) / systemPerformance.length 
+      ? systemPerformance.reduce((sum: number, p: any) => sum + ((p.metadata as any)?.duration || 0), 0) / systemPerformance.length 
       : 1000;
 
     // System load percentage (higher response time = higher load)

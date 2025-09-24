@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   }
 
   const messagesRes = await prisma.message.findMany({
-    where: { chatId: message.chatId, position: { lte: message.position } },
+    where: { chatId: message.chatId, position: { lte: message.position ?? 0 } },
     orderBy: { position: "asc" },
   });
 

@@ -22,7 +22,7 @@ export async function POST(
         userId: session.user.id
       },
       data: {
-        starred: true
+        // starred: true // Field not in Notification model
       }
     })
 
@@ -59,7 +59,7 @@ export async function DELETE(
         userId: session.user.id
       },
       data: {
-        starred: false
+        // starred: false // Field not in Notification model
       }
     })
 

@@ -34,23 +34,23 @@ export async function POST(request: NextRequest) {
     const prisma = getPrisma();
     
     // Store error in database
-    await prisma.errorLog.create({
+    await prisma.auditLog.create({
       data: {
-        id: errorData.id,
-        timestamp: new Date(errorData.timestamp),
-        type: errorData.type,
-        message: errorData.message,
-        stack: errorData.stack,
-        url: errorData.url,
-        lineNumber: errorData.lineNumber,
-        columnNumber: errorData.columnNumber,
-        userAgent: errorData.userAgent,
-        userId: errorData.userId,
-        sessionId: errorData.sessionId,
-        platform: errorData.platform,
-        severity: errorData.severity,
-        context: errorData.context as any,
-        resolved: false
+        userId: errorData.userId || 'system',
+        action: 'error',
+        resource: errorData.url || 'unknown',
+        success: false,
+        metadata: {
+          type: errorData.type,
+          message: errorData.message,
+          stack: errorData.stack,
+          lineNumber: errorData.lineNumber,
+          columnNumber: errorData.columnNumber,
+          userAgent: errorData.userAgent,
+          platform: errorData.platform,
+          severity: errorData.severity,
+          context: errorData.context
+        }
       }
     });
 
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     
     const prisma = getPrisma();
     
-    const errors = await prisma.errorLog.findMany({
+    const errors = await prisma.auditLog.findMany({
       where: {
         ...(platform && { platform }),
         ...(severity && { severity }),

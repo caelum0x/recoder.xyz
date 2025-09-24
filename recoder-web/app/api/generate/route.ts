@@ -1,6 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 
+// Track AI usage for cost monitoring
+async function trackAIUsage(model: string, inputText: string, outputText: string, feature: string = 'code_generation') {
+  try {
+    const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+    const inputTokens = estimateTokens(inputText);
+    const outputTokens = estimateTokens(outputText);
+    
+    await fetch('/api/usage/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: model.includes('claude') ? 'anthropic' : 
+                 model.includes('gpt') ? 'openai' : 'production-engine',
+        model: model || 'production-engine',
+        inputTokens,
+        outputTokens,
+        feature,
+        platform: 'recoder-web',
+        metadata: { 
+          endpoint: '/api/generate',
+          projectType: 'code_generation',
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+  } catch (error) {
+    console.error('Usage tracking failed:', error);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -87,6 +117,15 @@ export async function POST(req: NextRequest) {
       success: result.success,
       filesGenerated: result.files?.length || 0
     });
+
+    // Track usage for cost monitoring
+    const generatedContent = result.files?.map((f: { content: any; }) => f.content).join('\n') || result.code || '';
+    await trackAIUsage(
+      'production-engine',
+      finalDescription,
+      generatedContent,
+      'production_code_generation'
+    );
 
     return NextResponse.json({
       success: true,

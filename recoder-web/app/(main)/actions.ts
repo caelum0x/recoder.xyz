@@ -36,18 +36,16 @@ export async function createChat(
     
     const neon = new Pool({ connectionString: process.env.DATABASE_URL });
     const adapter = new PrismaNeon(neon as any) as any;
-    const prisma = new PrismaClient({ adapter });
+    const prisma = new PrismaClient();
     
     console.log('Prisma client initialized successfully');
 
     const chat = await prisma.chat.create({
       data: {
         model,
-        quality,
         prompt,
         title: "",
-        shadcn: true,
-        userId: session?.user?.id || null, // Associate with authenticated user
+        userId: session?.user?.id || "", // Associate with authenticated user
       },
     });
 
@@ -221,8 +219,14 @@ export async function createChat(
               role: "system",
               content: getMainCodingPrompt(mostSimilarExample),
               position: 0,
+              userId: session?.user?.id || "",
             },
-            { role: "user", content: userMessage, position: 1 },
+            { 
+              role: "user", 
+              content: userMessage, 
+              position: 1,
+              userId: session?.user?.id || "",
+            },
           ],
         },
       },
@@ -233,7 +237,7 @@ export async function createChat(
   });
 
   const lastMessage = newChat.messages
-    .sort((a, b) => a.position - b.position)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
     .at(-1);
   if (!lastMessage) throw new Error("No new message");
 
@@ -268,7 +272,7 @@ export async function createMessage(
     throw new Error("Unauthorized: You can only access your own chats");
   }
 
-  const maxPosition = Math.max(...chat.messages.map((m) => m.position));
+  const maxPosition = Math.max(...chat.messages.map((m) => m.position ?? 0));
 
   const newMessage = await prisma.message.create({
     data: {
@@ -276,6 +280,7 @@ export async function createMessage(
       content: text,
       position: maxPosition + 1,
       chatId,
+      userId: session?.user?.id || "",
     },
   });
 

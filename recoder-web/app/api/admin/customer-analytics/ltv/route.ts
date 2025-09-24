@@ -1,9 +1,9 @@
 // Customer Lifetime Value Analysis API - Real implementation with predictive analytics
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/database';
+import { prisma } from '../../../../../lib/database';
 import { z } from 'zod';
-import rateLimit from '@/lib/rate-limit';
+import rateLimit from '../../../../../lib/rate-limit';
 
 // Rate limiting for LTV analysis operations
 const limiter = rateLimit({
@@ -34,14 +34,14 @@ export async function GET(request: NextRequest) {
 
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check admin permissions
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true }
+      where: { email: session.user.email! },
+      select: { role: true, id: true }
     });
 
     if (user?.role !== 'admin' && user?.role !== 'super_admin') {
@@ -97,14 +97,14 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check admin permissions
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true }
+      where: { email: session.user.email! },
+      select: { role: true, id: true }
     });
 
     if (user?.role !== 'admin' && user?.role !== 'super_admin') {
@@ -120,8 +120,9 @@ export async function POST(request: NextRequest) {
     // Log the recalculation
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         action: 'ltv_recalculation_started',
+        resource: 'customer_lifetime_value',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -169,7 +170,7 @@ async function getLTVAnalysis(params: LTVAnalysisParams) {
   // Get average LTV metrics
   const avgLTVMetrics = await prisma.customerLifetimeValue.aggregate({
     where: {
-      lastCalculated: {
+      lastCalculatedAt: {
         gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
       }
     },
@@ -201,11 +202,11 @@ async function getLTVAnalysis(params: LTVAnalysisParams) {
 
   return {
     summary: {
-      averageLTV: avgLTVMetrics._avg.predictedLtv || 0,
-      averageHistoricalLTV: avgLTVMetrics._avg.totalRevenue || 0,
-      averageMonthlyRevenue: avgLTVMetrics._avg.averageMonthlyRevenue || 0,
-      averageChurnProbability: avgLTVMetrics._avg.churnProbability || 0,
-      totalCustomersAnalyzed: avgLTVMetrics._count.id || 0
+      averageLTV: avgLTVMetrics._avg?.predictedLtv || 0,
+      averageHistoricalLTV: avgLTVMetrics._avg?.totalRevenue || 0,
+      averageMonthlyRevenue: avgLTVMetrics._avg?.averageMonthlyRevenue || 0,
+      averageChurnProbability: avgLTVMetrics._avg?.churnProbability || 0,
+      totalCustomersAnalyzed: (avgLTVMetrics._count as any)?._all || 0
     },
     distribution: ltvDistribution,
     cohortAnalysis: cohortLTVAnalysis,
@@ -216,14 +217,14 @@ async function getLTVAnalysis(params: LTVAnalysisParams) {
 
 async function needsLTVRecalculation(): Promise<boolean> {
   const lastCalculation = await prisma.customerLifetimeValue.findFirst({
-    orderBy: { lastCalculated: 'desc' },
-    select: { lastCalculated: true }
+    orderBy: { lastCalculatedAt: 'desc' },
+    select: { lastCalculatedAt: true }
   });
 
   if (!lastCalculation) return true;
 
   // Recalculate if last calculation was more than 24 hours ago
-  const hoursSinceLastCalculation = (Date.now() - lastCalculation.lastCalculated.getTime()) / (1000 * 60 * 60);
+  const hoursSinceLastCalculation = (Date.now() - lastCalculation.lastCalculatedAt.getTime()) / (1000 * 60 * 60);
   return hoursSinceLastCalculation > 24;
 }
 
@@ -243,7 +244,7 @@ async function calculateLTVForAllCustomers() {
         orderBy: { createdAt: 'asc' }
       },
       subscriptions: {
-        orderBy: { createdAt: 'asc' }
+        
       }
     }
   });
@@ -269,14 +270,16 @@ async function calculateCustomerLTV(user: any) {
 
   if (payments.length === 0) {
     return {
-      cohortMonth: user.createdAt,
+      cohortMonth: `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`,
       totalRevenue: 0,
       monthsActive: 0,
       averageMonthlyRevenue: 0,
       predictedLtv: 0,
       churnProbability: 0.5,
       segments: [],
-      lastCalculated: new Date()
+      subscriptionStart: user.createdAt,
+      totalMonths: 0,
+      lastCalculatedAt: new Date()
     };
   }
 
@@ -308,14 +311,16 @@ async function calculateCustomerLTV(user: any) {
   if (activeSubscription?.plan === 'enterprise') segments.push('enterprise');
 
   return {
-    cohortMonth: new Date(user.createdAt.getFullYear(), user.createdAt.getMonth(), 1),
+    cohortMonth: `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`,
     totalRevenue,
     monthsActive,
     averageMonthlyRevenue,
     predictedLtv,
     churnProbability,
     segments,
-    lastCalculated: new Date()
+    subscriptionStart: firstPayment.createdAt,
+    totalMonths: monthsActive,
+    lastCalculatedAt: new Date()
   };
 }
 
@@ -485,7 +490,7 @@ async function getTopCustomersByLTV(limit: number) {
           createdAt: true,
           subscriptions: {
             where: { status: 'active' },
-            select: { plan: true, amount: true }
+            select: { planId: true, amount: true }
           }
         }
       }
@@ -537,17 +542,15 @@ async function getChurnPredictionAnalysis() {
           lastLoginAt: true,
           subscriptions: {
             where: { status: 'active' },
-            select: { plan: true, amount: true }
+            select: { planId: true, amount: true }
           }
         }
       }
     }
   });
 
-  // Churn probability distribution
-  const churnDistribution = await prisma.customerLifetimeValue.groupBy({
-    by: [],
-    _count: { id: true },
+  // Churn probability distribution  
+  const lowRiskCount = await prisma.customerLifetimeValue.count({
     where: {
       churnProbability: { gte: 0, lte: 0.3 }
     }
@@ -568,12 +571,12 @@ async function getChurnPredictionAnalysis() {
   return {
     atRiskCustomers: atRiskCustomers.slice(0, 20), // Top 20 at-risk high-value customers
     churnDistribution: [
-      { risk: 'Low', count: churnDistribution[0]?._count.id || 0, percentage: 0 },
+      { risk: 'Low', count: lowRiskCount, percentage: 0 },
       { risk: 'Medium', count: mediumRiskCount, percentage: 0 },
       { risk: 'High', count: highRiskCount, percentage: 0 }
     ],
     totalAtRisk: highRiskCount,
-    potentialRevenueAtRisk: atRiskCustomers.reduce((sum, customer) => sum + customer.predictedLtv, 0)
+    potentialRevenueAtRisk: atRiskCustomers.reduce((sum, customer) => sum + Number(customer.predictedLtv), 0)
   };
 }
 

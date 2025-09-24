@@ -168,7 +168,7 @@ export class CodeAnalysisService extends EventEmitter {
           } catch (error) {
             logger.error('Failed to analyze file:', {
               filePath: file.path,
-              error: error.message
+              error: error instanceof Error ? error.message : 'Unknown error'
             });
             return [];
           }
@@ -228,7 +228,7 @@ export class CodeAnalysisService extends EventEmitter {
         data: {
           status: 'error',
           processingMeta: {
-            error: error.message,
+            error: error instanceof Error ? error.message : 'Unknown error',
             failedAt: new Date()
           }
         }
@@ -648,7 +648,7 @@ export class CodeAnalysisService extends EventEmitter {
    * Generate and store vector embeddings
    */
   private async generateEmbeddings(knowledgeBaseId: string, chunks: CodeChunk[]): Promise<void> {
-    const vectors = [];
+    const vectors: any[] = [];
     
     for (const chunk of chunks) {
       try {
@@ -689,7 +689,7 @@ export class CodeAnalysisService extends EventEmitter {
       } catch (error) {
         logger.error('Failed to generate embedding for chunk:', {
           chunkId: chunk.id,
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     }

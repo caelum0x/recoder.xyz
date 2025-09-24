@@ -5,7 +5,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { OllamaManager_Instance } from '../services/ollama-manager';
 import { spinner } from '../utils/spinner';
 

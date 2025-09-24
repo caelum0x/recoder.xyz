@@ -5,7 +5,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { spawn } from 'child_process';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   GenerationResult,
   ValidationResult,
@@ -32,7 +32,7 @@ import {
   GenerationError,
   GenerationWarning,
   GeneratedFile
-} from '@recoder/shared/types/code-generation';
+} from 'recoder-shared/types/code-generation';
 
 export class ValidationPipeline {
   private tempDir: string;

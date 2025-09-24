@@ -2,7 +2,7 @@
  * Billing Integration Service
  * Manages subscription tiers, payment processing, and billing enforcement
  */
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from './backend-client';
 
 export interface SubscriptionTier {

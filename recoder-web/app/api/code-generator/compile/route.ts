@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userTier = session.user.subscription?.tier || 'free';
+    // TODO: Add subscription property to User type
+    const userTier = (session.user as any).subscription?.tier || 'free';
     const rateLimit = userTier === 'free' ? 30 : userTier === 'pro' ? 100 : 500;
 
     try {
@@ -271,4 +272,4 @@ async function updateUserUsageStats(userId: string, usage: any) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

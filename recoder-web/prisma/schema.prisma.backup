@@ -1,0 +1,1176 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  username      String?   @unique
+  bio           String?
+  location      String?
+  company       String?
+  blog          String?
+  publicRepos   Int?
+  followers     Int?
+  following     Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Enhanced security fields
+  mfaEnabled        Boolean   @default(false)
+  twoFactorEnabled  Boolean   @default(false) // Separate field for 2FA status
+  totpSecret        String?
+  backupCodes       String[]  @default([])
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+  password          String    // Added password field for authentication
+  passwordUpdatedAt DateTime? // Track when password was last changed
+  role              String    @default("user") // user, admin, premium
+
+  accounts      Account[]
+  sessions      Session[]
+  chats         Chat[]
+  generatedApps GeneratedApp[]
+  settings      UserSettings?
+  usage         UsageStats[]
+  userSessions  UserSession[]
+  apiKeys       ApiKey[]
+  auditLogs     AuditLog[]
+  routers       Router[]
+  projects      Project[]
+  aiConsensusLogs AiConsensusLog[]
+  
+  // Media Processing relations
+  mediaFiles     MediaFile[]
+  processingJobs ProcessingJob[]
+  batchJobs      BatchJob[]
+  campaignTemplates CampaignTemplate[]
+  templateUsages TemplateUsage[]
+  analyticsEvents AnalyticsEvent[]
+  analyticsDashboards AnalyticsDashboard[]
+  dashboardCollaborations DashboardCollaborator[]
+  payments        Payment[]
+  customerLifetimeValue CustomerLifetimeValue?
+  dashboardInvitations DashboardCollaborator[] @relation("DashboardInviter")
+  dashboardViews DashboardView[]
+  analyticsMetrics AnalyticsMetric[]
+  subscription   Subscription?
+  workflowExecutions WorkflowExecution[]
+  
+  // Privacy and Security Settings
+  privacySettings UserPrivacySettings?
+  securitySettings UserSecuritySettings?
+  dataExportRequests DataExportRequest[]
+  userAuditLogs UserAuditLog[]
+  teamMemberships TeamMember[]
+  
+  // Integration Relations
+  integrations UserIntegration[]
+  webhooks     Webhook[]
+  
+  // Notification Settings
+  notificationSettings UserNotificationSettings?
+  notifications Notification[]
+  
+  // Data Export Relations
+  dataExports  DataExport[]
+  
+  // Tooltip System Relations
+  tooltipInteractions TooltipInteraction[]
+  tooltipPreferences  TooltipPreferences?
+  tooltipFeedback     TooltipFeedback[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Enhanced application models
+model GeneratedApp {
+  id        String   @id @default(nanoid(5))
+  model     String
+  prompt    String
+  code      String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  metadata  Json?    // Store additional generation metadata
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([id])
+  @@index([userId])
+}
+
+model Chat {
+  id                String    @id @default(nanoid(16))
+  model             String
+  quality           String
+  prompt            String
+  title             String
+  llamaCoderVersion String    @default("v2")
+  shadcn            Boolean
+  userId            String?
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isPublic          Boolean   @default(false)
+  messages          Message[]
+  createdAt         DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(nanoid(16))
+  role      String
+  content   String
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  position  Int
+  metadata  Json?    // Store generation metadata (model, tokens, cost, etc.)
+  createdAt DateTime @default(now())
+
+  @@index([chatId])
+}
+
+// User preferences and settings
+model UserSettings {
+  id          String @id @default(cuid())
+  userId      String @unique
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferences Json   // Theme, default model, code style, etc.
+  limits      Json   // Usage limits and quotas
+  apiKeys     Json?  // Encrypted user API keys
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Usage tracking and analytics
+model UsageStats {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime @default(now()) @db.Date
+  generationsUsed Int      @default(0)
+  tokensUsed      Int      @default(0)
+  modelsUsed      Json     // Track which models were used
+  costAccrued     Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+// Unified Authentication Models
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  deviceId     String
+  deviceName   String   @default("Unknown Device")
+  browser      String   @default("Unknown Browser")
+  os           String   @default("Unknown OS")
+  ipAddress    String?
+  location     String   @default("Unknown Location")
+  platform     String   // 'web', 'cli', 'extension', 'router'
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  scopes       String[]
+  expiresAt    DateTime
+  isCurrent    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  terminatedAt DateTime?
+  riskLevel    String   @default("low") // 'low', 'medium', 'high', 'critical'
+  metadata     Json
+  createdAt    DateTime @default(now())
+  lastUsed     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([expiresAt])
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  keyId       String   @unique
+  userId      String
+  name        String
+  hashedKey   String
+  scopes      String[]
+  restrictions Json // IP whitelist, rate limits, platform restrictions, expiry
+  lastUsed    DateTime?
+  createdAt   DateTime @default(now())
+  active      Boolean  @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([keyId])
+  @@index([active])
+}
+
+model DeviceFlow {
+  id           String    @id @default(cuid())
+  deviceCode   String    @unique
+  userCode     String    @unique
+  userId       String?
+  status       String    @default("pending") // 'pending', 'authorized', 'denied', 'expired'
+  accessToken  String?   @db.Text
+  refreshToken String?   @db.Text
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  @@index([deviceCode])
+  @@index([userCode])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String   // 'login', 'logout', 'token_refresh', 'api_key_used', etc.
+  platform    String?  // 'web', 'cli', 'extension', 'router'
+  ip          String?
+  userAgent   String?  @db.Text
+  success     Boolean
+  riskLevel   String?  // 'low', 'medium', 'high', 'critical'
+  metadata    Json
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([riskLevel])
+}
+
+model SecurityEvent {
+  id          String   @id @default(cuid())
+  userId      String?
+  eventType   String   // 'suspicious_login', 'multiple_failures', 'mfa_bypass_attempt'
+  severity    String   // 'low', 'medium', 'high', 'critical'
+  description String   @db.Text
+  ip          String?
+  userAgent   String?  @db.Text
+  resolved    Boolean  @default(false)
+  metadata    Json
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([createdAt])
+  @@index([resolved])
+}
+
+// Router and Analytics Models
+model Router {
+  id          String   @id @default(cuid())
+  routerId    String   @unique // CLI router identifier
+  userId      String
+  name        String?
+  version     String?
+  status      String   @default("active") // 'active', 'inactive', 'suspended'
+  metadata    Json     // Configuration, settings, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastUsed    DateTime @default(now())
+
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usage           RouterUsage[]
+  analytics       RouterAnalytics[]
+
+  @@index([userId])
+  @@index([routerId])
+  @@index([status])
+  @@index([lastUsed])
+}
+
+model RouterUsage {
+  id          String   @id @default(cuid())
+  routerId    String
+  timestamp   DateTime @default(now())
+  provider    String   // 'anthropic', 'groq', 'openai', etc.
+  model       String   // Model used
+  tokens      Int      @default(0)
+  cost        Float    @default(0)
+  success     Boolean  @default(true)
+  responseTime Int     @default(0) // in ms
+  metadata    Json     // Request details, error info, etc.
+  
+  router Router @relation(fields: [routerId], references: [routerId], onDelete: Cascade)
+
+  @@index([routerId])
+  @@index([timestamp])
+  @@index([provider])
+  @@index([model])
+}
+
+model RouterAnalytics {
+  id            String   @id @default(cuid())
+  routerId      String
+  analyticsData Json     // Cost analytics, optimization data, etc.
+  timestamp     DateTime
+  createdAt     DateTime @default(now())
+
+  router Router @relation(fields: [routerId], references: [routerId], onDelete: Cascade)
+
+  @@index([routerId])
+  @@index([timestamp])
+}
+
+// Error tracking and monitoring models
+model ErrorLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  type         String   // 'javascript_error', 'react_error', 'api_error', 'auth_error', 'validation_error'
+  message      String   @db.Text
+  stack        String?  @db.Text
+  url          String
+  lineNumber   Int?
+  columnNumber Int?
+  userAgent    String   @db.Text
+  userId       String?
+  sessionId    String
+  platform     String   // 'web', 'chat', 'cli', 'engine'
+  severity     String   // 'low', 'medium', 'high', 'critical'
+  context      Json?    // Additional context data
+  resolved     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([platform])
+  @@index([severity])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([resolved])
+  @@index([type])
+}
+
+model PerformanceLog {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  type      String   // 'navigation', 'resource', 'api_call', 'form_submission'
+  duration  Int      // Duration in milliseconds
+  url       String
+  success   Boolean  @default(true)
+  userId    String?
+  sessionId String
+  platform  String
+  metadata  Json?    // Additional performance metadata
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([platform])
+  @@index([type])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([duration])
+  @@index([success])
+}
+
+// Project management models
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  framework   String?  // 'nextjs', 'react', 'vue', 'angular', etc.
+  language    String?  // 'typescript', 'javascript', 'python', etc.
+  repository  String?  // Git repository URL
+  visibility  String   @default("private") // 'public', 'private'
+  status      String   @default("active") // 'active', 'archived', 'deleted'
+  metadata    Json?    // Additional project metadata
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deploymentHistory DeploymentHistory[]
+  mediaFiles MediaFile[]
+  teamProjects TeamProject[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Advanced deployment automation models
+model DeploymentHistory {
+  id                    String   @id @default(cuid())
+  projectId             String
+  platforms             String[] // Array of platform IDs
+  results               Json     // Array of deployment results
+  config                Json     // Deployment configuration
+  timestamp             DateTime @default(now())
+  totalDeployments      Int
+  successfulDeployments Int
+  createdAt             DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([timestamp])
+}
+
+// AI Consensus System models
+model AiConsensusLog {
+  id                   String   @id @default(cuid())
+  userId               String
+  projectId            String?
+  validationTypes      String   // Comma-separated list
+  consensusScore       Float
+  consensusReached     Boolean
+  validatorCount       Int
+  totalCost            Float
+  totalTokens          Int
+  executionTime        Int      // Milliseconds
+  language             String
+  codeLength           Int
+  isQuickValidation    Boolean  @default(false)
+  metadata             Json?    // Additional validation metadata
+  createdAt            DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([consensusScore])
+  @@index([language])
+  @@index([isQuickValidation])
+}
+
+// Media Processing Platform models
+model MediaFile {
+  id                String   @id @default(cuid())
+  originalName      String
+  fileName          String
+  filePath          String
+  fileSize          Int
+  mimeType          String
+  format            String
+  purpose           String   @default("general") // general, campaign, template, etc.
+  width             Int?
+  height            Int?
+  duration          Float?   // Duration in seconds for video/audio
+  thumbnailPath     String?
+  previewPath       String?
+  metadata          Json?
+  deleted           Boolean  @default(false)
+  userId            String
+  projectId         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project           Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  processingJobs    ProcessingJob[]
+  templateUsages    TemplateUsage[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([purpose])
+  @@index([createdAt])
+}
+
+model ProcessingJob {
+  id                String   @id @default(cuid())
+  type              String   // video, audio, image, batch
+  status            String   @default("queued") // queued, processing, completed, failed
+  operation         String   // compress, convert, watermark, etc.
+  parameters        Json
+  progress          Int      @default(0)
+  inputPath         String
+  outputPath        String?
+  error             String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  userId            String
+  mediaFileId       String?
+  batchJobId        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaFile         MediaFile? @relation(fields: [mediaFileId], references: [id], onDelete: SetNull)
+  batchJob          BatchJob? @relation(fields: [batchJobId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([mediaFileId])
+  @@index([batchJobId])
+  @@index([createdAt])
+}
+
+model BatchJob {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  status            String   @default("queued") // queued, processing, completed, failed, cancelled
+  operation         String
+  parameters        Json
+  progress          Int      @default(0)
+  processedFiles    Int      @default(0)
+  totalFiles        Int
+  error             String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  userId            String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processingJobs    ProcessingJob[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CampaignTemplate {
+  id                String   @id @default(cuid())
+  name              String
+  description       String
+  category          String   // social, ads, presentations, marketing, branding
+  platform          String   // youtube, instagram, tiktok, facebook, linkedin, universal
+  aspectRatio       String
+  resolution        Json     // {width: number, height: number}
+  duration          Int?     // Duration in seconds
+  framerate         Int?
+  settings          Json     // format, quality, codec, bitrate settings
+  branding          Json     // logo, watermark, brand colors
+  effects           Json     // filters, transitions, animations
+  isPublic          Boolean  @default(false)
+  featured          Boolean  @default(false)
+  popularity        Int      @default(0)
+  tags              String[]
+  usageCount        Int      @default(0)
+  userId            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  templateUsages    TemplateUsage[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([platform])
+  @@index([isPublic])
+  @@index([featured])
+  @@index([popularity])
+}
+
+model TemplateUsage {
+  id                String   @id @default(cuid())
+  userId            String
+  templateId        String
+  mediaFileId       String?
+  customizations    Json?
+  createdAt         DateTime @default(now())
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template          CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  mediaFile         MediaFile? @relation(fields: [mediaFileId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([templateId])
+  @@index([createdAt])
+}
+
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  plan              String   // free, pro, enterprise
+  status            String   // active, cancelled, expired
+  currentPeriodStart DateTime
+  currentPeriodEnd  DateTime
+  cancelAtPeriodEnd Boolean  @default(false)
+  stripeCustomerId  String?
+  stripeSubscriptionId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model WorkflowExecution {
+  id          String   @id @default(cuid())
+  workflowId  String
+  userId      String
+  status      String   // pending, running, completed, failed, cancelled
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  progress    Int      @default(0)
+  results     Json?
+  logs        Json?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workflowId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// User Privacy and Security Settings
+model UserPrivacySettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  profileVisibility     String   @default("public") // public, friends, private
+  showEmail             Boolean  @default(false)
+  showPhone             Boolean  @default(false)
+  showLocation          Boolean  @default(false)
+  showOnlineStatus      Boolean  @default(true)
+  allowDirectMessages   String   @default("friends") // everyone, friends, none
+  allowFriendRequests   Boolean  @default(true)
+  showProjectsPublicly  Boolean  @default(true)
+  allowProjectSharing   Boolean  @default(true)
+  dataCollection        Json     @default("{\"analytics\":true,\"marketing\":false,\"personalization\":true,\"thirdParty\":false}")
+  tracking              Json     @default("{\"cookies\":true,\"location\":false,\"usage\":true,\"performance\":true}")
+  notifications         Json     @default("{\"email\":true,\"sms\":false,\"push\":true,\"marketing\":false}")
+  searchVisibility      Boolean  @default(true)
+  allowSearchEngines    Boolean  @default(false)
+  twoFactorRequired     Boolean  @default(false)
+  sessionTimeout        Int      @default(60) // minutes
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserSecuritySettings {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  twoFactorEnabled        Boolean  @default(false)
+  totpSecret              String?
+  backupCodes             String[] @default([])
+  trustedDevices          Json     @default("[]")
+  loginNotifications      Boolean  @default(true)
+  suspiciousActivityAlerts Boolean @default(true)
+  sessionTimeout          Int      @default(30) // in minutes
+  allowMultipleSessions   Boolean  @default(true)
+  requirePasswordOnSensitive Boolean @default(true)
+  passwordLastChanged     DateTime?
+  requirePasswordChange   Boolean  @default(false)
+  apiKeysEnabled          Boolean  @default(true)
+  webhooksEnabled         Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model DataExportRequest {
+  id           String    @id @default(cuid())
+  userId       String
+  type         String    // full, projects, profile
+  status       String    @default("pending") // pending, processing, ready, expired, failed
+  requestedAt  DateTime  @default(now())
+  processedAt  DateTime?
+  expiresAt    DateTime?
+  downloadUrl  String?
+  error        String?
+  ipAddress    String?
+  userAgent    String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exportData   DataExportData?
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model DataExportData {
+  id        String   @id @default(cuid())
+  exportId  String   @unique
+  data      Json     // The actual export data
+  createdAt DateTime @default(now())
+
+  exportRequest DataExportRequest @relation(fields: [exportId], references: [id], onDelete: Cascade)
+
+  @@index([exportId])
+}
+
+model UserAuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // PRIVACY_SETTINGS_UPDATED, DATA_EXPORT_REQUESTED, etc.
+  details   Json?    // Additional action-specific details
+  ipAddress String?
+  userAgent String?  @db.Text
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// Team Management Models
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  slug        String       @unique
+  plan        String       @default("free") // free, pro, enterprise
+  ownerId     String
+  settings    Json         @default("{}")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  members     TeamMember[]
+  invites     TeamInvite[]
+  projects    TeamProject[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      String   @default("member") // owner, admin, member, viewer
+  joinedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+model TeamInvite {
+  id        String   @id @default(cuid())
+  teamId    String
+  email     String
+  role      String   @default("member")
+  token     String   @unique
+  expiresAt DateTime
+  invitedBy String
+  createdAt DateTime @default(now())
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([email])
+  @@index([token])
+}
+
+model TeamProject {
+  id        String   @id @default(cuid())
+  teamId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, projectId])
+  @@index([teamId])
+  @@index([projectId])
+}
+
+// User Integration models
+model UserIntegration {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  type         String   // github, gitlab, bitbucket, aws, gcp, azure, vercel, netlify, docker, kubernetes
+  config       Json     // Integration-specific configuration
+  isEnabled    Boolean  @default(true)
+  isConnected  Boolean  @default(false)
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([type])
+}
+
+model Webhook {
+  id               String    @id @default(cuid())
+  userId           String
+  name             String
+  url              String
+  events           String[]  // Array of event types
+  secret           String
+  isActive         Boolean   @default(true)
+  lastTriggeredAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserNotificationSettings {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  preferences Json     // Notification preferences configuration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // 'info', 'success', 'warning', 'error', 'security', 'feature', 'collaboration', 'system'
+  title       String
+  message     String   @db.Text
+  category    String
+  priority    String   @default("medium") // 'low', 'medium', 'high', 'urgent'
+  read        Boolean  @default(false)
+  starred     Boolean  @default(false)
+  archived    Boolean  @default(false)
+  actionUrl   String?
+  actionText  String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+// Data Export model for GDPR compliance and account deletion
+model DataExport {
+  id          String   @id @default(cuid())
+  userId      String
+  status      String   // pending, processing, completed, failed
+  type        String   // full_export, account_deletion, gdpr_request
+  format      String   // zip, json, csv
+  fileSize    Int?     // Size in bytes
+  downloadUrl String?  // Temporary download URL
+  expiresAt   DateTime? // When download URL expires
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Tooltip System Models
+model Tooltip {
+  id              String   @id @default(cuid())
+  title           String   @db.VarChar(100)
+  content         String   @db.VarChar(500)
+  element         String   // CSS selector for target element
+  position        String   // top, bottom, left, right
+  trigger         String   // hover, click, focus, auto
+  delay           Int      @default(0) // Delay in ms before showing
+  duration        Int?     // Auto-hide duration in ms
+  context         String[] // Array of contexts where this tooltip applies
+  priority        String   @default("medium") // low, medium, high
+  category        String   // Category for grouping (onboarding, feature, help, etc.)
+  isActive        Boolean  @default(true)
+  customizable    Boolean  @default(true)
+  enabled         Boolean  @default(true)
+  
+  // Analytics fields
+  totalShows      Int      @default(0)
+  totalDismissals Int      @default(0)
+  totalClicks     Int      @default(0)
+  permanentDismissals Int  @default(0)
+  lastShown       DateTime?
+  
+  // Metadata and conditions
+  conditions      Json?    // User level, feature flags, etc.
+  metadata        Json?    // Additional tooltip data
+  
+  // Lifecycle fields
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+  disabledAt      DateTime?
+  disabledReason  String?
+  
+  // Relations
+  interactions    TooltipInteraction[]
+  feedback        TooltipFeedback[]
+  
+  @@index([isActive])
+  @@index([category])
+  @@index([priority])
+  @@index([context])
+  @@index([createdAt])
+}
+
+model TooltipInteraction {
+  id         String   @id @default(cuid())
+  userId     String
+  tooltipId  String
+  action     String   // shown, dismissed, clicked, completed
+  context    String   // Current context when interaction occurred
+  dismissed  Boolean  @default(false)
+  permanent  Boolean  @default(false) // Permanent dismissal
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tooltip    Tooltip  @relation(fields: [tooltipId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([tooltipId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([permanent])
+}
+
+model TooltipPreferences {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  showTooltips       Boolean  @default(true)
+  maxTooltipsPerDay  Int      @default(5)
+  preferredTrigger   String   @default("hover") // hover, click, focus, auto
+  enableTour         Boolean  @default(true)
+  skipSeen           Boolean  @default(false)
+  categories         String[] @default([]) // Enabled categories
+  contexts           String[] @default(["global"]) // Enabled contexts
+  autoHideDelay      Int      @default(5000) // Auto-hide delay in ms
+  enableAnimations   Boolean  @default(true)
+  position           String?  // Preferred position override
+  theme              String   @default("auto") // light, dark, auto
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model TooltipFeedback {
+  id        String   @id @default(cuid())
+  userId    String
+  tooltipId String
+  feedback  String   @db.Text
+  rating    Int?     // 1-5 rating
+  type      String   // dismissal, completion, suggestion
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tooltip   Tooltip  @relation(fields: [tooltipId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([tooltipId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Analytics Dashboard Models
+model AnalyticsDashboard {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  layout      String   @default("grid") // grid, masonry, flow
+  gridSize    Json     @default("{\"columns\": 4, \"rowHeight\": 200}")
+  widgets     Json     @default("[]") // Array of widget configurations
+  widgetCount Int      @default(0)
+  settings    Json     @default("{\"autoRefresh\": false, \"refreshInterval\": 30000, \"theme\": \"light\", \"showGrid\": true, \"allowResize\": true}")
+  sharing     Json     @default("{\"isPublic\": false, \"permissions\": [\"view\"]}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String
+
+  // Relations
+  user          User                    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  collaborators DashboardCollaborator[]
+  views         DashboardView[]
+
+  @@map("analytics_dashboards")
+}
+
+model DashboardCollaborator {
+  id          String   @id @default(cuid())
+  dashboardId String
+  userId      String
+  permission  String   @default("view") // view, edit, admin
+  invitedBy   String
+  invitedAt   DateTime @default(now())
+  acceptedAt  DateTime?
+
+  // Relations
+  dashboard AnalyticsDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inviter   User               @relation("DashboardInviter", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardId, userId])
+  @@map("dashboard_collaborators")
+}
+
+model DashboardView {
+  id          String   @id @default(cuid())
+  dashboardId String
+  userId      String?
+  sessionId   String?
+  viewedAt    DateTime @default(now())
+  duration    Int?     // Duration in seconds
+  userAgent   String?
+  ip          String?
+
+  // Relations
+  dashboard AnalyticsDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("dashboard_views")
+}
+
+model AnalyticsMetric {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  type        String   // counter, gauge, histogram, summary
+  description String?
+  category    String?
+  unit        String?
+  value       Float
+  metadata    Json     @default("{}")
+  timestamp   DateTime @default(now())
+  userId      String?
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name, timestamp])
+  @@index([category, timestamp])
+  @@map("analytics_metrics")
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  name       String
+  category   String?
+  properties Json     @default("{}")
+  userId     String?
+  sessionId  String?
+  timestamp  DateTime @default(now())
+  userAgent  String?
+  ip         String?
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name, timestamp])
+  @@index([category, timestamp])
+  @@index([userId, timestamp])
+  @@map("analytics_events")
+}
+
+// Payment and Customer Analytics Models
+model Payment {
+  id            String   @id @default(cuid())
+  userId        String
+  amount        Float
+  currency      String   @default("USD")
+  status        String   // pending, completed, failed, refunded
+  method        String   // stripe, paypal, etc.
+  stripeId      String?  @unique
+  description   String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("payments")
+}
+
+model CustomerLifetimeValue {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  totalSpent    Float    @default(0)
+  totalOrders   Int      @default(0)
+  avgOrderValue Float    @default(0)
+  firstPurchase DateTime?
+  lastPurchase  DateTime?
+  churnRisk     Float    @default(0) // 0-1 probability
+  segment       String?  // bronze, silver, gold, platinum
+  predictedLtv  Float    @default(0)
+  totalRevenue  Float    @default(0)
+  averageMonthlyRevenue Float @default(0)
+  churnProbability Float @default(0)
+  lastCalculated DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customer_lifetime_values")
+}

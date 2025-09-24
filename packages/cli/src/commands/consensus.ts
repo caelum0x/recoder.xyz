@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { Logger } from '../utils/logger';
 import { AIModelHub } from '../services/ai-models/ai-hub';
-import { TaskType } from '@recoder/shared/types/ai-models';
+import { TaskType } from 'recoder-shared/types/ai-models';
 
 export function createConsensusCommand(aiHub: AIModelHub): Command {
   const consensus = new Command('consensus')

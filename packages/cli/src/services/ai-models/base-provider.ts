@@ -3,7 +3,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   ModelMetadata,
   ModelRequest,
@@ -15,7 +15,7 @@ import {
   ErrorType,
   HealthStatus,
   ModelProvider
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 
 export abstract class BaseModelProvider extends EventEmitter {
   protected config: ModelConfiguration;

@@ -759,7 +759,7 @@ export class AIProviderManager extends EventEmitter {
     } catch (error) {
       logger.error(`Health check failed for provider ${provider.name}`, {
         providerId,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
 
       provider.status.isHealthy = false;
@@ -814,7 +814,7 @@ export class AIProviderManager extends EventEmitter {
     } catch (error) {
       logger.error('Failed to update provider status in database', {
         providerId,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }

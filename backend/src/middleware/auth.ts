@@ -12,6 +12,7 @@ import { rateLimit } from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../database/prisma';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error-helpers';
 
 // JWT Configuration with enhanced security
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
@@ -148,7 +149,7 @@ export const authRateLimit = rateLimit({
 });
 
 // Enhanced error handling for validation
-export const handleAuthValidationErrors = (req: Request, res: Response, next: NextFunction) => {
+export const handleAuthValidationErrors = (req: Request, res: Response, next: NextFunction): void => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
@@ -159,7 +160,7 @@ export const handleAuthValidationErrors = (req: Request, res: Response, next: Ne
       ip: req.ip
     });
     
-    return res.status(400).json({
+    res.status(400).json({
       success: false,
       error: 'Validation failed',
       details: errors.array().map(error => ({
@@ -168,6 +169,7 @@ export const handleAuthValidationErrors = (req: Request, res: Response, next: Ne
         value: (error as any).value
       }))
     });
+    return;
   }
   
   next();
@@ -203,10 +205,10 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
     
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: decoded.id },
       select: {
         id: true,
         email: true,
@@ -241,10 +243,13 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
 
     req.user = user;
     next();
-  } catch (error) {
-    logger.error('Authentication error:', { error: error.message });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
     
-    if (error.name === 'JsonWebTokenError') {
+    logger.error('Authentication error:', { error: errorMessage });
+    
+    if (errorName === 'JsonWebTokenError') {
       res.status(401).json({
         success: false,
         error: 'Invalid token',
@@ -253,7 +258,7 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
       return;
     }
     
-    if (error.name === 'TokenExpiredError') {
+    if (errorName === 'TokenExpiredError') {
       res.status(401).json({
         success: false,
         error: 'Token expired',
@@ -272,6 +277,7 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
 
 // Export authenticate as alias for authenticateUser
 export const authenticate = authenticateUser;
+export const authenticateToken = authenticateUser;
 
 /**
  * Require admin role
@@ -403,13 +409,14 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
       } else {
         req.user = undefined;
       }
-    } catch (tokenError) {
+    } catch (tokenError: unknown) {
       req.user = undefined;
     }
 
     next();
-  } catch (error) {
-    logger.error('Optional authentication error:', { error: error.message });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
+    logger.error('Optional authentication error:', { error: errorMessage });
     req.user = undefined;
     next();
   }
@@ -470,8 +477,9 @@ export const checkUsageLimits = async (req: Request, res: Response, next: NextFu
     };
 
     next();
-  } catch (error) {
-    logger.error('Usage limit check error:', { error: error.message, userId: req.user.id });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
+    logger.error('Usage limit check error:', { error: errorMessage, userId: req.user.id });
     next(); // Continue on error to avoid blocking requests
   }
 };
@@ -488,3 +496,29 @@ declare global {
     }
   }
 }
+
+// CommonJS compatibility for routes that use require()
+const authExports = {
+  authenticate: authenticateUser,
+  authenticateUser,
+  requireAdmin,
+  requireSubscription,
+  requireEmailVerification,
+  optionalAuth,
+  checkUsageLimits,
+  generateTokens,
+  verifyRefreshToken,
+  hashPassword,
+  authValidation,
+  authRateLimit,
+  handleAuthValidationErrors,
+  logSecurityEvent,
+  ROLE_PERMISSIONS,
+  UserRole
+};
+
+// Debug: Log what we're exporting
+console.log('[AUTH] Exporting functions:', Object.keys(authExports));
+console.log('[AUTH] authenticate type:', typeof authExports.authenticate);
+
+module.exports = authExports;

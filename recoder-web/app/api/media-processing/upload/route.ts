@@ -14,8 +14,12 @@ const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting
-    const rateLimitResult = await rateLimit(request, 'media-upload', 10, 60000) // 10 uploads per minute
-    if (!rateLimitResult.success) {
+    try {
+      await rateLimit({
+        interval: 60 * 1000, // 1 minute
+        uniqueTokenPerInterval: 10,
+      }).check(request, 10, 'media-upload')
+    } catch (err) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please try again later.' },
         { status: 429 }

@@ -334,7 +334,7 @@ router.post('/batch-analyze', upload.array('files', 20), validateRequest, async 
       fileCount: req.files.length
     });
 
-    const results = [];
+    const results: any[] = [];
     const files = req.files as Express.Multer.File[];
 
     for (const file of files) {

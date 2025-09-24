@@ -87,6 +87,8 @@ export function FeatureTour({
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
     }
+    // If not open or no steps, no cleanup needed
+    return undefined;
   }, [isOpen, currentStep, steps]);
 
   const updateTourPosition = () => {

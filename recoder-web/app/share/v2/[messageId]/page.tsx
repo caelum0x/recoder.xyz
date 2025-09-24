@@ -18,7 +18,7 @@ export async function generateMetadata({
     notFound();
   }
 
-  let title = message.chat.title;
+  let title = message.chat.title ?? "Untitled";
   let searchParams = new URLSearchParams();
   searchParams.set("prompt", title);
 

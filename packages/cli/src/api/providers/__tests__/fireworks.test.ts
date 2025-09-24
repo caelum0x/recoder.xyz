@@ -1,7 +1,7 @@
 // npx jest src/api/providers/__tests__/fireworks.test.ts
 
 import { FireworksHandler } from "../fireworks"
-import { ApiHandlerOptions, fireworksDefaultModelId } from "@recoder/shared"
+import { ApiHandlerOptions, fireworksDefaultModelId } from "recoder-shared"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { BaseProvider } from "../base-provider"
 

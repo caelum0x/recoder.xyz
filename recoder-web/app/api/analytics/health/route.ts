@@ -20,9 +20,9 @@ export async function GET(request: NextRequest) {
       totalPerformance
     ] = await Promise.all([
       // Critical errors in last hour
-      prisma.errorLog.count({
+      prisma.auditLog.count({
         where: {
-          severity: 'critical',
+          success: false,
           timestamp: {
             gte: oneHourAgo
           }
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       }),
       
       // All errors in last day
-      prisma.errorLog.count({
+      prisma.auditLog.count({
         where: {
           timestamp: {
             gte: oneDayAgo
@@ -39,11 +39,9 @@ export async function GET(request: NextRequest) {
       }),
       
       // Slow performance in last hour
-      prisma.performanceLog.count({
+      prisma.auditLog.count({
         where: {
-          duration: {
-            gte: 5000
-          },
+          success: false,
           timestamp: {
             gte: oneHourAgo
           }
@@ -51,7 +49,7 @@ export async function GET(request: NextRequest) {
       }),
       
       // Total errors in last day
-      prisma.errorLog.count({
+      prisma.auditLog.count({
         where: {
           timestamp: {
             gte: oneDayAgo
@@ -60,7 +58,7 @@ export async function GET(request: NextRequest) {
       }),
       
       // Total performance logs in last day
-      prisma.performanceLog.count({
+      prisma.auditLog.count({
         where: {
           timestamp: {
             gte: oneDayAgo
@@ -122,7 +120,7 @@ export async function GET(request: NextRequest) {
         errorsBySeverity,
         avgPerformanceByPlatform
       ] = await Promise.all([
-        prisma.errorLog.groupBy({
+        prisma.auditLog.groupBy({
           by: ['platform'],
           where: {
             timestamp: {
@@ -134,8 +132,8 @@ export async function GET(request: NextRequest) {
           }
         }),
         
-        prisma.errorLog.groupBy({
-          by: ['type'],
+        prisma.auditLog.groupBy({
+          by: ['action'],
           where: {
             timestamp: {
               gte: oneDayAgo
@@ -146,8 +144,8 @@ export async function GET(request: NextRequest) {
           }
         }),
         
-        prisma.errorLog.groupBy({
-          by: ['severity'],
+        prisma.auditLog.groupBy({
+          by: ['success'],
           where: {
             timestamp: {
               gte: oneDayAgo
@@ -158,15 +156,12 @@ export async function GET(request: NextRequest) {
           }
         }),
         
-        prisma.performanceLog.groupBy({
+        prisma.auditLog.groupBy({
           by: ['platform'],
           where: {
             timestamp: {
               gte: oneDayAgo
             }
-          },
-          _avg: {
-            duration: true
           },
           _count: {
             id: true

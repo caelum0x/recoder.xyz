@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
         message: true,
         priority: true,
         isRead: true,
-        starred: true,
+        // starred: true, // Field not in Notification model
         actionUrl: true,
         actionText: true,
         metadata: true,
@@ -201,6 +201,7 @@ async function markNotificationsRead(userId: string, data: any, request: NextReq
       data: {
         userId,
         action: 'notifications_mark_all_read',
+          resource: 'notification',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -249,7 +250,7 @@ async function starNotifications(userId: string, notificationIds: string[], requ
       userId
     },
     data: {
-      starred: true
+      // starred: true // Field not in Notification model
     }
   });
 
@@ -267,7 +268,7 @@ async function unstarNotifications(userId: string, notificationIds: string[], re
       userId
     },
     data: {
-      starred: false
+      // starred: false // Field not in Notification model
     }
   });
 
@@ -315,6 +316,7 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'notifications_deleted',
+          resource: 'notifications',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',

@@ -137,7 +137,7 @@ export class AIRouter extends EventEmitter {
 
     } catch (error) {
       logger.error('Failed to route AI request with cost optimization', {
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
         userId: request.userId,
         taskType: request.taskType
       });
@@ -208,7 +208,7 @@ export class AIRouter extends EventEmitter {
       } catch (fallbackError) {
         logger.warn('Fallback provider also failed', {
           provider: fallbackProviderId,
-          error: fallbackError.message,
+          error: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
           userId: originalRequest.userId
         });
         continue;
