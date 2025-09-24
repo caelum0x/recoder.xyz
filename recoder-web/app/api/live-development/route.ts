@@ -893,7 +893,7 @@ export async function GET(req: NextRequest) {
           }
           return NextResponse.json({ success: false, error: 'Project not found' });
         }
-        break;
+        return NextResponse.json({ success: false, error: 'Project ID is required' });
 
       case 'projects':
         const projects = liveDevelopmentEngine.getAllProjects();

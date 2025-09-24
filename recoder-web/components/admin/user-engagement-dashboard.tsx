@@ -652,7 +652,7 @@ export default function UserEngagementDashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ platform, totalUsage }) => `${platform}: ${totalUsage.toLocaleString()}`}
+                    label={(props: any) => `${props.name || props.segment || props.category || props.cycle || props.period || "Item"}: ${props.value || props.customerCount || props.totalRevenue || props.count || 0}`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="totalUsage"

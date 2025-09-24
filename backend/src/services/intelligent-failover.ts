@@ -95,8 +95,11 @@ export class IntelligentFailoverService extends EventEmitter {
   constructor() {
     super();
     this.initializeDefaultRules();
-    this.startHealthMonitoring();
-    this.startPredictiveAnalysis();
+    // Defer monitoring startup to avoid blocking module initialization
+    process.nextTick(() => {
+      this.startHealthMonitoring();
+      this.startPredictiveAnalysis();
+    });
   }
 
   /**
@@ -180,8 +183,10 @@ export class IntelligentFailoverService extends EventEmitter {
       await this.performHealthChecks();
     }, 30000);
 
-    // Initial health check
-    this.performHealthChecks();
+    // Delay initial health check to avoid startup loops
+    setTimeout(() => {
+      this.performHealthChecks();
+    }, 5000);
 
     logger.info('Intelligent failover monitoring started');
   }
@@ -246,9 +251,9 @@ export class IntelligentFailoverService extends EventEmitter {
         status: this.determineHealthStatus(healthResult, stats),
         metrics: {
           responseTime,
-          successRate: ((stats.totalRequests - stats.failedRequests) / Math.max(stats.totalRequests, 1)) * 100,
-          errorRate: (stats.failedRequests / Math.max(stats.totalRequests, 1)) * 100,
-          uptime: stats.uptime || 0,
+          successRate: stats ? ((stats.totalRequests - stats.failedRequests) / Math.max(stats.totalRequests, 1)) * 100 : 0,
+          errorRate: stats ? (stats.failedRequests / Math.max(stats.totalRequests, 1)) * 100 : 0,
+          uptime: stats?.uptime || 0,
           cost: 0,
           quality: 0
         },
@@ -305,7 +310,7 @@ export class IntelligentFailoverService extends EventEmitter {
     } catch (error) {
       return {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -702,7 +707,7 @@ export class IntelligentFailoverService extends EventEmitter {
         }
       });
     } catch (error) {
-      logger.warn('Failed to store health data:', error.message);
+      logger.warn('Failed to store health data:', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
@@ -784,7 +789,7 @@ export class IntelligentFailoverService extends EventEmitter {
   }
 
   private getRuleViolationReason(rule: FailoverRule, health: ProviderHealth): string {
-    const violations = [];
+    const violations: any[] = [];
     const { conditions } = rule;
     const { metrics } = health;
 

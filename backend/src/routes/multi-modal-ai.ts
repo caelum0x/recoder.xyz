@@ -118,7 +118,7 @@ router.post('/process', validateRequest, async (req: any, res: any) => {
     res.status(500).json({
       success: false,
       error: 'Multi-modal processing failed',
-      message: error.message
+      message: getErrorMessage(error)
     });
   }
 });
@@ -245,7 +245,7 @@ router.post('/process-files',
       res.status(500).json({
         success: false,
         error: 'File processing failed',
-        message: error.message
+        message: getErrorMessage(error)
       });
     }
   }
@@ -307,7 +307,7 @@ router.post('/code-generation', validateRequest, async (req: any, res: any) => {
     res.status(500).json({
       success: false,
       error: 'Code generation failed',
-      message: error.message
+      message: getErrorMessage(error)
     });
   }
 });
@@ -363,7 +363,7 @@ router.post('/documentation-generation', validateRequest, async (req: any, res: 
     res.status(500).json({
       success: false,
       error: 'Documentation generation failed',
-      message: error.message
+      message: getErrorMessage(error)
     });
   }
 });
@@ -426,7 +426,7 @@ router.post('/conversation', validateRequest, async (req: any, res: any) => {
     res.status(500).json({
       success: false,
       error: 'Conversation processing failed',
-      message: error.message
+      message: getErrorMessage(error)
     });
   }
 });
@@ -549,7 +549,7 @@ router.use((error: any, req: any, res: any, next: any) => {
     }
   }
 
-  if (error.message?.includes('Unsupported file type')) {
+  if (getErrorMessage(error)?.includes('Unsupported file type')) {
     return res.status(400).json({
       success: false,
       error: 'Unsupported file type',
@@ -560,7 +560,7 @@ router.use((error: any, req: any, res: any, next: any) => {
   res.status(500).json({
     success: false,
     error: 'Internal server error',
-    message: error.message
+    message: getErrorMessage(error)
   });
 });
 

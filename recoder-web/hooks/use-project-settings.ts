@@ -190,6 +190,8 @@ export const useProjectSettings = (projectId: string) => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    return null;
   }, [projectId, settings]);
 
   const importSettings = useCallback(async (file: File) => {

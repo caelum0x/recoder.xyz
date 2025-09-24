@@ -23,8 +23,12 @@ export async function GET(request: NextRequest) {
         // Get all user settings or specific section
         if (section) {
           const userSettings = await settingsSync.getUserSettings(session.user.id);
-          const sectionData = userSettings[section];
-          return NextResponse.json({ section, settings: sectionData });
+          if (section in userSettings) {
+            const sectionData = userSettings[section as keyof typeof userSettings];
+            return NextResponse.json({ section, settings: sectionData });
+          } else {
+            return NextResponse.json({ error: 'Invalid section' }, { status: 400 });
+          }
         } else {
           const settings = await settingsSync.getUserSettings(session.user.id);
           return NextResponse.json({ settings });

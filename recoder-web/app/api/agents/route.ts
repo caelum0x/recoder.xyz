@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
     const agents = backendData.data?.agents || [];
 
     // Add some realistic randomization
-    const realtimeAgents = agents.map(agent => ({
+    const realtimeAgents = agents.map((agent: any) => ({
       ...agent,
       performance: {
         accuracy: Math.min(100, agent.performance.accuracy + (Math.random() - 0.5) * 6),
@@ -193,20 +193,20 @@ export async function GET(req: NextRequest) {
 
     const summary = {
       totalAgents: realtimeAgents.length,
-      activeAgents: realtimeAgents.filter(agent => agent.status === 'active').length,
-      deployedAgents: realtimeAgents.filter(agent => agent.status === 'deployed').length,
-      aiGeneratedAgents: realtimeAgents.filter(agent => agent.aiGenerated).length,
-      totalRequests: realtimeAgents.reduce((sum, agent) => sum + agent.usage.totalRequests, 0),
-      avgPerformance: realtimeAgents.reduce((sum, agent) => 
+      activeAgents: realtimeAgents.filter((agent: any) => agent.status === 'active').length,
+      deployedAgents: realtimeAgents.filter((agent: any) => agent.status === 'deployed').length,
+      aiGeneratedAgents: realtimeAgents.filter((agent: any) => agent.aiGenerated).length,
+      totalRequests: realtimeAgents.reduce((sum: number, agent: any) => sum + agent.usage.totalRequests, 0),
+      avgPerformance: realtimeAgents.reduce((sum: number, agent: any) => 
         sum + (agent.performance.accuracy + agent.performance.speed + agent.performance.efficiency + agent.performance.reliability) / 4, 0
       ) / realtimeAgents.length,
-      avgSuccessRate: realtimeAgents.reduce((sum, agent) => sum + agent.usage.successRate, 0) / realtimeAgents.length,
-      totalCost: realtimeAgents.reduce((sum, agent) => sum + agent.cost, 0)
+      avgSuccessRate: realtimeAgents.reduce((sum: number, agent: any) => sum + agent.usage.successRate, 0) / realtimeAgents.length,
+      totalCost: realtimeAgents.reduce((sum: number, agent: any) => sum + agent.cost, 0)
     };
 
     logger.info('AI agents loaded', { 
       count: realtimeAgents.length,
-      active: summary.activeAgents,
+      isActive: summary.activeAgents,
       totalRequests: summary.totalRequests
     });
 

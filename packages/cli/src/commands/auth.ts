@@ -6,7 +6,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from '../services/backend-client';
 import { billingIntegration } from '../services/billing-integration';
 import { webCLIAuthBridge } from '../services/web-cli-auth-bridge';

@@ -496,10 +496,10 @@ export class AdvancedRAGLearningService extends EventEmitter {
   private patternCache: Map<string, PatternRecognitionResult> = new Map();
   
   // Machine learning components - ACTUAL ML MODELS
-  private patternClassifier: NeuralNetwork;
-  private qualityPredictor: NeuralNetwork;
-  private clustering: KMeansClusterer;
-  private textEmbedder: TextEmbedder;
+  private patternClassifier!: NeuralNetwork;
+  private qualityPredictor!: NeuralNetwork;
+  private clustering!: KMeansClusterer;
+  private textEmbedder!: TextEmbedder;
   
   // RAG components - VECTOR DATABASE
   private vectorDatabase: Map<string, VectorEmbedding[]> = new Map();
@@ -589,6 +589,14 @@ export class AdvancedRAGLearningService extends EventEmitter {
     
     // Get user-specific context
     const ragContext = this.ragContexts.get('general') || this.ragContexts.values().next().value;
+    
+    if (!ragContext) {
+      return {
+        retrievedDocuments: [],
+        relevanceScores: [],
+        contextualResponse: "No relevant knowledge found for your query."
+      };
+    }
     
     // Calculate similarities with all documents
     const similarities = ragContext.documents.map(doc => ({
@@ -1059,7 +1067,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
       logger.error('Advanced RAG query with learning failed:', error);
       
       if (request.learningEnabled && this.learningSessions.has(sessionId)) {
-        await this.recordFailedInteraction(sessionId, request, error.message);
+        await this.recordFailedInteraction(sessionId, request, error instanceof Error ? error.message : 'Unknown error');
       }
       
       throw error;
@@ -1688,7 +1696,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
   }
 
   private async detectAntiPatterns(query: string, codeContext?: string): Promise<Array<{pattern: string, reason: string, replacement: string}>> {
-    const antiPatterns = [];
+    const antiPatterns: any[] = [];
     
     if (codeContext?.includes('var ')) {
       antiPatterns.push({
@@ -1850,7 +1858,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
     reasoning: string;
     example?: string;
   }>> {
-    const tips = [];
+    const tips: any[] = [];
     
     if (userPrefs.qualityPreferences.comprehensiveErrorHandling) {
       tips.push({
@@ -1872,7 +1880,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
     personalizedReason: string;
     confidence: number;
   }>> {
-    const guidelines = [];
+    const guidelines: any[] = [];
     
     if (userPrefs.codingStyle.indentation === 'tabs') {
       guidelines.push({
@@ -1907,7 +1915,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
   }
 
   private async checkConsistency(file: any, allFiles: any[]): Promise<string[]> {
-    const issues = [];
+    const issues: any[] = [];
     
     // Check indentation consistency
     const hasSpaces = file.content.includes('  ');
@@ -1960,7 +1968,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
     patterns: LearningPattern[],
     insights: ContextualInsight[]
   ): Promise<string[]> {
-    const opportunities = [];
+    const opportunities: any[] = [];
     
     if (patterns.length < 5) {
       opportunities.push('Consider learning more design patterns');
@@ -2018,7 +2026,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
     categories: any[],
     evolution: any
   ): Promise<string[]> {
-    const recommendations = [];
+    const recommendations: any[] = [];
     
     if (progress.qualityImprovement < 0.1) {
       recommendations.push('Try providing more detailed feedback to improve learning');
@@ -2092,7 +2100,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
       if (cached) return cached;
 
       // Mock implementation - would fetch from database in real scenario
-      const recentFeedback = [];
+      const recentFeedback: any[] = [];
       const now = Date.now();
       
       for (let i = 0; i < Math.min(limit, 15); i++) {
@@ -2292,7 +2300,7 @@ Provide a comprehensive answer that incorporates the most relevant information a
     features: number[]
   ): Promise<{ length: number }> {
     try {
-      const modificationFeatures = [];
+      const modificationFeatures: any[] = [];
 
       for (const modification of modifications) {
         // Extract features from modification

@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { body } from 'express-validator';
 import { prisma } from '../database/prisma';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error-helpers';
 import { 
   authenticate, 
   generateTokens, 
@@ -38,7 +39,7 @@ router.post('/register',
   authRateLimit,
   authValidation.register,
   handleAuthValidationErrors,
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const { email, password, name, acceptTerms } = req.body;
 
@@ -53,12 +54,13 @@ router.post('/register',
           ip: req.ip 
         });
 
-        return res.status(409).json({
+        res.status(409).json({
           success: false,
           error: 'User already exists',
           message: 'An account with this email already exists',
           code: 'USER_EXISTS'
         });
+        return;
       }
 
       // Hash password
@@ -114,8 +116,8 @@ router.post('/register',
 
     } catch (error) {
       logger.error('Registration error', {
-        error: error.message,
-        stack: error.stack,
+        error: getErrorMessage(error),
+        stack: error instanceof Error ? error.stack : undefined,
         ip: req.ip
       });
 
@@ -138,7 +140,7 @@ router.post('/login',
   authRateLimit,
   authValidation.login,
   handleAuthValidationErrors,
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const { email, password } = req.body;
 
@@ -153,12 +155,13 @@ router.post('/login',
           ip: req.ip
         });
 
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Invalid credentials',
           message: 'Invalid email or password',
           code: 'INVALID_CREDENTIALS'
         });
+        return;
       }
 
       if (!user.isActive) {
@@ -168,16 +171,17 @@ router.post('/login',
           ip: req.ip
         });
 
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Account deactivated',
           message: 'Your account has been deactivated',
           code: 'ACCOUNT_DEACTIVATED'
         });
+        return;
       }
 
       // Verify password
-      const passwordValid = await bcrypt.compare(password, user.password);
+      const passwordValid = user.password ? await bcrypt.compare(password, user.password) : false;
 
       if (!passwordValid) {
         logger.warn('Login attempt with invalid password', {
@@ -186,12 +190,13 @@ router.post('/login',
           ip: req.ip
         });
 
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Invalid credentials',
           message: 'Invalid email or password',
           code: 'INVALID_CREDENTIALS'
         });
+        return;
       }
 
       // Generate tokens
@@ -226,8 +231,8 @@ router.post('/login',
 
     } catch (error) {
       logger.error('Login error', {
-        error: error.message,
-        stack: error.stack,
+        error: getErrorMessage(error),
+        stack: error instanceof Error ? error.stack : undefined,
         ip: req.ip
       });
 
@@ -249,7 +254,7 @@ router.post('/login',
 router.post('/refresh',
   authValidation.refreshToken,
   handleAuthValidationErrors,
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const { refreshToken } = req.body;
 
@@ -267,12 +272,13 @@ router.post('/refresh',
           ip: req.ip
         });
 
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Invalid refresh token',
           message: 'Please login again',
           code: 'INVALID_REFRESH_TOKEN'
         });
+        return;
       }
 
       // Generate new tokens
@@ -300,7 +306,7 @@ router.post('/refresh',
 
     } catch (error) {
       logger.warn('Refresh token error', {
-        error: error.message,
+        error: getErrorMessage(error),
         ip: req.ip
       });
 
@@ -319,7 +325,7 @@ router.post('/refresh',
  * @desc Get current user profile
  * @access Protected
  */
-router.get('/me', authenticate, async (req: Request, res: Response) => {
+router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
@@ -336,11 +342,12 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'User not found',
         code: 'USER_NOT_FOUND'
       });
+      return;
     }
 
     res.json({
@@ -352,7 +359,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
 
   } catch (error) {
     logger.error('Get user profile error', {
-      error: error.message,
+      error: getErrorMessage(error),
       userId: req.user?.id,
       ip: req.ip
     });
@@ -387,7 +394,7 @@ router.put('/update-profile',
       .withMessage('Please provide a valid email address')
   ],
   handleAuthValidationErrors,
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const { name, email } = req.body;
       const updateData: any = {};
@@ -400,11 +407,12 @@ router.put('/update-profile',
         });
 
         if (existingUser && existingUser.id !== req.user!.id) {
-          return res.status(409).json({
+          res.status(409).json({
             success: false,
             error: 'Email already taken',
             code: 'EMAIL_EXISTS'
           });
+          return;
         }
 
         updateData.email = email.toLowerCase();
@@ -441,7 +449,7 @@ router.put('/update-profile',
 
     } catch (error) {
       logger.error('Update profile error', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         ip: req.ip
       });
@@ -464,7 +472,7 @@ router.post('/change-password',
   authenticate,
   authValidation.changePassword,
   handleAuthValidationErrors,
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const { currentPassword, newPassword } = req.body;
 
@@ -474,24 +482,26 @@ router.post('/change-password',
       });
 
       if (!user) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: 'User not found',
           code: 'USER_NOT_FOUND'
         });
+        return;
       }
 
       // Verify current password
-      const currentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      const currentPasswordValid = user.password ? await bcrypt.compare(currentPassword, user.password) : false;
 
       if (!currentPasswordValid) {
         logSecurityEvent('password_change_invalid_current', req as Request);
 
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Current password is incorrect',
           code: 'INVALID_CURRENT_PASSWORD'
         });
+        return;
       }
 
       // Hash new password
@@ -518,7 +528,7 @@ router.post('/change-password',
 
     } catch (error) {
       logger.error('Change password error', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         ip: req.ip
       });
@@ -537,7 +547,7 @@ router.post('/change-password',
  * @desc Logout user (invalidate tokens)
  * @access Protected
  */
-router.post('/logout', authenticate, async (req: Request, res: Response) => {
+router.post('/logout', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     // In a production system, you would:
     // 1. Add the token to a blacklist in Redis
@@ -558,7 +568,7 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
 
   } catch (error) {
     logger.error('Logout error', {
-      error: error.message,
+      error: getErrorMessage(error),
       userId: req.user?.id,
       ip: req.ip
     });
@@ -576,7 +586,7 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
  * @desc Validate JWT token
  * @access Protected
  */
-router.post('/validate', authenticate, async (req: Request, res: Response) => {
+router.post('/validate', authenticate, async (req: Request, res: Response): Promise<void> => {
   res.json({
     success: true,
     message: 'Token is valid',
@@ -597,3 +607,5 @@ router.post('/validate', authenticate, async (req: Request, res: Response) => {
 });
 
 export default router;
+// CommonJS compatibility
+module.exports = router;

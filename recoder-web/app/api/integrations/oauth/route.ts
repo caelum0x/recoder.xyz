@@ -12,7 +12,7 @@ interface OAuthProvider {
   redirect_uri: string;
   auth_url: string;
   token_url: string;
-  scopes: string[];
+  permissions: string[];
   extra_params?: Record<string, string>;
 }
 
@@ -34,7 +34,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.GOOGLE_REDIRECT_URI || '',
     auth_url: 'https://accounts.google.com/o/oauth2/v2/auth',
     token_url: 'https://oauth2.googleapis.com/token',
-    scopes: [
+    permissions: [
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile',
       'https://www.googleapis.com/auth/gmail.modify',
@@ -52,7 +52,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.MICROSOFT_REDIRECT_URI || '',
     auth_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
     token_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-    scopes: [
+    permissions: [
       'https://graph.microsoft.com/User.Read',
       'https://graph.microsoft.com/Mail.ReadWrite',
       'https://graph.microsoft.com/Files.ReadWrite',
@@ -68,7 +68,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.GITHUB_REDIRECT_URI || '',
     auth_url: 'https://github.com/login/oauth/authorize',
     token_url: 'https://github.com/login/oauth/access_token',
-    scopes: ['repo', 'user', 'admin:org', 'workflow', 'write:packages']
+    permissions: ['repo', 'user', 'admin:org', 'workflow', 'write:packages']
   },
   
   slack: {
@@ -78,7 +78,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.SLACK_REDIRECT_URI || '',
     auth_url: 'https://slack.com/oauth/v2/authorize',
     token_url: 'https://slack.com/api/oauth.v2.access',
-    scopes: [
+    permissions: [
       'channels:read',
       'chat:write',
       'files:write',
@@ -97,7 +97,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.DISCORD_REDIRECT_URI || '',
     auth_url: 'https://discord.com/api/oauth2/authorize',
     token_url: 'https://discord.com/api/oauth2/token',
-    scopes: ['identify', 'email', 'guilds', 'bot', 'messages.read', 'webhook.incoming']
+    permissions: ['identify', 'email', 'guilds', 'bot', 'messages.read', 'webhook.incoming']
   },
   
   stripe: {
@@ -107,7 +107,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.STRIPE_REDIRECT_URI || '',
     auth_url: 'https://connect.stripe.com/oauth/authorize',
     token_url: 'https://connect.stripe.com/oauth/token',
-    scopes: ['read_write']
+    permissions: ['read_write']
   },
   
   linkedin: {
@@ -117,7 +117,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.LINKEDIN_REDIRECT_URI || '',
     auth_url: 'https://www.linkedin.com/oauth/v2/authorization',
     token_url: 'https://www.linkedin.com/oauth/v2/accessToken',
-    scopes: ['r_liteprofile', 'r_emailaddress', 'w_member_social', 'r_organization_social']
+    permissions: ['r_liteprofile', 'r_emailaddress', 'w_member_social', 'r_organization_social']
   },
   
   twitter: {
@@ -127,7 +127,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.TWITTER_REDIRECT_URI || '',
     auth_url: 'https://twitter.com/i/oauth2/authorize',
     token_url: 'https://api.twitter.com/2/oauth2/token',
-    scopes: ['tweet.read', 'tweet.write', 'users.read', 'follows.read', 'follows.write'],
+    permissions: ['tweet.read', 'tweet.write', 'users.read', 'follows.read', 'follows.write'],
     extra_params: {
       code_challenge_method: 'S256'
     }
@@ -140,7 +140,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.FACEBOOK_REDIRECT_URI || '',
     auth_url: 'https://www.facebook.com/v18.0/dialog/oauth',
     token_url: 'https://graph.facebook.com/v18.0/oauth/access_token',
-    scopes: ['email', 'public_profile', 'pages_messaging', 'pages_manage_posts', 'business_management']
+    permissions: ['email', 'public_profile', 'pages_messaging', 'pages_manage_posts', 'business_management']
   },
   
   shopify: {
@@ -150,7 +150,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     redirect_uri: process.env.SHOPIFY_REDIRECT_URI || '',
     auth_url: 'https://{shop}.myshopify.com/admin/oauth/authorize',
     token_url: 'https://{shop}.myshopify.com/admin/oauth/access_token',
-    scopes: ['read_products', 'write_products', 'read_orders', 'write_orders', 'read_customers', 'write_customers']
+    permissions: ['read_products', 'write_products', 'read_orders', 'write_orders', 'read_customers', 'write_customers']
   }
 };
 
@@ -233,7 +233,7 @@ async function getAuthUrl(provider: string, data: any = {}) {
   const params = new URLSearchParams({
     client_id: config.client_id,
     redirect_uri: data.redirect_uri || config.redirect_uri,
-    scope: data.scopes?.join(' ') || config.scopes.join(' '),
+    scope: data.scopes?.join(' ') || (config as any).scopes?.join(' ') || '',
     state: state,
     response_type: 'code'
   });
@@ -543,7 +543,7 @@ async function listProviders() {
     providers: Object.entries(OAUTH_PROVIDERS).map(([key, config]) => ({
       key,
       name: config.name,
-      scopes: config.scopes,
+      permissions: (config as any).scopes || [],
       configured: !!(config.client_id && config.client_secret)
     }))
   };

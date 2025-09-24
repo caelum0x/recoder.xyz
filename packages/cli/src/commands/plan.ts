@@ -8,7 +8,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
 import boxen from 'boxen';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { ProjectPlanner, PlanningContext } from '../services/project-planner';
 import { PlanExecutor } from '../services/plan-executor';
 import { requireAuth } from '../utils/auth';

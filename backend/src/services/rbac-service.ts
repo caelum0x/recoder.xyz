@@ -114,7 +114,7 @@ class RBACService {
           where: { 
             name_tenantId: { 
               name: roleData.name, 
-              tenantId: null 
+              tenantId: 'system' 
             } 
           },
           update: {
@@ -388,7 +388,7 @@ class RBACService {
   }
 
   getResourceActions(resource: string): string[] {
-    return this.permissionHierarchy[resource] || [];
+    return (this.permissionHierarchy as any)[resource] || [];
   }
 
   // Bulk operations

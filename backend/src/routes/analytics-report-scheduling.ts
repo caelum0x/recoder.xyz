@@ -68,7 +68,7 @@ router.post('/reports/:reportId/schedule', [
   body('schedule').isObject(),
   body('delivery').isArray().isLength({ min: 1, max: 10 }),
   body('exportOptions').isObject(),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<Response> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -140,7 +140,7 @@ router.post('/reports/:reportId/schedule', [
       activeCronJobs.set(reportSchedule.id, task);
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       schedule: {
         id: reportSchedule.id,
@@ -159,7 +159,7 @@ router.post('/reports/:reportId/schedule', [
 
   } catch (error) {
     console.error('Schedule creation error:', error);
-    res.status(500).json({ error: 'Failed to create report schedule' });
+    return res.status(500).json({ error: 'Failed to create report schedule' });
   }
 });
 
@@ -171,7 +171,7 @@ router.get('/reports/:reportId/schedules', [
   authenticate,
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { reportId } = req.params;
     const page = parseInt(req.query.page as string) || 1;

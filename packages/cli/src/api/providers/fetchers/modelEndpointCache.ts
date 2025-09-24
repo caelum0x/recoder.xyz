@@ -5,7 +5,7 @@ import NodeCache from "node-cache"
 import { safeWriteJson } from "../../../utils/safeWriteJson"
 import sanitize from "sanitize-filename"
 
-import { ContextProxy, getCacheDirectoryPath, RouterName, ModelRecord, fileExistsAtPath } from "@recoder/shared"
+import { ContextProxy, getCacheDirectoryPath, RouterName, ModelRecord, fileExistsAtPath } from "recoder-shared"
 
 import { getOpenRouterModelEndpoints } from "./openrouter"
 

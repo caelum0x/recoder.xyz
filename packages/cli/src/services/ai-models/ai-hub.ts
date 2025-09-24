@@ -19,7 +19,7 @@ import {
   HybridProcessingConfig,
   RequestContext,
   ModelRoutingRule
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 
 import { BaseModelProvider } from './base-provider';
 import { OpenAIProvider } from './providers/openai-provider';

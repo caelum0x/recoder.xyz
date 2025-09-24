@@ -22,7 +22,8 @@ export const getPrisma = cache(() => {
     const adapter = new PrismaNeon(neon as any) as any;
     
     const client = new PrismaClient({
-      adapter,
+      // @ts-ignore - PrismaNeon adapter type compatibility
+      adapter: adapter,
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
       errorFormat: 'pretty',
     });

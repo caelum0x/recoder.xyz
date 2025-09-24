@@ -500,7 +500,7 @@ export default function SubscriptionMetricsDashboard() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ cycle, totalRevenue }) => `${cycle}: ${formatCurrency(totalRevenue)}`}
+                      label={({ cycle, totalRevenue }: any) => `${cycle}: ${formatCurrency(totalRevenue)}`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="totalRevenue"
@@ -627,7 +627,7 @@ export default function SubscriptionMetricsDashboard() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ period, count }) => `${period}: ${count}`}
+                      label={(props: any) => `${props.name || props.segment || props.category || props.cycle || props.period || "Item"}: ${props.value || props.customerCount || props.totalRevenue || props.count || 0}`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="count"
@@ -867,7 +867,7 @@ export default function SubscriptionMetricsDashboard() {
                         stroke="#82ca9d" 
                         strokeDasharray="5 5" 
                         name="Low Estimate" 
-                        dataKey="confidenceInterval.low"
+                       // dataKey="confidenceInterval.low"
                       />
                       <Line 
                         type="monotone" 
@@ -875,7 +875,7 @@ export default function SubscriptionMetricsDashboard() {
                         stroke="#ffc658" 
                         strokeDasharray="5 5" 
                         name="High Estimate"
-                        dataKey="confidenceInterval.high"
+                      //  dataKey="confidenceInterval.high"
                       />
                     </LineChart>
                   </ResponsiveContainer>

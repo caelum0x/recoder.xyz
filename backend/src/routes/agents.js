@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, query, param, validationResult } = require('express-validator');
-const { Agent, Project, User } = require('../models');
+const { prisma } = require('../database/prisma');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { agentService } = require('../services/agentService');
 
 const router = express.Router();
@@ -45,7 +45,7 @@ const router = express.Router();
  *       200:
  *         description: Agents retrieved successfully
  */
-router.get('/', authenticateToken, [
+router.get('/', authenticate, [
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
@@ -82,7 +82,7 @@ router.get('/', authenticateToken, [
     if (type) whereClause.type = type;
     if (status) whereClause.status = status;
 
-    const agents = await Agent.findAndCountAll({
+    const agents = await prisma.agent.findAndCountAll({
       where: whereClause,
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -153,7 +153,7 @@ router.get('/', authenticateToken, [
  *       400:
  *         description: Invalid input
  */
-router.post('/', authenticateToken, [
+router.post('/', authenticate, [
   body('name')
     .isString()
     .isLength({ min: 1, max: 100 })
@@ -192,7 +192,7 @@ router.post('/', authenticateToken, [
 
     // Validate project ownership if projectId is provided
     if (projectId) {
-      const project = await Project.findOne({
+      const project = await prisma.project.findOne({
         where: { id: projectId, userId }
       });
       if (!project) {
@@ -249,7 +249,7 @@ router.post('/', authenticateToken, [
  *       404:
  *         description: Agent not found
  */
-router.get('/:agentId', authenticateToken, [
+router.get('/:agentId', authenticate, [
   param('agentId')
     .isString()
     .isLength({ min: 1 })
@@ -270,7 +270,7 @@ router.get('/:agentId', authenticateToken, [
     const { agentId } = req.params;
     const userId = req.user.id;
 
-    const agent = await Agent.findOne({
+    const agent = await prisma.agent.findOne({
       where: { id: agentId, userId },
       include: [
         {
@@ -348,7 +348,7 @@ router.get('/:agentId', authenticateToken, [
  *       404:
  *         description: Agent not found
  */
-router.put('/:agentId', authenticateToken, [
+router.put('/:agentId', authenticate, [
   param('agentId')
     .isString()
     .isLength({ min: 1 })
@@ -388,7 +388,7 @@ router.put('/:agentId', authenticateToken, [
     const { name, description, config, status } = req.body;
     const userId = req.user.id;
 
-    const agent = await Agent.findOne({
+    const agent = await prisma.agent.findOne({
       where: { id: agentId, userId }
     });
 
@@ -443,7 +443,7 @@ router.put('/:agentId', authenticateToken, [
  *       404:
  *         description: Agent not found
  */
-router.delete('/:agentId', authenticateToken, [
+router.delete('/:agentId', authenticate, [
   param('agentId')
     .isString()
     .isLength({ min: 1 })
@@ -464,7 +464,7 @@ router.delete('/:agentId', authenticateToken, [
     const { agentId } = req.params;
     const userId = req.user.id;
 
-    const agent = await Agent.findOne({
+    const agent = await prisma.agent.findOne({
       where: { id: agentId, userId }
     });
 
@@ -526,7 +526,7 @@ router.delete('/:agentId', authenticateToken, [
  *       404:
  *         description: Agent not found
  */
-router.post('/:agentId/execute', authenticateToken, [
+router.post('/:agentId/execute', authenticate, [
   param('agentId')
     .isString()
     .isLength({ min: 1 })
@@ -556,7 +556,7 @@ router.post('/:agentId/execute', authenticateToken, [
     const { task, context } = req.body;
     const userId = req.user.id;
 
-    const agent = await Agent.findOne({
+    const agent = await prisma.agent.findOne({
       where: { id: agentId, userId }
     });
 

@@ -1,4 +1,77 @@
-const AWS = require('aws-sdk');
+const { 
+  EC2Client, 
+  RunInstancesCommand, 
+  DescribeInstancesCommand, 
+  TerminateInstancesCommand,
+  CreateVpcCommand,
+  CreateSubnetCommand,
+  CreateInternetGatewayCommand,
+  AttachInternetGatewayCommand,
+  DescribeRegionsCommand
+} = require('@aws-sdk/client-ec2');
+
+const { 
+  S3Client, 
+  CreateBucketCommand, 
+  PutObjectCommand, 
+  GetObjectCommand 
+} = require('@aws-sdk/client-s3');
+
+const { 
+  LambdaClient, 
+  CreateFunctionCommand, 
+  InvokeCommand 
+} = require('@aws-sdk/client-lambda');
+
+const { 
+  RDSClient, 
+  CreateDBInstanceCommand 
+} = require('@aws-sdk/client-rds');
+
+const { 
+  CloudFormationClient, 
+  CreateStackCommand, 
+  DescribeStacksCommand 
+} = require('@aws-sdk/client-cloudformation');
+
+const { 
+  IAMClient 
+} = require('@aws-sdk/client-iam');
+
+const { 
+  ECSClient, 
+  CreateClusterCommand 
+} = require('@aws-sdk/client-ecs');
+
+const { 
+  EKSClient 
+} = require('@aws-sdk/client-eks');
+
+const { 
+  ElasticBeanstalkClient 
+} = require('@aws-sdk/client-elastic-beanstalk');
+
+const { 
+  Route53Client 
+} = require('@aws-sdk/client-route-53');
+
+const { 
+  CloudWatchClient 
+} = require('@aws-sdk/client-cloudwatch');
+
+const { 
+  SNSClient 
+} = require('@aws-sdk/client-sns');
+
+const { 
+  SQSClient 
+} = require('@aws-sdk/client-sqs');
+
+const { 
+  STSClient, 
+  GetCallerIdentityCommand 
+} = require('@aws-sdk/client-sts');
+
 const { logger } = require('../../utils/logger');
 
 class AWSIntegration {
@@ -12,28 +85,34 @@ class AWSIntegration {
       throw new Error('AWS credentials are required');
     }
     
-    AWS.config.update({
-      accessKeyId: this.accessKeyId,
-      secretAccessKey: this.secretAccessKey,
+    // Common client configuration
+    const clientConfig = {
       region: this.region,
-      timeout: this.timeout
-    });
+      credentials: {
+        accessKeyId: this.accessKeyId,
+        secretAccessKey: this.secretAccessKey,
+      },
+      requestHandler: {
+        requestTimeout: this.timeout
+      }
+    };
 
-    // Initialize AWS services
-    this.ec2 = new AWS.EC2();
-    this.s3 = new AWS.S3();
-    this.lambda = new AWS.Lambda();
-    this.rds = new AWS.RDS();
-    this.cloudFormation = new AWS.CloudFormation();
-    this.iam = new AWS.IAM();
-    this.vpc = new AWS.EC2(); // VPC operations use EC2 client
-    this.ecs = new AWS.ECS();
-    this.eks = new AWS.EKS();
-    this.elasticBeanstalk = new AWS.ElasticBeanstalk();
-    this.route53 = new AWS.Route53();
-    this.cloudWatch = new AWS.CloudWatch();
-    this.sns = new AWS.SNS();
-    this.sqs = new AWS.SQS();
+    // Initialize AWS SDK v3 clients
+    this.ec2 = new EC2Client(clientConfig);
+    this.s3 = new S3Client(clientConfig);
+    this.lambda = new LambdaClient(clientConfig);
+    this.rds = new RDSClient(clientConfig);
+    this.cloudFormation = new CloudFormationClient(clientConfig);
+    this.iam = new IAMClient(clientConfig);
+    this.vpc = new EC2Client(clientConfig); // VPC operations use EC2 client
+    this.ecs = new ECSClient(clientConfig);
+    this.eks = new EKSClient(clientConfig);
+    this.elasticBeanstalk = new ElasticBeanstalkClient(clientConfig);
+    this.route53 = new Route53Client(clientConfig);
+    this.cloudWatch = new CloudWatchClient(clientConfig);
+    this.sns = new SNSClient(clientConfig);
+    this.sqs = new SQSClient(clientConfig);
+    this.sts = new STSClient(clientConfig);
   }
 
   // EC2 Operations
@@ -49,7 +128,7 @@ class AWSIntegration {
     } = options;
 
     try {
-      const params = {
+      const command = new RunInstancesCommand({
         ImageId: imageId,
         InstanceType: instanceType,
         MinCount: 1,
@@ -62,9 +141,9 @@ class AWSIntegration {
           ResourceType: 'instance',
           Tags: tags
         }] : undefined
-      };
+      });
 
-      const result = await this.ec2.runInstances(params).promise();
+      const result = await this.ec2.send(command);
       const instance = result.Instances[0];
 
       return {
@@ -88,7 +167,8 @@ class AWSIntegration {
 
   async listEC2Instances() {
     try {
-      const result = await this.ec2.describeInstances().promise();
+      const command = new DescribeInstancesCommand({});
+      const result = await this.ec2.send(command);
       const instances = [];
 
       result.Reservations.forEach(reservation => {
@@ -119,9 +199,11 @@ class AWSIntegration {
 
   async terminateEC2Instance(instanceId) {
     try {
-      await this.ec2.terminateInstances({
+      const command = new TerminateInstancesCommand({
         InstanceIds: [instanceId]
-      }).promise();
+      });
+      
+      await this.ec2.send(command);
 
       return {
         success: true,
@@ -142,18 +224,17 @@ class AWSIntegration {
     const { bucketName, region = this.region, acl = 'private' } = options;
 
     try {
-      const params = {
+      const command = new CreateBucketCommand({
         Bucket: bucketName,
-        ACL: acl
-      };
+        ACL: acl,
+        ...(region !== 'us-east-1' && {
+          CreateBucketConfiguration: {
+            LocationConstraint: region
+          }
+        })
+      });
 
-      if (region !== 'us-east-1') {
-        params.CreateBucketConfiguration = {
-          LocationConstraint: region
-        };
-      }
-
-      await this.s3.createBucket(params).promise();
+      await this.s3.send(command);
 
       return {
         success: true,
@@ -175,22 +256,22 @@ class AWSIntegration {
     const { bucketName, key, body, contentType, metadata = {} } = options;
 
     try {
-      const params = {
+      const command = new PutObjectCommand({
         Bucket: bucketName,
         Key: key,
         Body: body,
         ContentType: contentType,
         Metadata: metadata
-      };
+      });
 
-      const result = await this.s3.upload(params).promise();
+      const result = await this.s3.send(command);
 
       return {
         success: true,
         upload: {
-          location: result.Location,
-          bucket: result.Bucket,
-          key: result.Key,
+          location: `https://${bucketName}.s3.${this.region}.amazonaws.com/${key}`,
+          bucket: bucketName,
+          key: key,
           etag: result.ETag
         }
       };
@@ -207,12 +288,12 @@ class AWSIntegration {
     const { bucketName, key } = options;
 
     try {
-      const params = {
+      const command = new GetObjectCommand({
         Bucket: bucketName,
         Key: key
-      };
+      });
 
-      const result = await this.s3.getObject(params).promise();
+      const result = await this.s3.send(command);
 
       return {
         success: true,
@@ -247,7 +328,7 @@ class AWSIntegration {
     } = options;
 
     try {
-      const params = {
+      const command = new CreateFunctionCommand({
         FunctionName: functionName,
         Runtime: runtime,
         Role: role,
@@ -259,9 +340,9 @@ class AWSIntegration {
         Environment: {
           Variables: environment
         }
-      };
+      });
 
-      const result = await this.lambda.createFunction(params).promise();
+      const result = await this.lambda.send(command);
 
       return {
         success: true,
@@ -288,19 +369,19 @@ class AWSIntegration {
     const { functionName, payload = {}, invocationType = 'RequestResponse' } = options;
 
     try {
-      const params = {
+      const command = new InvokeCommand({
         FunctionName: functionName,
         InvocationType: invocationType,
         Payload: JSON.stringify(payload)
-      };
+      });
 
-      const result = await this.lambda.invoke(params).promise();
+      const result = await this.lambda.send(command);
 
       return {
         success: true,
         invocation: {
           statusCode: result.StatusCode,
-          payload: result.Payload ? JSON.parse(result.Payload) : null,
+          payload: result.Payload ? JSON.parse(Buffer.from(result.Payload).toString()) : null,
           executedVersion: result.ExecutedVersion
         }
       };
@@ -328,7 +409,7 @@ class AWSIntegration {
     } = options;
 
     try {
-      const params = {
+      const command = new CreateDBInstanceCommand({
         DBInstanceIdentifier: dbInstanceIdentifier,
         DBInstanceClass: dbInstanceClass,
         Engine: engine,
@@ -338,9 +419,9 @@ class AWSIntegration {
         DBName: dbName,
         VpcSecurityGroupIds: vpcSecurityGroupIds,
         DBSubnetGroupName: dbSubnetGroupName
-      };
+      });
 
-      const result = await this.rds.createDBInstance(params).promise();
+      const result = await this.rds.send(command);
 
       return {
         success: true,
@@ -366,25 +447,28 @@ class AWSIntegration {
     const { cidrBlock = '10.0.0.0/16', tags = [] } = options;
 
     try {
-      const vpcResult = await this.vpc.createVpc({
+      const vpcCommand = new CreateVpcCommand({
         CidrBlock: cidrBlock,
         TagSpecifications: tags.length > 0 ? [{
           ResourceType: 'vpc',
           Tags: tags
         }] : undefined
-      }).promise();
+      });
 
+      const vpcResult = await this.vpc.send(vpcCommand);
       const vpcId = vpcResult.Vpc.VpcId;
 
       // Create Internet Gateway
-      const igwResult = await this.vpc.createInternetGateway().promise();
+      const igwCommand = new CreateInternetGatewayCommand({});
+      const igwResult = await this.vpc.send(igwCommand);
       const igwId = igwResult.InternetGateway.InternetGatewayId;
 
       // Attach Internet Gateway to VPC
-      await this.vpc.attachInternetGateway({
+      const attachCommand = new AttachInternetGatewayCommand({
         InternetGatewayId: igwId,
         VpcId: vpcId
-      }).promise();
+      });
+      await this.vpc.send(attachCommand);
 
       return {
         success: true,
@@ -408,7 +492,7 @@ class AWSIntegration {
     const { vpcId, cidrBlock, availabilityZone, tags = [] } = options;
 
     try {
-      const result = await this.vpc.createSubnet({
+      const command = new CreateSubnetCommand({
         VpcId: vpcId,
         CidrBlock: cidrBlock,
         AvailabilityZone: availabilityZone,
@@ -416,7 +500,9 @@ class AWSIntegration {
           ResourceType: 'subnet',
           Tags: tags
         }] : undefined
-      }).promise();
+      });
+
+      const result = await this.vpc.send(command);
 
       return {
         success: true,
@@ -449,22 +535,20 @@ class AWSIntegration {
     } = options;
 
     try {
-      const params = {
+      const command = new CreateStackCommand({
         StackName: stackName,
         Parameters: parameters,
         Capabilities: capabilities,
-        Tags: tags
-      };
+        Tags: tags,
+        ...(templateBody && { TemplateBody: templateBody }),
+        ...(templateUrl && { TemplateURL: templateUrl })
+      });
 
-      if (templateBody) {
-        params.TemplateBody = templateBody;
-      } else if (templateUrl) {
-        params.TemplateURL = templateUrl;
-      } else {
+      if (!templateBody && !templateUrl) {
         throw new Error('Either templateBody or templateUrl must be provided');
       }
 
-      const result = await this.cloudFormation.createStack(params).promise();
+      const result = await this.cloudFormation.send(command);
 
       return {
         success: true,
@@ -484,10 +568,11 @@ class AWSIntegration {
 
   async getStackStatus(stackName) {
     try {
-      const result = await this.cloudFormation.describeStacks({
+      const command = new DescribeStacksCommand({
         StackName: stackName
-      }).promise();
+      });
 
+      const result = await this.cloudFormation.send(command);
       const stack = result.Stacks[0];
 
       return {
@@ -514,10 +599,12 @@ class AWSIntegration {
     const { clusterName, tags = [] } = options;
 
     try {
-      const result = await this.ecs.createCluster({
+      const command = new CreateClusterCommand({
         clusterName: clusterName,
         tags: tags
-      }).promise();
+      });
+
+      const result = await this.ecs.send(command);
 
       return {
         success: true,
@@ -541,7 +628,8 @@ class AWSIntegration {
   // Utility Methods
   async getRegions() {
     try {
-      const result = await this.ec2.describeRegions().promise();
+      const command = new DescribeRegionsCommand({});
+      const result = await this.ec2.send(command);
       
       return {
         success: true,
@@ -561,8 +649,8 @@ class AWSIntegration {
 
   async getAccountInfo() {
     try {
-      const stsClient = new AWS.STS();
-      const result = await stsClient.getCallerIdentity().promise();
+      const command = new GetCallerIdentityCommand({});
+      const result = await this.sts.send(command);
       
       return {
         success: true,
@@ -625,21 +713,18 @@ class AWSIntegration {
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
     
-    AWS.config.update({
-      accessKeyId: accessKeyId,
-      secretAccessKey: secretAccessKey,
-      region: this.region
-    });
+    // Note: AWS SDK v3 requires recreating clients with new credentials
+    logger.info('AWS credentials updated - client recreation required for changes to take effect');
   }
 
   setRegion(region) {
     this.region = region;
-    AWS.config.update({ region: region });
+    logger.info(`AWS region updated to ${region} - client recreation required for changes to take effect`);
   }
 
   setTimeout(timeout) {
     this.timeout = timeout;
-    AWS.config.update({ timeout: timeout });
+    logger.info(`AWS timeout updated to ${timeout}ms - client recreation required for changes to take effect`);
   }
 
   // Generate Infrastructure as Code

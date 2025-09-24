@@ -869,7 +869,7 @@ export async function POST(request: Request) {
         const designSystem = await generateDesignSystem(body);
         const projectName = `${name}-design-system`;
         
-        const files = {
+        const files: Record<string, string> = {
           'src/tokens/design-tokens.ts': designSystem.tokens,
           'src/theme/theme.ts': designSystem.theme,
           '.storybook/main.ts': designSystem.storybook,

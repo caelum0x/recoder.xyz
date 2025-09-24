@@ -21,7 +21,6 @@ export function rateLimit(config: RateLimitConfig) {
     check: async (request: NextRequest, limit: number, identifier: string): Promise<void> => {
       const ip = request.headers.get('x-forwarded-for') || 
                  request.headers.get('x-real-ip') || 
-                 request.ip ||
                  'unknown';
       
       const key = `${identifier}:${ip}`;

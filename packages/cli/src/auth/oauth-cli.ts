@@ -3,8 +3,8 @@
  * Handles OAuth flows for the CLI platform
  */
 
-import { OAuthHandler, OAuthCallbackData } from '@recoder/shared';
-import { AuthClient } from '@recoder/shared';
+import { OAuthHandler, OAuthCallbackData } from 'recoder-shared';
+import { AuthClient } from 'recoder-shared';
 import express from 'express';
 import { Server } from 'http';
 import chalk from 'chalk';

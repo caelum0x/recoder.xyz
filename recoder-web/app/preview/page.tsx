@@ -54,7 +54,7 @@ export default function LivePreviewPage() {
     'wifi': { download: 30000, upload: 15000, latency: 2 }
   };
 
-  const currentDevice = devicePresets[deviceType];
+  const currentDevice = devicePresets[deviceType as keyof typeof devicePresets];
   const deviceWidth = orientation === 'landscape' && deviceType !== 'desktop' 
     ? currentDevice.height 
     : currentDevice.width;
@@ -74,7 +74,7 @@ export default function LivePreviewPage() {
     }
   };
 
-  const handleNavigate = (newUrl) => {
+  const handleNavigate = (newUrl: string) => {
     setUrl(newUrl);
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newUrl);
@@ -98,7 +98,7 @@ export default function LivePreviewPage() {
     }
   };
 
-  const handleZoomChange = (delta) => {
+  const handleZoomChange = (delta: number) => {
     const newZoom = Math.max(25, Math.min(200, zoom + delta));
     setZoom(newZoom);
   };
@@ -443,7 +443,7 @@ export default function LivePreviewPage() {
               ) : (
                 <Wifi className="w-3 h-3 text-green-400" />
               )}
-              <span>{networkConditions[networkCondition].download}kb/s</span>
+              <span>{networkConditions[networkCondition as keyof typeof networkConditions].download}kb/s</span>
             </div>
           </div>
 

@@ -8,7 +8,9 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import BillingDashboard from '@/components/billing/BillingDashboard';
+import OverageBilling from '@/components/billing/OverageBilling';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -68,12 +70,44 @@ function BillingPageContent({ searchParams }: { searchParams: {
         </div>
       )}
 
-      <Suspense fallback={<LoadingSpinner />}>
-        <BillingDashboard 
-          userId={searchParams.user_id || ''} 
-          source={searchParams.source as any || 'web'} 
-        />
-      </Suspense>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Billing & Usage</h1>
+          <p className="text-gray-600">Manage your subscription, monitor usage, and handle billing</p>
+        </div>
+        
+        <Tabs defaultValue="dashboard" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="overage">Overage & Billing</TabsTrigger>
+            <TabsTrigger value="analytics">Usage Analytics</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="dashboard">
+            <Suspense fallback={<LoadingSpinner />}>
+              <BillingDashboard 
+                userId={searchParams.user_id || ''} 
+                source={searchParams.source as any || 'web'} 
+              />
+            </Suspense>
+          </TabsContent>
+          
+          <TabsContent value="overage">
+            <Suspense fallback={<LoadingSpinner />}>
+              <OverageBilling />
+            </Suspense>
+          </TabsContent>
+          
+          <TabsContent value="analytics">
+            <Suspense fallback={<LoadingSpinner />}>
+              <div className="text-center py-8">
+                <p className="text-gray-600">Analytics content goes here</p>
+                <a href="/analytics" className="text-blue-600 hover:underline">View Full Analytics Dashboard</a>
+              </div>
+            </Suspense>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from '../services/backend-client';
 import { productionEngineClient } from '../services/production-engine-client';
 import { billingIntegration } from '../services/billing-integration';

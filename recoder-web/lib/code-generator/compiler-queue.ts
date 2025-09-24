@@ -180,7 +180,7 @@ export class CompilerQueue extends EventEmitter {
         memory: job.options.memory,
         compilationId: job.id,
         userId: job.userId,
-        optimization: job.options.optimization,
+        optimization: job.options.optimization as "basic" | "none" | "aggressive" | undefined,
         debug: job.options.debug,
         libraries: job.options.libraries,
       });

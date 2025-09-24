@@ -37,7 +37,7 @@ router.post('/tenants', [
   body('adminEmail').isEmail().withMessage('Valid admin email is required'),
   body('plan').isIn(['starter', 'professional', 'enterprise']).withMessage('Invalid plan'),
   body('domain').optional().isFQDN().withMessage('Invalid domain')
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -70,7 +70,7 @@ router.post('/tenants', [
     console.error('Create tenant error:', error);
     res.status(500).json({
       error: 'Failed to create tenant',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: error instanceof Error ? getErrorMessage(error) : 'Unknown error'
     });
   }
 });
@@ -83,7 +83,7 @@ router.post('/tenants', [
 router.get('/tenants/:identifier', [
   authMiddleware,
   param('identifier').notEmpty()
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { identifier } = req.params;
     
@@ -116,7 +116,7 @@ router.put('/tenants/:tenantId', [
   body('customDomain').optional().isFQDN(),
   body('plan').optional().isIn(['starter', 'professional', 'enterprise']),
   body('status').optional().isIn(['active', 'suspended', 'trial'])
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -159,7 +159,7 @@ router.put('/tenants/:tenantId', [
 router.delete('/tenants/:tenantId', [
   authMiddleware,
   param('tenantId').isUUID()
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { tenantId } = req.params;
 
@@ -181,7 +181,7 @@ router.delete('/tenants/:tenantId', [
  * @desc Get users for the current tenant
  * @access Private
  */
-router.get('/tenant/users', authMiddleware, async (req: Request, res: Response) => {
+router.get('/tenant/users', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const tenant = (req as any).tenant;
     
@@ -207,7 +207,7 @@ router.post('/tenant/users', [
   authMiddleware,
   body('email').isEmail().withMessage('Valid email is required'),
   body('role').isIn(['admin', 'developer', 'viewer']).withMessage('Invalid role')
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -253,7 +253,7 @@ router.put('/tenant/users/:userId', [
   body('role').optional().isIn(['admin', 'developer', 'viewer']),
   body('permissions').optional().isArray(),
   body('status').optional().isIn(['active', 'inactive', 'invited'])
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -282,7 +282,7 @@ router.put('/tenant/users/:userId', [
  * @desc Get white-label configuration for tenant
  * @access Public (for the specific tenant)
  */
-router.get('/tenant/white-label', async (req: Request, res: Response) => {
+router.get('/tenant/white-label', async (req: Request, res: Response): Promise<void> => {
   try {
     const tenant = (req as any).tenant;
     
@@ -309,7 +309,7 @@ router.get('/tenant/usage', [
   query('metric').optional().isIn(['api_calls', 'storage', 'bandwidth', 'users', 'projects']),
   query('from').optional().isISO8601(),
   query('to').optional().isISO8601()
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const tenant = (req as any).tenant;
     const { metric, from, to } = req.query;
@@ -373,7 +373,7 @@ router.post('/tenant/usage', [
   authMiddleware,
   body('metric').isIn(['api_calls', 'storage', 'bandwidth', 'users', 'projects']),
   body('amount').optional().isInt({ min: 1 }).toInt()
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -425,7 +425,7 @@ router.get('/tenant/permissions/:userId', [
   authMiddleware,
   param('userId').isUUID(),
   query('permission').notEmpty()
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const tenant = (req as any).tenant;
     const { userId } = req.params;
@@ -460,7 +460,7 @@ router.use((error: any, req: Request, res: Response, next: any) => {
   if (error.name === 'ValidationError') {
     return res.status(400).json({
       error: 'Validation failed',
-      details: error.message
+      details: getErrorMessage(error)
     });
   }
 
@@ -473,7 +473,7 @@ router.use((error: any, req: Request, res: Response, next: any) => {
 
   res.status(500).json({
     error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+    message: process.env.NODE_ENV === 'development' ? getErrorMessage(error) : 'Something went wrong'
   });
 });
 

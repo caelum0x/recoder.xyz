@@ -545,7 +545,7 @@ export async function GET() {
     },
     authentication: {
       type: 'OAuth 2.0',
-      scopes: [
+      permissions: [
         'Mail.ReadWrite',
         'Calendars.ReadWrite',
         'Files.ReadWrite.All',

@@ -33,7 +33,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+    const isPasswordValid = user.password ? await bcrypt.compare(password, user.password) : false
     if (!isPasswordValid) {
       return Response.json({ error: 'Invalid password' }, { status: 400 })
     }
@@ -43,6 +43,7 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'ACCOUNT_DELETION_REQUESTED',
+          resource: 'system',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',

@@ -21,7 +21,7 @@ const createPrismaClient = () => {
     ],
     datasources: {
       db: {
-        url: process.env.DATABASE_URL + '?connection_limit=50&pool_timeout=20&statement_timeout=30000'
+        url: process.env.DATABASE_URL + '?connection_limit=10&pool_timeout=60&statement_timeout=30000'
       }
     }
   });
@@ -41,8 +41,10 @@ class EnhancedPrismaClient {
   }
 
   private setupEventListeners() {
+    // Note: Prisma client event listeners temporarily disabled due to type issues
+    // TODO: Re-enable with proper event types when Prisma client is stable
+    /*
     this.client.$on('query', (e) => {
-      // Track slow queries
       if (e.duration > 1000) {
         logger.warn('Slow query detected', {
           query: e.query.substring(0, 100),
@@ -55,9 +57,10 @@ class EnhancedPrismaClient {
     this.client.$on('error', (e) => {
       logger.error('Database error:', e);
     });
+    */
   }
 
-  // Expose all Prisma methods - matching actual schema models
+  // Core Prisma models - only including models that exist in schema
   get user() { return this.client.user; }
   get project() { return this.client.project; }
   get template() { return this.client.template; }
@@ -100,27 +103,60 @@ class EnhancedPrismaClient {
   get userPreferences() { return this.client.userPreferences; }
   get responsiveConfig() { return this.client.responsiveConfig; }
   get deviceAnalytics() { return this.client.deviceAnalytics; }
-  
-  // Translation table
   get translation() { return this.client.translation; }
-  
-  // Multi-tenant tables
   get tenant() { return this.client.tenant; }
   get tenantUser() { return this.client.tenantUser; }
   get tenantUsage() { return this.client.tenantUsage; }
-  
-  // Role management
   get role() { return this.client.role; }
   get userRole() { return this.client.userRole; }
-  
-  // Aliases for usage tracking service compatibility
-  get usage() { return this.client.dodoUsage; }
-  get charge() { return this.client.dodoCharge; }
 
   // Game development models
   get codeGeneration() { return this.client.codeGeneration; }
   get gameBuild() { return this.client.gameBuild; }
   get gameAsset() { return this.client.gameAsset; }
+  get visualScript() { return this.client.visualScript; }
+  get gameRoom() { return this.client.gameRoom; }
+  get gameRoomPlayer() { return this.client.gameRoomPlayer; }
+  get matchmakingQueue() { return this.client.matchmakingQueue; }
+  get gameMatch() { return this.client.gameMatch; }
+  get gameMatchPlayer() { return this.client.gameMatchPlayer; }
+
+  // Unreal Engine models
+  get unrealProject() { return this.client.unrealProject; }
+  get unrealBlueprintNode() { return this.client.unrealBlueprintNode; }
+  get unrealAssetReference() { return this.client.unrealAssetReference; }
+  get unrealBuildConfig() { return this.client.unrealBuildConfig; }
+
+  // Blockchain models  
+  get solidityProject() { return this.client.solidityProject; }
+  get smartContract() { return this.client.smartContract; }
+  get blockchainNetwork() { return this.client.blockchainNetwork; }
+  get contractDeployment() { return this.client.contractDeployment; }
+  get contractDependency() { return this.client.contractDependency; }
+  get compilationResult() { return this.client.compilationResult; }
+
+  // Analytics and reporting models
+  get analyticsReport() { return this.client.analyticsReport; }
+  get reportExecution() { return this.client.reportExecution; }
+  get reportExport() { return this.client.reportExport; }
+  get reportSchedule() { return this.client.reportSchedule; }
+  get scheduledExecution() { return this.client.scheduledExecution; }
+  get reportShare() { return this.client.reportShare; }
+  get reportShareRecipient() { return this.client.reportShareRecipient; }
+  get reportShareAccess() { return this.client.reportShareAccess; }
+  get reportComment() { return this.client.reportComment; }
+  get reportCache() { return this.client.reportCache; }
+
+  // Mobile models
+  get mobileSession() { return this.client.mobileSession; }
+  get mobileAnalytics() { return this.client.mobileAnalytics; }
+  get pushNotification() { return this.client.pushNotification; }
+  get offlineAction() { return this.client.offlineAction; }
+
+  // Cost optimization models
+  get promptCache() { return this.client.promptCache; }
+  get componentTemplate() { return this.client.componentTemplate; }
+  get batchRequest() { return this.client.batchRequest; }
 
   // Expose Prisma methods
   get $connect() { return this.client.$connect.bind(this.client); }

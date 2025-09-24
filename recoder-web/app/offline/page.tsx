@@ -1,4 +1,6 @@
 // Offline Page - Professional PWA offline experience
+'use client';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -201,9 +203,5 @@ export default function OfflinePage() {
   );
 }
 
-// Metadata for the offline page
-export const metadata = {
-  title: 'Offline - Recoder.xyz',
-  description: 'You are currently offline, but many features are still available',
-  robots: 'noindex'
-};
+// Note: Metadata removed since this is a client component
+// The offline page needs client-side functionality for refresh button

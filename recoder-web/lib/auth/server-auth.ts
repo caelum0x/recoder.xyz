@@ -100,9 +100,9 @@ export class ServerAuth {
    * Check if user has required plan access
    */
   static hasAccess(session: AuthSession, requiredPlan: AuthUser['plan']): boolean {
-    const planHierarchy = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
-    const userLevel = planHierarchy[session.user.plan];
-    const requiredLevel = planHierarchy[requiredPlan];
+    const planHierarchy: Record<string, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+    const userLevel = planHierarchy[session.user.plan || 'FREE'] ?? 0;
+    const requiredLevel = planHierarchy[requiredPlan || 'FREE'] ?? 0;
     return userLevel >= requiredLevel;
   }
 }

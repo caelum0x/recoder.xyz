@@ -27,7 +27,7 @@ export default function ChatLog({
       initial="smooth"
     >
       <StickToBottom.Content className="mx-auto flex w-full max-w-prose flex-col gap-8 p-8">
-        <UserMessage content={chat.prompt} />
+        <UserMessage content={chat.prompt || ""} />
 
         {chat.messages.slice(2).map((message) => (
           <Fragment key={message.id}>

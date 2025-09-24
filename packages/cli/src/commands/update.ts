@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import ora from 'ora';
 import { AutoUpdater, UpdateOptions, UpdateProgress } from '../services/auto-updater';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 // Use static Logger methods directly
 

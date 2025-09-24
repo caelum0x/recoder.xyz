@@ -128,5 +128,155 @@ async function run(options: RunOptions = {}) {
   server.start();
 }
 
+/**
+ * Start interactive chat session using the router's AI system
+ */
+async function startInteractiveChat() {
+  console.clear();
+  
+  // Router-specific header
+  console.log('🚀 Recoder CLI Router - Interactive Chat');
+  console.log('Powered by unified AI routing system\n');
+  
+  // Initialize router AI system
+  console.log("🤖 Initializing router AI system...");
+  try {
+    const status = unifiedRouterAI.getRouterStatus();
+    console.log(`✅ Router initialized with ${status.availableProviders.length} providers: ${status.availableProviders.join(', ')}`);
+    
+    if (status.quotaInfo) {
+      console.log(`👤 Logged in as ${status.quotaInfo.user} (${status.quotaInfo.plan} plan)`);
+      console.log(`📊 Quota: ${status.quotaInfo.remaining}/${status.quotaInfo.total} requests remaining`);
+    } else {
+      console.log("📴 Not authenticated - some features may be limited");
+    }
+  } catch (error) {
+    console.warn("⚠️ Failed to initialize router AI system:", error);
+    return;
+  }
+  
+  console.log('\nType your message. Press Ctrl+C to exit.\n');
+  
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  // Main chat loop with router AI
+  while (true) {
+    try {
+      const userMessage = await new Promise<string>((resolve) => {
+        rl.question('> ', resolve);
+      });
+
+      if (!userMessage.trim()) continue;
+      
+      console.log('\n🤖 ');
+      
+      try {
+        // Use router AI system
+        const startTime = Date.now();
+        const response = await unifiedRouterAI.routeRequest(userMessage, {
+          contextType: 'default',
+          priority: 'quality',
+          maxTokens: 4000,
+          temperature: 0.7
+        });
+        const responseTime = Date.now() - startTime;
+        
+        // Display response
+        console.log(response.content);
+        console.log();
+        
+        // Show routing info
+        console.log(`Model: ${response.model} | Provider: ${response.provider}`);
+        console.log(`Tokens: ${response.tokens.input} in, ${response.tokens.output} out`);
+        if (response.cost !== undefined) {
+          console.log(`Cost: $${response.cost.toFixed(6)}`);
+        }
+        console.log(`Response Time: ${responseTime}ms`);
+        
+        if (response.quotaInfo) {
+          console.log(`Quota: ${response.quotaInfo.remaining}/${response.quotaInfo.total} remaining`);
+        }
+        
+        console.log();
+        
+      } catch (error: any) {
+        console.log(`❌ Error: ${error.message}`);
+        console.log();
+      }
+      
+    } catch (error) {
+      console.log('\nGoodbye! 👋');
+      break;
+    }
+  }
+  
+  rl.close();
+}
+
+// Handle command line arguments
+const args = process.argv.slice(2);
+const command = args[0];
+
+function showHelp() {
+  console.log(`
+🔧 Recoder CLI Router - Intelligent AI Model Routing System
+
+Usage:
+  rcr                    Start interactive chat (Claude Code style)
+  rcr chat              Start interactive chat
+  rcr start             Start router server in background
+  rcr stop              Stop router server
+  rcr status            Check router server status
+  rcr --help, -h        Show this help message
+
+Interactive Chat:
+  When running without arguments, rcr starts an interactive chat session
+  that uses smart AI model routing for optimal cost and performance.
+
+Features:
+  • Smart model routing (79% cost reduction vs Claude direct)
+  • Support for FREE and PAID tiers
+  • Real-time cost optimization
+  • Multiple AI providers (Claude, Gemini, DeepSeek, etc.)
+
+Examples:
+  rcr                   # Start interactive chat
+  rcr chat              # Start interactive chat 
+  rcr start --port 3456 # Start server on custom port
+`);
+}
+
+function showStatus() {
+  console.log('🔍 Checking CLI Router status...');
+  if (isServiceRunning()) {
+    console.log('✅ CLI Router server is running');
+  } else {
+    console.log('❌ CLI Router server is not running');
+  }
+}
+
+// Parse commands
+if (command === '--help' || command === '-h' || command === 'help') {
+  showHelp();
+} else if (command === 'status') {
+  showStatus();
+} else if (command === 'start') {
+  run();
+} else if (command === 'stop') {
+  cleanupPidFile();
+  console.log('🛑 CLI Router server stopped');
+} else if (args.length === 0 || command === 'chat') {
+  // Start interactive chat (Claude Code style)
+  startInteractiveChat();
+} else {
+  // Unknown command
+  console.log(`❌ Unknown command: ${command}`);
+  console.log('Run "rcr --help" for usage information.');
+  process.exit(1);
+}
+
 export { run };
-// run();

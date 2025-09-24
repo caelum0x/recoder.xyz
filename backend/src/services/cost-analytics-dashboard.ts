@@ -210,7 +210,7 @@ export class CostAnalyticsDashboardService extends EventEmitter {
     suggestedAction?: string;
   }>> {
     
-    const alerts = [];
+    const alerts: any[] = [];
     
     try {
       const analytics = await aiCostOptimizer.getCostAnalytics(userId);

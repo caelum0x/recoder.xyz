@@ -1,6 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import logger from '@/lib/logger';
 
+// Track AI usage for cost monitoring
+async function trackAIUsage(model: string, inputText: string, outputText: string, feature: string = 'ai_generation') {
+  try {
+    const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+    const inputTokens = estimateTokens(inputText);
+    const outputTokens = estimateTokens(outputText);
+    
+    await fetch('/api/usage/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: model.includes('claude') ? 'anthropic' : 
+                 model.includes('gpt') ? 'openai' : 'other',
+        model,
+        inputTokens,
+        outputTokens,
+        feature,
+        platform: 'recoder-web',
+        metadata: { 
+          endpoint: '/api/ai/generate',
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+  } catch (error) {
+    console.error('Usage tracking failed:', error);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { prompt, projectId, fileContext, model = 'anthropic/claude-sonnet-4' } = await request.json();
@@ -13,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Connect to production engine for AI generation
-    const engineUrl = process.env.NEXT_PUBLIC_PRODUCTION_ENGINE_URL || 'http://localhost:8001';
+    const engineUrl = process.env.NEXT_PUBLIC_PRODUCTION_ENGINE_URL || 'http://localhost:3002';
     
     logger.info(`Sending AI generation request to engine: ${engineUrl}`);
 
@@ -71,6 +100,14 @@ const GeneratedComponent = () => {
 };
 
 export default GeneratedComponent;` : generatedCode;
+
+    // Track usage for cost monitoring
+    await trackAIUsage(
+      result.metadata?.provider || model || 'recoder-ai-assistant',
+      prompt,
+      fallbackCode,
+      'ai_code_generation'
+    );
 
     return NextResponse.json({
       success: true,

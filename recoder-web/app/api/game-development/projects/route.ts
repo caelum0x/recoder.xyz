@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { verifyAuth } from '@/lib/auth'
+import { getServerSession } from 'next-auth'
+// TODO: Add verifyAuth export to @/lib/auth or use getServerSession
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await verifyAuth(request)
+    // TODO: Replace with proper auth verification
+    const session = await getServerSession()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.user.id
     const { searchParams } = new URL(request.url)
     
     const engine = searchParams.get('engine')
@@ -32,8 +38,10 @@ export async function GET(request: NextRequest) {
         include: {
           _count: {
             select: {
-              gameAssets: true,
-              gameBuilds: true
+              // TODO: Add gameAssets relation to Project model
+              // gameAssets: true,
+              // TODO: Add gameBuilds relation to Project model  
+              // gameBuilds: true
             }
           }
         }

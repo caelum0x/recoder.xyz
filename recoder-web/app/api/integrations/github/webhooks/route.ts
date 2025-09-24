@@ -1,6 +1,6 @@
 // GitHub Webhooks handler API
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/database';
+import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 
 // GitHub webhook events we handle
@@ -78,31 +78,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Store webhook event
-    const webhookEvent = await prisma.githubWebhookEvent.create({
+    // Store webhook delivery using existing WebhookDelivery model
+    // Note: Using WebhookDelivery model instead of non-existent githubWebhookEvent
+    const webhookEvent = await prisma.webhookDelivery.create({
       data: {
-        userId: integration.userId,
-        integrationId: integration.id,
-        eventType: event,
-        deliveryId: delivery,
-        repositoryId: repositoryId?.toString(),
-        repositoryName: payload.repository?.full_name,
+        webhookId: integration.id, // Using integration ID as webhook reference
+        event: event,
         payload: payload,
-        signature: signature,
-        processed: false
+        response: {
+          eventType: event,
+          deliveryId: delivery,
+          repositoryId: repositoryId?.toString(),
+          repositoryName: payload.repository?.full_name,
+          signature: signature,
+          processed: false
+        },
+        status: 'pending',
+        success: false,
+        statusCode: 200
       }
     });
 
     // Process the webhook event
     const result = await processWebhookEvent(event, payload, integration, webhookEvent);
 
-    // Update webhook event as processed
-    await prisma.githubWebhookEvent.update({
+    // Update webhook delivery as processed
+    await prisma.webhookDelivery.update({
       where: { id: webhookEvent.id },
       data: { 
-        processed: true,
-        processedAt: new Date(),
-        processingResult: result
+        status: 'delivered',
+        success: true,
+        deliveredAt: new Date(),
+        response: {
+          ...(webhookEvent.response as any),
+          processed: true,
+          processingResult: result
+        }
       }
     });
 
@@ -111,6 +122,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: integration.userId,
         action: 'github_webhook_processed',
+        resource: 'webhook',
         platform: 'webhook',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'GitHub-Hookshot',
@@ -200,44 +212,51 @@ async function processWebhookEvent(
   integration: any,
   webhookEvent: any
 ): Promise<any> {
-  const result = {
+  const result: any = {
     event,
     action: payload.action || 'unknown',
     processed: true,
-    notifications: [],
-    updates: []
+    notifications: [] as any[],
+    updates: [] as any[]
   };
 
   try {
     switch (event) {
       case 'push':
-        result.updates.push(await processPushEvent(payload, integration));
+        const pushResult = await processPushEvent(payload, integration);
+        result.updates.push(pushResult);
         break;
         
       case 'pull_request':
-        result.updates.push(await processPullRequestEvent(payload, integration));
+        const prResult = await processPullRequestEvent(payload, integration);
+        result.updates.push(prResult);
         break;
         
       case 'issues':
-        result.updates.push(await processIssuesEvent(payload, integration));
+        const issueResult = await processIssuesEvent(payload, integration);
+        result.updates.push(issueResult);
         break;
         
       case 'repository':
-        result.updates.push(await processRepositoryEvent(payload, integration));
+        const repoResult = await processRepositoryEvent(payload, integration);
+        result.updates.push(repoResult);
         break;
         
       case 'release':
-        result.updates.push(await processReleaseEvent(payload, integration));
+        const releaseResult = await processReleaseEvent(payload, integration);
+        result.updates.push(releaseResult);
         break;
         
       case 'workflow_run':
-        result.updates.push(await processWorkflowRunEvent(payload, integration));
+        const workflowResult = await processWorkflowRunEvent(payload, integration);
+        result.updates.push(workflowResult);
         break;
         
       case 'star':
       case 'watch':
       case 'fork':
-        result.updates.push(await processEngagementEvent(event, payload, integration));
+        const engagementResult = await processEngagementEvent(event, payload, integration);
+        result.updates.push(engagementResult);
         break;
         
       default:
@@ -420,14 +439,15 @@ async function createEventNotification(event: string, payload: any, integration:
         userId: integration.userId,
         type: 'github_event',
         title,
-        content,
-        actionUrl,
+        message: content,
+        category: 'integration',
         priority: 'medium',
         metadata: {
           event,
           action: payload.action,
           repository: payload.repository.full_name,
-          sender: payload.sender?.login
+          sender: payload.sender?.login,
+          actionUrl
         }
       }
     });

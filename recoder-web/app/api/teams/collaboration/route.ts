@@ -285,7 +285,7 @@ async function createApprovalRequest(user: any, body: any) {
       WHERE team_id = $1 AND role IN ('owner', 'admin') AND status = 'active'
     `;
     const adminResult = await db.query(adminQuery, [team_id]);
-    approvers.push(...adminResult.rows.map(row => row.user_id));
+    approvers.push(...adminResult.rows.map((row: any) => row.user_id));
   }
 
   // Update content status
@@ -296,7 +296,7 @@ async function createApprovalRequest(user: any, body: any) {
   `, [content_id]);
 
   // Create approval requests for each approver
-  const approvalPromises = approvers.map(approverId =>
+  const approvalPromises = approvers.map((approverId: string) =>
     db.query(`
       INSERT INTO notifications (
         user_id, team_id, type, title, message, data, expires_at, priority

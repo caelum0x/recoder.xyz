@@ -93,7 +93,7 @@ router.post('/export',
       res.status(500).json({
         success: false,
         error: 'Failed to export data',
-        details: error.message
+        details: getErrorMessage(error)
       });
     }
   }
@@ -150,7 +150,7 @@ router.post('/import',
       res.status(500).json({
         success: false,
         error: 'Failed to import data',
-        details: error.message
+        details: getErrorMessage(error)
       });
     }
   }
@@ -257,7 +257,7 @@ router.post('/gdpr-export',
       res.status(500).json({
         success: false,
         error: 'Failed to generate GDPR export',
-        details: error.message
+        details: getErrorMessage(error)
       });
     }
   }
@@ -309,7 +309,7 @@ router.delete('/gdpr-delete',
       res.status(500).json({
         success: false,
         error: 'Failed to delete user data',
-        details: error.message
+        details: getErrorMessage(error)
       });
     }
   }
@@ -440,7 +440,7 @@ router.get('/health', async (req, res) => {
     res.status(503).json({
       success: false,
       status: 'unhealthy',
-      error: error.message
+      error: getErrorMessage(error)
     });
   }
 });

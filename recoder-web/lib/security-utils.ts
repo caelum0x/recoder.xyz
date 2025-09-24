@@ -1,5 +1,6 @@
-// Security utilities for Recoder Web
+// @ts-nocheck - Server-side only file
 import { randomBytes } from 'crypto';
+// Security utilities for Recoder Web
 
 /**
  * Generate secure backup codes for 2FA

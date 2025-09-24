@@ -37,13 +37,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password)
+    const isCurrentPasswordValid = user.password ? await bcrypt.compare(currentPassword, user.password) : false
     if (!isCurrentPasswordValid) {
       return Response.json({ error: 'Current password is incorrect' }, { status: 400 })
     }
 
     // Check if new password is different from current
-    const isSamePassword = await bcrypt.compare(newPassword, user.password)
+    const isSamePassword = user.password ? await bcrypt.compare(newPassword, user.password) : false
     if (isSamePassword) {
       return Response.json({ error: 'New password must be different from current password' }, { status: 400 })
     }
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       where: { id: session.user.id },
       data: {
         password: hashedNewPassword,
-        passwordUpdatedAt: new Date()
+        // passwordUpdatedAt: new Date() // Field not available in User model
       }
     })
 
@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'PASSWORD_CHANGED',
+          resource: 'system',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ 
       success: true,
       message: 'Password updated successfully',
-      passwordLastChanged: updatedUser.passwordUpdatedAt?.toISOString()
+      // passwordLastChanged: updatedUser.passwordUpdatedAt?.toISOString() // Field not available
     })
   } catch (error) {
     console.error('Password change error:', error)

@@ -15,7 +15,7 @@ export function hasXmlTag(xml: string, tag: string): boolean {
 
 export function extractAllXmlContent(xml: string, tag: string): string[] {
   const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
-  const matches = [];
+  const matches: string[] = [];
   let match;
   
   while ((match = regex.exec(xml)) !== null) {

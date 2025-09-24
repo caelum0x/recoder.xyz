@@ -9,13 +9,13 @@ import ora from 'ora';
 import boxen from 'boxen';
 import fs from 'fs-extra';
 import path from 'path';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { 
   TaskType, 
   PrivacyLevel, 
   ModelProvider, 
   StatsPeriod 
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 import { AIModelHub, AIHubConfig } from '../services/ai-models/ai-hub';
 import { ConfigManager } from '../utils/config';
 

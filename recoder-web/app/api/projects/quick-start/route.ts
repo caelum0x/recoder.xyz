@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
       },
       deployment: {
         status: 'pending',
-        url: null,
+        url: null as string | null,
         environment: 'development'
       }
     };
@@ -272,7 +272,8 @@ export async function POST(request: NextRequest) {
 
     // Update project with generated code information
     project.status = codeGeneration.success ? 'ready' : 'error';
-    project.repository.commit = codeGeneration.commitHash;
+    // Note: commit field not available in repository object
+    // project.repository.commit = codeGeneration.success ? (codeGeneration as any).commitHash : undefined;
     project.deployment.status = 'ready';
     
     if (codeGeneration.success) {
@@ -398,4 +399,4 @@ async function logProjectEvent(userId: string, event: string, metadata: any): Pr
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

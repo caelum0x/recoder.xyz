@@ -21,16 +21,16 @@ import {
 	BEDROCK_MAX_TOKENS,
 	BEDROCK_DEFAULT_CONTEXT,
 	AWS_INFERENCE_PROFILE_MAPPING,
-} from "@roo-code/types"
+} from "roo-code-types"
 
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
-import { Logger } from "@recoder/shared"
+import { Logger } from "recoder-shared"
 import { MultiPointStrategy } from "../transform/cache-strategy/multi-point-strategy"
 import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"
 import { convertToBedrockConverseMessages as sharedConverter } from "../transform/bedrock-converse-format"
 import { getModelParams } from "../transform/model-params"
-import { shouldUseReasoningBudget } from "@recoder/shared"
+import { shouldUseReasoningBudget } from "recoder-shared"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { logger } from "../../utils/logging"
 

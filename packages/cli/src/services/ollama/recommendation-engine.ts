@@ -10,7 +10,7 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { platformDetector, PlatformInfo } from './platform-detector';
 import type { ModelInfo, SystemProfile, ModelCapability } from './model-manager';
 

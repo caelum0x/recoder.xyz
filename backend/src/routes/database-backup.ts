@@ -75,10 +75,11 @@ router.post('/create', async (req, res) => {
     } else if (type === 'incremental') {
       backup = await service.createIncrementalBackup();
     } else {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Invalid backup type. Must be "full" or "incremental"'
       });
+      return;
     }
 
     res.json({
@@ -97,6 +98,7 @@ router.post('/create', async (req, res) => {
       message: `${type} backup created successfully`
     });
 
+    return;
   } catch (error: any) {
     Logger.error('Manual backup creation failed:', error);
     res.status(500).json({
@@ -104,6 +106,7 @@ router.post('/create', async (req, res) => {
       error: 'Failed to create backup',
       details: error.message
     });
+    return;
   }
 });
 
@@ -119,10 +122,11 @@ router.post('/restore', async (req, res) => {
     } = req.body;
 
     if (!backupId) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Backup ID is required'
       });
+      return;
     }
 
     Logger.info(`Starting database restore`, { 
@@ -153,6 +157,7 @@ router.post('/restore', async (req, res) => {
       targetDatabase: targetDatabase || 'current',
       timestamp: new Date().toISOString()
     });
+    return;
 
   } catch (error: any) {
     Logger.error('Database restore failed:', error);
@@ -161,6 +166,7 @@ router.post('/restore', async (req, res) => {
       error: 'Database restore failed',
       details: error.message
     });
+    return;
   }
 });
 
@@ -415,7 +421,7 @@ router.get('/config', (req, res) => {
 });
 
 // POST /api/backup/config - Update backup configuration
-router.post('/config', async (req, res) => {
+router.post('/config', async (req, res): Promise<void> => {
   try {
     const { schedule, retention, notifications, encryption } = req.body;
 
@@ -424,17 +430,18 @@ router.post('/config', async (req, res) => {
       const cronValidator = await import('node-cron');
       
       if (schedule.full && !cronValidator.validate(schedule.full)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Invalid cron expression for full backup schedule'
         });
+        return;
       }
-      
       if (schedule.incremental && !cronValidator.validate(schedule.incremental)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Invalid cron expression for incremental backup schedule'
         });
+        return;
       }
     }
 

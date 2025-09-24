@@ -2,7 +2,7 @@
  * Enhanced Request Handler
  * Integrates billing, quota enforcement, and smart routing for production requests
  */
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { billingIntegration } from './billing-integration';
 import { apiKeyPoolManager } from './api-key-pool-manager';
 import { backendClient } from './backend-client';

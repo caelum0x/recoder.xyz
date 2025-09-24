@@ -31,13 +31,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       );
     }
 
-    let preferences = await prisma.tooltipPreferences.findUnique({
+    let preferences = await (prisma as any).tooltipPreferences.findUnique({
       where: { userId }
     });
 
     // If no preferences exist, create default ones
     if (!preferences) {
-      preferences = await prisma.tooltipPreferences.create({
+      preferences = await (prisma as any).tooltipPreferences.create({
         data: {
           userId,
           showTooltips: true,
@@ -79,7 +79,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 
     const validatedData = preferencesSchema.parse(body);
 
-    const preferences = await prisma.tooltipPreferences.upsert({
+    const preferences = await (prisma as any).tooltipPreferences.upsert({
       where: { userId },
       update: {
         ...validatedData,
@@ -134,7 +134,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
       );
     }
 
-    await prisma.tooltipPreferences.delete({
+    await (prisma as any).tooltipPreferences.delete({
       where: { userId }
     });
 

@@ -111,7 +111,7 @@ async function getDatabaseMetrics() {
     // In a real implementation, these would query the actual database
     return {
       connections: {
-        active: Math.round(Math.random() * 10 + 2),
+        isActive: Math.round(Math.random() * 10 + 2),
         idle: Math.round(Math.random() * 5 + 1),
         total: Math.round(Math.random() * 15 + 3)
       },
@@ -127,7 +127,7 @@ async function getDatabaseMetrics() {
     };
   } catch (error) {
     return {
-      connections: { active: 0, idle: 0, total: 0 },
+      connections: { isActive: 0, idle: 0, total: 0 },
       queries: { perSecond: 0, avgDuration: 0, slowQueries: 0 },
       storage: { size: 0, growth: 0 }
     };

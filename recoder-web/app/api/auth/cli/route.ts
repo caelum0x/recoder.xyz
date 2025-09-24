@@ -241,11 +241,7 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
         }
       },
       include: {
-        user: {
-          include: {
-            
-          }
-        }
+        user: true
       }
     });
 
@@ -323,8 +319,16 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
     });
 
     // Get user from session (this should be set during auth flow)
+    if (!authRequest.userId) {
+      return NextResponse.json({
+        success: false,
+        error: 'invalid_grant',
+        error_description: 'User not associated with authorization code'
+      }, { status: 400 });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: authRequest.userId! }
+      where: { id: authRequest.userId }
     });
 
     if (!user) {
@@ -349,11 +353,8 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
         accessToken: accessToken,
         refreshToken: refreshToken,
         expiresAt: expiresAt,
-        scopes: ['cli:full', 'profile'],
-        metadata: {
-          client_id: client_id,
-          scope: 'cli:full profile'
-        }
+        permissions: ['cli:full', 'profile'],
+        lastUsedAt: new Date()
       }
     });
 
@@ -416,11 +417,7 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
         refreshToken: refresh_token
       },
       include: {
-        user: {
-          include: {
-            
-          }
-        }
+        user: true
       }
     });
 
@@ -442,7 +439,7 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
       data: {
         accessToken: newAccessToken,
         expiresAt: newExpiresAt,
-        lastUsed: new Date()
+        lastUsedAt: new Date()
       }
     });
 
@@ -480,15 +477,11 @@ async function validateApiKey(apiKey: string): Promise<NextResponse> {
   try {
     const userApiKey = await prisma.apiKey.findFirst({
       where: {
-        keyId: apiKey,
-        active: true
+        keyPrefix: apiKey,
+        isActive: true
       },
       include: {
-        user: {
-          include: {
-            
-          }
-        }
+        user: true
       }
     });
 
@@ -503,7 +496,7 @@ async function validateApiKey(apiKey: string): Promise<NextResponse> {
     // Update last used
     await prisma.apiKey.update({
       where: { id: userApiKey.id },
-      data: { lastUsed: new Date() }
+      data: { lastUsedAt: new Date() }
     });
 
     return NextResponse.json({

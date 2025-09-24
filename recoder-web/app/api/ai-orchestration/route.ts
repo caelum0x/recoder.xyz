@@ -272,7 +272,7 @@ class AIOrchestrator {
         utilizationPercent: ((this.loadBalancer.get(p.id) || 0) / p.rateLimit) * 100,
         status: this.isProviderAvailable(p) ? 'available' : 'busy'
       })),
-      totalCapacity: this.providers.reduce((sum, p) => sum + p.rateLimit, 0),
+      totalCapacity: this.providers.reduce((sum: number, p: any) => sum + p.rateLimit, 0),
       currentLoad: Array.from(this.loadBalancer.values()).reduce((sum, load) => sum + load, 0)
     };
   }
@@ -351,8 +351,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success: true,
           orchestratedTasks,
-          totalEstimatedCost: orchestratedTasks.reduce((sum, t) => sum + t.selection.estimatedCost, 0),
-          totalEstimatedTime: Math.max(...orchestratedTasks.map(t => t.selection.estimatedTime))
+          totalEstimatedCost: orchestratedTasks.reduce((sum: number, t: any) => sum + t.selection.estimatedCost, 0),
+          totalEstimatedTime: Math.max(...orchestratedTasks.map((t: any) => t.selection.estimatedTime))
         });
       }
 
@@ -410,7 +410,7 @@ export async function GET(req: NextRequest) {
               'Failure recovery'
             ],
             providers: AI_PROVIDERS.length,
-            totalModels: AI_PROVIDERS.reduce((sum, p) => sum + p.models.length, 0)
+            totalModels: AI_PROVIDERS.reduce((sum: number, p: any) => sum + p.models.length, 0)
           }
         });
     }

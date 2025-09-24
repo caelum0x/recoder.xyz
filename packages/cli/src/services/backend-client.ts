@@ -5,7 +5,7 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
@@ -894,8 +894,8 @@ export class BackendClient {
   }
 
   /**
-   * Make AI request through recoder.xyz backend (like Claude Code)
-   * This routes all AI requests through our infrastructure
+   * Make AI request through recoder.xyz backend with OpenRouter smart routing
+   * This routes all AI requests through our cost-optimized infrastructure
    */
   async makeAIRequest(request: {
     messages: Array<{ role: string; content: string }>;
@@ -904,8 +904,10 @@ export class BackendClient {
   }): Promise<{
     content: string;
     model: string;
-    usage: { inputTokens: number; outputTokens: number; cost: number };
+    usage: { inputTokens: number; outputTokens: number; cost: number; totalTokens: number };
     provider: string;
+    routingStrategy?: string;
+    costOptimization?: number;
   }> {
     if (!this.currentSession) {
       throw new Error('Authentication required');
@@ -914,21 +916,37 @@ export class BackendClient {
     try {
       const response = await this.client.post('/api/ai/chat', {
         messages: request.messages,
-        type: request.type,
-        options: request.options,
-        userId: this.currentSession.userId
+        type: request.type || 'chat',
+        priority: request.options.priority || 'quality',
+        enableSmartRouting: true,
+        enableCostOptimization: true
       }, {
         headers: {
           'Authorization': `Bearer ${this.currentSession.token}`
         }
       });
 
-      return response.data;
+      const data = response.data;
+      return {
+        content: data.content,
+        model: data.model,
+        usage: {
+          inputTokens: data.usage.inputTokens,
+          outputTokens: data.usage.outputTokens,
+          totalTokens: data.usage.totalTokens,
+          cost: data.usage.cost
+        },
+        provider: data.provider,
+        routingStrategy: data.routingStrategy,
+        costOptimization: data.costOptimization
+      };
     } catch (error: any) {
       if (error.response?.status === 401) {
         // Token expired, clear session
         await this.clearUnifiedSession();
         this.currentSession = null;
+      } else if (error.response?.status === 429) {
+        throw new Error('Rate limit exceeded. Please upgrade your plan or wait.');
       }
       throw error;
     }

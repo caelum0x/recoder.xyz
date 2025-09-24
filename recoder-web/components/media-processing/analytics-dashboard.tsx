@@ -524,7 +524,7 @@ export function AnalyticsDashboard({ className }: AnalyticsDashboardProps) {
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="totalSize"
-                        label={({ format, totalSize }) => 
+                        label={({ format, totalSize }: any) => 
                           `${format.toUpperCase()}: ${formatFileSize(totalSize)}`
                         }
                       >

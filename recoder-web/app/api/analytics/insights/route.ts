@@ -40,140 +40,151 @@ export async function GET(request: NextRequest) {
     }
 
     // Gather data for insights
-    const [errors, performance, chats] = await Promise.all([
-      prisma.errorLog.findMany({
+    const [usageAnalytics, deviceAnalytics, auditLogs] = await Promise.all([
+      prisma.usageAnalytics.findMany({
         where: {
           timestamp: {
             gte: startDate
           }
         },
         select: {
-          severity: true,
-          type: true,
-          platform: true
-        }
-      }),
-      
-      prisma.performanceLog.findMany({
-        where: {
-          timestamp: {
-            gte: startDate
-          }
-        },
-        select: {
+          eventType: true,
+          platform: true,
+          provider: true,
+          tokens: true,
+          cost: true,
           duration: true,
-          type: true,
           success: true,
-          platform: true
+          errorCode: true,
+          errorMessage: true,
+          userId: true
         }
       }),
       
-      prisma.chat.findMany({
+      prisma.deviceAnalytics.findMany({
         where: {
-          createdAt: {
+          timestamp: {
             gte: startDate
           }
         },
         select: {
-          model: true,
-          quality: true,
+          deviceType: true,
+          screenWidth: true,
           userId: true
+        }
+      }),
+      
+      prisma.auditLog.findMany({
+        where: {
+          timestamp: {
+            gte: startDate
+          }
+        },
+        select: {
+          action: true,
+          resource: true,
+          userId: true,
+          metadata: true
         }
       })
     ]);
 
     const insights: Insight[] = [];
 
-    // Performance insights
-    const slowRequests = performance.filter(p => p.duration > 5000);
-    if (slowRequests.length > performance.length * 0.1) {
+    // Performance insights - analyze usage analytics for slow requests
+    const slowRequests = usageAnalytics.filter(u => u.duration && u.duration > 5000);
+    if (slowRequests.length > usageAnalytics.length * 0.1) {
       insights.push({
         id: 'slow-performance',
         type: 'performance',
-        severity: slowRequests.length > performance.length * 0.2 ? 'critical' : 'warning',
+        severity: slowRequests.length > usageAnalytics.length * 0.2 ? 'critical' : 'warning',
         title: 'Slow Response Times Detected',
-        description: `${slowRequests.length} requests (${Math.round((slowRequests.length / performance.length) * 100)}%) are taking longer than 5 seconds to complete.`,
+        description: `${slowRequests.length} requests (${Math.round((slowRequests.length / usageAnalytics.length) * 100)}%) are taking longer than 5 seconds to complete.`,
         recommendation: 'Consider optimizing API endpoints, adding caching, or scaling infrastructure to improve response times.',
         impact: 'high',
         confidence: 85
       });
     }
 
-    // Error insights
-    const criticalErrors = errors.filter(e => e.severity === 'critical');
-    if (criticalErrors.length > 0) {
+    // Error insights - analyze usage analytics for errors
+    const failedRequests = usageAnalytics.filter(u => !u.success && u.errorCode);
+    if (failedRequests.length > 0) {
       insights.push({
-        id: 'critical-errors',
+        id: 'failed-requests',
         type: 'technical',
         severity: 'critical',
-        title: 'Critical Errors Detected',
-        description: `${criticalErrors.length} critical errors have occurred, potentially affecting user experience.`,
-        recommendation: 'Investigate and fix critical errors immediately. Consider implementing better error handling and monitoring.',
+        title: 'Failed Requests Detected',
+        description: `${failedRequests.length} requests have failed, potentially affecting user experience.`,
+        recommendation: 'Investigate and fix failed requests immediately. Consider implementing better error handling and monitoring.',
         impact: 'high',
         confidence: 95
       });
     }
 
-    // Usage insights
-    const uniqueUsers = new Set(chats.map(c => c.userId).filter(Boolean));
-    const highQualityChats = chats.filter(c => c.quality === 'high').length;
+    // Usage insights - analyze usage analytics for patterns
+    const uniqueUsers = new Set(usageAnalytics.map(u => u.userId).filter(Boolean));
+    const highCostRequests = usageAnalytics.filter(u => u.cost && u.cost > 0.01).length;
     
-    if (highQualityChats < chats.length * 0.3) {
+    if (highCostRequests < usageAnalytics.length * 0.3) {
       insights.push({
-        id: 'low-quality-usage',
+        id: 'low-cost-usage',
         type: 'usage',
         severity: 'info',
-        title: 'Opportunity to Increase High-Quality Usage',
-        description: `Only ${Math.round((highQualityChats / chats.length) * 100)}% of generations are using high-quality mode.`,
-        recommendation: 'Consider promoting high-quality features, providing tutorials, or offering incentives to increase premium feature adoption.',
+        title: 'Opportunity to Increase High-Value Usage',
+        description: `Only ${Math.round((highCostRequests / usageAnalytics.length) * 100)}% of requests are high-cost operations.`,
+        recommendation: 'Consider promoting premium features, providing tutorials, or offering incentives to increase high-value feature adoption.',
         impact: 'medium',
         confidence: 70
       });
     }
 
-    // Platform distribution insight
-    const platformErrors = errors.reduce((acc, e) => {
-      acc[e.platform] = (acc[e.platform] || 0) + 1;
+    // Platform distribution insight - analyze usage analytics by platform
+    const platformUsage = usageAnalytics.reduce((acc, u) => {
+      const platform = u.platform || 'unknown';
+      acc[platform] = (acc[platform] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const maxErrorPlatform = Object.entries(platformErrors).sort(([,a], [,b]) => b - a)[0];
-    if (maxErrorPlatform && maxErrorPlatform[1] > errors.length * 0.6) {
+    const maxUsagePlatform = Object.entries(platformUsage).sort(([,a], [,b]) => b - a)[0];
+    if (maxUsagePlatform && maxUsagePlatform[1] > usageAnalytics.length * 0.6) {
       insights.push({
-        id: 'platform-issues',
+        id: 'platform-concentration',
         type: 'technical',
-        severity: 'warning',
-        title: `${maxErrorPlatform[0]} Platform Issues`,
-        description: `The ${maxErrorPlatform[0]} platform is experiencing ${maxErrorPlatform[1]} errors (${Math.round((maxErrorPlatform[1] / errors.length) * 100)}% of total errors).`,
-        recommendation: `Focus debugging efforts on the ${maxErrorPlatform[0]} platform. Check for platform-specific issues, dependencies, or configuration problems.`,
+        severity: 'info',
+        title: `${maxUsagePlatform[0]} Platform Dominance`,
+        description: `The ${maxUsagePlatform[0]} platform accounts for ${Math.round((maxUsagePlatform[1] / usageAnalytics.length) * 100)}% of total usage.`,
+        recommendation: `Consider optimizing performance for ${maxUsagePlatform[0]} platform and ensuring cross-platform compatibility.`,
         impact: 'medium',
         confidence: 80
       });
     }
 
-    // Model usage insights
-    const modelStats = chats.reduce((acc, chat) => {
-      acc[chat.model] = (acc[chat.model] || 0) + 1;
+    // Provider usage insights - analyze usage analytics by provider
+    const providerStats = usageAnalytics.reduce((acc, u) => {
+      const provider = u.provider;
+      if (provider) {
+        acc[provider] = (acc[provider] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
 
-    const mostUsedModel = Object.entries(modelStats).sort(([,a], [,b]) => b - a)[0];
-    if (mostUsedModel && mostUsedModel[1] > chats.length * 0.8) {
+    const mostUsedProvider = Object.entries(providerStats).sort(([,a], [,b]) => b - a)[0];
+    if (mostUsedProvider && mostUsedProvider[1] > usageAnalytics.length * 0.8) {
       insights.push({
-        id: 'model-concentration',
+        id: 'provider-concentration',
         type: 'business',
         severity: 'info',
-        title: 'Model Usage Concentration',
-        description: `${Math.round((mostUsedModel[1] / chats.length) * 100)}% of users are using ${mostUsedModel[0]}. This indicates strong preference but low model diversity.`,
-        recommendation: 'Consider promoting other models for specific use cases, or analyze why users prefer this model to improve others.',
+        title: 'Provider Usage Concentration',
+        description: `${Math.round((mostUsedProvider[1] / usageAnalytics.length) * 100)}% of requests are using ${mostUsedProvider[0]}. This indicates strong preference but low provider diversity.`,
+        recommendation: 'Consider promoting other providers for specific use cases, or analyze why users prefer this provider to improve others.',
         impact: 'low',
         confidence: 75
       });
     }
 
-    // Success rate insight
-    const successfulRequests = performance.filter(p => p.success);
-    const successRate = performance.length > 0 ? (successfulRequests.length / performance.length) : 1;
+    // Success rate insight - analyze usage analytics success rate
+    const successfulRequests = usageAnalytics.filter(u => u.success);
+    const successRate = usageAnalytics.length > 0 ? (successfulRequests.length / usageAnalytics.length) : 1;
     
     if (successRate < 0.95) {
       insights.push({

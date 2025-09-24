@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'revenue_data_exported',
+          resource: 'system',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Return file as download
-    return new NextResponse(exportContent, {
+    return new NextResponse(new Uint8Array(exportContent), {
       headers: {
         'Content-Type': mimeType,
         'Content-Disposition': `attachment; filename="${filename}"`,

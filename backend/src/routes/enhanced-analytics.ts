@@ -4,19 +4,19 @@
  * Advanced user behavior tracking that Cursor/Copilot don't provide
  */
 
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { Logger } from '../utils/logger';
 import { analyticsService, trackingHelpers, AnalyticsQuery, FunnelStep } from '../services/analytics-service';
 
 const router = express.Router();
 
 // POST /api/analytics/enhanced/track - Track a custom event
-router.post('/track', async (req, res) => {
+router.post('/track', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, event, properties, sessionId, deviceId, context } = req.body;
 
     if (!event) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Event name is required'
       });
@@ -52,12 +52,12 @@ router.post('/track', async (req, res) => {
 });
 
 // POST /api/analytics/enhanced/identify - Identify a user
-router.post('/identify', async (req, res) => {
+router.post('/identify', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, properties, traits } = req.body;
 
     if (!userId) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'User ID is required'
       });
@@ -86,12 +86,12 @@ router.post('/identify', async (req, res) => {
 });
 
 // POST /api/analytics/enhanced/batch - Track multiple events in batch
-router.post('/batch', async (req, res) => {
+router.post('/batch', async (req: Request, res: Response): Promise<void> => {
   try {
     const { events } = req.body;
 
     if (!Array.isArray(events) || events.length === 0) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Events array is required'
       });
@@ -99,7 +99,7 @@ router.post('/batch', async (req, res) => {
 
     // Track each event
     const results = await Promise.allSettled(
-      events.map(event => analyticsService.track({
+      events.map((event: any) => analyticsService.track({
         ...event,
         context: {
           ...event.context,
@@ -134,7 +134,7 @@ router.post('/batch', async (req, res) => {
 });
 
 // GET /api/analytics/enhanced/dashboard - Get real-time dashboard data
-router.get('/dashboard', async (req, res) => {
+router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
   try {
     const dashboardData = await analyticsService.getDashboardData();
 
@@ -167,12 +167,12 @@ router.get('/dashboard', async (req, res) => {
 });
 
 // POST /api/analytics/enhanced/query - Execute custom analytics query
-router.post('/query', async (req, res) => {
+router.post('/query', async (req: Request, res: Response): Promise<void> => {
   try {
     const query: AnalyticsQuery = req.body;
 
     if (!query.dateRange || !query.dateRange.start || !query.dateRange.end) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Date range with start and end is required'
       });
@@ -201,25 +201,25 @@ router.post('/query', async (req, res) => {
 });
 
 // POST /api/analytics/enhanced/funnel - Analyze funnel conversion
-router.post('/funnel', async (req, res) => {
+router.post('/funnel', async (req: Request, res: Response): Promise<void> => {
   try {
     const { steps, dateRange } = req.body;
 
     if (!Array.isArray(steps) || steps.length < 2) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'At least 2 funnel steps are required'
       });
     }
 
     if (!dateRange || !dateRange.start || !dateRange.end) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Date range is required'
       });
     }
 
-    const funnelSteps: FunnelStep[] = steps.map(step => ({
+    const funnelSteps: FunnelStep[] = steps.map((step: any) => ({
       event: step.event,
       properties: step.properties || {},
       name: step.name || step.event
@@ -257,12 +257,12 @@ router.post('/funnel', async (req, res) => {
 });
 
 // GET /api/analytics/enhanced/cohorts - Get cohort retention analysis
-router.get('/cohorts', async (req, res) => {
+router.get('/cohorts', async (req: Request, res: Response): Promise<void> => {
   try {
     const { period = 'weekly' } = req.query;
 
     if (!['daily', 'weekly', 'monthly'].includes(period as string)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Period must be daily, weekly, or monthly'
       });
@@ -298,13 +298,13 @@ router.get('/cohorts', async (req, res) => {
 });
 
 // GET /api/analytics/enhanced/features/:feature - Get feature usage metrics
-router.get('/features/:feature', async (req, res) => {
+router.get('/features/:feature', async (req: Request, res: Response): Promise<void> => {
   try {
     const { feature } = req.params;
     const { start, end } = req.query;
 
     if (!start || !end) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Start and end date query parameters are required'
       });
@@ -343,7 +343,7 @@ router.get('/features/:feature', async (req, res) => {
 });
 
 // GET /api/analytics/enhanced/features - Get all feature usage overview
-router.get('/features', async (req, res) => {
+router.get('/features', async (req: Request, res: Response): Promise<void> => {
   try {
     const { start, end } = req.query;
     const defaultEnd = new Date();
@@ -404,7 +404,7 @@ router.get('/features', async (req, res) => {
 });
 
 // Helper routes for common tracking patterns
-router.post('/track/signup', async (req, res) => {
+router.post('/track/signup', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, properties } = req.body;
     await trackingHelpers.signup(userId, properties);
@@ -414,7 +414,7 @@ router.post('/track/signup', async (req, res) => {
   }
 });
 
-router.post('/track/login', async (req, res) => {
+router.post('/track/login', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, properties } = req.body;
     await trackingHelpers.login(userId, properties);
@@ -424,7 +424,7 @@ router.post('/track/login', async (req, res) => {
   }
 });
 
-router.post('/track/subscription', async (req, res) => {
+router.post('/track/subscription', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, plan, revenue } = req.body;
     await trackingHelpers.subscribe(userId, plan, revenue);
@@ -434,7 +434,7 @@ router.post('/track/subscription', async (req, res) => {
   }
 });
 
-router.post('/track/code-generation', async (req, res) => {
+router.post('/track/code-generation', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, details } = req.body;
     await trackingHelpers.codeGeneration(userId, details);
@@ -444,7 +444,7 @@ router.post('/track/code-generation', async (req, res) => {
   }
 });
 
-router.post('/track/feature', async (req, res) => {
+router.post('/track/feature', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, feature, action, properties } = req.body;
     await trackingHelpers.feature(userId, feature, action, properties);
@@ -455,12 +455,12 @@ router.post('/track/feature', async (req, res) => {
 });
 
 // GET /api/analytics/enhanced/export - Export analytics data
-router.get('/export', async (req, res) => {
+router.get('/export', async (req: Request, res: Response): Promise<void> => {
   try {
     const { format = 'json', start, end, event, userId } = req.query;
 
     if (!start || !end) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Start and end date parameters are required'
       });
@@ -519,7 +519,7 @@ router.get('/export', async (req, res) => {
 });
 
 // GET /api/analytics/enhanced/health - Health check for analytics service
-router.get('/health', async (req, res) => {
+router.get('/health', async (req: Request, res: Response): Promise<void> => {
   try {
     const health = await analyticsService.healthCheck();
     
@@ -542,7 +542,7 @@ router.get('/health', async (req, res) => {
 });
 
 // GET /api/analytics/enhanced/config - Get analytics configuration
-router.get('/config', (req, res) => {
+router.get('/config', (req: Request, res: Response): void => {
   try {
     const config = analyticsService.getConfig();
 

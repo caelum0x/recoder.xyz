@@ -3,7 +3,7 @@
  * Handles authentication flows between recoder.xyz website and CLI
  * Enables seamless user experience across platforms
  */
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from './backend-client';
 import { unifiedSessionManager } from './unified-session-manager';
 import open from 'open';

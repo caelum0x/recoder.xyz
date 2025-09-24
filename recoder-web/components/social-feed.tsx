@@ -92,7 +92,7 @@ export default function SocialFeed({ type = 'home', showHeader = true, maxItems 
       const data = await response.json();
       if (data.success && data.data?.posts) {
         // Transform backend data to match frontend interface
-        const transformedPosts = data.data.posts.map(post => ({
+        const transformedPosts = data.data.posts.map((post: { id: any; title: any; content: string; author: { name: any; avatar: any; verified: any; }; metadata: { technologies: any; }; stats: { likes: any; comments: any; shares: any; }; createdAt: any; }) => ({
           id: post.id,
           type: 'model', // Default type for now
           title: post.title,

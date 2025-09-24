@@ -10,7 +10,7 @@ import boxen from 'boxen';
 import path from 'path';
 import fs from 'fs-extra';
 import chokidar from 'chokidar';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { ProjectService } from '../services/project';
 import { ConfigManager } from '../utils/config';
 import { requireAuth } from '../utils/auth';

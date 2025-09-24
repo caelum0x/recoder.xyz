@@ -3,7 +3,7 @@
  * Handles redirecting users from CLI to web for billing, upgrades, and account management
  * Critical for monetization - when users hit limits, they get seamless upgrade flow
  */
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { webCLIAuthBridge } from './web-cli-auth-bridge';
 import chalk from 'chalk';
 import open from 'open';

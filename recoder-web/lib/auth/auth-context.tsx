@@ -143,9 +143,9 @@ export function withAuth<P extends object>(
     }
 
     if (requiredPlan) {
-      const planHierarchy = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
-      const userLevel = planHierarchy[user.plan];
-      const requiredLevel = planHierarchy[requiredPlan];
+      const planHierarchy: Record<string, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+      const userLevel = planHierarchy[user.plan || 'FREE'] ?? 0;
+      const requiredLevel = planHierarchy[requiredPlan] ?? 0;
 
       if (userLevel < requiredLevel) {
         return (
@@ -177,9 +177,9 @@ export function usePlanAccess(requiredPlan: AuthUser['plan']) {
   
   if (!user) return false;
   
-  const planHierarchy = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
-  const userLevel = planHierarchy[user.plan];
-  const requiredLevel = planHierarchy[requiredPlan];
+  const planHierarchy: Record<string, number> = { FREE: 0, PRO: 1, ENTERPRISE: 2 };
+  const userLevel = planHierarchy[user.plan || 'FREE'] ?? 0;
+  const requiredLevel = planHierarchy[requiredPlan || 'FREE'] ?? 0;
   
   return userLevel >= requiredLevel;
 }

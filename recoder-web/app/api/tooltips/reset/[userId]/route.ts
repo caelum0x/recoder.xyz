@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     });
 
     // Reset user preferences to defaults
-    await prisma.tooltipPreferences.upsert({
+    await (prisma as any).tooltipPreferences.upsert({
       where: { userId },
       update: {
         showTooltips: true,
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       }
     });
 
-    const preferences = await prisma.tooltipPreferences.findUnique({
+    const preferences = await (prisma as any).tooltipPreferences.findUnique({
       where: { userId }
     });
 

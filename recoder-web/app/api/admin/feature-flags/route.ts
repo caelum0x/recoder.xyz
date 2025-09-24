@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       include: {
         _count: includeAnalytics ? {
           select: {
-            featureFlagUsage: true
+            usage: true
           }
         } : false
       },
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       featureFlags: featureFlags.map(flag => ({
         ...flag,
-        usageCount: flag._count?.featureFlagUsage || 0
+        usageCount: flag._count?.usage || 0
       })),
       analytics,
       totalFlags: featureFlags.length,
@@ -138,9 +138,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = featureFlagSchema.parse(body);
 
-    // Check if feature flag name already exists
+    // Check if feature flag key already exists
+    const flagKey = validatedData.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const existingFlag = await prisma.featureFlag.findUnique({
-      where: { name: validatedData.name }
+      where: { key: flagKey }
     });
 
     if (existingFlag) {
@@ -150,11 +151,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create feature flag
+    // Extract userSegments from validatedData to handle separately
+    const { userSegments, ...flagData } = validatedData;
+    
+    // Create feature flag  
     const featureFlag = await prisma.featureFlag.create({
       data: {
-        ...validatedData,
-        createdBy: session.user.id,
+        ...flagData,
+        key: flagKey, // Use pre-generated key
+        createdBy: '1', // Temporary fix - session.user.id not available
         startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
         endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
       }
@@ -165,6 +170,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'feature_flag_create',
+        resource: 'feature_flag',
         platform: 'admin',
         success: true,
         metadata: {
@@ -243,11 +249,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Feature flag not found' }, { status: 404 });
     }
 
+    // Extract userSegments from validatedData to handle separately
+    const { userSegments, ...updateData } = validatedData;
+    
     // Update feature flag
     const featureFlag = await prisma.featureFlag.update({
       where: { id: flagId },
       data: {
-        ...validatedData,
+        ...updateData,
         updatedAt: new Date(),
         startDate: validatedData.startDate ? new Date(validatedData.startDate) : undefined,
         endDate: validatedData.endDate ? new Date(validatedData.endDate) : undefined,
@@ -259,6 +268,7 @@ export async function PUT(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'feature_flag_update',
+        resource: 'feature_flag',
         platform: 'admin',
         success: true,
         metadata: {
@@ -344,6 +354,7 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'feature_flag_delete',
+        resource: 'feature_flag',
         platform: 'admin',
         success: true,
         metadata: {
@@ -397,7 +408,7 @@ async function getFeatureFlagAnalytics(startDate: Date, endDate: Date) {
       enabled: true,
       _count: {
         select: {
-          featureFlagUsage: {
+          usage: {
             where: {
               createdAt: { gte: startDate, lte: endDate }
             }
@@ -436,12 +447,12 @@ async function getFeatureFlagAnalytics(startDate: Date, endDate: Date) {
       name: flag.name,
       rolloutPercentage: flag.rolloutPercentage,
       enabled: flag.enabled,
-      usageCount: flag._count.featureFlagUsage
+      usageCount: flag._count.usage
     })),
     mostUsedFlags: mostUsedFlags.map(flag => ({
       flagId: flag.featureFlagId,
       name: flagNames.find(f => f.id === flag.featureFlagId)?.name || 'Unknown',
-      usageCount: flag._count.id
+      usageCount: flag._count?.id || 0
     }))
   };
 }

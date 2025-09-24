@@ -4,7 +4,7 @@
  * Implements cost optimization and usage tracking
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { backendClient } from './backend-client';
 
 export interface APIKeyConfig {

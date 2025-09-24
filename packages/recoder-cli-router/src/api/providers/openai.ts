@@ -8,11 +8,11 @@ import {
 	openAiModelInfoSaneDefaults,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 	OPENAI_AZURE_AI_INFERENCE_PATH,
-} from "@roo-code/types"
+} from "roo-code-types"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 
-import { XmlMatcher } from "@recoder/shared"
+import { XmlMatcher } from "recoder-shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"

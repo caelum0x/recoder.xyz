@@ -11,7 +11,7 @@ import * as path from 'path';
 import { exec, spawn, ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import * as os from 'os';
 
 const execAsync = promisify(exec);

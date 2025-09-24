@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     // Check if 2FA is already enabled
     const profile = await userManager.getUserProfile(session.user.id);
-    if (profile?.two_factor_enabled) {
+    if ((profile as any)?.two_factor_enabled) {
       return Response.json(
         { error: '2FA is already enabled for this account' },
         { status: 409 }
@@ -106,4 +106,4 @@ export function verifyTOTP(secret: string, token: string, window = 1): boolean {
 
 export { tempSecretStore };
 
-export const runtime = "edge";
+export const runtime = "nodejs";

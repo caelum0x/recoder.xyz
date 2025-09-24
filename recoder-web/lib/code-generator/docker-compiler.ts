@@ -1,9 +1,10 @@
-// Docker-based code compilation service
+// @ts-nocheck - Server-side only file, skip client-side compilation
+// This file is only used in API routes and should not be bundled for the client
+import { v4 as uuidv4 } from 'uuid';
 import { spawn } from 'child_process';
-import { writeFileSync, mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { v4 as uuidv4 } from 'uuid';
+import { mkdirSync, existsSync, writeFileSync, rmSync } from 'fs';
 
 export interface CompilationOptions {
   language: string;

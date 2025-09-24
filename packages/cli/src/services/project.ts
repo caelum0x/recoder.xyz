@@ -7,7 +7,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import os from 'os';
 import { ConfigManager } from '../utils/config';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface ProjectConfig {
   name: string;

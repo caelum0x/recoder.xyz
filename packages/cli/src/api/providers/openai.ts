@@ -8,9 +8,9 @@ import {
 	openAiModelInfoSaneDefaults,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 	OPENAI_AZURE_AI_INFERENCE_PATH,
-} from "@recoder/shared"
+} from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 
 import { XmlMatcher } from "../../utils/xml-matcher"
 

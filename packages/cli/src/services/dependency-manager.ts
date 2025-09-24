@@ -5,7 +5,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { spawn } from 'child_process';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   GeneratedFile,
   FileDependency,
@@ -13,7 +13,7 @@ import {
   FileExport,
   GenerationRequest,
   ProjectContext
-} from '@recoder/shared/types/code-generation';
+} from 'recoder-shared/types/code-generation';
 
 export interface DependencyGraph {
   nodes: DependencyNode[];

@@ -3,7 +3,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
 import { GlamaHandler } from "../glama"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
 
 // Mock dependencies
 vitest.mock("../fetchers/modelCache", () => ({

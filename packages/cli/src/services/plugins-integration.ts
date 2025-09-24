@@ -3,7 +3,7 @@
  * Integrates the @recoder/plugins package into CLI for extensibility
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import path from 'path';
 import fs from 'fs-extra';
 

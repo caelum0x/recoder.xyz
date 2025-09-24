@@ -10,7 +10,7 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { modelManager, ModelInfo } from './model-manager';
 import { ollamaService } from './ollama-service';
 import { recommendationEngine } from './recommendation-engine';

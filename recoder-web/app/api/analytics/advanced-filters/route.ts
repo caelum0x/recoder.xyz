@@ -1,6 +1,7 @@
 // Advanced filtering API for analytics data
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import rateLimit from '@/lib/rate-limit';
@@ -181,15 +182,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get user settings with saved filters
     const userSettings = await prisma.userSettings.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       select: { preferences: true }
     });
 
@@ -247,9 +248,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -257,9 +258,9 @@ export async function POST(request: NextRequest) {
     const action = searchParams.get('action') || 'save';
 
     if (action === 'save') {
-      return await handleSaveFilter(request, session.user.id);
+      return await handleSaveFilter(request, (session?.user as any)?.id);
     } else if (action === 'apply') {
-      return await handleApplyFilter(request, session.user.id);
+      return await handleApplyFilter(request, (session?.user as any)?.id);
     } else {
       return NextResponse.json(
         { error: 'Invalid action. Use "save" or "apply"' },
@@ -320,8 +321,7 @@ async function handleSaveFilter(request: NextRequest, userId: string) {
     update: { preferences: updatedPreferences },
     create: {
       userId,
-      preferences: updatedPreferences,
-      limits: {},
+      preferences: updatedPreferences
     }
   });
 
@@ -330,6 +330,7 @@ async function handleSaveFilter(request: NextRequest, userId: string) {
     data: {
       userId,
       action: 'filter_saved',
+      resource: 'analytics',
       platform: 'web',
       ip: request.headers.get('x-forwarded-for') || 'unknown',
       userAgent: request.headers.get('user-agent') || 'unknown',
@@ -418,8 +419,7 @@ async function handleApplyFilter(request: NextRequest, userId: string) {
             updatedAt: true,
             _count: {
               select: {
-                deploymentHistory: true,
-                mediaFiles: true,
+                // deploymentHistory: true,
               },
             },
           },
@@ -430,7 +430,7 @@ async function handleApplyFilter(request: NextRequest, userId: string) {
 
     case 'usage':
       [data, total] = await Promise.all([
-        prisma.usageStats.findMany({
+        prisma.usageAnalytics.findMany({
           where: whereConditions,
           orderBy: filterConfig.orderBy?.map((o: any) => ({ [o.field]: o.direction })) || [{ date: 'desc' }],
           skip,
@@ -445,7 +445,7 @@ async function handleApplyFilter(request: NextRequest, userId: string) {
             },
           },
         }),
-        prisma.usageStats.count({ where: whereConditions }),
+        prisma.usageAnalytics.count({ where: whereConditions }),
       ]);
       break;
 
@@ -486,9 +486,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -504,7 +504,7 @@ export async function DELETE(request: NextRequest) {
 
     // Get user settings
     const userSettings = await prisma.userSettings.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       select: { preferences: true }
     });
 
@@ -524,7 +524,7 @@ export async function DELETE(request: NextRequest) {
     const deletedFilter = savedFilters[filterIndex];
 
     // Check ownership
-    if (deletedFilter.createdBy !== session.user.id) {
+    if (deletedFilter.createdBy !== (session?.user as any)?.id) {
       return NextResponse.json(
         { error: 'Unauthorized to delete this filter' },
         { status: 403 }
@@ -541,20 +541,20 @@ export async function DELETE(request: NextRequest) {
     };
 
     await prisma.userSettings.upsert({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       update: { preferences: updatedPreferences },
       create: {
-        userId: session.user.id,
-        preferences: updatedPreferences,
-        limits: {},
+        userId: (session?.user as any)?.id,
+        preferences: updatedPreferences
       }
     });
 
     // Log filter deletion
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: (session?.user as any)?.id,
         action: 'filter_deleted',
+        resource: 'analytics',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -579,4 +579,4 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

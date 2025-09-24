@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { SyncState, Project, User } = require('../models/index');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -18,11 +18,11 @@ const router = express.Router();
  *       200:
  *         description: Sync status retrieved successfully
  */
-router.get('/status', authenticateToken, async (req, res, next) => {
+router.get('/status', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    const syncStates = await SyncState.findAll({
+    const syncStates = await prisma.syncState.findAll({
       where: { userId },
       attributes: ['dataType', 'lastSyncAt', 'syncVersion', 'syncStatus', 'deviceSyncMap'],
       order: [['updatedAt', 'DESC']]
@@ -35,7 +35,7 @@ router.get('/status', authenticateToken, async (req, res, next) => {
 
     // Create missing sync states
     for (const dataType of missingDataTypes) {
-      const newSyncState = await SyncState.create({
+      const newSyncState = await prisma.syncState.create({
         userId,
         dataType,
         syncVersion: 1,
@@ -85,7 +85,7 @@ router.get('/status', authenticateToken, async (req, res, next) => {
  *       200:
  *         description: Projects synced successfully
  */
-router.post('/projects', authenticateToken, [
+router.post('/projects', authenticate, [
   body('deviceId')
     .isString()
     .isLength({ min: 1 })
@@ -114,12 +114,12 @@ router.post('/projects', authenticateToken, [
     const { deviceId, localVersion, projects } = req.body;
 
     // Get or create sync state for projects
-    let syncState = await SyncState.findOne({
+    let syncState = await prisma.syncState.findOne({
       where: { userId, dataType: 'projects' }
     });
 
     if (!syncState) {
-      syncState = await SyncState.create({
+      syncState = await prisma.syncState.create({
         userId,
         dataType: 'projects',
         syncVersion: 1,
@@ -134,7 +134,7 @@ router.post('/projects', authenticateToken, [
 
     if (localVersion < serverVersion) {
       // Client is behind, return server data
-      const serverProjects = await Project.findAll({
+      const serverProjects = await prisma.project.findAll({
         where: { userId },
         attributes: ['id', 'name', 'type', 'description', 'status', 'config', 'updatedAt']
       });
@@ -158,7 +158,7 @@ router.post('/projects', authenticateToken, [
         for (const project of projects) {
           if (project.id) {
             // Update existing project
-            await Project.update(
+            await prisma.project.update(
               {
                 name: project.name,
                 type: project.type,
@@ -170,7 +170,7 @@ router.post('/projects', authenticateToken, [
             );
           } else {
             // Create new project
-            await Project.create({
+            await prisma.project.create({
               ...project,
               userId
             });
@@ -250,7 +250,7 @@ router.post('/projects', authenticateToken, [
  *       200:
  *         description: Settings synced successfully
  */
-router.post('/settings', authenticateToken, [
+router.post('/settings', authenticate, [
   body('deviceId')
     .isString()
     .isLength({ min: 1 })
@@ -279,12 +279,12 @@ router.post('/settings', authenticateToken, [
     const { deviceId, localVersion, settings } = req.body;
 
     // Get or create sync state for settings
-    let syncState = await SyncState.findOne({
+    let syncState = await prisma.syncState.findOne({
       where: { userId, dataType: 'settings' }
     });
 
     if (!syncState) {
-      syncState = await SyncState.create({
+      syncState = await prisma.syncState.create({
         userId,
         dataType: 'settings',
         syncVersion: 1,
@@ -297,7 +297,7 @@ router.post('/settings', authenticateToken, [
     const deviceSyncMap = syncState.deviceSyncMap || {};
 
     // Get current user settings
-    const user = await User.findByPk(userId);
+    const user = await prisma.user.findByPk(userId);
     const currentSettings = {
       name: user.name,
       organization: user.organization,
@@ -401,7 +401,7 @@ router.post('/settings', authenticateToken, [
  *       200:
  *         description: Conflicts resolved successfully
  */
-router.post('/resolve-conflicts', authenticateToken, [
+router.post('/resolve-conflicts', authenticate, [
   body('dataType')
     .isIn(['projects', 'settings', 'history', 'preferences'])
     .withMessage('Data type must be one of: projects, settings, history, preferences'),
@@ -432,7 +432,7 @@ router.post('/resolve-conflicts', authenticateToken, [
     const userId = req.user.id;
     const { dataType, resolution, deviceId, resolvedData } = req.body;
 
-    const syncState = await SyncState.findOne({
+    const syncState = await prisma.syncState.findOne({
       where: { userId, dataType }
     });
 
@@ -452,7 +452,7 @@ router.post('/resolve-conflicts', authenticateToken, [
     if (resolution === 'merge' && resolvedData) {
       // Apply merged data based on data type
       if (dataType === 'settings') {
-        const user = await User.findByPk(userId);
+        const user = await prisma.user.findByPk(userId);
         await user.update({
           ...(resolvedData.name && { name: resolvedData.name }),
           ...(resolvedData.organization !== undefined && { organization: resolvedData.organization })
@@ -509,7 +509,7 @@ router.post('/resolve-conflicts', authenticateToken, [
  *       200:
  *         description: Force sync completed successfully
  */
-router.post('/force-sync', authenticateToken, [
+router.post('/force-sync', authenticate, [
   body('deviceId')
     .isString()
     .isLength({ min: 1 })
@@ -531,16 +531,16 @@ router.post('/force-sync', authenticateToken, [
     const { deviceId } = req.body;
 
     // Get all sync states
-    const syncStates = await SyncState.findAll({
+    const syncStates = await prisma.syncState.findAll({
       where: { userId }
     });
 
     // Get all user data
     const [user, projects] = await Promise.all([
-      User.findByPk(userId, {
+      prisma.user.findByPk(userId, {
         attributes: ['name', 'organization', 'subscription']
       }),
-      Project.findAll({
+      prisma.project.findAll({
         where: { userId },
         attributes: ['id', 'name', 'type', 'description', 'status', 'config', 'updatedAt']
       })

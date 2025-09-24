@@ -32,12 +32,17 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         type: true,
+        provider: true,
         isEnabled: true,
         isConnected: true,
         lastSyncAt: true,
+        lastError: true,
+        capabilities: true,
+        metadata: true,
+        stats: true,
         createdAt: true,
         updatedAt: true,
-        // Don't return sensitive config data
+        // Don't return sensitive config/credentials data
       },
       orderBy: {
         createdAt: 'desc',
@@ -91,9 +96,10 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         name: validatedData.name,
         type: validatedData.type,
+        provider: validatedData.type, // Required field, using type as provider
         config: validatedData.config,
         isEnabled: validatedData.isEnabled,
-        isConnected: false, // Will be set to true after successful connection test
+        // isConnected: false, // Field not available in UserIntegration model
       },
       select: {
         id: true,
@@ -106,11 +112,16 @@ export async function POST(request: NextRequest) {
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.auditLog.create({
       data: {
         userId: session.user.id,
         action: 'INTEGRATION_CREATED',
-        details: {
+        resource: 'integration',
+        platform: 'web',
+        ip: 'unknown',
+        userAgent: 'unknown',
+        success: true,
+        metadata: {
           integrationId: integration.id,
           integrationType: integration.type,
           integrationName: integration.name,
@@ -195,11 +206,16 @@ export async function PUT(request: NextRequest) {
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.auditLog.create({
       data: {
         userId: session.user.id,
         action: 'INTEGRATION_UPDATED',
-        details: {
+        resource: 'integration',
+        platform: 'web',
+        ip: 'unknown',
+        userAgent: 'unknown',
+        success: true,
+        metadata: {
           integrationId: id,
           changes: updateData,
         },
@@ -263,11 +279,16 @@ export async function DELETE(request: NextRequest) {
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.auditLog.create({
       data: {
         userId: session.user.id,
         action: 'INTEGRATION_DELETED',
-        details: {
+        resource: 'integration',
+        platform: 'web',
+        ip: 'unknown',
+        userAgent: 'unknown',
+        success: true,
+        metadata: {
           integrationId: integrationId,
           integrationType: integration.type,
           integrationName: integration.name,

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../../../../lib/auth'
 
+declare global {
+  // Adjust the Job type according to your actual job object structure
+  var processingJobs: Map<string, any> | undefined;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { jobId: string } }
@@ -14,8 +19,8 @@ export async function GET(
     const jobId = params.jobId
     
     // Get job status from memory (in production, this would be from a database/queue)
-    global.processingJobs = global.processingJobs || new Map()
-    const job = global.processingJobs.get(jobId)
+    ;(global as any).processingJobs = (global as any).processingJobs || new Map()
+    const job = (global as any).processingJobs.get(jobId)
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })

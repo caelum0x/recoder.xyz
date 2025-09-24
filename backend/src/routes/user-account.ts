@@ -2,9 +2,10 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authenticate } from '../middleware/auth';
 import prisma from '../database/prisma';
-import bcrypt from 'bcrypt';
+const bcrypt = require('bcryptjs') as any;
 import multer from 'multer';
-import sharp from 'sharp';
+// import sharp from 'sharp';
+// const sharp = require('sharp') as any;
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs/promises';
@@ -31,11 +32,12 @@ const upload = multer({
  * GET /api/user/account/profile
  * Get user profile information
  */
-router.get('/profile', authenticate, async (req: Request, res: Response) => {
+router.get('/profile', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     const user = await prisma.user.findUnique({
@@ -54,12 +56,13 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
         updatedAt: true,
         preferences: {
           select: {
-            avatar: true,
-            bio: true,
-            location: true,
-            website: true,
-            timezone: true,
-            language: true
+            uiPreferences: true,
+            themePreferences: true,
+            languagePreferences: true,
+            notificationPreferences: true,
+            privacyPreferences: true,
+            accessibilityPreferences: true,
+            developerPreferences: true
           }
         },
         _count: {
@@ -72,11 +75,13 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'User not found' });
+      return;
     }
 
     res.json({
-      success: true,
+      resource: "user_account",
+        resourceId: userId,
       user: {
         ...user,
         stats: {
@@ -105,19 +110,21 @@ router.put('/profile', [
   body('website').optional().isURL().withMessage('Website must be a valid URL'),
   body('timezone').optional().isString().withMessage('Timezone must be a string'),
   body('language').optional().isString().withMessage('Language must be a string')
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Validation failed',
         details: errors.array()
       });
+      return;
     }
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     const { name, organization, bio, location, website, timezone, language } = req.body;
@@ -158,7 +165,8 @@ router.put('/profile', [
       data: {
         userId,
         action: 'profile_updated',
-        success: true,
+        resource: 'user_profile',
+        resourceId: userId,
         metadata: {
           updatedFields: [...Object.keys(updateData), ...Object.keys(preferencesData)]
         }
@@ -166,7 +174,8 @@ router.put('/profile', [
     });
 
     res.json({
-      success: true,
+      resource: "user_account",
+        resourceId: userId,
       message: 'Profile updated successfully'
     });
 
@@ -183,15 +192,17 @@ router.put('/profile', [
 router.post('/avatar', [
   authenticate,
   upload.single('avatar')
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided' });
+      res.status(400).json({ error: 'No image file provided' });
+      return;
     }
 
     // Create uploads directory if it doesn't exist
@@ -204,13 +215,17 @@ router.post('/avatar', [
     const filePath = path.join(uploadsDir, filename);
 
     // Process image with sharp (resize, optimize)
-    await sharp(req.file.buffer)
-      .resize(200, 200, {
-        fit: 'cover',
-        position: 'center'
-      })
-      .jpeg({ quality: 90 })
-      .toFile(filePath);
+    // TODO: Install sharp package for image processing
+    // await sharp(req.file.buffer)
+    //   .resize(200, 200, {
+    //     fit: 'cover',
+    //     position: 'center'
+    //   })
+    //   .jpeg({ quality: 90 })
+    //   .toFile(filePath);
+    
+    // For now, save the file directly
+    await fs.writeFile(filePath, req.file.buffer);
 
     // Update user preferences with avatar path
     const avatarUrl = `/uploads/avatars/${filename}`;
@@ -218,10 +233,10 @@ router.post('/avatar', [
       where: { userId },
       create: {
         userId,
-        avatar: avatarUrl
+        uiPreferences: { avatar: avatarUrl }
       },
       update: {
-        avatar: avatarUrl
+        uiPreferences: { avatar: avatarUrl }
       }
     });
 
@@ -230,7 +245,8 @@ router.post('/avatar', [
       data: {
         userId,
         action: 'avatar_updated',
-        success: true,
+        resource: 'user_avatar',
+        resourceId: userId,
         metadata: {
           filename,
           fileSize: req.file.size
@@ -239,7 +255,8 @@ router.post('/avatar', [
     });
 
     res.json({
-      success: true,
+      resource: "user_account",
+        resourceId: userId,
       message: 'Avatar updated successfully',
       avatarUrl
     });
@@ -264,19 +281,21 @@ router.post('/change-password', [
     }
     return true;
   })
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Validation failed',
         details: errors.array()
       });
+      return;
     }
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     const { currentPassword, newPassword } = req.body;
@@ -288,13 +307,15 @@ router.post('/change-password', [
     });
 
     if (!user || !user.password) {
-      return res.status(400).json({ error: 'Unable to change password' });
+      res.status(400).json({ error: 'Unable to change password' });
+      return;
     }
 
     // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
-      return res.status(400).json({ error: 'Current password is incorrect' });
+      res.status(400).json({ error: 'Current password is incorrect' });
+      return;
     }
 
     // Hash new password
@@ -311,7 +332,8 @@ router.post('/change-password', [
       data: {
         userId,
         action: 'password_changed',
-        success: true,
+        resource: "user_account",
+        resourceId: userId,
         metadata: {
           timestamp: new Date()
         }
@@ -319,7 +341,8 @@ router.post('/change-password', [
     });
 
     res.json({
-      success: true,
+      resource: "user_account",
+        resourceId: userId,
       message: 'Password changed successfully'
     });
 
@@ -333,11 +356,12 @@ router.post('/change-password', [
  * GET /api/user/account/export-data
  * Export user data for GDPR compliance
  */
-router.get('/export-data', authenticate, async (req: Request, res: Response) => {
+router.get('/export-data', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     // Collect all user data
@@ -373,7 +397,7 @@ router.get('/export-data', authenticate, async (req: Request, res: Response) => 
         select: {
           id: true,
           name: true,
-          type: true,
+          category: true,
           description: true,
           createdAt: true
         }
@@ -392,9 +416,9 @@ router.get('/export-data', authenticate, async (req: Request, res: Response) => 
         where: { userId },
         select: {
           id: true,
-          action: true,
-          tokenCount: true,
-          createdAt: true
+          type: true,
+          tokens: true,
+          timestamp: true
         }
       }),
       prisma.auditLog.findMany({
@@ -402,8 +426,8 @@ router.get('/export-data', authenticate, async (req: Request, res: Response) => 
         select: {
           id: true,
           action: true,
-          success: true,
-          createdAt: true
+          resource: true,
+          timestamp: true
         }
       }),
       prisma.userPreferences.findUnique({
@@ -434,7 +458,8 @@ router.get('/export-data', authenticate, async (req: Request, res: Response) => 
       data: {
         userId,
         action: 'data_exported',
-        success: true,
+        resource: "user_account",
+        resourceId: userId,
         metadata: {
           exportSize: JSON.stringify(exportData).length,
           timestamp: new Date()
@@ -443,7 +468,8 @@ router.get('/export-data', authenticate, async (req: Request, res: Response) => 
     });
 
     res.json({
-      success: true,
+      resource: "user_account",
+        resourceId: userId,
       data: exportData
     });
 
@@ -461,19 +487,21 @@ router.post('/deactivate', [
   authenticate,
   body('password').isLength({ min: 1 }).withMessage('Password is required for account deactivation'),
   body('reason').optional().isLength({ max: 500 }).withMessage('Reason must be max 500 characters')
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Validation failed',
         details: errors.array()
       });
+      return;
     }
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     const { password, reason } = req.body;
@@ -485,13 +513,15 @@ router.post('/deactivate', [
     });
 
     if (!user || !user.password) {
-      return res.status(400).json({ error: 'Unable to deactivate account' });
+      res.status(400).json({ error: 'Unable to deactivate account' });
+      return;
     }
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ error: 'Password is incorrect' });
+      res.status(400).json({ error: 'Password is incorrect' });
+      return;
     }
 
     // Deactivate account
@@ -508,7 +538,8 @@ router.post('/deactivate', [
       data: {
         userId,
         action: 'account_deactivated',
-        success: true,
+        resource: "user_account",
+        resourceId: userId,
         metadata: {
           reason: reason || 'No reason provided',
           timestamp: new Date()
@@ -517,7 +548,8 @@ router.post('/deactivate', [
     });
 
     res.json({
-      success: true,
+      resource: "user_account",
+        resourceId: userId,
       message: 'Account deactivated successfully'
     });
 
@@ -535,19 +567,21 @@ router.delete('/delete', [
   authenticate,
   body('password').isLength({ min: 1 }).withMessage('Password is required for account deletion'),
   body('confirmation').equals('DELETE_MY_ACCOUNT').withMessage('Confirmation text must be "DELETE_MY_ACCOUNT"')
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Validation failed',
         details: errors.array()
       });
+      return;
     }
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     const { password } = req.body;
@@ -559,13 +593,15 @@ router.delete('/delete', [
     });
 
     if (!user || !user.password) {
-      return res.status(400).json({ error: 'Unable to delete account' });
+      res.status(400).json({ error: 'Unable to delete account' });
+      return;
     }
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ error: 'Password is incorrect' });
+      res.status(400).json({ error: 'Password is incorrect' });
+      return;
     }
 
     // Log account deletion before deletion
@@ -573,7 +609,8 @@ router.delete('/delete', [
       data: {
         userId,
         action: 'account_deleted',
-        success: true,
+        resource: "user_account",
+        resourceId: userId,
         metadata: {
           timestamp: new Date(),
           deletionType: 'permanent'
@@ -587,7 +624,8 @@ router.delete('/delete', [
     });
 
     res.json({
-      success: true,
+      resource: "user_account",
+        resourceId: userId,
       message: 'Account deleted successfully'
     });
 

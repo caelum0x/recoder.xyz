@@ -4,7 +4,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { BaseModelProvider } from '../base-provider';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   ModelMetadata,
   ModelRequest,
@@ -17,7 +17,7 @@ import {
   ResponseMetadata,
   ModelCapabilities,
   ModelLimits
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 
 export class AnthropicProvider extends BaseModelProvider {
   private client: AxiosInstance;

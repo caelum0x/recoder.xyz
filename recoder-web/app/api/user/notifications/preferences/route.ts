@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Try to find existing preferences
-    let userNotificationSettings = await prisma.userNotificationSettings.findUnique({
+    let userNotificationSettings = await (prisma as any).userNotificationSettings.findUnique({
       where: {
         userId: session.user.id,
       },
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         },
       };
 
-      userNotificationSettings = await prisma.userNotificationSettings.create({
+      userNotificationSettings = await (prisma as any).userNotificationSettings.create({
         data: {
           userId: session.user.id,
           preferences: defaultPreferences,
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     const validatedData = notificationPreferencesSchema.parse(body);
 
     // Update or create notification settings
-    const userNotificationSettings = await prisma.userNotificationSettings.upsert({
+    const userNotificationSettings = await (prisma as any).userNotificationSettings.upsert({
       where: {
         userId: session.user.id,
       },

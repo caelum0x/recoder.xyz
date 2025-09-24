@@ -639,7 +639,7 @@ export class FFmpegProcessor {
         }
         
         const filterComplex = inputFiles
-          .map((_, index) => `[${index}:v][${index}:a]`)
+          .map((_: string, index: number) => `[${index}:v][${index}:a]`)
           .join('') + `concat=n=${inputFiles.length}:v=1:a=1[outv][outa]`
         
         args.push('-filter_complex', filterComplex)

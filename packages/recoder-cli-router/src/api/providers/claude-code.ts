@@ -5,14 +5,14 @@ import {
 	claudeCodeModels,
 	type ModelInfo,
 	getClaudeCodeModelId,
-} from "@roo-code/types"
+} from "roo-code-types"
 import { type ApiHandler } from ".."
 import { ApiStreamUsageChunk, type ApiStream } from "../transform/stream"
 import { runClaudeCode } from "../../integrations/claude-code/run"
 import { filterMessagesForClaudeCode } from "../../integrations/claude-code/message-filter"
 import { BaseProvider } from "./base-provider"
-import { t } from "@recoder/shared"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { t } from "recoder-shared"
+import { ApiHandlerOptions } from "recoder-shared"
 
 export class ClaudeCodeHandler extends BaseProvider implements ApiHandler {
 	private options: ApiHandlerOptions

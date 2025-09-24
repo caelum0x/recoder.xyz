@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
-const { User, Project, Template, Agent } = require('../models');
+const { prisma } = require('../database/prisma');
 const { logger } = require('../utils/logger');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -44,7 +44,7 @@ const router = express.Router();
  *       403:
  *         description: Admin access required
  */
-router.get('/', authenticateToken, requireAdmin, [
+router.get('/', authenticate, requireAdmin, [
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
@@ -137,7 +137,7 @@ router.get('/', authenticateToken, requireAdmin, [
  *       404:
  *         description: User not found
  */
-router.get('/:userId', authenticateToken, async (req, res, next) => {
+router.get('/:userId', authenticate, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const requestingUserId = req.user.id;
@@ -241,7 +241,7 @@ router.get('/:userId', authenticateToken, async (req, res, next) => {
  *       404:
  *         description: User not found
  */
-router.put('/:userId', authenticateToken, requireAdmin, [
+router.put('/:userId', authenticate, requireAdmin, [
   body('name')
     .optional()
     .isString()
@@ -339,7 +339,7 @@ router.put('/:userId', authenticateToken, requireAdmin, [
  *       404:
  *         description: User not found
  */
-router.delete('/:userId', authenticateToken, requireAdmin, async (req, res, next) => {
+router.delete('/:userId', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const adminUserId = req.user.id;
@@ -401,7 +401,7 @@ router.delete('/:userId', authenticateToken, requireAdmin, async (req, res, next
  *       404:
  *         description: User not found
  */
-router.get('/:userId/stats', authenticateToken, async (req, res, next) => {
+router.get('/:userId/stats', authenticate, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const requestingUserId = req.user.id;
@@ -505,7 +505,7 @@ router.get('/:userId/stats', authenticateToken, async (req, res, next) => {
  *       404:
  *         description: User not found
  */
-router.get('/:userId/activity', authenticateToken, [
+router.get('/:userId/activity', authenticate, [
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })

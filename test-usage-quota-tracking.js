@@ -15,10 +15,11 @@ class UsageQuotaTester {
       apiUrl: 'https://api.recoder.xyz',
       webUrl: 'https://recoder.xyz',
       testUser: {
-        userId: 'test-usage-user-789',
-        token: 'test-usage-token-123',
-        email: 'usage-test@recoder.xyz',
-        plan: 'pro'
+        // Real test user credentials should be loaded from environment
+        userId: process.env.TEST_USER_ID,
+        token: process.env.TEST_API_TOKEN,
+        email: process.env.TEST_USER_EMAIL,
+        plan: process.env.TEST_USER_PLAN || 'free'
       }
     };
   }

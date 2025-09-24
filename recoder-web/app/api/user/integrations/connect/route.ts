@@ -24,7 +24,7 @@ const OAUTH_CONFIGS = {
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
     authUrl: 'https://github.com/login/oauth/authorize',
     tokenUrl: 'https://github.com/login/oauth/access_token',
-    scopes: ['user:email', 'repo', 'read:org'],
+    permissions: ['user:email', 'repo', 'read:org'],
     redirectUri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback/github`
   },
   vercel: {
@@ -32,7 +32,7 @@ const OAUTH_CONFIGS = {
     clientSecret: process.env.VERCEL_CLIENT_SECRET,
     authUrl: 'https://vercel.com/oauth/authorize',
     tokenUrl: 'https://api.vercel.com/v2/oauth/access_token',
-    scopes: ['user', 'deployment:read', 'deployment:write'],
+    permissions: ['user', 'deployment:read', 'deployment:write'],
     redirectUri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback/vercel`
   }
 };
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       const authUrl = new URL(oauthConfig.authUrl);
       authUrl.searchParams.set('client_id', oauthConfig.clientId);
       authUrl.searchParams.set('redirect_uri', oauthConfig.redirectUri);
-      authUrl.searchParams.set('scope', oauthConfig.scopes.join(' '));
+      authUrl.searchParams.set('scope', (oauthConfig as any).scopes?.join(' ') || oauthConfig.permissions.join(' '));
       authUrl.searchParams.set('state', state);
       
       if (type === 'github') {
@@ -278,4 +278,4 @@ async function createOrUpdateIntegration(data: {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

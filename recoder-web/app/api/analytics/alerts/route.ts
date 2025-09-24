@@ -238,4 +238,4 @@ async function logAlertEvent(userId: string, event: string, metadata: any): Prom
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

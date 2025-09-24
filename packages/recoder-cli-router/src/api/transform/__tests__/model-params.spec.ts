@@ -1,12 +1,12 @@
 // npx vitest run api/transform/__tests__/model-params.spec.ts
 
-import { type ModelInfo, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@roo-code/types"
+import { type ModelInfo, ANTHROPIC_DEFAULT_MAX_TOKENS } from "roo-code-types"
 
 import { getModelParams } from "../model-params"
 import {
 	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
 	DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS,
-} from "@recoder/shared"
+} from "recoder-shared"
 
 describe("getModelParams", () => {
 	const baseModel: ModelInfo = {

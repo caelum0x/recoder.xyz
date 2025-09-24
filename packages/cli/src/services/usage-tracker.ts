@@ -3,7 +3,7 @@
  * Tracks usage, costs, and provides detailed analytics for cost optimization
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { ConfigManager } from '../utils/config';
 import { AuthService } from './auth';
 import fs from 'fs-extra';

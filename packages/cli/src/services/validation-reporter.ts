@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 import fs from 'fs-extra';
 import path from 'path';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { 
   ValidationReport, 
   ValidationCategory, 

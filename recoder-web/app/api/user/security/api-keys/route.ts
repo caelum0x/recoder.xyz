@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const existingKeysCount = await prisma.apiKey.count({
       where: { 
         userId: session.user.id,
-        active: true
+        isActive: true
       }
     })
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       where: {
         userId: session.user.id,
         name: validatedData.name,
-        active: true
+        isActive: true
       }
     })
 
@@ -109,28 +109,28 @@ export async function POST(request: NextRequest) {
     const createdKey = await prisma.apiKey.create({
       data: {
         userId: session.user.id,
-        keyId: crypto.randomUUID(),
+        keyPrefix: crypto.randomUUID(),
         name: validatedData.name,
-        hashedKey: hashedKey,
-        scopes: validatedData.permissions,
-        restrictions: {
+        keyHash: hashedKey,
+        permissions: validatedData.permissions,
+        rateLimit: {
           expiresAt: expiresAt?.toISOString(),
           maxUses: null,
           ipWhitelist: [],
           platformRestrictions: []
         },
-        lastUsed: null,
-        active: true
+        lastUsedAt: null,
+        isActive: true
       },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
+        permissions: true,
+        rateLimit: true,
         createdAt: true,
-        lastUsed: true,
-        active: true
+        lastUsedAt: true,
+        isActive: true
       }
     })
 
@@ -139,11 +139,11 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'API_KEY_CREATED',
+          resource: 'system',
         platform: 'web',
         ip: getClientIP(request),
         userAgent: request.headers.get('user-agent') || 'Unknown',
         success: true,
-        riskLevel: 'low',
         metadata: {
           name: validatedData.name,
           permissions: validatedData.permissions,
@@ -202,13 +202,13 @@ export async function GET(request: NextRequest) {
       where: { userId: session.user.id },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
-        lastUsed: true,
+        permissions: true,
+        rateLimit: true,
+        lastUsedAt: true,
         createdAt: true,
-        active: true
+        isActive: true
       },
       orderBy: { createdAt: 'desc' }
     })
@@ -217,11 +217,11 @@ export async function GET(request: NextRequest) {
     const keysWithStatus = apiKeys.map(key => ({
       ...key,
       status: getKeyStatus(key),
-      expiresAt: key.restrictions && typeof key.restrictions === 'object' && 'expiresAt' in key.restrictions 
-        ? key.restrictions.expiresAt as string 
+      expiresAt: key.rateLimit && typeof key.rateLimit === 'object' && 'expiresAt' in key.rateLimit 
+        ? (key.rateLimit as any).expiresAt as string 
         : null,
-      daysUntilExpiration: key.restrictions && typeof key.restrictions === 'object' && 'expiresAt' in key.restrictions
-        ? Math.ceil((new Date(key.restrictions.expiresAt as string).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      daysUntilExpiration: key.rateLimit && typeof key.rateLimit === 'object' && 'expiresAt' in key.rateLimit
+        ? Math.ceil((new Date((key.rateLimit as any).expiresAt as string).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
         : null
     }))
 
@@ -229,7 +229,7 @@ export async function GET(request: NextRequest) {
       success: true,
       apiKeys: keysWithStatus,
       total: apiKeys.length,
-      active: apiKeys.filter(key => key.active && getKeyStatus(key) === 'active').length
+      isActive: apiKeys.filter(key => key.isActive && getKeyStatus(key) === 'active').length
     })
 
   } catch (error) {
@@ -288,7 +288,7 @@ export async function PUT(request: NextRequest) {
         where: {
           userId: session.user.id,
           name: validatedData.name,
-          active: true,
+          isActive: true,
           id: { not: keyId }
         }
       })
@@ -306,18 +306,18 @@ export async function PUT(request: NextRequest) {
       where: { id: keyId },
       data: {
         name: validatedData.name,
-        scopes: validatedData.permissions,
-        active: validatedData.isActive ?? true
+        permissions: validatedData.permissions,
+        isActive: validatedData.isActive ?? true
       },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
-        lastUsed: true,
+        permissions: true,
+        rateLimit: true,
+        lastUsedAt: true,
         createdAt: true,
-        active: true
+        isActive: true
       }
     })
 
@@ -326,13 +326,14 @@ export async function PUT(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'API_KEY_UPDATED',
+          resource: 'system',
+          resourceId: keyId,
         platform: 'web',
         ip: getClientIP(request),
         userAgent: request.headers.get('user-agent') || 'Unknown',
         success: true,
-        riskLevel: 'low',
         metadata: {
-          keyId: keyId,
+          keyPrefix: keyId,
           updatedFields: Object.keys(validatedData),
           changes: validatedData
         }
@@ -406,7 +407,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.apiKey.update({
       where: { id: keyId },
       data: {
-        active: false
+        isActive: false
       }
     })
 
@@ -415,13 +416,14 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'API_KEY_DELETED',
+          resource: 'system',
+          resourceId: keyId,
         platform: 'web',
         ip: getClientIP(request),
         userAgent: request.headers.get('user-agent') || 'Unknown',
         success: true,
-        riskLevel: 'medium',
         metadata: {
-          keyId: keyId,
+          keyPrefix: keyId,
           name: existingKey.name,
           deletedAt: new Date().toISOString()
         }
@@ -465,9 +467,9 @@ function calculateExpirationDate(expiresIn: string): Date | null {
 }
 
 function getKeyStatus(key: any): 'active' | 'expired' | 'inactive' {
-  if (!key.active) return 'inactive'
-  if (key.restrictions && typeof key.restrictions === 'object' && 'expiresAt' in key.restrictions) {
-    const expiresAt = key.restrictions.expiresAt as string
+  if (!key.isActive) return 'inactive'
+  if (key.rateLimit && typeof key.rateLimit === 'object' && 'expiresAt' in key.rateLimit) {
+    const expiresAt = key.rateLimit.expiresAt as string
     if (expiresAt && new Date(expiresAt) < new Date()) return 'expired'
   }
   return 'active'

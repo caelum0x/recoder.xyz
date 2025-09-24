@@ -8,7 +8,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs/promises';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 interface ComplianceOptions {
   scan?: boolean;

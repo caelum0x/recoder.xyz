@@ -5,7 +5,7 @@
  */
 
 import { backendClient } from './backend-client';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import chalk from 'chalk';
 
 export interface RecoderAIRequest {

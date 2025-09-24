@@ -1,7 +1,7 @@
 // Webhook testing endpoint - allows users to test their webhooks manually
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/database';
+import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import rateLimit from '@/lib/rate-limit';
 
@@ -28,20 +28,29 @@ export async function POST(
 
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const { webhookId } = params;
 
     // Verify the webhook belongs to the user
-    const webhook = await prisma.userWebhook.findFirst({
+    const webhook = await prisma.webhook.findFirst({
       where: {
         id: webhookId,
-        userId: session.user.id,
+        userId: user.id,
       },
     });
 
@@ -69,13 +78,13 @@ export async function POST(
         webhook_id: webhookId,
         webhook_name: webhook.name,
         test_data: {
-          user_id: session.user.id,
+          user_id: user.id,
           user_email: session.user.email,
           triggered_at: new Date().toISOString(),
           source: 'manual_test'
         }
       },
-      user_id: session.user.id
+      user_id: user.id
     };
 
     const payloadString = JSON.stringify(testPayload);
@@ -87,11 +96,13 @@ export async function POST(
     await prisma.webhookDelivery.create({
       data: {
         webhookId: webhook.id,
+        event: 'webhook.test',
+        payload: payloadString,
+        status: deliveryResult.success ? 'success' : 'failed',
         success: deliveryResult.success,
         statusCode: deliveryResult.statusCode || 0,
         responseTime: deliveryResult.responseTime,
         attempt: 1,
-        payload: payloadString,
         response: deliveryResult.success ? 'Test successful' : deliveryResult.error || 'Test failed',
         error: deliveryResult.success ? null : deliveryResult.error,
         isTest: true
@@ -99,7 +110,7 @@ export async function POST(
     });
 
     // Update webhook test timestamp
-    await prisma.userWebhook.update({
+    await prisma.webhook.update({
       where: { id: webhookId },
       data: {
         lastTestAt: new Date(),
@@ -110,8 +121,9 @@ export async function POST(
     // Create audit log
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         action: 'webhook_tested',
+        resource: 'webhook',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -209,20 +221,29 @@ export async function GET(
   try {
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const { webhookId } = params;
 
     // Verify the webhook belongs to the user
-    const webhook = await prisma.userWebhook.findFirst({
+    const webhook = await prisma.webhook.findFirst({
       where: {
         id: webhookId,
-        userId: session.user.id,
+        userId: user.id,
       },
       select: {
         id: true,

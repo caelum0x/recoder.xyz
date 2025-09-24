@@ -37,8 +37,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const { action, code, state, installationId, setupAction } = githubOAuthSchema.parse(body);
-    const userId = session.user.id;
+    const userId = user.id;
 
     switch (action) {
       case 'initiate':
@@ -87,7 +96,7 @@ async function initiateGitHubOAuth(userId: string, request: NextRequest) {
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/integrations/github/oauth`;
   
   // Store state for validation
-  await prisma.oauthState.create({
+  await prisma.oAuthState.create({
     data: {
       userId,
       provider: 'github',
@@ -119,7 +128,7 @@ async function initiateGitHubOAuth(userId: string, request: NextRequest) {
       action: 'GITHUB_OAUTH_INITIATED',
       details: {
         provider: 'github',
-        scopes: githubScopes,
+        permissions: githubScopes,
         redirectUri
       },
       ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
@@ -144,7 +153,7 @@ async function handleGitHubCallback(
   request?: NextRequest
 ) {
   // Verify state
-  const storedState = await prisma.oauthState.findFirst({
+  const storedState = await prisma.oAuthState.findFirst({
     where: {
       userId,
       provider: 'github',
@@ -161,7 +170,7 @@ async function handleGitHubCallback(
   }
 
   // Delete used state
-  await prisma.oauthState.delete({
+  await prisma.oAuthState.delete({
     where: { id: storedState.id }
   });
 
@@ -210,8 +219,9 @@ async function handleGitHubCallback(
     // Store or update integration
     const integration = await prisma.userIntegration.upsert({
       where: {
-        userId_provider: {
+        userId_type_provider: {
           userId,
+          type: 'github',
           provider: 'github'
         }
       },
@@ -219,7 +229,7 @@ async function handleGitHubCallback(
         accessToken: tokenData.access_token,
         refreshToken: tokenData.refresh_token || null,
         tokenType: tokenData.token_type || 'bearer',
-        scopes: tokenData.scope?.split(',') || githubScopes,
+        permissions: tokenData.scope?.split(',') || githubScopes,
         expiresAt: tokenData.expires_in ? 
           new Date(Date.now() + tokenData.expires_in * 1000) : null,
         metadata: {
@@ -239,11 +249,13 @@ async function handleGitHubCallback(
       },
       create: {
         userId,
+        name: 'GitHub Integration',
+        type: 'github',
         provider: 'github',
         accessToken: tokenData.access_token,
         refreshToken: tokenData.refresh_token || null,
         tokenType: tokenData.token_type || 'bearer',
-        scopes: tokenData.scope?.split(',') || githubScopes,
+        permissions: tokenData.scope?.split(',') || githubScopes,
         expiresAt: tokenData.expires_in ? 
           new Date(Date.now() + tokenData.expires_in * 1000) : null,
         metadata: {
@@ -267,6 +279,8 @@ async function handleGitHubCallback(
       data: {
         userId,
         action: 'github_connected',
+          resource: 'system',
+          resourceId: integration.id,
         platform: 'web',
         ip: request?.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request?.headers.get('user-agent') || 'unknown',
@@ -275,7 +289,7 @@ async function handleGitHubCallback(
           integrationId: integration.id,
           githubLogin: githubUser.login,
           githubUserId: githubUser.id,
-          scopes: tokenData.scope?.split(',') || githubScopes,
+          permissions: tokenData.scope?.split(',') || githubScopes,
           installationId: installationId || null
         }
       }
@@ -306,7 +320,7 @@ async function handleGitHubCallback(
         provider: integration.provider,
         status: integration.status,
         connectedAt: integration.createdAt.toISOString(),
-        scopes: integration.scopes,
+        permissions: integration.permissions,
         github: {
           login: githubUser.login,
           name: githubUser.name,
@@ -326,6 +340,7 @@ async function handleGitHubCallback(
       data: {
         userId,
         action: 'github_connection_failed',
+          resource: 'system',
         platform: 'web',
         ip: request?.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request?.headers.get('user-agent') || 'unknown',
@@ -350,7 +365,7 @@ async function refreshGitHubToken(userId: string, request: NextRequest) {
     where: {
       userId,
       provider: 'github',
-      status: 'active'
+      isEnabled: true
     }
   });
 
@@ -379,6 +394,7 @@ async function refreshGitHubToken(userId: string, request: NextRequest) {
           where: { id: integration.id },
           data: { 
             status: 'expired',
+            isEnabled: false,
             lastSyncAt: new Date()
           }
         });
@@ -403,6 +419,8 @@ async function refreshGitHubToken(userId: string, request: NextRequest) {
       data: {
         userId,
         action: 'github_token_verified',
+          resource: 'system',
+          resourceId: integration.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -473,6 +491,8 @@ async function disconnectGitHub(userId: string, request: NextRequest) {
       data: {
         userId,
         action: 'github_disconnected',
+          resource: 'system',
+          resourceId: integration.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -525,7 +545,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const userId = session.user.id;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
 
     // Get current GitHub integration
     const integration = await prisma.userIntegration.findFirst({
@@ -549,7 +578,7 @@ export async function GET(request: NextRequest) {
       status: integration.status,
       connectedAt: integration.createdAt.toISOString(),
       lastSyncAt: integration.lastSyncAt?.toISOString(),
-      scopes: integration.scopes,
+      permissions: integration.permissions,
       github: {
         login: metadata?.login,
         name: metadata?.name,

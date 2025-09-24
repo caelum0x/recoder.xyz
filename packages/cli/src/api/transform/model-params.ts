@@ -1,4 +1,4 @@
-import { type ModelInfo, type ProviderSettings, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@recoder/shared"
+import { type ModelInfo, type ProviderSettings, ANTHROPIC_DEFAULT_MAX_TOKENS } from "recoder-shared"
 
 import {
 	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
@@ -6,7 +6,7 @@ import {
 	shouldUseReasoningBudget,
 	shouldUseReasoningEffort,
 	getModelMaxOutputTokens,
-} from "@recoder/shared"
+} from "recoder-shared"
 
 import {
 	type AnthropicReasoningParams,
