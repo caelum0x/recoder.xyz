@@ -1,9 +1,9 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import { type XAIModelId, xaiDefaultModelId, xaiModels } from "@recoder/shared"
+import { type XAIModelId, xaiDefaultModelId, xaiModels } from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 
 import { ApiStream } from "../transform/stream"
 import { convertToOpenAiMessages } from "../transform/openai-format"

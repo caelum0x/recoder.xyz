@@ -168,13 +168,13 @@ export async function GET(request: NextRequest) {
 
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get user settings with saved reports
     const userSettings = await prisma.userSettings.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       select: { preferences: true }
     });
 
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
 
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -252,9 +252,9 @@ export async function POST(request: NextRequest) {
     const action = searchParams.get('action') || 'save';
 
     if (action === 'save') {
-      return await handleSaveReport(request, session.user.id);
+      return await handleSaveReport(request, (session?.user as any)?.id);
     } else if (action === 'generate') {
-      return await handleGenerateReport(request, session.user.id);
+      return await handleGenerateReport(request, (session?.user as any)?.id);
     } else {
       return NextResponse.json(
         { error: 'Invalid action. Use "save" or "generate"' },
@@ -323,7 +323,7 @@ async function handleSaveReport(request: NextRequest, userId: string) {
     create: {
       userId,
       preferences: updatedPreferences,
-      limits: {},
+      // limits: {}, // Field doesn't exist
     }
   });
 
@@ -495,7 +495,7 @@ async function generateReportData(reportConfig: any, userId: string) {
             _count: {
               select: {
                 deploymentHistory: true,
-                mediaFiles: true,
+                // mediaFiles: true, // Field doesn't exist
               },
             },
           },
@@ -504,7 +504,7 @@ async function generateReportData(reportConfig: any, userId: string) {
         break;
 
       case 'usage':
-        sourceData = await prisma.usageStats.findMany({
+        sourceData = await prisma.usageAnalytics.findMany({
           where: { ...where, date: dateRange.createdAt },
           orderBy: reportConfig.orderBy?.map((o: any) => ({ [o.field]: o.direction })) || [{ date: 'desc' }],
         });
@@ -573,10 +573,10 @@ async function updateReportGenerationCount(reportId: string, userId: string) {
       create: {
         userId,
         preferences: updatedPreferences,
-        limits: {},
+        // limits: {}, // Field doesn't exist
       }
     });
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

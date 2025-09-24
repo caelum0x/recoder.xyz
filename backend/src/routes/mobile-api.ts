@@ -63,7 +63,7 @@ const mobileRateLimit = checkRateLimit(1000);
 const authRateLimit = checkRateLimit(500);
 
 // Mobile Authentication
-router.post('/auth/login', authRateLimit, validateRequest(mobileAuthSchema), async (req: Request, res: Response) => {
+router.post('/auth/login', authRateLimit, validateRequest(mobileAuthSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, deviceInfo } = req.body;
 
@@ -73,11 +73,12 @@ router.post('/auth/login', authRateLimit, validateRequest(mobileAuthSchema), asy
       // Don't include subscription relation, use the string field instead
     });
 
-    if (!user || !await bcrypt.compare(password, user.password)) {
-      return res.status(401).json({ 
+    if (!user || !user.password || !await bcrypt.compare(password, user.password)) {
+      res.status(401).json({ 
         success: false, 
         error: 'Invalid email or password' 
       });
+      return;
     }
 
     // Update or create device record
@@ -152,15 +153,16 @@ router.post('/auth/login', authRateLimit, validateRequest(mobileAuthSchema), asy
 });
 
 // Token refresh
-router.post('/auth/refresh', mobileRateLimit, async (req: Request, res: Response) => {
+router.post('/auth/refresh', mobileRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         error: 'Refresh token required'
       });
+      return;
     }
 
     const decoded = jwt.verify(
@@ -168,11 +170,12 @@ router.post('/auth/refresh', mobileRateLimit, async (req: Request, res: Response
       process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret'
     ) as any;
 
-    if (decoded.type !== 'refresh') {
-      return res.status(401).json({
+    if (!decoded || decoded.type !== 'refresh') {
+      res.status(401).json({
         success: false,
         error: 'Invalid refresh token'
       });
+      return;
     }
 
     const user = await prisma.user.findUnique({
@@ -181,10 +184,11 @@ router.post('/auth/refresh', mobileRateLimit, async (req: Request, res: Response
     });
 
     if (!user) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         error: 'User not found'
       });
+      return;
     }
 
     // Generate new tokens
@@ -223,7 +227,7 @@ router.post('/auth/refresh', mobileRateLimit, async (req: Request, res: Response
 });
 
 // Get user profile optimized for mobile
-router.get('/profile', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+router.get('/profile', authenticate, mobileRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
 
@@ -240,10 +244,11 @@ router.get('/profile', authenticate, mobileRateLimit, async (req: Request, res: 
     });
 
     if (!user) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'User not found'
       });
+      return;
     }
 
     // Get mobile-specific stats
@@ -305,7 +310,7 @@ router.get('/profile', authenticate, mobileRateLimit, async (req: Request, res: 
 });
 
 // Mobile-optimized project creation
-router.post('/projects', authenticate, mobileRateLimit, validateRequest(mobileProjectSchema), async (req: Request, res: Response) => {
+router.post('/projects', authenticate, mobileRateLimit, validateRequest(mobileProjectSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
     const { name, description, type, framework, language, aiModel, isPrivate } = req.body;
@@ -320,10 +325,11 @@ router.post('/projects', authenticate, mobileRateLimit, validateRequest(mobilePr
     });
 
     if (!user) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'User not found'
       });
+      return;
     }
 
     // Project limits based on subscription
@@ -332,11 +338,12 @@ router.post('/projects', authenticate, mobileRateLimit, validateRequest(mobilePr
                        user.subscription === 'enterprise' ? 500 : 3;
 
     if (user._count.projects >= maxProjects) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         error: `Project limit reached (${maxProjects}). Upgrade your plan to create more projects.`,
         upgradeRequired: true
       });
+      return;
     }
 
     const project = await prisma.project.create({
@@ -368,7 +375,7 @@ router.post('/projects', authenticate, mobileRateLimit, validateRequest(mobilePr
 });
 
 // Get projects optimized for mobile
-router.get('/projects', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+router.get('/projects', authenticate, mobileRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
     const { page = '1', limit = '10', type, search } = req.query;
@@ -436,7 +443,7 @@ router.get('/projects', authenticate, mobileRateLimit, async (req: Request, res:
 });
 
 // Mobile code generation
-router.post('/generate', authenticate, mobileRateLimit, validateRequest(mobileCodeGenerationSchema), async (req: Request, res: Response) => {
+router.post('/generate', authenticate, mobileRateLimit, validateRequest(mobileCodeGenerationSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
     const { prompt, projectId, type, framework, language, includeTests, includeComments, complexity } = req.body;
@@ -448,10 +455,11 @@ router.post('/generate', authenticate, mobileRateLimit, validateRequest(mobileCo
     });
 
     if (!user) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'User not found'
       });
+      return;
     }
 
     // Check generation limits
@@ -461,21 +469,22 @@ router.post('/generate', authenticate, mobileRateLimit, validateRequest(mobileCo
     const todayUsage = await prisma.usageRecord.aggregate({
       where: {
         userId,
-        createdAt: { gte: today }
+        timestamp: { gte: today }
       },
       _sum: {
-        apiCalls: true
+        tokens: true
       }
     });    const dailyLimit = user.subscription === 'free' ? 10 :
                       user.subscription === 'pro' ? 100 :
                       user.subscription === 'enterprise' ? 1000 : 10;
 
-    if ((todayUsage._sum.apiCalls || 0) >= dailyLimit) {
-      return res.status(429).json({
+    if ((todayUsage._sum.tokens || 0) >= dailyLimit) {
+      res.status(429).json({
         success: false,
         error: `Daily generation limit reached (${dailyLimit}). Upgrade your plan for more generations.`,
         upgradeRequired: true
       });
+      return;
     }
 
     // Enhanced prompt for mobile-optimized generation
@@ -502,13 +511,15 @@ Generate production-ready, well-structured code with proper error handling, load
       data: {
         userId,
         projectId: projectId || null,
-        prompt: enhancedPrompt,
-        type,
-        framework,
-        language,
-        status: 'processing',
-        isMobile: true,
-        complexity
+        type: 'code_generation',
+        metadata: {
+          prompt: enhancedPrompt,
+          framework,
+          language,
+          status: 'processing',
+          isMobile: true,
+          complexity
+        }
       }
     });
 
@@ -527,20 +538,28 @@ Generate production-ready, well-structured code with proper error handling, load
     await prisma.usageRecord.update({
       where: { id: generation.id },
       data: {
-        generatedCode: generatedCode.code,
-        files: generatedCode.files,
-        status: 'completed',
-        tokensUsed: generatedCode.tokensUsed
+        metadata: {
+          ...generation.metadata as any,
+          generatedCode: generatedCode.code,
+          files: generatedCode.files,
+          status: 'completed'
+        },
+        tokens: generatedCode.tokensUsed,
+        success: true
       }
     });
 
-    // Record usage
-    await prisma.usage.create({
+    // Record usage for billing
+    await prisma.dodoUsage.create({
       data: {
         userId,
-        type: 'code_generation',
         tokensUsed: generatedCode.tokensUsed,
-        apiCalls: 1,
+        requestsMade: 1,
+        aiProvider: 'claude',
+        featureUsed: 'code_generation',
+        costCents: Math.ceil(generatedCode.tokensUsed * 0.001), // Rough cost calculation
+        periodStart: new Date(),
+        periodEnd: new Date(),
         metadata: {
           generationType: type,
           framework,
@@ -571,13 +590,13 @@ Generate production-ready, well-structured code with proper error handling, load
 });
 
 // Offline sync endpoint
-router.post('/sync', authenticate, mobileRateLimit, validateRequest(mobileOfflineSyncSchema), async (req: Request, res: Response) => {
+router.post('/sync', authenticate, mobileRateLimit, validateRequest(mobileOfflineSyncSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
     const { actions, deviceId, lastSyncTime } = req.body;
 
-    const syncResults = [];
-    const conflicts = [];
+    const syncResults: any[] = [];
+    const conflicts: any[] = [];
 
     // Process each action
     for (const action of actions) {
@@ -598,11 +617,11 @@ router.post('/sync', authenticate, mobileRateLimit, validateRequest(mobileOfflin
             throw new Error(`Unsupported resource type: ${action.resource}`);
         }
 
-        if (result.conflict) {
+        if ((result as any).conflict) {
           conflicts.push({
             uuid: action.uuid,
             resource: action.resource,
-            conflict: result.conflict
+            conflict: (result as any).conflict
           });
         } else {
           syncResults.push({
@@ -615,7 +634,7 @@ router.post('/sync', authenticate, mobileRateLimit, validateRequest(mobileOfflin
         syncResults.push({
           uuid: action.uuid,
           success: false,
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     }
@@ -653,7 +672,7 @@ router.post('/sync', authenticate, mobileRateLimit, validateRequest(mobileOfflin
 });
 
 // Push notification registration
-router.post('/notifications/register', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+router.post('/notifications/register', authenticate, mobileRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
     const { pushToken, deviceId, preferences } = req.body;
@@ -683,7 +702,7 @@ router.post('/notifications/register', authenticate, mobileRateLimit, async (req
 });
 
 // Get mobile app configuration
-router.get('/config', authenticate, mobileRateLimit, async (req: Request, res: Response) => {
+router.get('/config', authenticate, mobileRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
     
@@ -711,9 +730,9 @@ router.get('/config', authenticate, mobileRateLimit, async (req: Request, res: R
                  50 * 1024 * 1024 // 50MB
       },
       models: {
-        available: user?.subscription?.tier === 'free' ? 
+        available: user?.subscription === 'free' ? 
           ['gpt-3.5-turbo', 'claude-3-haiku'] :
-          user?.subscription?.tier === 'pro' ?
+          user?.subscription === 'pro' ?
           ['gpt-3.5-turbo', 'gpt-4', 'claude-3-sonnet', 'claude-3-haiku'] :
           ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
       }

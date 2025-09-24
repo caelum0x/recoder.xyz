@@ -5,14 +5,14 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { glob } from 'glob';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   ModelRequest,
   ModelResponse,
   RequestContext,
   TaskType,
   ModelSpecialization
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 
 export interface ProjectContext {
   projectPath: string;

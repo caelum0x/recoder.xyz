@@ -3,7 +3,7 @@
  * Handles auto-installation, management, and optimization of local AI models
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import axios from 'axios';

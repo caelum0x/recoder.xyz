@@ -1,7 +1,8 @@
 // Alert system API for monitoring analytics metrics and thresholds
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/database';
 import { z } from 'zod';
 import rateLimit from '@/lib/rate-limit';
 
@@ -88,13 +89,9 @@ async function evaluateAlert(alert: any, userId: string) {
       break;
 
     case 'usage':
-      const usageStats = await prisma.usageStats.findMany({
+      const usageStats = await prisma.usageAnalytics.findMany({
         where: {
           userId,
-          date: {
-            gte: startTime,
-            lte: endTime,
-          },
         },
       });
 
@@ -222,15 +219,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get user settings with alerts
     const userSettings = await prisma.userSettings.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       select: { preferences: true }
     });
 
@@ -262,7 +259,7 @@ export async function GET(request: NextRequest) {
     // Get alert statistics
     const stats = {
       total: alerts.length,
-      active: alerts.filter((a: any) => a.status === 'active').length,
+      isActive: alerts.filter((a: any) => a.status === 'active').length,
       triggered: alerts.filter((a: any) => a.status === 'triggered').length,
       paused: alerts.filter((a: any) => a.status === 'paused').length,
       byDataSource: alerts.reduce((acc: any, alert: any) => {
@@ -299,9 +296,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -309,9 +306,9 @@ export async function POST(request: NextRequest) {
     const action = searchParams.get('action') || 'create';
 
     if (action === 'create') {
-      return await handleCreateAlert(request, session.user.id);
+      return await handleCreateAlert(request, (session?.user as any)?.id);
     } else if (action === 'evaluate') {
-      return await handleEvaluateAlerts(request, session.user.id);
+      return await handleEvaluateAlerts(request, (session?.user as any)?.id);
     } else {
       return NextResponse.json(
         { error: 'Invalid action. Use "create" or "evaluate"' },
@@ -379,7 +376,6 @@ async function handleCreateAlert(request: NextRequest, userId: string) {
     create: {
       userId,
       preferences: updatedPreferences,
-      limits: {},
     }
   });
 
@@ -388,6 +384,7 @@ async function handleCreateAlert(request: NextRequest, userId: string) {
     data: {
       userId,
       action: 'alert_created',
+      resource: 'alert',
       platform: 'web',
       ip: request.headers.get('x-forwarded-for') || 'unknown',
       userAgent: request.headers.get('user-agent') || 'unknown',
@@ -483,7 +480,6 @@ async function handleEvaluateAlerts(request: NextRequest, userId: string) {
     create: {
       userId,
       preferences: updatedPreferences,
-      limits: {},
     }
   });
 
@@ -509,9 +505,9 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -520,7 +516,7 @@ export async function PUT(request: NextRequest) {
 
     // Get user settings
     const userSettings = await prisma.userSettings.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       select: { preferences: true }
     });
 
@@ -540,7 +536,7 @@ export async function PUT(request: NextRequest) {
     const existingAlert = alerts[alertIndex];
 
     // Check ownership
-    if (existingAlert.createdBy !== session.user.id) {
+    if (existingAlert.createdBy !== (session?.user as any)?.id) {
       return NextResponse.json(
         { error: 'Unauthorized to update this alert' },
         { status: 403 }
@@ -563,20 +559,20 @@ export async function PUT(request: NextRequest) {
     };
 
     await prisma.userSettings.upsert({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       update: { preferences: updatedPreferences },
       create: {
-        userId: session.user.id,
+        userId: (session?.user as any)?.id,
         preferences: updatedPreferences,
-        limits: {},
-      }
+        }
     });
 
     // Log alert update
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: (session?.user as any)?.id,
         action: 'alert_updated',
+        resource: 'alert',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -623,9 +619,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -641,7 +637,7 @@ export async function DELETE(request: NextRequest) {
 
     // Get user settings
     const userSettings = await prisma.userSettings.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       select: { preferences: true }
     });
 
@@ -661,7 +657,7 @@ export async function DELETE(request: NextRequest) {
     const deletedAlert = alerts[alertIndex];
 
     // Check ownership
-    if (deletedAlert.createdBy !== session.user.id) {
+    if (deletedAlert.createdBy !== (session?.user as any)?.id) {
       return NextResponse.json(
         { error: 'Unauthorized to delete this alert' },
         { status: 403 }
@@ -678,20 +674,20 @@ export async function DELETE(request: NextRequest) {
     };
 
     await prisma.userSettings.upsert({
-      where: { userId: session.user.id },
+      where: { userId: (session?.user as any)?.id },
       update: { preferences: updatedPreferences },
       create: {
-        userId: session.user.id,
+        userId: (session?.user as any)?.id,
         preferences: updatedPreferences,
-        limits: {},
-      }
+        }
     });
 
     // Log alert deletion
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: (session?.user as any)?.id,
         action: 'alert_deleted',
+        resource: 'alert',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -716,4 +712,4 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

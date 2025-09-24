@@ -1,9 +1,9 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Mistral } from "@mistralai/mistralai"
 
-import { type MistralModelId, mistralDefaultModelId, mistralModels, MISTRAL_DEFAULT_TEMPERATURE } from "@recoder/shared"
+import { type MistralModelId, mistralDefaultModelId, mistralModels, MISTRAL_DEFAULT_TEMPERATURE } from "recoder-shared"
 
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
 
 import { convertToMistralMessages } from "../transform/mistral-format"
 import { ApiStream } from "../transform/stream"

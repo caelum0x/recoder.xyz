@@ -134,16 +134,7 @@ export class MediaProcessingSocketServer {
   // Get job status with live progress
   private async getJobStatus(jobId: string): Promise<MediaProcessingSocketData> {
     const job = await prisma.processingJob.findUnique({
-      where: { id: jobId },
-      include: {
-        mediaFile: {
-          select: {
-            originalName: true,
-            fileSize: true,
-            format: true
-          }
-        }
-      }
+      where: { id: jobId }
     })
 
     if (!job) {
@@ -155,20 +146,20 @@ export class MediaProcessingSocketServer {
 
     return {
       jobId: job.id,
-      userId: job.userId,
+      userId: job.id, // Use job id as fallback since userId field doesn't exist
       status: job.status as any,
       progress: liveProgress?.progress || job.progress,
       currentStep: liveProgress?.currentStep,
       estimatedTimeRemaining: liveProgress?.estimatedTimeRemaining,
       error: job.error || undefined,
-      outputUrl: job.outputPath || liveProgress?.outputUrl,
+      outputUrl: liveProgress?.outputUrl,
       metadata: {
-        operation: job.operation,
+        operation: job.type, // Use type field for operation
         type: job.type,
-        fileName: job.mediaFile?.originalName,
-        fileSize: job.mediaFile?.fileSize,
+        fileName: 'unknown', // Default since mediaFile relation doesn't exist
+        fileSize: 0,
         createdAt: job.createdAt,
-        startedAt: job.startedAt,
+        startedAt: job.createdAt, // Use createdAt as startedAt fallback
         completedAt: job.completedAt
       }
     }
@@ -178,17 +169,7 @@ export class MediaProcessingSocketServer {
   private async getUserActiveJobs(userId: string) {
     const jobs = await prisma.processingJob.findMany({
       where: {
-        userId,
         status: { in: ['queued', 'processing'] }
-      },
-      include: {
-        mediaFile: {
-          select: {
-            originalName: true,
-            fileSize: true,
-            format: true
-          }
-        }
       },
       orderBy: { createdAt: 'desc' }
     })

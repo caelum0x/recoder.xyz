@@ -4,7 +4,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { ConfigManager } from '../utils/config';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface AuthResponse {
   success: boolean;

@@ -35,7 +35,7 @@ export default function UnityScriptGenerator({ project, onClose, onScriptGenerat
     scriptType: 'MonoBehaviour',
     namespace: '',
     baseClass: '',
-    interfaces: [],
+    interfaces: [] as string[],
     functionality: '',
     includeComments: true,
     generateTests: false
@@ -149,7 +149,7 @@ export default function UnityScriptGenerator({ project, onClose, onScriptGenerat
       }
     } catch (error) {
       console.error('Failed to generate script:', error)
-      alert(error.message || 'Failed to generate script')
+      alert(error instanceof Error ? error.message : 'Failed to generate script')
     } finally {
       setLoading(false)
     }
@@ -305,7 +305,7 @@ export default function UnityScriptGenerator({ project, onClose, onScriptGenerat
                     Example Scripts for {scriptTypes.find(t => t.value === formData.scriptType)?.label}
                   </label>
                   <div className="space-y-1">
-                    {(scriptExamples[formData.scriptType] || []).map((example, index) => (
+                    {(scriptExamples[formData.scriptType as keyof typeof scriptExamples] || []).map((example: string, index: number) => (
                       <button
                         key={index}
                         onClick={() => handleUseExample(example)}

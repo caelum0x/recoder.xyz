@@ -1,10 +1,87 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
-import * as monaco from 'monaco-editor';
-import { useAIInlineSuggestions } from './AIInlineSuggestions';
-import { useCollaborativeEditor } from './CollaborativeEditor';
+import type * as monaco from 'monaco-editor';
+
+// Use global monaco reference when available
+declare global {
+  interface Window {
+    monaco: typeof import('monaco-editor');
+  }
+}
+
+// Define types for the hooks
+type AIInlineSuggestionsHook = (editor: monaco.editor.IStandaloneCodeEditor | null, enabled?: boolean) => {
+  acceptedCount: number;
+  rejectedCount: number;
+  aiSuggestionsComponent: React.JSX.Element;
+};
+
+type CollaborativeEditorHook = (editor: monaco.editor.IStandaloneCodeEditor | null, projectId: string, user: { id: string; name: string }) => {
+  collaborators: CollaboratorInfo[];
+  isConnected: boolean;
+  collaborativeEditorComponent: React.JSX.Element;
+};
+
+type CollaboratorInfo = {
+  id: string;
+  name: string;
+  color: string;
+  cursor?: { line: number; column: number };
+};
+
+// Create wrapper components for the hooks
+const AIInlineSuggestionsWrapper: React.FC<{
+  editor: monaco.editor.IStandaloneCodeEditor | null;
+  enabled: boolean;
+  onResult: (result: { acceptedCount: number; rejectedCount: number; aiSuggestionsComponent: React.JSX.Element }) => void;
+}> = ({ editor, enabled, onResult }) => {
+  const [hook, setHook] = useState<AIInlineSuggestionsHook | null>(null);
+  
+  useEffect(() => {
+    import('./AIInlineSuggestions').then(mod => {
+      setHook(() => mod.useAIInlineSuggestions as AIInlineSuggestionsHook);
+    }).catch(() => {
+      // Fallback if module doesn't exist
+      setHook(() => () => ({ acceptedCount: 0, rejectedCount: 0, aiSuggestionsComponent: <></> }));
+    });
+  }, []);
+  
+  const result = hook ? hook(editor, enabled) : { acceptedCount: 0, rejectedCount: 0, aiSuggestionsComponent: <></> };
+  
+  useEffect(() => {
+    onResult(result);
+  }, [result, onResult]);
+  
+  return result.aiSuggestionsComponent;
+};
+
+const CollaborativeEditorWrapper: React.FC<{
+  editor: monaco.editor.IStandaloneCodeEditor | null;
+  projectId: string;
+  user: { id: string; name: string };
+  onResult: (result: { collaborators: CollaboratorInfo[]; isConnected: boolean; collaborativeEditorComponent: React.JSX.Element }) => void;
+}> = ({ editor, projectId, user, onResult }) => {
+  const [hook, setHook] = useState<CollaborativeEditorHook | null>(null);
+  
+  useEffect(() => {
+    import('./CollaborativeEditor').then(mod => {
+      setHook(() => mod.useCollaborativeEditor as CollaborativeEditorHook);
+    }).catch(() => {
+      // Fallback if module doesn't exist
+      setHook(() => () => ({ collaborators: [], isConnected: false, collaborativeEditorComponent: <></> }));
+    });
+  }, []);
+  
+  const result = hook ? hook(editor, projectId, user) : { collaborators: [], isConnected: false, collaborativeEditorComponent: <></> };
+  
+  useEffect(() => {
+    onResult(result);
+  }, [result, onResult]);
+  
+  return result.collaborativeEditorComponent;
+};
 
 interface MonacoCodeEditorProps {
   value: string;
@@ -33,18 +110,22 @@ export default function MonacoCodeEditor({
 }: MonacoCodeEditorProps) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   
-  // AI inline suggestions
-  const { acceptedCount, rejectedCount, aiSuggestionsComponent } = useAIInlineSuggestions(
-    editorRef.current,
-    enableAISuggestions && !readOnly
-  );
-
-  // Collaborative editing
-  const { collaborators, isConnected, collaborativeEditorComponent } = useCollaborativeEditor(
-    editorRef.current,
-    projectId || '',
-    user || { id: 'anonymous', name: 'Anonymous' }
-  );
+  // State for AI suggestions
+  const [aiSuggestions, setAISuggestions] = useState({
+    acceptedCount: 0,
+    rejectedCount: 0,
+    aiSuggestionsComponent: <></>
+  });
+  
+  // State for collaborative editing
+  const [collaboration, setCollaboration] = useState({
+    collaborators: [] as CollaboratorInfo[],
+    isConnected: false,
+    collaborativeEditorComponent: <></>
+  });
+  
+  const { acceptedCount, rejectedCount } = aiSuggestions;
+  const { collaborators, isConnected } = collaboration;
 
   const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
@@ -87,26 +168,30 @@ export default function MonacoCodeEditor({
       }
     });
 
-    // Add keyboard shortcuts for competitive parity with Cursor
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash, () => {
-      editor.trigger('keyboard', 'editor.action.commentLine', {});
-    });
+    // Add keyboard shortcuts for competitive parity with Cursor (check if global monaco is available)
+    if (typeof window !== 'undefined' && window.monaco) {
+      const monacoRef = window.monaco;
+      
+      editor.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.Slash, () => {
+        editor.trigger('keyboard', 'editor.action.commentLine', {});
+      });
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, () => {
-      editor.trigger('keyboard', 'editor.action.addSelectionToNextFindMatch', {});
-    });
+      editor.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyCode.KeyD, () => {
+        editor.trigger('keyboard', 'editor.action.addSelectionToNextFindMatch', {});
+      });
 
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => {
-      editor.trigger('keyboard', 'editor.action.moveLinesUpAction', {});
-    });
+      editor.addCommand(monacoRef.KeyMod.Alt | monacoRef.KeyCode.UpArrow, () => {
+        editor.trigger('keyboard', 'editor.action.moveLinesUpAction', {});
+      });
 
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.DownArrow, () => {
-      editor.trigger('keyboard', 'editor.action.moveLinesDownAction', {});
-    });
+      editor.addCommand(monacoRef.KeyMod.Alt | monacoRef.KeyCode.DownArrow, () => {
+        editor.trigger('keyboard', 'editor.action.moveLinesDownAction', {});
+      });
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyK, () => {
-      editor.trigger('keyboard', 'editor.action.deleteLines', {});
-    });
+      editor.addCommand(monacoRef.KeyMod.CtrlCmd | monacoRef.KeyMod.Shift | monacoRef.KeyCode.KeyK, () => {
+        editor.trigger('keyboard', 'editor.action.deleteLines', {});
+      });
+    }
 
     // Focus editor
     editor.focus();
@@ -123,6 +208,7 @@ export default function MonacoCodeEditor({
     if (content.includes('import React') || content.includes('export default')) {
       return content.includes('.tsx') || content.includes('JSX.Element') ? 'typescript' : 'javascript';
     }
+    if (content.includes('pragma solidity') || content.includes('contract ') || content.includes('interface ') || content.includes('library ')) return 'solidity';
     if (content.includes('<?php')) return 'php';
     if (content.includes('def ') || content.includes('import ')) return 'python';
     if (content.includes('package ') || content.includes('public class')) return 'java';
@@ -138,8 +224,21 @@ export default function MonacoCodeEditor({
 
   return (
     <div className={`w-full h-full relative ${className}`}>
-      {aiSuggestionsComponent}
-      {enableCollaboration && collaborativeEditorComponent}
+      {enableAISuggestions && !readOnly && (
+        <AIInlineSuggestionsWrapper
+          editor={editorRef.current}
+          enabled={enableAISuggestions && !readOnly}
+          onResult={setAISuggestions}
+        />
+      )}
+      {enableCollaboration && (
+        <CollaborativeEditorWrapper
+          editor={editorRef.current}
+          projectId={projectId || ''}
+          user={user || { id: 'anonymous', name: 'Anonymous' }}
+          onResult={setCollaboration}
+        />
+      )}
       <Editor
         value={value}
         onChange={handleEditorChange}
@@ -228,7 +327,9 @@ export const getMonacoLanguage = (fileName: string): string => {
     'sql': 'sql',
     'graphql': 'graphql',
     'vue': 'vue',
-    'svelte': 'svelte'
+    'svelte': 'svelte',
+    'sol': 'solidity',
+    'solidity': 'solidity'
   };
 
   return languageMap[extension || ''] || 'plaintext';

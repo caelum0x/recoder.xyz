@@ -821,19 +821,28 @@ export async function POST(req: NextRequest) {
 
         // Log the validation request to database
         try {
-          await prisma.aiConsensusLog.create({
+          await prisma.aIConsensusLog.create({
             data: {
               userId: session.user.id,
-              projectId: data.projectId || null,
-              validationTypes: request.validationTypes.join(','),
-              consensusScore: result.consensusScore,
-              consensusReached: result.consensusReached,
-              validatorCount: result.validatorResponses.length,
-              totalCost: result.totalCost,
-              totalTokens: result.totalTokens,
-              executionTime: result.executionTime,
-              language: request.language,
-              codeLength: request.code.length
+              requestId: `consensus_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              models: JSON.stringify(result.validatorResponses.map(v => v.validatorName)),
+              prompt: request.code.substring(0, 1000), // Truncate for storage
+              consensus: result.consensusReached,
+              confidence: result.consensusScore / 100,
+              processingTime: result.executionTime,
+              responses: JSON.stringify(result.validatorResponses.map(v => ({
+                validator: v.validatorName,
+                score: v.score,
+                confidence: v.confidence
+              }))),
+              metadata: JSON.stringify({
+                language: request.language,
+                codeLength: request.code.length,
+                validatorCount: result.validatorResponses.length,
+                totalCost: result.totalCost,
+                totalTokens: result.totalTokens,
+                validationTypes: request.validationTypes
+              })
             }
           });
         } catch (dbError) {
@@ -876,20 +885,30 @@ export async function POST(req: NextRequest) {
 
         // Log quick validation
         try {
-          await prisma.aiConsensusLog.create({
+          await prisma.aIConsensusLog.create({
             data: {
               userId: session.user.id,
-              projectId: data.projectId || null,
-              validationTypes: 'quality,security',
-              consensusScore: result.consensusScore,
-              consensusReached: result.consensusReached,
-              validatorCount: result.validatorResponses.length,
-              totalCost: result.totalCost,
-              totalTokens: result.totalTokens,
-              executionTime: result.executionTime,
-              language: quickRequest.language,
-              codeLength: quickRequest.code.length,
-              isQuickValidation: true
+              requestId: `quick_consensus_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              models: JSON.stringify(result.validatorResponses.map(v => v.validatorName)),
+              prompt: quickRequest.code.substring(0, 1000), // Truncate for storage
+              consensus: result.consensusReached,
+              confidence: result.consensusScore / 100,
+              processingTime: result.executionTime,
+              responses: JSON.stringify(result.validatorResponses.map(v => ({
+                validator: v.validatorName,
+                score: v.score,
+                confidence: v.confidence
+              }))),
+              metadata: JSON.stringify({
+                language: quickRequest.language,
+                codeLength: quickRequest.code.length,
+                validatorCount: result.validatorResponses.length,
+                totalCost: result.totalCost,
+                totalTokens: result.totalTokens,
+                validationTypes: 'quality,security',
+                isQuickValidation: true,
+                projectId: data.projectId
+              })
             }
           });
         } catch (dbError) {

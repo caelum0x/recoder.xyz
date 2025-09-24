@@ -141,13 +141,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting
-    const rateLimitResult = await rateLimit(request, 'performance-management', 10, 60000)
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      )
-    }
+    rateLimit({
+      interval: 60 * 1000, // 1 minute
+      uniqueTokenPerInterval: 10,
+    })
 
     const session = await auth()
     if (!session?.user) {

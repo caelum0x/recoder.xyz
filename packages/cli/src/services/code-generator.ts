@@ -4,7 +4,7 @@
 
 import fs from 'fs-extra';
 import path from 'path';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   GenerationRequest,
   GenerationResult,
@@ -29,8 +29,8 @@ import {
   FileDependency,
   FileExport,
   FileImport
-} from '@recoder/shared/types/code-generation';
-import { TaskType, PrivacyLevel, TaskPriority } from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/code-generation';
+import { TaskType, PrivacyLevel, TaskPriority } from 'recoder-shared/types/ai-models';
 import { ProjectAnalyzer } from './project-analyzer';
 import { RealityValidationSystem } from './reality-validator';
 import { ValidationPipeline } from './validation-pipeline';

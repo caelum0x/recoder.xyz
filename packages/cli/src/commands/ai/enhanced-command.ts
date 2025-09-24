@@ -8,7 +8,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { enhancedOllamaProvider, CodeGenerationRequest } from '../../services/ollama';
 import { AIHub } from '../../services/ai-hub';
 

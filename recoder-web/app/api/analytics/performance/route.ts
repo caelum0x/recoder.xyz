@@ -29,18 +29,19 @@ export async function POST(request: NextRequest) {
     const prisma = getPrisma();
     
     // Store performance metrics in database
-    await prisma.performanceLog.create({
+    await prisma.auditLog.create({
       data: {
-        id: perfData.id,
-        timestamp: new Date(perfData.timestamp),
-        type: perfData.type,
-        duration: perfData.duration,
-        url: perfData.url,
+        userId: perfData.userId || 'system',
+        action: 'performance',
+        resource: perfData.url || 'unknown',
         success: perfData.success,
-        userId: perfData.userId,
-        sessionId: perfData.sessionId,
-        platform: perfData.platform,
-        metadata: perfData.metadata as any
+        metadata: {
+          type: perfData.type,
+          duration: perfData.duration,
+          sessionId: perfData.sessionId,
+          platform: perfData.platform,
+          originalMetadata: perfData.metadata
+        }
       }
     });
 
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
     
     const prisma = getPrisma();
     
-    const metrics = await prisma.performanceLog.findMany({
+    const metrics = await prisma.auditLog.findMany({
       where: {
         timestamp: {
           gte: timeFilter
@@ -121,16 +122,16 @@ export async function GET(request: NextRequest) {
     // Calculate aggregated metrics
     const totalMetrics = metrics.length;
     const avgDuration = metrics.length > 0 
-      ? metrics.reduce((sum, m) => sum + m.duration, 0) / metrics.length 
+      ? metrics.reduce((sum: number, m: any) => sum + ((m.metadata as any)?.duration || 0), 0) / metrics.length 
       : 0;
     
     const successRate = metrics.length > 0 
-      ? (metrics.filter(m => m.success).length / metrics.length) * 100 
+      ? (metrics.filter((m: any) => m.success).length / metrics.length) * 100 
       : 100;
 
-    const slowRequests = metrics.filter(m => m.duration > 3000).length;
+    const slowRequests = metrics.filter((m: any) => ((m.metadata as any)?.duration || 0) > 3000).length;
     const errorRate = metrics.length > 0 
-      ? ((metrics.filter(m => !m.success).length / metrics.length) * 100)
+      ? ((metrics.filter((m: any) => !m.success).length / metrics.length) * 100)
       : 0;
 
     return NextResponse.json({

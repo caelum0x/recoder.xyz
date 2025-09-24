@@ -4,7 +4,7 @@
 
 import fs from 'fs-extra';
 import path from 'path';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   ModelRequest,
   ModelResponse,
@@ -13,7 +13,7 @@ import {
   TaskType,
   TokenUsageStats,
   ModelProvider
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 
 export interface UsageRecord {
   id: string;

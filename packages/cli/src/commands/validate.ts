@@ -9,7 +9,7 @@ import ora from 'ora';
 import boxen from 'boxen';
 import path from 'path';
 import fs from 'fs-extra';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { 
   RealityValidationSystem, 
   ValidationCategory, 

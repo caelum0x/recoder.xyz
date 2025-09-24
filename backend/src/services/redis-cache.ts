@@ -71,7 +71,10 @@ export class RedisCacheService extends EventEmitter {
 
   constructor() {
     super();
-    this.initializeRedis();
+    // Defer Redis initialization to avoid blocking module initialization
+    process.nextTick(() => {
+      this.initializeRedis();
+    });
   }
 
   /**

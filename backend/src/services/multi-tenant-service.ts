@@ -229,7 +229,7 @@ class MultiTenantService {
   }
 
   // Middleware for tenant isolation
-  tenantMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  tenantMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       let tenantIdentifier: string | undefined;
 
@@ -247,16 +247,19 @@ class MultiTenantService {
       }
 
       if (!tenantIdentifier) {
-        return res.status(400).json({ error: 'Tenant identifier required' });
+        res.status(400).json({ error: 'Tenant identifier required' });
+        return;
       }
 
       const tenant = await this.getTenant(tenantIdentifier);
       if (!tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
+        res.status(404).json({ error: 'Tenant not found' });
+        return;
       }
 
       if (tenant.status !== 'active') {
-        return res.status(403).json({ error: 'Tenant access suspended' });
+        res.status(403).json({ error: 'Tenant access suspended' });
+        return;
       }
 
       // Add tenant to request context

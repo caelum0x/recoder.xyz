@@ -274,6 +274,7 @@ async function createRepository(
       data: {
         userId,
         action: 'github_repo_created',
+          resource: 'github',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -333,7 +334,7 @@ async function createWebhook(
   try {
     const webhookPayload = {
       name: 'web',
-      active: true,
+      isActive: true,
       events: webhookConfig.events,
       config: {
         url: webhookConfig.url,
@@ -372,6 +373,8 @@ async function createWebhook(
       data: {
         userId,
         action: 'github_webhook_created',
+          resource: 'github',
+          resourceId: webhook.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -394,7 +397,7 @@ async function createWebhook(
         name: webhook.name,
         events: webhook.events,
         url: webhook.config.url,
-        active: webhook.active,
+        isActive: webhook.active,
         createdAt: webhook.created_at
       }
     });
@@ -426,6 +429,8 @@ async function syncRepositories(
       data: {
         userId,
         action: 'github_repos_synced',
+          resource: 'system',
+          resourceId: integration.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',

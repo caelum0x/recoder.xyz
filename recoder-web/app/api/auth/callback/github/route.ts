@@ -256,7 +256,7 @@ async function createGitHubIntegration(data: {
         publicRepos: data.githubUser.public_repos,
         followers: data.githubUser.followers,
         following: data.githubUser.following,
-        scopes: data.scope.split(','),
+        permissions: data.scope.split(','),
         repositoryCount: data.repositories.length,
       },
       // Encrypted access token (in production)
@@ -280,7 +280,7 @@ async function createGitHubIntegration(data: {
     await logIntegrationEvent(data.userId, 'github_connected', {
       githubUsername: data.githubUser.login,
       repositoryCount: data.repositories.length,
-      scopes: data.scope,
+      permissions: data.scope,
       timestamp: new Date().toISOString(),
     });
 
@@ -308,4 +308,4 @@ async function logIntegrationEvent(userId: string, event: string, metadata: any)
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

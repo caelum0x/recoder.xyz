@@ -47,32 +47,32 @@ export async function GET(request: NextRequest) {
     });
 
     // Get API call performance for response times
-    const apiCalls = await prisma.performanceLog.findMany({
+    const apiCalls = await prisma.auditLog.findMany({
       where: {
-        timestamp: {
+        createdAt: {
           gte: startDate
         },
-        type: 'api_call',
-        url: {
-          contains: '/api/chat'
+        action: 'api_call',
+        resource: {
+          contains: 'chat'
         }
       },
       select: {
-        duration: true,
+        metadata: true,
         success: true
       }
     });
 
     const totalRequests = chats.length;
-    const totalTokens = chats.reduce((sum, chat) => {
-      return sum + chat.messages.reduce((msgSum, msg) => {
+    const totalTokens = chats.reduce((sum: number, chat: any) => {
+      return sum + chat.messages.reduce((msgSum: number, msg: any) => {
         // Estimate tokens: ~4 characters per token
         return msgSum + Math.ceil(msg.content.length / 4);
       }, 0);
     }, 0);
 
     const avgResponseTime = apiCalls.length > 0 
-      ? apiCalls.reduce((sum, call) => sum + call.duration, 0) / apiCalls.length 
+      ? apiCalls.reduce((sum: number, call: any) => sum + call.duration, 0) / apiCalls.length 
       : 2500; // Default estimate
 
     const successfulCalls = apiCalls.filter(call => call.success).length;
@@ -84,20 +84,21 @@ export async function GET(request: NextRequest) {
 
     // Model usage analysis
     const modelStats = chats.reduce((acc, chat) => {
-      if (!acc[chat.model]) {
-        acc[chat.model] = { count: 0, totalDuration: 0 };
+      const model = chat.model || 'unknown';
+      if (!acc[model]) {
+        acc[model] = { count: 0, totalDuration: 0 };
       }
-      acc[chat.model].count += 1;
+      acc[model].count += 1;
       
       // Estimate performance based on model and quality
       let estimatedPerf = 85;
-      if (chat.model.includes('claude')) estimatedPerf = 95;
-      else if (chat.model.includes('gpt-4')) estimatedPerf = 90;
-      else if (chat.model.includes('llama')) estimatedPerf = 80;
+      if (chat.model?.includes('claude')) estimatedPerf = 95;
+      else if (chat.model?.includes('gpt-4')) estimatedPerf = 90;
+      else if (chat.model?.includes('llama')) estimatedPerf = 80;
       
-      if (chat.quality === 'high') estimatedPerf += 5;
+      // Note: quality field doesn't exist in schema, using default
       
-      acc[chat.model].totalDuration += estimatedPerf;
+      acc[model].totalDuration += estimatedPerf;
       return acc;
     }, {} as Record<string, { count: number; totalDuration: number }>);
 

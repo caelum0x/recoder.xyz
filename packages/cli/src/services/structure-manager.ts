@@ -4,7 +4,7 @@
  * Generates production-ready project structures with real service connections
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { FileSystemUtils } from '../utils/filesystem';
 import { ValidationHelper } from '../utils/validation';
 import { ProjectData, ProjectStructure } from './api';

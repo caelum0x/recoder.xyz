@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString()
     });
     
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(new Uint8Array(zipBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',

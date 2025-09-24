@@ -114,6 +114,7 @@ export default function BusinessIntelligenceDashboard() {
 
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [autoRefresh]);
 
   // Initial data load

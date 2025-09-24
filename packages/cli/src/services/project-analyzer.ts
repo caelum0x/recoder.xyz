@@ -4,9 +4,9 @@
 
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
-import { ArchitectureInfo, CodebaseContext, CodePattern, CodeQualityMetrics, CodingConventions, Dependency, DirectoryInfo, DocumentationInfo, EnvironmentContext, ExistingCodeInfo, FileInfo, FileStructure, FrameworkInfo, LanguageInfo, ProjectContext, StructurePattern } from '@recoder/shared/types/code-generation';
+import { ArchitectureInfo, CodebaseContext, CodePattern, CodeQualityMetrics, CodingConventions, Dependency, DirectoryInfo, DocumentationInfo, EnvironmentContext, ExistingCodeInfo, FileInfo, FileStructure, FrameworkInfo, LanguageInfo, ProjectContext, StructurePattern } from 'recoder-shared/types/code-generation';
 
 // Helper function to recursively find files matching patterns
 async function findFiles(dir: string, patterns: string[], ignorePatterns: string[] = []): Promise<string[]> {

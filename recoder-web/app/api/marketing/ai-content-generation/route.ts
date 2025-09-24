@@ -731,7 +731,7 @@ async function generateHeadlines(params: ContentGenerationAction): Promise<Gener
     generation_time: 0,
     quality_score: calculateQualityScore(parsedContent, null, contentMetrics),
     plagiarism_check: await checkPlagiarism(parsedContent.content),
-    variations: parsedContent.content.split('\n').filter(line => line.trim()),
+    variations: parsedContent.content.split('\n').filter((line: string) => line.trim()),
     seo_analysis: {
       keyword_density: calculateKeywordDensity(parsedContent.content, keywords),
       readability_score: 85, // Headlines are typically readable

@@ -5,15 +5,18 @@ export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
 import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard';
+import UsageDashboard from '@/components/analytics/UsageDashboard';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Download, Settings, Share2, Calendar } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Download, Settings, Share2, Calendar, DollarSign, Zap } from 'lucide-react';
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month' | 'year'>('month');
   const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<'usage' | 'platform'>('usage');
 
   const handleExport = async (format: 'csv' | 'json' | 'excel') => {
     try {
@@ -125,8 +128,27 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
 
-      {/* Analytics Dashboard */}
-      <AnalyticsDashboard timeRange={timeRange} userId={userId} />
+      {/* Analytics Tabs */}
+      <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="usage" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Usage & Billing
+          </TabsTrigger>
+          <TabsTrigger value="platform" className="flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            Platform Analytics
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="usage">
+          <UsageDashboard />
+        </TabsContent>
+        
+        <TabsContent value="platform">
+          <AnalyticsDashboard timeRange={timeRange} userId={userId} />
+        </TabsContent>
+      </Tabs>
 
       {/* Quick Stats Cards */}
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">

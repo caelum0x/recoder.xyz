@@ -3,7 +3,7 @@
  * Implements intelligent algorithms to minimize AI costs while maintaining quality
  * Core competitive advantage over individual API key users
  */
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { billingIntegration } from './billing-integration';
 import { apiKeyPoolManager } from './api-key-pool-manager';
 

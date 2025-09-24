@@ -6,9 +6,9 @@ import * as os from "os"
 import axios from "axios"
 import dotenvx from "@dotenvx/dotenvx"
 
-import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "@recoder/shared"
+import { type ModelInfo, type GeminiCliModelId, geminiCliDefaultModelId, geminiCliModels } from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 import { t } from "../../i18n"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"

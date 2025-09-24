@@ -10,7 +10,7 @@ export async function POST(request: NextRequest, { params }: { params: { keyId: 
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { keyId } = params;
+    const keyId = params.keyId;
 
     // In a real implementation, you would:
     // 1. Verify the API key belongs to the user

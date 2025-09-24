@@ -79,15 +79,16 @@ export default function WorkflowMonitoring() {
   useEffect(() => {
     fetchExecutions();
     fetchStats();
-    
+
     if (autoRefresh) {
       const interval = setInterval(() => {
         fetchExecutions();
         fetchStats();
       }, refreshInterval);
-      
+
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [autoRefresh, refreshInterval, statusFilter, workflowFilter, searchQuery]);
 
   const fetchExecutions = async () => {

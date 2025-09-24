@@ -30,7 +30,7 @@ interface BusinessMetrics {
     breakdown: Record<string, number>;
   };
   users: {
-    active: number;
+    isActive: number;
     new: number;
     retention: number;
     churn: number;
@@ -97,7 +97,7 @@ class BusinessIntelligenceEngine {
         breakdown: await this.getRevenueBreakdown()
       },
       users: {
-        active: await this.getActiveUsers(),
+        isActive: await this.getActiveUsers(),
         new: await this.getNewUsers(),
         retention: await this.getRetentionRate(),
         churn: await this.getChurnRate(),

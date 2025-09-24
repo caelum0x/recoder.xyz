@@ -1,8 +1,8 @@
 import OpenAI from "openai"
 
-import type { ModelInfo } from "@recoder/shared"
+import type { ModelInfo } from "recoder-shared"
 
-import { ApiHandlerOptions, RouterName, ModelRecord } from "@recoder/shared"
+import { ApiHandlerOptions, RouterName, ModelRecord } from "recoder-shared"
 
 import { BaseProvider } from "./base-provider"
 import { getModels } from "./fetchers/modelCache"

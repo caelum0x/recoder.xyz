@@ -7,7 +7,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import { OpenRouterHandler } from "../openrouter"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
 import { Package } from "../../../shared/package"
 
 // Mock dependencies

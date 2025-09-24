@@ -1,13 +1,34 @@
 /**
- * Minimal Production Engine Server 
- * Provides essential functionality without complex dependencies
+ * Production Engine Server 
+ * Real AI-powered code generation with OpenRouter integration
  */
 
 import express, { Express } from 'express';
 import cors from 'cors';
+import OpenRouterAI from './services/openrouter-ai';
+import SecurityScanner from './services/security-scanner';
+
+// Types for validation
+interface ValidationResult {
+  check?: string;
+  passed: boolean;
+  message: string;
+  details?: any;
+}
+
+interface GeneratedFile {
+  path: string;
+  content: string;
+  type: 'code' | 'config' | 'test' | 'documentation';
+  language?: string;
+}
 
 const app: Express = express();
 const PORT = process.env.ENGINE_PORT || process.env.PORT || 3002;
+
+// Initialize services
+const aiService = new OpenRouterAI();
+const securityScanner = new SecurityScanner();
 
 // Middleware
 app.use(cors({
@@ -27,15 +48,28 @@ app.use((req, res, next) => {
 });
 
 // Health check
-app.get('/health', (req, res) => {
-  res.json({
-    service: 'Recoder Production Engine',
-    status: 'healthy',
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+app.get('/health', async (req, res) => {
+  try {
+    const aiHealthCheck = await aiService.healthCheck();
+    
+    res.json({
+      service: 'Recoder Production Engine',
+      status: 'healthy',
+      version: '2.0.0',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      ai: aiHealthCheck
+    });
+  } catch (error) {
+    res.status(503).json({
+      service: 'Recoder Production Engine',
+      status: 'degraded',
+      version: '2.0.0',
+      timestamp: new Date().toISOString(),
+      error: 'AI service check failed'
+    });
+  }
 });
 
 // Generate real code endpoint - working minimal implementation
@@ -59,7 +93,7 @@ app.post('/api/generate', async (req, res) => {
       });
     }
 
-    console.log('🚀 Production Engine: Starting code generation', {
+    console.log('🚀 Production Engine: Starting AI code generation', {
       type,
       description: description.substring(0, 100),
       framework,
@@ -67,25 +101,50 @@ app.post('/api/generate', async (req, res) => {
       userId
     });
 
-    // Generate working code templates
-    const generatedCode = await generateProductionCode(description, type, framework, features);
+    // Generate real code using AI or fallback to templates
+    const generatedCode = await aiService.generateCode({
+      description,
+      type,
+      framework,
+      features
+    });
+
+    // Run security scan on generated code
+    console.log('🔒 Running security scan on generated code...');
+    const securityScan = type === 'web' && framework?.includes('react')
+      ? await securityScanner.scanReactApp(generatedCode.files)
+      : await securityScanner.scanCode(generatedCode.files);
+
+    console.log('🔒 Security scan completed:', {
+      score: securityScan.score,
+      vulnerabilities: securityScan.summary.total,
+      passed: securityScan.passed
+    });
 
     const result = {
       success: true,
       files: generatedCode.files,
       instructions: generatedCode.instructions,
       metadata: {
-        provider: 'production-engine',
-        model: 'template-based-production',
-        tokensUsed: generatedCode.files.reduce((acc, f) => acc + Math.ceil(f.content.length / 4), 0),
-        generationTime: generatedCode.generationTime
+        ...generatedCode.metadata,
+        security: {
+          score: securityScan.score,
+          vulnerabilities: securityScan.vulnerabilities,
+          summary: securityScan.summary,
+          passed: securityScan.passed,
+          scanTime: securityScan.scanTime,
+          recommendations: securityScanner.getSecurityRecommendations(type)
+        }
       }
     };
 
-    console.log('✅ Production Engine: Code generation completed', {
+    console.log('✅ Production Engine: AI code generation completed', {
       success: true,
       files: result.files.length,
       provider: result.metadata.provider,
+      model: result.metadata.model,
+      tokensUsed: result.metadata.tokensUsed,
+      cost: result.metadata.cost,
       generationTime: result.metadata.generationTime
     });
 
@@ -103,6 +162,55 @@ app.post('/api/generate', async (req, res) => {
         model: 'failed',
         tokensUsed: 0,
         generationTime: 0
+      }
+    });
+  }
+});
+
+// Security scan endpoint
+app.post('/api/security-scan', async (req, res) => {
+  try {
+    const { files, projectType } = req.body;
+
+    if (!files || !Array.isArray(files)) {
+      return res.status(400).json({
+        error: {
+          message: 'Files array is required',
+          code: 'MISSING_FILES'
+        }
+      });
+    }
+
+    console.log('🔒 Production Engine: Starting security scan', {
+      fileCount: files.length,
+      projectType
+    });
+
+    const scanResult = projectType === 'web'
+      ? await securityScanner.scanReactApp(files)
+      : await securityScanner.scanCode(files);
+
+    console.log('✅ Production Engine: Security scan completed', {
+      score: scanResult.score,
+      vulnerabilities: scanResult.summary.total,
+      passed: scanResult.passed
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...scanResult,
+        recommendations: securityScanner.getSecurityRecommendations(projectType || 'general')
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Production Engine: Security scan failed:', error);
+    res.status(500).json({
+      error: {
+        message: 'Security scan failed',
+        code: 'SCAN_ERROR',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       }
     });
   }
@@ -167,10 +275,31 @@ app.post('/api/validate', async (req, res) => {
 // Get available AI providers
 app.get('/api/providers', async (req, res) => {
   try {
-    const providers = ['production-engine', 'template-generator'];
+    const aiHealthCheck = await aiService.healthCheck();
+    
+    const providers = [
+      {
+        name: 'openrouter',
+        status: aiHealthCheck.status,
+        models: aiHealthCheck.modelsAvailable ? [
+          'anthropic/claude-3.5-sonnet',
+          'anthropic/claude-3.5-haiku', 
+          'meta-llama/llama-3.1-70b-instruct'
+        ] : [],
+        capabilities: ['code-generation', 'real-time', 'production-ready']
+      },
+      {
+        name: 'template-engine',
+        status: 'healthy',
+        models: ['built-in-templates'],
+        capabilities: ['code-generation', 'fast', 'fallback']
+      }
+    ];
+    
     res.json({
       success: true,
-      providers
+      providers,
+      primary: aiHealthCheck.modelsAvailable ? 'openrouter' : 'template-engine'
     });
   } catch (error: any) {
     console.error('Failed to get providers:', error);
@@ -293,8 +422,8 @@ async function generateProductionCode(
 }
 
 // File generators for different project types
-function generateWebFiles(description: string, framework?: string, features: string[] = []) {
-  const files = [];
+function generateWebFiles(description: string, framework?: string, features: string[] = []): GeneratedFile[] {
+  const files: GeneratedFile[] = [];
   
   if (framework?.toLowerCase().includes('react') || framework?.toLowerCase().includes('next')) {
     // React/Next.js implementation
@@ -1338,15 +1467,15 @@ function generateInstructions(type: string, framework?: string): string {
   return instructions[type as keyof typeof instructions] || instructions.default;
 }
 
-function validateProductionCode(files: any[], projectType: string) {
-  const results = [];
+function validateProductionCode(files: GeneratedFile[], projectType: string): ValidationResult[] {
+  const results: ValidationResult[] = [];
 
   // Validate each file
   for (const file of files) {
     // Check if file has content
     results.push({
       check: `File content validation: ${file.path}`,
-      passed: file.content && file.content.length > 0,
+      passed: Boolean(file.content && file.content.length > 0),
       message: file.content ? 'File has content' : 'File is empty',
       details: { fileName: file.path, contentLength: file.content?.length || 0 }
     });

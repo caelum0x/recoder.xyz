@@ -324,7 +324,7 @@ export class PatternRecognitionMLService extends EventEmitter {
         options
       });
 
-      const discoveredPatterns = [];
+      const discoveredPatterns: any[] = [];
 
       // Extract features from all code samples
       const featureSets = await Promise.all(
@@ -522,7 +522,7 @@ export class PatternRecognitionMLService extends EventEmitter {
           category: category as any
         })));
       } catch (error) {
-        logger.warn(`Feature extraction failed for category ${category}:`, error.message);
+        logger.warn(`Feature extraction failed for category ${category}:`, error instanceof Error ? error.message : 'Unknown error');
       }
     }
 

@@ -555,4 +555,4 @@ function replaceVariables(template: string, variables: Record<string, any>): str
   });
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

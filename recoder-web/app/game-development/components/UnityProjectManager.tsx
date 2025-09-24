@@ -85,7 +85,7 @@ export default function UnityProjectManager({ onStatsChange }: UnityProjectManag
       }
     } catch (error) {
       console.error('Failed to create Unity project:', error)
-      alert(error.message || 'Failed to create project')
+      alert((error instanceof Error ? error.message : String(error)) || 'Failed to create project')
     }
   }
 

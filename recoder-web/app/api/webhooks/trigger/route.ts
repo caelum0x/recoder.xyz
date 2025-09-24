@@ -1,6 +1,6 @@
 // Webhook triggering system - sends webhook events to registered endpoints
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from '@/lib/database';
+import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 
 interface WebhookEvent {
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get all active webhooks for this user that listen to this event
-    const webhooks = await prisma.userWebhook.findMany({
+    const webhooks = await prisma.webhook.findMany({
       where: {
         userId,
         isActive: true,
@@ -127,23 +127,21 @@ async function deliverWebhook(webhook: any, payloadString: string): Promise<{
       await prisma.webhookDelivery.create({
         data: {
           webhookId: webhook.id,
-          success: response.ok,
-          statusCode: response.status,
-          responseTime,
-          attempt: attempt + 1,
-          payload: payloadString,
-          response: response.ok ? 'Success' : `HTTP ${response.status}: ${response.statusText}`,
-          error: response.ok ? null : `HTTP ${response.status}: ${response.statusText}`
+          event: JSON.parse(payloadString).event,
+          payload: JSON.parse(payloadString),
+          status: response.ok ? 'success' : 'failed',
+          attempts: attempt + 1,
+          response: response.ok ? { message: 'Success' } : { error: `HTTP ${response.status}: ${response.statusText}` },
+          deliveredAt: response.ok ? new Date() : null
         }
       });
 
       // Update webhook stats
-      await prisma.userWebhook.update({
+      await prisma.webhook.update({
         where: { id: webhook.id },
         data: {
           lastTriggeredAt: new Date(),
-          deliveryCount: { increment: 1 },
-          ...(response.ok ? {} : { failureCount: { increment: 1 } })
+          lastDelivery: new Date()
         }
       });
 
@@ -158,20 +156,17 @@ async function deliverWebhook(webhook: any, payloadString: string): Promise<{
       lastError = `HTTP ${response.status}: ${response.statusText}`;
       
     } catch (error) {
-      const responseTime = Date.now() - startTime;
       lastError = error instanceof Error ? error.message : 'Network error';
 
       // Log failed delivery attempt
       await prisma.webhookDelivery.create({
         data: {
           webhookId: webhook.id,
-          success: false,
-          statusCode: 0,
-          responseTime,
-          attempt: attempt + 1,
-          payload: payloadString,
-          response: null,
-          error: lastError
+          event: JSON.parse(payloadString).event,
+          payload: JSON.parse(payloadString),
+          status: 'failed',
+          attempts: attempt + 1,
+          response: { error: lastError }
         }
       });
     }
@@ -185,12 +180,11 @@ async function deliverWebhook(webhook: any, payloadString: string): Promise<{
   }
 
   // All attempts failed, update webhook stats
-  await prisma.userWebhook.update({
+  await prisma.webhook.update({
     where: { id: webhook.id },
     data: {
       lastTriggeredAt: new Date(),
-      deliveryCount: { increment: 1 },
-      failureCount: { increment: 1 }
+      lastDelivery: new Date()
     }
   });
 
@@ -213,7 +207,7 @@ export async function GET() {
   try {
     const stats = await prisma.webhookDelivery.aggregate({
       _count: { id: true },
-      _avg: { responseTime: true },
+      _avg: { attempts: true },
       where: {
         createdAt: {
           gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
@@ -223,18 +217,18 @@ export async function GET() {
 
     const successfulDeliveries = await prisma.webhookDelivery.count({
       where: {
-        success: true,
+        status: 'success',
         createdAt: {
           gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
         }
       }
     });
 
-    const activeWebhooks = await prisma.userWebhook.count({
+    const activeWebhooks = await prisma.webhook.count({
       where: { isActive: true }
     });
 
-    const totalDeliveries = stats._count.id || 0;
+    const totalDeliveries = stats._count?.id || 0;
     const successRate = totalDeliveries > 0 ? (successfulDeliveries / totalDeliveries) * 100 : 100;
 
     return NextResponse.json({
@@ -245,7 +239,7 @@ export async function GET() {
         deliveries24h: totalDeliveries,
         successfulDeliveries24h: successfulDeliveries,
         successRate: Math.round(successRate * 100) / 100,
-        averageResponseTime: Math.round((stats._avg.responseTime || 0) * 100) / 100
+        averageAttempts: Math.round((stats._avg?.attempts || 0) * 100) / 100
       },
       supportedEvents: [
         'project.created',

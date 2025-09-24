@@ -61,20 +61,20 @@ export default function HighContrastToggle() {
 
     // Update settings based on system preferences if not already set
     if (prefersReducedMotion.matches && !savedSettings) {
-      updateSetting('contrast', 'reduceMotion', true);
+      updateContrastSetting('reduceMotion', true);
     }
 
     if (prefersHighContrast.matches && !savedSettings) {
-      updateSetting('contrast', 'highContrast', true);
+      updateContrastSetting('highContrast', true);
     }
 
     // Listen for system preference changes
     const handleReducedMotionChange = (e: MediaQueryListEvent) => {
-      updateSetting('contrast', 'reduceMotion', e.matches);
+      updateContrastSetting('reduceMotion', e.matches);
     };
 
     const handleHighContrastChange = (e: MediaQueryListEvent) => {
-      updateSetting('contrast', 'highContrast', e.matches);
+      updateContrastSetting('highContrast', e.matches);
     };
 
     prefersReducedMotion.addEventListener('change', handleReducedMotionChange);
@@ -86,19 +86,34 @@ export default function HighContrastToggle() {
     };
   }, []);
 
-  const updateSetting = <K extends keyof AccessibilitySettings>(
-    category: K,
-    key: keyof AccessibilitySettings[K],
-    value: any
-  ) => {
+  const updateContrastSetting = (key: keyof ContrastSettings, value: any) => {
     const newSettings = {
       ...settings,
-      [category]: {
-        ...settings[category],
+      contrast: {
+        ...settings.contrast,
         [key]: value,
       },
     };
+    setSettings(newSettings);
+    applyAccessibilitySettings(newSettings);
+    localStorage.setItem('accessibility-settings', JSON.stringify(newSettings));
+  };
 
+  const updateFontSize = (size: 'normal' | 'large' | 'extra-large') => {
+    const newSettings = {
+      ...settings,
+      fontSize: size,
+    };
+    setSettings(newSettings);
+    applyAccessibilitySettings(newSettings);
+    localStorage.setItem('accessibility-settings', JSON.stringify(newSettings));
+  };
+
+  const updateScreenReaderSetting = (value: boolean) => {
+    const newSettings = {
+      ...settings,
+      screenReaderOptimized: value,
+    };
     setSettings(newSettings);
     applyAccessibilitySettings(newSettings);
     localStorage.setItem('accessibility-settings', JSON.stringify(newSettings));
@@ -268,7 +283,7 @@ export default function HighContrastToggle() {
               <Button
                 variant={settings.contrast.highContrast ? "default" : "outline"}
                 size="sm"
-                onClick={() => updateSetting('contrast', 'highContrast', !settings.contrast.highContrast)}
+                onClick={() => updateContrastSetting('highContrast', !settings.contrast.highContrast)}
                 className="h-6 px-2"
               >
                 {settings.contrast.highContrast ? <Check className="w-3 h-3" /> : <Contrast className="w-3 h-3" />}
@@ -280,7 +295,7 @@ export default function HighContrastToggle() {
               <Button
                 variant={settings.contrast.largeFocus ? "default" : "outline"}
                 size="sm"
-                onClick={() => updateSetting('contrast', 'largeFocus', !settings.contrast.largeFocus)}
+                onClick={() => updateContrastSetting('largeFocus', !settings.contrast.largeFocus)}
                 className="h-6 px-2"
               >
                 {settings.contrast.largeFocus ? <Check className="w-3 h-3" /> : <ZapIcon className="w-3 h-3" />}
@@ -292,7 +307,7 @@ export default function HighContrastToggle() {
               <Button
                 variant={settings.contrast.colorBlindFriendly ? "default" : "outline"}
                 size="sm"
-                onClick={() => updateSetting('contrast', 'colorBlindFriendly', !settings.contrast.colorBlindFriendly)}
+                onClick={() => updateContrastSetting('colorBlindFriendly', !settings.contrast.colorBlindFriendly)}
                 className="h-6 px-2"
               >
                 {settings.contrast.colorBlindFriendly ? <Check className="w-3 h-3" /> : <Palette className="w-3 h-3" />}
@@ -309,7 +324,7 @@ export default function HighContrastToggle() {
             <Button
               variant={settings.contrast.reduceMotion ? "default" : "outline"}
               size="sm"
-              onClick={() => updateSetting('contrast', 'reduceMotion', !settings.contrast.reduceMotion)}
+              onClick={() => updateContrastSetting('reduceMotion', !settings.contrast.reduceMotion)}
               className="h-6 px-2"
             >
               {settings.contrast.reduceMotion ? <Check className="w-3 h-3" /> : <Monitor className="w-3 h-3" />}
@@ -326,7 +341,7 @@ export default function HighContrastToggle() {
                 key={size}
                 variant={settings.fontSize === size ? "default" : "outline"}
                 size="sm"
-                onClick={() => updateSetting('fontSize', 'fontSize', size)}
+                onClick={() => updateFontSize(size)}
                 className="text-xs"
               >
                 {size === 'normal' ? 'Normal' : size === 'large' ? 'Large' : 'X-Large'}
@@ -343,7 +358,7 @@ export default function HighContrastToggle() {
             <Button
               variant={settings.screenReaderOptimized ? "default" : "outline"}
               size="sm"
-              onClick={() => updateSetting('screenReaderOptimized', 'screenReaderOptimized', !settings.screenReaderOptimized)}
+              onClick={() => updateScreenReaderSetting(!settings.screenReaderOptimized)}
               className="h-6 px-2"
             >
               {settings.screenReaderOptimized ? <Check className="w-3 h-3" /> : <Settings className="w-3 h-3" />}

@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         id: integration.id,
         provider: integration.provider,
         status: integration.status,
-        scopes: integration.scopes,
+        permissions: integration.scopes,
         connectedAt: integration.createdAt.toISOString(),
         lastSyncAt: integration.lastSyncAt?.toISOString(),
         expiresAt: integration.expiresAt?.toISOString(),
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     // Get integration statistics
     const stats = {
       total: integrations.length,
-      active: integrations.filter(i => i.status === 'active').length,
+      isActive: integrations.filter(i => i.status === 'active').length,
       expired: integrations.filter(i => i.status === 'expired').length,
       error: integrations.filter(i => i.status === 'error').length,
       byProvider: integrations.reduce((acc, integration) => {
@@ -171,6 +171,7 @@ async function disconnectIntegration(userId: string, integrationId: string, requ
       data: {
         userId,
         action: 'integration_disconnected',
+          resource: 'integration',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -258,6 +259,7 @@ async function refreshAllIntegrations(userId: string, provider?: string, request
     data: {
       userId,
       action: 'integrations_refreshed',
+          resource: 'integration',
       platform: 'web',
       ip: request?.headers.get('x-forwarded-for') || 'unknown',
       userAgent: request?.headers.get('user-agent') || 'unknown',

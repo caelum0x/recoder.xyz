@@ -63,7 +63,7 @@ export async function* runClaudeCode(options: ClaudeCodeRunOptions): AsyncGenera
       role: msg.role,
       content: typeof msg.content === 'string' ? msg.content : 
         Array.isArray(msg.content) ? 
-          msg.content.filter(block => block.type === 'text').map(block => block.text).join('\n') :
+          msg.content.filter((block: any) => block.type === 'text').map((block: any) => block.text).join('\n') :
           String(msg.content)
     }));
 

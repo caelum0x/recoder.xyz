@@ -573,8 +573,12 @@ class KeywordResearchClient {
   }
 
   private calculateIntentDistribution(keywords: any[]): any {
-    const distribution = { informational: 0, commercial: 0, transactional: 0, navigational: 0 };
-    keywords.forEach(kw => distribution[kw.intent]++);
+    const distribution: Record<string, number> = { informational: 0, commercial: 0, transactional: 0, navigational: 0 };
+    keywords.forEach(kw => {
+      if (distribution.hasOwnProperty(kw.intent)) {
+        distribution[kw.intent]++;
+      }
+    });
     
     const total = keywords.length;
     Object.keys(distribution).forEach(key => {
@@ -590,12 +594,12 @@ class KeywordResearchClient {
     
     const firstCompetitor = competitors[0].topKeywords || [];
     return firstCompetitor
-      .filter(kw => 
+      .filter((kw: any) => 
         competitors.every(comp => 
           (comp.topKeywords || []).some((k: any) => k.keyword === kw.keyword)
         )
       )
-      .map(kw => kw.keyword);
+      .map((kw: any) => kw.keyword);
   }
 
   private calculateAverageMetrics(keywords: any[]): any {

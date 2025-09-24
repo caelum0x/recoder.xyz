@@ -64,7 +64,7 @@ router.post('/scan-code', async (req, res) => {
     } = req.body;
 
     if (!code || !filePath) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Code content and file path are required'
       });
@@ -97,7 +97,7 @@ router.post('/scan-code', async (req, res) => {
       request: mockRequest
     });
 
-    res.json({
+    return res.json({
       success: true,
       compliance: response.data.complianceValidation,
       blocked: response.data.blockedByCompliance,
@@ -106,7 +106,7 @@ router.post('/scan-code', async (req, res) => {
 
   } catch (error: any) {
     Logger.error('Code compliance scan failed:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Compliance scan failed',
       details: error.message
@@ -120,7 +120,7 @@ router.post('/scan-project', async (req, res) => {
     const { projectPath } = req.body;
 
     if (!projectPath) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Project path is required'
       });
@@ -137,7 +137,7 @@ router.post('/scan-project', async (req, res) => {
     const scanResults = new Map(scanResponse.data.scanResults);
     const dashboard = dashboardResponse.data.dashboard;
 
-    res.json({
+    return res.json({
       success: true,
       scanResults: Array.from(scanResults.entries()).map(([path, report]) => ({
         filePath: path,
@@ -153,7 +153,7 @@ router.post('/scan-project', async (req, res) => {
 
   } catch (error: any) {
     Logger.error('Project compliance scan failed:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Project compliance scan failed',
       details: error.message
@@ -185,15 +185,16 @@ router.get('/config', async (req, res) => {
 });
 
 // POST /api/compliance/config - Update compliance configuration
-router.post('/config', async (req, res) => {
+router.post('/config', async (req, res): Promise<void> => {
   try {
     const { configuration } = req.body;
 
     if (!configuration) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Configuration object is required'
       });
+      return;
     }
 
     await axios.post(`${PRODUCTION_ENGINE_URL}/api/compliance/config`, {
@@ -290,15 +291,16 @@ router.get('/rules', (req, res) => {
 });
 
 // GET /api/compliance/certificate-eligibility - Check SOC 2 certificate eligibility
-router.get('/certificate-eligibility', async (req, res) => {
+router.get('/certificate-eligibility', async (req, res): Promise<void> => {
   try {
     const { projectPath } = req.query;
 
     if (!projectPath) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Project path is required'
       });
+      return;
     }
 
     const scanResponse = await axios.post(`${PRODUCTION_ENGINE_URL}/api/compliance/scan-project`, {

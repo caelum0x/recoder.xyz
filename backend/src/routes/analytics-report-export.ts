@@ -43,14 +43,15 @@ router.post('/reports/:reportId/export', [
   body('format').isIn(Object.values(ExportFormat)),
   body('options').optional().isObject(),
   body('customization').optional().isObject(),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Validation failed',
         details: errors.array()
       });
+      return;
     }
 
     const { reportId } = req.params;
@@ -62,7 +63,8 @@ router.post('/reports/:reportId/export', [
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     // Mock report data (replace with actual Prisma query when models are added)
@@ -81,19 +83,26 @@ router.post('/reports/:reportId/export', [
     };
 
     if (!report) {
-      return res.status(404).json({ error: 'Report not found or access denied' });
+      res.status(404).json({ error: 'Report not found or access denied' });
+      return;
     }
 
     // Check export limits (mock implementation)
     const plan: 'free' | 'pro' | 'enterprise' = req.user?.subscriptionPlan as any || 'free';
-    const exportLimits = { free: 10, pro: 100, enterprise: 1000 };
-    const monthlyExports = 5; // Mock count
-
+    // Mock monthlyExports value (replace with actual logic when available)
+    const monthlyExports = 0;
+    // Mock exportLimits object
+    const exportLimits = {
+      free: 5,
+      pro: 50,
+      enterprise: 500
+    };
     if (monthlyExports >= exportLimits[plan as keyof typeof exportLimits]) {
-      return res.status(403).json({
+      res.status(403).json({
         error: `Export limit reached. ${plan} plan allows ${exportLimits[plan as keyof typeof exportLimits]} exports per month.`,
         upgradeRequired: plan === 'free'
       });
+      return;
     }
 
     // Generate report data
@@ -123,11 +132,9 @@ router.post('/reports/:reportId/export', [
       case ExportFormat.JSON:
         exportResult = await generateJSONExport(reportData, defaultOptions);
         break;
-      case ExportFormat.ZIP:
-        exportResult = await generateZIPExport(reportData, defaultOptions, customization);
-        break;
       default:
-        return res.status(400).json({ error: 'Unsupported export format' });
+        res.status(400).json({ error: 'Unsupported export format' });
+        return;
     }
 
     // Log export activity (mock implementation)
@@ -136,9 +143,8 @@ router.post('/reports/:reportId/export', [
     // Set appropriate headers and send file
     res.setHeader('Content-Type', exportResult.contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
-    res.setHeader('Content-Length', exportResult.buffer.length);
     res.send(exportResult.buffer);
-
+    return;
   } catch (error) {
     console.error('Analytics export error:', error);
     res.status(500).json({ error: 'Failed to export analytics report' });
@@ -153,7 +159,7 @@ router.get('/reports/:reportId/export/history', [
   authenticate,
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { reportId } = req.params;
     const page = parseInt(req.query.page as string) || 1;

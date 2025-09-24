@@ -3,9 +3,9 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { User, ApiKey, UsageRecord } = require('../models');
+const { prisma } = require('../database/prisma');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -57,7 +57,7 @@ router.post('/device/code', async (req, res, next) => {
  * CLI Device Flow Authentication
  * Step 2: Web app confirms device code
  */
-router.post('/device/authorize', authenticateToken, async (req, res, next) => {
+router.post('/device/authorize', authenticate, async (req, res, next) => {
   try {
     const { userCode } = req.body;
     const userId = req.user.id;
@@ -148,7 +148,7 @@ router.post('/device/token', async (req, res, next) => {
     }
     
     // Generate API key for CLI
-    const user = await User.findByPk(deviceData.userId);
+    const user = await prisma.user.findByPk(deviceData.userId);
     if (!user) {
       return res.status(404).json({
         error: 'invalid_grant',
@@ -162,7 +162,7 @@ router.post('/device/token', async (req, res, next) => {
     const fullKey = `${keyPrefix}_${keySecret}`;
     const keyHash = crypto.createHash('sha256').update(fullKey).digest('hex');
     
-    await ApiKey.upsert({
+    await prisma.apiKey.upsert({
       userId: user.id,
       name: 'CLI Access',
       keyPrefix,
@@ -218,7 +218,7 @@ router.post('/register', [
     const { email, password, name } = req.body;
 
     // Check if user exists
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await prisma.user.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({
         error: { message: 'Email already registered', code: 'EMAIL_EXISTS' }
@@ -229,7 +229,7 @@ router.post('/register', [
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user with free subscription
-    const user = await User.create({
+    const user = await prisma.user.create({
       email,
       password: hashedPassword,
       name,
@@ -244,7 +244,7 @@ router.post('/register', [
     const fullKey = `${keyPrefix}_${keySecret}`;
     const keyHash = crypto.createHash('sha256').update(fullKey).digest('hex');
     
-    await ApiKey.create({
+    await prisma.apiKey.create({
       userId: user.id,
       name: 'CLI Access',
       keyPrefix,
@@ -295,7 +295,7 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user
-    const user = await User.findOne({ where: { email } });
+    const user = await prisma.user.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({
         error: { message: 'Invalid email or password', code: 'INVALID_CREDENTIALS' }
@@ -311,7 +311,7 @@ router.post('/login', [
     }
 
     // Find or create CLI API key
-    let apiKey = await ApiKey.findOne({ 
+    let apiKey = await prisma.apiKey.findOne({ 
       where: { userId: user.id, name: 'CLI Access', isActive: true }
     });
 
@@ -327,7 +327,7 @@ router.post('/login', [
         { requestsPerMinute: 20, tokensPerMinute: 5000 } :
         { requestsPerMinute: 60, tokensPerMinute: 50000 };
       
-      apiKey = await ApiKey.create({
+      apiKey = await prisma.apiKey.create({
         userId: user.id,
         name: 'CLI Access',
         keyPrefix,
@@ -388,7 +388,7 @@ router.post('/verify', async (req, res, next) => {
     const keyHash = crypto.createHash('sha256').update(api_key).digest('hex');
     
     // Find API key
-    const apiKey = await ApiKey.findOne({ 
+    const apiKey = await prisma.apiKey.findOne({ 
       where: { keyHash, isActive: true },
       include: [{ model: User, as: 'user' }]
     });
@@ -430,7 +430,7 @@ router.get('/subscription/:userId', async (req, res, next) => {
   try {
     const { userId } = req.params;
     
-    const user = await User.findByPk(userId);
+    const user = await prisma.user.findByPk(userId);
     if (!user) {
       return res.status(404).json({
         error: { message: 'User not found', code: 'USER_NOT_FOUND' }
@@ -442,7 +442,7 @@ router.get('/subscription/:userId', async (req, res, next) => {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
     
-    const usage = await UsageRecord.count({
+    const usage = await prisma.usageRecord.count({
       where: {
         userId,
         timestamp: { [require('sequelize').Op.gte]: startOfMonth }

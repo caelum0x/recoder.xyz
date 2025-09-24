@@ -553,8 +553,8 @@ export async function POST(req: NextRequest) {
             score: analysis.metrics.overall,
             topIssues: [...analysis.issues, ...analysis.vulnerabilities]
               .sort((a, b) => {
-                const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
-                return severityOrder[b.severity] - severityOrder[a.severity];
+                const severityOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+                return (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0);
               })
               .slice(0, 5)
           },

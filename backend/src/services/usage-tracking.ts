@@ -55,7 +55,7 @@ class UsageTrackingService {
 
       // Get current billing period
       const { periodStart, periodEnd } = this.getCurrentBillingPeriod(
-        user.dodoSubscriptions[0]?.planId as SubscriptionPlan || SubscriptionPlan.MONTHLY
+        user.dodoSubscriptions[0]?.planId || 'free'
       );
 
       // Record usage
@@ -150,12 +150,12 @@ class UsageTrackingService {
   /**
    * Get current billing period
    */
-  private getCurrentBillingPeriod(planId: SubscriptionPlan): { periodStart: Date; periodEnd: Date } {
+  private getCurrentBillingPeriod(planId: string): { periodStart: Date; periodEnd: Date } {
     const now = new Date();
     let periodStart: Date;
     let periodEnd: Date;
 
-    if (planId === SubscriptionPlan.WEEKLY) {
+    if (planId === 'weekly') {
       // Weekly billing period (Monday to Sunday)
       const dayOfWeek = now.getDay();
       const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 0 = Sunday
@@ -209,12 +209,11 @@ class UsageTrackingService {
       const tokensUsed = totalUsage._sum.tokensUsed || 0;
       const requestsMade = totalUsage._sum.requestsMade || 0;
 
-      // Calculate overage
-      const planId = subscription.planId as SubscriptionPlan;
-      const pricing = DodoPaymentsService.calculateUsage(planId, tokensUsed, requestsMade);
+      // Calculate overage using static method with correct signature
+      const pricing = DodoPaymentsService.calculateUsage(subscription.planId, tokensUsed, requestsMade);
 
       // If there's overage, create an on-demand charge
-      if (pricing.overage > 0) {
+      if (pricing > 0) {
         // Check if we haven't already charged for this period
         const existingCharge = await prisma.dodoCharge.findFirst({
           where: {
@@ -226,16 +225,16 @@ class UsageTrackingService {
         });
 
         if (!existingCharge) {
-          await this.dodoPayments.createCharge(
-            subscription.dodoSubscriptionId,
-            pricing.overage,
-            `Overage charges for period ${periodStart.toISOString().split('T')[0]} to ${periodEnd.toISOString().split('T')[0]}`
-          );
+          await this.dodoPayments.createCharge({
+            subscriptionId: subscription.dodoSubscriptionId,
+            amount: pricing,
+            description: `Overage charges for period ${periodStart.toISOString().split('T')[0]} to ${periodEnd.toISOString().split('T')[0]}`
+          });
 
           logger.info('Overage charge created', {
             userId,
             subscriptionId: subscription.id,
-            overage: pricing.overage,
+            overage: pricing,
             tokensUsed,
             requestsMade
           });

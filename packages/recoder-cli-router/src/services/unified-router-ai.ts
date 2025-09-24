@@ -7,7 +7,7 @@
 
 import { buildApiHandler, type ApiHandler } from '../api';
 import { routerBackendClient, type RequestUsage } from './backend-client';
-import type { ApiHandlerOptions } from '@recoder/shared';
+import type { ApiHandlerOptions } from 'recoder-shared';
 
 export interface RouterAIOptions {
   preferredProvider?: string;
@@ -143,16 +143,26 @@ export class UnifiedRouterAI {
       // Use Claude Sonnet 4 as default for best quality
       openRouterModelId: 'anthropic/claude-3.5-sonnet',
       openRouterUseMiddleOutTransform: true,
-      // Add custom configuration for our premium models
+      // Smart model selection for 60/25/15% cost optimization
       openRouterModels: [
-        'anthropic/claude-3.5-sonnet',      // Claude Sonnet 4
-        'google/gemini-flash-1.5',          // Gemini 2.5 Flash  
-        'deepseek/deepseek-chat',           // DeepSeek V3
-        'qwen/qwen-2.5-coder-32b-instruct', // Qwen3 Coder
-        'anthropic/claude-3-sonnet',        // Claude 3.7 Sonnet
-        'google/gemini-pro-1.5',            // Gemini 2.5 Pro
-        'deepseek/deepseek-reasoner',       // R1 0528
-        'moonshot/moonshot-v1-8k'           // Kimi K2
+        // FREE TIER (for free users)
+        'deepseek/deepseek-v3-0324-free',   // Free DeepSeek V3
+        'deepseek/deepseek-r1-0528-free',   // Free R1 0528
+        
+        // COST-EFFECTIVE TIER (60% of paid traffic)
+        'deepseek/deepseek-v3-0324',        // $2.19/1M - Best value
+        'meta-llama/llama-3.3-70b-instruct', // $0.79/1M - Very cheap
+        'microsoft/wizardlm-2-8x22b',       // $1.00/1M - Good quality
+        
+        // BALANCED TIER (25% of paid traffic)  
+        'google/gemini-2.5-flash',          // $0.30/1M - Fast & cheap
+        'google/gemini-2.0-flash',          // $0.30/1M - Reliable
+        'qwen/qwq-32b-preview',             // $1.00/1M - Code specialist
+        
+        // PREMIUM TIER (15% of paid traffic)
+        'anthropic/claude-4-sonnet',        // $15/1M - Best quality
+        'anthropic/claude-3.5-sonnet',      // $15/1M - Proven quality
+        'google/gemini-2.5-pro'             // $7.50/1M - Professional
       ]
     });
 
@@ -301,21 +311,22 @@ export class UnifiedRouterAI {
   }
 
   /**
-   * Select provider based on context type and routing rules
+   * Select provider and model with smart routing for cost optimization
+   * Implements 60/25/15% distribution for maximum profit
    */
   private selectProviderByContext(options: RouterAIOptions): string {
     const contextType = options.contextType || 'default';
     
-    // Use routing configuration
-    let preferredProvider = this.config.routing[contextType as keyof typeof this.config.routing];
+    // Always use OpenRouter for smart model selection unless specifically overridden
+    let preferredProvider = 'openrouter';
     
-    // Override with user preference
+    // Override with user preference if valid
     if (options.preferredProvider && this.handlers.has(options.preferredProvider)) {
       preferredProvider = options.preferredProvider;
     }
 
-    // Apply priority-based selection
-    if (options.priority) {
+    // Apply priority-based fallback selection
+    if (options.priority && !this.handlers.has(preferredProvider)) {
       preferredProvider = this.selectByPriority(options.priority);
     }
 
@@ -325,7 +336,7 @@ export class UnifiedRouterAI {
       const availableProviders = Array.from(this.handlers.keys());
       if (availableProviders.length > 0) {
         preferredProvider = availableProviders[0];
-        console.warn(`⚠️ Fallback to ${preferredProvider} (original not available)`);
+        console.warn(`⚠️ Fallback to ${preferredProvider} (OpenRouter not available)`);
       } else {
         throw new Error('No AI providers available');
       }
@@ -335,15 +346,22 @@ export class UnifiedRouterAI {
   }
 
   /**
-   * Select provider based on priority (cost, quality, speed)
+   * Select provider based on priority with OpenRouter preference
+   * All priorities route through OpenRouter for consistent smart model selection
    */
   private selectByPriority(priority: 'cost' | 'quality' | 'speed'): string {
     const availableProviders = Array.from(this.handlers.keys());
     
+    // OpenRouter handles all priorities through smart model selection
+    if (availableProviders.includes('openrouter')) {
+      return 'openrouter';
+    }
+    
+    // Fallback priority maps if OpenRouter unavailable
     const priorityMap = {
-      cost: ['ollama', 'deepseek', 'gemini', 'groq', 'openrouter', 'anthropic'],
-      quality: ['anthropic', 'openrouter', 'gemini', 'deepseek', 'groq', 'ollama'],
-      speed: ['groq', 'gemini', 'ollama', 'openrouter', 'deepseek', 'anthropic']
+      cost: ['deepseek', 'groq', 'gemini', 'ollama', 'anthropic'],
+      quality: ['anthropic', 'gemini', 'deepseek', 'groq', 'ollama'],
+      speed: ['groq', 'gemini', 'deepseek', 'ollama', 'anthropic']
     };
 
     const preferenceOrder = priorityMap[priority];
@@ -354,7 +372,7 @@ export class UnifiedRouterAI {
       }
     }
 
-    return availableProviders[0]; // Fallback
+    return availableProviders[0]; // Final fallback
   }
 
   /**

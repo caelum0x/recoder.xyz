@@ -21,7 +21,7 @@ import {
 	BEDROCK_MAX_TOKENS,
 	BEDROCK_DEFAULT_CONTEXT,
 	AWS_INFERENCE_PROFILE_MAPPING,
-} from "@recoder/shared"
+} from "recoder-shared"
 
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
@@ -30,7 +30,7 @@ import { MultiPointStrategy } from "../transform/cache-strategy/multi-point-stra
 import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"
 import { convertToBedrockConverseMessages as sharedConverter } from "../transform/bedrock-converse-format"
 import { getModelParams } from "../transform/model-params"
-import { shouldUseReasoningBudget } from "@recoder/shared"
+import { shouldUseReasoningBudget } from "recoder-shared"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
 /************************************************************************************

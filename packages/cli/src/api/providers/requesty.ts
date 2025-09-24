@@ -1,10 +1,10 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import { type ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@recoder/shared"
+import { type ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "recoder-shared"
 
-import type { ApiHandlerOptions, ModelRecord } from "@recoder/shared"
-import { calculateApiCostOpenAI } from "@recoder/shared"
+import type { ApiHandlerOptions, ModelRecord } from "recoder-shared"
+import { calculateApiCostOpenAI } from "recoder-shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"

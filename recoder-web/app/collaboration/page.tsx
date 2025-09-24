@@ -176,7 +176,7 @@ export default function CollaborationPage() {
     { id: 'admin', name: 'Admin', description: 'Can manage project settings and members' }
   ];
 
-  const getRoleIcon = (role) => {
+  const getRoleIcon = (role: string) => {
     switch (role) {
       case 'owner': return <Crown className="w-4 h-4 text-yellow-400" />;
       case 'admin': return <Shield className="w-4 h-4 text-blue-400" />;
@@ -185,7 +185,7 @@ export default function CollaborationPage() {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'online': return 'bg-green-400';
       case 'away': return 'bg-yellow-400';
@@ -194,7 +194,7 @@ export default function CollaborationPage() {
     }
   };
 
-  const getActivityIcon = (type) => {
+  const getActivityIcon = (type: string) => {
     switch (type) {
       case 'edit': return <Edit className="w-4 h-4 text-blue-400" />;
       case 'comment': return <MessageCircle className="w-4 h-4 text-green-400" />;

@@ -112,7 +112,7 @@ export default function AchievementsSystem() {
       if (data.success && data.data) {
         // Transform backend data to match frontend interface
         const transformedAchievements = [
-          ...data.data.unlockedAchievements.map(achievement => ({
+          ...data.data.unlockedAchievements.map((achievement: { id: any; icon: any; name: any; description: any; tier: string; unlockedAt: any; rarity: string; }) => ({
             id: achievement.id,
             title: `${achievement.icon} ${achievement.name}`,
             description: achievement.description,
@@ -126,7 +126,7 @@ export default function AchievementsSystem() {
             reward: { credits: 100, perks: [achievement.name] },
             rarity: achievement.rarity.toLowerCase() as 'common' | 'rare' | 'epic' | 'legendary'
           })),
-          ...data.data.availableAchievements.map(achievement => ({
+          ...data.data.availableAchievements.map((achievement: { id: any; icon: any; name: any; description: any; tier: string; progress: any; target: any; rarity: string; }) => ({
             id: achievement.id,
             title: `${achievement.icon} ${achievement.name}`,
             description: achievement.description,

@@ -3,7 +3,7 @@
  * Routes requests to optimal AI models based on task complexity and cost optimization
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { AuthService } from './auth';
 import { ConfigManager } from '../utils/config';
 

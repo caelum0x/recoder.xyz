@@ -124,7 +124,7 @@ async function getPlatformBreakdown(userId: string, startDate: string, endDate: 
 
   const result = await db.query(query, [userId, startDate, endDate]);
   
-  return result.rows.map(row => ({
+  return result.rows.map((row: any) => ({
     ...row,
     engagement_rate: row.impressions > 0 ? (row.engagement / row.impressions * 100).toFixed(2) : 0,
     cost_per_click: row.clicks > 0 ? (row.spend / row.clicks).toFixed(4) : 0
@@ -168,7 +168,7 @@ async function getContentPerformance(userId: string, startDate: string, endDate:
 
   const result = await db.query(query, values);
   
-  return result.rows.map(post => ({
+  return result.rows.map((post: any) => ({
     ...post,
     content_preview: post.content ? post.content.substring(0, 100) + '...' : '',
     performance_score: calculateContentScore(post),
@@ -213,7 +213,7 @@ async function getCampaignPerformance(userId: string, startDate: string, endDate
 
   const result = await db.query(query, values);
   
-  return result.rows.map(campaign => ({
+  return result.rows.map((campaign: any) => ({
     ...campaign,
     roi: calculateCampaignROI(campaign),
     cost_per_engagement: campaign.total_spend > 0 && campaign.total_engagement > 0
@@ -261,7 +261,7 @@ async function getAudienceInsights(userId: string, startDate: string, endDate: s
     engagement_by_time: {}
   };
 
-  result.rows.forEach(row => {
+  result.rows.forEach((row: any) => {
     // Merge demographic data
     const demo = JSON.parse(row.demographic_data || '{}');
     const interests = JSON.parse(row.interest_data || '{}');
@@ -270,19 +270,19 @@ async function getAudienceInsights(userId: string, startDate: string, endDate: s
 
     // Aggregate data (simplified aggregation)
     Object.keys(demo).forEach(key => {
-      audienceData.demographics[key] = (audienceData.demographics[key] || 0) + (demo[key] || 0);
+      (audienceData.demographics as Record<string, number>)[key] = ((audienceData.demographics as Record<string, number>)[key] || 0) + (demo[key] || 0);
     });
 
     Object.keys(interests).forEach(key => {
-      audienceData.interests[key] = (audienceData.interests[key] || 0) + (interests[key] || 0);
+      (audienceData.interests as Record<string, number>)[key] = ((audienceData.interests as Record<string, number>)[key] || 0) + (interests[key] || 0);
     });
 
     Object.keys(geo).forEach(key => {
-      audienceData.locations[key] = (audienceData.locations[key] || 0) + (geo[key] || 0);
+      (audienceData.locations as Record<string, number>)[key] = ((audienceData.locations as Record<string, number>)[key] || 0) + (geo[key] || 0);
     });
 
     Object.keys(devices).forEach(key => {
-      audienceData.devices[key] = (audienceData.devices[key] || 0) + (devices[key] || 0);
+      (audienceData.devices as Record<string, number>)[key] = ((audienceData.devices as Record<string, number>)[key] || 0) + (devices[key] || 0);
     });
   });
 
@@ -319,8 +319,8 @@ async function getCompetitorAnalysis(userId: string, platform?: string) {
   const result = await db.query(query, values);
   
   // Group by competitor
-  const competitorMap = {};
-  result.rows.forEach(row => {
+  const competitorMap: Record<string, any> = {};
+  result.rows.forEach((row: any) => {
     if (!competitorMap[row.name]) {
       competitorMap[row.name] = {
         name: row.name,

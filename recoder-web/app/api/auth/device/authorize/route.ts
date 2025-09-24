@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
         data: {
           userId: session.user.id,
           action: 'device_authorized',
+          resource: 'system',
           platform: 'web',
           ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
           userAgent: req.headers.get('user-agent') || 'unknown',
@@ -49,7 +50,8 @@ export async function POST(req: NextRequest) {
           metadata: {
             userCode,
             deviceCode: deviceFlow.deviceCode
-          }
+          },
+          resourceId: deviceFlow.id
         }
       });
 

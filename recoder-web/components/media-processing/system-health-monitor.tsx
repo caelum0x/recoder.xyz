@@ -68,6 +68,7 @@ export function SystemHealthMonitor() {
     } else if (refreshInterval) {
       clearInterval(refreshInterval)
     }
+    return undefined;
   }, [autoRefresh])
 
   const fetchSystemHealth = async () => {

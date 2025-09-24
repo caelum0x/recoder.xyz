@@ -73,7 +73,7 @@ export default function UnrealScriptGenerator({ project, onClose, onScriptGenera
     { value: 'Hybrid', label: 'C++ + Blueprint', description: 'C++ base with Blueprint extension' }
   ]
 
-  const scriptExamples = {
+  const scriptExamples: { [key: string]: string[] } = {
     Actor: [
       'Interactive pickup item with physics and sound effects',
       'Destructible environment object with particle effects',
@@ -179,7 +179,11 @@ export default function UnrealScriptGenerator({ project, onClose, onScriptGenera
       }
     } catch (error) {
       console.error('Failed to generate Unreal script:', error)
-      alert(error.message || 'Failed to generate script')
+      if (error instanceof Error) {
+        alert(error.message)
+      } else {
+        alert('Failed to generate script')
+      }
     } finally {
       setLoading(false)
     }

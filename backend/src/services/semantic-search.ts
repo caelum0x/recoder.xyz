@@ -546,7 +546,7 @@ export class SemanticSearchService extends EventEmitter {
         result.contextWindow = contextChunks.map(chunk => chunk.content).join('\n\n');
 
       } catch (error) {
-        logger.warn('Failed to add context window:', error.message);
+        logger.warn('Failed to add context window:', error instanceof Error ? error.message : 'Unknown error');
       }
     }
   }

@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import auth from '../../../../../../lib/auth'
-import { getS3Service } from '../../../../../lib/cloud-storage/aws-s3-service'
-import { FFmpegProcessor } from '../../../../../lib/media-processing/ffmpeg-processor'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { v4 as uuidv4 } from 'uuid'
+
+// Note: Removed unused imports for getS3Service and FFmpegProcessor since they're not used
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
+
+    // Get user ID from session email
+    // Note: Since we don't have prisma import here, using email as identifier for now
+    const userId = session.user.email
 
     const exportConfig = await request.json()
     
@@ -18,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const jobId = uuidv4()
-    const userId = session.user.id
+    // userId is already defined above
 
     const processingJob = {
       id: jobId,
@@ -31,7 +36,8 @@ export async function POST(request: NextRequest) {
       config: exportConfig
     }
 
-    processTimelineInBackground(processingJob)
+    // Start background processing (fire and forget)
+    processTimelineInBackground(processingJob).catch(console.error)
 
     return NextResponse.json({
       success: true,
@@ -80,12 +86,18 @@ async function processTimelineInBackground(job: any) {
       adaptiveBitrates: ['1080p', '720p', '480p']
     }
 
-    global.processingJobs = global.processingJobs || new Map()
-    global.processingJobs.set(job.id, job)
+    // Store job in global map
+    if (!(global as any).processingJobs) {
+      (global as any).processingJobs = new Map()
+    }
+    ;(global as any).processingJobs.set(job.id, job)
   } catch (error) {
     job.status = 'failed'
     job.error = error instanceof Error ? error.message : 'Unknown error'
-    global.processingJobs = global.processingJobs || new Map()
-    global.processingJobs.set(job.id, job)
+    // Store failed job in global map
+    if (!(global as any).processingJobs) {
+      (global as any).processingJobs = new Map()
+    }
+    ;(global as any).processingJobs.set(job.id, job)
   }
 }

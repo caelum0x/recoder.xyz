@@ -11,7 +11,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 const execAsync = promisify(exec);
 

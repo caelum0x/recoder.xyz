@@ -81,7 +81,7 @@ const middlewareStacks = {
     express.urlencoded({ extended: true, limit: '50mb' }),
     
     // Logging
-    morgan('combined', { stream: { write: message => logger.info(message.trim()) } }),
+    morgan('combined', { stream: { write: (message: string) => logger.info(message.trim()) } }),
     
     // Rate limiting
     performanceMiddleware.createRateLimitMiddleware({
@@ -105,7 +105,87 @@ performanceStack.forEach(middleware => app.use(middleware));
 // Health check endpoint
 app.get('/health', performanceMiddleware.createHealthCheckMiddleware());
 
-// Add all your existing routes here...
-// (This would include all the route definitions from your original server.ts)
+// Test endpoint for payment verification
+app.get('/api/test/ping', (req: any, res: any) => {
+  res.json({
+    success: true,
+    message: 'Test endpoint working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Import routes
+import gameDevelopmentRoutes from './routes/game-development-api';
+import matchmakingRoutes from './routes/matchmaking-api';
+import gameAnalyticsRoutes from './routes/game-analytics-api';
+import solidityRoutes from './routes/solidity-api';
+import blockchainRoutes from './routes/blockchain-api';
+import unifiedPaymentsRoutes from './routes/unified-payments';
+import simplePaymentTestRoutes from './routes/simple-payment-test';
+import platformIntegrationRoutes from './routes/platform-integration';
+import openRouterApiRoutes from './routes/openrouter-api';
+import pricingRoutes from './routes/pricing';
+import batchProcessingRoutes from './routes/batch-processing';
+import promptCacheRoutes from './routes/prompt-cache';
+import componentLibraryRoutes from './routes/component-library';
+import usageMonitoringRoutes from './routes/usage-monitoring';
+import overageBillingRoutes from './routes/overage-billing';
+import authRoutes from './routes/auth';
+import { batchProcessor } from './services/batch-processor';
+import { promptCache } from './services/prompt-cache';
+import { componentLibrary } from './services/component-library';
+import { realTimeUsageTracker } from './services/real-time-usage-tracker';
+import { overageBillingService } from './services/overage-billing';
+import { prisma } from './database/prisma';
+const projectsRoutes = require('./routes/projects');
+
+// Make Prisma available to routes
+app.locals.prisma = prisma;
+
+// Initialize batch processor (singleton, starts automatically)
+console.log('[INFO] Batch processor initialized');
+
+// Initialize prompt cache (singleton, starts automatically)
+console.log('[INFO] Prompt cache initialized');
+
+// Initialize component library (singleton, starts automatically)
+console.log('[INFO] Component library initialized');
+
+// Initialize real-time usage tracker (singleton, starts automatically)
+console.log('[INFO] Real-time usage tracker initialized');
+
+// Initialize overage billing service (singleton, starts automatically)
+console.log('[INFO] Overage billing service initialized');
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectsRoutes);
+app.use('/api/game-development', gameDevelopmentRoutes);
+app.use('/api/matchmaking', matchmakingRoutes);
+app.use('/api/game-analytics', gameAnalyticsRoutes);
+app.use('/api/solidity', solidityRoutes);
+app.use('/api/blockchain', blockchainRoutes);
+app.use('/api/payments', unifiedPaymentsRoutes);
+app.use('/api/payment-test', simplePaymentTestRoutes);
+app.use('/api/platform', platformIntegrationRoutes);
+app.use('/api/ai', openRouterApiRoutes);
+app.use('/api/pricing', pricingRoutes);
+app.use('/api/batch', batchProcessingRoutes);
+app.use('/api/cache', promptCacheRoutes);
+app.use('/api/components', componentLibraryRoutes);
+app.use('/api/usage', usageMonitoringRoutes);
+app.use('/api/overage', overageBillingRoutes);
+
+// Start server if not in serverless environment
+const PORT = process.env.PORT || 3001;
+if (!process.env.NETLIFY && !process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`✅ Recoder API server running on port ${PORT}`);
+  });
+  
+  server.timeout = 300000; // 5 minutes
+} else {
+  console.log('Serverless environment detected, skipping server start');
+}
 
 module.exports = app;

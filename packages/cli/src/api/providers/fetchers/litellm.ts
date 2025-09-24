@@ -1,8 +1,8 @@
 import axios from "axios"
 
-import { LITELLM_COMPUTER_USE_MODELS } from "@recoder/shared"
+import { LITELLM_COMPUTER_USE_MODELS } from "recoder-shared"
 
-import type { ModelRecord } from "@recoder/shared"
+import type { ModelRecord } from "recoder-shared"
 
 import { DEFAULT_HEADERS } from "../constants"
 /**

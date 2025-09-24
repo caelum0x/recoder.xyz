@@ -2,9 +2,9 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import axios from "axios"
 import OpenAI from "openai"
 
-import { glamaDefaultModelId, glamaDefaultModelInfo, GLAMA_DEFAULT_TEMPERATURE } from "@recoder/shared"
+import { glamaDefaultModelId, glamaDefaultModelInfo, GLAMA_DEFAULT_TEMPERATURE } from "recoder-shared"
 
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
 
 import { ApiStream } from "../transform/stream"
 import { convertToOpenAiMessages } from "../transform/openai-format"
@@ -16,7 +16,7 @@ import { RouterProvider } from "./router-provider"
 // Handle Package import with fallback for dev mode
 let Package: { publisher: string; name: string };
 try {
-	Package = require("@recoder/shared").Package;
+	Package = require("recoder-shared").Package;
 } catch {
 	Package = { publisher: "recoder", name: "recoder-cli" };
 }

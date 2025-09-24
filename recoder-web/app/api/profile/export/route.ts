@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/database';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import archiver from 'archiver';
@@ -28,7 +28,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { type, format, includeFiles, dateRange } = exportRequestSchema.parse(body);
-    const userId = session.user.id;
+    
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
 
     // Check if user has any pending export requests
     const pendingExports = await prisma.dataExportRequest.count({
@@ -52,7 +62,8 @@ export async function POST(request: NextRequest) {
         type,
         status: 'pending',
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown'
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
       }
     });
 
@@ -134,7 +145,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Return file directly for immediate download
-    return new NextResponse(fileContent, {
+    return new NextResponse(fileContent as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': contentType,
@@ -173,14 +184,23 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const exportId = searchParams.get('exportId');
 
-    const whereCondition: any = { userId: session.user.id };
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const whereCondition: any = { userId: user.id };
     if (exportId) {
       whereCondition.id = exportId;
     }
 
     const exports = await prisma.dataExportRequest.findMany({
       where: whereCondition,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { requestedAt: 'desc' },
       take: 10,
       select: {
         id: true,
@@ -230,17 +250,17 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
         id: true,
         name: true,
         email: true,
-        username: true,
-        bio: true,
-        location: true,
-        company: true,
-        blog: true,
+        // username: true, // Field not in User model
+        // bio: true, // Field not in User model
+        // location: true, // Field not in User model
+        // company: true, // Field not in User model
+        // blog: true, // Field not in User model
         image: true,
         createdAt: true,
         updatedAt: true,
-        publicRepos: true,
-        followers: true,
-        following: true
+        // publicRepos: true, // Field not in User model
+        // followers: true, // Field not in User model
+        // following: true // Field not in User model
       }
     });
   }
@@ -259,16 +279,15 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
         status: true,
         createdAt: true,
         updatedAt: true,
-        deploymentHistory: {
-          select: {
-            id: true,
-            platforms: true,
-            results: true,
-            timestamp: true,
-            successfulDeployments: true,
-            totalDeployments: true
-          }
-        }
+        // deploymentExecutions: { // Relation not in Project model
+        //   select: {
+        //     id: true,
+        //     status: true,
+        //     results: true,
+        //     createdAt: true,
+        //     completedAt: true
+        //   }
+        // }
       }
     });
 
@@ -276,11 +295,11 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
       where: { ...baseWhere, ...dateWhere },
       select: {
         id: true,
-        model: true,
-        prompt: true,
-        code: true,
+        type: true,
+        framework: true,
+        sourceCode: true,
         metadata: true,
-        isPublic: true,
+        status: true,
         createdAt: true
       }
     });
@@ -292,10 +311,10 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
       select: {
         id: true,
         model: true,
-        quality: true,
+        // quality: true, // Field not in Chat model
         prompt: true,
         title: true,
-        isPublic: true,
+        // isPublic: true, // Field not in Chat model
         createdAt: true,
         messages: {
           select: {
@@ -310,48 +329,48 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
       }
     });
 
-    exportData.usageStats = await prisma.usageStats.findMany({
+    exportData.usageStats = await prisma.usageAnalytics.findMany({
       where: { ...baseWhere, ...dateWhere },
       select: {
         id: true,
-        date: true,
-        generationsUsed: true,
-        tokensUsed: true,
-        modelsUsed: true,
-        costAccrued: true
+        // date: true, // Field not in UsageAnalytics model
+        eventType: true,
+        tokens: true,
+        cost: true,
+        timestamp: true
       }
     });
   }
 
   if (type === 'full' || type === 'security') {
-    exportData.userSessions = await prisma.userSession.findMany({
-      where: { ...baseWhere, ...dateWhere },
-      select: {
-        id: true,
-        deviceId: true,
-        deviceName: true,
-        browser: true,
-        os: true,
-        location: true,
-        platform: true,
-        isActive: true,
-        createdAt: true,
-        lastUsed: true,
-        terminatedAt: true
-      }
-    });
+    // exportData.userSessions = await prisma.userSession.findMany({ // UserSession model doesn't exist
+    //   where: { ...baseWhere, ...dateWhere },
+    //   select: {
+    //     id: true,
+    //     deviceId: true,
+    //     deviceName: true,
+    //     browser: true,
+    //     os: true,
+    //     location: true,
+    //     platform: true,
+    //     isActive: true,
+    //     createdAt: true,
+    //     lastUsedAt: true,
+    //     terminatedAt: true
+    //   }
+    // });
 
     exportData.apiKeys = await prisma.apiKey.findMany({
       where: { ...baseWhere, ...dateWhere },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
-        lastUsed: true,
+        permissions: true,
+        rateLimit: true,
+        lastUsedAt: true,
         createdAt: true,
-        active: true
+        isActive: true
       }
     });
 
@@ -366,11 +385,11 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
       }
     });
 
-    exportData.privacySettings = await prisma.userPrivacySettings.findUnique({
+    exportData.privacySettings = await prisma.privacySettings.findUnique({
       where: { userId }
     });
 
-    exportData.securitySettings = await prisma.userSecuritySettings.findUnique({
+    exportData.securitySettings = await prisma.securitySettings.findUnique({
       where: { userId }
     });
   }
@@ -381,12 +400,12 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
       select: {
         id: true,
         originalName: true,
-        fileName: true,
-        filePath: true,
+        filename: true,
+        // filePath: true, // Field not in MediaFile model
         fileSize: true,
-        mimeType: true,
+        mimetype: true,
         format: true,
-        purpose: true,
+        // purpose: true, // Field not in MediaFile model
         width: true,
         height: true,
         duration: true,
@@ -404,9 +423,9 @@ async function generateExportData(userId: string, type: string, dateRange?: { st
         message: true,
         category: true,
         priority: true,
-        read: true,
-        starred: true,
-        archived: true,
+        isRead: true,
+        // starred: true, // Field not in Notification model
+        // archived: true, // Field not in Notification model
         createdAt: true
       }
     });

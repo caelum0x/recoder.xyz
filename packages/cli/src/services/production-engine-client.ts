@@ -80,7 +80,7 @@ export class ProductionEngineClient {
     // Use production URLs when available, fallback to local development
     this.engineUrl = process.env.PRODUCTION_ENGINE_URL || 
                      process.env.NEXT_PUBLIC_ENGINE_URL || 
-                     'https://engine.recoder.xyz';
+                     'http://localhost:3002';
     
     this.client = axios.create({
       baseURL: this.engineUrl,

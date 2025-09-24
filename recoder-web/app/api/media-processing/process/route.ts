@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { FFmpegProcessor } from '@/lib/media-processing/ffmpeg-processor'
 import { ProcessingQueue } from '@/lib/media-processing/processing-queue'
@@ -12,8 +13,12 @@ const processingQueue = new ProcessingQueue()
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting
-    const rateLimitResult = await rateLimit(request, 'media-process', 5, 60) // 5 processing jobs per minute
-    if (!rateLimitResult.success) {
+    try {
+      await rateLimit({
+        interval: 60 * 1000, // 1 minute
+        uniqueTokenPerInterval: 100,
+      }).check(request, 5, 'media-process') // 5 processing jobs per minute
+    } catch {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please try again later.' },
         { status: 429 }
@@ -21,12 +26,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Authentication
-    const session = await auth()
-    if (!session?.user) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
       )
+    }
+
+    // Get user ID from session email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const body = await request.json()
@@ -47,29 +62,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify file ownership
+    // Note: removed 'deleted' field since it doesn't exist in MediaFile model
     const file = await prisma.mediaFile.findFirst({
       where: {
         id: fileId,
-        userId: session.user.id,
-        deleted: false
+        userId: user.id
       }
     });
 
     if (!file) {
       return NextResponse.json(
         { error: 'File not found or access denied' },
-        { status: 404 }
-      )
-    }
-
-    // Check user quota
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id }
-    })
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
         { status: 404 }
       )
     }
@@ -88,10 +91,10 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         mediaFileId: file.id,
-        type: file.mimeType.startsWith('video/') ? 'video' : file.mimeType.startsWith('audio/') ? 'audio' : 'image',
+        type: file.mimetype.startsWith('video/') ? 'video' : file.mimetype.startsWith('audio/') ? 'audio' : 'image',
         operation,
         parameters: parameters || {},
-        inputPath: file.filePath,
+        inputPath: file.filename, // using filename since url doesn't exist in MediaFile model
         status: 'queued'
       }
     });
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
     const priorityMap = { 'low': 1, 'normal': 2, 'high': 3 };
     await processingQueue.addJob({
       type: 'video', // Determine based on file format
-      inputPath: file.filePath,
+      inputPath: file.filename, // using filename since url doesn't exist in MediaFile model
       operation,
       parameters: parameters || {},
       priority: priorityMap[priority as keyof typeof priorityMap] || 2,
@@ -151,12 +154,22 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
       )
+    }
+
+    // Get user ID from session email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const url = new URL(request.url)
@@ -167,7 +180,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(url.searchParams.get('limit') || '20')
 
     const where: any = {
-      userId: session.user.id
+      userId: user.id
     }
 
     if (jobId) {
@@ -186,7 +199,7 @@ export async function GET(request: NextRequest) {
     const jobs = [
       {
         id: 'job_123',
-        userId: session.user.id,
+        userId: user.id,
         fileId: fileId || 'file_123',
         operation: 'convert',
         status: status || 'completed',

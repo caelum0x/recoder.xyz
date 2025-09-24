@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         userId: session.user.id
       },
       data: {
-        read: false
+        isRead: false
       }
     })
 

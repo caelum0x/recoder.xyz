@@ -8,9 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Users, Calendar, Target, AlertTriangle, Download, Refresh, Settings } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Users, Calendar, Target, AlertTriangle, Download, RefreshCw, Settings } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { addDays, format } from 'date-fns';
+import Refresh from '../icons/refresh';
 
 interface RevenueMetrics {
   totalRevenue: number;
@@ -381,7 +382,7 @@ export default function RevenueAnalyticsDashboard() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, value }) => `${name}: ${formatCurrency(Math.abs(value))}`}
+                      label={({ name, value }: any) => `${name}: ${formatCurrency(Math.abs(value ?? 0))}`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"

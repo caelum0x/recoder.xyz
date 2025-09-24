@@ -47,13 +47,13 @@ export async function PUT(request: NextRequest) {
       select: {
         id: true,
         email: true,
-        username: true,
+        // username: true, // doesn't exist in User model
         password: true,
         name: true,
-        bio: true,
-        location: true,
-        company: true,
-        blog: true
+       // bio: true,
+       // location: true,
+       // company: true,
+        //blog: true
       }
     });
 
@@ -90,27 +90,34 @@ export async function PUT(request: NextRequest) {
       updateData.emailVerified = null; // Reset email verification
     }
 
-    // Handle username change
-    if (validatedData.username && validatedData.username !== currentUser.username) {
-      const existingUsername = await prisma.user.findUnique({
-        where: { username: validatedData.username }
-      });
-      
-      if (existingUsername) {
-        return NextResponse.json(
-          { error: 'Username already taken' },
-          { status: 409 }
-        );
-      }
-      
-      updateData.username = validatedData.username;
-    }
+    // TODO: Handle username change (username field doesn't exist in User model)
+    // if (validatedData.username && validatedData.username !== currentUser.username) {
+    //   const existingUsername = await prisma.user.findUnique({
+    //     where: { username: validatedData.username }
+    //   });
+    //   
+    //   if (existingUsername) {
+    //     return NextResponse.json(
+    //       { error: 'Username already taken' },
+    //       { status: 409 }
+    //     );
+    //   }
+    //   
+    //   updateData.username = validatedData.username;
+    // }
 
     // Handle password change
     if (validatedData.newPassword && validatedData.currentPassword) {
+      if (!currentUser.password) {
+        return NextResponse.json(
+          { error: 'No password set for this user' },
+          { status: 400 }
+        );
+      }
+
       const isCurrentPasswordValid = await bcrypt.compare(
-        validatedData.currentPassword, 
-        currentUser.password
+        validatedData.currentPassword,
+        currentUser.password as string
       );
       
       if (!isCurrentPasswordValid) {
@@ -135,11 +142,11 @@ export async function PUT(request: NextRequest) {
         id: true,
         name: true,
         email: true,
-        username: true,
-        bio: true,
-        location: true,
-        company: true,
-        blog: true,
+        // username: true, // doesn't exist in User model
+       // bio: true,
+       // location: true,
+       // company: true,
+       // blog: true,
         updatedAt: true,
         emailVerified: true
       }
@@ -224,22 +231,22 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         email: true,
-        username: true,
-        bio: true,
-        location: true,
-        company: true,
-        blog: true,
+        // username: true, // doesn't exist in User model
+       // bio: true,
+       // location: true,
+       // company: true,
+       // blog: true,
         image: true,
         emailVerified: true,
         createdAt: true,
         updatedAt: true,
-        mfaEnabled: true,
+       // mfaEnabled: true,
         twoFactorEnabled: true,
         lastLoginAt: true,
-        passwordUpdatedAt: true,
-        publicRepos: true,
-        followers: true,
-        following: true
+      //  passwordUpdatedAt: true,
+       // publicRepos: true,
+       // followers: true,
+       // following: true
       }
     });
 

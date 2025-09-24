@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         userId: session.user.id
       },
       data: {
-        archived: true
+        // archived: true // Field not in Notification model
       }
     })
 

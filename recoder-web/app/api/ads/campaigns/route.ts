@@ -155,7 +155,7 @@ export const GET = requireAuth(async (request: NextRequest, user: any) => {
 
     // Sync with platform data
     const campaignsWithMetrics = await Promise.all(
-      result.rows.map(async (campaign) => {
+      result.rows.map(async (campaign: any) => {
         try {
           const platformMetrics = await getPlatformCampaignMetrics(campaign.platform, campaign.platform_campaign_id, user);
           return {

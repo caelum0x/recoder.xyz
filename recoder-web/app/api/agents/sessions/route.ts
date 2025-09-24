@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       sessions,
       meta: {
         total: sessions.length,
-        active: sessions.filter((s: any) => s.status === 'running').length,
+        isActive: sessions.filter((s: any) => s.status === 'running').length,
         completed: sessions.filter((s: any) => s.status === 'completed').length,
         error: sessions.filter((s: any) => s.status === 'error').length
       }

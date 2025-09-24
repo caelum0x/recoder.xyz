@@ -1,5 +1,5 @@
-import type { ModelInfo } from "@recoder/shared"
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ModelInfo } from "recoder-shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 import { BaseOpenAiCompatibleProvider } from "./base-openai-compatible-provider"
 
 const TOGETHER_MODELS = {

@@ -6,6 +6,10 @@ import AuthProvider from "@/lib/auth/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import PWAInitializer from "@/components/pwa/pwa-initializer";
+import { Web3Provider } from "@/providers/Web3Provider";
+import { SolanaProvider } from "@/providers/SolanaProvider";
+import { NearProvider } from "@/providers/NearProvider";
+import { SmartUpgradeWrapper } from "@/components/smart-upgrade/SmartUpgradeWrapper";
 import "./globals.css";
 
 const brandConfig = getBrandConfig();
@@ -76,9 +80,17 @@ export default function RootLayout({
         >
           <AuthProvider>
             <AnalyticsProvider>
-              <PWAInitializer />
-              {children}
-              <Toaster />
+              <SmartUpgradeWrapper>
+                <Web3Provider>
+                  <SolanaProvider>
+                    <NearProvider>
+                      <PWAInitializer />
+                      {children}
+                      <Toaster />
+                    </NearProvider>
+                  </SolanaProvider>
+                </Web3Provider>
+              </SmartUpgradeWrapper>
             </AnalyticsProvider>
           </AuthProvider>
         </ThemeProvider>

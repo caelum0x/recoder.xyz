@@ -423,7 +423,7 @@ export default function CustomerLTVDashboard() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ segment, customerCount }) => `${segment}: ${customerCount}`}
+                      label={({ segment, customerCount }: any) => `${segment}: ${customerCount}`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="customerCount"

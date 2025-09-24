@@ -77,6 +77,7 @@ export default function MobileNavigation({ user, notifications = 0 }: MobileNavi
       items: [
         { label: 'Automation', icon: Zap, href: '/automation' },
         { label: 'AI Studio', icon: Sparkles, href: '/ai-studio' },
+        { label: 'Blockchain', icon: Globe, href: '/blockchain' },
         { label: 'Scheduler', icon: Calendar, href: '/scheduler' },
         { label: 'Media Library', icon: ImageIcon, href: '/media' },
         { label: 'Performance', icon: TrendingUp, href: '/performance' },

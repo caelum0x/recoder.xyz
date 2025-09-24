@@ -67,7 +67,7 @@ interface TechnicalSEOAudit {
       cls: number; // Cumulative Layout Shift
     };
     pageSpeedScore: number;
-    timeToInteractive: number;
+    timeToInterisActive: number;
     firstContentfulPaint: number;
   };
   mobileUsability: {
@@ -417,7 +417,7 @@ class SEOAnalysisEngine {
             cls: technicalData.performance.cls
           },
           pageSpeedScore: technicalData.performance.pageSpeedScore,
-          timeToInteractive: technicalData.performance.tti,
+          timeToInterisActive: technicalData.performance.tti,
           firstContentfulPaint: technicalData.performance.fcp
         },
         mobileUsability: {

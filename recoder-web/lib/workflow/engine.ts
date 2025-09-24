@@ -583,14 +583,14 @@ export class WorkflowExecutionEngine {
           id: execution.id,
           workflowId: execution.workflowId,
           workflowName: `Workflow ${execution.workflowId}`,
-          userId: execution.userId,
+          userId: execution.workflowId, // Use workflowId as fallback since userId doesn't exist
           userName: 'User',
           status: execution.status,
           progress: execution.progress || 0,
           currentStep: (execution.metadata as any)?.currentStep || 'Unknown',
           startedAt: execution.startedAt,
           completedAt: execution.completedAt,
-          error: (execution.logs as any)?.error || null,
+          error: execution.error || null,
           triggerData: (execution.metadata as any)?.triggerData || {},
           variables: (execution.metadata as any)?.variables || {},
           outputs: execution.results || {}
@@ -1045,7 +1045,8 @@ export class WorkflowExecutionEngine {
           data: {
             status: 'failed',
             completedAt: new Date(),
-            logs: { error }
+            error: typeof error === 'string' ? error : JSON.stringify(error),
+            logs: typeof error === 'string' ? error : JSON.stringify(error)
           }
         })
       }

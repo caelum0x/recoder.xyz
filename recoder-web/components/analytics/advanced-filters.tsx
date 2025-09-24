@@ -617,7 +617,9 @@ export default function AdvancedFilters({
                         <SelectValue placeholder="Operator" />
                       </SelectTrigger>
                       <SelectContent>
-                        {operatorOptions[condition.dataType]?.map((op) => (
+                        {(operatorOptions.hasOwnProperty(condition.dataType) ?
+                          operatorOptions[condition.dataType as keyof typeof operatorOptions] : []
+                        ).map((op) => (
                           <SelectItem key={op.value} value={op.value}>
                             {op.label}
                           </SelectItem>

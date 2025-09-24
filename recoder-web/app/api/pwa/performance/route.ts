@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function processPerformanceMetrics(metrics: any[]) {
+function processPerformanceMetrics(metrics: any[]): any[] {
   return metrics.map(metric => {
     const processed = {
       id: generateMetricId(),
@@ -65,7 +65,7 @@ function processPerformanceMetrics(metrics: any[]) {
       rating: getPerformanceRating(metric.name, metric.value),
       timestamp: Date.now(),
       context: {
-        url: metric.url || window.location.href,
+        url: metric.url || 'unknown',
         connection: metric.connection || 'unknown',
         deviceMemory: metric.deviceMemory || 'unknown'
       }
@@ -74,19 +74,19 @@ function processPerformanceMetrics(metrics: any[]) {
     // Add specific processing based on metric type
     switch (metric.name) {
       case 'FCP': // First Contentful Paint
-        processed.threshold = { good: 1800, needsImprovement: 3000 };
+        (processed as any).threshold = { good: 1800, needsImprovement: 3000 };
         break;
       case 'LCP': // Largest Contentful Paint
-        processed.threshold = { good: 2500, needsImprovement: 4000 };
+        (processed as any).threshold = { good: 2500, needsImprovement: 4000 };
         break;
       case 'FID': // First Input Delay
-        processed.threshold = { good: 100, needsImprovement: 300 };
+        (processed as any).threshold = { good: 100, needsImprovement: 300 };
         break;
       case 'CLS': // Cumulative Layout Shift
-        processed.threshold = { good: 0.1, needsImprovement: 0.25 };
+        (processed as any).threshold = { good: 0.1, needsImprovement: 0.25 };
         break;
       case 'TTFB': // Time to First Byte
-        processed.threshold = { good: 800, needsImprovement: 1800 };
+        (processed as any).threshold = { good: 800, needsImprovement: 1800 };
         break;
     }
 
@@ -347,8 +347,8 @@ async function getPerformanceDashboard(timeframe: string) {
   });
 }
 
-function generatePerformanceRecommendations(metrics: any[]) {
-  const recommendations = [];
+function generatePerformanceRecommendations(metrics: any[]): any[] {
+  const recommendations: any[] = [];
 
   for (const metric of metrics) {
     if (metric.rating === 'poor') {

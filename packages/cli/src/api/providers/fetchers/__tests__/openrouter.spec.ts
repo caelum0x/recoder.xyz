@@ -9,7 +9,7 @@ import {
 	OPEN_ROUTER_COMPUTER_USE_MODELS,
 	OPEN_ROUTER_REASONING_BUDGET_MODELS,
 	OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS,
-} from "@recoder/shared"
+} from "recoder-shared"
 
 import { getOpenRouterModelEndpoints, getOpenRouterModels } from "../openrouter"
 

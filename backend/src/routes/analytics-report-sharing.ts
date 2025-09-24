@@ -61,14 +61,15 @@ router.post('/reports/:reportId/share', [
   body('permission').isIn(Object.values(SharePermission)),
   body('recipients').optional().isArray(),
   body('config').optional().isObject(),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'Validation failed',
         details: errors.array()
       });
+      return;
     }
 
     const { reportId } = req.params;
@@ -88,7 +89,8 @@ router.post('/reports/:reportId/share', [
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     // Generate share token and URL
@@ -186,14 +188,15 @@ router.post('/reports/:reportId/share', [
 router.get('/reports/:reportId/shares', [
   authenticate,
   query('includeInactive').optional().isBoolean(),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { reportId } = req.params;
     const includeInactive = req.query.includeInactive === 'true';
     const userId = req.user?.id;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     // Return empty shares array since models don't exist
@@ -225,14 +228,15 @@ router.put('/shares/:shareId', [
   body('permission').optional().isIn(Object.values(SharePermission)),
   body('config').optional().isObject(),
   body('isActive').optional().isBoolean(),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { shareId } = req.params;
     const userId = req.user?.id;
     const updates = req.body;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     // Log the update attempt
@@ -275,13 +279,14 @@ router.put('/shares/:shareId', [
  */
 router.delete('/shares/:shareId', [
   authenticate,
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { shareId } = req.params;
     const userId = req.user?.id;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     // Log the revocation
@@ -316,7 +321,7 @@ router.delete('/shares/:shareId', [
  * GET /api/analytics/shared/:shareToken
  * Access a shared report via token (public endpoint)
  */
-router.get('/shared/:shareToken', async (req: Request, res: Response) => {
+router.get('/shared/:shareToken', async (req: Request, res: Response): Promise<void> => {
   try {
     const { shareToken } = req.params;
     const { password } = req.query;
@@ -361,16 +366,18 @@ router.get('/shared/:shareToken', async (req: Request, res: Response) => {
     };
 
     if (!share) {
-      return res.status(404).json({ error: 'Share not found or expired' });
+      res.status(404).json({ error: 'Share not found or expired' });
+      return;
     }
 
     // Check password if required
     const config = share.config as any;
     if (config.password && config.password !== password) {
-      return res.status(403).json({ 
+      res.status(403).json({ 
         error: 'Password required',
         requiresPassword: true 
       });
+      return;
     }
 
     // Log access (removed due to missing model)
@@ -425,7 +432,7 @@ router.post('/shared/:shareToken/comment', [
   body('content').isLength({ min: 1, max: 1000 }),
   body('authorName').optional().isLength({ min: 1, max: 100 }),
   body('authorEmail').optional().isEmail(),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { shareToken } = req.params;
     const { content, authorName, authorEmail } = req.body;
@@ -443,13 +450,15 @@ router.post('/shared/:shareToken/comment', [
     };
 
     if (!share) {
-      return res.status(404).json({ error: 'Share not found or expired' });
+      res.status(404).json({ error: 'Share not found or expired' });
+      return;
     }
 
     // Check if comments are allowed
     const config = share.config as any;
     if (!config.allowComments) {
-      return res.status(403).json({ error: 'Comments are not allowed on this share' });
+      res.status(403).json({ error: 'Comments are not allowed on this share' });
+      return;
     }
 
     // Create the comment (simplified implementation)
@@ -489,7 +498,7 @@ router.post('/shared/:shareToken/comment', [
 router.get('/shared/:shareToken/comments', [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const { shareToken } = req.params;
     const page = parseInt(req.query.page as string) || 1;
@@ -507,13 +516,15 @@ router.get('/shared/:shareToken/comments', [
     };
 
     if (!share) {
-      return res.status(404).json({ error: 'Share not found' });
+      res.status(404).json({ error: 'Share not found' });
+      return;
     }
 
     // Check if comments are visible
     const config = share.config as any;
     if (!config.allowComments) {
-      return res.status(403).json({ error: 'Comments are not available for this share' });
+      res.status(403).json({ error: 'Comments are not available for this share' });
+      return;
     }
 
     // Mock comments data
@@ -567,7 +578,7 @@ router.get('/reports/shared-with-me', [
   authenticate,
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-], async (req: Request, res: Response) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
     const userEmail = req.user?.email;

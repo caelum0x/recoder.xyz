@@ -1,7 +1,7 @@
 // Advanced Analytics Report Builder API with full CRUD operations
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/database';
+import { prisma } from '../../../../lib/database';
 import { z } from 'zod';
 
 const reportConfigSchema = z.object({
@@ -94,7 +94,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const userId = session.user.id;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -156,14 +165,14 @@ export async function GET(request: NextRequest) {
       reports.map(async (report) => {
         const lastExecution = await prisma.reportExecution.findFirst({
           where: { reportId: report.id },
-          orderBy: { createdAt: 'desc' }
+          orderBy: { startedAt: 'desc' }
         });
 
         const avgExecutionTime = await prisma.reportExecution.aggregate({
           where: { 
             reportId: report.id,
             status: 'completed',
-            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
+            startedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
           },
           _avg: { executionTime: true }
         });
@@ -188,9 +197,9 @@ export async function GET(request: NextRequest) {
             totalExecutions: report._count.executions,
             totalExports: report._count.exports,
             totalShares: report._count.shares,
-            lastExecutedAt: lastExecution?.createdAt?.toISOString(),
+            lastExecutedAt: lastExecution?.startedAt?.toISOString(),
             lastExecutionStatus: lastExecution?.status,
-            avgExecutionTime: Math.round(avgExecutionTime._avg.executionTime || 0),
+            avgExecutionTime: Math.round(avgExecutionTime._avg?.executionTime ?? 0),
             isScheduled: (report.schedule as any)?.enabled || false
           }
         };
@@ -251,7 +260,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = session.user.id;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
     const body = await request.json();
     const reportData = reportConfigSchema.parse(body);
 
@@ -348,6 +366,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         action: 'analytics_report_created',
+          resource: 'analytics',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -414,7 +433,16 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const userId = session.user.id;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
     const { searchParams } = new URL(request.url);
     const reportId = searchParams.get('reportId');
 
@@ -497,6 +525,7 @@ export async function PUT(request: NextRequest) {
       data: {
         userId,
         action: 'analytics_report_updated',
+          resource: 'analytics',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -557,7 +586,16 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const userId = session.user.id;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = user.id;
     const { searchParams } = new URL(request.url);
     const reportId = searchParams.get('reportId');
 
@@ -621,6 +659,7 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId,
         action: 'analytics_report_deleted',
+          resource: 'analytics',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -765,7 +804,7 @@ async function executeReport(reportId: string, userId: string) {
     });
 
     // Execute the report (simplified implementation)
-    const results = await processReportData(report.dataSource, report.dimensions, report.metrics);
+    const results = await processReportData(report.dataSource, Array.isArray(report.dimensions) ? report.dimensions : [], Array.isArray(report.metrics) ? report.metrics : []);
     const executionTime = Date.now() - startTime;
 
     // Update execution record

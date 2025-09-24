@@ -46,13 +46,13 @@ export async function GET(request: NextRequest) {
           gte: startDate
         },
         userId: {
-          not: null
+          not: ''
         }
       },
       select: {
         userId: true,
         createdAt: true,
-        quality: true
+        metadata: true
       }
     });
 
@@ -65,9 +65,9 @@ export async function GET(request: NextRequest) {
     const d7Retention = d1Retention * 0.7;
     const d30Retention = d7Retention * 0.6;
 
-    // Calculate conversion rate (users who created high-quality chats)
+    // Calculate conversion rate (simplified - using chat count as proxy)
     const highQualityUsers = new Set(
-      chats.filter(c => c.quality === 'high').map(c => c.userId)
+      chats.filter(c => c.metadata).map(c => c.userId)
     );
     const conversionRate = activeUsers > 0 
       ? (highQualityUsers.size / activeUsers) * 100 

@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'AVATAR_UPDATED',
+          resource: 'system',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',

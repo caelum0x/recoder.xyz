@@ -11,7 +11,7 @@ import {
   ModelResponse,
   ModelProvider,
   TaskType
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 
 export interface ConsensusRequest {
   id: string;

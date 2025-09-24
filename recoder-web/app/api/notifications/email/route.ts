@@ -155,6 +155,70 @@ const emailTemplates = {
       </div>
     `,
   },
+  password_reset: {
+    subject: '🔑 Password Reset Request',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #2563eb;">Password Reset</h1>
+        <p>Hi {{name}},</p>
+        <p>We received a request to reset your password. Click the button below to proceed:</p>
+        <a href="{{resetUrl}}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 16px 0;">Reset Password</a>
+        <p>If you did not request this, please ignore this email.</p>
+        <p>The Recoder.xyz Team</p>
+      </div>
+    `,
+  },
+  email_verification: {
+    subject: '📧 Verify Your Email Address',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #2563eb;">Email Verification</h1>
+        <p>Hi {{name}},</p>
+        <p>Thank you for signing up! Please verify your email address by clicking the button below:</p>
+        <a href="{{verificationUrl}}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 16px 0;">Verify Email</a>
+        <p>If you did not sign up, please ignore this email.</p>
+        <p>The Recoder.xyz Team</p>
+      </div>
+    `,
+  },
+  account_deactivated: {
+    subject: '⚠️ Account Deactivated',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #dc2626;">Account Deactivated</h1>
+        <p>Hi {{name}},</p>
+        <p>Your account has been deactivated. If you believe this is a mistake, please contact support.</p>
+        <p>The Recoder.xyz Team</p>
+      </div>
+    `,
+  },
+  weekly_digest: {
+    subject: '📰 Your Weekly Digest',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #2563eb;">Weekly Digest</h1>
+        <p>Hi {{name}},</p>
+        <p>Here are your highlights for the week:</p>
+        <ul>
+          {{digestItems}}
+        </ul>
+        <p>Stay productive!</p>
+        <p>The Recoder.xyz Team</p>
+      </div>
+    `,
+  },
+  collaboration_request: {
+    subject: '🤝 Collaboration Request',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #2563eb;">Collaboration Request</h1>
+        <p>Hi {{name}},</p>
+        <p>You have received a new collaboration request from <strong>{{requesterName}}</strong> for the project <strong>{{projectName}}</strong>.</p>
+        <a href="{{collaborationUrl}}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 16px 0;">View Request</a>
+        <p>The Recoder.xyz Team</p>
+      </div>
+    `,
+  },
 };
 
 // GET - Get available email templates
@@ -305,23 +369,21 @@ export async function POST(request: NextRequest) {
           const user = await prisma.user.findUnique({
             where: { email },
             include: {
-              notificationSettings: {
-                select: { preferences: true }
-              }
+             // notificationSettings: true
             }
           });
 
           if (!user) return null;
 
-          const preferences = user.notificationSettings?.preferences as any || {};
-          const emailPrefs = preferences.email || {};
-          
-          return {
-            email,
-            canSend: emailPrefs.enabled !== false && 
-                    (emailPrefs.categories?.[emailData.category] !== false),
-            preferences: emailPrefs
-          };
+        const preferences = (user as any).notificationSettings?.preferences as any || {};
+        const emailPrefs = preferences.email || {};
+        
+        return {
+          email,
+          canSend: emailPrefs.enabled !== false && 
+                  (emailPrefs.categories?.[emailData.category] !== false),
+          preferences: emailPrefs
+        };
         })
       );
 
@@ -388,4 +450,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
           whiteLabel: false,
           sla: null
         },
-        restrictions: {
+        rateLimit: {
           modelAccess: 'basic',
           responseTime: 'standard',
           support: 'community'
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
           whiteLabel: false,
           sla: '99.5% uptime'
         },
-        restrictions: {
+        rateLimit: {
           modelAccess: 'standard',
           responseTime: 'priority',
           support: 'email'
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
           whiteLabel: false,
           sla: '99.7% uptime'
         },
-        restrictions: {
+        rateLimit: {
           modelAccess: 'standard',
           responseTime: 'priority',
           support: 'priority'
@@ -215,7 +215,7 @@ export async function GET(request: NextRequest) {
           whiteLabel: true,
           sla: '99.9% uptime'
         },
-        restrictions: {
+        rateLimit: {
           modelAccess: 'full',
           responseTime: 'enterprise',
           support: 'dedicated'

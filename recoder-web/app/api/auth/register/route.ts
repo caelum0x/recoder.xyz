@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ServerAuth } from '@/lib/auth/server-auth';
 import type { AuthUser, RegisterData } from '@/lib/auth/types';
 import bcrypt from 'bcryptjs';
-
-// Mock user database - replace with actual database integration
-const mockUsers: Record<string, AuthUser & { password: string }> = {};
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +25,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    if (mockUsers[email.toLowerCase()]) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    });
+
+    if (existingUser) {
       return NextResponse.json(
         { error: 'User already exists' },
         { status: 409 }
@@ -37,23 +39,33 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user
-    const newUser: AuthUser & { password: string } = {
-      id: Date.now().toString(),
-      email: email.toLowerCase(),
-      name,
-      plan: 'FREE',
-      emailVerified: false,
-      password: hashedPassword,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    // Save to mock database
-    mockUsers[email.toLowerCase()] = newUser;
+    // Create new user in database
+    const newUser = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        name,
+        password: hashedPassword,
+        emailVerified: null
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailVerified: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
 
     // Create session
-    const { password: _, ...userWithoutPassword } = newUser;
+    const userWithoutPassword = {
+      id: newUser.id,
+      email: newUser.email,
+      name: newUser.name || '',
+      emailVerified: Boolean(newUser.emailVerified),
+      createdAt: newUser.createdAt.toISOString(),
+      updatedAt: newUser.updatedAt.toISOString()
+    };
     const sessionToken = await ServerAuth.createSessionToken(userWithoutPassword);
 
     // Create response with session

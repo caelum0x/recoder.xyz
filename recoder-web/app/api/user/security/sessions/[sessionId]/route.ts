@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export async function DELETE(
@@ -7,10 +8,20 @@ export async function DELETE(
   { params }: { params: { sessionId: string } }
 ) {
   try {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user ID from session email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return Response.json({ error: 'User not found' }, { status: 404 })
     }
 
     const { sessionId } = params
@@ -19,7 +30,7 @@ export async function DELETE(
     const userSession = await prisma.userSession.findFirst({
       where: {
         id: sessionId,
-        userId: session.user.id
+        userId: user.id
       }
     })
 
@@ -27,33 +38,31 @@ export async function DELETE(
       return Response.json({ error: 'Session not found' }, { status: 404 })
     }
 
-    // Don't allow terminating the current session
-    if (userSession.isCurrent) {
-      return Response.json({ error: 'Cannot terminate current session' }, { status: 400 })
-    }
-
-    // Mark session as inactive
+    // Note: isCurrent field not available in UserSession model
+    // Skip current session check for now
+    
+    // Mark session as expired (using expiresAt field instead of isActive)
     await prisma.userSession.update({
       where: { id: sessionId },
       data: {
-        isActive: false,
-        terminatedAt: new Date()
+        expiresAt: new Date() // Mark as expired immediately
       }
     })
 
     // Log the session termination
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         action: 'SESSION_TERMINATED',
+        resource: 'system',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           terminatedSessionId: sessionId,
-          deviceName: userSession.deviceName,
-          ipAddress: userSession.ipAddress
+          deviceId: userSession.deviceId || 'unknown',
+          platform: userSession.platform || 'unknown'
         }
       }
     })

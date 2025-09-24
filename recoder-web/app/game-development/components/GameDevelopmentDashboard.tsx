@@ -9,14 +9,16 @@ import {
   DocumentTextIcon,
   FolderIcon,
   CloudArrowUpIcon,
-  WrenchScrewdriverIcon
+  WrenchScrewdriverIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline'
 import UnityProjectManager from './UnityProjectManager'
 import UnrealProjectManager from './UnrealProjectManager'
 import GameAssetManager from './GameAssetManager'
 import GameBuildManager from './GameBuildManager'
-import VisualScriptEditor from './VisualScriptEditor'
+import VisualScriptManager from './VisualScriptManager'
 import GameAnalyticsDashboard from './GameAnalyticsDashboard'
+import MatchmakingDashboard from './MatchmakingDashboard'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -76,7 +78,12 @@ export default function GameDevelopmentDashboard() {
     {
       name: 'Visual Scripts',
       icon: WrenchScrewdriverIcon,
-      component: <VisualScriptEditor onStatsChange={fetchDashboardStats} />
+      component: <VisualScriptManager onStatsChange={fetchDashboardStats} />
+    },
+    {
+      name: 'Multiplayer',
+      icon: UserGroupIcon,
+      component: <MatchmakingDashboard onStatsChange={fetchDashboardStats} />
     },
     {
       name: 'Analytics',
