@@ -9,7 +9,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface FileAnalysis {
   path: string;

@@ -370,7 +370,7 @@ class AutoDatabaseGenerator {
     const relationships: RelationshipDefinition[] = [];
 
     // Common relationship patterns
-    const relationshipPatterns = {
+    const relationshipPatterns: Record<string, RelationshipDefinition[]> = {
       'user': [
         { type: 'one-to-many' as const, target: 'Post', foreignKey: 'author_id' },
         { type: 'one-to-many' as const, target: 'Order', foreignKey: 'user_id' }

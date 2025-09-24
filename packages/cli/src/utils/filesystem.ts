@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import glob from 'glob';
 import { promisify } from 'util';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 const globAsync = promisify(glob);
 

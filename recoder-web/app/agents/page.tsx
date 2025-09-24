@@ -130,7 +130,7 @@ export default function AgentsPage() {
       const data = await response.json();
       if (data.success) {
         // Transform backend data to match frontend interface
-        const transformedAgents = (data.data?.agents || []).map(agent => ({
+        const transformedAgents = (data.data?.agents || []).map((agent: any) => ({
           id: agent.id,
           name: agent.name,
           description: agent.description || 'AI Agent',

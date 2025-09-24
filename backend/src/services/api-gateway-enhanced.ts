@@ -176,7 +176,7 @@ export class EnhancedAPIGateway extends EventEmitter {
     });
 
     // Metrics endpoint
-    this.app.get('/metrics', async (req: Request, res: Response) => {
+    this.app.get('/metrics', async (req: Request, res: Response): Promise<void> => {
       const metrics = await this.getSystemMetrics();
       res.json(metrics);
     });

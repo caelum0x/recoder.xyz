@@ -11,7 +11,7 @@ export class AuthPage {
 
   async gotoRegister() {
     await this.page.goto('/register');
-    await expect(this.page.getByRole('heading')).toContainText('Sign Up');
+    await expect(this.page.getByRole('heading')).toContainText('Create Account');
   }
 
   async register(email: string, password: string) {

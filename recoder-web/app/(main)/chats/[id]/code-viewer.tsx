@@ -103,7 +103,7 @@ export default function CodeViewer({
   };
 
   const codeCapabilities = analyzeCodeCapabilities(code);
-  const projectName = title || `${chat.title.slice(0, 20)}-v${currentVersion + 1}`;
+  const projectName = title || `${(chat.title || "untitled").slice(0, 20)}-v${currentVersion + 1}`;
 
   const handleDeployment = (projectFiles: any) => {
     setDeploymentStatus("deploying");

@@ -954,7 +954,7 @@ async function getWebhooks(octokit: Octokit, owner: string, repo: string) {
     webhooks: response.data.map(webhook => ({
       id: webhook.id,
       name: webhook.name,
-      active: webhook.active,
+      isActive: webhook.active,
       events: webhook.events,
       config: webhook.config,
       created_at: webhook.created_at,
@@ -968,7 +968,7 @@ async function createWebhook(octokit: Octokit, owner: string, repo: string, data
     owner,
     repo,
     name: data.name || 'web',
-    active: data.active !== false,
+    isActive: data.active !== false,
     events: data.events || ['push'],
     config: {
       url: data.url,
@@ -981,7 +981,7 @@ async function createWebhook(octokit: Octokit, owner: string, repo: string, data
   return {
     webhook_id: response.data.id,
     name: response.data.name,
-    active: response.data.active,
+    isActive: response.data.active,
     events: response.data.events,
     url: response.data.config.url,
     created_at: response.data.created_at
@@ -993,7 +993,7 @@ async function updateWebhook(octokit: Octokit, owner: string, repo: string, hook
     owner,
     repo,
     hook_id: parseInt(hook_id),
-    active: data.active,
+    isActive: data.active,
     events: data.events,
     config: data.config ? {
       url: data.config.url,
@@ -1005,7 +1005,7 @@ async function updateWebhook(octokit: Octokit, owner: string, repo: string, hook
 
   return {
     webhook_id: hook_id,
-    active: response.data.active,
+    isActive: response.data.active,
     events: response.data.events,
     updated_at: response.data.updated_at
   };

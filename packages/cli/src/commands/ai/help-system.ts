@@ -8,7 +8,7 @@
 
 import chalk from 'chalk';
 import boxen from 'boxen';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface HelpTopic {
   name: string;

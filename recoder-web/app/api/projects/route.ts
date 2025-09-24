@@ -4,10 +4,10 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '@/lib/logger';
 
-// Real project storage directory
+// Fallback project storage directory
 const PROJECTS_DIR = path.join(process.cwd(), 'projects');
 
-// Ensure projects directory exists
+// Ensure projects directory exists (for fallback)
 async function ensureProjectsDir() {
   try {
     await fs.access(PROJECTS_DIR);
@@ -16,69 +16,140 @@ async function ensureProjectsDir() {
   }
 }
 
-export async function GET(req: NextRequest) {
+/**
+ * GET /api/projects - Get user projects from backend
+ */
+export async function GET(request: NextRequest) {
   try {
-    logger.info('Loading real projects from file system');
-    
-    await ensureProjectsDir();
-    const projects = await fs.readdir(PROJECTS_DIR);
-    const projectList: any[] = [];
+    const { searchParams } = new URL(request.url);
+    const limit = searchParams.get('limit') || '20';
+    const offset = searchParams.get('offset') || '0';
+    const type = searchParams.get('type');
+    const status = searchParams.get('status');
 
-    for (const projectName of projects) {
-      const projectPath = path.join(PROJECTS_DIR, projectName);
-      const stats = await fs.stat(projectPath);
+    // Extract user for authentication
+    const authHeader = request.headers.get('authorization');
+    const userIdHeader = request.headers.get('x-user-id');
+    
+    logger.info('Loading projects from backend', {
+      userId: userIdHeader,
+      limit,
+      offset,
+      type,
+      status
+    });
+
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
       
-      if (stats.isDirectory()) {
-        try {
-          // Read project metadata
-          const metadataPath = path.join(projectPath, '.recoder', 'metadata.json');
-          const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
-          
-          projectList.push({
-            id: projectName,
-            name: metadata.name || projectName,
-            description: metadata.description || '',
-            framework: metadata.framework || 'react',
-            createdAt: metadata.createdAt || stats.birthtime.toISOString(),
-            updatedAt: stats.mtime.toISOString(),
-            path: projectPath,
-            type: metadata.type || 'web',
-            status: 'development',
-            technology: metadata.technology || ['React'],
-            progress: metadata.progress || 0
-          });
-        } catch {
-          // If no metadata exists, create basic info
-          projectList.push({
-            id: projectName,
-            name: projectName,
-            description: '',
-            framework: 'react',
-            createdAt: stats.birthtime.toISOString(),
-            updatedAt: stats.mtime.toISOString(),
-            path: projectPath,
-            type: 'web',
-            status: 'development',
-            technology: ['React'],
-            progress: 0
-          });
+      // Build query parameters
+      const queryParams = new URLSearchParams({
+        limit,
+        offset
+      });
+      
+      if (type) queryParams.append('type', type);
+      if (status) queryParams.append('status', status);
+
+      const response = await fetch(`${backendUrl}/api/projects?${queryParams}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader || 'Bearer anonymous',
+          'x-user-id': userIdHeader || 'anonymous'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      logger.info('Projects retrieved from backend', {
+        count: data.data?.projects?.length || 0,
+        userId: userIdHeader
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: data.data,
+        message: 'Projects retrieved successfully',
+        source: 'backend'
+      });
+
+    } catch (backendError) {
+      logger.warn('Backend failed, falling back to local file system', {
+        error: backendError instanceof Error ? backendError.message : 'Unknown error'
+      });
+      
+      // Fallback to local file system
+      await ensureProjectsDir();
+      const projects = await fs.readdir(PROJECTS_DIR);
+      const projectList: any[] = [];
+
+      for (const projectName of projects) {
+        const projectPath = path.join(PROJECTS_DIR, projectName);
+        const stats = await fs.stat(projectPath);
+        
+        if (stats.isDirectory()) {
+          try {
+            // Read project metadata
+            const metadataPath = path.join(projectPath, '.recoder', 'metadata.json');
+            const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
+            
+            projectList.push({
+              id: projectName,
+              name: metadata.name || projectName,
+              description: metadata.description || '',
+              framework: metadata.framework || 'react',
+              createdAt: metadata.createdAt || stats.birthtime.toISOString(),
+              updatedAt: stats.mtime.toISOString(),
+              path: projectPath,
+              type: metadata.type || 'web',
+              status: 'development',
+              technology: metadata.technology || ['React'],
+              progress: metadata.progress || 0
+            });
+          } catch {
+            // If no metadata exists, create basic info
+            projectList.push({
+              id: projectName,
+              name: projectName,
+              description: '',
+              framework: 'react',
+              createdAt: stats.birthtime.toISOString(),
+              updatedAt: stats.mtime.toISOString(),
+              path: projectPath,
+              type: 'web',
+              status: 'development',
+              technology: ['React'],
+              progress: 0
+            });
+          }
         }
       }
+
+      return NextResponse.json({ 
+        success: true,
+        data: { projects: projectList },
+        source: 'local'
+      });
     }
 
-    return NextResponse.json({ 
-      success: true,
-      data: { projects: projectList }
-    });
   } catch (error) {
-    logger.error('Error fetching projects:', error);
+    logger.error('Error retrieving projects:', error);
     return NextResponse.json({ 
       success: false,
-      error: 'Failed to fetch projects' 
+      error: 'Failed to retrieve projects',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
 
+/**
+ * POST /api/projects - Create new project in backend
+ */
 export async function POST(request: NextRequest) {
   try {
     const { name, description, framework = 'react', template = 'blank' } = await request.json();
@@ -90,11 +161,71 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    await ensureProjectsDir();
-    
-    const projectId = uuidv4();
-    const projectPath = path.join(PROJECTS_DIR, projectId);
-    const metadataDir = path.join(projectPath, '.recoder');
+    // Extract user for authentication
+    const authHeader = request.headers.get('authorization');
+    const userIdHeader = request.headers.get('x-user-id');
+
+    logger.info('Creating project via backend', {
+      name,
+      framework,
+      userId: userIdHeader
+    });
+
+    try {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+
+      const response = await fetch(`${backendUrl}/api/projects`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader || 'Bearer anonymous',
+          'x-user-id': userIdHeader || 'anonymous'
+        },
+        body: JSON.stringify({
+          name,
+          type: 'web', // Map framework to type
+          description,
+          config: {
+            framework,
+            template,
+            technology: framework === 'react' ? ['React', 'JavaScript'] : [framework],
+            progress: 0,
+            createdViaWeb: true
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Backend API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      logger.info('Project created in backend', {
+        projectId: data.data?.id,
+        name: data.data?.name,
+        userId: userIdHeader
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: data.data,
+        message: 'Project created successfully',
+        source: 'backend'
+      });
+
+    } catch (backendError) {
+      logger.warn('Backend failed, falling back to local creation', {
+        error: backendError instanceof Error ? backendError.message : 'Unknown error'
+      });
+      
+      // Fallback to local file storage
+      await ensureProjectsDir();
+      
+      const projectId = uuidv4();
+      const projectPath = path.join(PROJECTS_DIR, projectId);
+      const metadataDir = path.join(projectPath, '.recoder');
     
     // Create project directory structure
     await fs.mkdir(projectPath, { recursive: true });
@@ -252,19 +383,21 @@ code {
 
     logger.info(`Created new project: ${name} (${projectId})`);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        project: {
-          id: projectId,
-          name,
-          description,
-          framework,
-          createdAt: metadata.createdAt,
-          path: projectPath
-        }
-      }
-    });
+      return NextResponse.json({
+        success: true,
+        data: {
+          project: {
+            id: projectId,
+            name,
+            description,
+            framework,
+            createdAt: metadata.createdAt,
+            path: projectPath
+          }
+        },
+        source: 'local'
+      });
+    }
 
   } catch (error) {
     logger.error('Error creating project:', error);

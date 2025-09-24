@@ -51,7 +51,7 @@ export class CommercialAIHubService {
   }
 
   /**
-   * Smart AI routing based on user tier and request complexity
+   * Smart AI routing with proper fallback logic
    */
   async generateWithSmartRouting(
     prompt: string, 
@@ -62,12 +62,33 @@ export class CommercialAIHubService {
     
     logger.info(`🧠 Smart routing: User tier=${userTier}, Complexity=${complexity}`);
 
-    // Route based on user tier and complexity
-    if (userTier === 'free') {
-      return await this.generateWithTogether(prompt, options);
-    } else {
-      return await this.generateWithOpenRouter(prompt, options);
+    // Primary strategy: Use OpenRouter for all users (it has free models too)
+    try {
+      const openRouterResult = await this.generateWithOpenRouter(prompt, options);
+      if (openRouterResult.success) {
+        return openRouterResult;
+      }
+    } catch (error) {
+      logger.warn(`⚠️ OpenRouter failed: ${error}`);
     }
+
+    // Fallback strategy: Try Together.ai only if OpenRouter fails
+    if (userTier === 'free') {
+      try {
+        const togetherResult = await this.generateWithTogether(prompt, options);
+        if (togetherResult.success) {
+          return togetherResult;
+        }
+      } catch (error) {
+        logger.warn(`⚠️ Together.ai fallback failed: ${error}`);
+      }
+    }
+
+    // Final fallback: Return error
+    return {
+      success: false,
+      error: `All AI providers failed. OpenRouter: primary provider failed. Together.ai: ${userTier === 'free' ? 'fallback failed' : 'not available for paid users'}`
+    };
   }
 
   /**

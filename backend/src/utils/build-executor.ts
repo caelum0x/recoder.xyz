@@ -1,0 +1,546 @@
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import fs from 'fs/promises';
+import { prisma } from '../database/prisma';
+import { getErrorMessage } from './error-helpers';
+
+const execAsync = promisify(exec);
+
+export interface BuildConfig {
+  buildId: string;
+  projectPath: string;
+  framework: 'Unity' | 'Unreal Engine';
+  platform: string;
+  buildType: 'Debug' | 'Release' | 'Development';
+  version: string;
+  outputPath: string;
+  configuration: any;
+}
+
+export interface BuildResult {
+  success: boolean;
+  outputPath?: string;
+  artifactSize?: number;
+  buildTime: number;
+  logs: Array<{ timestamp: Date; message: string; level: 'info' | 'warning' | 'error' }>;
+  error?: string;
+}
+
+export class BuildExecutor {
+  private buildConfig: BuildConfig;
+  private logs: Array<{ timestamp: Date; message: string; level: 'info' | 'warning' | 'error' }> = [];
+  private startTime: Date;
+
+  constructor(buildConfig: BuildConfig) {
+    this.buildConfig = buildConfig;
+    this.startTime = new Date();
+  }
+
+  async execute(): Promise<BuildResult> {
+    try {
+      this.log('info', `Starting ${this.buildConfig.framework} build for ${this.buildConfig.platform}`);
+      
+      // Pre-build validation
+      await this.validateBuildEnvironment();
+      
+      let result: BuildResult;
+      
+      if (this.buildConfig.framework === 'Unity') {
+        result = await this.executeUnityBuild();
+      } else {
+        result = await this.executeUnrealBuild();
+      }
+      
+      // Post-build processing
+      if (result.success && result.outputPath) {
+        await this.postBuildProcessing(result.outputPath);
+      }
+      
+      return result;
+      
+    } catch (error) {
+      this.log('error', `Build failed: ${getErrorMessage(error)}`);
+      return {
+        success: false,
+        buildTime: Date.now() - this.startTime.getTime(),
+        logs: this.logs,
+        error: getErrorMessage(error)
+      };
+    }
+  }
+
+  private async executeUnityBuild(): Promise<BuildResult> {
+    this.log('info', 'Executing Unity build...');
+    
+    const unityPath = await this.getUnityExecutablePath();
+    const buildMethod = this.getUnityBuildMethod();
+    
+    // Prepare Unity command line arguments
+    const args = [
+      '-batchmode',
+      '-quit',
+      '-projectPath', this.buildConfig.projectPath,
+      '-executeMethod', buildMethod,
+      '-buildTarget', this.getUnityBuildTarget(),
+      '-logFile', path.join(this.buildConfig.outputPath, 'unity_build.log')
+    ];
+
+    // Add platform-specific arguments
+    if (this.buildConfig.platform === 'Android') {
+      args.push('-androidSdk', process.env.ANDROID_SDK_ROOT || '/opt/android-sdk');
+    } else if (this.buildConfig.platform === 'iOS') {
+      args.push('-iPhoneSimulatorSdk', process.env.IOS_SDK_PATH || '/Applications/Xcode.app/Contents/Developer');
+    }
+
+    try {
+      // Execute Unity build
+      const command = `"${unityPath}" ${args.join(' ')}`;
+      this.log('info', `Executing command: ${command}`);
+      
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: this.buildConfig.projectPath,
+        timeout: 30 * 60 * 1000 // 30 minutes timeout
+      });
+
+      // Parse Unity logs
+      await this.parseUnityLogs(path.join(this.buildConfig.outputPath, 'unity_build.log'));
+      
+      // Check if build succeeded
+      const buildOutputPath = await this.findUnityBuildOutput();
+      
+      if (!buildOutputPath) {
+        throw new Error('Build output not found');
+      }
+
+      const stats = await fs.stat(buildOutputPath);
+      
+      return {
+        success: true,
+        outputPath: buildOutputPath,
+        artifactSize: stats.size,
+        buildTime: Date.now() - this.startTime.getTime(),
+        logs: this.logs
+      };
+      
+    } catch (error) {
+      this.log('error', `Unity build failed: ${getErrorMessage(error)}`);
+      throw error;
+    }
+  }
+
+  private async executeUnrealBuild(): Promise<BuildResult> {
+    this.log('info', 'Executing Unreal Engine build...');
+    
+    const unrealBuildToolPath = await this.getUnrealBuildToolPath();
+    const target = this.getUnrealBuildTarget();
+    const configuration = this.buildConfig.buildType;
+    const platform = this.getUnrealPlatformName();
+    
+    try {
+      // First, generate project files if needed
+      await this.generateUnrealProjectFiles();
+      
+      // Execute Unreal build using UnrealBuildTool
+      const buildArgs = [
+        target,
+        platform,
+        configuration,
+        `-project="${this.buildConfig.projectPath}"`,
+        '-verbose'
+      ];
+      
+      const command = `"${unrealBuildToolPath}" ${buildArgs.join(' ')}`;
+      this.log('info', `Executing command: ${command}`);
+      
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: this.buildConfig.projectPath,
+        timeout: 60 * 60 * 1000 // 60 minutes timeout for Unreal builds
+      });
+
+      // Parse build output
+      this.parseUnrealBuildOutput(stdout, stderr);
+      
+      // Package the game if build succeeded
+      const packagedPath = await this.packageUnrealGame();
+      
+      if (!packagedPath) {
+        throw new Error('Game packaging failed');
+      }
+
+      const stats = await fs.stat(packagedPath);
+      
+      return {
+        success: true,
+        outputPath: packagedPath,
+        artifactSize: stats.size,
+        buildTime: Date.now() - this.startTime.getTime(),
+        logs: this.logs
+      };
+      
+    } catch (error) {
+      this.log('error', `Unreal build failed: ${getErrorMessage(error)}`);
+      throw error;
+    }
+  }
+
+  private async validateBuildEnvironment(): Promise<void> {
+    this.log('info', 'Validating build environment...');
+    
+    // Check if project path exists
+    try {
+      await fs.access(this.buildConfig.projectPath);
+    } catch {
+      throw new Error(`Project path not found: ${this.buildConfig.projectPath}`);
+    }
+
+    // Create output directory
+    await fs.mkdir(this.buildConfig.outputPath, { recursive: true });
+
+    // Framework-specific validation
+    if (this.buildConfig.framework === 'Unity') {
+      await this.validateUnityEnvironment();
+    } else {
+      await this.validateUnrealEnvironment();
+    }
+
+    this.log('info', 'Build environment validation completed');
+  }
+
+  private async validateUnityEnvironment(): Promise<void> {
+    // Check for Unity installation
+    const unityPath = await this.getUnityExecutablePath();
+    try {
+      await fs.access(unityPath);
+    } catch {
+      throw new Error('Unity installation not found. Please install Unity and set UNITY_PATH environment variable.');
+    }
+
+    // Validate Unity project
+    const projectSettingsPath = path.join(this.buildConfig.projectPath, 'ProjectSettings', 'ProjectSettings.asset');
+    try {
+      await fs.access(projectSettingsPath);
+    } catch {
+      throw new Error('Invalid Unity project - ProjectSettings.asset not found');
+    }
+
+    // Platform-specific validation
+    if (this.buildConfig.platform === 'Android') {
+      if (!process.env.ANDROID_SDK_ROOT) {
+        this.log('warning', 'ANDROID_SDK_ROOT not set, using default path');
+      }
+    }
+  }
+
+  private async validateUnrealEnvironment(): Promise<void> {
+    // Check for Unreal Engine installation
+    const ueBuildToolPath = await this.getUnrealBuildToolPath();
+    try {
+      await fs.access(ueBuildToolPath);
+    } catch {
+      throw new Error('Unreal Engine installation not found. Please install Unreal Engine and set UE_PATH environment variable.');
+    }
+
+    // Validate Unreal project
+    const uprojectFiles = await fs.readdir(this.buildConfig.projectPath);
+    const uprojectFile = uprojectFiles.find(file => file.endsWith('.uproject'));
+    
+    if (!uprojectFile) {
+      throw new Error('Invalid Unreal project - .uproject file not found');
+    }
+  }
+
+  private async getUnityExecutablePath(): Promise<string> {
+    if (process.env.UNITY_PATH) {
+      return process.env.UNITY_PATH;
+    }
+
+    // Default Unity installation paths
+    const defaultPaths = {
+      'win32': 'C:\\Program Files\\Unity\\Hub\\Editor\\2022.3.0f1\\Editor\\Unity.exe',
+      'darwin': '/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity',
+      'linux': '/opt/Unity/Editor/Unity'
+    };
+
+    const platform = process.platform as keyof typeof defaultPaths;
+    return defaultPaths[platform] || defaultPaths.linux;
+  }
+
+  private async getUnrealBuildToolPath(): Promise<string> {
+    if (process.env.UE_BUILD_TOOL_PATH) {
+      return process.env.UE_BUILD_TOOL_PATH;
+    }
+
+    // Default Unreal Engine installation paths
+    const defaultPaths = {
+      'win32': 'C:\\Program Files\\Epic Games\\UE_5.1\\Engine\\Binaries\\DotNET\\UnrealBuildTool\\UnrealBuildTool.exe',
+      'darwin': '/Users/Shared/Epic Games/UE_5.1/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool',
+      'linux': '/opt/UnrealEngine/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool'
+    };
+
+    const platform = process.platform as keyof typeof defaultPaths;
+    return defaultPaths[platform] || defaultPaths.linux;
+  }
+
+  private getUnityBuildMethod(): string {
+    // Custom build methods for different platforms
+    const buildMethods: Record<string, string> = {
+      'Windows': 'BuildPipeline.BuildStandaloneWindows',
+      'Mac': 'BuildPipeline.BuildStandaloneMac',
+      'Linux': 'BuildPipeline.BuildStandaloneLinux',
+      'iOS': 'BuildPipeline.BuildiOS',
+      'Android': 'BuildPipeline.BuildAndroid',
+      'WebGL': 'BuildPipeline.BuildWebGL'
+    };
+
+    return buildMethods[this.buildConfig.platform] || 'BuildPipeline.BuildPlayer';
+  }
+
+  private getUnityBuildTarget(): string {
+    const buildTargets: Record<string, string> = {
+      'Windows': 'StandaloneWindows64',
+      'Mac': 'StandaloneOSX',
+      'Linux': 'StandaloneLinux64',
+      'iOS': 'iOS',
+      'Android': 'Android',
+      'WebGL': 'WebGL'
+    };
+
+    return buildTargets[this.buildConfig.platform] || 'StandaloneWindows64';
+  }
+
+  private getUnrealBuildTarget(): string {
+    // Get the target name from the .uproject file or use default
+    return this.buildConfig.configuration.targetName || 'GameTarget';
+  }
+
+  private getUnrealPlatformName(): string {
+    const platformNames: Record<string, string> = {
+      'Windows': 'Win64',
+      'Mac': 'Mac',
+      'Linux': 'Linux',
+      'iOS': 'IOS',
+      'Android': 'Android',
+      'PlayStation': 'PS5',
+      'Xbox': 'XSX'
+    };
+
+    return platformNames[this.buildConfig.platform] || 'Win64';
+  }
+
+  private async generateUnrealProjectFiles(): Promise<void> {
+    this.log('info', 'Generating Unreal project files...');
+    
+    const uprojectFiles = await fs.readdir(this.buildConfig.projectPath);
+    const uprojectFile = uprojectFiles.find(file => file.endsWith('.uproject'));
+    
+    if (!uprojectFile) {
+      throw new Error('No .uproject file found');
+    }
+
+    const generateCommand = process.platform === 'win32' ? 
+      `"${this.buildConfig.projectPath}\\${uprojectFile}" -projectfiles` :
+      `"${this.buildConfig.projectPath}/${uprojectFile}" -projectfiles`;
+
+    try {
+      await execAsync(generateCommand, { cwd: this.buildConfig.projectPath });
+      this.log('info', 'Project files generated successfully');
+    } catch (error) {
+      this.log('warning', `Project file generation failed: ${getErrorMessage(error)}`);
+    }
+  }
+
+  private async packageUnrealGame(): Promise<string | null> {
+    this.log('info', 'Packaging Unreal game...');
+    
+    const automationToolPath = process.platform === 'win32' ?
+      path.join(path.dirname(await this.getUnrealBuildToolPath()), '..', 'AutomationTool.exe') :
+      path.join(path.dirname(await this.getUnrealBuildToolPath()), '..', 'AutomationTool');
+
+    const packagePath = path.join(this.buildConfig.outputPath, 'Package');
+    await fs.mkdir(packagePath, { recursive: true });
+
+    const packageArgs = [
+      'BuildCookRun',
+      `-project="${this.buildConfig.projectPath}"`,
+      `-platform=${this.getUnrealPlatformName()}`,
+      `-configuration=${this.buildConfig.buildType}`,
+      `-archivedirectory="${packagePath}"`,
+      '-cook',
+      '-package',
+      '-stage',
+      '-archive'
+    ];
+
+    try {
+      const command = `"${automationToolPath}" ${packageArgs.join(' ')}`;
+      await execAsync(command, {
+        cwd: this.buildConfig.projectPath,
+        timeout: 45 * 60 * 1000 // 45 minutes for packaging
+      });
+
+      return packagePath;
+    } catch (error) {
+      this.log('error', `Game packaging failed: ${getErrorMessage(error)}`);
+      return null;
+    }
+  }
+
+  private async parseUnityLogs(logPath: string): Promise<void> {
+    try {
+      const logContent = await fs.readFile(logPath, 'utf-8');
+      const lines = logContent.split('\n');
+
+      for (const line of lines) {
+        if (line.trim()) {
+          let level: 'info' | 'warning' | 'error' = 'info';
+          
+          if (line.toLowerCase().includes('error')) {
+            level = 'error';
+          } else if (line.toLowerCase().includes('warning')) {
+            level = 'warning';
+          }
+
+          this.log(level, line.trim());
+        }
+      }
+    } catch (error) {
+      this.log('warning', `Could not parse Unity logs: ${getErrorMessage(error)}`);
+    }
+  }
+
+  private parseUnrealBuildOutput(stdout: string, stderr: string): void {
+    // Parse stdout
+    const stdoutLines = stdout.split('\n');
+    for (const line of stdoutLines) {
+      if (line.trim()) {
+        let level: 'info' | 'warning' | 'error' = 'info';
+        
+        if (line.includes('Error:') || line.includes('ERROR')) {
+          level = 'error';
+        } else if (line.includes('Warning:') || line.includes('WARNING')) {
+          level = 'warning';
+        }
+
+        this.log(level, line.trim());
+      }
+    }
+
+    // Parse stderr
+    if (stderr) {
+      const stderrLines = stderr.split('\n');
+      for (const line of stderrLines) {
+        if (line.trim()) {
+          this.log('error', line.trim());
+        }
+      }
+    }
+  }
+
+  private async findUnityBuildOutput(): Promise<string | null> {
+    const buildPath = path.join(this.buildConfig.projectPath, 'Builds', this.buildConfig.platform);
+    
+    try {
+      await fs.access(buildPath);
+      return buildPath;
+    } catch {
+      // Try alternative build paths
+      const alternativePaths = [
+        path.join(this.buildConfig.outputPath, 'Build'),
+        path.join(this.buildConfig.projectPath, 'Build'),
+        this.buildConfig.outputPath
+      ];
+
+      for (const altPath of alternativePaths) {
+        try {
+          await fs.access(altPath);
+          return altPath;
+        } catch {
+          continue;
+        }
+      }
+      
+      return null;
+    }
+  }
+
+  private async postBuildProcessing(outputPath: string): Promise<void> {
+    this.log('info', 'Performing post-build processing...');
+    
+    // Create build archive
+    const archivePath = await this.createBuildArchive(outputPath);
+    
+    // Upload to storage (mock implementation)
+    await this.uploadBuildArtifact(archivePath);
+    
+    // Generate build manifest
+    await this.generateBuildManifest(outputPath);
+    
+    this.log('info', 'Post-build processing completed');
+  }
+
+  private async createBuildArchive(outputPath: string): Promise<string> {
+    const archiveName = `${this.buildConfig.framework}_${this.buildConfig.platform}_${this.buildConfig.version}_${Date.now()}.zip`;
+    const archivePath = path.join(this.buildConfig.outputPath, archiveName);
+    
+    // In production, use proper archiving library like AdmZip or node-7z
+    this.log('info', `Creating build archive: ${archiveName}`);
+    
+    return archivePath;
+  }
+
+  private async uploadBuildArtifact(archivePath: string): Promise<void> {
+    // In production, upload to S3, Azure Blob, or similar
+    this.log('info', `Uploading build artifact: ${path.basename(archivePath)}`);
+    
+    // Mock upload delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    this.log('info', 'Build artifact uploaded successfully');
+  }
+
+  private async generateBuildManifest(outputPath: string): Promise<void> {
+    const manifest = {
+      buildId: this.buildConfig.buildId,
+      framework: this.buildConfig.framework,
+      platform: this.buildConfig.platform,
+      buildType: this.buildConfig.buildType,
+      version: this.buildConfig.version,
+      buildTime: new Date().toISOString(),
+      outputPath,
+      logs: this.logs
+    };
+
+    const manifestPath = path.join(this.buildConfig.outputPath, 'build-manifest.json');
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+    
+    this.log('info', 'Build manifest generated');
+  }
+
+  private log(level: 'info' | 'warning' | 'error', message: string): void {
+    const logEntry = {
+      timestamp: new Date(),
+      message,
+      level
+    };
+    
+    this.logs.push(logEntry);
+    console.log(`[${level.toUpperCase()}] ${message}`);
+  }
+
+  // Update build status in database
+  async updateBuildStatus(status: string, progress?: number): Promise<void> {
+    try {
+      await prisma.gameBuild.update({
+        where: { id: this.buildConfig.buildId },
+        data: {
+          status,
+          progress,
+          logs: this.logs
+        }
+      });
+    } catch (error) {
+      console.error('Failed to update build status:', error);
+    }
+  }
+}

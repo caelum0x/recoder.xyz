@@ -8,7 +8,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { platformDetector, PlatformInfo, BinaryInfo, InstallationPaths } from './platform-detector';
 import { downloadManager } from './download-manager';
 import { healthChecker } from './health-checker';

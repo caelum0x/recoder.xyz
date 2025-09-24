@@ -298,6 +298,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         action: 'dashboard_widget_added',
+          resource: 'dashboard',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -401,8 +402,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update widget
+    const currentWidget = widgets[widgetIndex] as any;
     const updatedWidget = {
-      ...widgets[widgetIndex],
+      ...currentWidget,
       ...updates,
       id: widgetId, // Ensure ID doesn't change
       updatedAt: new Date().toISOString()
@@ -424,6 +426,7 @@ export async function PATCH(request: NextRequest) {
       data: {
         userId,
         action: 'dashboard_widget_updated',
+          resource: 'dashboard',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -501,7 +504,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const removedWidget = widgets[widgetIndex];
+    const removedWidget = widgets[widgetIndex] as any;
     widgets.splice(widgetIndex, 1);
 
     // Update dashboard
@@ -518,6 +521,7 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId,
         action: 'dashboard_widget_deleted',
+          resource: 'dashboard',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -525,8 +529,8 @@ export async function DELETE(request: NextRequest) {
         metadata: {
           dashboardId,
           widgetId,
-          widgetType: removedWidget.type,
-          widgetTitle: removedWidget.title
+          widgetType: (removedWidget as any)?.type || 'unknown',
+          widgetTitle: (removedWidget as any)?.title || 'untitled'
         }
       }
     });

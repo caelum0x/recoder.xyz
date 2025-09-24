@@ -356,7 +356,7 @@ export function AnalyticsDashboard({ timeRange, userId }: AnalyticsDashboardProp
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                      label={(props: any) => `${props.name || props.segment || props.category || props.cycle || props.period || "Item"}: ${props.value || props.customerCount || props.totalRevenue || props.count || 0}`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"

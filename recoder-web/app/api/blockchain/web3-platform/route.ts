@@ -1,14 +1,14 @@
 // Blockchain Integration Suite API - Comprehensive Web3 development platform
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/database';
+import { prisma } from '../../../../lib/database';
 import { z } from 'zod';
-import rateLimit from '@/lib/rate-limit';
+import rateLimit from '../../../../lib/rate-limit';
 import { v4 as uuidv4 } from 'uuid';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs-extra';
-import path from 'path';
+import * as path from 'path';
 
 const execAsync = promisify(exec);
 
@@ -104,8 +104,17 @@ export async function POST(request: NextRequest) {
 
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -118,17 +127,7 @@ export async function POST(request: NextRequest) {
       const project = await prisma.project.findFirst({
         where: {
           id: validatedData.projectId,
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id,
-                  role: { in: ['admin', 'editor'] }
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       });
 
@@ -150,7 +149,7 @@ export async function POST(request: NextRequest) {
           tokenomics: validatedData.tokenomics,
           security: validatedData.security,
           status: 'generating',
-          createdBy: session.user.id,
+          createdBy: user.id,
           metadata: {
             createdAt: new Date().toISOString(),
             version: '1.0.0'
@@ -164,8 +163,9 @@ export async function POST(request: NextRequest) {
       // Log contract creation
       await prisma.auditLog.create({
         data: {
-          userId: session.user.id,
+          userId: user.id,
           action: 'smart_contract_create',
+          resource: 'smart',
           platform: 'blockchain',
           success: true,
           metadata: {
@@ -201,17 +201,7 @@ export async function POST(request: NextRequest) {
       const hasAccess = await prisma.project.findFirst({
         where: {
           id: contract.projectId,
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id,
-                  role: { in: ['admin', 'editor'] }
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       });
 
@@ -220,7 +210,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Deploy contract
-      const deploymentResult = await deploySmartContract(contract, validatedData, session.user.id);
+      const deploymentResult = await deploySmartContract(contract, validatedData, user.id);
 
       return NextResponse.json({
         deployment: deploymentResult,
@@ -234,17 +224,7 @@ export async function POST(request: NextRequest) {
       const project = await prisma.project.findFirst({
         where: {
           id: validatedData.projectId,
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id,
-                  role: { in: ['admin', 'editor'] }
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       });
 
@@ -265,7 +245,7 @@ export async function POST(request: NextRequest) {
           frontend: validatedData.frontend,
           styling: validatedData.styling,
           status: 'generating',
-          createdBy: session.user.id,
+          createdBy: user.id,
           metadata: {
             createdAt: new Date().toISOString()
           }
@@ -295,7 +275,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Run security audit
-      const auditResult = await runSecurityAudit(contract, session.user.id);
+      const auditResult = await runSecurityAudit(contract, user.id);
 
       return NextResponse.json({
         audit: auditResult,
@@ -325,8 +305,17 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -388,16 +377,7 @@ export async function GET(request: NextRequest) {
       // Get smart contracts
       const whereConditions: any = {
         project: {
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       };
 
@@ -436,16 +416,7 @@ export async function GET(request: NextRequest) {
       // Get DApp projects
       const whereConditions: any = {
         project: {
-          OR: [
-            { userId: session.user.id },
-            { 
-              collaborators: {
-                some: {
-                  userId: session.user.id
-                }
-              }
-            }
-          ]
+          userId: user.id
         }
       };
 
@@ -483,7 +454,7 @@ export async function GET(request: NextRequest) {
 
     } else {
       // Get overview data
-      const overview = await getBlockchainOverview(session.user.id, projectId);
+      const overview = await getBlockchainOverview(user.id, projectId || undefined);
       return NextResponse.json({ overview });
     }
 
@@ -525,7 +496,7 @@ async function generateSmartContract(contract: any) {
       where: { id: contract.id },
       data: {
         status: 'generated',
-        sourceCode: generatedFiles['main'] || '',
+        sourceCode: (generatedFiles as Record<string, string>)['main'] || '',
         metadata: {
           ...contract.metadata,
           generatedAt: new Date().toISOString(),
@@ -580,7 +551,7 @@ async function generateSolidityContract(contract: any, contractDirectory: string
   for (const [filePath, content] of Object.entries(files)) {
     const fullPath = path.join(contractDirectory, filePath);
     await fs.ensureDir(path.dirname(fullPath));
-    await fs.writeFile(fullPath, content);
+    await fs.outputFile(fullPath, content);
   }
 
   return files;
@@ -1210,7 +1181,7 @@ async function generateDeFiSwapDApp(dapp: any, dappDirectory: string) {
   for (const [filePath, content] of Object.entries(files)) {
     const fullPath = path.join(dappDirectory, filePath);
     await fs.ensureDir(path.dirname(fullPath));
-    await fs.writeFile(fullPath, content);
+    await fs.outputFile(fullPath, content);
   }
 
   return files;
@@ -1333,6 +1304,7 @@ async function runSecurityAudit(contract: any, userId: string) {
     data: {
       userId,
       action: 'security_audit',
+          resource: 'security',
       platform: 'blockchain',
       success: true,
       metadata: {
@@ -1349,14 +1321,7 @@ async function runSecurityAudit(contract: any, userId: string) {
 async function getBlockchainOverview(userId: string, projectId?: string) {
   const whereConditions: any = {
     project: {
-      OR: [
-        { userId },
-        { 
-          collaborators: {
-            some: { userId }
-          }
-        }
-      ]
+      userId
     }
   };
 
@@ -1409,4 +1374,4 @@ async function getDirectorySize(dirPath: string): Promise<number> {
   } catch (error) {
     return 0;
   }
-}
+}export const runtime = 'nodejs';

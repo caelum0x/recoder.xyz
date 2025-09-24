@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
     let endDate = searchParams.get('endDate');
 
     // Set default date range if not provided
+    const now = new Date();
     if (!startDate || !endDate) {
-      const now = new Date();
       endDate = now.toISOString();
       
       switch (period) {
@@ -85,43 +85,64 @@ export async function GET(request: NextRequest) {
     }
 
     // Get feature adoption overview
-    const overview = await getFeatureAdoptionOverview(new Date(startDate), new Date(endDate));
+    const overview = await getFeatureAdoptionOverview(
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now
+    );
     
     // Get feature funnel analysis
-    const featureFunnel = await getFeatureFunnelAnalysis(new Date(startDate), new Date(endDate));
+    const featureFunnel = await getFeatureFunnelAnalysis(
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now
+    );
     
     // Get adoption timeline
     const adoptionTimeline = await getFeatureAdoptionTimeline(
-      new Date(startDate), 
-      new Date(endDate), 
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now, 
       granularity as any
     );
     
     // Get feature lifecycle analysis
-    const lifecycleAnalysis = await getFeatureLifecycleAnalysis(new Date(startDate), new Date(endDate));
+    const lifecycleAnalysis = await getFeatureLifecycleAnalysis(
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now
+    );
     
     // Get user journey analysis
-    const userJourney = await getUserJourneyAnalysis(new Date(startDate), new Date(endDate));
+    const userJourney = await getUserJourneyAnalysis(
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now
+    );
     
     // Get feature stickiness metrics
-    const stickinessMetrics = await getFeatureStickinessMetrics(new Date(startDate), new Date(endDate));
+    const stickinessMetrics = await getFeatureStickinessMetrics(
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now
+    );
     
     // Get cohort adoption analysis
     const cohortAdoption = await getCohortAdoptionAnalysis();
     
     // Get feature correlation analysis
-    const featureCorrelation = await getFeatureCorrelationAnalysis(new Date(startDate), new Date(endDate));
+    const featureCorrelation = await getFeatureCorrelationAnalysis(
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now
+    );
     
     // Get abandonment analysis
-    const abandonmentAnalysis = await getFeatureAbandonmentAnalysis(new Date(startDate), new Date(endDate));
+    const abandonmentAnalysis = await getFeatureAbandonmentAnalysis(
+      startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : now
+    );
     
     // Get segmented analysis if requested
     let segmentedAnalysis = null;
     if (segmentBy) {
       segmentedAnalysis = await getSegmentedFeatureAnalysis(
         segmentBy,
-        new Date(startDate),
-        new Date(endDate)
+        startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+        endDate ? new Date(endDate) : now
       );
     }
 
@@ -129,8 +150,8 @@ export async function GET(request: NextRequest) {
     let detailedMetrics = null;
     if (includeDetailedMetrics) {
       detailedMetrics = await getDetailedFeatureMetrics(
-        new Date(startDate), 
-        new Date(endDate),
+        startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), 
+        endDate ? new Date(endDate) : now,
         featureFilter
       );
     }
@@ -167,7 +188,7 @@ async function getFeatureAdoptionOverview(startDate: Date, endDate: Date) {
     by: ['action'],
     where: {
       createdAt: { gte: startDate, lte: endDate },
-      userId: { not: null }
+      userId: { not: '' }
     },
     _count: { id: true }
   });
@@ -176,7 +197,7 @@ async function getFeatureAdoptionOverview(startDate: Date, endDate: Date) {
   const totalActiveUsers = await prisma.auditLog.findMany({
     where: {
       createdAt: { gte: startDate, lte: endDate },
-      userId: { not: null }
+      userId: { not: '' }
     },
     distinct: ['userId'],
     select: { userId: true }
@@ -241,7 +262,7 @@ async function getFeatureAdoptionOverview(startDate: Date, endDate: Date) {
     newAdopters: Number(newAdopters.new_adopters) || 0,
     newFeatureAdoptions: Number(newAdopters.new_feature_adoptions) || 0,
     avgFeaturesPerUser: totalActiveUsers.length > 0 
-      ? totalFeatures.reduce((sum, f) => sum + f._count.id, 0) / totalActiveUsers.length 
+      ? totalFeatures.reduce((sum, f) => sum + (typeof f._count === 'object' && f._count ? Object.values(f._count)[0] as number || 0 : 0), 0) / totalActiveUsers.length 
       : 0,
     featureAdoptionRates: Array.isArray(featureAdoptionRates) 
       ? featureAdoptionRates.map((row: any) => ({
@@ -274,21 +295,22 @@ async function getFeatureFunnelAnalysis(startDate: Date, endDate: Date) {
       where: {
         action: { in: stage.actions },
         createdAt: { gte: startDate, lte: endDate },
-        userId: { not: null }
+        userId: { not: '' }
       },
       distinct: ['userId'],
       select: { userId: true }
     });
 
     const previousStageUsers = index === 0 ? stageUsers.length 
-      : await prisma.auditLog.count({
+      : (await prisma.auditLog.findMany({
           where: {
             action: { in: funnelStages.slice(0, index).flatMap(s => s.actions) },
             createdAt: { gte: startDate, lte: endDate },
-            userId: { not: null }
+            userId: { not: '' }
           },
-          distinct: ['userId']
-        });
+          distinct: ['userId'],
+          select: { userId: true }
+        })).length;
 
     const conversionRate = previousStageUsers > 0 ? (stageUsers.length / previousStageUsers) * 100 : 0;
     const dropOffRate = 100 - conversionRate;
@@ -873,7 +895,7 @@ async function getDetailedFeatureMetrics(
       feature: row.action,
       usageCount: Number(row.usage_count) || 0,
       firstUsed: row.first_used,
-      lastUsed: row.last_used
+      lastUsedAt: row.last_used
     })) : [],
     underperformingFeatures: Array.isArray(underperforming) ? underperforming.map((row: any) => ({
       feature: row.action,

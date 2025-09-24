@@ -165,7 +165,7 @@ class PWAManager {
   private observeWebVitals(): void {
     const observer = new PerformanceObserver((list) => {
       list.getEntries().forEach((entry) => {
-        this.sendMetricToAPI(entry.name, entry.value, entry);
+        this.sendMetricToAPI(entry.name, (entry as any).value || 0, entry);
       });
     });
 
@@ -255,7 +255,7 @@ class PWAManager {
   private sendNavigationMetric(entry: PerformanceNavigationTiming): void {
     const metrics = {
       'dom-content-loaded': entry.domContentLoadedEventEnd - entry.domContentLoadedEventStart,
-      'dom-complete': entry.domComplete - entry.navigationStart,
+      'dom-complete': entry.domComplete - (entry.startTime || 0),
       'load-complete': entry.loadEventEnd - entry.loadEventStart,
       'first-byte': entry.responseStart - entry.requestStart,
       'dns-lookup': entry.domainLookupEnd - entry.domainLookupStart,
@@ -336,7 +336,8 @@ class PWAManager {
   private syncWhenOnline(): void {
     if (this.options.enableBackgroundSync && this.swRegistration) {
       // Trigger background sync
-      this.swRegistration.sync?.register('recoder-background-sync').catch(() => {
+      const swWithSync = this.swRegistration as any;
+      swWithSync.sync?.register('recoder-background-sync').catch(() => {
         // Background sync not supported
         this.log('Background sync not supported');
       });

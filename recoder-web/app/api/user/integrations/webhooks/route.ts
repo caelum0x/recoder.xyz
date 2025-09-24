@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/database';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { z } from "zod";
 import crypto from 'crypto';
 import rateLimit from '@/lib/rate-limit';
@@ -13,7 +14,6 @@ const limiter = rateLimit({
 
 // Webhook schema for validation
 const webhookSchema = z.object({
-  name: z.string().min(1).max(100),
   url: z.string().url().refine(url => {
     // Validate URL is HTTPS for security
     return url.startsWith('https://') || url.startsWith('http://localhost:');
@@ -35,14 +35,10 @@ const webhookSchema = z.object({
     'security.alert.created'
   ])).min(1),
   secret: z.string().optional(),
-  isActive: z.boolean().optional().default(true),
-  headers: z.record(z.string()).optional(),
-  timeout: z.number().min(1000).max(30000).optional().default(10000),
-  retries: z.number().min(0).max(5).optional().default(3)
+  isActive: z.boolean().optional().default(true)
 });
 
 const updateWebhookSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
   url: z.string().url().refine(url => {
     return url.startsWith('https://') || url.startsWith('http://localhost:');
   }, 'Webhook URL must use HTTPS or be localhost for development').optional(),
@@ -62,10 +58,7 @@ const updateWebhookSchema = z.object({
     'billing.subscription.updated',
     'security.alert.created'
   ])).min(1).optional(),
-  isActive: z.boolean().optional(),
-  headers: z.record(z.string()).optional(),
-  timeout: z.number().min(1000).max(30000).optional(),
-  retries: z.number().min(0).max(5).optional()
+  isActive: z.boolean().optional()
 });
 
 // GET - Fetch user's webhooks
@@ -83,29 +76,33 @@ export async function GET(request: NextRequest) {
 
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const webhooks = await prisma.userWebhook.findMany({
+    // Get user ID from session email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const webhooks = await prisma.webhook.findMany({
       where: {
-        userId: session.user.id,
+        userId: user.id,
       },
       select: {
         id: true,
-        name: true,
         url: true,
         events: true,
         isActive: true,
-        lastTriggeredAt: true,
-        deliveryCount: true,
-        failureCount: true,
-        headers: true,
-        timeout: true,
-        retries: true,
+        // lastDelivery: true, // Field not in Webhook model
         createdAt: true,
         updatedAt: true,
         // Don't return secret for security
@@ -126,16 +123,13 @@ export async function GET(request: NextRequest) {
         },
         _count: {
           id: true
-        },
-        _avg: {
-          responseTime: true
         }
       });
 
       const successfulDeliveries = await prisma.webhookDelivery.count({
         where: {
           webhookId: webhook.id,
-          success: true,
+          success: true, // Using success field instead of status
           createdAt: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
           }
@@ -151,7 +145,7 @@ export async function GET(request: NextRequest) {
           totalDeliveries,
           successfulDeliveries,
           successRate: Math.round(successRate * 100) / 100,
-          averageResponseTime: Math.round((deliveryStats._avg.responseTime || 0) * 100) / 100
+          averageResponseTime: 0 // Not available in current schema
         }
       };
     }));
@@ -184,24 +178,34 @@ export async function POST(request: NextRequest) {
 
     const session = await getServerSession();
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
+    // Get user ID from session email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const validatedData = webhookSchema.parse(body);
 
     // Check webhook limits per user (free: 5, pro: 20, enterprise: 100)
-    const existingWebhooks = await prisma.userWebhook.count({
-      where: { userId: session.user.id }
+    const existingWebhooks = await prisma.webhook.count({
+      where: { userId: user.id }
     });
 
     // Get user subscription for limit checking
     const userSubscription = await prisma.subscription.findUnique({
-      where: { userId: session.user.id }
+      where: { userId: user.id }
     });
 
     const plan = userSubscription?.plan || 'free';
@@ -228,28 +232,20 @@ export async function POST(request: NextRequest) {
     const testResult = await testWebhookEndpoint(validatedData.url);
     
     // Create the webhook
-    const webhook = await prisma.userWebhook.create({
+    const webhook = await prisma.webhook.create({
       data: {
-        userId: session.user.id,
-        name: validatedData.name,
+        userId: user.id,
+        name: (validatedData as any).name || `Webhook-${Date.now()}`, // Required field with fallback
         url: validatedData.url,
         events: validatedData.events,
         secret: secret,
-        isActive: validatedData.isActive,
-        headers: validatedData.headers || {},
-        timeout: validatedData.timeout || 10000,
-        retries: validatedData.retries || 3,
-        lastTestAt: testResult.success ? new Date() : null
+        isActive: validatedData.isActive !== false
       },
       select: {
         id: true,
-        name: true,
         url: true,
         events: true,
         isActive: true,
-        headers: true,
-        timeout: true,
-        retries: true,
         createdAt: true,
         // Return secret only on creation
         secret: true,
@@ -259,15 +255,16 @@ export async function POST(request: NextRequest) {
     // Create audit log entry
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         action: 'webhook_created',
+        resource: 'webhook',
+        resourceId: webhook.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           webhookId: webhook.id,
-          webhookName: webhook.name,
           webhookUrl: webhook.url,
           events: webhook.events,
           testResult
@@ -278,10 +275,10 @@ export async function POST(request: NextRequest) {
     // Security event
     await prisma.securityEvent.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         eventType: 'webhook_created',
         severity: 'low',
-        description: `New webhook "${validatedData.name}" created`,
+        description: `New webhook created for ${validatedData.url}`,
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         metadata: {
@@ -320,14 +317,23 @@ export async function POST(request: NextRequest) {
 // PUT - Update webhook
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    const prisma = getPrisma();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
+    }
+
+    // Get user ID from session email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -344,10 +350,10 @@ export async function PUT(request: NextRequest) {
     const validatedData = updateWebhookSchema.parse(updateData);
 
     // Verify the webhook belongs to the user
-    const existingWebhook = await prisma.userWebhook.findFirst({
+    const existingWebhook = await prisma.webhook.findFirst({
       where: {
         id: id,
-        userId: session.user.id,
+        userId: user.id,
       },
     });
 
@@ -359,7 +365,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update the webhook
-    const updatedWebhook = await prisma.userWebhook.update({
+    const updatedWebhook = await prisma.webhook.update({
       where: { id: id },
       data: {
         ...validatedData,
@@ -367,13 +373,13 @@ export async function PUT(request: NextRequest) {
       },
       select: {
         id: true,
-        name: true,
+        // name: true, // Field not in Webhook model
         url: true,
         events: true,
         isActive: true,
-        headers: true,
-        timeout: true,
-        retries: true,
+        // headers: true, // Field not in Webhook model
+        // timeout: true, // Field not in Webhook model
+        // retries: true, // Field not in Webhook model
         updatedAt: true,
       },
     });
@@ -381,8 +387,10 @@ export async function PUT(request: NextRequest) {
     // Create audit log entry
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         action: 'webhook_updated',
+        resource: 'webhook',
+        resourceId: id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -410,14 +418,23 @@ export async function PUT(request: NextRequest) {
 // DELETE - Remove webhook
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    const prisma = getPrisma();
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
+    }
+
+    // Get user ID from session email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -431,10 +448,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify the webhook belongs to the user
-    const webhook = await prisma.userWebhook.findFirst({
+    const webhook = await prisma.webhook.findFirst({
       where: {
         id: webhookId,
-        userId: session.user.id,
+        userId: user.id,
       },
     });
 
@@ -451,22 +468,23 @@ export async function DELETE(request: NextRequest) {
     });
 
     // Delete the webhook
-    await prisma.userWebhook.delete({
+    await prisma.webhook.delete({
       where: { id: webhookId },
     });
 
     // Create audit log entry
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         action: 'webhook_deleted',
+        resource: 'webhook',
+        resourceId: webhookId,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           webhookId: webhookId,
-          webhookName: webhook.name,
           webhookUrl: webhook.url,
         }
       }
@@ -475,10 +493,10 @@ export async function DELETE(request: NextRequest) {
     // Security event
     await prisma.securityEvent.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         eventType: 'webhook_deleted',
         severity: 'low',
-        description: `Webhook "${webhook.name}" was deleted`,
+        description: `Webhook was deleted`,
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         metadata: {

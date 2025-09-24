@@ -1,6 +1,6 @@
-import { deepSeekModels, deepSeekDefaultModelId } from "@recoder/shared"
+import { deepSeekModels, deepSeekDefaultModelId } from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 
 import type { ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"

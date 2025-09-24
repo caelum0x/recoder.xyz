@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Integration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            background: #f9f9f9;
+        }
+        button {
+            background: #007cba;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a8b;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #2e7d32;
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .loading {
+            color: #1976d2;
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .plan {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .plan-popular {
+            border-color: #007cba;
+            background: #f0f8ff;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Recoder Payment Integration Test</h1>
+    
+    <div class="card">
+        <h2>API Connection Status</h2>
+        <div id="connectionStatus">Testing connection...</div>
+    </div>
+
+    <div class="card">
+        <h2>Available Plans</h2>
+        <button onclick="loadPlans()">Load Plans</button>
+        <div id="plansContainer"></div>
+    </div>
+
+    <div class="card">
+        <h2>Subscription Status</h2>
+        <button onclick="checkSubscription()">Check Subscription</button>
+        <div id="subscriptionContainer"></div>
+    </div>
+
+    <div class="card">
+        <h2>Usage Statistics</h2>
+        <button onclick="checkUsage()">Check Usage</button>
+        <div id="usageContainer"></div>
+    </div>
+
+    <div class="card">
+        <h2>Test Payment Creation</h2>
+        <button onclick="testPayment('recoder-monthly')">Create Test Payment (Pro Plan)</button>
+        <div id="paymentContainer"></div>
+    </div>
+
+    <div class="card">
+        <h2>Usage Recording</h2>
+        <button onclick="recordTestUsage()">Record Test Usage</button>
+        <div id="usageRecordContainer"></div>
+    </div>
+
+    <div class="card">
+        <h2>API Logs</h2>
+        <pre id="apiLogs"></pre>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api/payments';
+        let logs = [];
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.push(`[${timestamp}] ${message}`);
+            document.getElementById('apiLogs').textContent = logs.slice(-10).join('\n');
+        }
+
+        function setStatus(containerId, content, type = 'info') {
+            const container = document.getElementById(containerId);
+            container.className = type;
+            container.innerHTML = content;
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            log(`${options.method || 'GET'} ${url}`);
+            
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+
+                const data = await response.json();
+                log(`Response: ${response.status} - ${JSON.stringify(data).slice(0, 100)}...`);
+                
+                return { success: response.ok, data, status: response.status };
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function testConnection() {
+            const result = await apiCall('/../health');
+            if (result.success) {
+                setStatus('connectionStatus', '✅ Connected to backend API', 'success');
+            } else {
+                setStatus('connectionStatus', `❌ Connection failed: ${result.error}`, 'error');
+            }
+        }
+
+        async function loadPlans() {
+            setStatus('plansContainer', 'Loading plans...', 'loading');
+            
+            const result = await apiCall('/plans');
+            if (result.success && result.data.success) {
+                const plans = result.data.data;
+                let html = '<h3>Available Plans:</h3>';
+                
+                plans.forEach(plan => {
+                    const isPopular = plan.id === 'recoder-monthly';
+                    html += `
+                        <div class="plan ${isPopular ? 'plan-popular' : ''}">
+                            <h4>${plan.name} ${isPopular ? '⭐ Popular' : ''}</h4>
+                            <p><strong>Price:</strong> $${plan.price}/month</p>
+                            <p><strong>Requests:</strong> ${plan.limits.monthlyRequests.toLocaleString()}/month</p>
+                            <p><strong>Features:</strong> ${plan.features.slice(0, 2).join(', ')}</p>
+                            <button onclick="testPayment('${plan.id}')">Subscribe to ${plan.name}</button>
+                        </div>
+                    `;
+                });
+                
+                setStatus('plansContainer', html, 'success');
+            } else {
+                setStatus('plansContainer', `❌ Failed to load plans: ${result.data?.error || result.error}`, 'error');
+            }
+        }
+
+        async function checkSubscription() {
+            setStatus('subscriptionContainer', 'Checking subscription...', 'loading');
+            
+            const result = await apiCall('/subscription');
+            if (result.success && result.data.success) {
+                const sub = result.data.data;
+                if (sub) {
+                    setStatus('subscriptionContainer', `
+                        <h3>✅ Active Subscription</h3>
+                        <p><strong>Plan:</strong> ${sub.planName}</p>
+                        <p><strong>Status:</strong> ${sub.status}</p>
+                        <p><strong>Amount:</strong> $${sub.amount}/month</p>
+                        <p><strong>Next billing:</strong> ${sub.nextBillingDate || 'N/A'}</p>
+                    `, 'success');
+                } else {
+                    setStatus('subscriptionContainer', '❌ No active subscription found', 'error');
+                }
+            } else {
+                setStatus('subscriptionContainer', `❌ Failed to check subscription: ${result.data?.error || result.error}`, 'error');
+            }
+        }
+
+        async function checkUsage() {
+            setStatus('usageContainer', 'Checking usage...', 'loading');
+            
+            const result = await apiCall('/usage');
+            if (result.success && result.data.success) {
+                const usage = result.data.data;
+                setStatus('usageContainer', `
+                    <h3>📊 Usage Statistics</h3>
+                    <p><strong>Current Usage:</strong> ${usage.currentUsage} / ${usage.monthlyLimit}</p>
+                    <p><strong>Usage Percentage:</strong> ${usage.usagePercentage}%</p>
+                    <p><strong>Cost This Month:</strong> $${usage.costThisMonth.toFixed(2)}</p>
+                    <p><strong>Projected Cost:</strong> $${usage.projectedMonthlyCost.toFixed(2)}</p>
+                    <p><strong>Remaining Quota:</strong> ${usage.remainingQuota}</p>
+                `, 'success');
+            } else {
+                setStatus('usageContainer', `❌ Failed to check usage: ${result.data?.error || result.error}`, 'error');
+            }
+        }
+
+        async function testPayment(planId) {
+            setStatus('paymentContainer', `Creating payment for plan: ${planId}...`, 'loading');
+            
+            const result = await apiCall('/create', {
+                method: 'POST',
+                body: JSON.stringify({
+                    planId: planId,
+                    planName: planId === 'recoder-monthly' ? 'Recoder Pro' : 'Test Plan',
+                    amount: 19.99,
+                    currency: 'USD',
+                    paymentType: 'subscription',
+                    frontend: 'web',
+                    successUrl: 'http://localhost:3003/subscription?status=success',
+                    cancelUrl: 'http://localhost:3003/pricing',
+                    metadata: {
+                        testPayment: true,
+                        platform: 'test-interface'
+                    }
+                })
+            });
+            
+            if (result.success && result.data.success) {
+                const payment = result.data.data;
+                setStatus('paymentContainer', `
+                    <h3>✅ Payment Created Successfully</h3>
+                    <p><strong>Payment ID:</strong> ${payment.paymentId}</p>
+                    <p><strong>Checkout URL:</strong> <a href="${payment.checkoutUrl}" target="_blank">Open Payment Link</a></p>
+                    <p><strong>Amount:</strong> $${payment.amount}</p>
+                    <p>Click the checkout URL to complete the payment flow.</p>
+                `, 'success');
+            } else {
+                setStatus('paymentContainer', `❌ Payment creation failed: ${result.data?.error || result.error}`, 'error');
+            }
+        }
+
+        async function recordTestUsage() {
+            setStatus('usageRecordContainer', 'Recording test usage...', 'loading');
+            
+            const result = await apiCall('/usage/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    type: 'ai_generation',
+                    metadata: {
+                        model: 'claude-3-sonnet',
+                        inputTokens: 150,
+                        outputTokens: 300,
+                        totalTokens: 450,
+                        feature: 'test_interface',
+                        platform: 'web',
+                        timestamp: new Date().toISOString()
+                    }
+                })
+            });
+            
+            if (result.success && result.data.success) {
+                const record = result.data.data;
+                setStatus('usageRecordContainer', `
+                    <h3>✅ Usage Recorded Successfully</h3>
+                    <p><strong>Usage ID:</strong> ${record.usageId}</p>
+                    <p><strong>Remaining Quota:</strong> ${record.remainingQuota}</p>
+                    <p><strong>Usage Percentage:</strong> ${record.usagePercentage}%</p>
+                `, 'success');
+            } else {
+                setStatus('usageRecordContainer', `❌ Usage recording failed: ${result.data?.error || result.error}`, 'error');
+            }
+        }
+
+        // Initialize on page load
+        window.onload = function() {
+            testConnection();
+            loadPlans();
+        };
+    </script>
+</body>
+</html>

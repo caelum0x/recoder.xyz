@@ -253,4 +253,4 @@ function generateMockTimeSeriesData(type: string, days: number) {
   return data;
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

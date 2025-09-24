@@ -8,9 +8,9 @@ import {
 	vertexDefaultModelId,
 	vertexModels,
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
-} from "@recoder/shared"
+} from "recoder-shared"
 
-import { ApiHandlerOptions, safeJsonParse } from "@recoder/shared"
+import { ApiHandlerOptions, safeJsonParse } from "recoder-shared"
 
 import { ApiStream } from "../transform/stream"
 import { addCacheBreakpoints } from "../transform/caching/vertex"

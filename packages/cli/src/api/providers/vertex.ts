@@ -1,6 +1,6 @@
-import { type ModelInfo, type VertexModelId, vertexDefaultModelId, vertexModels } from "@recoder/shared"
+import { type ModelInfo, type VertexModelId, vertexDefaultModelId, vertexModels } from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 
 import { getModelParams } from "../transform/model-params"
 

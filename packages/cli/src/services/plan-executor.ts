@@ -3,7 +3,7 @@
  * Ensures that generated code is actually functional and not mock/placeholder
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { FileSystemUtils } from '../utils/filesystem';
 import { ValidationHelper } from '../utils/validation';
 import { apiClient } from './api';

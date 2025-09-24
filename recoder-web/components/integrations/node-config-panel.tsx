@@ -86,14 +86,14 @@ export function NodeConfigPanel({ node, integrations, onSave, onCancel }: NodeCo
   };
 
   const handleConfigChange = (key: string, value: any) => {
-    setConfig(prev => ({
+    setConfig((prev: any) => ({
       ...prev,
       [key]: value
     }));
   };
 
   const handleNestedConfigChange = (parentKey: string, index: number, key: string, value: any) => {
-    setConfig(prev => ({
+    setConfig((prev: { [x: string]: any[]; }) => ({
       ...prev,
       [parentKey]: prev[parentKey]?.map((item: any, i: number) => 
         i === index ? { ...item, [key]: value } : item
@@ -108,14 +108,14 @@ export function NodeConfigPanel({ node, integrations, onSave, onCancel }: NodeCo
       operation: 'copy'
     };
     
-    setConfig(prev => ({
+    setConfig((prev: { transformations: any; }) => ({
       ...prev,
       transformations: [...(prev.transformations || []), newMapping]
     }));
   };
 
   const removeFieldMapping = (index: number) => {
-    setConfig(prev => ({
+    setConfig((prev: { transformations: any[]; }) => ({
       ...prev,
       transformations: prev.transformations?.filter((_: any, i: number) => i !== index) || []
     }));

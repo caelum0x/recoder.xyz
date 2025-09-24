@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from "vitest"
 import { DEFAULT_HEADERS } from "../constants"
-import { Package } from "@recoder/shared"
+import { Package } from "recoder-shared"
 
 describe("DEFAULT_HEADERS", () => {
 	it("should contain all required headers", () => {

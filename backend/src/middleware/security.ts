@@ -7,7 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import slowDown from 'express-slow-down';
+const slowDown = require('express-slow-down');
 import { body, query, param, validationResult } from 'express-validator';
 import { logger } from '../utils/logger';
 
@@ -207,19 +207,21 @@ export const speedLimiter = slowDown({
 /**
  * Input Validation Helpers
  */
-export const validateJSON = (req: Request, res: Response, next: NextFunction) => {
+export const validateJSON = (req: Request, res: Response, next: NextFunction): void => {
   if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
     if (req.get('Content-Type')?.includes('application/json')) {
       // Check if body was parsed correctly
       if (req.body === undefined) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Invalid JSON',
           message: 'Request body must be valid JSON'
         });
+        return;
       }
     }
   }
-  next();
+  
+  return next();
 };
 
 /**
@@ -266,7 +268,7 @@ export const commonValidation = {
 /**
  * Validation Error Handler
  */
-export const handleValidationErrors = (req: Request, res: Response, next: NextFunction) => {
+export const handleValidationErrors = (req: Request, res: Response, next: NextFunction): void => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
@@ -277,17 +279,18 @@ export const handleValidationErrors = (req: Request, res: Response, next: NextFu
       ip: req.ip
     });
     
-    return res.status(400).json({
+    res.status(400).json({
       error: 'Validation failed',
       details: errors.array().map(error => ({
-        field: error.param,
+        field: (error as any).path || (error as any).param || 'unknown',
         message: error.msg,
-        value: error.value
+        value: (error as any).value || 'unknown'
       }))
     });
+    return;
   }
   
-  next();
+  return next();
 };
 
 /**
@@ -320,13 +323,13 @@ export const securityLogger = (req: Request, res: Response, next: NextFunction) 
     });
   }
   
-  next();
+  return next();
 };
 
 /**
  * Request Size Limiter
  */
-export const requestSizeLimiter = (req: Request, res: Response, next: NextFunction) => {
+export const requestSizeLimiter = (req: Request, res: Response, next: NextFunction): void => {
   const maxSize = 10 * 1024 * 1024; // 10MB max request size
   
   if (req.get('content-length') && parseInt(req.get('content-length')!) > maxSize) {
@@ -336,33 +339,35 @@ export const requestSizeLimiter = (req: Request, res: Response, next: NextFuncti
       path: req.path
     });
     
-    return res.status(413).json({
+    res.status(413).json({
       error: 'Request too large',
       message: 'Request body exceeds maximum allowed size'
     });
+    return;
   }
   
-  next();
+  return next();
 };
 
 /**
  * IP Whitelist/Blacklist
  */
-export const ipFilter = (req: Request, res: Response, next: NextFunction) => {
+export const ipFilter = (req: Request, res: Response, next: NextFunction): void => {
   const clientIP = req.ip;
   
   // Blacklisted IPs (in production, this would come from database/redis)
   const blacklistedIPs: string[] = [];
   
-  if (blacklistedIPs.includes(clientIP)) {
+  if (clientIP && blacklistedIPs.includes(clientIP)) {
     logger.warn('Blocked request from blacklisted IP', { ip: clientIP });
-    return res.status(403).json({
+    res.status(403).json({
       error: 'Access denied',
       message: 'Your IP address has been blocked'
     });
+    return;
   }
   
-  next();
+  return next();
 };
 
 /**

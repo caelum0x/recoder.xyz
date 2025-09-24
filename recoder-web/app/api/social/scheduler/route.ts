@@ -428,7 +428,7 @@ Make it engaging, authentic, and platform-appropriate. Focus on driving real eng
 
     return {
       content: cleanContent,
-      hashtags: foundHashtags.map(h => h.replace('#', '')),
+      hashtags: foundHashtags.map((h: string) => h.replace('#', '')),
       platform_optimized: true,
       character_count: generatedContent.length,
       estimated_engagement: Math.floor(Math.random() * 50) + 25 // Mock engagement score

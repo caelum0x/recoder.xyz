@@ -138,4 +138,4 @@ async function getTeamInvitations(teamId: string): Promise<TeamInvitation[]> {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

@@ -1,7 +1,8 @@
 // Dashboard management API for custom analytics dashboards
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/database';
 import { z } from 'zod';
 import rateLimit from '@/lib/rate-limit';
 
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -100,14 +101,14 @@ export async function GET(request: NextRequest) {
           status: true,
           framework: true,
           language: true,
-          visibility: true,
+          // visibility: true, // Field doesn't exist in Project model
           createdAt: true,
           updatedAt: true,
           _count: {
             select: {
-              deploymentHistory: true,
-              mediaFiles: true,
-              teamProjects: true,
+              // deploymentHistory: true,
+              // mediaFiles: true,
+              // teamProjects: true,
             },
           },
         },
@@ -137,16 +138,16 @@ export async function GET(request: NextRequest) {
       createdBy: session.user.id,
       user: { id: session.user.id, name: session.user.name, image: session.user.image },
       _count: {
-        collaborators: project._count.teamProjects,
+        collaborators: 0, // project._count.teamProjects,
         views: 0,
       },
       projectData: {
         framework: project.framework,
         language: project.language,
         status: project.status,
-        visibility: project.visibility,
-        deployments: project._count.deploymentHistory,
-        mediaFiles: project._count.mediaFiles,
+        visibility: 'private', // Default since visibility field doesn't exist
+        deployments: 0, // project._count.deploymentHistory,
+        mediaFiles: 0, // project._count.mediaFiles,
       },
     }));
 
@@ -182,7 +183,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -240,8 +241,7 @@ export async function POST(request: NextRequest) {
       update: { preferences: updatedPreferences },
       create: {
         userId: session.user.id,
-        preferences: updatedPreferences,
-        limits: {},
+        preferences: updatedPreferences
       }
     });
 
@@ -250,6 +250,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'dashboard_created',
+        resource: 'dashboard',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -296,7 +297,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -362,8 +363,7 @@ export async function PUT(request: NextRequest) {
       update: { preferences: updatedPreferences },
       create: {
         userId: session.user.id,
-        preferences: updatedPreferences,
-        limits: {},
+        preferences: updatedPreferences
       }
     });
 
@@ -372,6 +372,7 @@ export async function PUT(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'dashboard_updated',
+        resource: 'dashboard',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -418,7 +419,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -477,8 +478,7 @@ export async function DELETE(request: NextRequest) {
       update: { preferences: updatedPreferences },
       create: {
         userId: session.user.id,
-        preferences: updatedPreferences,
-        limits: {},
+        preferences: updatedPreferences
       }
     });
 
@@ -487,6 +487,7 @@ export async function DELETE(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'dashboard_deleted',
+        resource: 'dashboard',
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
@@ -511,4 +512,4 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

@@ -1,0 +1,122 @@
+/**
+ * Recoder Backend Express App
+ * Express app configuration without server startup
+ */
+
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
+const { logger } = require('./utils/logger');
+
+// Import performance systems - NOW FULLY INTEGRATED
+import { intelligentFailover } from './services/intelligent-failover';
+import { redisCache } from './services/redis-cache';
+import { databaseOptimization } from './services/database-optimization';
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+
+// Enhanced performance middleware with intelligent systems
+const performanceMiddleware = {
+  createRateLimitMiddleware: (options: any) => async (req: any, res: any, next: any) => {
+    const identifier = `${req.ip}:${req.get('User-Agent')?.slice(0, 50) || 'unknown'}`;
+    const count = await redisCache.incrementRateLimit(identifier, Math.floor(options.windowMs / 1000));
+    
+    if (count > options.max) {
+      return res.status(429).json({
+        error: 'Too many requests',
+        retryAfter: Math.floor(options.windowMs / 1000)
+      });
+    }
+    
+    res.set('X-RateLimit-Limit', options.max);
+    res.set('X-RateLimit-Remaining', Math.max(0, options.max - count));
+    next();
+  },
+  
+  createHealthCheckMiddleware: () => async (req: any, res: any) => {
+    const [failoverStatus, cacheHealth, dbHealth] = await Promise.all([
+      intelligentFailover.getSystemStatus(),
+      redisCache.healthCheck(),
+      databaseOptimization.healthCheck()
+    ]);
+    
+    const overall = failoverStatus.overall === 'healthy' && 
+                   cacheHealth.status === 'healthy' && 
+                   dbHealth.status === 'healthy' ? 'healthy' : 'degraded';
+    
+    res.json({
+      status: overall,
+      systems: {
+        aiProviders: failoverStatus.overall,
+        cache: cacheHealth.status,
+        database: dbHealth.status
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Middleware configuration
+const middlewareStacks = {
+  full: (options: any = {}) => [
+    // CORS
+    cors({
+      origin: process.env['CORS_ORIGIN'] || '*',
+      credentials: true
+    }),
+    
+    // Compression
+    require('compression')(options.compressionOptions || {}),
+    
+    // Security headers
+    require('helmet')(),
+    
+    // Request parsing
+    express.json({ limit: '50mb' }),
+    express.urlencoded({ extended: true, limit: '50mb' }),
+    
+    // Logging
+    morgan('combined', { stream: { write: (message: string) => logger.info(message.trim()) } }),
+    
+    // Rate limiting
+    performanceMiddleware.createRateLimitMiddleware({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 1000 // requests per window
+    })
+  ]
+};
+
+// Performance and optimization middleware stack
+const performanceStack = middlewareStacks.full({
+  compressionOptions: {
+    level: 6,
+    threshold: 1024
+  }
+});
+
+// Apply middleware
+performanceStack.forEach(middleware => app.use(middleware));
+
+// Health check endpoint
+app.get('/health', performanceMiddleware.createHealthCheckMiddleware());
+
+// Import routes
+import gameDevelopmentRoutes from './routes/game-development-api';
+import matchmakingRoutes from './routes/matchmaking-api';
+import gameAnalyticsRoutes from './routes/game-analytics-api';
+import solidityRoutes from './routes/solidity-api';
+import blockchainRoutes from './routes/blockchain-api';
+
+// API Routes
+app.use('/api/game-development', gameDevelopmentRoutes);
+app.use('/api/matchmaking', matchmakingRoutes);
+app.use('/api/game-analytics', gameAnalyticsRoutes);
+app.use('/api/solidity', solidityRoutes);
+app.use('/api/blockchain', blockchainRoutes);
+
+module.exports = app;

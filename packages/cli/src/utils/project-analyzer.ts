@@ -3,7 +3,7 @@
  * Analyzes existing projects and generates optimal project structures
  */
 
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { FileSystemUtils } from './filesystem';
 import { ValidationHelper } from './validation';
 import { ProjectStructure, ProjectData } from '../services/api';

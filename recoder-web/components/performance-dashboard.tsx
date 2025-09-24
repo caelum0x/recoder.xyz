@@ -212,6 +212,7 @@ export default function RealPerformanceDashboard() {
       const interval = setInterval(collectMetrics, refreshInterval);
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [autoRefresh, refreshInterval, collectMetrics]);
 
   // 🚨 RESOLVE ALERT

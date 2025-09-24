@@ -10,7 +10,7 @@ import { productionEngineClient, ProductionEngineClient } from './production-eng
 // Analytics integration - monitoring and cost tracking
 let analyticsPackage: any = null
 try {
-  analyticsPackage = require('@recoder/analytics')
+  analyticsPackage = require('recoder-analytics')
 } catch (error) {
   Logger.warn('Analytics package not available:', error)
 }
@@ -31,7 +31,7 @@ try {
 // Security integration - vulnerability scanning and compliance
 let securityPackage: any = null
 try {
-  securityPackage = require('@recoder/security')
+  securityPackage = require('recoder-security')
 } catch (error) {
   Logger.warn('Security package not available:', error)
 }

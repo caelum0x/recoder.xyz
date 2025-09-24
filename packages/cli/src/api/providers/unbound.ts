@@ -1,9 +1,9 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import { unboundDefaultModelId, unboundDefaultModelInfo } from "@recoder/shared"
+import { unboundDefaultModelId, unboundDefaultModelInfo } from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { convertToOpenAiMessages } from "../transform/openai-format"

@@ -1,7 +1,7 @@
 // User data export API endpoint for GDPR compliance
-import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
-import { userManager } from '@/lib/user-management';
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { prisma } from '@/lib/database';
 import rateLimit from '@/lib/rate-limit';
 
 // Rate limiting for data exports - 5 requests per hour
@@ -22,21 +22,47 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const session = await auth();
+    const session = await getServerSession();
     
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get comprehensive user data
-    const profile = await userManager.getUserProfile(session.user.id);
+    // Get user from database
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! }
+    });
     
-    if (!profile) {
-      return Response.json(
+    if (!user) {
+      return NextResponse.json(
         { error: 'User profile not found' },
         { status: 404 }
       );
     }
+
+    // Get related data separately
+    const [projects, apiKeys, integrations, notifications, subscriptions] = await Promise.all([
+      prisma.project.findMany({
+        where: { userId: user.id },
+        select: { id: true, name: true, description: true, createdAt: true, updatedAt: true }
+      }),
+      prisma.apiKey.findMany({
+        where: { userId: user.id },
+        select: { id: true, name: true, keyPrefix: true, permissions: true, createdAt: true, lastUsedAt: true, isActive: true }
+      }),
+      prisma.userIntegration.findMany({
+        where: { userId: user.id },
+        select: { id: true, name: true, type: true, provider: true, isEnabled: true, isConnected: true, createdAt: true, lastSyncAt: true }
+      }),
+      prisma.notification.findMany({
+        where: { userId: user.id },
+        select: { id: true, title: true, message: true, type: true, isRead: true, createdAt: true }
+      }),
+      prisma.subscription.findMany({
+        where: { userId: user.id },
+        select: { id: true, plan: true, status: true, amount: true, billingCycle: true, createdAt: true }
+      })
+    ]);
 
     // Collect all user data
     const exportData = {
@@ -47,71 +73,113 @@ export async function GET(request: NextRequest) {
         format: 'JSON',
       },
       personalInformation: {
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        username: profile.username,
-        bio: profile.bio,
-        phone: profile.phone,
-        location: profile.location,
-        website: profile.website,
-        company: profile.company,
-        jobTitle: profile.job_title,
-        timezone: profile.timezone,
-        language: profile.language,
-        avatarUrl: profile.avatar_url,
-        emailVerified: profile.email_verified,
-        phoneVerified: profile.phone_verified,
-        createdAt: profile.created_at.toISOString(),
-        lastLoginAt: profile.last_login_at?.toISOString(),
-        updatedAt: profile.updated_at.toISOString(),
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        role: user.role,
+        emailVerified: user.emailVerified?.toISOString(),
+        lastLoginAt: user.lastLoginAt?.toISOString(),
+        acquisitionChannel: user.acquisitionChannel,
+        companySize: user.companySize,
+        industry: user.industry,
+        country: user.country,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
       },
       accountSettings: {
-        twoFactorEnabled: profile.two_factor_enabled || false,
-        emailNotifications: profile.email_notifications !== false,
-        marketingEmails: profile.marketing_emails !== false,
-        publicProfile: profile.public_profile !== false,
-        showEmail: profile.show_email || false,
-        showLocation: profile.show_location !== false,
+        twoFactorEnabled: user.twoFactorEnabled || false,
       },
-      // Projects data (if available)
-      projects: await getUserProjects(profile.id),
+      // Projects data
+      projects: projects.map(project => ({
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        createdAt: project.createdAt.toISOString(),
+        updatedAt: project.updatedAt.toISOString()
+      })),
       
       // API keys data (without sensitive values)
-      apiKeys: await getUserApiKeys(profile.id),
+      apiKeys: apiKeys.map(key => ({
+        id: key.id,
+        name: key.name,
+        keyPrefix: key.keyPrefix,
+        permissions: key.permissions,
+        isActive: key.isActive,
+        createdAt: key.createdAt.toISOString(),
+        lastUsedAt: key.lastUsedAt?.toISOString()
+      })),
       
-      // Sessions data (without sensitive tokens)
-      sessions: await getUserSessions(profile.id),
+      // Integrations data  
+      integrations: integrations.map(integration => ({
+        id: integration.id,
+        name: integration.name,
+        type: integration.type,
+        provider: integration.provider,
+        isEnabled: integration.isEnabled,
+        isConnected: integration.isConnected,
+        createdAt: integration.createdAt.toISOString(),
+        lastSyncAt: integration.lastSyncAt?.toISOString()
+      })),
       
       // Notifications data
-      notifications: await getUserNotifications(profile.id),
+      notifications: notifications.map(notif => ({
+        id: notif.id,
+        title: notif.title,
+        message: notif.message,
+        type: notif.type,
+        read: notif.isRead,
+        createdAt: notif.createdAt.toISOString()
+      })),
       
-      // Usage analytics (anonymized)
-      usageStats: await getUserUsageStats(profile.id),
+      // Usage analytics (basic stats)
+      usageStats: {
+        totalProjects: projects.length,
+        totalApiKeys: apiKeys.length,
+        totalIntegrations: integrations.length,
+        totalNotifications: notifications.length,
+      },
       
-      // Billing data (if available)
-      billingInfo: await getUserBillingInfo(profile.id),
+      // Billing data
+      billingInfo: {
+        subscriptions: subscriptions.map(sub => ({
+          id: sub.id,
+          plan: sub.plan,
+          status: sub.status,
+          amount: sub.amount,
+          billingCycle: sub.billingCycle,
+          createdAt: sub.createdAt.toISOString()
+        }))
+      },
       
       dataProcessingConsent: {
-        consentGiven: profile.gdpr_consent || false,
-        consentDate: profile.gdpr_consent_date?.toISOString(),
         dataRetentionPeriod: '7 years',
         dataProcessingPurpose: 'Service provision, analytics, and customer support',
       }
     };
 
     // Log the export for compliance
-    console.log(`Data export requested by user ${session.user.id}:`, {
-      userId: session.user.id,
-      timestamp: new Date().toISOString(),
-      userAgent: request.headers.get('user-agent'),
-      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: 'user_data_exported',
+        resource: 'user',
+        resourceId: user.id,
+        platform: 'web',
+        ip: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        success: true,
+        metadata: {
+          exportFormat: 'JSON',
+          dataTypes: ['profile', 'projects', 'apiKeys', 'integrations', 'notifications', 'billing']
+        }
+      }
     });
 
     // Return as downloadable JSON file
     const jsonString = JSON.stringify(exportData, null, 2);
     
-    return new Response(jsonString, {
+    return new NextResponse(jsonString, {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -122,88 +190,11 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Data export error:', error);
-    return Response.json(
+    return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
-// Helper functions to get user data from different services
-async function getUserProjects(userId: string) {
-  try {
-    // This would integrate with the project service
-    // For now, return empty array
-    return [];
-  } catch (error) {
-    console.error('Error fetching user projects:', error);
-    return [];
-  }
-}
-
-async function getUserApiKeys(userId: string) {
-  try {
-    // This would fetch API keys without sensitive data
-    // Return only metadata: created date, name, last used, etc.
-    return [];
-  } catch (error) {
-    console.error('Error fetching user API keys:', error);
-    return [];
-  }
-}
-
-async function getUserSessions(userId: string) {
-  try {
-    // This would fetch session data without tokens
-    // Return only metadata: IP, user agent, created date, last active
-    return [];
-  } catch (error) {
-    console.error('Error fetching user sessions:', error);
-    return [];
-  }
-}
-
-async function getUserNotifications(userId: string) {
-  try {
-    // This would fetch user notifications
-    return [];
-  } catch (error) {
-    console.error('Error fetching user notifications:', error);
-    return [];
-  }
-}
-
-async function getUserUsageStats(userId: string) {
-  try {
-    // This would fetch anonymized usage statistics
-    return {
-      totalProjects: 0,
-      totalApiCalls: 0,
-      totalTokensUsed: 0,
-      averageSessionDuration: 0,
-      favoriteFeatures: [],
-    };
-  } catch (error) {
-    console.error('Error fetching user usage stats:', error);
-    return {};
-  }
-}
-
-async function getUserBillingInfo(userId: string) {
-  try {
-    // This would fetch billing information
-    // Include subscription status, payment history (without sensitive card data)
-    return {
-      subscriptionStatus: 'free',
-      subscriptionPlan: 'free',
-      billingCycle: null,
-      nextBillingDate: null,
-      paymentHistory: [], // Dates and amounts only, no card info
-    };
-  } catch (error) {
-    console.error('Error fetching user billing info:', error);
-    return {};
-  }
-}
-
-export const runtime = "edge";
+export const runtime = "nodejs";

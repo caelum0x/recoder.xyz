@@ -486,7 +486,7 @@ Provide analysis in JSON format:
 
 // Generate Platform Variant
 async function generatePlatformVariant(originalContent: any, platform: string, variantNumber: number) {
-  const platformLimits = {
+  const platformLimits: Record<string, { max_chars: number; hashtags: number }> = {
     twitter: { max_chars: 280, hashtags: 2 },
     linkedin: { max_chars: 3000, hashtags: 3 },
     facebook: { max_chars: 2200, hashtags: 5 },

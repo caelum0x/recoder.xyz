@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     // Sort alerts by severity and timestamp
     const sortedAlerts = alerts.sort((a, b) => {
-      const severityOrder = { error: 3, warning: 2, info: 1 };
+      const severityOrder: Record<string, number> = { error: 3, warning: 2, info: 1 };
       const severityDiff = (severityOrder[b.type] || 0) - (severityOrder[a.type] || 0);
       if (severityDiff !== 0) return severityDiff;
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
@@ -217,7 +217,7 @@ async function checkFeatureAdoption(startDate: Date, endDate: Date) {
   const usersWithActivity = await prisma.auditLog.findMany({
     where: {
       createdAt: { gte: startDate, lte: endDate },
-      userId: { not: null }
+      userId: { not: '' }
     },
     distinct: ['userId'],
     select: { userId: true }
@@ -233,7 +233,7 @@ async function checkFeatureAdoption(startDate: Date, endDate: Date) {
       message: `Only ${adoptionRate.toFixed(1)}% of active users are using features (${usersWithActivity.length}/${totalUsers})`,
       timestamp: new Date().toISOString(),
       resolved: false,
-      metadata: { adoptionRate, activeUsers: usersWithActivity.length, totalUsers }
+      metadata: { adoptionRate, isActiveUsers: usersWithActivity.length, totalUsers }
     };
   }
 
@@ -293,7 +293,7 @@ async function checkSystemPerformance(startDate: Date, endDate: Date) {
       createdAt: { gte: startDate, lte: endDate },
       metadata: {
         path: ['duration'],
-        not: null
+        not: undefined
       }
     }
   });

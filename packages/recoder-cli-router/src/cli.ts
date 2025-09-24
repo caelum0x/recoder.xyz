@@ -122,6 +122,103 @@ async function handleAuthCommand() {
   }
 }
 
+async function startInteractiveChat() {
+  const chalk = require('chalk');
+  
+  console.clear();
+  
+  // Simple, clean header like Claude Code
+  console.log(chalk.cyan('💬 Recoder CLI Router Chat'));
+  console.log(chalk.gray('Type your message or question. Press Ctrl+C to exit.\n'));
+  
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  // Ensure service is running for chat
+  if (!isServiceRunning()) {
+    console.log(chalk.yellow('⏺ Starting router service...'));
+    const cliPath = join(__dirname, "cli.js");
+    const startProcess = spawn("node", [cliPath, "start"], {
+      detached: true,
+      stdio: "ignore",
+    });
+
+    startProcess.unref();
+
+    if (!(await waitForService())) {
+      console.log(chalk.red('❌ Failed to start router service. Try manually: rcr start'));
+      rl.close();
+      return;
+    }
+    console.log(chalk.green('✅ Router service started\n'));
+  }
+
+  // Main chat loop
+  while (true) {
+    try {
+      const userMessage = await new Promise<string>((resolve) => {
+        rl.question(chalk.green('> '), resolve);
+      });
+
+      if (!userMessage.trim()) continue;
+      
+      console.log(chalk.cyan('\n⏺ '), '');
+      
+      // Get AI response using router service
+      try {
+        const config = await readConfigFile();
+        const axios = require('axios');
+        
+        const response = await axios.post(`http://127.0.0.1:${config.PORT || 3456}/api/router/select`, {
+          prompt: userMessage,
+          priority: 'medium'
+        }, {
+          timeout: 60000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.data.success) {
+          const { selectedModel, reasoning, estimatedCost, provider } = response.data;
+          
+          // Show model selection info
+          console.log(chalk.gray(`Model: ${selectedModel.displayName} (${provider.name})`));
+          console.log(chalk.gray(`Reasoning: ${reasoning}`));
+          console.log(chalk.gray(`Est. Cost: $${estimatedCost.toFixed(4)}\n`));
+          
+          // For now, show the routing decision. In future, this would make actual AI call
+          console.log(chalk.white(`I would route this request to ${selectedModel.displayName} because: ${reasoning}`));
+          console.log(chalk.white(`This request appears to be about: ${response.data.taskType || 'general development'}`));
+          console.log(chalk.white(`The estimated cost would be $${estimatedCost.toFixed(4)} with an estimated response time of ${Math.round(response.data.estimatedTime/1000)}s.`));
+          console.log();
+          
+        } else {
+          console.log(chalk.red(`Error: ${response.data.error}`));
+          console.log();
+        }
+        
+      } catch (error: any) {
+        if (error.code === 'ECONNREFUSED') {
+          console.log(chalk.red('Error: Router service not responding. Try: rcr start'));
+        } else {
+          console.log(chalk.red(`Error: ${error.message}`));
+        }
+        console.log();
+      }
+      
+    } catch (error) {
+      console.log('\n' + chalk.gray('Goodbye! 👋'));
+      break;
+    }
+  }
+  
+  rl.close();
+}
+
 async function main() {
   switch (command) {
     case "start":
@@ -192,6 +289,11 @@ async function main() {
       console.log(HELP_TEXT);
       break;
     default:
+      // If just "rcr" is called with no arguments, start interactive chat session (like Claude Code)
+      if (process.argv.length === 2) {
+        await startInteractiveChat();
+        return;
+      }
       console.log(HELP_TEXT);
       process.exit(1);
   }

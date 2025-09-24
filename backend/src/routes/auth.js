@@ -2,9 +2,10 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+// Use the existing Prisma instance from database service
+const { prisma } = require('../database/prisma');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -75,7 +76,7 @@ router.post('/register', [
     const { email, password, name, organization } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await prisma.user.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({
         error: {
@@ -90,7 +91,7 @@ router.post('/register', [
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Create user
-    const user = await User.create({
+    const user = await prisma.user.create({
       email,
       password: hashedPassword,
       name,
@@ -192,7 +193,7 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user
-    const user = await User.findOne({ where: { email } });
+    const user = await prisma.user.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({
         error: {
@@ -314,7 +315,7 @@ router.post('/refresh', [
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     
     // Find user
-    const user = await User.findByPk(decoded.userId);
+    const user = await prisma.user.findByPk(decoded.userId);
     if (!user || user.refreshToken !== refreshToken) {
       return res.status(401).json({
         error: {
@@ -387,12 +388,12 @@ router.post('/refresh', [
  *       200:
  *         description: Logout successful
  */
-router.post('/logout', authenticateToken, async (req, res, next) => {
+router.post('/logout', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
     // Clear refresh token
-    await User.update(
+    await prisma.user.update(
       { refreshToken: null },
       { where: { id: userId } }
     );
@@ -422,11 +423,11 @@ router.post('/logout', authenticateToken, async (req, res, next) => {
  *       200:
  *         description: User profile retrieved successfully
  */
-router.get('/me', authenticateToken, async (req, res, next) => {
+router.get('/me', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    const user = await User.findByPk(userId, {
+    const user = await prisma.user.findByPk(userId, {
       attributes: { exclude: ['password', 'refreshToken'] }
     });
 
@@ -476,7 +477,7 @@ router.get('/me', authenticateToken, async (req, res, next) => {
  *       200:
  *         description: Profile updated successfully
  */
-router.put('/update-profile', authenticateToken, [
+router.put('/update-profile', authenticate, [
   body('name')
     .optional()
     .isString()
@@ -503,7 +504,7 @@ router.put('/update-profile', authenticateToken, [
     const userId = req.user.id;
     const { name, organization } = req.body;
 
-    const user = await User.findByPk(userId);
+    const user = await prisma.user.findByPk(userId);
     if (!user) {
       return res.status(404).json({
         error: {
@@ -569,7 +570,7 @@ router.put('/update-profile', authenticateToken, [
  *       400:
  *         description: Invalid current password
  */
-router.put('/change-password', authenticateToken, [
+router.put('/change-password', authenticate, [
   body('currentPassword')
     .isString()
     .isLength({ min: 1 })
@@ -594,7 +595,7 @@ router.put('/change-password', authenticateToken, [
     const userId = req.user.id;
     const { currentPassword, newPassword } = req.body;
 
-    const user = await User.findByPk(userId);
+    const user = await prisma.user.findByPk(userId);
     if (!user) {
       return res.status(404).json({
         error: {

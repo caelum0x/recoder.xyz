@@ -1,7 +1,7 @@
 // npx vitest run src/api/providers/__tests__/bedrock-custom-arn.spec.ts
 
 import { AwsBedrockHandler } from "../bedrock"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
 import { logger } from "../../../utils/logging"
 
 // Mock the logger

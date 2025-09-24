@@ -2,7 +2,7 @@
  * Reality Validation System - Ensures generated code has actual functionality
  */
 
-import { GenerationResult, Logger } from '@recoder/shared';
+import { GenerationResult, Logger } from 'recoder-shared';
 import fs from 'fs-extra';
 import path from 'path';
 import { glob } from 'glob';

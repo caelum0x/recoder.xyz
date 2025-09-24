@@ -8,7 +8,7 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import boxen from 'boxen';
 import Table from 'cli-table3';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { apiClient } from '../services/api';
 import { ValidationHelper } from '../utils/validation';
 import { FileSystemUtils } from '../utils/filesystem';

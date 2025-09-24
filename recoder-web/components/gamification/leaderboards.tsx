@@ -89,8 +89,8 @@ export default function Leaderboards() {
             period: activePeriod,
             category: activeCategory,
             totalParticipants: data.data.metadata.totalParticipants,
-            userRank: data.data.leaderboard.find((entry, index) => entry.user.id === 'current-user')?.rank || undefined,
-            entries: data.data.leaderboard.map(entry => ({
+            userRank: data.data.leaderboard.find((entry: { user: { id: string; }; }, index: any) => entry.user.id === 'current-user')?.rank || undefined,
+            entries: data.data.leaderboard.map((entry: { rank: any; user: { id: any; name: string; avatar: any; verified: any; tier: any; }; score: any; trend: string; change: string; metrics: any; }) => ({
               rank: entry.rank,
               prevRank: entry.rank,
               user: {

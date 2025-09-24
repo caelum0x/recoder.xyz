@@ -83,14 +83,14 @@ Return as JSON with separate content for each platform.`;
       const projectHashtag = `#${projectName.replace(/\s+/g, '')}`;
       
       return {
-        twitter: `🚀 Just deployed ${projectName}! ${features.slice(0, 2).map(f => `✨ ${f}`).join(' ')} Check it out: ${deploymentUrl} ${[...hashtags, projectHashtag].slice(0, 5).join(' ')}`,
+        twitter: `🚀 Just deployed ${projectName}! ${features.slice(0, 2).map((f: any) => `✨ ${f}`).join(' ')} Check it out: ${deploymentUrl} ${[...hashtags, projectHashtag].slice(0, 5).join(' ')}`,
         
         linkedin: `Excited to announce the deployment of ${projectName}! 🎉
 
 This project features ${features.join(', ')} and represents our commitment to innovative development.
 
 Key highlights:
-${features.map(f => `• ${f}`).join('\n')}
+${features.map((f: any) => `• ${f}`).join('\n')}
 
 Check it out and let me know your thoughts: ${deploymentUrl}
 
@@ -116,7 +116,7 @@ ${hashtags.slice(0, 6).join(' ')} ${projectHashtag}`,
       projectId,
       projectName,
       deploymentUrl,
-      platforms: platforms.map(platform => ({
+      platforms: platforms.map((platform: string) => ({
         platform,
         status: 'posted',
         content: socialContent[platform as keyof typeof socialContent] || socialContent.general,

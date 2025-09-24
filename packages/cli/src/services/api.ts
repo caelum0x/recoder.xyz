@@ -5,7 +5,7 @@
 
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import { ConfigManager } from '../utils/config';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { getAuthHeaders, handleAuthError } from '../utils/auth';
 import { ValidationHelper } from '../utils/validation';
 import chalk from 'chalk';

@@ -169,7 +169,7 @@ export default function PWAManager() {
     
     switch (type) {
       case 'PERFORMANCE_METRICS':
-        setPerformanceMetrics(prev => ({ ...prev, ...data }));
+        setPerformanceMetrics((prev: any) => ({ ...prev, ...data }));
         break;
       case 'BACKGROUND_SYNC_SUCCESS':
         toast({

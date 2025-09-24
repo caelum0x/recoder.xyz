@@ -7,10 +7,10 @@ import {
 } from "@google/genai"
 import type { JWTInput } from "google-auth-library"
 
-import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@recoder/shared"
+import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
-import { safeJsonParse } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
+import { safeJsonParse } from "recoder-shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { Part } from "@google/genai"

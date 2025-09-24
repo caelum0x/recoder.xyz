@@ -63,13 +63,13 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json({
       success: true,
+      ...deploymentResult,
       platform,
       projectName,
       deploymentUrl: deploymentResult.url,
       deploymentId: deploymentResult.id,
       status: 'deployed',
-      message: `Successfully deployed to ${platform}!`,
-      ...deploymentResult
+      message: `Successfully deployed to ${platform}!`
     });
     
   } catch (error) {

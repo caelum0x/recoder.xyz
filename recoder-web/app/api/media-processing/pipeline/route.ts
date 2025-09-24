@@ -9,13 +9,10 @@ const mediaProcessingPipeline = new MediaProcessingPipeline()
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting
-    const rateLimitResult = await rateLimit(request, 'media-pipeline', 5, 60000)
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      )
-    }
+    await rateLimit({
+      interval: 60 * 1000, // 1 minute
+      uniqueTokenPerInterval: 5,
+    }).check(request, 5, 'media-pipeline')
 
     // Authentication
     const session = await auth()

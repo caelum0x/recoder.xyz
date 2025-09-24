@@ -102,16 +102,16 @@ async function getRevenueMetrics(startDate: Date, endDate: Date) {
     _sum: { amount: true }
   });
 
-  const currentRevenueAmount = totalRevenue._sum.amount || 0;
-  const previousRevenueAmount = previousRevenue._sum.amount || 0;
+  const currentRevenueAmount = Number(totalRevenue._sum.amount) || 0;
+  const previousRevenueAmount = Number(previousRevenue._sum.amount) || 0;
   const growth = previousRevenueAmount > 0 
     ? ((currentRevenueAmount - previousRevenueAmount) / previousRevenueAmount) * 100 
     : 0;
 
   return {
     totalRevenue: currentRevenueAmount,
-    mrr: currentMRR._sum.amount || 0,
-    arr: (currentMRR._sum.amount || 0) * 12,
+    mrr: Number(currentMRR._sum.amount) || 0,
+    arr: (Number(currentMRR._sum.amount) || 0) * 12,
     growth
   };
 }

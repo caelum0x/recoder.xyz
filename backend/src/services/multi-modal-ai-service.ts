@@ -544,7 +544,7 @@ export class MultiModalAIService extends EventEmitter {
 
   private extractFunctions(code: string): string[] {
     const functionRegex = /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g;
-    const matches = [];
+    const matches: any[] = [];
     let match;
     while ((match = functionRegex.exec(code)) !== null) {
       matches.push(match[1]);
@@ -554,7 +554,7 @@ export class MultiModalAIService extends EventEmitter {
 
   private extractClasses(code: string): string[] {
     const classRegex = /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/g;
-    const matches = [];
+    const matches: any[] = [];
     let match;
     while ((match = classRegex.exec(code)) !== null) {
       matches.push(match[1]);
@@ -564,7 +564,7 @@ export class MultiModalAIService extends EventEmitter {
 
   private extractImports(code: string): string[] {
     const importRegex = /import\s+.*?from\s+['"]([^'"]+)['"]/g;
-    const matches = [];
+    const matches: any[] = [];
     let match;
     while ((match = importRegex.exec(code)) !== null) {
       matches.push(match[1]);
@@ -582,7 +582,7 @@ export class MultiModalAIService extends EventEmitter {
 
   private extractSections(content: string): string[] {
     const sectionRegex = /^#+\s+(.+)$/gm;
-    const matches = [];
+    const matches: any[] = [];
     let match;
     while ((match = sectionRegex.exec(content)) !== null) {
       matches.push(match[1]);
@@ -726,7 +726,7 @@ Context: ${JSON.stringify(context, null, 2).slice(0, 500)}`;
   }
 
   private extractSuggestions(content: string): string[] {
-    const suggestions = [];
+    const suggestions: any[] = [];
     if (content.includes('consider')) suggestions.push('Consider the suggested approach');
     if (content.includes('recommend')) suggestions.push('Follow the recommendation');
     return suggestions;

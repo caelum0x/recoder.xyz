@@ -7,7 +7,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import { ollamaService, ModelRecommendation } from '../ollama';
 import type { AIProvider, AIResponse, TaskContext, AIRequestOptions } from '../ai-hub';
 

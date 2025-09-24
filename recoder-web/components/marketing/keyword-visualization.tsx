@@ -194,7 +194,7 @@ export function KeywordVisualization({ keywords }: KeywordVisualizationProps) {
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="value"
-                label={({ name, percentage }) => `${name} (${percentage}%)`}
+                label={(props: any) => `${props.name || props.segment || props.category || props.cycle || props.period || "Item"}: ${props.value || props.customerCount || props.totalRevenue || props.count || 0}`}
               >
                 {intentData.map((entry, index) => (
                   <Cell 
@@ -245,7 +245,7 @@ export function KeywordVisualization({ keywords }: KeywordVisualizationProps) {
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="value"
-                label={({ name, value }) => `${name} (${value})`}
+                label={(props: any) => `${props.name || props.segment || props.category || props.cycle || props.period || "Item"}: ${props.value || props.customerCount || props.totalRevenue || props.count || 0}`}
               >
                 {competitionData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />

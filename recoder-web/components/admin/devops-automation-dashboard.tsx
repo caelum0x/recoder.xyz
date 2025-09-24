@@ -24,7 +24,7 @@ import {
   Clock, 
   AlertTriangle,
   Cloud,
-  Docker,
+  Dock,
   Database,
   Shield,
   Monitor,
@@ -410,7 +410,7 @@ export default function DevOpsAutomationDashboard() {
       case 'aws': return <Cloud className="h-4 w-4 text-orange-500" />;
       case 'gcp': return <Cloud className="h-4 w-4 text-blue-500" />;
       case 'azure': return <Cloud className="h-4 w-4 text-blue-600" />;
-      case 'docker': return <Docker className="h-4 w-4 text-blue-400" />;
+      case 'docker': return <Dock className="h-4 w-4 text-blue-400" />;
       case 'vercel': return <Zap className="h-4 w-4 text-black" />;
       case 'netlify': return <Globe className="h-4 w-4 text-teal-500" />;
       default: return <Server className="h-4 w-4" />;
@@ -717,7 +717,7 @@ export default function DevOpsAutomationDashboard() {
                     <div className="flex flex-wrap gap-2">
                       {deployment.infrastructure?.containerized && (
                         <Badge variant="outline" className="text-xs">
-                          <Docker className="h-3 w-3 mr-1" />
+                          <Dock className="h-3 w-3 mr-1" />
                           Containerized
                         </Badge>
                       )}

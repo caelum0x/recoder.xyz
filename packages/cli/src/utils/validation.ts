@@ -3,7 +3,7 @@
  */
 
 import Joi from 'joi';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 export interface ValidationResult {
   valid: boolean;

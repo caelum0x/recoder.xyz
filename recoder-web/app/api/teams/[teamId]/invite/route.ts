@@ -96,16 +96,17 @@ export async function POST(
     }
 
     // Check team member limits
-    const memberLimits = {
+    type TeamPlan = 'free' | 'pro' | 'enterprise';
+    const memberLimits: Record<TeamPlan, number> = {
       free: 5,
       pro: 25,
       enterprise: 500
     };
 
-    if (team.memberCount >= memberLimits[team.plan]) {
+    if (team.memberCount >= memberLimits[team.plan as TeamPlan]) {
       return Response.json(
         { 
-          error: `Team member limit reached. ${team.plan} plan allows ${memberLimits[team.plan]} members.`,
+          error: `Team member limit reached. ${team.plan} plan allows ${memberLimits[team.plan as TeamPlan]} members.`,
           upgradeRequired: team.plan === 'free'
         },
         { status: 403 }
@@ -289,4 +290,4 @@ async function logInvitationEvent(userId: string, event: string, metadata: any):
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

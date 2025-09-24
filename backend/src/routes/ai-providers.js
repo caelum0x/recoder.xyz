@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { AIProviderStatus, UsageAnalytics } = require('../models/index');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const axios = require('axios');
 
 const router = express.Router();
@@ -133,10 +133,10 @@ const AI_PROVIDERS = {
  *       200:
  *         description: AI providers status retrieved successfully
  */
-router.get('/status', authenticateToken, async (req, res, next) => {
+router.get('/status', authenticate, async (req, res, next) => {
   try {
     // Get all provider statuses from database
-    const providerStatuses = await AIProviderStatus.findAll({
+    const providerStatuses = await prisma.aIProviderStatus.findAll({
       order: [['lastCheckAt', 'DESC']]
     });
 
@@ -195,7 +195,7 @@ router.get('/status', authenticateToken, async (req, res, next) => {
  *       200:
  *         description: Health check completed successfully
  */
-router.post('/health-check', authenticateToken, async (req, res, next) => {
+router.post('/health-check', authenticate, async (req, res, next) => {
   try {
     const healthResults = {};
     const providerNames = Object.keys(AI_PROVIDERS);
@@ -207,7 +207,7 @@ router.post('/health-check', authenticateToken, async (req, res, next) => {
         healthResults[provider] = result;
         
         // Update or create provider status
-        const [providerStatus] = await AIProviderStatus.upsert({
+        const [providerStatus] = await prisma.aIProviderStatus.upsert({
           provider,
           status: result.status,
           responseTime: result.responseTime,
@@ -286,7 +286,7 @@ router.post('/health-check', authenticateToken, async (req, res, next) => {
  *       200:
  *         description: Cost analytics retrieved successfully
  */
-router.get('/costs', authenticateToken, async (req, res, next) => {
+router.get('/costs', authenticate, async (req, res, next) => {
   try {
     const { timeframe = 'day', provider } = req.query;
     const userId = req.user.id;
@@ -321,7 +321,7 @@ router.get('/costs', authenticateToken, async (req, res, next) => {
     }
 
     // Get usage analytics data
-    const analytics = await UsageAnalytics.findAll({
+    const analytics = await prisma.usageAnalytics.findAll({
       where: whereConditions,
       attributes: ['provider', 'cost', 'tokens', 'timestamp', 'eventType', 'platform'],
       order: [['timestamp', 'DESC']]
@@ -429,7 +429,7 @@ router.get('/costs', authenticateToken, async (req, res, next) => {
  *       200:
  *         description: Provider configured successfully
  */
-router.post('/configure', authenticateToken, [
+router.post('/configure', authenticate, [
   body('provider')
     .isIn(['anthropic', 'groq', 'gemini', 'ollama', 'openai'])
     .withMessage('Provider must be one of: anthropic, groq, gemini, ollama, openai'),
@@ -463,12 +463,12 @@ router.post('/configure', authenticateToken, [
 
     // For now, we'll store provider configurations in the AI provider status metadata
     // In a full implementation, you might want a separate user preferences table
-    let providerStatus = await AIProviderStatus.findOne({
+    let providerStatus = await prisma.aIProviderStatus.findOne({
       where: { provider }
     });
 
     if (!providerStatus) {
-      providerStatus = await AIProviderStatus.create({
+      providerStatus = await prisma.aIProviderStatus.create({
         provider,
         status: 'unknown',
         metadata: {}
@@ -537,7 +537,7 @@ router.post('/configure', authenticateToken, [
  *       200:
  *         description: Provider recommendation retrieved successfully
  */
-router.post('/recommend', authenticateToken, [
+router.post('/recommend', authenticate, [
   body('taskType')
     .isIn(['coding', 'blockchain', 'security', 'analysis', 'chat', 'generation'])
     .withMessage('Task type must be one of: coding, blockchain, security, analysis, chat, generation'),
@@ -561,7 +561,7 @@ router.post('/recommend', authenticateToken, [
     const { taskType, priority = 'quality' } = req.body;
 
     // Get current provider statuses
-    const providerStatuses = await AIProviderStatus.findAll();
+    const providerStatuses = await prisma.aIProviderStatus.findAll();
     const healthyProviders = providerStatuses.filter(p => p.status === 'healthy' || p.status === 'degraded');
 
     // Provider specializations based on the CLAUDE.md context

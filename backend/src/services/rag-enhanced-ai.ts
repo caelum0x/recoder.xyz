@@ -103,7 +103,7 @@ export class RAGEnhancedAIService extends EventEmitter {
       this.activeSessions.set(sessionId, ragSession);
 
       // Step 1: Retrieve relevant context if knowledge base is provided
-      let retrievedContext = null;
+      let retrievedContext: any = null;
       if (request.knowledgeBaseId) {
         retrievedContext = await this.retrieveRelevantContext(request);
       }
@@ -155,7 +155,7 @@ export class RAGEnhancedAIService extends EventEmitter {
       await this.storeRAGInteraction(ragSession.id, {
         input: request.prompt,
         output: finalResponse,
-        retrievalResults: retrievedContext?.results.length || 0,
+        retrievalResults: retrievedContext?.results?.length || 0,
         aiProvider: routingResult.providerId,
         aiModel: routingResult.modelId,
         qualityScore
@@ -232,7 +232,7 @@ export class RAGEnhancedAIService extends EventEmitter {
           totalTime: Date.now() - startTime,
           qualityScore: 0,
           success: false,
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
         this.activeSessions.delete(sessionId);
       }
@@ -297,7 +297,7 @@ export class RAGEnhancedAIService extends EventEmitter {
       };
 
     } catch (error) {
-      logger.warn('Context retrieval failed:', error.message);
+      logger.warn('Context retrieval failed:', error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }

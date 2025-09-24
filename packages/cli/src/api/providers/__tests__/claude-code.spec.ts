@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest"
 import { ClaudeCodeHandler } from "../claude-code"
-import { ApiHandlerOptions } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
 import { ClaudeCodeMessage } from "../../../integrations/claude-code/types"
 
 // Mock the runClaudeCode function

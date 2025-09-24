@@ -4,8 +4,8 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import { RequestyHandler } from "../requesty"
-import { ApiHandlerOptions } from "@recoder/shared"
-import { Package } from "@recoder/shared"
+import { ApiHandlerOptions } from "recoder-shared"
+import { Package } from "recoder-shared"
 
 const mockCreate = vitest.fn()
 

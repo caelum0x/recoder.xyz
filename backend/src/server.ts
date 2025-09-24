@@ -3,13 +3,17 @@
  * Enhanced with comprehensive performance optimization and monitoring
  */
 
+console.log('🔍 DEBUG: Starting server.ts module import...');
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+console.log('🔍 DEBUG: Basic requires done, loading logger...');
 const { logger } = require('./utils/logger');
 
+console.log('🔍 DEBUG: Logger loaded, importing performance systems...');
 // Import performance systems - NOW FULLY INTEGRATED
 import { intelligentFailover } from './services/intelligent-failover';
 import { redisCache } from './services/redis-cache';
@@ -100,13 +104,22 @@ const cdnManager = {
   on: (event: string, handler: Function) => {}
 };
 
+console.log('🔍 DEBUG: Module loading completed, about to import routes...');
+
 // Import routes
+console.log('🔍 DEBUG: Importing auth routes...');
 const authRoutes = require('./routes/auth');
+console.log('🔍 DEBUG: Auth routes imported, importing user routes...');
 const userRoutes = require('./routes/users');
+console.log('🔍 DEBUG: User routes imported, continuing...');
 const projectRoutes = require('./routes/projects');
+console.log('🔍 DEBUG: Project routes imported...');
 const agentRoutes = require('./routes/agents');
+console.log('🔍 DEBUG: Agent routes imported...');
 const templateRoutes = require('./routes/templates');
+console.log('🔍 DEBUG: Template routes imported...');
 const plannerRoutes = require('./routes/planner');
+console.log('🔍 DEBUG: Planner routes imported...');
 const structureRoutes = require('./routes/structure');
 const validationRoutes = require('./routes/validation');
 const modelRoutes = require('./routes/models');
@@ -117,7 +130,7 @@ const analyticsRoutes = require('./routes/analytics');
 const apiKeyRoutes = require('./routes/api-keys');
 const aiProvidersRoutes = require('./routes/ai-providers');
 const ragRoutes = require('./routes/rag');
-const { collaborationRouter, initializeCollaborationService } = require('./routes/collaboration');
+const collaborationRouter = require('./routes/collaboration');
 const { soc2ComplianceRouter } = require('./routes/soc2-compliance');
 const { databaseBackupRouter } = require('./routes/database-backup');
 const { enhancedAnalyticsRouter } = require('./routes/enhanced-analytics');
@@ -246,6 +259,10 @@ app.get('/metrics', async (req: any, res: any) => {
 const authenticationRoutes = require('./routes/auth');
 app.use('/api/auth', authenticationRoutes);
 
+// Unified SSO routes for cross-platform authentication
+import ssoRoutes from './routes/sso';
+app.use('/api/sso', ssoRoutes);
+
 // API routes with authentication
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
@@ -295,6 +312,60 @@ app.get('/api/v1/status', (req: any, res: any) => {
     status: 'running',
     timestamp: new Date().toISOString()
   });
+});
+
+// Payment test endpoint
+app.get('/api/payment-test/ping', (req: any, res: any) => {
+  res.json({
+    success: true,
+    message: 'Payment test routes are working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Payment system health check
+app.get('/api/payment-test/health', async (req: any, res: any) => {
+  try {
+    const healthChecks = {
+      database: false,
+      webhookSecret: false
+    };
+
+    // Check database connectivity
+    try {
+      const { prisma } = require('./database/prisma');
+      await prisma.$queryRaw`SELECT 1`;
+      healthChecks.database = true;
+    } catch (error) {
+      logger.error('Database health check failed', { error });
+    }
+
+    // Check webhook secret
+    healthChecks.webhookSecret = !!process.env.DODO_WEBHOOK_SECRET;
+
+    const allHealthy = Object.values(healthChecks).every(check => check);
+
+    res.json({
+      success: true,
+      data: {
+        status: allHealthy ? 'healthy' : 'unhealthy',
+        checks: healthChecks,
+        timestamp: new Date().toISOString()
+      },
+      message: `Payment system is ${allHealthy ? 'healthy' : 'unhealthy'}`
+    });
+
+  } catch (error) {
+    logger.error('Payment health check failed', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Health check failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // 404 handler
@@ -431,10 +502,19 @@ process.on('unhandledRejection', (reason, promise) => {
 // Start server with performance initialization
 async function startServer() {
   try {
-    // Initialize performance systems first
-    await initializePerformanceSystems();
+    console.log('🚀 Starting server initialization...');
     
+    // Initialize performance systems first (with error handling)
+    try {
+      await initializePerformanceSystems();
+      console.log('✅ Performance systems initialized');
+    } catch (perfError) {
+      console.warn('⚠️ Performance systems failed to initialize, continuing without them:', perfError);
+    }
+    
+    console.log('🌐 Starting Express server...');
     const server = app.listen(PORT, () => {
+      console.log(`✅ Recoder API server running on port ${PORT}`);
       logger.info(`Recoder API server running on port ${PORT}`, {
         environment: process.env['NODE_ENV'] || 'development',
         port: PORT,
@@ -447,17 +527,21 @@ async function startServer() {
         }
       });
       
-      // Log performance system status
+      // Log performance system status (with error handling)
       setTimeout(async () => {
-        const summary = performanceMonitor.getPerformanceSummary();
-        const cacheHealth = await redisCache.getHealthStatus();
-        
-        logger.info('Performance systems status:', {
-          performanceScore: summary.score,
-          cacheConnected: cacheHealth.connected,
-          cacheHitRate: `${cacheHealth.hitRate.toFixed(1)}%`,
-          activeAlerts: summary.activeAlerts
-        });
+        try {
+          const summary = performanceMonitor.getPerformanceSummary();
+          const cacheHealth = await redisCache.getHealthStatus();
+          
+          logger.info('Performance systems status:', {
+            performanceScore: summary.score,
+            cacheConnected: cacheHealth.connected,
+            cacheHitRate: `${cacheHealth.hitRate.toFixed(1)}%`,
+            activeAlerts: summary.activeAlerts
+          });
+        } catch (statusError) {
+          console.warn('⚠️ Could not get performance status:', statusError);
+        }
       }, 5000);
     });
 
@@ -466,14 +550,25 @@ async function startServer() {
     
     return server;
   } catch (error) {
+    console.error('❌ Failed to start server:', error);
     logger.error('Failed to start server:', error);
     process.exit(1);
   }
 }
 
+console.log('🔍 DEBUG: Reached bottom of module, checking startup conditions...');
+console.log('🔍 DEBUG: NETLIFY env:', process.env.NETLIFY);
+console.log('🔍 DEBUG: VERCEL env:', process.env.VERCEL);
+
 // Only start the server if not in serverless environment
-if (!process.env.NETLIFY && !process.env.VERCEL && require.main === module) {
-  startServer();
+if (!process.env.NETLIFY && !process.env.VERCEL) {
+  console.log('🔍 DEBUG: About to call startServer()...');
+  startServer().catch(error => {
+    console.error('❌ startServer() failed:', error);
+    process.exit(1);
+  });
+} else {
+  console.log('🔍 DEBUG: Skipping server start due to serverless environment');
 }
 
 module.exports = app;

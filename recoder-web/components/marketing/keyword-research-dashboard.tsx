@@ -312,6 +312,7 @@ export function KeywordResearchDashboard() {
       }, 500);
       return () => clearTimeout(timeoutId);
     }
+    return undefined;
   }, [seedKeyword]);
 
   const exportKeywords = () => {

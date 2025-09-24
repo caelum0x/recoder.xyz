@@ -11,13 +11,10 @@ const batchProcessor = new BatchProcessor()
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting for batch operations
-    const rateLimitResult = await rateLimit(request, 'batch-process', 2, 60) // 2 batch jobs per minute
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      )
-    }
+    await rateLimit({
+      interval: 60 * 1000, // 1 minute
+      uniqueTokenPerInterval: 2
+    }).check(request, 2, 'batch-process') // 2 batch jobs per minute
 
     const session = await auth()
     if (!session?.user) {

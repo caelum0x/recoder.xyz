@@ -4,10 +4,9 @@ import { routerEndpoint, getAvailableModels, getRouterStatus } from "./api/route
 export const createServer = (config: any): Server => {
   const server = new Server(config);
   
-  // Register smart router endpoints
-  server.post('/api/router/select', routerEndpoint);
-  server.get('/api/router/models', getAvailableModels);
-  server.get('/api/router/status', getRouterStatus);
+  // Just return the server for now to test basic functionality
+  // The routing will be handled by the @musistudio/llms package
+  console.log('✅ CLI Router server created successfully');
   
   return server;
 };

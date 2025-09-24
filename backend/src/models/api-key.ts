@@ -4,6 +4,7 @@
 import crypto from 'crypto';
 import { prisma } from '../database/prisma';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error-helpers';
 
 export interface ApiKey {
   id: string;
@@ -106,9 +107,10 @@ export class ApiKeyService {
         apiKey: apiKey as ApiKey
       };
 
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
       logger.error('Failed to generate API key', {
-        error: error.message,
+        error: errorMessage,
         userId,
         name
       });
@@ -175,9 +177,10 @@ export class ApiKeyService {
 
       return apiKey as unknown as ApiKey;
 
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
       logger.error('Failed to validate API key', {
-        error: error.message,
+        error: errorMessage,
         keyPrefix: key.substring(0, 10)
       });
       return null;
@@ -227,8 +230,9 @@ export class ApiKeyService {
       })) as Omit<ApiKey, 'keyHash'>[];
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
       logger.error('Failed to list API keys', {
-        error: error.message,
+        error: errorMessage,
         userId
       });
       throw error;
@@ -254,8 +258,9 @@ export class ApiKeyService {
       logger.info('API key revoked', { userId, keyId });
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
       logger.error('Failed to revoke API key', {
-        error: error.message,
+        error: errorMessage,
         userId,
         keyId
       });
@@ -291,8 +296,9 @@ export class ApiKeyService {
       logger.info('API key updated', { userId, keyId, updates });
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
       logger.error('Failed to update API key', {
-        error: error.message,
+        error: errorMessage,
         userId,
         keyId
       });
@@ -356,10 +362,10 @@ export class ApiKeyService {
         cost: usage._sum.cost || 0,
         errors: errorCount
       };
-
     } catch (error) {
+      const errorMessage = error instanceof Error ? getErrorMessage(error) : 'Unknown error';
       logger.error('Failed to get API key usage', {
-        error: error.message,
+        error: errorMessage,
         keyId
       });
       throw error;

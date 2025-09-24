@@ -14,7 +14,7 @@ interface RouterMetrics {
   status: 'active' | 'idle' | 'disconnected';
   version: string;
   uptime: number;
-  lastUsed: string;
+  lastUsedAt: string;
   enterpriseMode: boolean;
 }
 
@@ -101,7 +101,7 @@ export async function POST(
     }
 
     // Register/update router
-    const router = await prisma.router.upsert({
+    const router = await (prisma as any).router.upsert({
       where: {
         routerId: routerId
       },
@@ -112,7 +112,7 @@ export async function POST(
           enterpriseMode,
           capabilities
         },
-        lastUsed: new Date(),
+        lastUsedAt: new Date(),
         status: 'active'
       },
       create: {
@@ -125,7 +125,7 @@ export async function POST(
           enterpriseMode,
           capabilities
         },
-        lastUsed: new Date()
+        lastUsedAt: new Date()
       }
     });
 
@@ -151,12 +151,12 @@ export async function POST(
 
 async function getUserRouters(userId: string): Promise<RouterMetrics[]> {
   try {
-    const routers = await prisma.router.findMany({
+    const routers = await (prisma as any).router.findMany({
       where: {
         userId: userId
       },
       orderBy: {
-        lastUsed: 'desc'
+        lastUsedAt: 'desc'
       }
     });
 
@@ -165,13 +165,13 @@ async function getUserRouters(userId: string): Promise<RouterMetrics[]> {
       return generateMockRouters(userId);
     }
 
-    return routers.map(router => ({
+    return routers.map((router: { routerId: any; name: any; lastUsed: Date; version: any; createdAt: Date; metadata: any; }) => ({
       routerId: router.routerId,
       name: router.name || 'Unknown Router',
       status: determineRouterStatus(router.lastUsed),
       version: router.version || 'unknown',
       uptime: calculateUptime(router.createdAt),
-      lastUsed: router.lastUsed.toISOString(),
+      lastUsedAt: router.lastUsed.toISOString(),
       enterpriseMode: (router.metadata as any)?.enterpriseMode || false
     }));
 
@@ -210,7 +210,7 @@ function generateMockRouters(userId: string): RouterMetrics[] {
       status: 'active',
       version: '2.1.0',
       uptime: 86400, // 1 day
-      lastUsed: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 minutes ago
+      lastUsedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 minutes ago
       enterpriseMode: false
     },
     {
@@ -219,7 +219,7 @@ function generateMockRouters(userId: string): RouterMetrics[] {
       status: 'active',
       version: '2.0.5',
       uptime: 259200, // 3 days
-      lastUsed: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 minutes ago
+      lastUsedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 minutes ago
       enterpriseMode: true
     },
     {
@@ -228,7 +228,7 @@ function generateMockRouters(userId: string): RouterMetrics[] {
       status: 'disconnected',
       version: '1.9.8',
       uptime: 7200, // 2 hours
-      lastUsed: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+      lastUsedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
       enterpriseMode: false
     }
   ];

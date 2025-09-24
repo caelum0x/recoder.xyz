@@ -2,11 +2,11 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import axios from "axios"
 
-import { type ModelInfo, openAiModelInfoSaneDefaults, LMSTUDIO_DEFAULT_TEMPERATURE } from "@roo-code/types"
+import { type ModelInfo, openAiModelInfoSaneDefaults, LMSTUDIO_DEFAULT_TEMPERATURE } from "roo-code-types"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 
-import { XmlMatcher } from "@recoder/shared"
+import { XmlMatcher } from "recoder-shared"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"

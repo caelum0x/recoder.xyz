@@ -65,39 +65,51 @@ export async function GET(request: NextRequest) {
       
       switch (period) {
         case 'day':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
           break;
         case 'week':
-          startDate = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000).toISOString(); // 12 weeks
+          startDate = new Date(Date.now() - 12 * 7 * 24 * 60 * 60 * 1000).toISOString(); // 12 weeks
           break;
         case 'month':
-          startDate = new Date(now.getTime() - 12 * 30 * 24 * 60 * 60 * 1000).toISOString(); // 12 months
+          startDate = new Date(Date.now() - 12 * 30 * 24 * 60 * 60 * 1000).toISOString(); // 12 months
           break;
         case 'quarter':
-          startDate = new Date(now.getTime() - 8 * 90 * 24 * 60 * 60 * 1000).toISOString(); // 8 quarters
+          startDate = new Date(Date.now() - 8 * 90 * 24 * 60 * 60 * 1000).toISOString(); // 8 quarters
           break;
         case 'year':
-          startDate = new Date(now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000).toISOString(); // 3 years
+          startDate = new Date(Date.now() - 3 * 365 * 24 * 60 * 60 * 1000).toISOString(); // 3 years
           break;
       }
     }
 
     // Get engagement overview
-    const overview = await getEngagementOverview(new Date(startDate), new Date(endDate));
+    const overview = await getEngagementOverview(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get user activity metrics
-    const userActivity = await getUserActivityMetrics(new Date(startDate), new Date(endDate));
+    const userActivity = await getUserActivityMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get session analytics
-    const sessionAnalytics = await getSessionAnalytics(new Date(startDate), new Date(endDate));
+    const sessionAnalytics = await getSessionAnalytics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get feature usage metrics
-    const featureUsage = await getFeatureUsageMetrics(new Date(startDate), new Date(endDate));
+    const featureUsage = await getFeatureUsageMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get time series engagement data
     const timeSeries = await getEngagementTimeSeries(
-      new Date(startDate), 
-      new Date(endDate), 
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date(), 
       granularity as any
     );
     
@@ -105,10 +117,16 @@ export async function GET(request: NextRequest) {
     const cohortAnalysis = await getUserCohortAnalysis();
     
     // Get engagement scoring
-    const engagementScoring = await getEngagementScoring(new Date(startDate), new Date(endDate));
+    const engagementScoring = await getEngagementScoring(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get content engagement
-    const contentEngagement = await getContentEngagementMetrics(new Date(startDate), new Date(endDate));
+    const contentEngagement = await getContentEngagementMetrics(
+      startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+      endDate ? new Date(endDate) : new Date()
+    );
     
     // Get retention analysis
     const retentionAnalysis = await getRetentionAnalysis();
@@ -118,15 +136,18 @@ export async function GET(request: NextRequest) {
     if (segmentBy) {
       segmentedAnalysis = await getSegmentedEngagementAnalysis(
         segmentBy,
-        new Date(startDate),
-        new Date(endDate)
+        startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        endDate ? new Date(endDate) : new Date()
       );
     }
 
     // Get detailed user metrics if requested
     let detailedMetrics = null;
     if (includeDetailedMetrics) {
-      detailedMetrics = await getDetailedEngagementMetrics(new Date(startDate), new Date(endDate));
+      detailedMetrics = await getDetailedEngagementMetrics(
+        startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
+        endDate ? new Date(endDate) : new Date()
+      );
     }
 
     return NextResponse.json({

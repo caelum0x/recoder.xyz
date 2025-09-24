@@ -26,9 +26,9 @@ import {
   QualityAssurancePlan,
   MockIndicator,
   RealWorldAlternative
-} from '@recoder/shared';
-import { ErrorCode, ErrorHandler, Logger, RecoderError } from '@recoder/shared';
-import { ImplementationPhase } from '@recoder/shared/types/planner';
+} from 'recoder-shared';
+import { ErrorCode, ErrorHandler, Logger, RecoderError } from 'recoder-shared';
+import { ImplementationPhase } from 'recoder-shared/types/planner';
 
 // Configuration interfaces
 export interface PlannerConfig {

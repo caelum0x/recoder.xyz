@@ -88,7 +88,7 @@ async function getOverviewAnalytics(userId: string, startDate: Date, endDate: Da
       where: {
         userId,
         createdAt: { gte: startDate, lte: endDate },
-        deleted: false
+        // Note: deleted field doesn't exist in MediaFile model
       }
     }),
 
@@ -122,7 +122,7 @@ async function getOverviewAnalytics(userId: string, startDate: Date, endDate: Da
     prisma.mediaFile.aggregate({
       where: {
         userId,
-        deleted: false
+        // Note: deleted field doesn't exist in MediaFile model
       },
       _sum: { fileSize: true }
     }),
@@ -132,7 +132,7 @@ async function getOverviewAnalytics(userId: string, startDate: Date, endDate: Da
       where: {
         userId,
         createdAt: { gte: startDate, lte: endDate },
-        deleted: false
+        // Note: deleted field doesn't exist in MediaFile model
       },
       select: {
         id: true,
@@ -183,7 +183,7 @@ async function getOverviewAnalytics(userId: string, startDate: Date, endDate: Da
         completedJobs,
         failedJobs,
         successRate,
-        totalStorage: totalStorage._sum.fileSize || 0,
+        totalStorage: totalStorage._sum?.fileSize || 0,
         averageProcessingTime: processingTimeStats._avg.progress || 0
       },
       recentFiles,
@@ -270,7 +270,8 @@ async function getStorageAnalytics(userId: string, startDate: Date, endDate: Dat
     by: ['format'],
     where: {
       userId,
-      deleted: false,
+      // TODO: Add deleted field to MediaFile model
+      // deleted: false,
       createdAt: { gte: startDate, lte: endDate }
     },
     _sum: { fileSize: true },
@@ -286,7 +287,6 @@ async function getStorageAnalytics(userId: string, startDate: Date, endDate: Dat
       COUNT(*) as files_count
     FROM "MediaFile" 
     WHERE "userId" = ${userId} 
-      AND deleted = false
       AND "createdAt" >= ${startDate}
       AND "createdAt" <= ${endDate}
     GROUP BY DATE("createdAt")
@@ -297,7 +297,8 @@ async function getStorageAnalytics(userId: string, startDate: Date, endDate: Dat
   const largestFiles = await prisma.mediaFile.findMany({
     where: {
       userId,
-      deleted: false,
+      // TODO: Add deleted field to MediaFile model
+      // deleted: false,
       createdAt: { gte: startDate, lte: endDate }
     },
     select: {
@@ -316,8 +317,8 @@ async function getStorageAnalytics(userId: string, startDate: Date, endDate: Dat
     analytics: {
       storageByType: storageByType.map(item => ({
         format: item.format,
-        totalSize: item._sum.fileSize || 0,
-        fileCount: item._count.id
+        totalSize: item._sum?.fileSize || 0,
+        fileCount: item._count?.id || 0
       })),
       storageGrowth,
       largestFiles,

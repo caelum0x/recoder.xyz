@@ -41,7 +41,7 @@ const validateRequest = (req: express.Request, res: express.Response, next: expr
       details: errors.array()
     });
   }
-  next();
+  return next();
 };
 
 /**
@@ -207,7 +207,7 @@ router.post('/knowledge-bases/:id/upload',
       }
 
       // Process uploaded files
-      const codeFiles = [];
+      const codeFiles: any[] = [];
       
       for (const file of files) {
         try {
@@ -229,7 +229,7 @@ router.post('/knowledge-bases/:id/upload',
         } catch (error) {
           logger.warn('Failed to process uploaded file:', {
             filename: file.originalname,
-            error: error.message
+            error: error instanceof Error ? error.message : 'Unknown error'
           });
         }
       }
@@ -485,7 +485,7 @@ router.delete('/knowledge-bases/:id',
           );
         }
       } catch (error) {
-        logger.warn('Failed to delete vectors:', error.message);
+        logger.warn('Failed to delete vectors:', error instanceof Error ? error.message : 'Unknown error');
       }
 
       // Delete from database (cascades to related records)

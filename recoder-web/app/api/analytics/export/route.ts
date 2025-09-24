@@ -311,4 +311,4 @@ async function logExportEvent(userId: string, event: string, metadata: any): Pro
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

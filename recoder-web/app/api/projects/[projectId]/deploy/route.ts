@@ -101,9 +101,10 @@ export async function POST(
         }
 
         deployment.status = 'deployed';
-        deployment.url = deploymentResult.url;
+        const result = deploymentResult as { url: string };
+        deployment.url = result.url;
         deployment.buildTime = Date.now() - startTime;
-        deployment.logs?.push(`Successfully deployed to ${deploymentResult.url}`);
+        deployment.logs?.push(`Successfully deployed to ${result.url}`);
 
       } catch (error) {
         deployment.status = 'failed';

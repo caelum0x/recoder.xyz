@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, query, param, validationResult } = require('express-validator');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { billingService } = require('../services/billingService');
 
 const router = express.Router();
@@ -18,7 +18,7 @@ const router = express.Router();
  *       200:
  *         description: Subscription details retrieved successfully
  */
-router.get('/subscription', authenticateToken, async (req, res, next) => {
+router.get('/subscription', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
@@ -63,7 +63,7 @@ router.get('/subscription', authenticateToken, async (req, res, next) => {
  *       400:
  *         description: Invalid input
  */
-router.post('/subscription', authenticateToken, [
+router.post('/subscription', authenticate, [
   body('planId')
     .isString()
     .isLength({ min: 1 })
@@ -119,7 +119,7 @@ router.post('/subscription', authenticateToken, [
  *       200:
  *         description: Subscription cancelled successfully
  */
-router.delete('/subscription', authenticateToken, async (req, res, next) => {
+router.delete('/subscription', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
@@ -189,7 +189,7 @@ router.get('/plans', async (req, res, next) => {
  *       200:
  *         description: Usage statistics retrieved successfully
  */
-router.get('/usage', authenticateToken, [
+router.get('/usage', authenticate, [
   query('startDate')
     .optional()
     .isISO8601()
@@ -257,7 +257,7 @@ router.get('/usage', authenticateToken, [
  *       200:
  *         description: Invoices retrieved successfully
  */
-router.get('/invoices', authenticateToken, [
+router.get('/invoices', authenticate, [
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
@@ -320,7 +320,7 @@ router.get('/invoices', authenticateToken, [
  *       404:
  *         description: Invoice not found
  */
-router.get('/invoices/:invoiceId', authenticateToken, [
+router.get('/invoices/:invoiceId', authenticate, [
   param('invoiceId')
     .isString()
     .isLength({ min: 1 })
@@ -376,7 +376,7 @@ router.get('/invoices/:invoiceId', authenticateToken, [
  *       200:
  *         description: Payment methods retrieved successfully
  */
-router.get('/payment-methods', authenticateToken, async (req, res, next) => {
+router.get('/payment-methods', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
@@ -425,7 +425,7 @@ router.get('/payment-methods', authenticateToken, async (req, res, next) => {
  *       400:
  *         description: Invalid input
  */
-router.post('/payment-methods', authenticateToken, [
+router.post('/payment-methods', authenticate, [
   body('token')
     .isString()
     .isLength({ min: 1 })
@@ -494,7 +494,7 @@ router.post('/payment-methods', authenticateToken, [
  *       404:
  *         description: Payment method not found
  */
-router.delete('/payment-methods/:paymentMethodId', authenticateToken, [
+router.delete('/payment-methods/:paymentMethodId', authenticate, [
   param('paymentMethodId')
     .isString()
     .isLength({ min: 1 })

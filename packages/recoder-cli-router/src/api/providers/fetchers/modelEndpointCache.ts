@@ -2,13 +2,13 @@ import * as path from "path"
 import fs from "fs/promises"
 
 import NodeCache from "node-cache"
-import { safeWriteJson } from "@recoder/shared"
+import { safeWriteJson } from "recoder-shared"
 import sanitize from "sanitize-filename"
 
-import { ContextProxy } from "@recoder/shared"
-import { getCacheDirectoryPath } from "@recoder/shared"
-import { RouterName, ModelRecord } from "@recoder/shared"
-import { fileExistsAtPath } from "@recoder/shared"
+import { ContextProxy } from "recoder-shared"
+import { getCacheDirectoryPath } from "recoder-shared"
+import { RouterName, ModelRecord } from "recoder-shared"
+import { fileExistsAtPath } from "recoder-shared"
 
 import { getOpenRouterModelEndpoints } from "./openrouter"
 

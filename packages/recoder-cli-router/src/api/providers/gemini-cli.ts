@@ -6,10 +6,10 @@ import * as os from "os"
 import axios from "axios"
 import * as dotenvx from "@dotenvx/dotenvx"
 
-import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "@roo-code/types"
+import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "roo-code-types"
 
-import type { ApiHandlerOptions, GeminiCliModelId } from "@recoder/shared"
-import { geminiCliDefaultModelId, geminiCliModels, t } from "@recoder/shared"
+import type { ApiHandlerOptions, GeminiCliModelId } from "recoder-shared"
+import { geminiCliDefaultModelId, geminiCliModels, t } from "recoder-shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { ApiStream } from "../transform/stream"

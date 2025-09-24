@@ -21,7 +21,7 @@ try {
 	};
 }
 
-import type { ModelInfo } from "@recoder/shared"
+import type { ModelInfo } from "recoder-shared"
 
 import { getCommand } from "../../utils/commands"
 import { ApiStream } from "../transform/stream"

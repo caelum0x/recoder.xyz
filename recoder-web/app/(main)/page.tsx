@@ -229,8 +229,10 @@ export default function Home() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {/* Chat Platform */}
-              <Link 
-                href="/chats" 
+              <a 
+                href="https://chat.recoder.xyz" 
+                target="_blank"
+                rel="noopener noreferrer"
                 className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-8 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2"
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -253,7 +255,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-              </Link>
+              </a>
               
               {/* Current Platform - Web Builder */}
               <div className="group relative overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-300 rounded-2xl p-8 shadow-lg">
@@ -1133,51 +1135,102 @@ export default function Home() {
           </div>
         </div>
 
-        <footer className="flex w-full flex-col items-center justify-between space-y-3 px-5 pb-3 pt-5 text-center sm:flex-row sm:pt-2">
-          <div>
-            <div className="font-medium">
-              Built with{" "}
-              <a
-                href="https://togetherai.link/?utm_source=llamacoder&utm_medium=referral&utm_campaign=example-app"
-                className="font-semibold text-blue-600 underline-offset-4 transition hover:text-gray-700 hover:underline"
-              >
-                Llama
-              </a>{" "}
-              and{" "}
-              <a
-                href="https://togetherai.link/?utm_source=llamacoder&utm_medium=referral&utm_campaign=example-app"
-                className="font-semibold text-blue-600 underline-offset-4 transition hover:text-gray-700 hover:underline"
-              >
-                Together AI
-              </a>
-              .
+        <footer className="w-full bg-gradient-to-r from-gray-50 to-white border-t border-gray-200 mt-20">
+          <div className="max-w-7xl mx-auto px-6 py-12">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              {/* Brand Column */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">R</span>
+                  </div>
+                  <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Recoder.xyz
+                  </span>
+                </div>
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  The AI-powered development platform that transforms ideas into production-ready applications.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Link href="https://github.com/recoder-xyz" className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                  </Link>
+                  <Link href="https://twitter.com/recoderxyz" className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Platform Links */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">Platform</h4>
+                <div className="space-y-3">
+                  <a href="https://chat.recoder.xyz" target="_blank" rel="noopener noreferrer" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    💬 AI Chat Platform
+                  </a>
+                  <Link href="/" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    🛠️ Web Builder
+                  </Link>
+                  <Link href="/cli" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    ⚡ CLI Tool
+                  </Link>
+                  <Link href="/docs" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    📚 Documentation
+                  </Link>
+                </div>
+              </div>
+
+              {/* Features */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">Features</h4>
+                <div className="space-y-3">
+                  <Link href="/agents" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    🤖 AI Agents
+                  </Link>
+                  <Link href="/templates" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    🎨 Templates
+                  </Link>
+                  <Link href="/game-development" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    🎮 Game Development
+                  </Link>
+                  <Link href="/blockchain" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    ⛓️ Blockchain Tools
+                  </Link>
+                </div>
+              </div>
+
+              {/* Company */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">Company</h4>
+                <div className="space-y-3">
+                  <Link href="/pricing" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    💰 Pricing
+                  </Link>
+                  <Link href="/settings" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    ⚙️ Settings
+                  </Link>
+                  <Link href="/settings/privacy" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    🔐 Privacy
+                  </Link>
+                  <Link href="/settings/security" className="block text-gray-600 hover:text-blue-600 transition-colors text-sm">
+                    🛡️ Security
+                  </Link>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex space-x-4 pb-4 sm:pb-0">
-            <Link
-              href="https://twitter.com/nutlope"
-              className="group"
-              aria-label=""
-            >
-              <svg
-                aria-hidden="true"
-                className="h-6 w-6 fill-gray-500 group-hover:fill-gray-700"
-              >
-                <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0 0 22 5.92a8.19 8.19 0 0 1-2.357.646 4.118 4.118 0 0 0 1.804-2.27 8.224 8.224 0 0 1-2.605.996 4.107 4.107 0 0 0-6.993 3.743 11.65 11.65 0 0 1-8.457-4.287 4.106 4.106 0 0 0 1.27 5.477A4.073 4.073 0 0 1 2.8 9.713v.052a4.105 4.105 0 0 0 3.292 4.022 4.093 4.093 0 0 1-1.853.07 4.108 4.108 0 0 0 3.834 2.85A8.233 8.233 0 0 1 2 18.407a11.615 11.615 0 0 0 6.29 1.84" />
-              </svg>
-            </Link>
-            <Link
-              href="https://github.com/Nutlope/llamacoder"
-              className="group"
-              aria-label=""
-            >
-              <svg
-                aria-hidden="true"
-                className="h-6 w-6 fill-slate-500 group-hover:fill-slate-700"
-              >
-                <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z" />
-              </svg>
-            </Link>
+
+            <div className="border-t border-gray-200 mt-8 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-sm text-gray-600">
+                © 2024 Recoder.xyz. Built with AI-powered intelligence.
+              </div>
+              <div className="text-sm text-gray-500">
+                Powered by Claude, Groq, Gemini & OpenRouter
+              </div>
+            </div>
           </div>
         </footer>
       </div>

@@ -387,7 +387,7 @@ class CompetitorAnalysisClient {
       'Business Services': ['consulting', 'enterprise', 'solutions', 'professional services', 'management']
     };
     
-    return keywordMap[industry] || ['business', 'services', 'solutions', 'professional', 'industry'];
+    return keywordMap[industry as keyof typeof keywordMap] || ['business', 'services', 'solutions', 'professional', 'industry'];
   }
 
   private async getSERPCompetitors(keyword: string) {

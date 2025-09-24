@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Get feature flags
     const featureFlags = await prisma.featureFlag.findMany({
       where: {
-        name: { in: flags },
+        key: { in: flags },
         enabled: true
       }
     });
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
 
     for (const flagName of flags) {
-      const flag = featureFlags.find(f => f.name === flagName);
+      const flag = featureFlags.find(f => f.key === flagName);
       
       if (!flag) {
         flagResults[flagName] = false;
@@ -73,23 +73,38 @@ export async function POST(request: NextRequest) {
       } else if (flag.rolloutPercentage > 0) {
         // Use consistent hashing for user-based rollout
         const hash = effectiveUserId 
-          ? hashString(effectiveUserId + flag.name) 
+          ? hashString(effectiveUserId + flag.key) 
           : Math.random();
         isEnabled = hash < (flag.rolloutPercentage / 100);
       }
 
-      // Check user segments if specified
-      if (isEnabled && flag.userSegments && flag.userSegments.length > 0 && effectiveUserId) {
-        const user = await prisma.user.findUnique({
-          where: { id: effectiveUserId },
-          select: { role: true, plan: true, metadata: true }
+      // Check user segments if specified (get segments separately)
+      if (isEnabled && effectiveUserId) {
+        const flagSegments = await (prisma as any).featureFlagUserSegment.findMany({
+          where: { featureFlagId: flag.id }
         });
+        
+        if (flagSegments.length > 0) {
+          const user = await prisma.user.findUnique({
+            where: { id: effectiveUserId },
+            select: { role: true }
+          });
 
-        if (user) {
-          const userSegments = [user.role, user.plan].filter(Boolean);
-          isEnabled = flag.userSegments.some(segment => userSegments.includes(segment));
-        } else {
-          isEnabled = false;
+          if (user) {
+            // Get user's plan from subscription
+            const userSubscription = await prisma.subscription.findFirst({
+              where: { userId: effectiveUserId },
+              select: { plan: true } as any,
+              orderBy: { createdAt: 'desc' }
+            });
+            
+            const userPlan = userSubscription?.plan || 'free';
+            const userSegmentValues = [user.role, userPlan].filter(Boolean);
+            const flagSegmentNames = flagSegments.map((s: any) => s.segment);
+            isEnabled = flagSegmentNames.some((segment: string) => userSegmentValues.includes(segment));
+          } else {
+            isEnabled = false;
+          }
         }
       }
 
@@ -98,12 +113,23 @@ export async function POST(request: NextRequest) {
       // Log feature flag usage
       if (isEnabled && effectiveUserId) {
         try {
-          await prisma.featureFlagUsage.create({
-            data: {
+          await prisma.featureFlagUsage.upsert({
+            where: {
+              featureFlagId_userId: {
+                featureFlagId: flag.id,
+                userId: effectiveUserId
+              }
+            } as any,
+            update: {
+              enabled: isEnabled,
+              context: context || {}
+            } as any,
+            create: {
               featureFlagId: flag.id,
               userId: effectiveUserId,
+              enabled: isEnabled,
               context: context || {}
-            }
+            } as any
           });
         } catch (error) {
           // Don't fail the request if logging fails
@@ -157,7 +183,7 @@ export async function GET(request: NextRequest) {
     const effectiveUserId = userId || session?.user?.id;
 
     const flag = await prisma.featureFlag.findUnique({
-      where: { name: flagName }
+      where: { key: flagName }
     });
 
     if (!flag || !flag.enabled) {
@@ -193,35 +219,61 @@ export async function GET(request: NextRequest) {
       isEnabled = true;
     } else if (flag.rolloutPercentage > 0) {
       const hash = effectiveUserId 
-        ? hashString(effectiveUserId + flag.name) 
+        ? hashString(effectiveUserId + flag.key) 
         : Math.random();
       isEnabled = hash < (flag.rolloutPercentage / 100);
     }
 
-    // Check user segments if specified
-    if (isEnabled && flag.userSegments && flag.userSegments.length > 0 && effectiveUserId) {
-      const user = await prisma.user.findUnique({
-        where: { id: effectiveUserId },
-        select: { role: true, plan: true }
+    // Check user segments if specified (get segments separately)
+    if (isEnabled && effectiveUserId) {
+      const flagSegments = await (prisma as any).featureFlagUserSegment.findMany({
+        where: { featureFlagId: flag.id }
       });
+      
+      if (flagSegments.length > 0) {
+        const user = await prisma.user.findUnique({
+          where: { id: effectiveUserId },
+          select: { role: true }
+        });
 
-      if (user) {
-        const userSegments = [user.role, user.plan].filter(Boolean);
-        isEnabled = flag.userSegments.some(segment => userSegments.includes(segment));
-      } else {
-        isEnabled = false;
+        if (user) {
+          // Get user's plan from subscription
+          const userSubscription = await prisma.subscription.findFirst({
+            where: { userId: effectiveUserId },
+            select: { plan: true } as any,
+            orderBy: { createdAt: 'desc' }
+          });
+          
+          const userPlan = userSubscription?.plan || 'free';
+          const userSegmentValues = [user.role, userPlan].filter(Boolean);
+          const flagSegmentNames = flagSegments.map((s: any) => s.segment);
+          isEnabled = flagSegmentNames.some((segment: string) => userSegmentValues.includes(segment));
+        } else {
+          isEnabled = false;
+        }
       }
     }
 
     // Log usage if enabled
     if (isEnabled && effectiveUserId) {
       try {
-        await prisma.featureFlagUsage.create({
-          data: {
+        await prisma.featureFlagUsage.upsert({
+          where: {
+            featureFlagId_userId: {
+              featureFlagId: flag.id,
+              userId: effectiveUserId
+            }
+          } as any,
+          update: {
+            enabled: isEnabled,
+            context: {}
+          } as any,
+          create: {
             featureFlagId: flag.id,
             userId: effectiveUserId,
+            enabled: isEnabled,
             context: {}
-          }
+          } as any
         });
       } catch (error) {
         console.warn('Failed to log feature flag usage:', error);

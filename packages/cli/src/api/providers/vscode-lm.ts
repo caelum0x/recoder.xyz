@@ -66,9 +66,9 @@ type VSCodeLmChatRequest = any;
 type VSCodeLmChatRequestOptions = any;
 type VSCodeLmChatResponse = any;
 
-import { type ModelInfo, openAiModelInfoSaneDefaults } from "@recoder/shared"
+import { type ModelInfo, openAiModelInfoSaneDefaults } from "recoder-shared"
 
-import type { ApiHandlerOptions } from "@recoder/shared"
+import type { ApiHandlerOptions } from "recoder-shared"
 import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
 
 import { ApiStream } from "../transform/stream"

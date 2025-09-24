@@ -101,6 +101,21 @@ export default function LiveDevelopmentEditor() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Utility: Copy code to clipboard
+  const copyCodeToClipboard = (code: string) => {
+    if (navigator && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+    } else {
+      // fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = code;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+  };
+
   // Editor state
   const [activeFile, setActiveFile] = useState<string>('');
   const [editorContent, setEditorContent] = useState<string>('');
@@ -1021,12 +1036,4 @@ export default function LiveDevelopmentEditor() {
     </div>
   );
 
-  // Helper function
-  const copyCodeToClipboard = async (content: string) => {
-    try {
-      await navigator.clipboard.writeText(content);
-    } catch (error) {
-      console.error('Failed to copy code:', error);
-    }
-  };
 }

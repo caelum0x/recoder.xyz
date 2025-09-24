@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, query, param, validationResult } = require('express-validator');
-const { Template, User, Project } = require('../models');
+const { prisma } = require('../database/prisma');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { templateService } = require('../services/templateService');
 
 const router = express.Router();
@@ -49,7 +49,7 @@ const router = express.Router();
  *       200:
  *         description: Templates retrieved successfully
  */
-router.get('/', authenticateToken, [
+router.get('/', authenticate, [
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
@@ -113,7 +113,7 @@ router.get('/', authenticateToken, [
       ];
     }
 
-    const templates = await Template.findAndCountAll({
+    const templates = await prisma.template.findAndCountAll({
       where: whereClause,
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -187,7 +187,7 @@ router.get('/', authenticateToken, [
  *       400:
  *         description: Invalid input
  */
-router.post('/', authenticateToken, [
+router.post('/', authenticate, [
   body('name')
     .isString()
     .isLength({ min: 1, max: 100 })
@@ -272,7 +272,7 @@ router.post('/', authenticateToken, [
  *       404:
  *         description: Template not found
  */
-router.get('/:templateId', authenticateToken, [
+router.get('/:templateId', authenticate, [
   param('templateId')
     .isString()
     .isLength({ min: 1 })
@@ -293,7 +293,7 @@ router.get('/:templateId', authenticateToken, [
     const { templateId } = req.params;
     const userId = req.user.id;
 
-    const template = await Template.findOne({
+    const template = await prisma.template.findOne({
       where: {
         id: templateId,
         [Op.or]: [
@@ -382,7 +382,7 @@ router.get('/:templateId', authenticateToken, [
  *       403:
  *         description: Access denied
  */
-router.put('/:templateId', authenticateToken, [
+router.put('/:templateId', authenticate, [
   param('templateId')
     .isString()
     .isLength({ min: 1 })
@@ -426,7 +426,7 @@ router.put('/:templateId', authenticateToken, [
     const { name, description, structure, config, public: isPublic } = req.body;
     const userId = req.user.id;
 
-    const template = await Template.findOne({
+    const template = await prisma.template.findOne({
       where: { id: templateId, userId }
     });
 
@@ -484,7 +484,7 @@ router.put('/:templateId', authenticateToken, [
  *       403:
  *         description: Access denied
  */
-router.delete('/:templateId', authenticateToken, [
+router.delete('/:templateId', authenticate, [
   param('templateId')
     .isString()
     .isLength({ min: 1 })
@@ -505,7 +505,7 @@ router.delete('/:templateId', authenticateToken, [
     const { templateId } = req.params;
     const userId = req.user.id;
 
-    const template = await Template.findOne({
+    const template = await prisma.template.findOne({
       where: { id: templateId, userId }
     });
 
@@ -519,7 +519,7 @@ router.delete('/:templateId', authenticateToken, [
     }
 
     // Check if template is being used by any projects
-    const projectsUsingTemplate = await Project.count({
+    const projectsUsingTemplate = await prisma.project.count({
       where: { templateId }
     });
 
@@ -581,7 +581,7 @@ router.delete('/:templateId', authenticateToken, [
  *       404:
  *         description: Template not found
  */
-router.post('/:templateId/clone', authenticateToken, [
+router.post('/:templateId/clone', authenticate, [
   param('templateId')
     .isString()
     .isLength({ min: 1 })
@@ -611,7 +611,7 @@ router.post('/:templateId/clone', authenticateToken, [
     const { name, public: isPublic } = req.body;
     const userId = req.user.id;
 
-    const originalTemplate = await Template.findOne({
+    const originalTemplate = await prisma.template.findOne({
       where: {
         id: templateId,
         [Op.or]: [
@@ -636,7 +636,7 @@ router.post('/:templateId/clone', authenticateToken, [
       userId
     });
 
-    logger.info(`Template cloned: ${templateId} -> ${clonedTemplate.id} by user: ${userId}`);
+    logger.info(`Template cloned: ${templateId} -> ${clonedprisma.template.id} by user: ${userId}`);
 
     res.status(201).json({
       success: true,

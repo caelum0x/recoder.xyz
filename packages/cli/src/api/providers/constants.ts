@@ -2,11 +2,11 @@
 let pkg: { version: string };
 try {
 	// Try importing from shared package
-	const shared = require("@recoder/shared");
+	const shared = require("recoder-shared");
 	pkg = shared.pkg || shared.default?.pkg || { version: "1.0.0" };
 } catch (error) {
 	// Fallback for development mode
-	console.warn('Failed to load package info from @recoder/shared, using fallback');
+	console.warn('Failed to load package info from recoder-shared, using fallback');
 	pkg = { version: "1.0.0" };
 }
 

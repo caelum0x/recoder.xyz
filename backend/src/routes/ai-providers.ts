@@ -8,18 +8,20 @@ import { aiProviderManager } from '../services/ai-provider-manager';
 import { aiRouter } from '../services/ai-router';
 import { ragEnhancedAI } from '../services/rag-enhanced-ai';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error-helpers';
 
 const router = express.Router();
 
 // Validation middleware
-const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
+    res.status(400).json({
       success: false,
       error: 'Validation failed',
       details: errors.array()
     });
+    return;
   }
   next();
 };
@@ -76,7 +78,7 @@ router.get('/',
       });
 
     } catch (error) {
-      logger.error('Failed to get AI providers', { error: error.message });
+      logger.error('Failed to get AI providers', { error: getErrorMessage(error) });
       res.status(500).json({
         success: false,
         error: 'Failed to get AI providers'
@@ -117,7 +119,7 @@ router.get('/:providerId',
 
     } catch (error) {
       logger.error('Failed to get provider details', { 
-        error: error.message, 
+        error: getErrorMessage(error), 
         providerId: req.params.providerId 
       });
       res.status(500).json({
@@ -179,14 +181,14 @@ router.post('/route',
 
     } catch (error) {
       logger.error('Failed to route AI request', { 
-        error: error.message, 
+        error: getErrorMessage(error), 
         userId: req.user?.id,
         taskType: req.body?.taskType
       });
       res.status(500).json({
         success: false,
         error: 'Failed to route request',
-        details: error.message
+        details: getErrorMessage(error)
       });
     }
   }
@@ -200,7 +202,7 @@ router.get('/recommendations',
   authenticateUser,
   async (req, res) => {
     try {
-      const recommendations = aiRouter.getRoutingRecommendations(req.user.id);
+      const recommendations = aiRouter.getRoutingRecommendations(req.user?.id || '');
 
       res.json({
         success: true,
@@ -211,7 +213,7 @@ router.get('/recommendations',
 
     } catch (error) {
       logger.error('Failed to get recommendations', { 
-        error: error.message, 
+        error: getErrorMessage(error), 
         userId: req.user?.id 
       });
       res.status(500).json({
@@ -261,7 +263,7 @@ router.get('/analytics',
 
     } catch (error) {
       logger.error('Failed to get provider analytics', { 
-        error: error.message, 
+        error: getErrorMessage(error), 
         userId: req.user?.id 
       });
       res.status(500).json({
@@ -309,7 +311,7 @@ router.post('/:providerId/health-check',
 
     } catch (error) {
       logger.error('Failed to trigger health check', { 
-        error: error.message, 
+        error: getErrorMessage(error), 
         providerId: req.params.providerId 
       });
       res.status(500).json({
@@ -369,7 +371,7 @@ router.get('/status',
       });
 
     } catch (error) {
-      logger.error('Failed to get system status', { error: error.message });
+      logger.error('Failed to get system status', { error: getErrorMessage(error) });
       res.status(500).json({
         success: false,
         error: 'Failed to get system status'
@@ -445,14 +447,14 @@ router.post('/generate-enhanced',
 
     } catch (error) {
       logger.error('RAG-enhanced generation failed:', {
-        error: error.message,
+        error: getErrorMessage(error),
         userId: req.user?.id,
         taskType: req.body?.taskType
       });
       res.status(500).json({
         success: false,
         error: 'Failed to generate enhanced response',
-        details: error.message
+        details: getErrorMessage(error)
       });
     }
   }
@@ -491,7 +493,7 @@ router.post('/usage',
 
     } catch (error) {
       logger.error('Failed to track provider usage', { 
-        error: error.message, 
+        error: getErrorMessage(error), 
         userId: req.user?.id,
         providerId: req.body?.providerId
       });

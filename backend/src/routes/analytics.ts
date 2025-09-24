@@ -7,17 +7,19 @@ import { authenticateUser, requireSubscription } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { prisma } from '../database/prisma';
 import { Parser } from 'json2csv';
+import { getErrorMessage } from '../utils/error-helpers';
 
 const router = express.Router();
 
 // Validation middleware
-const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
+    res.status(400).json({
       error: 'Validation failed',
       details: errors.array()
     });
+    return;
   }
   next();
 };
@@ -66,29 +68,29 @@ router.get('/metrics',
       const userId = req.user.id;
 
       // Get usage metrics
-      const usageMetrics = await prisma.usage.aggregate({
+      const usageMetrics = await prisma.usageRecord.aggregate({
         where: {
           userId,
-          createdAt: {
+          timestamp: {
             gte: startDate,
             lte: endDate
           }
         },
         _sum: {
-          tokensUsed: true,
-          requestsMade: true,
-          costCents: true
+          tokens: true,
+          cost: true,
+          duration: true
         },
         _avg: {
-          tokensUsed: true,
-          requestsMade: true
+          tokens: true,
+          cost: true
         }
       });
 
       // Get unique active users in the period
-      const activeUsers = await prisma.usage.findMany({
+      const activeUsers = await prisma.usageRecord.findMany({
         where: {
-          createdAt: {
+          timestamp: {
             gte: startDate,
             lte: endDate
           }
@@ -97,22 +99,22 @@ router.get('/metrics',
         distinct: ['userId']
       });
 
-      // Get most used AI provider
-      const topProvider = await prisma.usage.groupBy({
-        by: ['aiProvider'],
+      // Get most used service type
+      const topProvider = await prisma.usageRecord.groupBy({
+        by: ['type'],
         where: {
           userId,
-          createdAt: {
+          timestamp: {
             gte: startDate,
             lte: endDate
           }
         },
-        _sum: {
-          tokensUsed: true
+        _count: {
+          type: true
         },
         orderBy: {
-          _sum: {
-            tokensUsed: 'desc'
+          _count: {
+            type: 'desc'
           }
         },
         take: 1
@@ -121,25 +123,25 @@ router.get('/metrics',
       // Calculate session duration (mock for now)
       const averageSessionDuration = 12.5; // minutes
 
-      const totalTokens = usageMetrics._sum.tokensUsed || 0;
-      const totalRequests = usageMetrics._sum.requestsMade || 0;
-      const totalCost = (usageMetrics._sum.costCents || 0) / 100;
+      const totalTokens = usageMetrics._sum.tokens || 0;
+      const totalCost = usageMetrics._sum.cost || 0;
+      const avgDuration = (usageMetrics._avg as any)?.duration || 0;
 
       res.json({
         success: true,
         data: {
           totalTokens,
-          totalRequests,
           totalCost,
+          averageDuration: avgDuration,
           activeUsers: activeUsers.length,
           averageSessionDuration,
-          topAiProvider: topProvider[0]?.aiProvider || 'Unknown',
+          topServiceType: topProvider[0]?.type || 'Unknown',
           costPerToken: totalTokens > 0 ? totalCost / totalTokens : 0,
-          requestsPerUser: activeUsers.length > 0 ? totalRequests / activeUsers.length : 0
+          usageCount: activeUsers.length
         }
       });
     } catch (error) {
-      logger.error('Failed to get usage metrics', { error: error.message, userId: req.user?.id });
+      logger.error('Failed to get usage metrics', { error: getErrorMessage(error), userId: req.user?.id });
       res.status(500).json({
         success: false,
         error: 'Failed to get usage metrics'
@@ -216,7 +218,7 @@ router.get('/timeseries',
         data: formattedData
       });
     } catch (error) {
-      logger.error('Failed to get time series data', { error: error.message, userId: req.user?.id });
+      logger.error('Failed to get time series data', { error: getErrorMessage(error), userId: req.user?.id });
       res.status(500).json({
         success: false,
         error: 'Failed to get time series data'
@@ -240,36 +242,35 @@ router.get('/providers',
       const { startDate, endDate } = getDateRange(range);
       const userId = req.user.id;
 
-      const providerData = await prisma.usage.groupBy({
-        by: ['aiProvider'],
+      const providerData = await prisma.usageRecord.groupBy({
+        by: ['type'],
         where: {
           userId,
-          createdAt: {
+          timestamp: {
             gte: startDate,
             lte: endDate
           }
         },
         _sum: {
-          tokensUsed: true,
-          requestsMade: true,
-          costCents: true
+          tokens: true,
+          cost: true
         },
         orderBy: {
           _sum: {
-            tokensUsed: 'desc'
+            tokens: 'desc'
           }
         }
       });
 
       // Calculate percentages
-      const totalTokens = providerData.reduce((sum, item) => sum + (item._sum.tokensUsed || 0), 0);
+      const totalTokens = providerData.reduce((sum, item) => sum + (item._sum.tokens || 0), 0);
 
       const formattedData = providerData.map(item => ({
-        provider: item.aiProvider || 'Unknown',
-        tokens: item._sum.tokensUsed || 0,
-        requests: item._sum.requestsMade || 0,
-        cost: (item._sum.costCents || 0) / 100,
-        percentage: totalTokens > 0 ? Math.round(((item._sum.tokensUsed || 0) / totalTokens) * 100) : 0
+        provider: (item as any).aiProvider || 'Unknown',
+        tokens: item._sum.tokens || 0,
+        requests: 1, // Each record represents one request
+        cost: (item._sum.cost || 0),
+        percentage: totalTokens > 0 ? Math.round(((item._sum.tokens || 0) / totalTokens) * 100) : 0
       }));
 
       res.json({
@@ -277,7 +278,7 @@ router.get('/providers',
         data: formattedData
       });
     } catch (error) {
-      logger.error('Failed to get provider usage', { error: error.message, userId: req.user?.id });
+      logger.error('Failed to get provider usage', { error: getErrorMessage(error), userId: req.user?.id });
       res.status(500).json({
         success: false,
         error: 'Failed to get provider usage'
@@ -322,7 +323,7 @@ router.get('/users',
         LIMIT 50
       `;
 
-      const formattedData = userUsageData.map((row: any) => ({
+      const formattedData = (userUsageData as any[]).map((row: any) => ({
         userId: row.user_id.toString(),
         userName: row.user_name,
         email: row.email,
@@ -338,7 +339,7 @@ router.get('/users',
         data: formattedData
       });
     } catch (error) {
-      logger.error('Failed to get user analytics', { error: error.message, userId: req.user?.id });
+      logger.error('Failed to get user analytics', { error: getErrorMessage(error), userId: req.user?.id });
       res.status(500).json({
         success: false,
         error: 'Failed to get user analytics'
@@ -363,18 +364,18 @@ router.get('/costs',
       const userId = req.user.id;
 
       // Get cost breakdown by feature/provider
-      const costData = await prisma.usage.groupBy({
-        by: ['featureUsed', 'aiProvider'],
+      const costData = await prisma.usageRecord.groupBy({
+        by: ['type'], // Group by usage type instead of featureUsed and aiProvider
         where: {
           userId,
-          createdAt: {
+          timestamp: {
             gte: startDate,
             lte: endDate
           }
         },
         _sum: {
-          costCents: true,
-          tokensUsed: true
+          cost: true,
+          tokens: true
         }
       });
 
@@ -383,8 +384,8 @@ router.get('/costs',
       let totalCost = 0;
 
       costData.forEach(item => {
-        const cost = (item._sum.costCents || 0) / 100;
-        const category = item.featureUsed || 'General';
+        const cost = (item._sum.cost || 0);
+        const category = (item as any).type || 'General';
         
         categoryMap[category] = (categoryMap[category] || 0) + cost;
         totalCost += cost;
@@ -402,7 +403,7 @@ router.get('/costs',
         data: formattedData
       });
     } catch (error) {
-      logger.error('Failed to get cost analysis', { error: error.message, userId: req.user?.id });
+      logger.error('Failed to get cost analysis', { error: getErrorMessage(error), userId: req.user?.id });
       res.status(500).json({
         success: false,
         error: 'Failed to get cost analysis'
@@ -431,29 +432,29 @@ router.get('/export',
       const userId = req.user.id;
 
       // Get detailed usage data
-      const usageData = await prisma.usage.findMany({
+      const usageData = await prisma.usageRecord.findMany({
         where: {
           userId,
-          createdAt: {
+          timestamp: {
             gte: startDate,
             lte: endDate
           }
         },
         orderBy: {
-          createdAt: 'desc'
+          timestamp: 'desc'
         },
         take: 10000 // Limit to prevent huge exports
       });
 
       const exportData = usageData.map(usage => ({
-        date: usage.createdAt.toISOString(),
-        aiProvider: usage.aiProvider,
-        feature: usage.featureUsed,
-        tokens: usage.tokensUsed,
-        requests: usage.requestsMade,
-        cost: usage.costCents / 100,
-        periodStart: usage.periodStart.toISOString().split('T')[0],
-        periodEnd: usage.periodEnd.toISOString().split('T')[0]
+        date: usage.timestamp.toISOString(),
+        aiProvider: (usage.metadata as any)?.aiProvider || 'unknown',
+        feature: usage.type,
+        tokens: usage.tokens || 0,
+        requests: 1, // Each record represents one request
+        cost: usage.cost || 0,
+        periodStart: usage.timestamp.toISOString().split('T')[0],
+        periodEnd: usage.timestamp.toISOString().split('T')[0]
       }));
 
       if (format === 'csv') {
@@ -492,7 +493,7 @@ router.get('/export',
         recordCount: exportData.length
       });
     } catch (error) {
-      logger.error('Failed to export analytics', { error: error.message, userId: req.user?.id });
+      logger.error('Failed to export analytics', { error: getErrorMessage(error), userId: req.user?.id });
       res.status(500).json({
         success: false,
         error: 'Failed to export analytics data'

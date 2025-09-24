@@ -3,7 +3,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 import {
   ModelRequest,
   ModelResponse,
@@ -17,7 +17,7 @@ import {
   ModelSpecialization,
   HybridProcessingConfig,
   RequestContext
-} from '@recoder/shared/types/ai-models';
+} from 'recoder-shared/types/ai-models';
 import { BaseModelProvider } from './base-provider';
 
 export interface RouterConfig {

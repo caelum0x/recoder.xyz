@@ -65,6 +65,10 @@ export class UnifiedAIProvider {
     // Initialize API keys
     this.openRouterApiKey = process.env.OPENROUTER_API_KEY;
     this.togetherApiKey = process.env.TOGETHER_API_KEY;
+    
+    // Debug: Log API key availability (first 8 chars only for security)
+    console.log('🔑 OpenRouter API Key:', this.openRouterApiKey ? `${this.openRouterApiKey.substring(0, 8)}...` : 'NOT SET');
+    console.log('🤝 Together API Key:', this.togetherApiKey ? `${this.togetherApiKey.substring(0, 8)}...` : 'NOT SET');
   }
 
   /**

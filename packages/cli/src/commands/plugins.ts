@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { getPluginsIntegration } from '../services/plugins-integration';
-import { Logger } from '@recoder/shared';
+import { Logger } from 'recoder-shared';
 
 const logger = Logger.getInstance();
 

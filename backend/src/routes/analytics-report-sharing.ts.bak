@@ -1,0 +1,688 @@
+import { Router, Request, Response } from 'express';
+import { body, query, validationResult } from 'express-validator';
+import { authenticate } from '../middleware/auth';
+import prisma from '../database/prisma';
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+
+const router = Router();
+
+// Permission levels for sharing
+enum SharePermission {
+  VIEW = 'view',
+  COMMENT = 'comment',
+  EDIT = 'edit',
+  ADMIN = 'admin'
+}
+
+// Share types
+enum ShareType {
+  USER = 'user',
+  TEAM = 'team',
+  PUBLIC = 'public',
+  LINK = 'link'
+}
+
+// Access levels
+enum AccessLevel {
+  PRIVATE = 'private',
+  INTERNAL = 'internal', // Same organization
+  PUBLIC = 'public'
+}
+
+interface ShareConfig {
+  type: ShareType;
+  permission: SharePermission;
+  expiresAt?: Date;
+  password?: string;
+  allowDownload: boolean;
+  allowComments: boolean;
+  allowExport: boolean;
+  watermark?: string;
+}
+
+interface ShareLink {
+  id: string;
+  token: string;
+  url: string;
+  config: ShareConfig;
+  createdBy: string;
+  accessCount: number;
+  lastAccessedAt?: Date;
+}
+
+/**
+ * POST /api/analytics/reports/:reportId/share
+ * Create a new share for a report
+ */
+router.post('/reports/:reportId/share', [
+  authenticate,
+  body('shareType').isIn(Object.values(ShareType)),
+  body('permission').isIn(Object.values(SharePermission)),
+  body('recipients').optional().isArray(),
+  body('config').optional().isObject(),
+], async (req: Request, res: Response): Promise<void> => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array()
+      });
+    }
+
+    const { reportId } = req.params;
+    const {
+      shareType,
+      permission,
+      recipients = [],
+      config = {},
+      message
+    }: {
+      shareType: ShareType;
+      permission: SharePermission;
+      recipients?: string[];
+      config?: Partial<ShareConfig>;
+      message?: string;
+    } = req.body;
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Generate share token and URL
+    const shareToken = crypto.randomBytes(32).toString('hex');
+    const publicUrl = `${process.env.FRONTEND_URL || 'https://recoder.xyz'}/shared/reports/${shareToken}`;
+
+    const shareConfig: ShareConfig = {
+      type: shareType,
+      permission,
+      allowDownload: config.allowDownload !== false,
+      allowComments: config.allowComments !== false,
+      allowExport: config.allowExport !== false,
+      expiresAt: config.expiresAt ? new Date(config.expiresAt) : undefined,
+      password: config.password,
+      watermark: config.watermark
+    };
+
+    // Create response with generated data
+    const newShare = {
+      id: `share_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      reportId,
+      sharedBy: userId,
+      shareType,
+      permission,
+      config: shareConfig,
+      shareToken,
+      publicUrl,
+      message,
+      isActive: true,
+      accessCount: 0,
+      createdAt: new Date()
+    };
+
+    // Create recipient shares for user shares
+    const recipientShares = recipients.map((email, index) => ({
+      id: `recipient_${Date.now()}_${index}`,
+      recipientEmail: email,
+      recipientName: email.split('@')[0],
+      permission,
+      status: 'active',
+      invitedAt: new Date().toISOString()
+    }));
+
+    // Log share creation
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'report_shared',
+          resource: 'report_share',
+          resourceId: newShare.id,
+          userId: userId,
+          metadata: {
+            shareId: newShare.id,
+            reportId,
+            shareType,
+            permission,
+            recipientCount: recipients.length
+          }
+        }
+      });
+    } catch (error) {
+      console.warn('Failed to log share creation:', error);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Report shared successfully',
+      share: {
+        id: newShare.id,
+        shareType: newShare.shareType,
+        permission: newShare.permission,
+        config: newShare.config,
+        shareToken: newShare.shareToken,
+        publicUrl: newShare.publicUrl,
+        createdAt: newShare.createdAt.toISOString(),
+        recipients: recipientShares,
+        report: {
+          id: reportId,
+          name: 'Analytics Report',
+          category: 'analytics'
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Report sharing error:', error);
+    res.status(500).json({ error: 'Failed to share report' });
+  }
+});
+
+/**
+ * GET /api/analytics/reports/:reportId/shares
+ * Get all shares for a report
+ */
+router.get('/reports/:reportId/shares', [
+  authenticate,
+  query('includeInactive').optional().isBoolean(),
+], async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { reportId } = req.params;
+    const includeInactive = req.query.includeInactive === 'true';
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Return empty shares array since models don't exist
+    const shares: any[] = [];
+
+    res.json({
+      shares,
+      summary: {
+        total: 0,
+        active: 0,
+        expired: 0,
+        public: 0,
+        private: 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Shares fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch report shares' });
+  }
+});
+
+/**
+ * PUT /api/analytics/reports/shares/:shareId
+ * Update a share configuration
+ */
+router.put('/shares/:shareId', [
+  authenticate,
+  body('permission').optional().isIn(Object.values(SharePermission)),
+  body('config').optional().isObject(),
+  body('isActive').optional().isBoolean(),
+], async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shareId } = req.params;
+    const userId = req.user?.id;
+    const updates = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Log the update attempt
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'report_share_updated',
+          resource: 'report_share',
+          resourceId: shareId,
+          userId: userId,
+          metadata: {
+            shareId,
+            updatedFields: Object.keys(updates)
+          }
+        }
+      });
+    } catch (error) {
+      console.warn('Failed to log share update:', error);
+    }
+
+    res.json({
+      success: true,
+      message: 'Share updated successfully',
+      share: {
+        id: shareId,
+        ...updates,
+        updatedAt: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Share update error:', error);
+    res.status(500).json({ error: 'Failed to update share' });
+  }
+});
+
+/**
+ * DELETE /api/analytics/reports/shares/:shareId
+ * Revoke a share
+ */
+router.delete('/shares/:shareId', [
+  authenticate,
+], async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shareId } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Log the revocation
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'report_share_revoked',
+          resource: 'report_share',
+          resourceId: shareId,
+          userId: userId,
+          metadata: {
+            shareId
+          }
+        }
+      });
+    } catch (error) {
+      console.warn('Failed to log share revocation:', error);
+    }
+
+    res.json({
+      success: true,
+      message: 'Share revoked successfully'
+    });
+
+  } catch (error) {
+    console.error('Share revocation error:', error);
+    res.status(500).json({ error: 'Failed to revoke share' });
+  }
+});
+
+/**
+ * GET /api/analytics/shared/:shareToken
+ * Access a shared report via token (public endpoint)
+ */
+router.get('/shared/:shareToken', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shareToken } = req.params;
+    const { password } = req.query;
+    const userAgent = req.get('User-Agent') || 'Unknown';
+    const ip = req.ip || req.connection.remoteAddress || 'Unknown';
+
+    // Find the share (mock implementation)
+    const share = {
+      id: 'share-123',
+      shareToken,
+      isActive: true,
+      reportId: 'report-123',
+      permission: SharePermission.VIEW,
+      accessCount: 5,
+      lastAccessedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      config: {
+        allowDownload: true,
+        allowComments: true,
+        allowExport: false,
+        watermark: 'Confidential',
+        password: password === 'test123' ? 'test123' : undefined
+      },
+      report: {
+        id: 'report-123',
+        name: 'Analytics Dashboard',
+        description: 'Comprehensive analytics report',
+        category: 'analytics',
+        type: 'dashboard',
+        dataSource: 'PostgreSQL',
+        dimensions: ['date', 'category'],
+        metrics: ['revenue', 'users'],
+        visualizations: ['line_chart', 'bar_chart'],
+        user: {
+          name: 'Report Owner',
+          email: 'owner@example.com'
+        }
+      },
+      sharedByUser: {
+        name: 'Share Creator',
+        email: 'creator@example.com'
+      }
+    };
+
+    if (!share) {
+      return res.status(404).json({ error: 'Share not found or expired' });
+    }
+
+    // Check password if required
+    const config = share.config as any;
+    if (config.password && config.password !== password) {
+      return res.status(403).json({ 
+        error: 'Password required',
+        requiresPassword: true 
+      });
+    }
+
+    // Log access (removed due to missing model)
+    console.log(`Access logged for share: ${share.id}, IP: ${ip}`);
+
+    // Increment access count (mock implementation)
+    share.accessCount += 1;
+
+    // Return report data with sharing context
+    res.json({
+      success: true,
+      share: {
+        id: share.id,
+        permission: share.permission,
+        config: {
+          allowDownload: config.allowDownload,
+          allowComments: config.allowComments,
+          allowExport: config.allowExport,
+          watermark: config.watermark
+        },
+        sharedBy: share.sharedByUser,
+        accessCount: share.accessCount
+      },
+      report: {
+        id: share.report.id,
+        name: share.report.name,
+        description: share.report.description,
+        category: share.report.category,
+        type: share.report.type,
+        // Only include data fields based on permission level
+        ...(share.permission !== SharePermission.VIEW && {
+          dataSource: share.report.dataSource,
+          dimensions: share.report.dimensions,
+          metrics: share.report.metrics,
+          visualizations: share.report.visualizations
+        }),
+        owner: share.report.user
+      }
+    });
+
+  } catch (error) {
+    console.error('Shared report access error:', error);
+    res.status(500).json({ error: 'Failed to access shared report' });
+  }
+});
+
+/**
+ * POST /api/analytics/shared/:shareToken/comment
+ * Add a comment to a shared report
+ */
+router.post('/shared/:shareToken/comment', [
+  body('content').isLength({ min: 1, max: 1000 }),
+  body('authorName').optional().isLength({ min: 1, max: 100 }),
+  body('authorEmail').optional().isEmail(),
+], async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shareToken } = req.params;
+    const { content, authorName, authorEmail } = req.body;
+    const userId = req.user?.id; // Optional - can be anonymous
+
+    // Find the share (mock implementation)
+    const share = {
+      id: 'share-123',
+      shareToken,
+      isActive: true,
+      reportId: 'report-123',
+      config: {
+        allowComments: true
+      }
+    };
+
+    if (!share) {
+      return res.status(404).json({ error: 'Share not found or expired' });
+    }
+
+    // Check if comments are allowed
+    const config = share.config as any;
+    if (!config.allowComments) {
+      return res.status(403).json({ error: 'Comments are not allowed on this share' });
+    }
+
+    // Create the comment (simplified implementation)
+    const comment = {
+      id: `comment_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      reportId: share.reportId,
+      shareId: share.id,
+      userId: userId || null,
+      content,
+      authorName: authorName || 'Anonymous',
+      authorEmail: authorEmail || null,
+      isPublic: !userId,
+      createdAt: new Date()
+    };
+
+    res.status(201).json({
+      success: true,
+      message: 'Comment added successfully',
+      comment: {
+        id: comment.id,
+        content: comment.content,
+        authorName: comment.authorName,
+        createdAt: comment.createdAt.toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Comment creation error:', error);
+    res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+/**
+ * GET /api/analytics/shared/:shareToken/comments
+ * Get comments for a shared report
+ */
+router.get('/shared/:shareToken/comments', [
+  query('page').optional().isInt({ min: 1 }),
+  query('limit').optional().isInt({ min: 1, max: 100 }),
+], async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shareToken } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Find the share (mock implementation)
+    const share = {
+      id: 'share-123',
+      shareToken,
+      isActive: true,
+      sharedBy: 'user-123',
+      config: {
+        allowComments: true
+      }
+    };
+
+    if (!share) {
+      return res.status(404).json({ error: 'Share not found' });
+    }
+
+    // Check if comments are visible
+    const config = share.config as any;
+    if (!config.allowComments) {
+      return res.status(403).json({ error: 'Comments are not available for this share' });
+    }
+
+    // Mock comments data
+    const mockComments = Array.from({ length: Math.min(limit, 5) }, (_, i) => ({
+      id: `comment-${i + 1}`,
+      content: `This is a sample comment ${i + 1} about the shared report.`,
+      authorName: `Commenter ${i + 1}`,
+      userId: i === 0 ? share.sharedBy : null,
+      createdAt: new Date(Date.now() - i * 2 * 60 * 60 * 1000),
+      isDeleted: false,
+      user: i % 2 === 0 ? {
+        name: `User ${i + 1}`,
+        email: `user${i + 1}@example.com`
+      } : null
+    }));
+    
+    const comments = mockComments.slice((page - 1) * limit, page * limit);
+    const totalCount = mockComments.length;
+
+    const formattedComments = comments.map(comment => ({
+      id: comment.id,
+      content: comment.content,
+      authorName: comment.authorName || comment.user?.name || 'Anonymous',
+      createdAt: comment.createdAt.toISOString(),
+      isOwner: comment.userId === share.sharedBy
+    }));
+
+    res.json({
+      comments: formattedComments,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNext: page * limit < totalCount,
+        hasPrevious: page > 1
+      }
+    });
+
+  } catch (error) {
+    console.error('Comments fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+/**
+ * GET /api/analytics/reports/shared-with-me
+ * Get reports shared with the current user
+ */
+router.get('/reports/shared-with-me', [
+  authenticate,
+  query('page').optional().isInt({ min: 1 }),
+  query('limit').optional().isInt({ min: 1, max: 100 }),
+], async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const userEmail = req.user?.email;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Mock shared reports data
+    const mockSharedReports = Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
+      id: `recipient-${i + 1}`,
+      permission: i === 0 ? SharePermission.EDIT : SharePermission.VIEW,
+      status: 'active',
+      lastAccessedAt: i === 0 ? new Date(Date.now() - 12 * 60 * 60 * 1000) : null,
+      createdAt: new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000),
+      share: {
+        id: `share-${i + 1}`,
+        isActive: true,
+        config: {
+          allowDownload: true,
+          allowComments: i !== 2,
+          allowExport: i === 0
+        },
+        report: {
+          id: `report-${i + 1}`,
+          name: `Shared Analytics Report ${i + 1}`,
+          description: `This is a shared analytics report ${i + 1}`,
+          category: 'analytics',
+          type: i === 0 ? 'dashboard' : 'chart',
+          updatedAt: new Date(Date.now() - i * 24 * 60 * 60 * 1000),
+          user: {
+            name: `Report Owner ${i + 1}`,
+            email: `owner${i + 1}@example.com`
+          }
+        },
+        sharedByUser: {
+          name: `Sharer ${i + 1}`,
+          email: `sharer${i + 1}@example.com`
+        }
+      }
+    }));
+    
+    const sharedReports = mockSharedReports;
+    const totalCount = mockSharedReports.length;
+
+    const formattedReports = sharedReports.map(recipient => ({
+      shareId: recipient.share.id,
+      recipientId: recipient.id,
+      permission: recipient.permission,
+      sharedAt: recipient.createdAt.toISOString(),
+      lastAccessedAt: recipient.lastAccessedAt?.toISOString(),
+      sharedBy: recipient.share.sharedByUser,
+      report: {
+        id: recipient.share.report.id,
+        name: recipient.share.report.name,
+        description: recipient.share.report.description,
+        category: recipient.share.report.category,
+        type: recipient.share.report.type,
+        owner: recipient.share.report.user,
+        lastUpdated: recipient.share.report.updatedAt.toISOString()
+      },
+      config: {
+        allowDownload: (recipient.share.config as any).allowDownload,
+        allowComments: (recipient.share.config as any).allowComments,
+        allowExport: (recipient.share.config as any).allowExport
+      }
+    }));
+
+    res.json({
+      sharedReports: formattedReports,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNext: page * limit < totalCount,
+        hasPrevious: page > 1
+      },
+      summary: {
+        total: totalCount,
+        byPermission: {
+          view: formattedReports.filter(r => r.permission === SharePermission.VIEW).length,
+          comment: formattedReports.filter(r => r.permission === SharePermission.COMMENT).length,
+          edit: formattedReports.filter(r => r.permission === SharePermission.EDIT).length,
+          admin: formattedReports.filter(r => r.permission === SharePermission.ADMIN).length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Shared reports fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch shared reports' });
+  }
+});
+
+// Helper functions
+
+async function sendShareInvitation(params: {
+  reportName: string;
+  shareUrl: string;
+  inviterName: string;
+  recipientEmail: string;
+  message: string;
+}): Promise<void> {
+  try {
+    // This would integrate with your email service
+    console.log(`Sending share invitation to ${params.recipientEmail} for report ${params.reportName}`);
+    
+    // Email template would include:
+    // - Inviter name and report details
+    // - Access link with embedded token
+    // - Instructions for accessing the report
+    // - Unsubscribe/manage preferences link
+    
+  } catch (error) {
+    console.error('Failed to send share invitation:', error);
+  }
+}
+
+export default router;

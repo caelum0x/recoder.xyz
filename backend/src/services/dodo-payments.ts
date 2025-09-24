@@ -1,395 +1,500 @@
-// DODO Payments Integration for Recoder.xyz
-// Handles subscription billing with multiple pricing tiers
+/**
+ * DODO Payments Integration Service
+ * Mock implementation for DODO Payments API
+ */
 
-import axios, { AxiosResponse } from 'axios';
 import { logger } from '../utils/logger';
+import * as crypto from 'crypto';
 
-// DODO Payments API Configuration
-interface DodoPaymentsConfig {
-  apiKey: string;
-  baseUrl: string;
-  webhookSecret: string;
+export interface DodoCustomer {
+  email: string;
+  name: string;
 }
 
-// Subscription Plans
-export enum SubscriptionPlan {
-  WEEKLY = 'weekly',
-  MONTHLY = 'monthly', 
-  ENTERPRISE = 'enterprise'
+export interface DodoProduct {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  type: 'subscription' | 'one_time' | 'usage';
 }
 
-export const SUBSCRIPTION_PLANS = {
-  [SubscriptionPlan.WEEKLY]: {
-    id: 'recoder-weekly',
-    name: 'Recoder Weekly',
-    price: 1000, // $10.00 in cents
+export interface DodoCheckoutRequest {
+  customer: DodoCustomer;
+  product: DodoProduct;
+  metadata?: Record<string, any>;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface DodoCheckoutResponse {
+  success: boolean;
+  checkoutId?: string;
+  checkoutUrl?: string;
+  error?: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  interval: 'weekly' | 'monthly' | 'yearly';
+  intervalCount: number;
+  features: string[];
+}
+
+export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
+  free: {
+    id: 'free',
+    name: 'Free',
+    price: 0,
     currency: 'USD',
-    interval: 'Week',
+    interval: 'monthly',
     intervalCount: 1,
-    description: 'Weekly subscription to Recoder.xyz AI development platform',
-    features: [
-      '500k AI tokens per week',
-      '5k API requests per week',
-      'Multi-provider AI access (Claude, Groq, Gemini)',
-      'Real-time collaboration',
-      'Basic support'
-    ]
+    features: ['100 AI requests/month', '5 projects', 'Basic templates', 'Community support']
   },
-  [SubscriptionPlan.MONTHLY]: {
-    id: 'recoder-monthly',
-    name: 'Recoder Monthly',
-    price: 2000, // $20.00 in cents
+  weekly: {
+    id: 'weekly',
+    name: 'Weekly',
+    price: 1000, // $10 in cents
     currency: 'USD',
-    interval: 'Month',
+    interval: 'weekly',
     intervalCount: 1,
-    description: 'Monthly subscription to Recoder.xyz AI development platform',
-    features: [
-      '2.5M AI tokens per month',
-      '25k API requests per month',
-      'Multi-provider AI access (Claude, Groq, Gemini)',
-      'Real-time collaboration',
-      'Advanced AI features',
-      'Priority support',
-      'Usage analytics'
-    ]
+    features: ['1,000 AI requests/week', '10 projects', 'All templates', 'Email support']
   },
-  [SubscriptionPlan.ENTERPRISE]: {
-    id: 'recoder-enterprise',
-    name: 'Recoder Enterprise',
-    price: 10000, // $100.00 in cents
+  starter: {
+    id: 'starter',
+    name: 'Starter',
+    price: 2000, // $20 in cents
     currency: 'USD',
-    interval: 'Month',
+    interval: 'monthly',
     intervalCount: 1,
-    description: 'Enterprise subscription to Recoder.xyz with high-volume access',
-    features: [
-      '20M AI tokens per month',
-      '200k API requests per month',
-      'All AI providers (Claude, Groq, Gemini, OpenAI, DeepSeek)',
-      'Real-time collaboration',
-      'Advanced AI features',
-      'White-label solutions',
-      'Dedicated support',
-      'Custom integrations',
-      'SLA guarantee',
-      'Advanced analytics'
-    ]
+    features: ['5,000 AI requests/month', '25 projects', 'All templates', 'Priority support']
+  },
+  professional: {
+    id: 'professional',
+    name: 'Professional',
+    price: 10000, // $100 in cents
+    currency: 'USD',
+    interval: 'monthly',
+    intervalCount: 1,
+    features: ['25,000 AI requests/month', 'Unlimited projects', 'Advanced features', 'Premium support', 'API access']
+  },
+  business: {
+    id: 'business',
+    name: 'Business',
+    price: 20000, // $200 in cents
+    currency: 'USD',
+    interval: 'monthly',
+    intervalCount: 1,
+    features: ['100,000 AI requests/month', 'Team collaboration', 'Advanced analytics', 'Dedicated support', 'Custom integrations']
+  },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Enterprise',
+    price: 0, // Usage-based pricing
+    currency: 'USD',
+    interval: 'monthly',
+    intervalCount: 1,
+    features: ['Usage-based pricing', 'Unlimited everything', 'Custom deployment', 'SLA guarantees', 'White-label options']
   }
 };
 
-// DODO Payments Types
-interface DodoCustomer {
-  customer_id?: string;
-  name: string;
-  email: string;
-  phone_number?: string;
-}
-
-interface DodoBillingAddress {
-  country: string;
-  state: string;
-  city: string;
-  street: string;
-  zipcode: string;
-}
-
-interface DodoSubscriptionRequest {
-  product_id: string;
-  quantity: number;
-  customer: DodoCustomer;
-  billing: DodoBillingAddress;
-  trial_period_days?: number;
-  metadata?: Record<string, string>;
-  return_url?: string;
-  payment_link?: boolean;
-}
-
-interface DodoSubscriptionResponse {
-  subscription_id: string;
-  payment_id: string;
-  recurring_pre_tax_amount: number;
-  customer: {
-    customer_id: string;
-    name: string;
-    email: string;
-  };
-  payment_link?: string;
-  client_secret?: string;
-  metadata: Record<string, string>;
-}
-
-interface DodoSubscriptionListItem {
-  subscription_id: string;
-  product_id: string;
-  status: 'pending' | 'active' | 'on_hold' | 'cancelled' | 'failed' | 'expired';
-  recurring_pre_tax_amount: number;
-  currency: string;
-  customer: {
-    customer_id: string;
-    name: string;
-    email: string;
-  };
-  created_at: string;
-  next_billing_date: string;
-  cancel_at_next_billing_date: boolean;
+export interface DodoCancelResponse {
+  success: boolean;
+  error?: string;
 }
 
 class DodoPaymentsService {
-  private config: DodoPaymentsConfig;
-  private axios;
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
 
-  constructor(config: DodoPaymentsConfig) {
-    this.config = config;
-    this.axios = axios.create({
-      baseURL: config.baseUrl,
-      headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+  constructor() {
+    this.baseUrl = process.env.DODO_PAYMENTS_URL || 'https://api.dodopayments.com/v1';
+    this.apiKey = process.env.DODO_API_KEY || 'mock-api-key';
   }
 
   /**
-   * Create a new subscription
+   * Create a checkout session with real DODO Payments API
    */
-  async createSubscription(params: {
-    planId: string;
-    customerName: string;
-    customerEmail: string;
-    billingAddress: DodoBillingAddress;
-    trialDays?: number;
-    metadata?: Record<string, string>;
-    returnUrl?: string;
-  }): Promise<DodoSubscriptionResponse> {
+  async createCheckout(request: DodoCheckoutRequest): Promise<DodoCheckoutResponse> {
     try {
-      const plan = this.getPlanById(params.planId);
-      if (!plan) {
-        throw new Error(`Invalid plan ID: ${params.planId}`);
-      }
-
-      const request: DodoSubscriptionRequest = {
-        product_id: plan.id,
-        quantity: 1,
-        customer: {
-          name: params.customerName,
-          email: params.customerEmail
-        },
-        billing: params.billingAddress,
-        trial_period_days: params.trialDays || 0,
-        metadata: {
-          plan: params.planId,
-          service: 'recoder.xyz',
-          ...params.metadata
-        },
-        return_url: params.returnUrl,
-        payment_link: true
-      };
-
-      logger.info('Creating DODO subscription', { planId: params.planId, customerEmail: params.customerEmail });
-
-      const response: AxiosResponse<DodoSubscriptionResponse> = await this.axios.post('/subscriptions', request);
-      
-      logger.info('DODO subscription created successfully', { 
-        subscriptionId: response.data.subscription_id,
-        paymentId: response.data.payment_id 
+      logger.info('Creating DODO checkout session', {
+        customerEmail: request.customer.email,
+        productId: request.product.id,
+        amount: request.product.price
       });
 
-      return response.data;
+      // Prepare DODO API request
+      const dodoRequest = {
+        customer: {
+          email: request.customer.email,
+          name: request.customer.name
+        },
+        product: {
+          name: request.product.name,
+          price: request.product.price,
+          currency: request.product.currency || 'USD',
+          type: request.product.type || 'subscription'
+        },
+        success_url: request.successUrl,
+        cancel_url: request.cancelUrl,
+        metadata: request.metadata || {}
+      };
+
+      // Make actual API call to DODO Payments
+      const response = await fetch(`${this.baseUrl}/checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        },
+        body: JSON.stringify(dodoRequest)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        logger.error('DODO API error', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        
+        // Log error and fail fast in all environments
+        logger.error('DODO API is unavailable - payment system disabled', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        
+        return {
+          success: false,
+          error: `DODO API error: ${response.status} ${response.statusText}`
+        };
+      }
+
+      const data = await response.json() as { id?: string; checkout_url?: string };
+      
+      logger.info('DODO checkout created successfully', {
+        checkoutId: data.id,
+        checkoutUrl: data.checkout_url
+      });
+
+      return {
+        success: true,
+        checkoutId: data.id,
+        checkoutUrl: data.checkout_url
+      };
+
     } catch (error) {
-      logger.error('Failed to create DODO subscription', { error: error.message, params });
-      throw new Error(`Subscription creation failed: ${error.message}`);
+      logger.error('DODO checkout creation failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        request 
+      });
+
+      // Log critical error - payment system must be reliable
+      logger.error('Critical payment system failure - DODO API unreachable', { error });
+
+      return {
+        success: false,
+        error: 'Failed to create checkout session'
+      };
     }
   }
 
   /**
-   * List subscriptions for a customer
+   * Cancel a subscription with real DODO Payments API
    */
-  async listSubscriptions(customerId?: string): Promise<DodoSubscriptionListItem[]> {
+  async cancelSubscription(subscriptionId: string, cancelImmediately: boolean = false): Promise<DodoCancelResponse> {
     try {
-      const params: any = {};
-      if (customerId) {
-        params.customer_id = customerId;
+      logger.info('Cancelling DODO subscription', {
+        subscriptionId,
+        cancelImmediately
+      });
+
+      // Make actual API call to DODO Payments
+      const response = await fetch(`${this.baseUrl}/subscriptions/${subscriptionId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        },
+        body: JSON.stringify({
+          cancel_immediately: cancelImmediately
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        logger.error('DODO subscription cancellation API error', {
+          status: response.status,
+          error: errorData
+        });
+        return {
+          success: false,
+          error: `API error: ${response.status}`
+        };
       }
 
-      const response: AxiosResponse<{ items: DodoSubscriptionListItem[] }> = await this.axios.get('/subscriptions', { params });
-      
-      return response.data.items;
+      const data = await response.json();
+      logger.info('DODO subscription cancelled successfully', { subscriptionId });
+
+      return {
+        success: true
+      };
+
     } catch (error) {
-      logger.error('Failed to list DODO subscriptions', { error: error.message, customerId });
-      throw new Error(`Failed to list subscriptions: ${error.message}`);
+      logger.error('DODO subscription cancellation failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        subscriptionId 
+      });
+
+      return {
+        success: false,
+        error: 'Failed to cancel subscription'
+      };
     }
   }
 
   /**
    * Get subscription details
    */
-  async getSubscription(subscriptionId: string): Promise<DodoSubscriptionListItem> {
+  async getSubscription(subscriptionId: string): Promise<any> {
     try {
-      const response: AxiosResponse<DodoSubscriptionListItem> = await this.axios.get(`/subscriptions/${subscriptionId}`);
-      
-      return response.data;
-    } catch (error) {
-      logger.error('Failed to get DODO subscription', { error: error.message, subscriptionId });
-      throw new Error(`Failed to get subscription: ${error.message}`);
-    }
-  }
+      logger.info('Retrieving DODO subscription', { subscriptionId });
 
-  /**
-   * Update subscription (change plan)
-   */
-  async updateSubscription(subscriptionId: string, newPlanId: string): Promise<DodoSubscriptionResponse> {
-    try {
-      const plan = this.getPlanById(newPlanId);
-      if (!plan) {
-        throw new Error(`Invalid plan ID: ${newPlanId}`);
+      const response = await fetch(`${this.baseUrl}/subscriptions/${subscriptionId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        logger.error('DODO subscription retrieval API error', {
+          status: response.status,
+          error: errorData
+        });
+        return null;
       }
 
-      const response: AxiosResponse<DodoSubscriptionResponse> = await this.axios.post(`/subscriptions/${subscriptionId}/change-plan`, {
-        product_id: plan.id
-      });
+      const data = await response.json();
+      logger.info('DODO subscription retrieved successfully', { subscriptionId });
       
-      logger.info('DODO subscription plan changed', { subscriptionId, newPlanId });
+      return data;
 
-      return response.data;
     } catch (error) {
-      logger.error('Failed to update DODO subscription', { error: error.message, subscriptionId, newPlanId });
-      throw new Error(`Failed to update subscription: ${error.message}`);
-    }
-  }
-
-  /**
-   * Cancel subscription
-   */
-  async cancelSubscription(subscriptionId: string, cancelAtPeriodEnd: boolean = true): Promise<void> {
-    try {
-      await this.axios.patch(`/subscriptions/${subscriptionId}`, {
-        cancel_at_next_billing_date: cancelAtPeriodEnd
+      logger.error('DODO subscription retrieval failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        subscriptionId 
       });
-      
-      logger.info('DODO subscription cancelled', { subscriptionId, cancelAtPeriodEnd });
-    } catch (error) {
-      logger.error('Failed to cancel DODO subscription', { error: error.message, subscriptionId });
-      throw new Error(`Failed to cancel subscription: ${error.message}`);
+
+      return null;
     }
   }
 
   /**
-   * Create on-demand charge
+   * Get payment details
    */
-  async createCharge(subscriptionId: string, amount: number, description: string): Promise<{ payment_id: string }> {
+  async getPayment(paymentId: string): Promise<any> {
     try {
-      const response: AxiosResponse<{ payment_id: string }> = await this.axios.post(`/subscriptions/${subscriptionId}/charges`, {
-        amount,
-        description
+      logger.info('Retrieving DODO payment', { paymentId });
+
+      const response = await fetch(`${this.baseUrl}/payments/${paymentId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        }
       });
-      
-      logger.info('DODO on-demand charge created', { subscriptionId, amount, paymentId: response.data.payment_id });
 
-      return response.data;
-    } catch (error) {
-      logger.error('Failed to create DODO charge', { error: error.message, subscriptionId, amount });
-      throw new Error(`Failed to create charge: ${error.message}`);
-    }
-  }
-
-  /**
-   * Verify webhook signature
-   */
-  verifyWebhookSignature(payload: string, signature: string): boolean {
-    try {
-      // DODO Payments webhook signature verification
-      // This would depend on their specific signature algorithm
-      // For now, we'll do a simple secret comparison
-      return signature === this.config.webhookSecret;
-    } catch (error) {
-      logger.error('Failed to verify DODO webhook signature', { error: error.message });
-      return false;
-    }
-  }
-
-  /**
-   * Get plan by ID
-   */
-  private getPlanById(planId: string) {
-    return Object.values(SUBSCRIPTION_PLANS).find(plan => plan.id === planId);
-  }
-
-  /**
-   * Get all available plans
-   */
-  static getAvailablePlans() {
-    return SUBSCRIPTION_PLANS;
-  }
-
-  /**
-   * Calculate usage-based pricing
-   */
-  static calculateUsage(plan: SubscriptionPlan, tokensUsed: number, requestsMade: number): {
-    basePrice: number;
-    overage: number;
-    total: number;
-  } {
-    const planConfig = SUBSCRIPTION_PLANS[plan];
-    let overage = 0;
-
-    // Define usage limits
-    const limits = {
-      [SubscriptionPlan.WEEKLY]: {
-        tokens: 500000,    // 500k tokens per week
-        requests: 5000     // 5k requests per week
-      },
-      [SubscriptionPlan.MONTHLY]: {
-        tokens: 2500000,   // 2.5M tokens per month
-        requests: 25000    // 25k requests per month
-      },
-      [SubscriptionPlan.ENTERPRISE]: {
-        tokens: 20000000,  // 20M tokens per month (high limit, not unlimited)
-        requests: 200000   // 200k requests per month
+      if (!response.ok) {
+        const errorData = await response.text();
+        logger.error('DODO payment retrieval API error', {
+          status: response.status,
+          error: errorData
+        });
+        return null;
       }
-    };
 
-    const limit = limits[plan];
+      const data = await response.json();
+      logger.info('DODO payment retrieved successfully', { paymentId });
+      
+      return data;
 
-    // Calculate overage for tokens (per 1000 tokens = $0.01)
-    if (tokensUsed > limit.tokens) {
-      const excessTokens = tokensUsed - limit.tokens;
-      overage += Math.ceil(excessTokens / 1000) * 1; // $0.01 per 1000 tokens
+    } catch (error) {
+      logger.error('DODO payment retrieval failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        paymentId 
+      });
+
+      return null;
     }
+  }
 
-    // Calculate overage for requests (per request = $0.001)
-    if (requestsMade > limit.requests) {
-      const excessRequests = requestsMade - limit.requests;
-      overage += excessRequests * 0.1; // $0.001 per request (in cents)
+  /**
+   * Create a subscription
+   */
+  async createSubscription(data: any): Promise<any> {
+    try {
+      logger.info('Creating DODO subscription', { planId: data.planId });
+
+      const response = await fetch(`${this.baseUrl}/subscriptions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        logger.error('DODO subscription creation API error', {
+          status: response.status,
+          error: errorData
+        });
+        return null;
+      }
+
+      const result = await response.json() as { id?: string };
+      logger.info('DODO subscription created successfully', { subscriptionId: result.id });
+      
+      return result;
+    } catch (error) {
+      logger.error('DODO subscription creation failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return null;
     }
+  }
 
-    return {
-      basePrice: planConfig.price,
-      overage: Math.round(overage),
-      total: planConfig.price + Math.round(overage)
+  /**
+   * List subscriptions
+   */
+  async listSubscriptions(customerId?: string): Promise<any> {
+    try {
+      const url = customerId 
+        ? `${this.baseUrl}/subscriptions?customer=${customerId}`
+        : `${this.baseUrl}/subscriptions`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        }
+      });
+
+      if (!response.ok) {
+        return { data: [] };
+      }
+
+      return await response.json();
+    } catch (error) {
+      logger.error('DODO subscription listing failed', { error });
+      return { data: [] };
+    }
+  }
+
+  /**
+   * Update subscription
+   */
+  async updateSubscription(subscriptionId: string, data: any): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/subscriptions/${subscriptionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      return await response.json();
+    } catch (error) {
+      logger.error('DODO subscription update failed', { error });
+      return null;
+    }
+  }
+
+  /**
+   * Create a charge
+   */
+  async createCharge(data: any): Promise<any> {
+    try {
+      logger.info('Creating DODO charge', { amount: data.amount });
+
+      const response = await fetch(`${this.baseUrl}/charges`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'User-Agent': 'Recoder-Backend/1.0'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        logger.error('DODO charge creation API error', {
+          status: response.status,
+          error: errorData
+        });
+        return null;
+      }
+
+      const result = await response.json() as { id?: string };
+      logger.info('DODO charge created successfully', { chargeId: result.id });
+      
+      return result;
+    } catch (error) {
+      logger.error('DODO charge creation failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Calculate usage for billing
+   */
+  static calculateUsage(planId: string, tokens?: number, requests?: number): number {
+    // Simple usage calculation logic
+    return tokens || requests || 0;
+  }
+
+  // Get rate limits based on subscription plan
+  static getRateLimits(planId: string): { requests: number; tokens: number } {
+    const limits: Record<string, { requests: number; tokens: number }> = {
+      free: { requests: 100, tokens: 10000 },
+      weekly: { requests: 1000, tokens: 100000 },
+      starter: { requests: 5000, tokens: 500000 },
+      professional: { requests: 25000, tokens: 2500000 },
+      business: { requests: 100000, tokens: 10000000 },
+      enterprise: { requests: -1, tokens: -1 } // Unlimited (usage-based)
     };
+    
+    return limits[planId] || limits.free;
   }
 }
 
-// Export the service and types
+// Export singleton instance
+export const dodoPayments = new DodoPaymentsService();
+
+// Export class for direct usage
 export { DodoPaymentsService };
-export type { DodoSubscriptionResponse, DodoSubscriptionListItem, DodoBillingAddress };
 
-// Create singleton instance
-let dodoPaymentsInstance: DodoPaymentsService | null = null;
-
-export function getDodoPaymentsInstance(): DodoPaymentsService {
-  if (!dodoPaymentsInstance) {
-    const config: DodoPaymentsConfig = {
-      apiKey: process.env.DODO_PAYMENTS_API_KEY!,
-      baseUrl: process.env.DODO_API_BASE_URL || 'https://api.dodopayments.com',
-      webhookSecret: process.env.DODO_WEBHOOK_SECRET!
-    };
-
-    if (!config.apiKey || !config.webhookSecret) {
-      throw new Error('DODO Payments configuration missing. Please set DODO_PAYMENTS_API_KEY and DODO_WEBHOOK_SECRET environment variables.');
-    }
-
-    dodoPaymentsInstance = new DodoPaymentsService(config);
-  }
-
-  return dodoPaymentsInstance;
-}
+// Export getter function for compatibility
+export const getDodoPaymentsInstance = () => dodoPayments;

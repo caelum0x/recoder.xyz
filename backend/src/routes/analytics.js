@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
 const { UsageAnalytics, User, Project, UserDevice } = require('../models/index');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { logger } = require('../utils/logger');
 
 const router = express.Router();
@@ -49,7 +49,7 @@ const router = express.Router();
  *       201:
  *         description: Analytics event tracked successfully
  */
-router.post('/track', authenticateToken, [
+router.post('/track', authenticate, [
   body('eventType')
     .isIn(['api_call', 'code_generation', 'authentication', 'sync', 'ai_request'])
     .withMessage('Event type must be one of: api_call, code_generation, authentication, sync, ai_request'),
@@ -106,7 +106,7 @@ router.post('/track', authenticateToken, [
     } = req.body;
 
     // Create analytics record
-    const analyticsRecord = await UsageAnalytics.create({
+    const analyticsRecord = await prisma.usageAnalytics.create({
       userId,
       eventType,
       platform,
@@ -159,7 +159,7 @@ router.post('/track', authenticateToken, [
  *       200:
  *         description: Dashboard data retrieved successfully
  */
-router.get('/dashboard', authenticateToken, [
+router.get('/dashboard', authenticate, [
   query('timeframe')
     .optional()
     .isIn(['hour', 'day', 'week', 'month'])
@@ -213,7 +213,7 @@ router.get('/dashboard', authenticateToken, [
     }
 
     // Get analytics data
-    const analytics = await UsageAnalytics.findAll({
+    const analytics = await prisma.usageAnalytics.findAll({
       where: whereConditions,
       order: [['timestamp', 'DESC']]
     });
@@ -315,7 +315,7 @@ router.get('/dashboard', authenticateToken, [
  *       200:
  *         description: Performance metrics retrieved successfully
  */
-router.get('/performance', authenticateToken, [
+router.get('/performance', authenticate, [
   query('metric')
     .optional()
     .isIn(['response_time', 'success_rate', 'token_usage', 'cost_efficiency'])
@@ -339,7 +339,7 @@ router.get('/performance', authenticateToken, [
     // Get last 7 days of data for performance analysis
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const analytics = await UsageAnalytics.findAll({
+    const analytics = await prisma.usageAnalytics.findAll({
       where: {
         userId,
         timestamp: { $gte: weekAgo }
@@ -498,7 +498,7 @@ router.get('/performance', authenticateToken, [
  *       200:
  *         description: Real-time data retrieved successfully
  */
-router.get('/realtime', authenticateToken, async (req, res, next) => {
+router.get('/realtime', authenticate, async (req, res, next) => {
   try {
     const userId = req.user.id;
     
@@ -507,7 +507,7 @@ router.get('/realtime', authenticateToken, async (req, res, next) => {
 
     const [recentActivity, activeDevices] = await Promise.all([
       // Recent activity
-      UsageAnalytics.findAll({
+      prisma.usageAnalytics.findAll({
         where: {
           userId,
           timestamp: { $gte: hourAgo }
@@ -517,7 +517,7 @@ router.get('/realtime', authenticateToken, async (req, res, next) => {
       }),
       
       // Active devices (devices active in last hour)
-      UserDevice.findAll({
+      prisma.userDevice.findAll({
         where: {
           userId,
           lastActiveAt: { $gte: hourAgo },
@@ -604,7 +604,7 @@ router.get('/realtime', authenticateToken, async (req, res, next) => {
  *       200:
  *         description: Export data retrieved successfully
  */
-router.post('/export', authenticateToken, [
+router.post('/export', authenticate, [
   body('format')
     .isIn(['json', 'csv'])
     .withMessage('Format must be json or csv'),
@@ -656,7 +656,7 @@ router.post('/export', authenticateToken, [
       ...filters
     };
 
-    const analytics = await UsageAnalytics.findAll({
+    const analytics = await prisma.usageAnalytics.findAll({
       where: whereConditions,
       order: [['timestamp', 'DESC']]
     });

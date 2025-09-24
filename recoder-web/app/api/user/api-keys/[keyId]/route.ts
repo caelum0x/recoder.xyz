@@ -13,8 +13,8 @@ const limiter = rateLimit({
 
 const updateApiKeySchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  active: z.boolean().optional(),
-  restrictions: z.object({
+  isActive: z.boolean().optional(),
+  rateLimit: z.object({
     ipWhitelist: z.array(z.string()).optional(),
     rateLimit: z.object({
       requests: z.number().min(1).max(10000),
@@ -44,23 +44,23 @@ export async function GET(request: NextRequest, { params }: { params: { keyId: s
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { keyId } = params;
+    const keyId = params.keyId;
     const userId = session.user.id;
 
     // Get API key details
     const apiKey = await prisma.apiKey.findFirst({
       where: {
-        keyId,
+        id: keyId,
         userId
       },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
-        active: true,
-        lastUsed: true,
+        permissions: true,
+        rateLimit: true,
+        isActive: true,
+        lastUsedAt: true,
         createdAt: true,
         updatedAt: true
       }
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest, { params }: { params: { keyId: s
     const usageStats = {
       totalRequests: Math.floor(Math.random() * 10000),
       requestsThisMonth: Math.floor(Math.random() * 1000),
-      lastRequestAt: apiKey.lastUsed?.toISOString(),
+      lastRequestAt: apiKey.lastUsedAt?.toISOString(),
       averageResponseTime: Math.floor(Math.random() * 500) + 50,
       topEndpoints: [
         { endpoint: '/api/projects', requests: Math.floor(Math.random() * 500) },
@@ -90,13 +90,12 @@ export async function GET(request: NextRequest, { params }: { params: { keyId: s
     return Response.json({
       apiKey: {
         id: apiKey.id,
-        keyId: apiKey.keyId,
+        keyPrefix: `rcd_${apiKey.keyPrefix.substring(0, 8)}...`,
         name: apiKey.name,
-        keyPrefix: `rcd_${apiKey.keyId.substring(0, 8)}...`,
-        scopes: apiKey.scopes,
-        restrictions: apiKey.restrictions,
-        status: apiKey.active ? 'active' : 'inactive',
-        lastUsed: apiKey.lastUsed?.toISOString(),
+        permissions: apiKey.permissions,
+        rateLimit: apiKey.rateLimit,
+        status: apiKey.isActive ? 'active' : 'inactive',
+        lastUsedAt: apiKey.lastUsedAt?.toISOString(),
         createdAt: apiKey.createdAt.toISOString(),
         updatedAt: apiKey.updatedAt?.toISOString(),
         usage: usageStats
@@ -127,7 +126,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { keyId:
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { keyId } = params;
+    const keyId = params.keyId;
     const userId = session.user.id;
 
     // Validate request body
@@ -137,7 +136,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { keyId:
     // Verify the API key belongs to the user
     const existingKey = await prisma.apiKey.findFirst({
       where: {
-        keyId,
+        id: keyId,
         userId
       }
     });
@@ -152,11 +151,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { keyId:
     // Prepare update data
     const updateData: any = {};
     if (updates.name !== undefined) updateData.name = updates.name;
-    if (updates.active !== undefined) updateData.active = updates.active;
-    if (updates.restrictions !== undefined) {
-      updateData.restrictions = {
-        ...existingKey.restrictions,
-        ...updates.restrictions,
+    if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+    if (updates.rateLimit !== undefined) {
+      updateData.rateLimit = {
+        ...(existingKey.rateLimit as object || {}),
+        ...updates.rateLimit,
         updatedAt: new Date().toISOString()
       };
     }
@@ -167,11 +166,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { keyId:
       data: updateData,
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true,
-        scopes: true,
-        restrictions: true,
-        active: true,
+        permissions: true,
+        rateLimit: true,
+        isActive: true,
         updatedAt: true
       }
     });
@@ -181,13 +180,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { keyId:
       data: {
         userId,
         action: 'api_key_updated',
+          resource: 'api',
+          resourceId: updatedKey.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           apiKeyId: updatedKey.id,
-          keyId: updatedKey.keyId,
+          keyPrefix: updatedKey.keyPrefix,
           updates: Object.keys(updateData)
         }
       }
@@ -197,12 +198,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { keyId:
       success: true,
       apiKey: {
         id: updatedKey.id,
-        keyId: updatedKey.keyId,
+        keyPrefix: `rcd_${updatedKey.keyPrefix.substring(0, 8)}...`,
         name: updatedKey.name,
-        keyPrefix: `rcd_${updatedKey.keyId.substring(0, 8)}...`,
-        scopes: updatedKey.scopes,
-        restrictions: updatedKey.restrictions,
-        status: updatedKey.active ? 'active' : 'inactive',
+        permissions: updatedKey.permissions,
+        rateLimit: updatedKey.rateLimit,
+        status: updatedKey.isActive ? 'active' : 'inactive',
         updatedAt: updatedKey.updatedAt?.toISOString()
       },
       message: 'API key updated successfully'
@@ -239,18 +239,18 @@ export async function DELETE(request: NextRequest, { params }: { params: { keyId
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { keyId } = params;
+    const keyId = params.keyId;
     const userId = session.user.id;
 
     // Verify the API key belongs to the user
     const existingKey = await prisma.apiKey.findFirst({
       where: {
-        keyId,
+        id: keyId,
         userId
       },
       select: {
         id: true,
-        keyId: true,
+        keyPrefix: true,
         name: true
       }
     });
@@ -266,7 +266,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { keyId
     await prisma.apiKey.update({
       where: { id: existingKey.id },
       data: {
-        active: false,
+        isActive: false,
         updatedAt: new Date()
       }
     });
@@ -276,34 +276,36 @@ export async function DELETE(request: NextRequest, { params }: { params: { keyId
       data: {
         userId,
         action: 'api_key_deleted',
+          resource: 'api',
+          resourceId: existingKey.id,
         platform: 'web',
         ip: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         success: true,
         metadata: {
           apiKeyId: existingKey.id,
-          keyId: existingKey.keyId,
+          keyPrefix: existingKey.keyPrefix,
           name: existingKey.name
         }
       }
     });
 
-    // Security event
-    await prisma.securityEvent.create({
-      data: {
-        userId,
-        eventType: 'api_key_deleted',
-        severity: 'medium',
-        description: `API key "${existingKey.name}" was deleted`,
-        ip: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown',
-        metadata: {
-          apiKeyId: existingKey.id,
-          keyId: existingKey.keyId,
-          name: existingKey.name
-        }
-      }
-    });
+    // TODO: Security event tracking (SecurityEvent model needs to be added to schema)
+    // await prisma.securityEvent.create({
+    //   data: {
+    //     userId,
+    //     eventType: 'api_key_deleted',
+    //     severity: 'medium',
+    //     description: `API key "${existingKey.name}" was deleted`,
+    //     ip: request.headers.get('x-forwarded-for') || 'unknown',
+    //     userAgent: request.headers.get('user-agent') || 'unknown',
+    //     metadata: {
+    //       apiKeyId: existingKey.id,
+    //       keyPrefix: existingKey.keyPrefix,
+    //       name: existingKey.name
+    //     }
+    //   }
+    // });
 
     return Response.json({
       success: true,

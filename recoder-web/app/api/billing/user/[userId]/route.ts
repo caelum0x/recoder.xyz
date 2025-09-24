@@ -31,10 +31,10 @@ interface BillingResponse {
     savings_percentage: number;
   };
   platforms: {
-    cli: { active: boolean; last_seen: string; version?: string };
-    web: { active: boolean; last_seen: string };
-    router: { active: boolean; last_seen: string; version?: string };
-    extension: { active: boolean; last_seen: string };
+    cli: { isActive: boolean; last_seen: string; version?: string };
+    web: { isActive: boolean; last_seen: string };
+    router: { isActive: boolean; last_seen: string; version?: string };
+    extension: { isActive: boolean; last_seen: string };
   };
 }
 
@@ -207,10 +207,10 @@ async function getPlatformStatus(userId: string) {
 
   // Return default platform status
   return {
-    cli: { active: false, last_seen: new Date().toISOString() },
-    web: { active: true, last_seen: new Date().toISOString() },
-    router: { active: false, last_seen: new Date().toISOString() },
-    extension: { active: false, last_seen: new Date().toISOString() }
+    cli: { isActive: false, last_seen: new Date().toISOString() },
+    web: { isActive: true, last_seen: new Date().toISOString() },
+    router: { isActive: false, last_seen: new Date().toISOString() },
+    extension: { isActive: false, last_seen: new Date().toISOString() }
   };
 }
 

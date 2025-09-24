@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     const metrics = await generateMetricsData(
       session.user.id,
       validatedQuery.range,
-      validatedQuery.metrics,
+      validatedQuery.metrics || [],
       validatedQuery.granularity
     );
 
@@ -148,7 +148,7 @@ async function generateMetricsData(
     },
     users: {
       total: 15247 + Math.floor(Math.random() * 100),
-      active: 3421 + Math.floor(Math.random() * 50),
+      isActive: 3421 + Math.floor(Math.random() * 50),
       new: 234 + Math.floor(Math.random() * 20),
       returning: 3187 + Math.floor(Math.random() * 40),
       avgSessionDuration: 28.5 + Math.random() * 5,
@@ -353,4 +353,4 @@ function getGranularityIntervals(days: number, granularity: string): number {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

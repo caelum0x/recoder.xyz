@@ -19,6 +19,7 @@ import type { Session } from 'next-auth';
 import { useSearchParams } from 'next/navigation';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
+import { useChatTracking } from '@/hooks/use-chat-tracking';
 import { ChatSDKError } from '@/lib/errors';
 import type { Attachment, ChatMessage } from '@/lib/types';
 import { useDataStream } from './data-stream-provider';
@@ -47,6 +48,7 @@ export function Chat({
 
   const { mutate } = useSWRConfig();
   const { setDataStream } = useDataStream();
+  const { trackChatMessage, trackStreamingMessage } = useChatTracking();
 
   const [input, setInput] = useState<string>('');
 
@@ -81,8 +83,30 @@ export function Chat({
     onData: (dataPart) => {
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
     },
-    onFinish: () => {
+    onFinish: async (message, { streamingMessages }) => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
+      
+      // Track usage when chat finishes
+      try {
+        const lastUserMessage = messages.find(m => m.role === 'user')?.parts?.find(p => p.type === 'text')?.text || '';
+        const assistantResponse = message.parts?.find(p => p.type === 'text')?.text || '';
+        
+        if (lastUserMessage && assistantResponse) {
+          await trackChatMessage({
+            userMessage: lastUserMessage,
+            assistantResponse,
+            model: initialChatModel,
+            chatId: id,
+            metadata: {
+              messageId: message.id,
+              timestamp: new Date().toISOString()
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to track chat usage:', error);
+        // Don't break the chat flow for tracking errors
+      }
     },
     onError: (error) => {
       if (error instanceof ChatSDKError) {

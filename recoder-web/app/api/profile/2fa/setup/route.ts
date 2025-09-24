@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/database';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import speakeasy from 'speakeasy';
@@ -26,11 +26,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { action, token, backupCode, password } = setupSchema.parse(body);
-    const userId = session.user.id;
 
-    // Verify current password for any 2FA operation
+    // Get user ID from session email
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { email: session.user.email },
       select: {
         id: true,
         email: true,
@@ -58,6 +57,8 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const userId = user.id;
 
     switch (action) {
       case 'generate':
@@ -164,30 +165,24 @@ async function verifyAndEnableTOTP(userId: string, user: any, token: string, req
     where: { id: userId },
     data: {
       twoFactorEnabled: true,
-      mfaEnabled: true,
       backupCodes: hashedBackupCodes
     },
     select: {
       id: true,
-      twoFactorEnabled: true,
-      mfaEnabled: true
+      twoFactorEnabled: true
     }
   });
 
   // Update security settings
-  await prisma.userSecuritySettings.upsert({
+  await prisma.securitySettings.upsert({
     where: { userId },
     update: {
       twoFactorEnabled: true,
-      totpSecret: user.totpSecret,
-      backupCodes: hashedBackupCodes,
       updatedAt: new Date()
     },
     create: {
       userId,
-      twoFactorEnabled: true,
-      totpSecret: user.totpSecret,
-      backupCodes: hashedBackupCodes
+      twoFactorEnabled: true
     }
   });
 
@@ -272,24 +267,20 @@ async function disableTwoFactor(userId: string, user: any, token?: string, backu
     where: { id: userId },
     data: {
       twoFactorEnabled: false,
-      mfaEnabled: false,
       totpSecret: null,
       backupCodes: []
     },
     select: {
       id: true,
-      twoFactorEnabled: true,
-      mfaEnabled: true
+      twoFactorEnabled: true
     }
   });
 
   // Update security settings
-  await prisma.userSecuritySettings.upsert({
+  await prisma.securitySettings.upsert({
     where: { userId },
     update: {
       twoFactorEnabled: false,
-      totpSecret: null,
-      backupCodes: [],
       updatedAt: new Date()
     },
     create: {
@@ -346,11 +337,10 @@ export async function GET(request: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { email: session.user.email },
       select: {
         id: true,
         twoFactorEnabled: true,
-        mfaEnabled: true,
         backupCodes: true
       }
     });
@@ -362,29 +352,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const securitySettings = await prisma.userSecuritySettings.findUnique({
+    const securitySettings = await prisma.securitySettings.findUnique({
       where: { userId: user.id },
       select: {
         twoFactorEnabled: true,
-        totpSecret: true,
-        backupCodes: true,
-        trustedDevices: true,
         sessionTimeout: true,
         loginNotifications: true,
-        suspiciousActivityAlerts: true
+        securityAlerts: true
+        // Note: totpSecret, backupCodes, trustedDevices, suspiciousActivityAlerts fields don't exist in SecuritySettings model
       }
     });
 
     return NextResponse.json({
       twoFactorEnabled: user.twoFactorEnabled,
-      mfaEnabled: user.mfaEnabled,
-      hasBackupCodes: user.backupCodes && user.backupCodes.length > 0,
-      backupCodesCount: user.backupCodes ? user.backupCodes.length : 0,
+      hasBackupCodes: user.backupCodes && Array.isArray(user.backupCodes) && user.backupCodes.length > 0,
+      backupCodesCount: Array.isArray(user.backupCodes) ? user.backupCodes.length : 0,
       securitySettings: securitySettings || {
         twoFactorEnabled: false,
-        sessionTimeout: 30,
+        sessionTimeout: 86400,
         loginNotifications: true,
-        suspiciousActivityAlerts: true
+        securityAlerts: true
       }
     });
 

@@ -74,7 +74,7 @@ export async function GET(
     });
 
     // Verify router ownership
-    const router = await prisma.router.findFirst({
+    const router = await (prisma as any).router.findFirst({
       where: {
         routerId: routerId,
         userId: session.user.id
@@ -137,7 +137,7 @@ export async function POST(
     } = body;
 
     // Verify router ownership  
-    const router = await prisma.router.findFirst({
+    const router = await (prisma as any).router.findFirst({
       where: {
         routerId: routerId,
         userId: session.user.id
@@ -180,7 +180,7 @@ function getPeriodHours(period: string): number {
 
 async function getRouterUsageData(routerId: string, startTime: Date, endTime: Date) {
   // Get router usage data from database
-  const usageRecords = await prisma.routerUsage.findMany({
+  const usageRecords = await (prisma as any).routerUsage.findMany({
     where: {
       routerId: routerId,
       timestamp: {
@@ -423,7 +423,7 @@ function generateOptimizationRecommendations(
 async function storeRouterAnalytics(routerId: string, costData: any, timestamp: string) {
   try {
     // Store analytics data in database
-    await prisma.routerAnalytics.create({
+    await (prisma as any).routerAnalytics.create({
       data: {
         routerId: routerId,
         analyticsData: costData,

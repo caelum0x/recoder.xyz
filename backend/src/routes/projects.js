@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, query, param, validationResult } = require('express-validator');
-const { Project, User, Agent, Template } = require('../models');
+const { prisma } = require('../database/prisma');
 const { logger } = require('../utils/logger');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { projectService } = require('../services/projectService');
 const { codeService } = require('../services/codeService');
 
@@ -46,7 +46,7 @@ const router = express.Router();
  *       200:
  *         description: Projects retrieved successfully
  */
-router.get('/', authenticateToken, [
+router.get('/', authenticate, [
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
@@ -83,34 +83,42 @@ router.get('/', authenticateToken, [
     if (type) whereClause.type = type;
     if (status) whereClause.status = status;
 
-    const projects = await Project.findAndCountAll({
-      where: whereClause,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: Agent,
-          as: 'agents',
-          attributes: ['id', 'name', 'type', 'status']
-        },
-        {
-          model: Template,
-          as: 'template',
-          attributes: ['id', 'name', 'category']
+    const [projects, totalCount] = await Promise.all([
+      prisma.project.findMany({
+        where: whereClause,
+        take: parseInt(limit),
+        skip: parseInt(offset),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          agents: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              status: true
+            }
+          },
+          template: {
+            select: {
+              id: true,
+              name: true,
+              category: true
+            }
+          }
         }
-      ]
-    });
+      }),
+      prisma.project.count({ where: whereClause })
+    ]);
 
     res.json({
       success: true,
       data: {
-        projects: projects.rows,
+        projects: projects,
         pagination: {
-          total: projects.count,
+          total: totalCount,
           limit: parseInt(limit),
           offset: parseInt(offset),
-          totalPages: Math.ceil(projects.count / limit)
+          totalPages: Math.ceil(totalCount / limit)
         }
       },
       message: 'Projects retrieved successfully'
@@ -159,7 +167,7 @@ router.get('/', authenticateToken, [
  *       400:
  *         description: Invalid input
  */
-router.post('/', authenticateToken, [
+router.post('/', authenticate, [
   body('name')
     .isString()
     .isLength({ min: 1, max: 100 })
@@ -198,10 +206,10 @@ router.post('/', authenticateToken, [
 
     // Validate template if provided
     if (templateId) {
-      const template = await Template.findOne({
-        where: { 
+      const template = await prisma.template.findFirst({
+        where: {
           id: templateId,
-          $or: [
+          OR: [
             { userId },
             { public: true }
           ]
@@ -261,7 +269,7 @@ router.post('/', authenticateToken, [
  *       404:
  *         description: Project not found
  */
-router.get('/:projectId', authenticateToken, [
+router.get('/:projectId', authenticate, [
   param('projectId')
     .isString()
     .isLength({ min: 1 })
@@ -282,25 +290,34 @@ router.get('/:projectId', authenticateToken, [
     const { projectId } = req.params;
     const userId = req.user.id;
 
-    const project = await Project.findOne({
+    const project = await prisma.project.findFirst({
       where: { id: projectId, userId },
-      include: [
-        {
-          model: Agent,
-          as: 'agents',
-          attributes: ['id', 'name', 'type', 'status', 'config']
+      include: {
+        agents: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            status: true,
+            config: true
+          }
         },
-        {
-          model: Template,
-          as: 'template',
-          attributes: ['id', 'name', 'category', 'structure']
+        template: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            structure: true
+          }
         },
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'name', 'email']
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
-      ]
+      }
     });
 
     if (!project) {
@@ -365,7 +382,7 @@ router.get('/:projectId', authenticateToken, [
  *       404:
  *         description: Project not found
  */
-router.put('/:projectId', authenticateToken, [
+router.put('/:projectId', authenticate, [
   param('projectId')
     .isString()
     .isLength({ min: 1 })
@@ -405,7 +422,7 @@ router.put('/:projectId', authenticateToken, [
     const { name, description, config, status } = req.body;
     const userId = req.user.id;
 
-    const project = await Project.findOne({
+    const project = await prisma.project.findFirst({
       where: { id: projectId, userId }
     });
 
@@ -418,18 +435,21 @@ router.put('/:projectId', authenticateToken, [
       });
     }
 
-    await project.update({
-      ...(name && { name }),
-      ...(description && { description }),
-      ...(config && { config }),
-      ...(status && { status })
+    const updatedProject = await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        ...(name && { name }),
+        ...(description && { description }),
+        ...(config && { config }),
+        ...(status && { status })
+      }
     });
 
     logger.info(`Project updated: ${project.id} by user: ${userId}`);
 
     res.json({
       success: true,
-      data: project,
+      data: updatedProject,
       message: 'Project updated successfully'
     });
 
@@ -460,7 +480,7 @@ router.put('/:projectId', authenticateToken, [
  *       404:
  *         description: Project not found
  */
-router.delete('/:projectId', authenticateToken, [
+router.delete('/:projectId', authenticate, [
   param('projectId')
     .isString()
     .isLength({ min: 1 })
@@ -481,7 +501,7 @@ router.delete('/:projectId', authenticateToken, [
     const { projectId } = req.params;
     const userId = req.user.id;
 
-    const project = await Project.findOne({
+    const project = await prisma.project.findFirst({
       where: { id: projectId, userId }
     });
 
@@ -494,7 +514,9 @@ router.delete('/:projectId', authenticateToken, [
       });
     }
 
-    await project.destroy();
+    await prisma.project.delete({
+      where: { id: projectId }
+    });
 
     logger.info(`Project deleted: ${projectId} by user: ${userId}`);
 
@@ -540,7 +562,7 @@ router.delete('/:projectId', authenticateToken, [
  *       404:
  *         description: Project not found
  */
-router.post('/:projectId/generate', authenticateToken, [
+router.post('/:projectId/generate', authenticate, [
   param('projectId')
     .isString()
     .isLength({ min: 1 })
@@ -566,14 +588,11 @@ router.post('/:projectId/generate', authenticateToken, [
     const { options } = req.body;
     const userId = req.user.id;
 
-    const project = await Project.findOne({
+    const project = await prisma.project.findFirst({
       where: { id: projectId, userId },
-      include: [
-        {
-          model: Template,
-          as: 'template'
-        }
-      ]
+      include: {
+        template: true
+      }
     });
 
     if (!project) {
@@ -622,7 +641,7 @@ router.post('/:projectId/generate', authenticateToken, [
  *       404:
  *         description: Project not found
  */
-router.get('/:projectId/structure', authenticateToken, [
+router.get('/:projectId/structure', authenticate, [
   param('projectId')
     .isString()
     .isLength({ min: 1 })
@@ -643,7 +662,7 @@ router.get('/:projectId/structure', authenticateToken, [
     const { projectId } = req.params;
     const userId = req.user.id;
 
-    const project = await Project.findOne({
+    const project = await prisma.project.findFirst({
       where: { id: projectId, userId }
     });
 
@@ -666,6 +685,203 @@ router.get('/:projectId/structure', authenticateToken, [
 
   } catch (error) {
     logger.error('Failed to get project structure:', error);
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/projects/{projectId}/files:
+ *   post:
+ *     summary: Save project files
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     path:
+ *                       type: string
+ *                     content:
+ *                       type: string
+ *                     type:
+ *                       type: string
+ *                     size:
+ *                       type: integer
+ *     responses:
+ *       200:
+ *         description: Files saved successfully
+ *       404:
+ *         description: Project not found
+ */
+router.post('/:projectId/files', authenticate, [
+  param('projectId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('Project ID is required'),
+  body('files')
+    .isArray()
+    .withMessage('Files must be an array'),
+  body('files.*.path')
+    .isString()
+    .withMessage('File path is required'),
+  body('files.*.content')
+    .isString()
+    .withMessage('File content is required')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: errors.array()
+        }
+      });
+    }
+
+    const { projectId } = req.params;
+    const { files } = req.body;
+    const userId = req.user.id;
+
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, userId }
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        error: {
+          message: 'Project not found',
+          code: 'PROJECT_NOT_FOUND'
+        }
+      });
+    }
+
+    // Update project config to include files metadata
+    const currentConfig = project.config || {};
+    const updatedConfig = {
+      ...currentConfig,
+      files: files.map(file => ({
+        path: file.path,
+        type: file.type || 'text',
+        size: file.size || file.content.length,
+        lastModified: new Date().toISOString()
+      })),
+      filesContent: files, // Store actual content
+      lastUpdated: new Date().toISOString()
+    };
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { config: updatedConfig }
+    });
+
+    logger.info(`Project files saved: ${projectId} (${files.length} files) by user: ${userId}`);
+
+    res.json({
+      success: true,
+      data: {
+        projectId,
+        filesCount: files.length,
+        totalSize: files.reduce((sum, file) => sum + (file.size || file.content.length), 0)
+      },
+      message: 'Project files saved successfully'
+    });
+
+  } catch (error) {
+    logger.error('Failed to save project files:', error);
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /api/projects/{projectId}/files:
+ *   get:
+ *     summary: Get project files
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     responses:
+ *       200:
+ *         description: Files retrieved successfully
+ *       404:
+ *         description: Project not found
+ */
+router.get('/:projectId/files', authenticate, [
+  param('projectId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('Project ID is required')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: errors.array()
+        }
+      });
+    }
+
+    const { projectId } = req.params;
+    const userId = req.user.id;
+
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, userId }
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        error: {
+          message: 'Project not found',
+          code: 'PROJECT_NOT_FOUND'
+        }
+      });
+    }
+
+    const files = project.config?.filesContent || [];
+    const filesMetadata = project.config?.files || [];
+
+    res.json({
+      success: true,
+      data: {
+        files,
+        metadata: filesMetadata,
+        projectId,
+        filesCount: files.length
+      },
+      message: 'Project files retrieved successfully'
+    });
+
+  } catch (error) {
+    logger.error('Failed to get project files:', error);
     next(error);
   }
 });

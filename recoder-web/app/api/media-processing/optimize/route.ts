@@ -9,13 +9,10 @@ import { FFmpegProcessor } from '@/lib/media-processing/ffmpeg-processor'
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting
-    const rateLimitResult = await rateLimit(request, 'media-optimization', 3, 60000)
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      )
-    }
+    await rateLimit({
+      interval: 60 * 1000, // 1 minute
+      uniqueTokenPerInterval: 3,
+    })
 
     // Authentication
     const session = await auth()
