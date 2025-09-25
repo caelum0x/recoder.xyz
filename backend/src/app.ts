@@ -8,6 +8,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const { logger } = require('./utils/logger');
 
 // Import performance systems - NOW FULLY INTEGRATED
@@ -79,6 +81,7 @@ const middlewareStacks = {
     // Request parsing
     express.json({ limit: '50mb' }),
     express.urlencoded({ extended: true, limit: '50mb' }),
+    cookieParser(),
     
     // Logging
     morgan('combined', { stream: { write: (message: string) => logger.info(message.trim()) } }),
@@ -101,6 +104,18 @@ const performanceStack = middlewareStacks.full({
 
 // Apply middleware
 performanceStack.forEach(middleware => app.use(middleware));
+
+// Session middleware for OAuth state management
+app.use(session({
+  secret: process.env.JWT_SECRET || 'recoder-xyz-session-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
 
 // Health check endpoint
 app.get('/health', performanceMiddleware.createHealthCheckMiddleware());
@@ -131,6 +146,7 @@ import componentLibraryRoutes from './routes/component-library';
 import usageMonitoringRoutes from './routes/usage-monitoring';
 import overageBillingRoutes from './routes/overage-billing';
 import authRoutes from './routes/auth';
+import oauthRoutes from './routes/oauth';
 import { batchProcessor } from './services/batch-processor';
 import { promptCache } from './services/prompt-cache';
 import { componentLibrary } from './services/component-library';
@@ -159,6 +175,7 @@ console.log('[INFO] Overage billing service initialized');
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/oauth', oauthRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/game-development', gameDevelopmentRoutes);
 app.use('/api/matchmaking', matchmakingRoutes);

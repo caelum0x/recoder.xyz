@@ -4,11 +4,11 @@
 export const dynamic = 'force-dynamic';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAuth } from "@/lib/auth/auth-context";
+import { useSession } from "next-auth/react";
 import { Check, Sparkles, Zap, Shield } from 'lucide-react';
 
 function SubscriptionSuccessContent() {
-  const { user } = useAuth();
+  const { data: session } = useSession();
   const searchParams = useSearchParams();
   const planId = searchParams?.get('plan');
   const [plan, setPlan] = useState<any>(null);
@@ -68,9 +68,9 @@ function SubscriptionSuccessContent() {
             Your subscription has been activated successfully
           </p>
           
-          {user && (
+          {session?.user && (
             <p className="text-gray-500">
-              Logged in as {user.email}
+              Logged in as {session.user.email}
             </p>
           )}
         </div>

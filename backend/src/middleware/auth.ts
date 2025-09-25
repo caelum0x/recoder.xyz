@@ -193,8 +193,14 @@ export const logSecurityEvent = (event: string, req: Request) => {
  */
 export const authenticateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    // Check for token in Authorization header first
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
+    let token = authHeader && authHeader.split(' ')[1];
+    
+    // If no header token, check cookies (for OAuth flow)
+    if (!token && req.cookies?.accessToken) {
+      token = req.cookies.accessToken;
+    }
 
     if (!token) {
       res.status(401).json({
