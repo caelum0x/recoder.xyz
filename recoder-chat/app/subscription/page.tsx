@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
 import SubscriptionManager from '@/components/subscription/SubscriptionManager';
 import { usePaymentStore } from '@/lib/payment-service';
 
-export default function SubscriptionPage() {
+function SubscriptionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refreshData } = usePaymentStore();
@@ -168,5 +168,13 @@ export default function SubscriptionPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function SubscriptionPage() {
+  return (
+    <Suspense fallback={<div className="container mx-auto px-4 py-8"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div></div>}>
+      <SubscriptionContent />
+    </Suspense>
   );
 }
