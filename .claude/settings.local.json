@@ -213,7 +213,16 @@
       "Bash(/bashes)",
       "Bash(PORT=3001 npx tsx /Users/arhansubasi/recoder.xyz/backend/src/app.ts)",
       "Bash(export JWT_SECRET=\"your-super-secret-jwt-key-for-development-only\")",
-      "Bash(JWT_SECRET=\"your-super-secret-jwt-key-for-development-only\" PORT=3001 npx tsx backend/src/app.ts)"
+      "Bash(JWT_SECRET=\"your-super-secret-jwt-key-for-development-only\" PORT=3001 npx tsx backend/src/app.ts)",
+      "Bash(JWT_SECRET=\"recoder-xyz-super-secret-jwt-key-change-in-production-2024\" PORT=3001 timeout 10s npx tsx src/app.ts)",
+      "Bash(JWT_SECRET=\"recoder-xyz-super-secret-jwt-key-change-in-production-2024\" PORT=3001 gtimeout 10s npx tsx src/app.ts)",
+      "Bash(JWT_SECRET=\"recoder-xyz-super-secret-jwt-key-change-in-production-2024\" PORT=3001 npx tsx src/app.ts)",
+      "Bash(JWT_SECRET=\"recoder-xyz-super-secret-jwt-key-change-in-production-2024\" PORT=3002 npx tsx src/minimal-server.ts)",
+      "Bash(brew services:*)",
+      "Bash(DATABASE_URL=\"postgresql://recoder:password@localhost:5432/recoder_db\" npx prisma migrate dev --name init)",
+      "Bash(DATABASE_URL=\"postgresql://recoder:password@localhost:5432/recoder_db\" npx prisma migrate reset --force)",
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes\" DATABASE_URL=\"postgresql://recoder:password@localhost:5432/recoder_db\" npx prisma migrate reset --force)",
+      "Bash(JWT_SECRET=\"recoder-xyz-super-secret-jwt-key-change-in-production-2024\" PORT=3001 npx tsx src/server.ts)"
     ],
     "deny": []
   }
