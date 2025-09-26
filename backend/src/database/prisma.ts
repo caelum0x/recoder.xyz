@@ -3,8 +3,8 @@
 
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
-import { databaseOptimization } from '../services/database-optimization';
-import { redisCache } from '../services/redis-cache';
+// import { databaseOptimization } from '../services/database-optimization';
+// import { redisCache } from '../services/redis-cache';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -157,6 +157,7 @@ class EnhancedPrismaClient {
   get promptCache() { return this.client.promptCache; }
   get componentTemplate() { return this.client.componentTemplate; }
   get batchRequest() { return this.client.batchRequest; }
+  get batchExecution() { return this.client.batchExecution; }
 
   // Expose Prisma methods
   get $connect() { return this.client.$connect.bind(this.client); }
@@ -168,72 +169,36 @@ class EnhancedPrismaClient {
   get $transaction() { return this.client.$transaction.bind(this.client); }
   get $on() { return this.client.$on.bind(this.client); }
 
-  // Enhanced cached query method
+  // Enhanced cached query method (simplified for testing)
   async cachedQuery<T>(
     query: string,
     params: any[] = [],
     cacheKey?: string,
     cacheTtl: number = 300
   ): Promise<T> {
-    const finalCacheKey = cacheKey || `query:${this.hashQuery(query, params)}`;
-    
-    // Try cache first
-    const cached = await redisCache.get<T>(finalCacheKey, 'API_RESPONSES');
-    if (cached) {
-      return cached;
-    }
-
-    // Execute query through optimization service
-    const result = await databaseOptimization.executeQuery<T>(query, params, {
-      useCache: true,
-      cacheTtl,
-      readOnly: query.trim().toLowerCase().startsWith('select')
-    });
-
-    // Cache the result
-    await redisCache.set(finalCacheKey, result, { ttl: cacheTtl }, 'API_RESPONSES');
-
-    return result;
+    // Direct query execution without caching for testing
+    return await this.client.$queryRawUnsafe(query, ...params) as T;
   }
 
-  // Read-optimized query (uses read replicas if available)
+  // Read-optimized query (simplified for testing)
   async readQuery<T>(query: string, params: any[] = []): Promise<T> {
-    return await databaseOptimization.executeQuery<T>(query, params, {
-      readOnly: true,
-      useCache: true,
-      cacheTtl: 600
-    });
+    return await this.client.$queryRawUnsafe(query, ...params) as T;
   }
 
-  // Write-optimized query
+  // Write-optimized query (simplified for testing)
   async writeQuery<T>(query: string, params: any[] = []): Promise<T> {
-    // Invalidate related cache entries
-    await this.invalidateQueryCache(query);
-    
-    return await databaseOptimization.executeQuery<T>(query, params, {
-      readOnly: false,
-      useCache: false
-    });
+    return await this.client.$queryRawUnsafe(query, ...params) as T;
   }
 
-  // Cached find operations
+  // Cached find operations (simplified for testing)
   async cachedFindMany<T>(
     model: string,
     args: any,
     cacheKey?: string,
     cacheTtl: number = 300
   ): Promise<T> {
-    const key = cacheKey || `find:${model}:${this.hashObject(args)}`;
-    
-    const cached = await redisCache.get<T>(key, 'API_RESPONSES');
-    if (cached) return cached;
-
-    // Execute the actual query
     const modelClient = (this.client as any)[model];
-    const result = await modelClient.findMany(args);
-
-    await redisCache.set(key, result, { ttl: cacheTtl, tags: [model] }, 'API_RESPONSES');
-    return result;
+    return await modelClient.findMany(args);
   }
 
   async cachedFindUnique<T>(
@@ -242,25 +207,13 @@ class EnhancedPrismaClient {
     cacheKey?: string,
     cacheTtl: number = 600
   ): Promise<T> {
-    const key = cacheKey || `findUnique:${model}:${this.hashObject(args)}`;
-    
-    const cached = await redisCache.get<T>(key, 'API_RESPONSES');
-    if (cached) return cached;
-
     const modelClient = (this.client as any)[model];
-    const result = await modelClient.findUnique(args);
-
-    await redisCache.set(key, result, { ttl: cacheTtl, tags: [model] }, 'API_RESPONSES');
-    return result;
+    return await modelClient.findUnique(args);
   }
 
-  // Invalidate cache for write operations
+  // Invalidate cache for write operations (simplified for testing)
   async invalidateCache(model: string, id?: string): Promise<void> {
-    if (id) {
-      await redisCache.invalidateByTags([model, `${model}:${id}`]);
-    } else {
-      await redisCache.invalidateByTags([model]);
-    }
+    // No-op for testing
   }
 
   private hashQuery(query: string, params: any[]): string {
@@ -280,12 +233,7 @@ class EnhancedPrismaClient {
   }
 
   private async invalidateQueryCache(query: string): Promise<void> {
-    // Extract table names from query and invalidate related caches
-    const tableMatches = query.match(/(?:FROM|INTO|UPDATE|JOIN)\s+(\w+)/gi);
-    if (tableMatches) {
-      const tables = tableMatches.map(match => match.split(/\s+/)[1]);
-      await redisCache.invalidateByTags(tables);
-    }
+    // No-op for testing
   }
 }
 
@@ -296,13 +244,16 @@ basePrisma.$connect()
   .then(async () => {
     logger.info('Successfully connected to PostgreSQL database');
     
-    // Initialize database optimizations
-    try {
-      await databaseOptimization.optimizeSettings();
-      logger.info('Database optimization settings applied');
-    } catch (error) {
-      logger.warn('Database optimization failed:', error);
-    }
+    // Initialize database optimizations (non-blocking) - DISABLED FOR TESTING
+    // setImmediate(async () => {
+    //   try {
+    //     await databaseOptimization.optimizeSettings();
+    //     logger.info('Database optimization settings applied');
+    //   } catch (error) {
+    //     logger.warn('Database optimization failed:', error);
+    //   }
+    // });
+    logger.info('Database optimization disabled for testing');
   })
   .catch((error) => {
     logger.error('Failed to connect to database:', error);
@@ -312,9 +263,9 @@ basePrisma.$connect()
 // Graceful shutdown with cleanup
 process.on('beforeExit', async () => {
   await Promise.all([
-    basePrisma.$disconnect(),
-    databaseOptimization.close(),
-    redisCache.close()
+    basePrisma.$disconnect()
+    // databaseOptimization.close(),
+    // redisCache.close()
   ]);
   logger.info('Database connections closed');
 });

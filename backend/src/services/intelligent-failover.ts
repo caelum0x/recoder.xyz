@@ -95,10 +95,14 @@ export class IntelligentFailoverService extends EventEmitter {
   constructor() {
     super();
     this.initializeDefaultRules();
-    // Defer monitoring startup to avoid blocking module initialization
-    process.nextTick(() => {
-      this.startHealthMonitoring();
-      this.startPredictiveAnalysis();
+    // Defer monitoring startup to avoid blocking module initialization (with better error handling)
+    setImmediate(async () => {
+      try {
+        this.startHealthMonitoring();
+        this.startPredictiveAnalysis();
+      } catch (error) {
+        logger.error('Failed to initialize failover monitoring:', error);
+      }
     });
   }
 
@@ -183,9 +187,13 @@ export class IntelligentFailoverService extends EventEmitter {
       await this.performHealthChecks();
     }, 30000);
 
-    // Delay initial health check to avoid startup loops
-    setTimeout(() => {
-      this.performHealthChecks();
+    // Delay initial health check to avoid startup loops (non-blocking)
+    setTimeout(async () => {
+      try {
+        await this.performHealthChecks();
+      } catch (error) {
+        logger.error('Initial health check failed:', error);
+      }
     }, 5000);
 
     logger.info('Intelligent failover monitoring started');
@@ -200,8 +208,14 @@ export class IntelligentFailoverService extends EventEmitter {
       await this.generatePredictions();
     }, 300000);
 
-    // Initial prediction
-    this.generatePredictions();
+    // Initial prediction (non-blocking)
+    setImmediate(async () => {
+      try {
+        await this.generatePredictions();
+      } catch (error) {
+        logger.error('Initial prediction generation failed:', error);
+      }
+    });
 
     logger.info('Predictive analysis started');
   }
