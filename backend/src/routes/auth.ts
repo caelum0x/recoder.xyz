@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import '../types'; // Import types to extend Request interface
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -327,8 +328,17 @@ router.post('/refresh',
  */
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        code: 'NOT_AUTHENTICATED'
+      });
+      return;
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: req.user!.id },
+      where: { id: req.user.id },
       select: {
         id: true,
         email: true,
@@ -592,15 +602,15 @@ router.post('/validate', authenticate, async (req: Request, res: Response): Prom
     message: 'Token is valid',
     data: {
       user: {
-        id: req.user!.id,
-        email: req.user!.email,
-        role: req.user!.role,
-        permissions: req.user!.permissions
+        id: req.user.id,
+        email: req.user.email,
+        name: req.user.name,
+        role: req.user.role,
+        subscription: req.user.subscription
       },
       tokenInfo: {
         expiresIn: JWT_EXPIRES_IN,
-        issuedAt: new Date(),
-        sessionId: req.user!.sessionId
+        issuedAt: new Date()
       }
     }
   });

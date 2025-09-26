@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import '../types'; // Import types to extend Request interface
 import crypto from 'crypto';
 import axios from 'axios';
 import { prisma } from '../database/prisma';
@@ -164,7 +165,7 @@ router.get('/google/callback', async (req: Request, res: Response): Promise<void
     // Generate tokens
     const tokens = generateTokens(user);
 
-    logSecurityEvent('oauth_login_success', req as Request, { provider: 'google' });
+    logSecurityEvent('oauth_login_success', req as Request);
 
     logger.info('Google OAuth login successful', {
       userId: user.id,
@@ -363,7 +364,7 @@ router.get('/github/callback', async (req: Request, res: Response): Promise<void
     // Generate tokens
     const tokens = generateTokens(user);
 
-    logSecurityEvent('oauth_login_success', req as Request, { provider: 'github' });
+    logSecurityEvent('oauth_login_success', req as Request);
 
     logger.info('GitHub OAuth login successful', {
       userId: user.id,

@@ -12,9 +12,7 @@ import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from 'ne
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return (
     <NextThemesProvider {...props}>
-      <div suppressHydrationWarning>
-        {children}
-      </div>
+      {children}
     </NextThemesProvider>
   )
 }

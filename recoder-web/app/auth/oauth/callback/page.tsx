@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-export default function OAuthCallbackPage() {
+function OAuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -22,8 +22,8 @@ export default function OAuthCallbackPage() {
         const hash = window.location.hash;
         
         // Check for error in URL
-        const error = urlParams.get('error') || searchParams.get('error');
-        const errorDescription = urlParams.get('error_description') || searchParams.get('error_description');
+        const error = urlParams.get('error') || searchParams?.get('error');
+        const errorDescription = urlParams.get('error_description') || searchParams?.get('error_description');
         
         if (error) {
           setStatus('error');
@@ -137,5 +137,27 @@ export default function OAuthCallbackPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle>Authentication</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center space-y-4">
+              <Icons.spinner className="h-8 w-8 animate-spin mx-auto" />
+              <p>Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <OAuthCallbackContent />
+    </Suspense>
   );
 }

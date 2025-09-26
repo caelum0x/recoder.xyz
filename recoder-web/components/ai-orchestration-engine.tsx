@@ -289,8 +289,8 @@ export default function AIOrchestrationEngine({ className = "" }: AIOrchestratio
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-600 mb-1">
-              {orchestrationStats.totalTasks.toLocaleString()}
+            <div className="text-3xl font-bold text-blue-600 mb-1" suppressHydrationWarning>
+              {orchestrationStats.totalTasks.toLocaleString('en-US')}
             </div>
             <Badge className="bg-blue-100 text-blue-800 text-xs">
               <TrendingUp className="w-3 h-3 mr-1" />

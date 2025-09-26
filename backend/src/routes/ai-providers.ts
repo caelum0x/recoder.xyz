@@ -2,6 +2,7 @@
 // Management and monitoring of AI provider ecosystem
 
 import express from 'express';
+import '../types'; // Import types to extend Request interface
 import { query, body, param, validationResult } from 'express-validator';
 import { authenticateUser, requireSubscription, requireAdmin } from '../middleware/auth';
 import { aiProviderManager } from '../services/ai-provider-manager';
