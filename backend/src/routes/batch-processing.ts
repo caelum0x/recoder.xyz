@@ -140,7 +140,7 @@ router.post('/submit', authenticate, [
  *       404:
  *         description: Request not found
  */
-router.get('/status/:requestId', authenticate, async (req, res, next) => {
+router.get('/status/:requestId', authenticate, async (req, res, next): Promise<void> => {
   try {
     const { requestId } = req.params;
     const userId = req.user.id;
@@ -157,13 +157,14 @@ router.get('/status/:requestId', authenticate, async (req, res, next) => {
     });
 
     if (!request) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: {
           message: 'Batch request not found',
           code: 'REQUEST_NOT_FOUND'
         }
       });
+      return;
     }
 
     const response = {

@@ -287,7 +287,7 @@ export class RealTimeUsageTracker extends EventEmitter {
       const warnings = this.checkForWarnings(limits, planLimits);
       
       // Check for overage billing conditions
-      this.checkOverageConditions(userId, limits, planLimits, usageEvent.planType || 'free');
+      this.checkOverageConditions(userId, limits, planLimits, limits.planId || 'free');
 
       return {
         allowed: true,

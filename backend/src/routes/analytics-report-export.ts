@@ -88,7 +88,7 @@ router.post('/reports/:reportId/export', [
     }
 
     // Check export limits (mock implementation)
-    const plan: 'free' | 'pro' | 'enterprise' = req.user?.subscriptionPlan as any || 'free';
+    const plan: 'free' | 'pro' | 'enterprise' = req.user?.subscription as any || 'free';
     // Mock monthlyExports value (replace with actual logic when available)
     const monthlyExports = 0;
     // Mock exportLimits object

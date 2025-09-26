@@ -5,6 +5,7 @@
  */
 
 import express from 'express';
+import '../types'; // Import types to extend Request interface
 import { body, query, param, validationResult } from 'express-validator';
 import { Logger } from '../utils/logger';
 import { authenticateUser, requireSubscription } from '../middleware/auth';
@@ -205,7 +206,7 @@ router.get('/templates',
       res.json({
         success: true,
         templates,
-        customBrandingAvailable: ['pro', 'enterprise'].includes(req.user?.subscriptionPlan || ''),
+        customBrandingAvailable: ['pro', 'enterprise'].includes(req.user?.subscription || ''),
         supportedFormats: {
           pdf: ['standard', 'executive', 'detailed', 'summary'],
           excel: ['standard', 'detailed'],

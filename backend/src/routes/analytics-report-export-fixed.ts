@@ -86,7 +86,7 @@ router.post('/reports/:reportId/export', [
     // For now, we'll always have a report due to mock data
 
     // Get user's plan from their subscription
-    const userPlan = req.user?.subscriptionPlan || 'free';
+    const userPlan = req.user?.subscription || 'free';
     const plan: 'free' | 'pro' | 'enterprise' = userPlan as 'free' | 'pro' | 'enterprise';
     const exportLimits = { free: 10, pro: 100, enterprise: 1000 };
     const monthlyExports = 5; // Mock count
