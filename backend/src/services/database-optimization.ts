@@ -133,10 +133,15 @@ export class DatabaseOptimizationService extends EventEmitter {
     };
 
     // Defer initialization to avoid blocking module initialization
-    process.nextTick(() => {
-      this.initializePrisma();
-      this.initializeConnectionPools();
-      this.startMetricsCollection();
+    setImmediate(async () => {
+      try {
+        this.initializePrisma();
+        await this.initializeConnectionPools();
+        this.startMetricsCollection();
+      } catch (error) {
+        logger.error('Database optimization initialization failed:', error);
+        // Continue without optimization features
+      }
     });
   }
 

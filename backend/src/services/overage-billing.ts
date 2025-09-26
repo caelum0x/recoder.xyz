@@ -125,7 +125,7 @@ class OverageBillingService extends EventEmitter {
         await redisCache.set(
           `overage:notification:${notificationKey}`,
           { sent: true, timestamp: new Date() },
-          86400 // 24 hours
+          { ttl: 86400 } // 24 hours
         );
       }
     }
@@ -228,7 +228,7 @@ class OverageBillingService extends EventEmitter {
         action: 'overage_billing_created',
         resource: 'overage_billing',
         resourceId: billingId,
-        metadata: overageBilling
+        metadata: JSON.parse(JSON.stringify(overageBilling))
       }
     });
 
@@ -263,7 +263,7 @@ class OverageBillingService extends EventEmitter {
         amount: billing.overageAmount,
         currency: 'USD',
         paymentType: 'one_time',
-        frontend: 'backend',
+        frontend: 'web',
         metadata: {
           overageBillingId: billingId,
           overageRequests: billing.overageRequests,
@@ -399,7 +399,7 @@ class OverageBillingService extends EventEmitter {
       orderBy: { timestamp: 'desc' }
     });
 
-    return auditLogs.map(log => log.metadata as OverageBilling);
+    return auditLogs.map(log => log.metadata as unknown as OverageBilling);
   }
 
   /**

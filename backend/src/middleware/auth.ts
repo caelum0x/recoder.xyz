@@ -5,6 +5,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { AuthUser } from '../types';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -56,15 +57,14 @@ export const ROLE_PERMISSIONS = {
 
 export const generateTokens = (user: any) => {
   const payload = {
-    id: user.id,
+    userId: user.id,
     email: user.email,
-    role: user.role,
-    sessionId: crypto.randomBytes(16).toString('hex')
+    role: user.role
   };
 
   const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
   const refreshToken = jwt.sign(
-    { id: user.id, sessionId: payload.sessionId },
+    { userId: user.id },
     JWT_REFRESH_SECRET,
     { expiresIn: JWT_REFRESH_EXPIRES_IN } as jwt.SignOptions
   );
@@ -211,21 +211,18 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string; email: string; role: string };
     
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+      where: { id: decoded.userId },
       select: {
         id: true,
         email: true,
         name: true,
-       // subscriptionPlan: true,
-       // subscriptionStatus: true,
         role: true,
         isActive: true,
         emailVerified: true,
-        createdAt: true,
-        updatedAt: true
+        subscription: true
       }
     });
 
@@ -324,7 +321,7 @@ export const requireSubscription = (allowedPlans: string[]) => {
       return;
     }
 
-    const userPlan = req.user.subscriptionPlan || 'free';
+    const userPlan = req.user.subscription || 'free';
     
     if (!allowedPlans.includes(userPlan)) {
       res.status(403).json({
@@ -338,12 +335,12 @@ export const requireSubscription = (allowedPlans: string[]) => {
     }
 
     // Check if subscription is active
-    if (req.user.subscriptionStatus !== 'active' && userPlan !== 'free') {
+    if (req.user.subscription !== 'active' && userPlan !== 'free') {
       res.status(403).json({
         success: false,
         error: 'Active subscription required',
         code: 'SUBSCRIPTION_INACTIVE',
-        currentStatus: req.user.subscriptionStatus
+        currentStatus: req.user.subscription
       });
       return;
     }
@@ -400,13 +397,10 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
           id: true,
           email: true,
           name: true,
-          // subscriptionPlan: true,
-          // subscriptionStatus: true,
           role: true,
           isActive: true,
           emailVerified: true,
-          createdAt: true,
-          updatedAt: true
+          subscription: true
         }
       });
 
@@ -438,7 +432,7 @@ export const checkUsageLimits = async (req: Request, res: Response, next: NextFu
   }
 
   try {
-    const userPlan = req.user.subscriptionPlan || 'free';
+    const userPlan = req.user.subscription || 'free';
     
     // Define usage limits per plan
     const dailyLimits = {
