@@ -15,7 +15,7 @@ import {
 } from '@/lib/device-flow-storage';
 
 const authorizeDeviceSchema = z.object({
-  user_code: z.string().min(8).max(9),
+  user_code: z.string().min(8),
   action: z.enum(['authorize', 'deny'])
 });
 

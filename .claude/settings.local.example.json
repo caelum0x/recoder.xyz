@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PORT=3000 pnpm run dev)",
+      "Bash(ls:*)",
+      "WebSearch",
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(PGPASSWORD=\"YOUR_DB_PASSWORD\" psql \"postgresql://YOUR_DB_USER@YOUR_DB_HOST/YOUR_DB_NAME?sslmode=require\" -c \"\\dt\")",
+      "Bash(npm run build:*)",
+      "Bash(PORT=3001 npm run dev)",
+      "Bash(node:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
