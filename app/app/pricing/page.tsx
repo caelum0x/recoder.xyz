@@ -1,350 +1,401 @@
-import React from 'react';
+'use client';
+
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  Check, 
-  Zap, 
-  Star, 
-  Crown, 
-  Building,
-  ArrowRight,
-  Sparkles,
-  MessageSquare,
-  Code2,
-  Globe,
-  Terminal
-} from 'lucide-react';
+import { Terminal, Check, Zap, Crown, Building, ArrowRight, Sparkles } from 'lucide-react';
+import { useState } from 'react';
 
 export default function PricingPage() {
+  const [billingCycle, setBillingCycle] = useState<'week' | 'month'>('month');
+
   const plans = [
     {
       id: 'free',
       name: 'Free',
       price: 0,
-      currency: 'USD',
       period: 'forever',
-      description: 'Perfect for trying out Recoder and small personal projects',
-      icon: Code2,
+      description: 'Try Recoder with limited usage',
+      icon: Terminal,
       badge: null,
       popular: false,
       features: [
-        '10k AI tokens per month',
-        '100 API calls per month',
-        '2 deployments per month',
+        '100 AI tokens/month',
+        '50 API calls/month',
+        '1 active project',
+        'Basic AI models',
         'Community support',
-        'Basic templates',
-        'CLI access',
-        'Web platform access'
+        'CLI + Web access'
       ],
       limitations: [
-        'Limited AI model access',
-        'Basic deployment options',
-        'Community support only'
+        'Limited to basic models',
+        'No priority support'
       ],
-      cta: 'Get Started Free',
-      href: '/auth/signin'
+      cta: 'Start Free',
+      href: '/auth/signup',
+      color: 'gray'
     },
     {
       id: 'weekly',
-      name: 'Recoder Weekly',
+      name: 'Weekly',
       price: 10,
-      currency: 'USD',
       period: 'week',
-      description: 'Great for freelancers and short-term projects',
+      description: 'Perfect for short-term projects',
       icon: Zap,
-      badge: { text: 'Popular', color: 'bg-blue-500' },
-      popular: true,
+      badge: null,
+      popular: false,
       features: [
-        '500k AI tokens per week',
-        '5k API requests per week',
-        'Multi-provider AI access (Claude, Groq, Gemini)',
-        'Real-time collaboration',
-        'Basic support',
-        'All templates',
-        'GitHub integration',
-        '20 deployments per week',
-        'Up to 3 team members'
+        '5,000 AI tokens/week',
+        '500 API calls/week',
+        'Unlimited projects',
+        'All AI models (Claude, GPT-4, Gemini)',
+        'Priority support',
+        'Advanced features',
+        'Team collaboration (3 members)',
+        'Custom templates'
       ],
-      limitations: [],
-      cta: 'Start Weekly Plan',
-      href: '/auth/signin?plan=weekly'
+      cta: 'Start Weekly',
+      href: '/auth/signup?plan=weekly',
+      color: 'orange'
     },
     {
       id: 'monthly',
-      name: 'Recoder Monthly',
+      name: 'Monthly',
       price: 20,
-      currency: 'USD',
       period: 'month',
-      description: 'Best value for regular development work and small teams',
-      icon: Star,
-      badge: { text: 'Best Value', color: 'bg-green-500' },
-      popular: false,
+      description: 'Best for individual developers',
+      icon: Sparkles,
+      badge: 'MOST POPULAR',
+      popular: true,
       features: [
-        '2.5M AI tokens per month',
-        '25k API requests per month',
-        'Multi-provider AI access (Claude, Groq, Gemini)',
-        'Real-time collaboration',
+        '20,000 AI tokens/month',
+        '2,000 API calls/month',
+        'Unlimited projects',
+        'All AI models (Claude, GPT-4, Gemini)',
         'Priority support',
+        'Advanced features',
+        'Team collaboration (5 members)',
         'Custom templates',
-        'Team collaboration',
-        'Advanced analytics',
-        '100 deployments per month',
-        'Up to 10 team members',
-        'Advanced security features'
+        'API access'
       ],
-      limitations: [],
-      cta: 'Start Monthly Plan',
-      href: '/auth/signin?plan=monthly'
+      cta: 'Start Monthly',
+      href: '/auth/signup?plan=monthly',
+      color: 'orange'
     },
     {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: 499,
-      currency: 'USD',
+      id: 'pro',
+      name: 'Pro',
+      price: 100,
       period: 'month',
-      description: 'For large teams and organizations with advanced needs',
-      icon: Building,
-      badge: { text: 'Enterprise', color: 'bg-purple-500' },
+      description: 'For power users and teams',
+      icon: Crown,
+      badge: '5X USAGE',
       popular: false,
       features: [
-        'Unlimited AI tokens',
-        'Unlimited API calls',
-        'Unlimited deployments',
-        'Dedicated support team',
-        'On-premise deployment options',
-        'Custom integrations',
-        'White-label options',
-        'SLA guarantees',
-        'Advanced security & compliance',
-        'Unlimited team members',
-        'Custom AI model training',
-        'Priority feature requests'
+        '100,000 AI tokens/month (5x)',
+        '10,000 API calls/month (5x)',
+        'Unlimited projects',
+        'All AI models + Beta access',
+        'Priority support + Slack',
+        'Advanced features',
+        'Team collaboration (15 members)',
+        'Custom templates',
+        'API access',
+        'Custom AI models',
+        'Dedicated account manager'
       ],
-      limitations: [],
-      cta: 'Contact Sales',
-      href: '/contact?plan=enterprise'
+      cta: 'Start Pro',
+      href: '/auth/signup?plan=pro',
+      color: 'purple'
     }
   ];
 
-  const features = [
-    {
-      icon: Terminal,
-      title: 'CLI Tools',
-      description: 'Powerful command-line interface with natural language processing'
-    },
-    {
-      icon: Globe,
-      title: 'Web Platform',
-      description: 'Browser-based development environment with real-time collaboration'
-    },
-    {
-      icon: MessageSquare,
-      title: 'AI Chat',
-      description: 'Intelligent chat interface for code discussions and assistance'
-    },
-    {
-      icon: Code2,
-      title: 'VS Code Extension',
-      description: 'Seamless integration with your favorite code editor'
-    },
-    {
-      icon: Zap,
-      title: 'Multi-AI Integration',
-      description: 'Access to 15+ AI models including Claude, GPT-4, and Gemini'
-    },
-    {
-      icon: Crown,
-      title: 'Production Ready',
-      description: 'Generate real, deployable code - not just prototypes'
-    }
-  ];
+  const enterprise = {
+    name: 'Enterprise',
+    description: 'Custom solutions for large teams',
+    icon: Building,
+    features: [
+      'Unlimited everything',
+      'Custom AI models',
+      'On-premise deployment',
+      'SLA guarantees',
+      'Security audit',
+      'Dedicated support',
+      'Custom integrations',
+      'Training & onboarding'
+    ],
+    cta: 'Contact Sales',
+    href: 'mailto:sales@recoder.xyz'
+  };
 
   const faqs = [
     {
-      question: 'What AI models do you support?',
-      answer: 'We support 15+ AI models including Claude Sonnet 4, GPT-4, Gemini 2.5 Flash, Groq Llama, and many more through our OpenRouter integration.'
+      question: 'Can I switch plans anytime?',
+      answer: 'Yes! Upgrade or downgrade your plan anytime. Changes take effect immediately with pro-rated billing.'
     },
     {
-      question: 'Can I cancel my subscription anytime?',
-      answer: 'Yes, you can cancel your subscription at any time. There are no cancellation fees, and you\'ll retain access until the end of your billing period.'
+      question: 'What happens when I hit my usage limit?',
+      answer: 'Your service continues, but with rate limiting. Upgrade anytime to get full speed back instantly.'
     },
     {
       question: 'Do you offer refunds?',
-      answer: 'We offer a 7-day money-back guarantee for all paid plans. If you\'re not satisfied, contact us within 7 days for a full refund.'
+      answer: 'Yes, we offer a 7-day money-back guarantee on all paid plans. No questions asked.'
     },
     {
-      question: 'Is there a free trial?',
-      answer: 'Yes! Our Free plan gives you access to all core features with usage limits. You can upgrade anytime as your needs grow.'
+      question: 'Can I use multiple AI models?',
+      answer: 'All paid plans include access to Claude, GPT-4, Gemini, and more. We automatically route to the best model for your task.'
     },
     {
-      question: 'What payment methods do you accept?',
-      answer: 'We accept all major credit cards, PayPal, and bank transfers. All payments are processed securely through Dodo Pay.'
+      question: 'Is my code private?',
+      answer: 'Absolutely. Your code is never used to train AI models. We have strict data privacy and security measures.'
     },
     {
-      question: 'Do you offer volume discounts?',
-      answer: 'Yes, we offer custom pricing for large teams and enterprises. Contact our sales team to discuss volume discounts.'
+      question: 'Do you support team collaboration?',
+      answer: 'Yes! All paid plans include team collaboration features with shared projects and usage pools.'
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <section className="pt-20 pb-16 px-4">
-        <div className="container mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-4 py-2 rounded-full text-sm font-medium mb-6">
-            <Sparkles className="w-4 h-4" />
-            Simple, Transparent Pricing
+      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center space-x-2 group">
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
+              <Terminal className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold">recoder</span>
+          </Link>
+          
+          <nav className="flex items-center space-x-8">
+            <Link href="/docs" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Docs
+            </Link>
+            <Link href="/pricing" className="text-sm text-white">
+              Pricing
+            </Link>
+            <Link 
+              href="/auth/signin" 
+              className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+            >
+              Sign In
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="pt-32 pb-20 px-6">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border border-orange-500/20 bg-orange-500/5">
+              <Sparkles className="w-4 h-4 text-orange-500" />
+              <span className="text-sm text-orange-500">Simple, Transparent Pricing</span>
+            </div>
+            
+            <h1 className="text-6xl md:text-8xl font-bold tracking-tight">
+              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+                Pay As You Grow
+              </span>
+            </h1>
+            
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              Start free, scale when you're ready. No hidden fees, cancel anytime.
+            </p>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-6">
-            Choose Your Perfect Plan
-          </h1>
-          <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto">
-            Start building with AI-powered development tools. Scale as you grow with flexible pricing that matches your needs.
-          </p>
         </div>
       </section>
 
       {/* Pricing Cards */}
-      <section className="pb-20 px-4">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
-            {plans.map((plan, index) => {
+      <section className="py-20 px-6">
+        <div className="container mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {plans.map((plan) => {
               const Icon = plan.icon;
+              const isPopular = plan.popular;
+              
               return (
-                <Card 
-                  key={plan.id} 
-                  className={`relative group hover:shadow-lg transition-all duration-300 ${
-                    plan.popular ? 'ring-2 ring-blue-500 scale-105' : ''
-                  }`}
+                <div
+                  key={plan.id}
+                  className={`relative p-8 rounded-2xl border ${
+                    isPopular 
+                      ? 'border-orange-500 bg-gradient-to-b from-orange-500/10 to-transparent' 
+                      : 'border-white/10 bg-black/50'
+                  } hover:border-${plan.color}-500/50 transition-all`}
                 >
                   {plan.badge && (
-                    <div className={`absolute -top-3 left-1/2 transform -translate-x-1/2 ${plan.badge.color} text-white px-3 py-1 rounded-full text-sm font-semibold`}>
-                      {plan.badge.text}
-                    </div>
-                  )}
-                  
-                  <CardHeader className="text-center">
-                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                      <Icon className="w-6 h-6 text-white" />
-                    </div>
-                    <CardTitle className="text-xl">{plan.name}</CardTitle>
-                    <CardDescription className="text-sm">{plan.description}</CardDescription>
-                    
-                    <div className="mt-4">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-sm text-slate-600 dark:text-slate-300">$</span>
-                        <span className="text-4xl font-bold">{plan.price}</span>
-                        <span className="text-sm text-slate-600 dark:text-slate-300">/{plan.period}</span>
+                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                      <div className="px-4 py-1 bg-orange-500 text-black text-xs font-bold rounded-full">
+                        {plan.badge}
                       </div>
                     </div>
-                  </CardHeader>
+                  )}
 
-                  <CardContent>
-                    <Button 
-                      size="lg" 
-                      className={`w-full mb-6 ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
-                      asChild
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Icon className={`w-10 h-10 text-${plan.color}-500`} />
+                      <h3 className="text-2xl font-bold">{plan.name}</h3>
+                      <p className="text-gray-400 text-sm">{plan.description}</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-baseline space-x-2">
+                        <span className="text-5xl font-bold">${plan.price}</span>
+                        <span className="text-gray-400">/{plan.period}</span>
+                      </div>
+                    </div>
+
+                    <Link
+                      href={plan.href}
+                      className={`block w-full px-6 py-3 text-center rounded-lg font-medium transition-all ${
+                        isPopular
+                          ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                          : 'border border-white/10 hover:border-white/20 text-white'
+                      }`}
                     >
-                      <Link href={plan.href}>
-                        {plan.cta}
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </Link>
-                    </Button>
+                      {plan.cta}
+                    </Link>
 
-                    <div className="space-y-3">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">What's included:</p>
-                      {plan.features.map((feature, featureIndex) => (
-                        <div key={featureIndex} className="flex items-start gap-2">
-                          <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm text-slate-600 dark:text-slate-300">{feature}</span>
+                    <div className="space-y-3 pt-6 border-t border-white/10">
+                      {plan.features.map((feature, index) => (
+                        <div key={index} className="flex items-start space-x-3">
+                          <Check className={`w-5 h-5 text-${plan.color}-500 flex-shrink-0 mt-0.5`} />
+                          <span className="text-sm text-gray-300">{feature}</span>
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
+          </div>
+
+          {/* Enterprise */}
+          <div className="mt-8 p-8 rounded-2xl border border-white/10 bg-gradient-to-r from-purple-500/5 to-orange-500/5">
+            <div className="flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0">
+              <div className="flex items-start space-x-4">
+                <Building className="w-12 h-12 text-purple-500 flex-shrink-0" />
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-bold">{enterprise.name}</h3>
+                  <p className="text-gray-400">{enterprise.description}</p>
+                  <div className="grid grid-cols-2 gap-2 pt-4">
+                    {enterprise.features.map((feature, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <Check className="w-4 h-4 text-purple-500" />
+                        <span className="text-sm text-gray-300">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <Link
+                href={enterprise.href}
+                className="px-8 py-4 bg-gradient-to-r from-purple-500 to-orange-500 hover:from-purple-600 hover:to-orange-600 rounded-lg font-medium transition-all whitespace-nowrap"
+              >
+                {enterprise.cta}
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Features Overview */}
-      <section className="py-20 px-4 bg-white/50 dark:bg-slate-800/50">
-        <div className="container mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">Everything You Need to Build</h2>
-            <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-              All plans include access to our comprehensive development ecosystem
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <div key={index} className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <Icon className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-slate-600 dark:text-slate-300">{feature.description}</p>
-                </div>
-              );
-            })}
+      {/* Comparison */}
+      <section className="py-20 px-6 border-t border-white/10">
+        <div className="container mx-auto max-w-6xl">
+          <h2 className="text-4xl font-bold text-center mb-4">All Plans Include</h2>
+          <p className="text-gray-400 text-center mb-16">Core features available in every plan</p>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="space-y-3">
+              <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+                <Terminal className="w-6 h-6 text-orange-500" />
+              </div>
+              <h3 className="text-xl font-bold">CLI + Web Access</h3>
+              <p className="text-gray-400">Use from terminal or browser, your choice</p>
+            </div>
+            <div className="space-y-3">
+              <div className="w-12 h-12 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                <Zap className="w-6 h-6 text-purple-500" />
+              </div>
+              <h3 className="text-xl font-bold">Real-Time Generation</h3>
+              <p className="text-gray-400">Production code in seconds, not hours</p>
+            </div>
+            <div className="space-y-3">
+              <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+                <Check className="w-6 h-6 text-orange-500" />
+              </div>
+              <h3 className="text-xl font-bold">No Lock-In</h3>
+              <p className="text-gray-400">Cancel anytime, export your code always</p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* FAQ */}
-      <section className="py-20 px-4">
+      <section className="py-20 px-6">
         <div className="container mx-auto max-w-4xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">Frequently Asked Questions</h2>
-            <p className="text-xl text-slate-600 dark:text-slate-300">
-              Got questions? We've got answers.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8">
+          <h2 className="text-4xl font-bold text-center mb-16">Frequently Asked Questions</h2>
+          
+          <div className="space-y-6">
             {faqs.map((faq, index) => (
-              <Card key={index}>
-                <CardHeader>
-                  <CardTitle className="text-lg">{faq.question}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-slate-600 dark:text-slate-300">{faq.answer}</p>
-                </CardContent>
-              </Card>
+              <div
+                key={index}
+                className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-white/20 transition-all"
+              >
+                <h3 className="text-xl font-bold mb-3">{faq.question}</h3>
+                <p className="text-gray-400">{faq.answer}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-20 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-        <div className="container mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Start Building?</h2>
-          <p className="text-xl mb-8 max-w-2xl mx-auto opacity-90">
-            Join thousands of developers building faster and smarter with AI-powered tools.
+      {/* CTA */}
+      <section className="py-32 px-6">
+        <div className="container mx-auto max-w-4xl text-center space-y-8">
+          <h2 className="text-5xl font-bold">
+            Start building for free
+          </h2>
+          <p className="text-xl text-gray-400">
+            No credit card required. Upgrade when you're ready to scale.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" variant="secondary" asChild>
-              <Link href="/auth/signin" className="flex items-center gap-2">
-                <span>Start Free Trial</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600" asChild>
-              <Link href="/contact" className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4" />
-                <span>Contact Sales</span>
-              </Link>
-            </Button>
+          <div className="flex items-center justify-center space-x-4">
+            <Link
+              href="/auth/signup"
+              className="px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+            >
+              Start Free Trial
+            </Link>
+            <Link
+              href="/docs"
+              className="px-8 py-4 border border-white/10 hover:border-white/20 rounded-lg font-medium transition-colors"
+            >
+              View Documentation
+            </Link>
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-12 px-6">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
+              <span className="font-bold">recoder</span>
+            </div>
+            
+            <div className="flex items-center space-x-8 text-sm text-gray-500">
+              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
+              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
+              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Link href="mailto:support@recoder.xyz" className="hover:text-white transition-colors">Support</Link>
+            </div>
+            
+            <div className="text-sm text-gray-500">
+              © 2024 Recoder.xyz
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

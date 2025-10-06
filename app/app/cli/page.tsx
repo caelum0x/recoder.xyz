@@ -1,45 +1,22 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Terminal, 
-  Download,
-  Copy,
-  CheckCircle,
-  ArrowRight,
-  ExternalLink,
-  Zap,
-  Shield,
-  Globe
-} from 'lucide-react';
+import { Terminal, Copy, CheckCircle, ArrowRight, Zap, Shield, Globe, Sparkles, Code2, Rocket, Download } from 'lucide-react';
 
 export default function CLIPage() {
   const installSteps = [
     {
-      title: "Install Recoder CLI Router",
-      code: "npm install -g recoder-cli-router",
-      description: "Install the CLI router that handles AI model routing and authentication"
-    },
-    {
-      title: "Verify CLI Router Installation",
-      code: "node dist/cli.js --help",
-      description: "Test that the CLI router is working (from the installation directory)"
-    },
-    {
       title: "Install Recoder CLI",
       code: "npm install -g @recoder/cli",
-      description: "Install the main CLI for code generation and AI assistance"
+      description: "Install the CLI in seconds"
     },
     {
-      title: "Authenticate with Recoder.xyz",
+      title: "Authenticate",
       code: "recoder auth login",
-      description: "Connect to your Recoder.xyz account (like Claude Code authentication)"
+      description: "Connect to your Recoder.xyz account"
     },
     {
       title: "Start Building",
-      code: 'recoder generate "create a React app with TypeScript"',
-      description: "Generate real, production-ready code using AI"
+      code: 'recoder "create a Next.js app with auth"',
+      description: "Generate production-ready code instantly"
     }
   ];
 
@@ -47,110 +24,155 @@ export default function CLIPage() {
     {
       icon: Zap,
       title: "Multi-AI Intelligence",
-      description: "Automatically routes requests to the best AI model (Claude, Groq, Gemini, etc.)"
+      description: "Automatically routes to the best AI model (Claude, GPT-4, Gemini)"
     },
     {
       icon: Shield,
-      title: "No API Keys Required",
-      description: "Authentication through Recoder.xyz - no need to manage API keys"
+      title: "Production Ready",
+      description: "Real code that works, not mock implementations"
     },
     {
-      icon: Globe,
-      title: "Production Ready",
-      description: "Generates real, working code that you can deploy immediately"
+      icon: Rocket,
+      title: "Deploy Instantly",
+      description: "From idea to production in minutes"
     }
   ];
 
-  const commands = [
+  const examples = [
     {
-      command: "recoder generate",
-      description: "Generate full applications or components",
-      example: 'recoder generate "Solana DEX with token swapping"'
+      prompt: 'recoder "build a REST API with auth"',
+      description: "Full backend with authentication"
     },
     {
-      command: "recoder chat",
-      description: "Interactive AI chat for coding assistance",
-      example: "recoder chat"
+      prompt: 'recoder "create a dashboard with charts"',
+      description: "React dashboard with real data"
     },
     {
-      command: "recoder plan",
-      description: "Create detailed project plans with architecture",
-      example: 'recoder plan "microservices e-commerce platform"'
-    },
-    {
-      command: "recoder validate",
-      description: "Validate generated code for production readiness",
-      example: "recoder validate ./my-project"
-    },
-    {
-      command: "recoder refactor",
-      description: "Repository-wide refactoring with full context",
-      example: 'recoder refactor "modernize to React 18"'
+      prompt: 'recoder "add Stripe payments to my app"',
+      description: "Complete payment integration"
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <Terminal className="w-8 h-8 text-blue-600" />
-              <span className="text-xl font-bold">Recoder CLI</span>
+      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center space-x-2 group">
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
+              <Terminal className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold">recoder</span>
+          </Link>
+          
+          <nav className="flex items-center space-x-8">
+            <Link href="/docs" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Docs
             </Link>
-            <Button asChild>
-              <Link href="/auth/signin">Get Started</Link>
-            </Button>
-          </div>
+            <Link href="/pricing" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Pricing
+            </Link>
+            <Link 
+              href="/auth/signin" 
+              className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+            >
+              Sign In
+            </Link>
+          </nav>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto text-center">
-          <Badge variant="secondary" className="mb-4">
-            🚀 Production-Ready AI CLI
-          </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
-            Recoder CLI
-          </h1>
-          <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto">
-            The most powerful AI-powered CLI for developers. Generate real, production-ready code 
-            with multi-AI intelligence and seamless Recoder.xyz integration.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button size="lg" asChild>
-              <Link href="#install" className="flex items-center space-x-2">
+      {/* Hero */}
+      <section className="pt-32 pb-20 px-6">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center space-y-8">
+            <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border border-orange-500/20 bg-orange-500/5">
+              <Terminal className="w-4 h-4 text-orange-500" />
+              <span className="text-sm text-orange-500">Terminal-First Development</span>
+            </div>
+            
+            <h1 className="text-6xl md:text-8xl font-bold tracking-tight">
+              CLI That
+              <br />
+              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+                Actually Codes
+              </span>
+            </h1>
+            
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              Generate production-ready code from your terminal. Multi-AI powered, instantly deployable.
+            </p>
+
+            <div className="flex items-center justify-center space-x-4 pt-8">
+              <Link
+                href="/auth/signup"
+                className="group px-8 py-4 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium transition-all flex items-center space-x-2"
+              >
                 <Download className="w-5 h-5" />
                 <span>Install Now</span>
-                <ArrowRight className="w-4 h-4" />
               </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="https://github.com/recoderxyz/recoder-cli" className="flex items-center space-x-2">
-                <ExternalLink className="w-5 h-5" />
-                <span>View on GitHub</span>
+              <Link
+                href="/docs"
+                className="px-8 py-4 border border-white/10 hover:border-white/20 rounded-lg font-medium transition-colors"
+              >
+                View Docs
               </Link>
-            </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Installation */}
+      <section className="py-20 px-6 border-t border-white/10">
+        <div className="container mx-auto max-w-4xl">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold mb-4">Install in 60 Seconds</h2>
+            <p className="text-gray-400">Three commands to start building with AI</p>
+          </div>
+
+          <div className="space-y-6">
+            {installSteps.map((step, index) => (
+              <div
+                key={index}
+                className="relative p-6 rounded-2xl border border-white/10 bg-gradient-to-br from-orange-500/5 to-transparent hover:border-orange-500/30 transition-all"
+              >
+                <div className="flex items-start space-x-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-black font-bold">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <h3 className="text-xl font-bold">{step.title}</h3>
+                    <p className="text-gray-400">{step.description}</p>
+                    <div className="flex items-center space-x-2 p-4 bg-black border border-white/10 rounded-lg font-mono text-sm">
+                      <code className="flex-1 text-orange-500">{step.code}</code>
+                      <button className="p-2 hover:bg-white/5 rounded transition-colors">
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="py-20 px-4 bg-white/50 dark:bg-slate-800/50">
-        <div className="container mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">Why Recoder CLI?</h2>
+      <section className="py-20 px-6">
+        <div className="container mx-auto max-w-6xl">
+          <h2 className="text-4xl font-bold text-center mb-16">Why Recoder CLI?</h2>
+          
           <div className="grid md:grid-cols-3 gap-8">
             {features.map((feature, index) => {
               const Icon = feature.icon;
               return (
-                <div key={index} className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Icon className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-4">{feature.title}</h3>
-                  <p className="text-slate-600 dark:text-slate-300">{feature.description}</p>
+                <div
+                  key={index}
+                  className="p-8 rounded-2xl border border-white/10 bg-black/50 hover:border-orange-500/30 transition-all"
+                >
+                  <Icon className="w-12 h-12 text-orange-500 mb-4" />
+                  <h3 className="text-2xl font-bold mb-2">{feature.title}</h3>
+                  <p className="text-gray-400">{feature.description}</p>
                 </div>
               );
             })}
@@ -158,102 +180,82 @@ export default function CLIPage() {
         </div>
       </section>
 
-      {/* Installation */}
-      <section id="install" className="py-20 px-4">
-        <div className="container mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">Quick Installation</h2>
-          <div className="max-w-4xl mx-auto">
-            <div className="grid gap-6">
-              {installSteps.map((step, index) => (
-                <Card key={index} className="p-6">
-                  <div className="flex items-start space-x-4">
-                    <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-sm">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg mb-2">{step.title}</h3>
-                      <p className="text-slate-600 dark:text-slate-300 mb-4">{step.description}</p>
-                      <div className="bg-slate-900 dark:bg-slate-800 p-4 rounded-lg flex items-center justify-between">
-                        <code className="text-green-400 font-mono">{step.code}</code>
-                        <Button size="sm" variant="outline" className="ml-4">
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
+      {/* Examples */}
+      <section className="py-20 px-6 border-t border-white/10">
+        <div className="container mx-auto max-w-4xl">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold mb-4">See It In Action</h2>
+            <p className="text-gray-400">Real commands, real results</p>
+          </div>
 
-            <div className="mt-12 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <div className="flex items-start space-x-3">
-                <CheckCircle className="w-6 h-6 text-blue-600 mt-1" />
-                <div>
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    Authentication Like Claude Code
-                  </h4>
-                  <p className="text-blue-800 dark:text-blue-200">
-                    Just like Claude Code, you authenticate once with your Recoder.xyz account and get access to all AI models. 
-                    No need to manage multiple API keys!
-                  </p>
+          <div className="space-y-6">
+            {examples.map((example, index) => (
+              <div
+                key={index}
+                className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-purple-500/30 transition-all"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2 p-4 bg-black border border-white/10 rounded-lg font-mono text-sm">
+                    <Terminal className="w-4 h-4 text-orange-500" />
+                    <code className="flex-1 text-green-400">{example.prompt}</code>
+                  </div>
+                  <p className="text-gray-400 text-sm pl-4">→ {example.description}</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Commands */}
-      <section className="py-20 px-4 bg-white/50 dark:bg-slate-800/50">
-        <div className="container mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">Powerful Commands</h2>
-          <div className="max-w-4xl mx-auto">
-            <div className="grid gap-4">
-              {commands.map((cmd, index) => (
-                <Card key={index} className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                    <div className="mb-4 md:mb-0">
-                      <h3 className="font-semibold text-lg mb-2">
-                        <code className="text-blue-600">{cmd.command}</code>
-                      </h3>
-                      <p className="text-slate-600 dark:text-slate-300">{cmd.description}</p>
-                    </div>
-                    <div className="bg-slate-900 dark:bg-slate-800 p-3 rounded-lg min-w-0 md:min-w-[300px]">
-                      <code className="text-green-400 font-mono text-sm">{cmd.example}</code>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-20 px-4 bg-gradient-to-r from-blue-600 to-purple-600">
-        <div className="container mx-auto text-center">
-          <h2 className="text-3xl font-bold text-white mb-6">
-            Ready to Supercharge Your Development?
+      <section className="py-32 px-6">
+        <div className="container mx-auto max-w-4xl text-center space-y-8">
+          <h2 className="text-5xl font-bold">
+            Ready to 10x your development speed?
           </h2>
-          <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Install Recoder CLI now and start building production-ready applications with AI assistance.
+          <p className="text-xl text-gray-400">
+            Install the CLI and start building production code in minutes.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" variant="secondary" asChild>
-              <Link href="/auth/signin" className="flex items-center space-x-2">
-                <span>Get Started Now</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-blue-600" asChild>
-              <Link href="/docs" className="flex items-center space-x-2">
-                <span>Read Documentation</span>
-                <ExternalLink className="w-4 h-4" />
-              </Link>
-            </Button>
+          <div className="flex items-center justify-center space-x-4">
+            <Link
+              href="/auth/signup"
+              className="px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
+            >
+              <Download className="w-5 h-5" />
+              <span>Install Recoder CLI</span>
+            </Link>
+            <Link
+              href="/pricing"
+              className="px-8 py-4 border border-white/10 hover:border-white/20 rounded-lg font-medium transition-colors"
+            >
+              View Pricing
+            </Link>
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-12 px-6">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
+              <span className="font-bold">recoder</span>
+            </div>
+            
+            <div className="flex items-center space-x-8 text-sm text-gray-500">
+              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
+              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
+              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Link href="mailto:support@recoder.xyz" className="hover:text-white transition-colors">Support</Link>
+            </div>
+            
+            <div className="text-sm text-gray-500">
+              © 2024 Recoder.xyz
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
