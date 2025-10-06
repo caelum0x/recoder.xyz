@@ -5,7 +5,7 @@ import { Terminal, Check, Zap, Crown, Building, ArrowRight, Sparkles } from 'luc
 import { useState } from 'react';
 
 export default function PricingPage() {
-  const [billingCycle, setBillingCycle] = useState<'week' | 'month'>('month');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   const plans = [
     {
@@ -59,8 +59,10 @@ export default function PricingPage() {
     {
       id: 'monthly',
       name: 'Monthly',
-      price: 20,
-      period: 'month',
+      price: billingCycle === 'monthly' ? 20 : 18,
+      originalPrice: billingCycle === 'yearly' ? 20 : null,
+      period: billingCycle === 'monthly' ? 'month' : 'month',
+      billedAs: billingCycle === 'yearly' ? '$216 billed yearly' : null,
       description: 'Best for individual developers',
       icon: Sparkles,
       badge: 'MOST POPULAR',
@@ -83,8 +85,10 @@ export default function PricingPage() {
     {
       id: 'pro',
       name: 'Pro',
-      price: 100,
-      period: 'month',
+      price: billingCycle === 'monthly' ? 100 : 90,
+      originalPrice: billingCycle === 'yearly' ? 100 : null,
+      period: billingCycle === 'monthly' ? 'month' : 'month',
+      billedAs: billingCycle === 'yearly' ? '$1,080 billed yearly' : null,
       description: 'For power users and teams',
       icon: Crown,
       badge: '5X USAGE',
@@ -200,6 +204,33 @@ export default function PricingPage() {
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               Start free, scale when you're ready. No hidden fees, cancel anytime.
             </p>
+            
+            {/* Billing Toggle */}
+            <div className="flex items-center justify-center space-x-4 pt-8">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                  billingCycle === 'monthly'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-white/5 text-gray-400 hover:text-white'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('yearly')}
+                className={`px-6 py-2 rounded-lg font-medium transition-all relative ${
+                  billingCycle === 'yearly'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-white/5 text-gray-400 hover:text-white'
+                }`}
+              >
+                Yearly
+                <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-purple-500 text-white text-xs font-bold rounded-full">
+                  Save 10%
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -238,9 +269,15 @@ export default function PricingPage() {
 
                     <div className="space-y-1">
                       <div className="flex items-baseline space-x-2">
+                        {plan.originalPrice && (
+                          <span className="text-2xl line-through text-gray-600">${plan.originalPrice}</span>
+                        )}
                         <span className="text-5xl font-bold">${plan.price}</span>
                         <span className="text-gray-400">/{plan.period}</span>
                       </div>
+                      {plan.billedAs && (
+                        <p className="text-xs text-gray-500">{plan.billedAs}</p>
+                      )}
                     </div>
 
                     <Link
