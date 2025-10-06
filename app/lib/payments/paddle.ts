@@ -35,6 +35,14 @@ export const PADDLE_PRODUCTS = {
     recurring: true,
     interval: 'month' as const
   },
+  monthly_yearly: {
+    productId: process.env.NEXT_PUBLIC_PADDLE_PRODUCT_MONTHLY_YEARLY || 'prod_monthly_yearly_placeholder',
+    name: 'Recoder Monthly (Billed Yearly)',
+    price: 216, // $18/month * 12 months
+    currency: 'USD',
+    recurring: true,
+    interval: 'year' as const
+  },
   pro: {
     productId: process.env.NEXT_PUBLIC_PADDLE_PRODUCT_PRO || 'prod_pro_placeholder',
     name: 'Recoder Pro',
@@ -42,6 +50,14 @@ export const PADDLE_PRODUCTS = {
     currency: 'USD',
     recurring: true,
     interval: 'month' as const
+  },
+  pro_yearly: {
+    productId: process.env.NEXT_PUBLIC_PADDLE_PRODUCT_PRO_YEARLY || 'prod_pro_yearly_placeholder',
+    name: 'Recoder Pro (Billed Yearly)',
+    price: 1080, // $90/month * 12 months
+    currency: 'USD',
+    recurring: true,
+    interval: 'year' as const
   }
 };
 

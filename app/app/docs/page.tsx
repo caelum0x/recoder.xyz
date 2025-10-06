@@ -1,8 +1,4 @@
-import React from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { 
   BookOpen, 
   Terminal, 
@@ -13,7 +9,8 @@ import {
   ArrowRight,
   FileText,
   Video,
-  Github
+  Github,
+  Sparkles
 } from 'lucide-react';
 
 export default function DocsPage() {
@@ -94,33 +91,64 @@ export default function DocsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <section className="pt-20 pb-16 px-4">
-        <div className="container mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-4 py-2 rounded-full text-sm font-medium mb-6">
-            <BookOpen className="w-4 h-4" />
-            Documentation Hub
+      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center space-x-2 group">
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
+              <Terminal className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold">recoder</span>
+          </Link>
+          
+          <nav className="flex items-center space-x-8">
+            <Link href="/docs" className="text-sm text-white">
+              Docs
+            </Link>
+            <Link href="/pricing" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Pricing
+            </Link>
+            <Link 
+              href="/auth/signin" 
+              className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+            >
+              Sign In
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="pt-32 pb-16 px-6">
+        <div className="container mx-auto text-center max-w-4xl">
+          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border border-orange-500/20 bg-orange-500/5 mb-6">
+            <BookOpen className="w-4 h-4 text-orange-500" />
+            <span className="text-sm text-orange-500">Documentation</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-6">
-            Recoder Documentation
+          <h1 className="text-5xl md:text-7xl font-bold mb-6">
+            <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              Learn Recoder
+            </span>
           </h1>
-          <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
-            Everything you need to build production-ready applications with AI-powered development tools.
+          <p className="text-xl text-gray-400 mb-12">
+            Everything you need to build production-ready applications with AI
           </p>
 
           {/* Quick Links */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto mb-12">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
             {quickLinks.map((link, index) => {
               const Icon = link.icon;
               return (
-                <Button key={index} variant="outline" size="lg" asChild className="h-auto p-4 flex flex-col gap-2">
-                  <Link href={link.href}>
-                    <Icon className="w-5 h-5" />
-                    <span className="font-medium">{link.title}</span>
-                    <span className="text-xs text-muted-foreground">{link.description}</span>
-                  </Link>
-                </Button>
+                <Link 
+                  key={index} 
+                  href={link.href}
+                  className="p-4 rounded-lg border border-white/10 bg-white/5 hover:border-orange-500/30 hover:bg-white/10 transition-all flex flex-col items-center text-center space-y-2"
+                >
+                  <Icon className="w-6 h-6 text-orange-500" />
+                  <span className="font-medium">{link.title}</span>
+                  <span className="text-xs text-gray-400">{link.description}</span>
+                </Link>
               );
             })}
           </div>
@@ -128,101 +156,122 @@ export default function DocsPage() {
       </section>
 
       {/* Documentation Sections */}
-      <section className="pb-20 px-4">
+      <section className="py-20 px-6">
         <div className="container mx-auto">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {docSections.map((section, index) => {
               const Icon = section.icon;
               return (
-                <Card key={index} className="group hover:shadow-lg transition-all duration-300">
-                  <CardHeader>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">{section.title}</CardTitle>
-                      </div>
+                <div
+                  key={index}
+                  className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-white/20 transition-all"
+                >
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
+                      <Icon className="w-6 h-6 text-white" />
                     </div>
-                    <CardDescription>{section.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {section.articles.map((article, articleIndex) => (
-                        <div key={articleIndex} className="flex items-center justify-between py-2">
-                          <Link 
-                            href={article.href}
-                            className="flex items-center gap-2 text-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                          >
-                            <span>{article.title}</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </Link>
-                          <Badge variant={article.status === 'available' ? 'default' : 'secondary'} className="text-xs">
-                            {article.status === 'available' ? 'Available' : 'Coming Soon'}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                    <h3 className="text-xl font-bold">{section.title}</h3>
+                  </div>
+                  <p className="text-gray-400 text-sm mb-6">{section.description}</p>
+                  
+                  <div className="space-y-2">
+                    {section.articles.map((article, articleIndex) => (
+                      <div key={articleIndex} className="flex items-center justify-between py-2 border-b border-white/5">
+                        <Link 
+                          href={article.href}
+                          className="flex items-center space-x-2 text-sm hover:text-orange-500 transition-colors group"
+                        >
+                          <span>{article.title}</span>
+                          <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                        </Link>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          article.status === 'available' 
+                            ? 'bg-green-500/10 text-green-500' 
+                            : 'bg-gray-500/10 text-gray-500'
+                        }`}>
+                          {article.status === 'available' ? 'Live' : 'Soon'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               );
             })}
           </div>
 
           {/* Additional Resources */}
-          <div className="mt-16 text-center">
-            <h2 className="text-2xl font-bold mb-6">Additional Resources</h2>
-            <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
-              <Card>
-                <CardHeader>
-                  <Video className="w-8 h-8 mx-auto text-red-500" />
-                  <CardTitle className="text-lg">Video Tutorials</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Step-by-step video guides for common workflows
-                  </p>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/docs/videos">Watch Tutorials</Link>
-                  </Button>
-                </CardContent>
-              </Card>
+          <div className="mt-20">
+            <h2 className="text-3xl font-bold text-center mb-12">Additional Resources</h2>
+            <div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+              <div className="p-6 rounded-2xl border border-white/10 bg-black/50 text-center space-y-4">
+                <Video className="w-12 h-12 mx-auto text-red-500" />
+                <h3 className="text-xl font-bold">Video Tutorials</h3>
+                <p className="text-sm text-gray-400">
+                  Step-by-step video guides for common workflows
+                </p>
+                <Link 
+                  href="/docs/videos" 
+                  className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
+                >
+                  Watch Tutorials
+                </Link>
+              </div>
 
-              <Card>
-                <CardHeader>
-                  <Github className="w-8 h-8 mx-auto text-gray-700 dark:text-gray-300" />
-                  <CardTitle className="text-lg">Examples</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Real-world examples and starter templates
-                  </p>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="https://github.com/recoderxyz/examples" target="_blank">
-                      View Examples
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="p-6 rounded-2xl border border-white/10 bg-black/50 text-center space-y-4">
+                <Github className="w-12 h-12 mx-auto text-gray-400" />
+                <h3 className="text-xl font-bold">Examples</h3>
+                <p className="text-sm text-gray-400">
+                  Real-world examples and starter templates
+                </p>
+                <Link 
+                  href="https://github.com/recoder-xyz/examples" 
+                  target="_blank"
+                  className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
+                >
+                  View Examples
+                </Link>
+              </div>
 
-              <Card>
-                <CardHeader>
-                  <MessageSquare className="w-8 h-8 mx-auto text-blue-500" />
-                  <CardTitle className="text-lg">Community</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Join discussions and get help from the community
-                  </p>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/community">Join Community</Link>
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="p-6 rounded-2xl border border-white/10 bg-black/50 text-center space-y-4">
+                <MessageSquare className="w-12 h-12 mx-auto text-purple-500" />
+                <h3 className="text-xl font-bold">Community</h3>
+                <p className="text-sm text-gray-400">
+                  Join discussions and get help from the community
+                </p>
+                <Link 
+                  href="/community"
+                  className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
+                >
+                  Join Community
+                </Link>
+              </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-12 px-6">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
+              <span className="font-bold">recoder</span>
+            </div>
+            
+            <div className="flex items-center space-x-8 text-sm text-gray-500">
+              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
+              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
+              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Link href="mailto:support@recoder.xyz" className="hover:text-white transition-colors">Support</Link>
+            </div>
+            
+            <div className="text-sm text-gray-500">
+              © 2024 Recoder.xyz
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
