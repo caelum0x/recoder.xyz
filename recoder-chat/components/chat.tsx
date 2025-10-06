@@ -83,7 +83,7 @@ export function Chat({
     onData: (dataPart) => {
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
     },
-    onFinish: async (message, { streamingMessages }) => {
+    onFinish: async (message, options) => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
       
       // Track usage when chat finishes

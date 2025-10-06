@@ -4,9 +4,9 @@
  * Backend integration for WebSocket collaboration service
  */
 
-import express from 'express';
-import { Logger } from '../utils/logger';
-import { CollaborationService } from 'recoder-shared/collaboration';
+const express = require('express');
+const { Logger } = require('../utils/logger');
+const { CollaborationService } = require('recoder-shared/collaboration');
 
 const router = express.Router();
 
@@ -17,7 +17,7 @@ let collaborationService: CollaborationService | null = null;
 const sessionRegistry = new Map<string, any>();
 
 // Initialize collaboration service
-function initializeCollaborationService(): CollaborationService {
+function initializeCollaborationService() {
   if (!collaborationService) {
     collaborationService = new CollaborationService({
       websocketPort: parseInt(process.env.COLLAB_WEBSOCKET_PORT || '8080'),
@@ -30,7 +30,7 @@ function initializeCollaborationService(): CollaborationService {
 }
 
 // Get collaboration service instance
-function getCollaborationService(): CollaborationService {
+function getCollaborationService() {
   if (!collaborationService) {
     throw new Error('Collaboration service not initialized');
   }
@@ -60,7 +60,7 @@ router.get('/sessions', async (req, res) => {
       totalSessions: sessionData.length,
       activeSessions: sessionData.filter(s => s.isActive).length
     });
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to list collaboration sessions:', error);
     res.status(500).json({
       success: false,
@@ -139,7 +139,7 @@ router.post('/sessions', async (req, res) => {
     });
 
     Logger.info(`Collaboration session created via API: ${session.id} by ${userName}`);
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to create collaboration session:', error);
     res.status(500).json({
       success: false,
@@ -185,7 +185,7 @@ router.get('/sessions/:sessionId', async (req, res) => {
         websocketUrl: `ws://localhost:${process.env.COLLAB_WEBSOCKET_PORT || 8080}/collaboration`
       }
     });
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to get collaboration session:', error);
     res.status(500).json({
       success: false,
@@ -242,7 +242,7 @@ router.post('/sessions/:sessionId/join', async (req, res) => {
         error: 'Failed to join session - session may be full or not found'
       });
     }
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to join collaboration session:', error);
     res.status(500).json({
       success: false,
@@ -271,7 +271,7 @@ router.post('/sessions/:sessionId/leave', async (req, res) => {
       success,
       message: success ? 'Successfully left session' : 'Failed to leave session'
     });
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to leave collaboration session:', error);
     res.status(500).json({
       success: false,
@@ -313,7 +313,7 @@ router.get('/analytics', async (req, res) => {
       success: true,
       analytics
     });
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to get collaboration analytics:', error);
     res.status(500).json({
       success: false,
@@ -348,7 +348,7 @@ router.post('/documents', async (req, res) => {
         lastModified: document.lastModified
       }
     });
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to create collaborative document:', error);
     res.status(500).json({
       success: false,
@@ -375,7 +375,7 @@ router.get('/documents/:documentId/analytics', async (req, res) => {
       success: true,
       analytics
     });
-  } catch (error: any) {
+  } catch (error) {
     Logger.error('Failed to get document analytics:', error);
     res.status(500).json({
       success: false,
@@ -401,7 +401,7 @@ router.get('/health', async (req, res) => {
       websocketUrl: `ws://localhost:${process.env.COLLAB_WEBSOCKET_PORT || 8080}/collaboration`,
       timestamp: new Date().toISOString()
     });
-  } catch (error: any) {
+  } catch (error) {
     res.status(503).json({
       success: false,
       status: 'unhealthy',
@@ -410,4 +410,4 @@ router.get('/health', async (req, res) => {
   }
 });
 
-export { router as collaborationRouter, initializeCollaborationService };
+module.exports = { collaborationRouter: router, initializeCollaborationService };

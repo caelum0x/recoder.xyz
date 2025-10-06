@@ -68,11 +68,11 @@ export default function CodeViewer({
     ? "two-up"
     : "tabbed";
 
-  const assistantMessages = chat.messages.filter((m) => m.role === "assistant");
+  const assistantMessages = chat.messages.filter((m: Message) => m.role === "assistant");
   const currentVersion = streamApp
     ? assistantMessages.length
     : message
-      ? assistantMessages.map((m) => m.id).indexOf(message.id)
+      ? assistantMessages.map((m: Message) => m.id).indexOf(message.id)
       : 1;
   const previousMessage =
     currentVersion !== 0 ? assistantMessages.at(currentVersion - 1) : undefined;

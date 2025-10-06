@@ -21,7 +21,7 @@ export default function PageClient({ chat }: { chat: Chat }) {
   >(context.streamPromise);
   const [streamText, setStreamText] = useState("");
   const [isShowingCodeViewer, setIsShowingCodeViewer] = useState(
-    chat.messages.some((m) => m.role === "assistant"),
+    chat.messages.some((m: any) => m.role === "assistant"),
   );
   const [activeTab, setActiveTab] = useState<"code" | "preview" | "deploy">("preview");
   const router = useRouter();

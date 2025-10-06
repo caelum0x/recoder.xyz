@@ -10,6 +10,40 @@ export interface ChatModel {
 }
 
 export const chatModels: Array<ChatModel> = [
+  // 🆓 FREE AI MODELS - NO API COSTS
+  {
+    id: 'deepseek/deepseek-r1:free',
+    name: '🆓 DeepSeek R1 (Free)',
+    description: 'Advanced reasoning - 671B params - FREE',
+  },
+  {
+    id: 'glm-4.5-air',
+    name: '🆓 GLM 4.5 Air (Free)',
+    description: 'Lightweight MoE - Agent tasks - FREE',
+  },
+  {
+    id: 'qwen/qwen3-coder-480b-a35b:free',
+    name: '🆓 Qwen3 Coder (Free)',
+    description: 'Code generation expert - 480B params - FREE',
+  },
+  {
+    id: 'deepseek/deepseek-v3-0324:free',
+    name: '🆓 DeepSeek V3 (Free)',
+    description: 'Latest DeepSeek flagship - FREE',
+  },
+  {
+    id: 'microsoft/mai-ds-r1:free',
+    name: '🆓 Microsoft MAI DS R1 (Free)',
+    description: 'Enhanced safety R1 variant - FREE',
+  },
+
+  // 🎨 IMAGE GENERATION
+  {
+    id: 'google/gemini-2.5-flash-image',
+    name: '🎨 Gemini 2.5 Flash Image',
+    description: 'State-of-the-art image generation',
+  },
+
   // 🚀 UNIFIED AI MODELS - BATTLE READY
   {
     id: 'unified-premium',

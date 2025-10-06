@@ -71,9 +71,14 @@ export class RedisCacheService extends EventEmitter {
 
   constructor() {
     super();
-    // Defer Redis initialization to avoid blocking module initialization
-    process.nextTick(() => {
-      this.initializeRedis();
+    // Defer Redis initialization to avoid blocking module initialization (with better error handling)
+    setImmediate(async () => {
+      try {
+        await this.initializeRedis();
+      } catch (error) {
+        logger.error('Failed to initialize Redis cache:', error);
+        // Continue without Redis (fallback to in-memory cache)
+      }
     });
   }
 
@@ -117,7 +122,12 @@ export class RedisCacheService extends EventEmitter {
       this.redis.on('ready', () => {
         this.isConnected = true;
         logger.info('Redis ready for operations');
-        this.configureRedis();
+        // Configure Redis asynchronously to avoid blocking (optional)
+        setImmediate(() => {
+          this.configureRedis().catch(error => {
+            logger.warn('Redis configuration failed:', error);
+          });
+        });
       });
 
       this.redis.on('close', () => {
@@ -143,15 +153,10 @@ export class RedisCacheService extends EventEmitter {
     if (!this.redis) return;
 
     try {
-      // Set Redis configuration for optimal performance
-      await this.redis.config('SET', 'maxmemory-policy', 'allkeys-lru');
-      await this.redis.config('SET', 'tcp-keepalive', '60');
-      await this.redis.config('SET', 'timeout', '0');
-
-      // Set up key expiration notifications
-      await this.redis.config('SET', 'notify-keyspace-events', 'Ex');
-
-      logger.info('Redis configured for optimal performance');
+      // Minimal Redis configuration to avoid hanging
+      logger.info('Redis configuration skipped to prevent startup delays');
+      // Note: Advanced Redis config removed to ensure fast startup
+      // Configuration can be done manually if needed
 
     } catch (error) {
       logger.warn('Failed to configure Redis:', error);

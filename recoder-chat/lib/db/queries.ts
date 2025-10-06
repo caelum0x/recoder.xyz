@@ -39,7 +39,7 @@ import { ChatSDKError } from '../errors';
 // https://authjs.dev/reference/adapter/drizzle
 
 // biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(process.env.POSTGRES_URL!);
+const client = postgres(process.env.DATABASE_URL!);
 export const db = drizzle(client);
 
 export async function getUser(email: string): Promise<Array<User>> {
@@ -67,7 +67,7 @@ export async function createUser(email: string, password: string) {
 }
 
 export async function createGuestUser() {
-  const email = `guest-${Date.now()}`;
+  const email = `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const password = generateHashedPassword(generateUUID());
 
   try {
@@ -79,10 +79,25 @@ export async function createGuestUser() {
       email: user.email,
     });
   } catch (error) {
-    throw new ChatSDKError(
-      'bad_request:database',
-      'Failed to create guest user',
-    );
+    console.error('Guest user creation failed:', error);
+    
+    // Retry once with a different email in case of collision
+    try {
+      const retryEmail = `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      return await db.insert(user).values({ 
+        email: retryEmail, 
+        password 
+      }).returning({
+        id: user.id,
+        email: user.email,
+      });
+    } catch (retryError) {
+      console.error('Guest user creation retry failed:', retryError);
+      throw new ChatSDKError(
+        'bad_request:database',
+        'Failed to create guest user after retry',
+      );
+    }
   }
 }
 
@@ -478,23 +493,27 @@ export async function updateChatVisiblityById({
 export async function getMessageCountByUserId({
   id,
   differenceInHours,
-}: { id: string; differenceInHours: number }) {
+}: { id: string; differenceInHours?: number }) {
   try {
-    const twentyFourHoursAgo = new Date(
-      Date.now() - differenceInHours * 60 * 60 * 1000,
-    );
+    // Build where conditions
+    const conditions = [
+      eq(chat.userId, id),
+      eq(message.role, 'user'),
+    ];
+
+    // Add time filter only if differenceInHours is provided
+    if (differenceInHours !== undefined) {
+      const timeAgo = new Date(
+        Date.now() - differenceInHours * 60 * 60 * 1000,
+      );
+      conditions.push(gte(message.createdAt, timeAgo));
+    }
 
     const [stats] = await db
       .select({ count: count(message.id) })
       .from(message)
       .innerJoin(chat, eq(message.chatId, chat.id))
-      .where(
-        and(
-          eq(chat.userId, id),
-          gte(message.createdAt, twentyFourHoursAgo),
-          eq(message.role, 'user'),
-        ),
-      )
+      .where(and(...conditions))
       .execute();
 
     return stats?.count ?? 0;

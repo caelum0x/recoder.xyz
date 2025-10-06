@@ -1,20 +1,20 @@
 // AI Providers API Routes
 // Management and monitoring of AI provider ecosystem
 
-import express from 'express';
-import '../types'; // Import types to extend Request interface
-import { query, body, param, validationResult } from 'express-validator';
-import { authenticateUser, requireSubscription, requireAdmin } from '../middleware/auth';
-import { aiProviderManager } from '../services/ai-provider-manager';
-import { aiRouter } from '../services/ai-router';
-import { ragEnhancedAI } from '../services/rag-enhanced-ai';
-import { logger } from '../utils/logger';
-import { getErrorMessage } from '../utils/error-helpers';
+const express = require('express');
+require('../types'); // Import types to extend Request interface
+const { query, body, param, validationResult } = require('express-validator');
+const { authenticateUser, requireSubscription, requireAdmin } = require('../middleware/auth');
+const { aiProviderManager } = require('../services/ai-provider-manager');
+const { aiRouter } = require('../services/ai-router');
+const { ragEnhancedAI } = require('../services/rag-enhanced-ai');
+const { logger } = require('../utils/logger');
+const { getErrorMessage } = require('../utils/error-helpers');
 
 const router = express.Router();
 
 // Validation middleware
-const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+const validateRequest = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     res.status(400).json({
@@ -506,4 +506,4 @@ router.post('/usage',
   }
 );
 
-export default router;
+module.exports = router;
