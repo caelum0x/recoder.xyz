@@ -27,6 +27,9 @@ out/
 .env.test.local
 .env.production.local
 
+# Claude Code settings with secrets
+.claude/settings.local.json
+
 # Desktop app bundles and cache
 recoder-desktop/app-bundles/
 **/app-bundles/cache/
