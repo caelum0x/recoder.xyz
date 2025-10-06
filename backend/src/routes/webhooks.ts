@@ -1,16 +1,15 @@
 // DODO Payments Webhook Handler
 // Processes subscription events and updates database
 
-import express, { Request, Response } from 'express';
-import { logger } from '../utils/logger';
-import { prisma } from '../database/prisma';
-import { APIResponse, WebhookEvent } from '../types';
-import * as crypto from 'crypto';
+const express = require('express');
+const { logger } = require('../utils/logger');
+const { prisma } = require('../database/prisma');
+const crypto = require('crypto');
 
 const router = express.Router();
 
 // Health check endpoint for webhook service
-router.get('/health', (req: Request, res: Response) => {
+router.get('/health', (req, res) => {
   res.json({
     success: true,
     message: 'Webhook service is healthy',
@@ -24,7 +23,7 @@ router.get('/health', (req: Request, res: Response) => {
 });
 
 // Test webhook endpoint for development
-router.post('/test', express.json(), async (req: Request, res: Response): Promise<void> => {
+router.post('/test', express.json(), async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     res.status(404).json({ success: false, error: 'Test endpoint not available in production' });
     return;
@@ -55,12 +54,12 @@ router.use('/dodo', express.raw({
  * POST /api/webhooks/dodo
  * Handle DODO Payments webhooks with enhanced error handling
  */
-router.post('/dodo', async (req: Request, res: Response): Promise<void> => {
-  let event: WebhookEvent;
+router.post('/dodo', async (req, res) => {
+  let event;
   
   try {
-    const signature = req.headers['x-dodo-signature'] as string;
-    const timestamp = req.headers['x-dodo-timestamp'] as string;
+    const signature = req.headers['x-dodo-signature'];
+    const timestamp = req.headers['x-dodo-timestamp'];
     
     // Basic validation
     if (!signature) {
@@ -197,7 +196,7 @@ router.post('/dodo', async (req: Request, res: Response): Promise<void> => {
 /**
  * Generate webhook signature for verification
  */
-function generateWebhookSignature(payload: string, secret?: string): string {
+function generateWebhookSignature(payload, secret) {
   if (!secret) {
     return 'no-secret-configured';
   }
@@ -211,7 +210,7 @@ function generateWebhookSignature(payload: string, secret?: string): string {
 /**
  * Process different types of webhook events
  */
-async function processWebhookEvent(event: WebhookEvent) {
+async function processWebhookEvent(event) {
   switch (event.type) {
     case 'subscription.created':
       await handleSubscriptionCreated(event.data);
@@ -257,7 +256,7 @@ async function processWebhookEvent(event: WebhookEvent) {
 /**
  * Handle subscription created event
  */
-async function handleSubscriptionCreated(data: Record<string, any>) {
+async function handleSubscriptionCreated(data) {
   try {
     const { subscription_id, customer, product_id, status, recurring_pre_tax_amount } = data;
 
@@ -300,7 +299,7 @@ async function handleSubscriptionCreated(data: Record<string, any>) {
 /**
  * Handle subscription updated event
  */
-async function handleSubscriptionUpdated(data: Record<string, any>) {
+async function handleSubscriptionUpdated(data) {
   try {
     const { subscription_id, status, recurring_pre_tax_amount, product_id } = data;
 
@@ -322,7 +321,7 @@ async function handleSubscriptionUpdated(data: Record<string, any>) {
 /**
  * Handle subscription cancelled event
  */
-async function handleSubscriptionCancelled(data: Record<string, any>) {
+async function handleSubscriptionCancelled(data) {
   try {
     const { subscription_id, cancelled_at, cancel_at_next_billing_date } = data;
 
@@ -343,7 +342,7 @@ async function handleSubscriptionCancelled(data: Record<string, any>) {
 /**
  * Handle subscription expired event
  */
-async function handleSubscriptionExpired(data: Record<string, any>) {
+async function handleSubscriptionExpired(data) {
   try {
     const { subscription_id } = data;
 
@@ -363,7 +362,7 @@ async function handleSubscriptionExpired(data: Record<string, any>) {
 /**
  * Handle payment succeeded event with enhanced validation and error handling
  */
-async function handlePaymentSucceeded(data: Record<string, any>) {
+async function handlePaymentSucceeded(data) {
   try {
     // Validate required fields
     const { payment_id, subscription_id, amount, currency } = data;
@@ -506,7 +505,7 @@ async function handlePaymentSucceeded(data: Record<string, any>) {
 /**
  * Handle payment failed event
  */
-async function handlePaymentFailed(data: Record<string, any>) {
+async function handlePaymentFailed(data) {
   try {
     const { payment_id, subscription_id, amount, currency, failure_reason } = data;
 
@@ -558,7 +557,7 @@ async function handlePaymentFailed(data: Record<string, any>) {
 /**
  * Handle invoice created event
  */
-async function handleInvoiceCreated(data: Record<string, any>) {
+async function handleInvoiceCreated(data) {
   try {
     const { invoice_id, subscription_id, amount, currency, due_date } = data;
 
@@ -593,7 +592,7 @@ async function handleInvoiceCreated(data: Record<string, any>) {
 /**
  * Handle invoice paid event
  */
-async function handleInvoicePaid(data: Record<string, any>) {
+async function handleInvoicePaid(data) {
   try {
     const { invoice_id, payment_id } = data;
 
@@ -615,7 +614,7 @@ async function handleInvoicePaid(data: Record<string, any>) {
 /**
  * Handle customer created event
  */
-async function handleCustomerCreated(data: Record<string, any>) {
+async function handleCustomerCreated(data) {
   try {
     const { customer_id, email, name } = data;
 
@@ -632,4 +631,4 @@ async function handleCustomerCreated(data: Record<string, any>) {
   }
 }
 
-export default router;
+module.exports = router;

@@ -3,13 +3,13 @@
  * Comprehensive security hardening for Recoder.xyz backend
  */
 
-import { Request, Response, NextFunction } from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
-import rateLimit from 'express-rate-limit';
-const slowDown = require('express-slow-down');
-import { body, query, param, validationResult } from 'express-validator';
-import { logger } from '../utils/logger';
+const { Request, Response, NextFunction } = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+// const slowDown = require('express-slow-down'); // Temporarily disabled - missing dependency
+const { body, query, param, validationResult } = require('express-validator');
+const { logger } = require('../utils/logger');
 
 // Security configuration based on environment
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -18,7 +18,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 /**
  * Helmet Security Headers Configuration
  */
-export const securityHeaders = helmet({
+const securityHeaders = helmet({
   // Content Security Policy
   contentSecurityPolicy: {
     directives: {
@@ -86,7 +86,7 @@ export const securityHeaders = helmet({
 /**
  * CORS Configuration
  */
-export const corsMiddleware = cors({
+const corsMiddleware = cors({
   origin: (origin, callback) => {
     // Allowed origins for production
     const allowedOrigins = [
@@ -142,7 +142,7 @@ export const corsMiddleware = cors({
 /**
  * Rate Limiting Configuration
  */
-export const rateLimiter = rateLimit({
+const rateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: isProduction ? 100 : 1000, // limit each IP to 100 requests per windowMs in production
   message: {
@@ -169,7 +169,7 @@ export const rateLimiter = rateLimit({
 /**
  * API Rate Limiting (stricter for API endpoints)
  */
-export const apiRateLimiter = rateLimit({
+const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: isProduction ? 60 : 300, // 60 requests per minute in production
   message: {
@@ -185,7 +185,7 @@ export const apiRateLimiter = rateLimit({
 /**
  * Authentication Rate Limiting (very strict)
  */
-export const authRateLimiter = rateLimit({
+const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 login attempts per 15 minutes
   message: {
@@ -196,18 +196,14 @@ export const authRateLimiter = rateLimit({
 });
 
 /**
- * Slow Down Middleware (progressive delay)
+ * Slow Down Middleware (progressive delay) - Temporarily disabled
  */
-export const speedLimiter = slowDown({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  delayAfter: 2, // allow 2 requests per windowMs without delay
-  delayMs: 500 // add 500ms delay per request after delayAfter
-});
+const speedLimiter = (req, res, next) => next(); // Disabled due to missing express-slow-down dependency
 
 /**
  * Input Validation Helpers
  */
-export const validateJSON = (req: Request, res: Response, next: NextFunction): void => {
+const validateJSON = (req, res, next) => {
   if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
     if (req.get('Content-Type')?.includes('application/json')) {
       // Check if body was parsed correctly
@@ -227,7 +223,7 @@ export const validateJSON = (req: Request, res: Response, next: NextFunction): v
 /**
  * Common validation rules
  */
-export const commonValidation = {
+const commonValidation = {
   email: body('email')
     .isEmail()
     .normalizeEmail()
@@ -268,7 +264,7 @@ export const commonValidation = {
 /**
  * Validation Error Handler
  */
-export const handleValidationErrors = (req: Request, res: Response, next: NextFunction): void => {
+const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
@@ -296,7 +292,7 @@ export const handleValidationErrors = (req: Request, res: Response, next: NextFu
 /**
  * Security Logging Middleware
  */
-export const securityLogger = (req: Request, res: Response, next: NextFunction) => {
+const securityLogger = (req, res, next) => {
   // Log potentially suspicious activity
   const suspiciousPatterns = [
     /\.\./,           // Path traversal
@@ -329,7 +325,7 @@ export const securityLogger = (req: Request, res: Response, next: NextFunction) 
 /**
  * Request Size Limiter
  */
-export const requestSizeLimiter = (req: Request, res: Response, next: NextFunction): void => {
+const requestSizeLimiter = (req, res, next) => {
   const maxSize = 10 * 1024 * 1024; // 10MB max request size
   
   if (req.get('content-length') && parseInt(req.get('content-length')!) > maxSize) {
@@ -352,7 +348,7 @@ export const requestSizeLimiter = (req: Request, res: Response, next: NextFuncti
 /**
  * IP Whitelist/Blacklist
  */
-export const ipFilter = (req: Request, res: Response, next: NextFunction): void => {
+const ipFilter = (req, res, next) => {
   const clientIP = req.ip;
   
   // Blacklisted IPs (in production, this would come from database/redis)
@@ -373,7 +369,7 @@ export const ipFilter = (req: Request, res: Response, next: NextFunction): void 
 /**
  * Complete Security Middleware Stack
  */
-export const applySecurity = (app: any) => {
+const applySecurity = (app) => {
   // Trust proxy for correct IP addresses
   app.set('trust proxy', 1);
   
@@ -407,7 +403,7 @@ export const applySecurity = (app: any) => {
 /**
  * Security Headers Check Endpoint
  */
-export const securityHealthCheck = (req: Request, res: Response) => {
+const securityHealthCheck = (req, res) => {
   const securityHeaders = {
     'X-Content-Type-Options': res.get('X-Content-Type-Options'),
     'X-Frame-Options': res.get('X-Frame-Options'),
@@ -427,12 +423,20 @@ export const securityHealthCheck = (req: Request, res: Response) => {
   });
 };
 
-export default {
+// CommonJS exports
+module.exports = {
   applySecurity,
+  securityHeaders,
+  corsMiddleware,
   rateLimiter,
   apiRateLimiter,
   authRateLimiter,
+  speedLimiter,
+  validateJSON,
   commonValidation,
   handleValidationErrors,
+  securityLogger,
+  requestSizeLimiter,
+  ipFilter,
   securityHealthCheck
 };

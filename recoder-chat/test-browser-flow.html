@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat Test - Guest Flow</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .log {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .success {
+      color: #28a745;
+    }
+    .error {
+      color: #dc3545;
+    }
+    .info {
+      color: #17a2b8;
+    }
+    #messageInput {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .response {
+      background: #e7f3ff;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Recoder Chat - Complete Flow Test</h1>
+
+  <div class="test-section">
+    <h2>1. Guest Authentication</h2>
+    <p>This will sign you in as a guest user (20 messages free)</p>
+    <button onclick="guestSignIn()">Sign In as Guest</button>
+    <div id="authLog" class="log"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>2. Session Check</h2>
+    <button onclick="checkSession()">Check Current Session</button>
+    <div id="sessionLog" class="log"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>3. Send Chat Message</h2>
+    <input type="text" id="messageInput" placeholder="Type your message..." value="Hello! Can you help me?">
+    <button onclick="sendChat()">Send Message</button>
+    <div id="chatLog" class="log"></div>
+    <div id="chatResponse" class="response" style="display: none;"></div>
+  </div>
+
+  <script>
+    const BASE_URL = 'http://localhost:3010';
+
+    function log(elementId, message, type = 'info') {
+      const el = document.getElementById(elementId);
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+      el.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function guestSignIn() {
+      const logEl = 'authLog';
+      document.getElementById(logEl).innerHTML = '';
+      log(logEl, 'Starting guest authentication...', 'info');
+
+      try {
+        // Using NextAuth client-side signIn
+        log(logEl, 'Calling /api/auth/signin/guest...', 'info');
+
+        // Use CSRF token approach
+        const csrfResponse = await fetch(`${BASE_URL}/api/auth/csrf`);
+        const { csrfToken } = await csrfResponse.json();
+        log(logEl, `Got CSRF token: ${csrfToken.substring(0, 20)}...`, 'info');
+
+        // Call guest auth callback
+        const formData = new URLSearchParams();
+        formData.append('csrfToken', csrfToken);
+        formData.append('callbackUrl', `${BASE_URL}/`);
+        formData.append('json', 'true');
+
+        const response = await fetch(`${BASE_URL}/api/auth/callback/guest`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData,
+          credentials: 'include', // Important for cookies
+        });
+
+        log(logEl, `Response status: ${response.status}`, 'info');
+
+        const data = await response.json();
+        log(logEl, `Response data: ${JSON.stringify(data, null, 2)}`, 'info');
+
+        if (data.url || response.ok) {
+          log(logEl, '✅ Guest authentication successful!', 'success');
+          log(logEl, 'You can now check session and send messages', 'success');
+        } else if (data.error) {
+          log(logEl, `❌ Error: ${data.error}`, 'error');
+        }
+      } catch (error) {
+        log(logEl, `❌ Error: ${error.message}`, 'error');
+        console.error('Full error:', error);
+      }
+    }
+
+    async function checkSession() {
+      const logEl = 'sessionLog';
+      document.getElementById(logEl).innerHTML = '';
+      log(logEl, 'Checking session...', 'info');
+
+      try {
+        const response = await fetch(`${BASE_URL}/api/auth/session`, {
+          credentials: 'include',
+        });
+
+        const session = await response.json();
+        log(logEl, `Session data:\n${JSON.stringify(session, null, 2)}`, 'info');
+
+        if (session && session.user) {
+          log(logEl, `✅ Logged in as: ${session.user.email}`, 'success');
+          log(logEl, `User type: ${session.user.type}`, 'success');
+          log(logEl, `User ID: ${session.user.id}`, 'success');
+        } else {
+          log(logEl, '❌ Not logged in', 'error');
+          log(logEl, 'Please click "Sign In as Guest" first', 'error');
+        }
+      } catch (error) {
+        log(logEl, `❌ Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function sendChat() {
+      const logEl = 'chatLog';
+      const responseEl = 'chatResponse';
+      document.getElementById(logEl).innerHTML = '';
+      document.getElementById(responseEl).style.display = 'none';
+      document.getElementById(responseEl).innerHTML = '';
+
+      const message = document.getElementById('messageInput').value;
+
+      if (!message.trim()) {
+        log(logEl, '❌ Please enter a message', 'error');
+        return;
+      }
+
+      log(logEl, 'Sending chat message...', 'info');
+
+      try {
+        const chatId = `chat-${Date.now()}`;
+        const messageId = `msg-${Date.now()}`;
+
+        const payload = {
+          id: chatId,
+          message: {
+            role: 'user',
+            content: message,
+            id: messageId,
+          },
+          selectedChatModel: 'deepseek/deepseek-r1:free',
+          selectedVisibilityType: 'private',
+        };
+
+        log(logEl, `Payload: ${JSON.stringify(payload, null, 2)}`, 'info');
+
+        const response = await fetch(`${BASE_URL}/api/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+          credentials: 'include',
+        });
+
+        log(logEl, `Response status: ${response.status} ${response.statusText}`, 'info');
+        log(logEl, `Content-Type: ${response.headers.get('content-type')}`, 'info');
+
+        if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+          log(logEl, '✅ Streaming response started!', 'success');
+          document.getElementById(responseEl).style.display = 'block';
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value);
+            document.getElementById(responseEl).innerHTML += chunk;
+            log(logEl, `Received chunk (${chunk.length} bytes)`, 'info');
+          }
+
+          log(logEl, '✅ Streaming complete!', 'success');
+        } else {
+          const text = await response.text();
+          log(logEl, `Response: ${text.substring(0, 500)}...`, 'error');
+
+          if (text.includes('<!DOCTYPE html>')) {
+            log(logEl, '❌ Received HTML instead of streaming response', 'error');
+            log(logEl, '❌ This means you are not authenticated', 'error');
+            log(logEl, 'Please sign in as guest first!', 'error');
+          } else {
+            try {
+              const json = JSON.parse(text);
+              log(logEl, `Error: ${JSON.stringify(json, null, 2)}`, 'error');
+            } catch {
+              log(logEl, `Error: ${text}`, 'error');
+            }
+          }
+        }
+      } catch (error) {
+        log(logEl, `❌ Error: ${error.message}`, 'error');
+        console.error('Full error:', error);
+      }
+    }
+
+    // Auto-check session on load
+    window.addEventListener('load', () => {
+      log('authLog', 'Page loaded. Ready to test!', 'info');
+    });
+  </script>
+</body>
+</html>

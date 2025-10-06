@@ -1,42 +1,18 @@
+import { streamText } from 'ai';
+import { auth } from '@/app/(auth)/auth';
 import {
-  convertToModelMessages,
-  createUIMessageStream,
-  JsonToSseTransformStream,
-  smoothStream,
-  stepCountIs,
-  streamText,
-} from 'ai';
-import { auth, type UserType } from '@/app/(auth)/auth';
-import { type RequestHints, systemPrompt } from '@/lib/ai/prompts';
-import {
-  createStreamId,
-  deleteChatById,
   getChatById,
-  getMessageCountByUserId,
-  getMessagesByChatId,
   saveChat,
   saveMessages,
+  deleteChatById,
 } from '@/lib/db/queries';
-import { convertToUIMessages, generateUUID } from '@/lib/utils';
-import { generateTitleFromUserMessage } from '../../actions';
-import { createDocument } from '@/lib/ai/tools/create-document';
-import { updateDocument } from '@/lib/ai/tools/update-document';
-import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
-import { getWeather } from '@/lib/ai/tools/get-weather';
-import { isProductionEnvironment } from '@/lib/constants';
-import { myProvider } from '@/lib/ai/providers';
-import { entitlementsByUserType } from '@/lib/ai/entitlements';
-import { postRequestBodySchema, type PostRequestBody } from './schema';
-import { geolocation } from '@vercel/functions';
+import { generateUUID } from '@/lib/utils';
+import { ChatSDKError } from '@/lib/errors';
 import {
   createResumableStreamContext,
   type ResumableStreamContext,
 } from 'resumable-stream';
 import { after } from 'next/server';
-import { ChatSDKError } from '@/lib/errors';
-import type { ChatMessage } from '@/lib/types';
-import type { ChatModel } from '@/lib/ai/models';
-import type { VisibilityType } from '@/components/visibility-selector';
 
 export const maxDuration = 60;
 
@@ -63,166 +39,91 @@ export function getStreamContext() {
 }
 
 export async function POST(request: Request) {
-  let requestBody: PostRequestBody;
-
   try {
     const json = await request.json();
-    requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
-    return new ChatSDKError('bad_request:api').toResponse();
-  }
+    const { id, messages } = json;
 
-  try {
-    const {
-      id,
-      message,
-      selectedChatModel,
-      selectedVisibilityType,
-    }: {
-      id: string;
-      message: ChatMessage;
-      selectedChatModel: ChatModel['id'];
-      selectedVisibilityType: VisibilityType;
-    } = requestBody;
+    console.log('📨 Chat request:', { id, messageCount: messages?.length });
 
     const session = await auth();
-
     if (!session?.user) {
       return new ChatSDKError('unauthorized:chat').toResponse();
     }
 
-    const userType: UserType = session.user.type;
-
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 24,
-    });
-
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
-      return new ChatSDKError('rate_limit:chat').toResponse();
+    // Validate messages array
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return new ChatSDKError('bad_request:api').toResponse();
     }
 
-    const chat = await getChatById({ id });
-
+    // Get or create chat
+    let chat = await getChatById({ id });
     if (!chat) {
-      const title = await generateTitleFromUserMessage({
-        message,
-      });
+      const firstMessage = messages?.[0]?.content || 'New Chat';
+      const title = typeof firstMessage === 'string'
+        ? firstMessage.substring(0, 50)
+        : 'New Chat';
 
       await saveChat({
         id,
         userId: session.user.id,
         title,
-        visibility: selectedVisibilityType,
+        visibility: 'private',
       });
-    } else {
-      if (chat.userId !== session.user.id) {
-        return new ChatSDKError('forbidden:chat').toResponse();
-      }
+    } else if (chat.userId !== session.user.id) {
+      return new ChatSDKError('forbidden:chat').toResponse();
     }
 
-    const messagesFromDb = await getMessagesByChatId({ id });
-    const uiMessages = [...convertToUIMessages(messagesFromDb), message];
-
-    const { longitude, latitude, city, country } = geolocation(request);
-
-    const requestHints: RequestHints = {
-      longitude,
-      latitude,
-      city,
-      country,
-    };
-
+    // Save user message
+    const userMessage = messages[messages.length - 1];
     await saveMessages({
       messages: [
         {
+          id: generateUUID(),
           chatId: id,
-          id: message.id,
           role: 'user',
-          parts: message.parts,
+          parts: [{ type: 'text', text: userMessage.content }],
           attachments: [],
           createdAt: new Date(),
         },
       ],
     });
 
-    const streamId = generateUUID();
-    await createStreamId({ streamId, chatId: id });
+    // Use OpenRouter with DeepSeek free model
+    const { createOpenAI } = await import('@ai-sdk/openai');
+    const openrouter = createOpenAI({
+      apiKey: process.env.OPENROUTER_API_KEY || '',
+      baseURL: 'https://openrouter.ai/api/v1',
+    });
 
-    const stream = createUIMessageStream({
-      execute: async ({ writer: dataStream }) => {
-        const model = await myProvider.chat();
-        const result = streamText({
-          model,
-          system: systemPrompt({ selectedChatModel, requestHints }),
-          messages: convertToModelMessages(uiMessages),
-          stopWhen: stepCountIs(5),
-          experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning'
-              ? []
-              : [
-                  'getWeather',
-                  'createDocument',
-                  'updateDocument',
-                  'requestSuggestions',
-                ],
-          experimental_transform: smoothStream({ chunking: 'word' }),
-          tools: {
-            getWeather,
-            createDocument: createDocument({ session, dataStream }),
-            updateDocument: updateDocument({ session, dataStream }),
-            requestSuggestions: requestSuggestions({
-              session,
-              dataStream,
-            }),
-          },
-          experimental_telemetry: {
-            isEnabled: isProductionEnvironment,
-            functionId: 'stream-text',
-          },
-        });
+    console.log('🤖 Streaming with DeepSeek...');
 
-        result.consumeStream();
-
-        dataStream.merge(
-          result.toUIMessageStream({
-            sendReasoning: true,
-          }),
-        );
-      },
-      generateId: generateUUID,
-      onFinish: async ({ messages }) => {
+    const result = await streamText({
+      model: openrouter('deepseek/deepseek-chat-v3.1:free'),
+      messages,
+      async onFinish({ text }) {
+        console.log('💾 Saving response:', text.substring(0, 100));
         await saveMessages({
-          messages: messages.map((message) => ({
-            id: message.id,
-            role: message.role,
-            parts: message.parts,
-            createdAt: new Date(),
-            attachments: [],
-            chatId: id,
-          })),
+          messages: [
+            {
+              id: generateUUID(),
+              chatId: id,
+              role: 'assistant',
+              parts: [{ type: 'text', text }],
+              attachments: [],
+              createdAt: new Date(),
+            },
+          ],
         });
-      },
-      onError: () => {
-        return 'Oops, an error occurred!';
       },
     });
 
-    const streamContext = getStreamContext();
-
-    if (streamContext) {
-      return new Response(
-        await streamContext.resumableStream(streamId, () =>
-          stream.pipeThrough(new JsonToSseTransformStream()),
-        ),
-      );
-    } else {
-      return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
-    }
+    return result.toDataStreamResponse();
   } catch (error) {
-    if (error instanceof ChatSDKError) {
-      return error.toResponse();
-    }
+    console.error('❌ Chat error:', error);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 }
 

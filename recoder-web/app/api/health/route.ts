@@ -74,10 +74,15 @@ export async function GET() {
 // Database health check
 async function checkDatabase(): Promise<string> {
   try {
-    // TODO: Add actual database connectivity check
-    // For now, just return healthy
+    // Import getPrisma dynamically to avoid edge runtime issues
+    const { getPrisma } = await import('@/lib/prisma');
+    const prisma = getPrisma();
+    
+    // Simple connectivity test
+    await prisma.$queryRaw`SELECT 1`;
     return 'healthy';
   } catch (error) {
+    console.error('Database health check failed:', error);
     return 'unhealthy';
   }
 }

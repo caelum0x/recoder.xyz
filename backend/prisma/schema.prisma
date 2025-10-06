@@ -1,4 +1,3 @@
-// Prisma schema file
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,431 +8,356 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  password        String?   // Optional for OAuth users
-  name            String
-  organization    String?
-  role            String    @default("user")
-  isActive        Boolean   @default(true)
-  emailVerified   Boolean   @default(false)
-  subscription    String    @default("free")
-  apiKey          String?   @unique
-  refreshToken    String?
-  lastLoginAt     DateTime?
-  avatar          String?   // User avatar URL for mobile API
-  
-  // Two-Factor Authentication fields
-  twoFactorEnabled    Boolean   @default(false)
-  totpSecret          String?   // Encrypted TOTP secret
-  totpSecretTemp      String?   // Temporary secret during setup
-  backupCodes         String?   // JSON array of hashed backup codes
-  backupCodesTemp     String?   // Temporary backup codes during setup
-  twoFactorSetupAt    DateTime? // When 2FA setup was initiated
-  twoFactorEnabledAt  DateTime? // When 2FA was enabled
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Relations
-  projects        Project[]
-  templates       Template[]
-  agents          Agent[]
-  usageRecords    UsageRecord[]
-  subscriptions   Subscription[]
-  invoices        Invoice[]
-  paymentMethods  PaymentMethod[]
-  devices         UserDevice[]
-  syncStates      SyncState[]
-  oauthAccounts   OAuthAccount[]
-  integrations    Integration[]
-  apiKeys         ApiKey[]
-  auditLogs       AuditLog[]
-  notifications   NotificationSettings?
-  userNotifications Notification[]
-  usageEvents     UsageEvent[]
-  fileUploads     FileUpload[]
-  webhooks        Webhook[]
-  analytics       UsageAnalytics[]
-  dodoSubscriptions DodoSubscription[]
-  dodoUsage       DodoUsage[]
-  knowledgeBases  CodebaseKnowledge[]
-  semanticQueries SemanticQuery[]
-  ragSessions     RAGSession[]
-  restoreJobs     RestoreJob[]
-  backupAccess    BackupAccess?
-  preferences     UserPreferences?
-  translations    Translation[]
-  userRoles       UserRole[]
-  
-  // Analytics Report Relations
-  analyticsReports        AnalyticsReport[]
-  reportExecutions        ReportExecution[]
-  reportExports           ReportExport[]
-  reportSchedules         ReportSchedule[]
-  scheduledExecutions     ScheduledExecution[]
-  sharedReports           ReportShare[] @relation("SharedReports")
-  receivedShares          ReportShareRecipient[] @relation("ReceivedShares")
-  reportShareAccesses     ReportShareAccess[]
-  authoredComments        ReportComment[] @relation("AuthoredComments")
-  moderatedComments       ReportComment[] @relation("ModeratedComments")
-
-  // Mobile and Game Development Relations
-  gameAssets              GameAsset[]
-  gameBuilds              GameBuild[]
-  codeGenerations         CodeGeneration[]
-  visualScripts           VisualScript[]
-  mobileAnalytics         MobileAnalytics[]
-  pushNotifications       PushNotification[]
-  offlineActions          OfflineAction[]
-  mobileSessions          MobileSession[]
-  
-  // Multiplayer and Matchmaking Relations
-  hostedRooms             GameRoom[] @relation("HostedRooms")
-  gameRoomPlayers         GameRoomPlayer[]
-  matchmakingQueue        MatchmakingQueue[]
-  gameMatchPlayers        GameMatchPlayer[]
-  
-  // Analytics Relations
-  gameAnalyticsEvents     GameAnalyticsEvent[]
-  gameSessions            GameSession[]
-  
-  // Blockchain Relations
-  createdContracts        SmartContract[] @relation("CreatedContracts")
-  deployedContracts       ContractDeployment[] @relation("DeployedContracts")
-  
-  // Payment System Relations
-  paymentIntents          PaymentIntent[]
-  
-  // AI App Generator Relations
-  aiGeneratedProjects     AIGeneratedProject[]
-  projectCollaborations   ProjectCollaborator[]
-  projectComments         ProjectComment[]
-  
-  // Platform Integration Relations
-  platformSessions        PlatformSession[]
-  projectShares           ProjectShare[]
-  remoteAssistance        RemoteAssistance[]
-  userPricingHistory      UserPricingHistory[]
-  
-  // Batch Processing Relations
-  batchRequests           BatchRequest[]
+  id                    String                 @id @default(cuid())
+  email                 String                 @unique
+  password              String?
+  name                  String
+  organization          String?
+  role                  String                 @default("user")
+  isActive              Boolean                @default(true)
+  emailVerified         Boolean                @default(false)
+  subscription          String                 @default("free")
+  apiKey                String?                @unique
+  refreshToken          String?
+  lastLoginAt           DateTime?
+  avatar                String?
+  twoFactorEnabled      Boolean                @default(false)
+  totpSecret            String?
+  totpSecretTemp        String?
+  backupCodes           String?
+  backupCodesTemp       String?
+  twoFactorSetupAt      DateTime?
+  twoFactorEnabledAt    DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  agents                Agent[]
+  aiGeneratedProjects   AIGeneratedProject[]
+  analyticsReports      AnalyticsReport[]
+  apiKeys               ApiKey[]
+  auditLogs             AuditLog[]
+  backupAccess          BackupAccess?
+  batchRequests         BatchRequest[]
+  codeGenerations       CodeGeneration[]
+  knowledgeBases        CodebaseKnowledge[]
+  deployedContracts     ContractDeployment[]   @relation("DeployedContracts")
+  dodoSubscriptions     DodoSubscription[]
+  dodoUsage             DodoUsage[]
+  fileUploads           FileUpload[]
+  gameAnalyticsEvents   GameAnalyticsEvent[]
+  gameAssets            GameAsset[]
+  gameBuilds            GameBuild[]
+  gameMatchPlayers      GameMatchPlayer[]
+  gameRoomPlayers       GameRoomPlayer[]
+  hostedRooms           GameRoom[]             @relation("HostedRooms")
+  gameSessions          GameSession[]
+  integrations          Integration[]
+  invoices              Invoice[]
+  matchmakingQueue      MatchmakingQueue[]
+  mobileAnalytics       MobileAnalytics[]
+  mobileSessions        MobileSession[]
+  notifications         NotificationSettings?
+  userNotifications     Notification[]
+  oauthAccounts         OAuthAccount[]
+  offlineActions        OfflineAction[]
+  paymentIntents        PaymentIntent[]
+  paymentMethods        PaymentMethod[]
+  platformSessions      PlatformSession[]
+  projectCollaborations ProjectCollaborator[]
+  projectComments       ProjectComment[]
+  projectShares         ProjectShare[]
+  projects              Project[]
+  pushNotifications     PushNotification[]
+  ragSessions           RAGSession[]
+  remoteAssistance      RemoteAssistance[]
+  moderatedComments     ReportComment[]        @relation("ModeratedComments")
+  authoredComments      ReportComment[]        @relation("AuthoredComments")
+  reportExecutions      ReportExecution[]
+  reportExports         ReportExport[]
+  reportSchedules       ReportSchedule[]
+  reportShareAccesses   ReportShareAccess[]
+  receivedShares        ReportShareRecipient[] @relation("ReceivedShares")
+  sharedReports         ReportShare[]          @relation("SharedReports")
+  restoreJobs           RestoreJob[]
+  scheduledExecutions   ScheduledExecution[]
+  semanticQueries       SemanticQuery[]
+  createdContracts      SmartContract[]        @relation("CreatedContracts")
+  subscriptions         Subscription[]
+  syncStates            SyncState[]
+  templates             Template[]
+  translations          Translation[]
+  analytics             UsageAnalytics[]
+  usageEvents           UsageEvent[]
+  usageRecords          UsageRecord[]
+  devices               UserDevice[]
+  preferences           UserPreferences?
+  userPricingHistory    UserPricingHistory[]
+  userRoles             UserRole[]
+  visualScripts         VisualScript[]
+  webhooks              Webhook[]
 
   @@map("users")
 }
 
 model Project {
-  id                      String    @id @default(cuid())
-  name                    String
-  type                    String    // web, mobile, desktop, api, blockchain, ai, game
-  description             String?
-  status                  String    @default("planning") // planning, active, completed, archived
-  framework               String?   // React, Vue, Unity, Unreal, etc.
-  language                String?   // TypeScript, JavaScript, C#, C++, etc.
-  isPrivate               Boolean   @default(false)
-  config                  Json      @default("{}")
-  structure               Json?
-  metadata                Json?     @default("{}")  // Additional project metadata
-  lastGenerated           DateTime?
-  generatedCodeMetadata   Json?
-  projectPath             String?   // Local filesystem path for game projects
-  configuration           Json?     @default("{}")  // Build configuration for game projects
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
-
-  // Foreign keys
-  userId                  String
-  templateId              String?
-
-  // Relations
-  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  template                Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  agents                  Agent[]
-  usageRecords            UsageRecord[]
-  analytics               UsageAnalytics[]
-  knowledgeBases          CodebaseKnowledge[]
-  gameAssets              GameAsset[]
-  gameBuilds              GameBuild[]
-  codeGenerations         CodeGeneration[]
-  visualScripts           VisualScript[]
-  gameRooms               GameRoom[]
-  matchmakingQueue        MatchmakingQueue[]
-  gameMatches             GameMatch[]
-  unrealProject           UnrealProject?
-  gameSessions            GameSession[]
-  analyticsEvents         GameAnalyticsEvent[]
-  solidityProjects        SolidityProject[]
-  smartContracts          SmartContract[]
-  blockchainNetworks      BlockchainNetwork[]
-  contractDeployments     ContractDeployment[]
+  id                    String               @id @default(cuid())
+  name                  String
+  type                  String
+  description           String?
+  status                String               @default("planning")
+  framework             String?
+  language              String?
+  isPrivate             Boolean              @default(false)
+  config                Json                 @default("{}")
+  structure             Json?
+  metadata              Json?                @default("{}")
+  lastGenerated         DateTime?
+  generatedCodeMetadata Json?
+  projectPath           String?
+  configuration         Json?                @default("{}")
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  userId                String
+  templateId            String?
+  agents                Agent[]
+  blockchainNetworks    BlockchainNetwork[]
+  codeGenerations       CodeGeneration[]
+  knowledgeBases        CodebaseKnowledge[]
+  contractDeployments   ContractDeployment[]
+  analyticsEvents       GameAnalyticsEvent[]
+  gameAssets            GameAsset[]
+  gameBuilds            GameBuild[]
+  gameMatches           GameMatch[]
+  gameRooms             GameRoom[]
+  gameSessions          GameSession[]
+  matchmakingQueue      MatchmakingQueue[]
+  template              Template?            @relation(fields: [templateId], references: [id])
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  smartContracts        SmartContract[]
+  solidityProjects      SolidityProject?
+  unrealProject         UnrealProject?
+  analytics             UsageAnalytics[]
+  usageRecords          UsageRecord[]
+  visualScripts         VisualScript[]
 
   @@map("projects")
 }
 
 model Template {
-  id          String    @id @default(cuid())
-  name        String
-  category    String    // web, mobile, desktop, api, blockchain, ai
-  description String?
-  structure   Json
-  config      Json      @default("{}")
-  public      Boolean   @default(false)
-  version     String    @default("1.0.0")
-  imported    Boolean   @default(false)
+  id                 String    @id @default(cuid())
+  name               String
+  category           String
+  description        String?
+  structure          Json
+  config             Json      @default("{}")
+  public             Boolean   @default(false)
+  version            String    @default("1.0.0")
+  imported           Boolean   @default(false)
   originalTemplateId String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Foreign keys
-  userId      String
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projects    Project[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  userId             String
+  projects           Project[]
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("templates")
 }
 
 model Agent {
-  id          String    @id @default(cuid())
-  name        String
-  type        String    // code, chat, analysis, deployment
-  description String?
-  config      Json      @default("{}")
-  status      String    @default("inactive") // active, inactive, training, error
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Foreign keys
-  userId      String
-  projectId   String?
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  id           String        @id @default(cuid())
+  name         String
+  type         String
+  description  String?
+  config       Json          @default("{}")
+  status       String        @default("inactive")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userId       String
+  projectId    String?
+  project      Project?      @relation(fields: [projectId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   usageRecords UsageRecord[]
 
   @@map("agents")
 }
 
 model UsageRecord {
-  id          String    @id @default(cuid())
-  type        String    // api_usage, model_usage, code_generation, bandwidth, etc.
-  metadata    Json      @default("{}")
-  tokens      Int?
-  cost        Float?
-  duration    Int?
-  success     Boolean   @default(true)
-  timestamp   DateTime  @default(now())
-
-  // Foreign keys
-  userId      String
-  projectId   String?
-  agentId     String?
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  agent       Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  id        String   @id @default(cuid())
+  type      String
+  metadata  Json     @default("{}")
+  tokens    Int?
+  cost      Float?
+  duration  Int?
+  success   Boolean  @default(true)
+  timestamp DateTime @default(now())
+  userId    String
+  projectId String?
+  agentId   String?
+  agent     Agent?   @relation(fields: [agentId], references: [id])
+  project   Project? @relation(fields: [projectId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("usage_records")
 }
 
 model Subscription {
-  id                    String    @id @default(cuid())
-  planId                String
-  status                String    // active, inactive, cancelled, past_due
-  currentPeriodStart    DateTime
-  currentPeriodEnd      DateTime
-  cancelAtPeriodEnd     Boolean   @default(false)
-  cancelledAt           DateTime?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  // Foreign keys
-  userId                String
-  paymentMethodId       String?
-
-  // Relations
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  paymentMethod         PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
-  invoices              Invoice[]
+  id                 String         @id @default(cuid())
+  planId             String
+  status             String
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean        @default(false)
+  cancelledAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  userId             String
+  paymentMethodId    String?
+  invoices           Invoice[]
+  paymentMethod      PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("subscriptions")
 }
 
 model Invoice {
-  id              String    @id @default(cuid())
-  amount          Float
-  currency        String    @default("USD")
-  status          String    // draft, open, paid, void, uncollectible
-  description     String?
-  items           Json      @default("[]")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  paidAt          DateTime?
-  voidedAt        DateTime?
-
-  // Foreign keys
-  userId          String
-  subscriptionId  String?
-
-  // Relations
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscription    Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  id             String        @id @default(cuid())
+  amount         Float
+  currency       String        @default("USD")
+  status         String
+  description    String?
+  items          Json          @default("[]")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  paidAt         DateTime?
+  voidedAt       DateTime?
+  userId         String
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("invoices")
 }
 
 model PaymentMethod {
-  id          String    @id @default(cuid())
-  type        String    // card, bank_account
-  provider    String    @default("stripe")
-  providerId  String
-  brand       String?
-  last4       String?
-  expMonth    Int?
-  expYear     Int?
-  isDefault   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Foreign keys
-  userId      String
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String         @id @default(cuid())
+  type          String
+  provider      String         @default("stripe")
+  providerId    String
+  brand         String?
+  last4         String?
+  expMonth      Int?
+  expYear       Int?
+  isDefault     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscriptions Subscription[]
 
   @@map("payment_methods")
 }
 
 model Integration {
-  id          String    @id @default(cuid())
-  name        String
-  type        String    // ai, cloud, payment, blockchain
-  provider    String
-  config      Json      @default("{}")
-  status      String    @default("inactive") // active, inactive, error
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Foreign keys
-  userId      String
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  provider  String
+  config    Json     @default("{}")
+  status    String   @default("inactive")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("integrations")
 }
 
 model ApiKey {
-  id            String    @id @default(cuid())
-  name          String
-  keyPrefix     String
-  keyHash       String
-  permissions   String[]  @default([])
-  rateLimit     Json      @default("{}")
-  metadata      Json      @default("{}")
-  isActive      Boolean   @default(true)
-  lastUsedAt    DateTime?
-  expiresAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // Foreign keys
-  userId        String
-
-  // Relations
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  name        String
+  keyPrefix   String
+  keyHash     String
+  permissions String[]  @default([])
+  rateLimit   Json      @default("{}")
+  metadata    Json      @default("{}")
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("api_keys")
 }
 
 model AuditLog {
-  id          String    @id @default(cuid())
-  action      String
-  resource    String
-  resourceId  String?
-  metadata    Json      @default("{}")
-  ipAddress   String?
-  userAgent   String?
-  timestamp   DateTime  @default(now())
-
-  // Foreign keys
-  userId      String?
-
-  // Relations
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id         String   @id @default(cuid())
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json     @default("{}")
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
 }
 
 model Configuration {
-  id          String    @id @default(cuid())
-  key         String    @unique
+  id          String   @id @default(cuid())
+  key         String   @unique
   value       Json
   description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@map("configurations")
 }
 
 model NotificationSettings {
-  id                    String    @id @default(cuid())
-  emailNotifications    Boolean   @default(true)
-  pushNotifications     Boolean   @default(false)
-  weeklyReports         Boolean   @default(true)
-  securityAlerts        Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @default(now())
-
-  // Foreign keys
-  userId                String    @unique
-
-  // Relations
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid())
+  emailNotifications Boolean  @default(true)
+  pushNotifications  Boolean  @default(false)
+  weeklyReports      Boolean  @default(true)
+  securityAlerts     Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_settings")
 }
 
 model FileUpload {
-  id          String    @id @default(cuid())
-  filename    String
+  id           String   @id @default(cuid())
+  filename     String
   originalName String
-  mimetype    String
-  size        Int
-  path        String
-  url         String?
-  metadata    Json      @default("{}")
-  createdAt   DateTime  @default(now())
-
-  // Foreign keys
-  userId      String
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mimetype     String
+  size         Int
+  path         String
+  url          String?
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("file_uploads")
 }
 
 model Webhook {
-  id          String    @id @default(cuid())
-  url         String
-  events      String[]
-  secret      String?
-  isActive    Boolean   @default(true)
+  id           String            @id @default(cuid())
+  url          String
+  events       String[]
+  secret       String?
+  isActive     Boolean           @default(true)
   lastDelivery DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Foreign keys
-  userId      String
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deliveries  WebhookDelivery[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  userId       String
+  deliveries   WebhookDelivery[]
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("webhooks")
 }
@@ -443,54 +367,44 @@ model WebhookDelivery {
   event       String
   payload     Json
   response    Json?
-  status      String    // success, failed, pending
+  status      String
   attempts    Int       @default(1)
   createdAt   DateTime  @default(now())
   deliveredAt DateTime?
-
-  // Foreign keys
   webhookId   String
-
-  // Relations
   webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
   @@map("webhook_deliveries")
 }
 
-// OAuth Account Management
 model OAuthAccount {
-  id            String  @id @default(cuid())
-  provider      String  // google, github, microsoft
-  providerId    String  // External provider's user ID
-  email         String?
-  accessToken   String?
-  refreshToken  String?
+  id             String    @id @default(cuid())
+  provider       String
+  providerId     String
+  email          String?
+  accessToken    String?
+  refreshToken   String?
   tokenExpiresAt DateTime?
-  scope         String?
-  isActive      Boolean @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Foreign keys
-  userId        String
-
-  // Relations
-  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope          String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerId])
   @@map("oauth_accounts")
 }
 
-// Device Management for Cross-Platform Sync
 model UserDevice {
   id                      String    @id @default(cuid())
-  name                    String    // User-friendly device name
-  deviceType              String    // web, cli, extension, mobile, desktop
-  platform                String    // windows, macos, linux, android, ios, browser
-  deviceId                String    // Unique device identifier
-  pushToken               String?   // For push notifications
-  version                 String?   // Device OS/app version
-  model                   String?   // Device model
+  name                    String
+  deviceType              String
+  platform                String
+  deviceId                String
+  pushToken               String?
+  version                 String?
+  model                   String?
   lastActiveAt            DateTime  @default(now())
   lastSeenAt              DateTime?
   lastSyncAt              DateTime?
@@ -499,79 +413,63 @@ model UserDevice {
   metadata                Json      @default("{}")
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
-
-  // Foreign keys
   userId                  String
-
-  // Relations
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@map("user_devices")
 }
 
-// Cross-Platform Sync States
 model SyncState {
-  id              String    @id @default(cuid())
-  dataType        String    // projects, settings, history, preferences
-  lastSyncAt      DateTime  @default(now())
-  syncVersion     Int       @default(1)
-  conflictData    Json?     // Store conflict resolution data
-  syncStatus      String    @default("synced") // synced, pending, conflicted, failed
-  deviceSyncMap   Json      @default("{}") // Track sync status per device
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Foreign keys
-  userId          String
-
-  // Relations
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  dataType      String
+  lastSyncAt    DateTime @default(now())
+  syncVersion   Int      @default(1)
+  conflictData  Json?
+  syncStatus    String   @default("synced")
+  deviceSyncMap Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dataType])
   @@map("sync_states")
 }
 
-// AI Provider Status and Configuration
 model AIProviderStatus {
-  id              String    @id @default(cuid())
-  provider        String    // anthropic, groq, gemini, ollama, openai
-  status          String    @default("unknown") // healthy, degraded, offline, error
-  responseTime    Float?    // Average response time in ms
-  errorRate       Float?    // Error rate percentage
-  lastCheckAt     DateTime  @default(now())
-  uptime          Float?    // Uptime percentage
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  provider     String   @unique
+  status       String   @default("unknown")
+  responseTime Float?
+  errorRate    Float?
+  lastCheckAt  DateTime @default(now())
+  uptime       Float?
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  @@unique([provider])
   @@map("ai_provider_status")
 }
 
-// Enhanced Usage Analytics
 model UsageAnalytics {
-  id              String    @id @default(cuid())
-  eventType       String    // api_call, code_generation, authentication, sync
-  platform        String    // cli, web, mobile, extension, desktop
-  provider        String?   // AI provider if applicable
-  tokens          Int?
-  cost            Float?
-  duration        Int?      // Duration in milliseconds
-  success         Boolean   @default(true)
-  errorCode       String?
-  errorMessage    String?
-  metadata        Json      @default("{}")
-  timestamp       DateTime  @default(now())
-
-  // Foreign keys
-  userId          String?
-  deviceId        String?
-  projectId       String?
-
-  // Relations
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  id           String   @id @default(cuid())
+  eventType    String
+  platform     String
+  provider     String?
+  tokens       Int?
+  cost         Float?
+  duration     Int?
+  success      Boolean  @default(true)
+  errorCode    String?
+  errorMessage String?
+  metadata     Json     @default("{}")
+  timestamp    DateTime @default(now())
+  userId       String?
+  deviceId     String?
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id])
+  user         User?    @relation(fields: [userId], references: [id])
 
   @@index([userId, timestamp])
   @@index([platform, timestamp])
@@ -579,125 +477,108 @@ model UsageAnalytics {
   @@map("usage_analytics")
 }
 
-// DODO Payments Integration Models
 model DodoSubscription {
-  id                   String   @id @default(cuid())
-  userId               String
-  planId               String   // "weekly", "monthly", "enterprise"  
-  planName             String
-  dodoSubscriptionId   String   @unique
-  status               String   @default("pending") // "active", "cancelled", "expired", "failed"
-  amount               Float    // Changed to Float for precise currency amounts
-  currency             String   @default("USD")
-  nextBillingDate      DateTime
-  cancelAtPeriodEnd    Boolean  @default(false)
-  
-  // Additional fields for unified payment service
-  currentPeriodStart   DateTime?
-  currentPeriodEnd     DateTime?
-  lastPaymentAt        DateTime?
-  cancelledAt          DateTime?
-  
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  // Relations
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  usage                DodoUsage[]
-  charges              DodoCharge[]
+  id                 String       @id @default(cuid())
+  userId             String
+  planId             String
+  planName           String
+  dodoSubscriptionId String       @unique
+  status             String       @default("pending")
+  amount             Float
+  currency           String       @default("USD")
+  nextBillingDate    DateTime
+  cancelAtPeriodEnd  Boolean      @default(false)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  lastPaymentAt      DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  charges            DodoCharge[]
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usage              DodoUsage[]
 
   @@map("dodo_subscriptions")
 }
 
 model DodoUsage {
-  id               String   @id @default(cuid())
-  userId           String
-  subscriptionId   String?
-  tokensUsed       Int
-  requestsMade     Int
-  aiProvider       String
-  featureUsed      String
-  costCents        Int
-  periodStart      DateTime
-  periodEnd        DateTime
-  metadata         Json     @default("{}")
-  createdAt        DateTime @default(now())
-
-  // Relations
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscription     DodoSubscription? @relation(fields: [subscriptionId], references: [id])
+  id             String            @id @default(cuid())
+  userId         String
+  subscriptionId String?
+  tokensUsed     Int
+  requestsMade   Int
+  aiProvider     String
+  featureUsed    String
+  costCents      Int
+  periodStart    DateTime
+  periodEnd      DateTime
+  metadata       Json              @default("{}")
+  createdAt      DateTime          @default(now())
+  subscription   DodoSubscription? @relation(fields: [subscriptionId], references: [id])
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("dodo_usage")
 }
 
 model DodoCharge {
-  id               String           @id @default(cuid())
-  subscriptionId   String
-  dodoChargeId     String           @unique
-  amount           Float            // Changed to Float for precise currency amounts
-  currency         String           @default("USD")
-  description      String
-  status           String           @default("pending") // "succeeded", "failed", "pending"
-  processedAt      DateTime?        // When payment was processed
-  createdAt        DateTime         @default(now())
-
-  // Relations
-  subscription     DodoSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  id             String           @id @default(cuid())
+  subscriptionId String
+  dodoChargeId   String           @unique
+  amount         Float
+  currency       String           @default("USD")
+  description    String
+  status         String           @default("pending")
+  processedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  subscription   DodoSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@map("dodo_charges")
 }
 
 model DodoWebhookEvent {
-  id               String   @id @default(cuid())
-  provider         String   @default("dodo_payments")
-  eventType        String
-  payload          Json
-  processed        Boolean  @default(false)
-  processingError  String?
-  createdAt        DateTime @default(now())
+  id              String   @id @default(cuid())
+  provider        String   @default("dodo_payments")
+  eventType       String
+  payload         Json
+  processed       Boolean  @default(false)
+  processingError String?
+  createdAt       DateTime @default(now())
 
   @@map("dodo_webhook_events")
 }
 
-// RAG (Retrieval-Augmented Generation) System Models
-// Vector embeddings and knowledge base for enhanced code understanding
-
 model CodebaseKnowledge {
-  id              String    @id @default(cuid())
-  name            String
-  description     String?
-  repositoryUrl   String?
-  type            String    @default("project") // project, library, framework, documentation
-  language        String?   // programming language
-  framework       String?   // framework/stack
-  visibility      String    @default("private") // private, public, organization
-  status          String    @default("active") // active, processing, indexed, error
-  totalFiles      Int       @default(0)
-  indexedFiles    Int       @default(0)
-  lastIndexedAt   DateTime?
-  processingMeta  Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Foreign keys
-  userId          String
-  projectId       String?
-
-  // Relations
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project         Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  codeChunks      CodeChunk[]
+  id               String            @id @default(cuid())
+  name             String
+  description      String?
+  repositoryUrl    String?
+  type             String            @default("project")
+  language         String?
+  framework        String?
+  visibility       String            @default("private")
+  status           String            @default("active")
+  totalFiles       Int               @default(0)
+  indexedFiles     Int               @default(0)
+  lastIndexedAt    DateTime?
+  processingMeta   Json              @default("{}")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  userId           String
+  projectId        String?
+  codeChunks       CodeChunk[]
+  project          Project?          @relation(fields: [projectId], references: [id])
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ragSessions      RAGSession[]
+  semanticQueries  SemanticQuery[]
   vectorEmbeddings VectorEmbedding[]
-  semanticQueries SemanticQuery[]
-  ragSessions     RAGSession[]
 
   @@map("codebase_knowledge")
 }
 
 model CodeChunk {
-  id              String    @id @default(cuid())
-  content         String    // Raw code content
-  contentType     String    // function, class, method, variable, comment, import, etc.
+  id              String                 @id @default(cuid())
+  content         String
+  contentType     String
   filePath        String
   fileName        String
   fileExtension   String
@@ -708,21 +589,17 @@ model CodeChunk {
   className       String?
   methodName      String?
   variableName    String?
-  complexity      String?   // simple, medium, complex
-  dependencies    String[]  @default([])
-  keywords        String[]  @default([])
-  summary         String?   // AI-generated summary
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Foreign keys
+  complexity      String?
+  dependencies    String[]               @default([])
+  keywords        String[]               @default([])
+  summary         String?
+  metadata        Json                   @default("{}")
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
   knowledgeBaseId String
-  vectorId        String?   @unique
-
-  // Relations
-  knowledgeBase   CodebaseKnowledge @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  vectorEmbedding VectorEmbedding?  @relation(fields: [vectorId], references: [id], onDelete: SetNull)
+  vectorId        String?                @unique
+  knowledgeBase   CodebaseKnowledge      @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  vectorEmbedding VectorEmbedding?       @relation(fields: [vectorId], references: [id])
   searchResults   SemanticSearchResult[]
 
   @@index([knowledgeBaseId, language])
@@ -732,24 +609,20 @@ model CodeChunk {
 }
 
 model VectorEmbedding {
-  id              String    @id @default(cuid())
-  embedding       Float[]   // Vector embedding array (for pgvector)
-  embeddingModel  String    @default("text-embedding-3-small") // OpenAI, Cohere, etc.
-  dimension       Int       @default(1536)
-  provider        String    @default("openai") // openai, cohere, huggingface
-  contentHash     String    // Hash of the content for deduplication
-  similarity      Float?    // Similarity score (for search results)
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-
-  // Foreign keys
+  id              String                 @id @default(cuid())
+  embedding       Float[]
+  embeddingModel  String                 @default("text-embedding-3-small")
+  dimension       Int                    @default(1536)
+  provider        String                 @default("openai")
+  contentHash     String
+  similarity      Float?
+  metadata        Json                   @default("{}")
+  createdAt       DateTime               @default(now())
   knowledgeBaseId String
-  chunkId         String?   @unique
-
-  // Relations
-  knowledgeBase   CodebaseKnowledge @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunkId         String?                @unique
   codeChunk       CodeChunk?
   searchResults   SemanticSearchResult[]
+  knowledgeBase   CodebaseKnowledge      @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
 
   @@index([knowledgeBaseId])
   @@index([contentHash])
@@ -757,27 +630,23 @@ model VectorEmbedding {
 }
 
 model SemanticQuery {
-  id              String    @id @default(cuid())
+  id              String                 @id @default(cuid())
   query           String
-  queryType       String    @default("search") // search, explain, generate, refactor
-  intent          String?   // user intent classification
-  language        String?   // programming language filter
-  framework       String?   // framework filter
-  complexity      String?   // complexity filter
-  maxResults      Int       @default(10)
-  threshold       Float     @default(0.7) // similarity threshold
-  processingTime  Int?      // milliseconds
-  totalResults    Int       @default(0)
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-
-  // Foreign keys
+  queryType       String                 @default("search")
+  intent          String?
+  language        String?
+  framework       String?
+  complexity      String?
+  maxResults      Int                    @default(10)
+  threshold       Float                  @default(0.7)
+  processingTime  Int?
+  totalResults    Int                    @default(0)
+  metadata        Json                   @default("{}")
+  createdAt       DateTime               @default(now())
   userId          String
   knowledgeBaseId String
-
-  // Relations
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  knowledgeBase   CodebaseKnowledge @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  knowledgeBase   CodebaseKnowledge      @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   searchResults   SemanticSearchResult[]
 
   @@index([userId, createdAt])
@@ -786,24 +655,20 @@ model SemanticQuery {
 }
 
 model SemanticSearchResult {
-  id              String    @id @default(cuid())
+  id              String          @id @default(cuid())
   rank            Int
   similarity      Float
-  relevanceScore  Float?    // Combined relevance score
-  contextWindow   String?   // Surrounding context
-  explanation     String?   // AI explanation of relevance
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-
-  // Foreign keys
+  relevanceScore  Float?
+  contextWindow   String?
+  explanation     String?
+  metadata        Json            @default("{}")
+  createdAt       DateTime        @default(now())
   queryId         String
   chunkId         String
   vectorId        String
-
-  // Relations
-  query           SemanticQuery     @relation(fields: [queryId], references: [id], onDelete: Cascade)
-  codeChunk       CodeChunk         @relation(fields: [chunkId], references: [id], onDelete: Cascade)
-  vectorEmbedding VectorEmbedding   @relation(fields: [vectorId], references: [id], onDelete: Cascade)
+  codeChunk       CodeChunk       @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  query           SemanticQuery   @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  vectorEmbedding VectorEmbedding @relation(fields: [vectorId], references: [id], onDelete: Cascade)
 
   @@index([queryId, rank])
   @@index([similarity])
@@ -811,16 +676,16 @@ model SemanticSearchResult {
 }
 
 model EmbeddingCache {
-  id              String    @id @default(cuid())
-  contentHash     String    @unique
-  content         String
-  embedding       Float[]
-  model           String
-  provider        String
-  dimension       Int
-  hitCount        Int       @default(1)
-  lastAccessedAt  DateTime  @default(now())
-  createdAt       DateTime  @default(now())
+  id             String   @id @default(cuid())
+  contentHash    String   @unique
+  content        String
+  embedding      Float[]
+  model          String
+  provider       String
+  dimension      Int
+  hitCount       Int      @default(1)
+  lastAccessedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   @@index([contentHash])
   @@index([model, provider])
@@ -828,101 +693,80 @@ model EmbeddingCache {
 }
 
 model RAGSession {
-  id              String    @id @default(cuid())
-  sessionType     String    @default("chat") // chat, generation, analysis
-  context         Json      @default("{}")
+  id              String             @id @default(cuid())
+  sessionType     String             @default("chat")
+  context         Json               @default("{}")
   conversationId  String?
-  totalQueries    Int       @default(0)
-  totalTokens     Int       @default(0)
-  totalCost       Float     @default(0)
-  qualityScore    Float?    // User feedback quality score
-  feedback        String?   // User feedback
-  isActive        Boolean   @default(true)
+  totalQueries    Int                @default(0)
+  totalTokens     Int                @default(0)
+  totalCost       Float              @default(0)
+  qualityScore    Float?
+  feedback        String?
+  isActive        Boolean            @default(true)
   endedAt         DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Foreign keys
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
   userId          String
   knowledgeBaseId String?
-
-  // Relations
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  knowledgeBase   CodebaseKnowledge? @relation(fields: [knowledgeBaseId], references: [id], onDelete: SetNull)
   interactions    RAGInteraction[]
+  knowledgeBase   CodebaseKnowledge? @relation(fields: [knowledgeBaseId], references: [id])
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isActive])
   @@map("rag_sessions")
 }
 
 model RAGInteraction {
-  id              String    @id @default(cuid())
-  interactionType String    // query, response, feedback
+  id              String     @id @default(cuid())
+  interactionType String
   input           String?
   output          String?
   tokensUsed      Int?
   cost            Float?
-  latency         Int?      // milliseconds
-  provider        String?   // AI provider used
-  model           String?   // AI model used
-  retrievedChunks Int       @default(0)
+  latency         Int?
+  provider        String?
+  model           String?
+  retrievedChunks Int        @default(0)
   relevanceScore  Float?
-  userRating      Int?      // 1-5 stars
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-
-  // Foreign keys
+  userRating      Int?
+  metadata        Json       @default("{}")
+  createdAt       DateTime   @default(now())
   sessionId       String
-
-  // Relations
   session         RAGSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
   @@map("rag_interactions")
 }
 
-// Database Backup System Models
 model BackupJob {
-  id              String    @id @default(cuid())
-  type            String    // "full", "incremental", "manual"
-  status          String    @default("pending") // pending, in_progress, completed, failed, cancelled
-  backupId        String    @unique // External backup identifier
-  storageLocation String?   // S3 path, local path, etc.
-  storageProvider String    @default("local") // local, aws-s3, gcp-storage
-  
-  // Backup Details
+  id              String             @id @default(cuid())
+  type            String
+  status          String             @default("pending")
+  backupId        String             @unique
+  storageLocation String?
+  storageProvider String             @default("local")
   databaseName    String
-  tableCount      Int       @default(0)
-  recordCount     Int       @default(0)
-  sizeBytes       Int       @default(0)
+  tableCount      Int                @default(0)
+  recordCount     Int                @default(0)
+  sizeBytes       Int                @default(0)
   checksum        String?
-  compressionType String?   // gzip, bzip2, none
-  encryptionType  String?   // aes-256, none
-  
-  // Timing
+  compressionType String?
+  encryptionType  String?
   scheduledFor    DateTime?
   startedAt       DateTime?
   completedAt     DateTime?
-  duration        Int?      // milliseconds
-  
-  // Error Handling
+  duration        Int?
   errorMessage    String?
-  retryCount      Int       @default(0)
-  maxRetries      Int       @default(3)
-  
-  // Configuration
-  config          Json      @default("{}")
-  retention       Json      @default("{}") // retention policy settings
-  metadata        Json      @default("{}")
-  
-  // Tracking
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Relations
-  restoreJobs     RestoreJob[]
+  retryCount      Int                @default(0)
+  maxRetries      Int                @default(3)
+  config          Json               @default("{}")
+  retention       Json               @default("{}")
+  metadata        Json               @default("{}")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
   validationJobs  BackupValidation[]
-  
+  restoreJobs     RestoreJob[]
+
   @@index([status, createdAt])
   @@index([type, status])
   @@index([databaseName, createdAt])
@@ -931,53 +775,35 @@ model BackupJob {
 
 model RestoreJob {
   id              String    @id @default(cuid())
-  status          String    @default("pending") // pending, in_progress, completed, failed, cancelled
-  restoreType     String    @default("full") // full, partial, point_in_time
-  targetDatabase  String?   // target database name (if different)
-  
-  // Restore Options
+  status          String    @default("pending")
+  restoreType     String    @default("full")
+  targetDatabase  String?
   dryRun          Boolean   @default(false)
   cleanFirst      Boolean   @default(false)
   skipConstraints Boolean   @default(false)
   tablesToRestore String[]  @default([])
   pointInTime     DateTime?
-  
-  // Progress Tracking
   totalSteps      Int       @default(0)
   completedSteps  Int       @default(0)
   progressPercent Float     @default(0)
   currentStep     String?
-  
-  // Timing
   startedAt       DateTime?
   completedAt     DateTime?
-  duration        Int?      // milliseconds
-  
-  // Error Handling
+  duration        Int?
   errorMessage    String?
   warnings        String[]  @default([])
-  
-  // Results
   restoredTables  String[]  @default([])
   restoredRecords Int       @default(0)
   skippedTables   String[]  @default([])
-  
-  // Configuration
   config          Json      @default("{}")
   metadata        Json      @default("{}")
-  
-  // Tracking
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  
-  // Foreign Keys
   backupId        String
-  userId          String?   // User who initiated restore
-  
-  // Relations
+  userId          String?
   backup          BackupJob @relation(fields: [backupId], references: [id], onDelete: Cascade)
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
+  user            User?     @relation(fields: [userId], references: [id])
+
   @@index([status, createdAt])
   @@index([backupId, createdAt])
   @@map("restore_jobs")
@@ -985,318 +811,213 @@ model RestoreJob {
 
 model BackupValidation {
   id              String    @id @default(cuid())
-  validationType  String    // "integrity", "restore_test", "checksum", "structure"
-  status          String    @default("pending") // pending, running, passed, failed
-  
-  // Validation Results
+  validationType  String
+  status          String    @default("pending")
   checksumValid   Boolean?
   integrityValid  Boolean?
   restoreValid    Boolean?
   structureValid  Boolean?
-  
-  // Test Details
-  testDatabase    String?   // temporary database for restore testing
+  testDatabase    String?
   validationSteps Json      @default("[]")
   errors          String[]  @default([])
   warnings        String[]  @default([])
-  
-  // Performance Metrics
-  validationTime  Int?      // milliseconds
-  testDataSize    Int?      // bytes tested
-  
-  // Timing
+  validationTime  Int?
+  testDataSize    Int?
   startedAt       DateTime?
   completedAt     DateTime?
-  
-  // Configuration
   config          Json      @default("{}")
   metadata        Json      @default("{}")
-  
-  // Tracking
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  
-  // Foreign Keys
   backupId        String
-  
-  // Relations
   backup          BackupJob @relation(fields: [backupId], references: [id], onDelete: Cascade)
-  
+
   @@index([backupId, validationType])
   @@index([status, createdAt])
   @@map("backup_validations")
 }
 
 model BackupSchedule {
-  id              String    @id @default(cuid())
-  name            String
-  description     String?
-  scheduleType    String    // "full", "incremental"
-  cronExpression  String    // Cron expression for scheduling
-  isActive        Boolean   @default(true)
-  
-  // Backup Configuration
-  databaseName    String
-  storageProvider String    @default("local")
-  storageConfig   Json      @default("{}")
-  compressionType String    @default("gzip")
-  encryptionEnabled Boolean @default(false)
-  
-  // Retention Policy
-  retentionDaily  Int       @default(7)   // days
-  retentionWeekly Int       @default(4)   // weeks  
-  retentionMonthly Int      @default(12)  // months
-  
-  // Monitoring
-  lastRunAt       DateTime?
-  lastBackupId    String?
-  nextRunAt       DateTime?
-  consecutiveFailures Int   @default(0)
-  
-  // Notifications
-  notifyOnSuccess Boolean   @default(false)
-  notifyOnFailure Boolean   @default(true)
-  notificationConfig Json   @default("{}")
-  
-  // Tracking
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  id                  String    @id @default(cuid())
+  name                String
+  description         String?
+  scheduleType        String
+  cronExpression      String
+  isActive            Boolean   @default(true)
+  databaseName        String
+  storageProvider     String    @default("local")
+  storageConfig       Json      @default("{}")
+  compressionType     String    @default("gzip")
+  encryptionEnabled   Boolean   @default(false)
+  retentionDaily      Int       @default(7)
+  retentionWeekly     Int       @default(4)
+  retentionMonthly    Int       @default(12)
+  lastRunAt           DateTime?
+  lastBackupId        String?
+  nextRunAt           DateTime?
+  consecutiveFailures Int       @default(0)
+  notifyOnSuccess     Boolean   @default(false)
+  notifyOnFailure     Boolean   @default(true)
+  notificationConfig  Json      @default("{}")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
   @@index([isActive, nextRunAt])
   @@index([databaseName, scheduleType])
   @@map("backup_schedules")
 }
 
 model BackupStorage {
-  id              String    @id @default(cuid())
-  provider        String    // "local", "aws-s3", "gcp-storage", "azure-blob"
-  name            String    // Human-readable name
-  
-  // Configuration
-  config          Json      @default("{}")
-  credentials     Json      @default("{}") // Encrypted credentials
-  
-  // Storage Details
-  bucket          String?   // S3 bucket, GCS bucket, etc.
-  region          String?
-  endpoint        String?   // Custom endpoint
-  basePath        String    @default("/") // Base path for backups
-  
-  // Status
-  isActive        Boolean   @default(true)
-  lastTestAt      DateTime?
-  testStatus      String?   // "passed", "failed"
-  testError       String?
-  
-  // Metrics
-  totalBackups    Int       @default(0)
-  totalSizeBytes  BigInt    @default(0)
-  availableBytes  BigInt?   // Available storage space
-  usedBytes       BigInt    @default(0)
-  
-  // Security
-  encryptionEnabled Boolean @default(true)
-  encryptionKey   String?   // Encrypted encryption key
-  accessLevel     String    @default("private") // private, read-only, public
-  
-  // Tracking
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  id                String    @id @default(cuid())
+  provider          String
+  name              String
+  config            Json      @default("{}")
+  credentials       Json      @default("{}")
+  bucket            String?
+  region            String?
+  endpoint          String?
+  basePath          String    @default("/")
+  isActive          Boolean   @default(true)
+  lastTestAt        DateTime?
+  testStatus        String?
+  testError         String?
+  totalBackups      Int       @default(0)
+  totalSizeBytes    BigInt    @default(0)
+  availableBytes    BigInt?
+  usedBytes         BigInt    @default(0)
+  encryptionEnabled Boolean   @default(true)
+  encryptionKey     String?
+  accessLevel       String    @default("private")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
   @@unique([provider, bucket, basePath])
   @@index([provider, isActive])
   @@map("backup_storage")
 }
 
-// Add backup-related fields to User model
 model BackupAccess {
-  id          String    @id @default(cuid())
-  userId      String
-  permissions String[]  @default(["read"]) // read, write, delete, manage
-  
-  // Scope
-  databases   String[]  @default([]) // specific databases, empty = all
-  operations  String[]  @default([]) // backup, restore, validate, schedule
-  
-  // Restrictions
-  maxBackups  Int?      // Maximum backups user can create
-  maxRestore  Int?      // Maximum restores per day
-  
-  // Tracking
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@unique([userId])
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  permissions String[] @default(["read"])
+  databases   String[] @default([])
+  operations  String[] @default([])
+  maxBackups  Int?
+  maxRestore  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("backup_access")
 }
 
-// User Preferences Model - Centralized user preferences
 model UserPreferences {
-  id                      String    @id @default(cuid())
-  userId                  String    @unique
-  
-  // Theme Preferences
-  themePreferences        Json?     @default("{}")    // Theme settings across platforms
-  
-  // Language Preferences  
-  languagePreferences     Json?     @default("{}")    // i18n and localization settings
-  
-  // UI Preferences
-  uiPreferences           Json?     @default("{}")    // Layout, density, etc.
-  
-  // Notification Preferences
-  notificationPreferences Json?     @default("{}")    // All notification settings
-  
-  // Privacy Preferences
-  privacyPreferences      Json?     @default("{}")    // Data collection, analytics opt-in/out
-  
-  // Accessibility Preferences
-  accessibilityPreferences Json?    @default("{}")    // Screen reader, contrast, etc.
-  
-  // Developer Preferences
-  developerPreferences    Json?     @default("{}")    // Code style, AI model preferences, etc.
-  
-  // Tracking
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
-  
-  // Relations
-  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  themePreferences         Json?    @default("{}")
+  languagePreferences      Json?    @default("{}")
+  uiPreferences            Json?    @default("{}")
+  notificationPreferences  Json?    @default("{}")
+  privacyPreferences       Json?    @default("{}")
+  accessibilityPreferences Json?    @default("{}")
+  developerPreferences     Json?    @default("{}")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("user_preferences")
 }
 
-// Translation Model - For internationalization
 model Translation {
-  id          String    @id @default(cuid())
-  key         String    // Translation key (e.g., "common.welcome")
-  locale      String    // Locale code (e.g., "en-US", "es-ES")
-  value       String    // Translated text
-  context     String?   // Context for translators
-  pluralRule  String?   // Plural rule: zero, one, two, few, many, other
-  category    String    @default("ui") // ui, messages, errors, marketing, legal, technical
-  
-  // Management
-  version     String    @default("1.0.0")
-  approved    Boolean   @default(false)
-  reviewerId  String?   // User who approved the translation
-  
-  // Tracking
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  lastUpdated DateTime  @default(now())
-  
-  // Relations
-  reviewer    User?     @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
-  
+  id          String   @id @default(cuid())
+  key         String
+  locale      String
+  value       String
+  context     String?
+  pluralRule  String?
+  category    String   @default("ui")
+  version     String   @default("1.0.0")
+  approved    Boolean  @default(false)
+  reviewerId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastUpdated DateTime @default(now())
+  reviewer    User?    @relation(fields: [reviewerId], references: [id])
+
   @@unique([key, locale])
   @@index([locale, category])
   @@index([key, approved])
   @@map("translations")
 }
 
-// Responsive Design Breakpoint Configurations
 model ResponsiveConfig {
-  id              String    @id @default(cuid())
-  name            String    // "mobile-first", "desktop-first", "custom"
+  id              String   @id @default(cuid())
+  name            String
   description     String?
-  
-  // Breakpoint Definitions
-  breakpoints     Json      @default("{}")  // { mobile: "320px", tablet: "768px", desktop: "1024px", etc. }
-  
-  // Grid Configuration
-  gridColumns     Json      @default("{}")  // Columns per breakpoint
-  gridGutters     Json      @default("{}")  // Gutters per breakpoint
-  
-  // Typography Scale
-  typographyScale Json      @default("{}")  // Font sizes per breakpoint
-  
-  // Spacing Scale
-  spacingScale    Json      @default("{}")  // Margins/padding per breakpoint
-  
-  // Component Configurations
-  componentRules  Json      @default("{}")  // Component-specific responsive rules
-  
-  // Usage
-  isDefault       Boolean   @default(false)
-  isActive        Boolean   @default(true)
-  usageCount      Int       @default(0)
-  
-  // Tracking
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now())
-  
+  breakpoints     Json     @default("{}")
+  gridColumns     Json     @default("{}")
+  gridGutters     Json     @default("{}")
+  typographyScale Json     @default("{}")
+  spacingScale    Json     @default("{}")
+  componentRules  Json     @default("{}")
+  isDefault       Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  usageCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
   @@index([isDefault, isActive])
   @@map("responsive_configs")
 }
 
-// Device Usage Analytics for Responsive Design
 model DeviceAnalytics {
-  id              String    @id @default(cuid())
-  
-  // Device Information
-  deviceType      String    // mobile, tablet, desktop, tv, watch
+  id              String   @id @default(cuid())
+  deviceType      String
   screenWidth     Int?
   screenHeight    Int?
   viewportWidth   Int?
   viewportHeight  Int?
-  pixelRatio      Float?    @default(1.0)
-  
-  // Browser Information
+  pixelRatio      Float?   @default(1.0)
   userAgent       String?
   browserName     String?
   browserVersion  String?
-  platform        String?   // iOS, Android, Windows, macOS, Linux
-  
-  // Usage Data
+  platform        String?
   sessionId       String
   userId          String?
   pageUrl         String?
-  component       String?   // Which component/page was accessed
-  
-  // Performance Metrics
-  loadTime        Int?      // milliseconds
-  renderTime      Int?      // milliseconds
-  interactionTime Int?      // time to first interaction
-  
-  // Responsive Behavior
-  breakpointUsed  String?   // Which breakpoint was active
-  layoutShifts    Int?      @default(0)  // Count of layout shifts
-  scrollDepth     Float?    // Percentage of page scrolled
-  
-  // Tracking
-  timestamp       DateTime  @default(now())
-  createdAt       DateTime  @default(now())
-  
+  component       String?
+  loadTime        Int?
+  renderTime      Int?
+  interactionTime Int?
+  breakpointUsed  String?
+  layoutShifts    Int?     @default(0)
+  scrollDepth     Float?
+  timestamp       DateTime @default(now())
+  createdAt       DateTime @default(now())
+
   @@index([deviceType, timestamp])
   @@index([userId, timestamp])
   @@index([sessionId, timestamp])
   @@map("device_analytics")
 }
 
-// Multi-Tenant Architecture Models
 model Tenant {
-  id            String    @id @default(cuid())
-  name          String
-  slug          String    @unique
-  domain        String?   @unique
-  customDomain  String?   @unique
-  plan          String    @default("starter") // starter, professional, enterprise
-  settings      String    // JSON string
-  branding      String    // JSON string
-  limits        String    // JSON string
-  status        String    @default("active") // active, suspended, trial
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  domain       String?       @unique
+  customDomain String?       @unique
+  plan         String        @default("starter")
+  settings     String
+  branding     String
+  limits       String
+  status       String        @default("active")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  roles        Role[]
+  usage        TenantUsage[]
+  users        TenantUser[]
 
-  // Relations
-  users         TenantUser[]
-  usage         TenantUsage[]
-  roles         Role[]
-  
   @@map("tenants")
 }
 
@@ -1304,14 +1025,12 @@ model TenantUser {
   id          String    @id @default(cuid())
   tenantId    String
   email       String
-  role        String    // admin, developer, viewer
-  permissions String    // JSON string array
-  status      String    @default("active") // active, inactive, invited
+  role        String
+  permissions String
+  status      String    @default("active")
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-
-  // Relations
   tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
@@ -1321,12 +1040,10 @@ model TenantUser {
 model TenantUsage {
   id        String   @id @default(cuid())
   tenantId  String
-  metric    String   // api_calls, storage, bandwidth, users, projects
+  metric    String
   value     Int      @default(0)
-  date      String   // YYYY-MM-DD format
+  date      String
   createdAt DateTime @default(now())
-
-  // Relations
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, metric, date], name: "tenantId_metric_date")
@@ -1334,21 +1051,18 @@ model TenantUsage {
   @@map("tenant_usage")
 }
 
-// Role-Based Access Control (RBAC) Models
 model Role {
   id          String     @id @default(cuid())
   name        String
   description String?
-  type        String     @default("custom") // system, tenant, custom
-  permissions String     // JSON string array
+  type        String     @default("custom")
+  permissions String
   isActive    Boolean    @default(true)
   tenantId    String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-
-  // Relations
-  userRoles   UserRole[]
   tenant      Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles   UserRole[]
 
   @@unique([name, tenantId])
   @@index([type, isActive])
@@ -1363,56 +1077,43 @@ model UserRole {
   expiresAt  DateTime?
   assignedBy String
   assignedAt DateTime  @default(now())
-
-  // Relations  
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role       Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId, tenantId], name: "userId_roleId_tenantId")
   @@index([userId, tenantId])
   @@map("user_roles")
 }
 
-// Advanced Analytics Report System Models
 model AnalyticsReport {
-  id              String    @id @default(cuid())
-  name            String
-  description     String?
-  slug            String    @unique
-  category        String    // usage, performance, financial, user_behavior, custom
-  type            String    // summary, detailed, comparative, trending, real_time
-  
-  // Report Configuration
-  dataSource      Json      @default("{}")  // Data source configuration
-  dimensions      Json      @default("[]")  // Report dimensions
-  metrics         Json      @default("[]")  // Report metrics
-  visualizations  Json      @default("[]")  // Chart and visualization configs
-  schedule        Json?     @default("{}")  // Schedule configuration
-  settings        Json      @default("{}")  // Report settings
-  
-  // Status and Tracking
-  isActive        Boolean   @default(true)
-  isPublic        Boolean   @default(false)
-  version         String    @default("1.0.0")
-  
-  // Timestamps
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Foreign Keys
-  userId          String
-  
-  // Relations
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  executions      ReportExecution[]
-  exports         ReportExport[]
-  schedules       ReportSchedule[]
-  shares          ReportShare[]
-  cache           ReportCache[]
-  comments        ReportComment[]
-  shareAccesses   ReportShareAccess[]
+  id                  String               @id @default(cuid())
+  name                String
+  description         String?
+  slug                String               @unique
+  category            String
+  type                String
+  dataSource          Json                 @default("{}")
+  dimensions          Json                 @default("[]")
+  metrics             Json                 @default("[]")
+  visualizations      Json                 @default("[]")
+  schedule            Json?                @default("{}")
+  settings            Json                 @default("{}")
+  isActive            Boolean              @default(true)
+  isPublic            Boolean              @default(false)
+  version             String               @default("1.0.0")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  userId              String
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cache               ReportCache[]
+  comments            ReportComment[]
+  executions          ReportExecution[]
+  exports             ReportExport[]
+  schedules           ReportSchedule[]
+  shareAccesses       ReportShareAccess[]
+  shares              ReportShare[]
   scheduledExecutions ScheduledExecution[]
-  
+
   @@index([userId, category])
   @@index([slug, isPublic])
   @@index([type, isActive])
@@ -1420,30 +1121,24 @@ model AnalyticsReport {
 }
 
 model ReportExecution {
-  id              String    @id @default(cuid())
-  status          String    @default("pending") // pending, running, completed, failed, cancelled
-  startedAt       DateTime  @default(now())
-  completedAt     DateTime?
-  executionTime   Int?      // milliseconds
-  results         Json?     // Execution results
-  error           String?   // Error message if failed
-  rowCount        Int?      // Number of rows returned
-  cacheHit        Boolean   @default(false)
-  
-  // Configuration
-  parameters      Json      @default("{}")  // Execution parameters
-  metadata        Json      @default("{}")  // Additional metadata
-  
-  // Foreign Keys
-  reportId        String
-  userId          String
-  scheduleId      String?   // If triggered by schedule
-  
-  // Relations
-  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  schedule        ReportSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
-  
+  id            String          @id @default(cuid())
+  status        String          @default("pending")
+  startedAt     DateTime        @default(now())
+  completedAt   DateTime?
+  executionTime Int?
+  results       Json?
+  error         String?
+  rowCount      Int?
+  cacheHit      Boolean         @default(false)
+  parameters    Json            @default("{}")
+  metadata      Json            @default("{}")
+  reportId      String
+  userId        String
+  scheduleId    String?
+  report        AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  schedule      ReportSchedule? @relation(fields: [scheduleId], references: [id])
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([reportId, startedAt])
   @@index([userId, status])
   @@index([scheduleId, status])
@@ -1451,35 +1146,25 @@ model ReportExecution {
 }
 
 model ReportExport {
-  id              String    @id @default(cuid())
-  format          String    // pdf, xlsx, csv, json, zip
-  status          String    @default("pending") // pending, processing, completed, failed
-  filePath        String?   // Path to exported file
-  fileUrl         String?   // Public URL if applicable
-  fileSize        Int?      // File size in bytes
-  downloadCount   Int       @default(0)
-  
-  // Export Configuration
-  options         Json      @default("{}")  // Export options
-  customization   Json      @default("{}")  // Customization settings
-  
-  // Security
-  expiresAt       DateTime? // Export expiration
-  accessToken     String?   // Access token for downloads
-  
-  // Timestamps
-  createdAt       DateTime  @default(now())
-  completedAt     DateTime?
-  lastDownloadAt  DateTime?
-  
-  // Foreign Keys
-  reportId        String
-  userId          String
-  
-  // Relations
-  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id             String          @id @default(cuid())
+  format         String
+  status         String          @default("pending")
+  filePath       String?
+  fileUrl        String?
+  fileSize       Int?
+  downloadCount  Int             @default(0)
+  options        Json            @default("{}")
+  customization  Json            @default("{}")
+  expiresAt      DateTime?
+  accessToken    String?
+  createdAt      DateTime        @default(now())
+  completedAt    DateTime?
+  lastDownloadAt DateTime?
+  reportId       String
+  userId         String
+  report         AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([reportId, format])
   @@index([userId, createdAt])
   @@index([status, expiresAt])
@@ -1487,40 +1172,28 @@ model ReportExport {
 }
 
 model ReportSchedule {
-  id              String    @id @default(cuid())
-  name            String
-  description     String?
-  
-  // Schedule Configuration
-  schedule        Json      @default("{}")  // Frequency, time, timezone config
-  delivery        Json      @default("[]")  // Delivery method configurations
-  exportOptions   Json      @default("{}")  // Export format and options
-  
-  // Status and Tracking
-  isActive        Boolean   @default(true)
-  lastRun         DateTime?
-  nextRun         DateTime?
-  runCount        Int       @default(0)
-  failureCount    Int       @default(0)
-  
-  // Error Handling
-  lastError       String?
-  maxRetries      Int       @default(3)
-  
-  // Timestamps
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now())
-  
-  // Foreign Keys
-  reportId        String
-  userId          String
-  
-  // Relations
-  report          AnalyticsReport     @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  executions      ReportExecution[]
+  id                  String               @id @default(cuid())
+  name                String
+  description         String?
+  schedule            Json                 @default("{}")
+  delivery            Json                 @default("[]")
+  exportOptions       Json                 @default("{}")
+  isActive            Boolean              @default(true)
+  lastRun             DateTime?
+  nextRun             DateTime?
+  runCount            Int                  @default(0)
+  failureCount        Int                  @default(0)
+  lastError           String?
+  maxRetries          Int                  @default(3)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @default(now())
+  reportId            String
+  userId              String
+  executions          ReportExecution[]
+  report              AnalyticsReport      @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   scheduledExecutions ScheduledExecution[]
-  
+
   @@index([reportId, isActive])
   @@index([userId, nextRun])
   @@index([isActive, nextRun])
@@ -1528,63 +1201,49 @@ model ReportSchedule {
 }
 
 model ScheduledExecution {
-  id              String    @id @default(cuid())
-  status          String    @default("pending") // pending, running, completed, failed
-  startedAt       DateTime  @default(now())
+  id              String          @id @default(cuid())
+  status          String          @default("pending")
+  startedAt       DateTime        @default(now())
   completedAt     DateTime?
-  executionTime   Int?      // milliseconds
-  results         Json?     // Execution results
-  error           String?   // Error message if failed
-  deliveryResults Json?     // Delivery results for each method
-  
-  // Foreign Keys
+  executionTime   Int?
+  results         Json?
+  error           String?
+  deliveryResults Json?
   scheduleId      String
   reportId        String
   userId          String
-  
-  // Relations
-  schedule        ReportSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  schedule        ReportSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([scheduleId, startedAt])
   @@index([status, startedAt])
   @@map("scheduled_executions")
 }
 
 model ReportShare {
-  id              String    @id @default(cuid())
-  shareType       String    // user, team, public, link
-  permission      String    // view, comment, edit, admin
-  shareToken      String?   @unique  // For link shares
-  publicUrl       String?   // Public URL for sharing
-  message         String?   // Message from sharer
-  
-  // Share Configuration
-  config          Json      @default("{}")  // Permission config, expiration, etc.
-  
-  // Access Control
-  isActive        Boolean   @default(true)
-  accessCount     Int       @default(0)
-  lastAccessedAt  DateTime?
-  expiresAt       DateTime? // Share expiration
-  revokedAt       DateTime?
-  
-  // Timestamps
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now())
-  
-  // Foreign Keys
-  reportId        String
-  sharedBy        String    // User who shared
-  
-  // Relations
-  report          AnalyticsReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  sharedByUser    User                  @relation("SharedReports", fields: [sharedBy], references: [id], onDelete: Cascade)
-  recipients      ReportShareRecipient[]
-  accesses        ReportShareAccess[]
-  comments        ReportComment[]
-  
+  id             String                 @id @default(cuid())
+  shareType      String
+  permission     String
+  shareToken     String?                @unique
+  publicUrl      String?
+  message        String?
+  config         Json                   @default("{}")
+  isActive       Boolean                @default(true)
+  accessCount    Int                    @default(0)
+  lastAccessedAt DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @default(now())
+  reportId       String
+  sharedBy       String
+  comments       ReportComment[]
+  accesses       ReportShareAccess[]
+  recipients     ReportShareRecipient[]
+  report         AnalyticsReport        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sharedByUser   User                   @relation("SharedReports", fields: [sharedBy], references: [id], onDelete: Cascade)
+
   @@index([reportId, isActive])
   @@index([sharedBy, shareType])
   @@index([shareToken, isActive])
@@ -1592,27 +1251,19 @@ model ReportShare {
 }
 
 model ReportShareRecipient {
-  id              String    @id @default(cuid())
-  recipientEmail  String
-  permission      String    // view, comment, edit, admin
-  status          String    @default("invited") // invited, active, declined, revoked
-  
-  // Access Tracking
-  lastAccessedAt  DateTime?
-  accessCount     Int       @default(0)
-  
-  // Management
-  invitedAt       DateTime  @default(now())
-  revokedAt       DateTime?
-  
-  // Foreign Keys
-  shareId         String
-  recipientId     String?   // User ID if registered
-  
-  // Relations
-  share           ReportShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
-  recipient       User?       @relation("ReceivedShares", fields: [recipientId], references: [id], onDelete: SetNull)
-  
+  id             String      @id @default(cuid())
+  recipientEmail String
+  permission     String
+  status         String      @default("invited")
+  lastAccessedAt DateTime?
+  accessCount    Int         @default(0)
+  invitedAt      DateTime    @default(now())
+  revokedAt      DateTime?
+  shareId        String
+  recipientId    String?
+  recipient      User?       @relation("ReceivedShares", fields: [recipientId], references: [id])
+  share          ReportShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
   @@index([shareId, status])
   @@index([recipientId, status])
   @@index([recipientEmail, status])
@@ -1620,29 +1271,21 @@ model ReportShareRecipient {
 }
 
 model ReportShareAccess {
-  id              String    @id @default(cuid())
-  accessType      String    // view, download, export, comment
-  ipAddress       String?
-  userAgent       String?
-  accessedAt      DateTime  @default(now())
-  
-  // Session Info
-  sessionId       String?
-  duration        Int?      // milliseconds
-  
-  // Metadata
-  metadata        Json      @default("{}")
-  
-  // Foreign Keys
-  shareId         String
-  reportId        String
-  userId          String?   // If logged in user
-  
-  // Relations
-  share           ReportShare     @relation(fields: [shareId], references: [id], onDelete: Cascade)
-  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  user            User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
+  id         String          @id @default(cuid())
+  accessType String
+  ipAddress  String?
+  userAgent  String?
+  accessedAt DateTime        @default(now())
+  sessionId  String?
+  duration   Int?
+  metadata   Json            @default("{}")
+  shareId    String
+  reportId   String
+  userId     String?
+  report     AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  share      ReportShare     @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  user       User?           @relation(fields: [userId], references: [id])
+
   @@index([shareId, accessedAt])
   @@index([reportId, accessType])
   @@index([userId, accessedAt])
@@ -1650,40 +1293,30 @@ model ReportShareAccess {
 }
 
 model ReportComment {
-  id              String    @id @default(cuid())
-  content         String
-  authorName      String?   // For anonymous comments
-  authorEmail     String?   // For anonymous comments
-  isPublic        Boolean   @default(false) // Public comments don't require login
-  isDeleted       Boolean   @default(false)
-  
-  // Thread Support
-  parentId        String?   // For reply threads
-  threadDepth     Int       @default(0)
-  
-  // Moderation
-  isModerated     Boolean   @default(false)
-  moderatedBy     String?
-  moderatedAt     DateTime?
-  
-  // Timestamps
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now())
-  deletedAt       DateTime?
-  
-  // Foreign Keys
-  reportId        String
-  shareId         String?   // If comment is on a shared report
-  userId          String?   // Null for anonymous comments
-  
-  // Relations
-  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  share           ReportShare?    @relation(fields: [shareId], references: [id], onDelete: SetNull)
-  user            User?           @relation("AuthoredComments", fields: [userId], references: [id], onDelete: SetNull)
-  moderator       User?           @relation("ModeratedComments", fields: [moderatedBy], references: [id], onDelete: SetNull)
-  parent          ReportComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies         ReportComment[] @relation("CommentReplies")
-  
+  id          String          @id @default(cuid())
+  content     String
+  authorName  String?
+  authorEmail String?
+  isPublic    Boolean         @default(false)
+  isDeleted   Boolean         @default(false)
+  parentId    String?
+  threadDepth Int             @default(0)
+  isModerated Boolean         @default(false)
+  moderatedBy String?
+  moderatedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now())
+  deletedAt   DateTime?
+  reportId    String
+  shareId     String?
+  userId      String?
+  moderator   User?           @relation("ModeratedComments", fields: [moderatedBy], references: [id])
+  parent      ReportComment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     ReportComment[] @relation("CommentReplies")
+  report      AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  share       ReportShare?    @relation(fields: [shareId], references: [id])
+  user        User?           @relation("AuthoredComments", fields: [userId], references: [id])
+
   @@index([reportId, isDeleted])
   @@index([shareId, isDeleted])
   @@index([userId, createdAt])
@@ -1692,161 +1325,129 @@ model ReportComment {
 }
 
 model ReportCache {
-  id              String    @id @default(cuid())
-  cacheKey        String    @unique
-  data            Json      // Cached data
-  metadata        Json      @default("{}")
-  
-  // Cache Management
-  hitCount        Int       @default(0)
-  lastHitAt       DateTime?
-  expiresAt       DateTime
-  
-  // Data Info
-  dataSize        Int?      // Size in bytes
-  rowCount        Int?      // Number of rows
-  
-  // Timestamps
-  createdAt       DateTime  @default(now())
-  
-  // Foreign Keys
-  reportId        String
-  
-  // Relations
-  report          AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  
+  id        String          @id @default(cuid())
+  cacheKey  String          @unique
+  data      Json
+  metadata  Json            @default("{}")
+  hitCount  Int             @default(0)
+  lastHitAt DateTime?
+  expiresAt DateTime
+  dataSize  Int?
+  rowCount  Int?
+  createdAt DateTime        @default(now())
+  reportId  String
+  report    AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
   @@index([reportId, expiresAt])
   @@index([cacheKey, expiresAt])
-  @@index([expiresAt]) // For cleanup
+  @@index([expiresAt])
   @@map("report_cache")
 }
 
-// Mobile-specific models
 model MobileSession {
-  id                String    @id @default(cuid())
-  sessionToken      String    @unique
-  deviceId          String
-  pushToken         String?
-  platform          String    // ios, android
-  version           String    // app version
-  isActive          Boolean   @default(true)
-  lastActiveAt      DateTime  @default(now())
-  metadata          Json      @default("{}")
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @default(now())
-  
-  // Foreign keys
-  userId            String
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  deviceId     String
+  pushToken    String?
+  platform     String
+  version      String
+  isActive     Boolean  @default(true)
+  lastActiveAt DateTime @default(now())
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("mobile_sessions")
 }
 
 model MobileAnalytics {
-  id                String    @id @default(cuid())
-  event             String    // app_open, screen_view, feature_used, etc.
-  platform          String    // ios, android
-  deviceInfo        Json      @default("{}")
-  screenSize        Json?     @default("{}")
-  appVersion        String?
-  osVersion         String?
-  networkType       String?   // wifi, cellular, offline
-  duration          Int?      // session duration in milliseconds
-  metadata          Json      @default("{}")
-  timestamp         DateTime  @default(now())
-  
-  // foreign keys
-  userId            String?
-  sessionId         String?
-  
-  // Relations
-  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
+  id          String   @id @default(cuid())
+  event       String
+  platform    String
+  deviceInfo  Json     @default("{}")
+  screenSize  Json?    @default("{}")
+  appVersion  String?
+  osVersion   String?
+  networkType String?
+  duration    Int?
+  metadata    Json     @default("{}")
+  timestamp   DateTime @default(now())
+  userId      String?
+  sessionId   String?
+  user        User?    @relation(fields: [userId], references: [id])
+
   @@index([userId, timestamp])
   @@index([event, platform])
   @@map("mobile_analytics")
 }
 
 model PushNotification {
-  id                String    @id @default(cuid())
-  title             String
-  body              String
-  data              Json      @default("{}")
-  targetPlatform    String[]  @default([]) // ios, android, all
-  deviceTokens      String[]  @default([])
-  status            String    @default("pending") // pending, sent, delivered, failed
-  sentAt            DateTime?
-  deliveredAt       DateTime?
-  readAt            DateTime?
-  errorMessage      String?
-  metadata          Json      @default("{}")
-  createdAt         DateTime  @default(now())
-  
-  // Foreign keys
-  userId            String
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id             String    @id @default(cuid())
+  title          String
+  body           String
+  data           Json      @default("{}")
+  targetPlatform String[]  @default([])
+  deviceTokens   String[]  @default([])
+  status         String    @default("pending")
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  errorMessage   String?
+  metadata       Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, status])
   @@index([status, sentAt])
   @@map("push_notifications")
 }
 
 model OfflineAction {
-  id                String    @id @default(cuid())
-  actionType        String    // create, update, delete
-  resourceType      String    // project, file, generation, etc.
-  resourceId        String?
-  actionData        Json      @default("{}")
-  uuid              String    @unique  // Client-generated UUID for deduplication
-  deviceId          String
-  status            String    @default("pending") // pending, synced, conflict, failed
-  conflictData      Json?     // Conflict resolution data
-  syncedAt          DateTime?
-  createdAt         DateTime  @default(now())
-  
-  // Foreign keys
-  userId            String
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id           String    @id @default(cuid())
+  actionType   String
+  resourceType String
+  resourceId   String?
+  actionData   Json      @default("{}")
+  uuid         String    @unique
+  deviceId     String
+  status       String    @default("pending")
+  conflictData Json?
+  syncedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, status])
   @@index([deviceId, status])
   @@map("offline_actions")
 }
 
-// Game Development Models
 model GameAsset {
-  id                String    @id @default(cuid())
-  name              String
-  assetType         String    // texture, model, audio, animation, script, prefab, material, shader
-  category          String?   // UI, Environment, Character, etc.
-  filePath          String?   // Path to asset file
-  fileUrl           String?   // URL to asset file
-  fileSize          Int?      // File size in bytes
-  format            String?   // File format: .png, .fbx, .wav, .cs, etc.
-  resolution        String?   // For textures: 1024x1024, etc.
-  duration          Float?    // For audio/video: duration in seconds
-  tags              String[]  @default([])
-  dependencies      String[]  @default([]) // Asset dependencies
-  metadata          Json      @default("{}")
-  status            String    @default("active") // active, deprecated, deleted
-  version           String    @default("1.0.0")
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @default(now())
-  
-  // Foreign keys
-  userId            String
-  projectId         String?   // Can belong to main project
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  
+  id           String   @id @default(cuid())
+  name         String
+  assetType    String
+  category     String?
+  filePath     String?
+  fileUrl      String?
+  fileSize     Int?
+  format       String?
+  resolution   String?
+  duration     Float?
+  tags         String[] @default([])
+  dependencies String[] @default([])
+  metadata     Json     @default("{}")
+  status       String   @default("active")
+  version      String   @default("1.0.0")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+  userId       String
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id])
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, assetType])
   @@index([projectId, assetType])
   @@map("game_assets")
@@ -1854,63 +1455,46 @@ model GameAsset {
 
 model GameBuild {
   id                String    @id @default(cuid())
-  platform          String    // Windows, Mac, Linux, iOS, Android, WebGL, PlayStation, Xbox
-  buildType         String    @default("Release") // Debug, Release, Development
+  platform          String
+  buildType         String    @default("Release")
   version           String    @default("1.0.0")
-  status            String    @default("queued") // queued, building, completed, failed, cancelled
-  priority          Int       @default(1) // Priority for build queue (1=low, 2=normal, 3=high)
-  
-  // Build Progress
-  progress          Int?      // Build progress percentage (0-100)
-  downloadUrl       String?   // URL to download completed build
-  artifactSize      Int?      // Build artifact size in MB
-  
-  // Queue Management
-  queuePosition     Int?      // Position in build queue
-  estimatedWaitTime Int?      // Estimated wait time in minutes
-  
-  // Timing
+  status            String    @default("queued")
+  priority          Int       @default(1)
+  progress          Int?
+  downloadUrl       String?
+  artifactSize      Int?
+  queuePosition     Int?
+  estimatedWaitTime Int?
   queuedAt          DateTime  @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
-  
-  // Logs - structured logs as JSON array
-  logs              Json      @default("[]") // Array of {timestamp, message, level}
-  
-  // Build Configuration
+  logs              Json      @default("[]")
   buildSettings     Json      @default("{}")
   configuration     Json      @default("{}")
-  
-  // Legacy fields for backward compatibility
   buildNumber       String?
   buildName         String?
   engineVersion     String?
-  buildSize         Int?      // Build size in bytes
-  buildPath         String?   // Path to build files
-  buildUrl          String?   // URL to download build (legacy)
+  buildSize         Int?
+  buildPath         String?
+  buildUrl          String?
   cloudBuild        Boolean   @default(false)
   autoPublish       Boolean   @default(false)
-  buildDuration     Int?      // Build time in milliseconds
-  buildLog          String?   // Build output logs (legacy)
-  errorLog          String?   // Error logs (legacy)
-  warningLog        String?   // Warning logs (legacy)
+  buildDuration     Int?
+  buildLog          String?
+  errorLog          String?
+  warningLog        String?
   publishStatus     String    @default("not_published")
   publishedAt       DateTime?
-  publishUrl        String?   
+  publishUrl        String?
   metadata          Json      @default("{}")
   tags              String[]  @default([])
-  
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @default(now())
-  
-  // Foreign keys
   userId            String
   projectId         String?
-  
-  // Relations
+  project           Project?  @relation(fields: [projectId], references: [id])
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  
+
   @@index([userId, status])
   @@index([projectId, status])
   @@index([status, queuedAt])
@@ -1919,39 +1503,31 @@ model GameBuild {
 }
 
 model GameRoom {
-  id                String    @id @default(cuid())
-  name              String    // Room name/title
-  gameMode          String    // deathmatch, team, cooperative, etc.
-  maxPlayers        Int       @default(10)
-  currentPlayers    Int       @default(0)
-  isPrivate         Boolean   @default(false)
-  password          String?   // For private rooms
-  status            String    @default("waiting") // waiting, active, finished
-  gameSettings      Json      @default("{}")
-  mapName           String?   // Current map/level
-  serverRegion      String?   // us-east, eu-west, asia-pacific
-  
-  // Room metadata
-  metadata          Json      @default("{}")
-  tags              String[]  @default([])
-  
-  // Timing
-  createdAt         DateTime  @default(now())
-  startedAt         DateTime?
-  endedAt           DateTime?
-  updatedAt         DateTime  @updatedAt
-  
-  // Foreign keys
-  hostId            String    // Room host/creator
-  projectId         String?   // Associated game project
-  
-  // Relations
-  host              User      @relation("HostedRooms", fields: [hostId], references: [id], onDelete: Cascade)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  players           GameRoomPlayer[]
-  matchmakingQueue  MatchmakingQueue[]
-  gameMatches       GameMatch[]
-  
+  id               String             @id @default(cuid())
+  name             String
+  gameMode         String
+  maxPlayers       Int                @default(10)
+  currentPlayers   Int                @default(0)
+  isPrivate        Boolean            @default(false)
+  password         String?
+  status           String             @default("waiting")
+  gameSettings     Json               @default("{}")
+  mapName          String?
+  serverRegion     String?
+  metadata         Json               @default("{}")
+  tags             String[]           @default([])
+  createdAt        DateTime           @default(now())
+  startedAt        DateTime?
+  endedAt          DateTime?
+  updatedAt        DateTime           @updatedAt
+  hostId           String
+  projectId        String?
+  gameMatches      GameMatch[]
+  players          GameRoomPlayer[]
+  host             User               @relation("HostedRooms", fields: [hostId], references: [id], onDelete: Cascade)
+  project          Project?           @relation(fields: [projectId], references: [id])
+  matchmakingQueue MatchmakingQueue[]
+
   @@index([status, gameMode])
   @@index([hostId, status])
   @@index([projectId, status])
@@ -1960,31 +1536,23 @@ model GameRoom {
 }
 
 model GameRoomPlayer {
-  id                String    @id @default(cuid())
-  role              String    @default("player") // player, spectator, admin
-  team              String?   // red, blue, etc.
-  status            String    @default("connected") // connected, disconnected, ready
-  score             Int       @default(0)
-  kills             Int       @default(0)
-  deaths            Int       @default(0)
-  assists           Int       @default(0)
-  
-  // Player stats
-  stats             Json      @default("{}")
-  
-  // Timing
-  joinedAt          DateTime  @default(now())
-  leftAt            DateTime?
-  lastActiveAt      DateTime  @default(now())
-  
-  // Foreign keys
-  userId            String
-  roomId            String
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  room              GameRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  
+  id           String    @id @default(cuid())
+  role         String    @default("player")
+  team         String?
+  status       String    @default("connected")
+  score        Int       @default(0)
+  kills        Int       @default(0)
+  deaths       Int       @default(0)
+  assists      Int       @default(0)
+  stats        Json      @default("{}")
+  joinedAt     DateTime  @default(now())
+  leftAt       DateTime?
+  lastActiveAt DateTime  @default(now())
+  userId       String
+  roomId       String
+  room         GameRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, roomId])
   @@index([roomId, status])
   @@index([userId, status])
@@ -1993,36 +1561,26 @@ model GameRoomPlayer {
 
 model MatchmakingQueue {
   id                String    @id @default(cuid())
-  gameMode          String    // Game mode preference
-  skillLevel        Int       @default(1000) // ELO/MMR rating
-  preferredRegion   String?   // Server region preference
-  maxWaitTime       Int       @default(300) // Maximum wait time in seconds
-  
-  // Queue status
-  status            String    @default("waiting") // waiting, matched, expired, cancelled
-  priority          Int       @default(1) // Queue priority
-  
-  // Matchmaking preferences
-  preferences       Json      @default("{}") // Skill range, map preferences, etc.
+  gameMode          String
+  skillLevel        Int       @default(1000)
+  preferredRegion   String?
+  maxWaitTime       Int       @default(300)
+  status            String    @default("waiting")
+  priority          Int       @default(1)
+  preferences       Json      @default("{}")
   partySize         Int       @default(1)
-  partyMembers      String[]  @default([]) // Party member IDs
-  
-  // Timing
+  partyMembers      String[]  @default([])
   queuedAt          DateTime  @default(now())
   matchedAt         DateTime?
   expiredAt         DateTime?
-  estimatedWaitTime Int?      // Estimated wait time in seconds
-  
-  // Foreign keys
+  estimatedWaitTime Int?
   userId            String
-  projectId         String?   // Game project
-  roomId            String?   // Matched room
-  
-  // Relations
+  projectId         String?
+  roomId            String?
+  project           Project?  @relation(fields: [projectId], references: [id])
+  room              GameRoom? @relation(fields: [roomId], references: [id])
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  room              GameRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  
+
   @@index([status, gameMode])
   @@index([skillLevel, gameMode])
   @@index([queuedAt, status])
@@ -2031,41 +1589,29 @@ model MatchmakingQueue {
 }
 
 model GameMatch {
-  id                String    @id @default(cuid())
-  matchType         String    // ranked, casual, tournament
-  gameMode          String    // deathmatch, team, etc.
-  status            String    @default("starting") // starting, active, finished, cancelled
-  
-  // Match details
-  duration          Int?      // Match duration in seconds
-  winner            String?   // Winner team/player ID
-  finalScore        Json?     // Final scores/stats
-  
-  // Match settings
-  settings          Json      @default("{}")
+  id                String            @id @default(cuid())
+  matchType         String
+  gameMode          String
+  status            String            @default("starting")
+  duration          Int?
+  winner            String?
+  finalScore        Json?
+  settings          Json              @default("{}")
   mapName           String?
   serverRegion      String?
-  
-  // Statistics
-  totalKills        Int       @default(0)
-  totalDeaths       Int       @default(0)
+  totalKills        Int               @default(0)
+  totalDeaths       Int               @default(0)
   averageSkillLevel Int?
-  
-  // Timing
-  startedAt         DateTime  @default(now())
+  startedAt         DateTime          @default(now())
   endedAt           DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Foreign keys
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   roomId            String?
   projectId         String?
-  
-  // Relations
-  room              GameRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   players           GameMatchPlayer[]
-  
+  project           Project?          @relation(fields: [projectId], references: [id])
+  room              GameRoom?         @relation(fields: [roomId], references: [id])
+
   @@index([status, matchType])
   @@index([gameMode, status])
   @@index([startedAt, status])
@@ -2073,32 +1619,22 @@ model GameMatch {
 }
 
 model GameMatchPlayer {
-  id                String    @id @default(cuid())
-  team              String?   // Team assignment
-  finalPosition     Int?      // Final ranking/position
-  
-  // Player performance
-  kills             Int       @default(0)
-  deaths            Int       @default(0)
-  assists           Int       @default(0)
-  score             Int       @default(0)
-  
-  // Skill rating changes
-  skillBefore       Int       @default(1000)
-  skillAfter        Int?      // Updated after match
-  skillChange       Int       @default(0)
-  
-  // Player stats
-  stats             Json      @default("{}")
-  
-  // Foreign keys
-  userId            String
-  matchId           String
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  match             GameMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  
+  id            String    @id @default(cuid())
+  team          String?
+  finalPosition Int?
+  kills         Int       @default(0)
+  deaths        Int       @default(0)
+  assists       Int       @default(0)
+  score         Int       @default(0)
+  skillBefore   Int       @default(1000)
+  skillAfter    Int?
+  skillChange   Int       @default(0)
+  stats         Json      @default("{}")
+  userId        String
+  matchId       String
+  match         GameMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, matchId])
   @@index([matchId, team])
   @@index([userId, skillAfter])
@@ -2106,44 +1642,31 @@ model GameMatchPlayer {
 }
 
 model GameAnalyticsEvent {
-  id                String    @id @default(cuid())
-  eventType         String    // player_action, game_event, performance, monetization, error
-  eventName         String    // level_complete, item_purchase, crash, etc.
-  category          String?   // gameplay, ui, system, commerce
-  
-  // Event Data
-  eventData         Json      @default("{}") // Flexible event payload
-  properties        Json      @default("{}") // Additional properties
-  metrics           Json      @default("{}") // Numerical metrics
-  
-  // Context
+  id             String       @id @default(cuid())
+  eventType      String
+  eventName      String
+  category       String?
+  eventData      Json         @default("{}")
+  properties     Json         @default("{}")
+  metrics        Json         @default("{}")
+  sessionId      String?
+  userId         String?
+  projectId      String?
+  gameVersion    String?
+  platform       String?
+  deviceInfo     Json?        @default("{}")
+  level          String?
+  position       Json?
+  serverRegion   String?
+  timestamp      DateTime     @default(now())
+  localTimestamp DateTime?
+  sessionTime    Int?
+  processed      Boolean      @default(false)
+  batchId        String?
+  project        Project?     @relation(fields: [projectId], references: [id])
+  session        GameSession? @relation(fields: [sessionId], references: [sessionId])
+  user           User?        @relation(fields: [userId], references: [id])
 
-  sessionId         String?   // Game session identifier
-  userId            String?   // User who triggered event
-  projectId         String?   // Game project
-  gameVersion       String?   // Game build version
-  platform          String?   // iOS, Android, PC, etc.
-  deviceInfo        Json?     @default("{}") // Device specifications
-  
-  // Location & Environment
-  level             String?   // Game level/scene
-  position          Json?     // Player position (x, y, z)
-  serverRegion      String?   // Server region
-  
-  // Timing
-  timestamp         DateTime  @default(now())
-  localTimestamp    DateTime? // Client-side timestamp
-  sessionTime       Int?      // Seconds since session start
-  
-  // Processing
-  processed         Boolean   @default(false)
-  batchId           String?   // For batch processing
-  
-  // Foreign keys
-  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  session           GameSession? @relation(fields: [sessionId], references: [sessionId], onDelete: SetNull)
-  
   @@index([eventType, timestamp])
   @@index([userId, timestamp])
   @@index([projectId, timestamp])
@@ -2153,47 +1676,35 @@ model GameAnalyticsEvent {
 }
 
 model GameSession {
-  id                String    @id @default(cuid())
-  sessionId         String    @unique // Client-generated session ID
-  
-  // Session Info
-  userId            String?
-  projectId         String?
-  gameVersion       String?
-  platform          String    @default("unknown")
-  deviceInfo        Json      @default("{}")
-  
-  // Session Metrics
-  startTime         DateTime  @default(now())
-  endTime           DateTime?
-  duration          Int?      // Duration in seconds
-  isActive          Boolean   @default(true)
-  
-  // Gameplay Metrics
-  levelsPlayed      String[]  @default([])
-  achievements      String[]  @default([])
-  totalScore        Int       @default(0)
-  coinsEarned       Int       @default(0)
-  coinsSpent        Int       @default(0)
-  itemsPurchased    String[]  @default([])
-  
-  // Performance Metrics
-  avgFrameRate      Float?
-  avgLoadTime       Float?
-  crashCount        Int       @default(0)
-  errorCount        Int       @default(0)
-  
-  // Network & Location
-  ipAddress         String?
-  country           String?
-  city              String?
-  serverRegion      String?
-  
-  // Relationships
-  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  events            GameAnalyticsEvent[]
-  
+  id             String               @id @default(cuid())
+  sessionId      String               @unique
+  userId         String?
+  projectId      String?
+  gameVersion    String?
+  platform       String               @default("unknown")
+  deviceInfo     Json                 @default("{}")
+  startTime      DateTime             @default(now())
+  endTime        DateTime?
+  duration       Int?
+  isActive       Boolean              @default(true)
+  levelsPlayed   String[]             @default([])
+  achievements   String[]             @default([])
+  totalScore     Int                  @default(0)
+  coinsEarned    Int                  @default(0)
+  coinsSpent     Int                  @default(0)
+  itemsPurchased String[]             @default([])
+  avgFrameRate   Float?
+  avgLoadTime    Float?
+  crashCount     Int                  @default(0)
+  errorCount     Int                  @default(0)
+  ipAddress      String?
+  country        String?
+  city           String?
+  serverRegion   String?
+  events         GameAnalyticsEvent[]
+  project        Project?             @relation(fields: [projectId], references: [id])
+  user           User?                @relation(fields: [userId], references: [id])
+
   @@index([userId, startTime])
   @@index([projectId, startTime])
   @@index([platform, startTime])
@@ -2202,53 +1713,38 @@ model GameSession {
 }
 
 model CodeGeneration {
-  id                String    @id @default(cuid())
-  prompt            String    // Original prompt
-  generatedCode     String?   // Generated code content
-  type              String    // script, component, shader, blueprint, etc.
-  framework         String?   // Unity, React, Unreal, etc.
-  language          String    // C#, JavaScript, TypeScript, HLSL, etc.
-  
-  // Generation Details
-  aiProvider        String?   // anthropic, openai, etc.
-  model             String?   // claude-3-sonnet, gpt-4, etc.
-  tokensUsed        Int?      // Tokens consumed
-  generationTime    Int?      // Generation time in milliseconds
-  complexity        String?   // simple, intermediate, advanced
-  
-  // Code Details
-  files             Json      @default("[]") // Generated files list
-  dependencies      String[]  @default([]) // Required dependencies
-  instructions      String?   // Implementation instructions
-  tests             String?   // Generated test code
-  documentation     String?   // Generated documentation
-  
-  // Quality and Status
-  status            String    @default("completed") // pending, processing, completed, failed
-  quality           String?   // AI-assessed quality: excellent, good, average, poor
-  validated         Boolean   @default(false)
-  validationResults Json?     // Validation results
-  
-  // Usage and Feedback
-  used              Boolean   @default(false) // Whether code was used
-  userRating        Int?      // User rating 1-5
-  feedback          String?   // User feedback
-  
-  // Metadata
-  metadata          Json      @default("{}")
-  version           String    @default("1.0.0")
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Foreign keys
+  id                String   @id @default(cuid())
+  prompt            String
+  generatedCode     String?
+  type              String
+  framework         String?
+  language          String
+  aiProvider        String?
+  model             String?
+  tokensUsed        Int?
+  generationTime    Int?
+  complexity        String?
+  files             Json     @default("[]")
+  dependencies      String[] @default([])
+  instructions      String?
+  tests             String?
+  documentation     String?
+  status            String   @default("completed")
+  quality           String?
+  validated         Boolean  @default(false)
+  validationResults Json?
+  used              Boolean  @default(false)
+  userRating        Int?
+  feedback          String?
+  metadata          Json     @default("{}")
+  version           String   @default("1.0.0")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
   userId            String
   projectId         String?
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  
+  project           Project? @relation(fields: [projectId], references: [id])
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, createdAt])
   @@index([projectId, type])
   @@index([framework, language])
@@ -2256,172 +1752,114 @@ model CodeGeneration {
 }
 
 model VisualScript {
-  id                String    @id @default(cuid())
-  name              String
-  description       String?
-  nodeGraph         Json      @default("{}") // Visual node graph data
-  compiledCode      String?   // Generated code from visual script
-  scriptType        String    @default("logic") // logic, ui, gameplay, ai, etc.
-  engine            String    // Unity, Unreal, Custom, etc.
-  language          String    @default("C#") // Target language for compilation
-  
-  // Visual Script Metadata
-  nodeCount         Int       @default(0)
-  connectionCount   Int       @default(0)
-  complexity        String    @default("simple") // simple, medium, complex
-  
-  // Status
-  status            String    @default("draft") // draft, compiled, error
-  lastCompiled      DateTime?
-  compileErrors     Json?     // Compilation errors and warnings
-  
-  // Usage
-  isTemplate        Boolean   @default(false)
-  isPublic          Boolean   @default(false)
-  used              Boolean   @default(false)
-  
-  // Metadata
-  metadata          Json      @default("{}")
-  version           String    @default("1.0.0")
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @default(now())
-  
-  // Foreign keys
-  userId            String
-  projectId         String?
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  nodeGraph       Json      @default("{}")
+  compiledCode    String?
+  scriptType      String    @default("logic")
+  engine          String
+  language        String    @default("C#")
+  nodeCount       Int       @default(0)
+  connectionCount Int       @default(0)
+  complexity      String    @default("simple")
+  status          String    @default("draft")
+  lastCompiled    DateTime?
+  compileErrors   Json?
+  isTemplate      Boolean   @default(false)
+  isPublic        Boolean   @default(false)
+  used            Boolean   @default(false)
+  metadata        Json      @default("{}")
+  version         String    @default("1.0.0")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now())
+  userId          String
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id])
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, createdAt])
   @@index([projectId, scriptType])
   @@index([engine, language])
   @@map("visual_scripts")
 }
 
-// ========================================
-// UNREAL ENGINE SPECIFIC MODELS
-// ========================================
-
 model UnrealProject {
-  id                String    @id @default(cuid())
-  projectId         String    // Reference to main Project
-  
-  // Unreal Project Settings
-  engineVersion     String    @default("5.3") // UE version
-  projectVersion    String    @default("1.0.0")
-  targetPlatforms   String[]  @default(["Windows"]) // Windows, Mac, Linux, iOS, Android, etc.
-  
-  // Rendering Features
-  rayTracingEnabled Boolean   @default(false)
-  lumenEnabled      Boolean   @default(true)
-  naniteEnabled     Boolean   @default(true)
-  virtualShadowMaps Boolean   @default(true)
-  worldPartition    Boolean   @default(false)
-  
-  // Project Structure
-  projectPath       String?   // Local project directory
-  uprojectPath      String?   // Path to .uproject file
-  sourceCodePath    String?   // Source/ directory path
-  contentPath       String?   // Content/ directory path
-  configPath        String?   // Config/ directory path
-  
-  // C++ Settings
-  cppSupport        Boolean   @default(false)
-  moduleName        String?   // Primary module name
-  apiMacro          String?   // API macro name
-  
-  // Blueprint Settings
-  blueprintCount    Int       @default(0)
-  widgetCount       Int       @default(0)
-  animBlueprintCount Int      @default(0)
-  
-  // Asset Counts
-  staticMeshCount   Int       @default(0)
-  materialCount     Int       @default(0)
-  textureCount      Int       @default(0)
-  audioCount        Int       @default(0)
-  
-  // Build Configuration
-  buildConfiguration Json     @default("{}")
-  targetRules       Json      @default("{}")
-  buildSettings     Json      @default("{}")
-  
-  // Project Metadata
-  metadata          Json      @default("{}")
-  tags              String[]  @default([])
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Relations
-  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  blueprintNodes    UnrealBlueprintNode[]
-  assetReferences   UnrealAssetReference[]
-  buildConfigs      UnrealBuildConfig[]
-  
-  @@unique([projectId])
+  id                 String                 @id @default(cuid())
+  projectId          String                 @unique
+  engineVersion      String                 @default("5.3")
+  projectVersion     String                 @default("1.0.0")
+  targetPlatforms    String[]               @default(["Windows"])
+  rayTracingEnabled  Boolean                @default(false)
+  lumenEnabled       Boolean                @default(true)
+  naniteEnabled      Boolean                @default(true)
+  virtualShadowMaps  Boolean                @default(true)
+  worldPartition     Boolean                @default(false)
+  projectPath        String?
+  uprojectPath       String?
+  sourceCodePath     String?
+  contentPath        String?
+  configPath         String?
+  cppSupport         Boolean                @default(false)
+  moduleName         String?
+  apiMacro           String?
+  blueprintCount     Int                    @default(0)
+  widgetCount        Int                    @default(0)
+  animBlueprintCount Int                    @default(0)
+  staticMeshCount    Int                    @default(0)
+  materialCount      Int                    @default(0)
+  textureCount       Int                    @default(0)
+  audioCount         Int                    @default(0)
+  buildConfiguration Json                   @default("{}")
+  targetRules        Json                   @default("{}")
+  buildSettings      Json                   @default("{}")
+  metadata           Json                   @default("{}")
+  tags               String[]               @default([])
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  assetReferences    UnrealAssetReference[]
+  blueprintNodes     UnrealBlueprintNode[]
+  buildConfigs       UnrealBuildConfig[]
+  project            Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@index([engineVersion])
   @@index([cppSupport])
   @@map("unreal_projects")
 }
 
 model UnrealBlueprintNode {
-  id                String    @id @default(cuid())
-  unrealProjectId   String
-  
-  // Node Identification
-  nodeId            String    // Unique node ID within blueprint
-  nodeType          String    // Function, Event, Variable, etc.
-  nodeClass         String    // Specific node class (e.g., "K2Node_CallFunction")
-  nodeName          String    // Display name of the node
-  
-  // Blueprint Information
-  blueprintPath     String    // Path to blueprint asset
-  blueprintName     String    // Name of the blueprint
-  blueprintType     String    // Actor, Component, Widget, etc.
-  
-  // Node Position and Layout
-  positionX         Float     @default(0)
-  positionY         Float     @default(0)
-  sizeX             Float     @default(150)
-  sizeY             Float     @default(80)
-  
-  // Node Properties
-  properties        Json      @default("{}")
-  inputPins         Json      @default("[]")  // Array of input pin definitions
-  outputPins        Json      @default("[]") // Array of output pin definitions
-  
-  // Connections
-  connections       Json      @default("[]") // Connected pins and target nodes
-  
-  // Function/Event Specific
-  functionName      String?   // For function nodes
-  eventType         String?   // For event nodes
-  variableName      String?   // For variable nodes
-  variableType      String?   // Variable data type
-  
-  // Execution Flow
-  executionOrder    Int?      // Order in execution flow
-  isEntryPoint      Boolean   @default(false)
-  isExitPoint       Boolean   @default(false)
-  
-  // Comments and Documentation
-  comment           String?   // Node comment
-  tooltip           String?   // Node tooltip
-  
-  // Metadata
-  metadata          Json      @default("{}")
-  nodeGuid          String?   // Unreal Engine GUID
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Relations
-  unrealProject     UnrealProject @relation(fields: [unrealProjectId], references: [id], onDelete: Cascade)
-  
+  id              String        @id @default(cuid())
+  unrealProjectId String
+  nodeId          String
+  nodeType        String
+  nodeClass       String
+  nodeName        String
+  blueprintPath   String
+  blueprintName   String
+  blueprintType   String
+  positionX       Float         @default(0)
+  positionY       Float         @default(0)
+  sizeX           Float         @default(150)
+  sizeY           Float         @default(80)
+  properties      Json          @default("{}")
+  inputPins       Json          @default("[]")
+  outputPins      Json          @default("[]")
+  connections     Json          @default("[]")
+  functionName    String?
+  eventType       String?
+  variableName    String?
+  variableType    String?
+  executionOrder  Int?
+  isEntryPoint    Boolean       @default(false)
+  isExitPoint     Boolean       @default(false)
+  comment         String?
+  tooltip         String?
+  metadata        Json          @default("{}")
+  nodeGuid        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  unrealProject   UnrealProject @relation(fields: [unrealProjectId], references: [id], onDelete: Cascade)
+
   @@index([unrealProjectId, blueprintPath])
   @@index([nodeType, nodeClass])
   @@index([blueprintName, nodeType])
@@ -2429,55 +1867,36 @@ model UnrealBlueprintNode {
 }
 
 model UnrealAssetReference {
-  id                String    @id @default(cuid())
-  unrealProjectId   String
-  
-  // Asset Identification
-  assetPath         String    // Full asset path in Unreal
-  assetName         String    // Asset name
-  assetType         String    // StaticMesh, Material, Texture, Sound, etc.
-  assetClass        String    // UStaticMesh, UMaterial, etc.
-  
-  // File Information
-  fileName          String?   // Actual file name
-  fileExtension     String?   // .uasset, .umap, etc.
-  fileSize          Int?      // File size in bytes
-  filePath          String?   // Local file path
-  
-  // Asset Properties
-  properties        Json      @default("{}")
-  dependencies      String[]  @default([]) // Referenced assets
-  referencedBy      String[]  @default([]) // Assets that reference this
-  
-  // Import Information
-  sourceFilePath    String?   // Original source file (FBX, PNG, etc.)
-  importSettings    Json?     // Import configuration used
-  importedAt        DateTime? // When asset was imported
-  
-  // Usage Tracking
-  usageCount        Int       @default(0)
-  lastUsed          DateTime?
-  isUsed            Boolean   @default(true)
-  
-  // Asset Metadata
-  tags              String[]  @default([])
-  category          String?   // Organization category
-  subcategory       String?   // Sub-organization
-  
-  // Version Control
-  version           String    @default("1.0.0")
-  checksum          String?   // File checksum for change detection
-  
-  // Thumbnail and Preview
-  thumbnailPath     String?   // Path to thumbnail image
-  previewData       Json?     // Preview metadata
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @default(now())
-  
-  // Relations
-  unrealProject     UnrealProject @relation(fields: [unrealProjectId], references: [id], onDelete: Cascade)
-  
+  id              String        @id @default(cuid())
+  unrealProjectId String
+  assetPath       String
+  assetName       String
+  assetType       String
+  assetClass      String
+  fileName        String?
+  fileExtension   String?
+  fileSize        Int?
+  filePath        String?
+  properties      Json          @default("{}")
+  dependencies    String[]      @default([])
+  referencedBy    String[]      @default([])
+  sourceFilePath  String?
+  importSettings  Json?
+  importedAt      DateTime?
+  usageCount      Int           @default(0)
+  lastUsed        DateTime?
+  isUsed          Boolean       @default(true)
+  tags            String[]      @default([])
+  category        String?
+  subcategory     String?
+  version         String        @default("1.0.0")
+  checksum        String?
+  thumbnailPath   String?
+  previewData     Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @default(now())
+  unrealProject   UnrealProject @relation(fields: [unrealProjectId], references: [id], onDelete: Cascade)
+
   @@index([unrealProjectId, assetType])
   @@index([assetPath])
   @@index([assetType, assetClass])
@@ -2486,165 +1905,108 @@ model UnrealAssetReference {
 }
 
 model UnrealBuildConfig {
-  id                String    @id @default(cuid())
-  unrealProjectId   String
-  
-  // Build Configuration
-  configName        String    // Development, Shipping, Debug, Test
-  platform          String    // Win64, Mac, Linux, iOS, Android, etc.
-  architecture      String    @default("x64") // x64, ARM64, etc.
-  
-  // Compilation Settings
-  optimizationLevel String    @default("Default") // None, Speed, Size, Default
-  debugInfo         Boolean   @default(true)
-  staticAnalysis    Boolean   @default(false)
-  unityBuild        Boolean   @default(true)
-  
-  // Engine Features
-  enabledPlugins    String[]  @default([])
-  disabledPlugins   String[]  @default([])
-  engineFeatures    Json      @default("{}")
-  
-  // Packaging Settings
-  pakFiles          Boolean   @default(true)
-  compression       String    @default("Default") // None, Fast, Default, Best
-  chunkInstall      Boolean   @default(false)
-  
-  // Deployment Settings
-  deploymentTarget  String?   // Steam, Epic, Mobile Store, etc.
-  signingCertificate String?  // For mobile/console builds
-  provisioningProfile String? // For iOS builds
-  
-  // Custom Build Steps
-  preBuildSteps     Json      @default("[]")
-  postBuildSteps    Json      @default("[]")
-  customCommands    Json      @default("[]")
-  
-  // Build Artifacts
-  outputPath        String?   // Where built files are placed
-  artifactNames     String[]  @default([])
-  artifactSizes     Json?     // File sizes of built artifacts
-  
-  // Build Status
-  lastBuildTime     DateTime?
-  buildDuration     Int?      // Build time in seconds
-  buildStatus       String    @default("never_built") // success, failed, building, never_built
-  buildLog          String?   // Build output log
-  buildErrors       Json?     // Compilation errors and warnings
-  
-  // Performance Settings
-  maxParallelJobs   Int       @default(0) // 0 = auto-detect
-  memoryPerJob      Int       @default(2048) // MB per compile job
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @default(now())
-  
-  // Relations
-  unrealProject     UnrealProject @relation(fields: [unrealProjectId], references: [id], onDelete: Cascade)
-  
+  id                  String        @id @default(cuid())
+  unrealProjectId     String
+  configName          String
+  platform            String
+  architecture        String        @default("x64")
+  optimizationLevel   String        @default("Default")
+  debugInfo           Boolean       @default(true)
+  staticAnalysis      Boolean       @default(false)
+  unityBuild          Boolean       @default(true)
+  enabledPlugins      String[]      @default([])
+  disabledPlugins     String[]      @default([])
+  engineFeatures      Json          @default("{}")
+  pakFiles            Boolean       @default(true)
+  compression         String        @default("Default")
+  chunkInstall        Boolean       @default(false)
+  deploymentTarget    String?
+  signingCertificate  String?
+  provisioningProfile String?
+  preBuildSteps       Json          @default("[]")
+  postBuildSteps      Json          @default("[]")
+  customCommands      Json          @default("[]")
+  outputPath          String?
+  artifactNames       String[]      @default([])
+  artifactSizes       Json?
+  lastBuildTime       DateTime?
+  buildDuration       Int?
+  buildStatus         String        @default("never_built")
+  buildLog            String?
+  buildErrors         Json?
+  maxParallelJobs     Int           @default(0)
+  memoryPerJob        Int           @default(2048)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @default(now())
+  unrealProject       UnrealProject @relation(fields: [unrealProjectId], references: [id], onDelete: Cascade)
+
   @@unique([unrealProjectId, configName, platform])
   @@index([platform, configName])
   @@index([buildStatus, lastBuildTime])
   @@map("unreal_build_configs")
 }
 
-// ========================================
-// END UNREAL ENGINE MODELS
-// ========================================
-// ========================================
-// SOLIDITY/BLOCKCHAIN MODELS
-// ========================================
-
-// Solidity/Blockchain Development Models
 model SolidityProject {
-  id              String    @id @default(cuid())
-  projectId       String    @unique // Reference to main Project
-  
-  // Project Configuration
-  solcVersion     String    @default("0.8.24") // Solidity compiler version
-  evmVersion      String    @default("london")  // EVM target version
-  optimization    Boolean   @default(true)     // Enable optimization
-  optimizationRuns Int      @default(200)      // Optimization runs
-  
-  // Project Structure
-  sourceDirectory String    @default("contracts/")
-  outputDirectory String    @default("artifacts/")
-  testDirectory   String    @default("test/")
-  deployDirectory String    @default("scripts/deploy/")
-  
-  // Dependencies
-  dependencies    Json      @default("{}")     // npm dependencies
-  devDependencies Json      @default("{}")     // dev dependencies
-  remappings      String[]  @default([])       // Import remappings
-  
-  // Configuration Files
-  hardhatConfig   Json?     // hardhat.config.js content
-  truffleConfig   Json?     // truffle-config.js content
-  foundryConfig   Json?     // foundry.toml content
-  
-  // Metadata
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Relations
-  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  contracts       SmartContract[]
-  deployments     ContractDeployment[]
-  
+  id               String               @id @default(cuid())
+  projectId        String               @unique
+  solcVersion      String               @default("0.8.24")
+  evmVersion       String               @default("london")
+  optimization     Boolean              @default(true)
+  optimizationRuns Int                  @default(200)
+  sourceDirectory  String               @default("contracts/")
+  outputDirectory  String               @default("artifacts/")
+  testDirectory    String               @default("test/")
+  deployDirectory  String               @default("scripts/deploy/")
+  dependencies     Json                 @default("{}")
+  devDependencies  Json                 @default("{}")
+  remappings       String[]             @default([])
+  hardhatConfig    Json?
+  truffleConfig    Json?
+  foundryConfig    Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deployments      ContractDeployment[]
+  contracts        SmartContract[]
+  project          Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@map("solidity_projects")
 }
 
 model SmartContract {
-  id                String    @id @default(cuid())
-  name              String    // Contract name
-  fileName          String    // e.g., "MyToken.sol"
-  filePath          String    // Relative path in project
-  
-  // Contract Content
-  sourceCode        String    @db.Text // Solidity source code
-  abi               Json?     // Contract ABI
-  bytecode          String?   @db.Text // Compiled bytecode
-  metadata          Json?     // Compilation metadata
-  
-  // Contract Information
-  contractType      String    @default("contract") // contract, interface, library, abstract
-  isAbstract        Boolean   @default(false)
-  isInterface       Boolean   @default(false)
-  isLibrary         Boolean   @default(false)
-  
-  // Compilation Status
-  compiled          Boolean   @default(false)
-  compilationError  String?   @db.Text
-  lastCompiledAt    DateTime?
-  
-  // Analysis Results
-  securityWarnings  Json      @default("[]")     // Security analysis warnings
-  gasEstimations    Json?     // Gas cost estimations
-  importDependencies String[]  @default([])       // Contract import dependencies
-  
-  // Version Control
-  version           String    @default("1.0.0")
-  changelog         Json      @default("[]")     // Version changelog
-  
-  // Metadata
-  description       String?
-  tags              String[]  @default([])
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Foreign Keys
-  projectId         String
-  solidityProjectId String
-  createdBy         String
-  
-  // Relations
-  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  solidityProject   SolidityProject  @relation(fields: [solidityProjectId], references: [id], onDelete: Cascade)
-  creator           User             @relation("CreatedContracts", fields: [createdBy], references: [id], onDelete: Cascade)
-  deployments       ContractDeployment[]
-  dependencies      ContractDependency[]
+  id                 String               @id @default(cuid())
+  name               String
+  fileName           String
+  filePath           String
+  sourceCode         String
+  abi                Json?
+  bytecode           String?
+  metadata           Json?
+  contractType       String               @default("contract")
+  isAbstract         Boolean              @default(false)
+  isInterface        Boolean              @default(false)
+  isLibrary          Boolean              @default(false)
+  compiled           Boolean              @default(false)
+  compilationError   String?
+  lastCompiledAt     DateTime?
+  securityWarnings   Json                 @default("[]")
+  gasEstimations     Json?
+  importDependencies String[]             @default([])
+  version            String               @default("1.0.0")
+  changelog          Json                 @default("[]")
+  description        String?
+  tags               String[]             @default([])
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  projectId          String
+  solidityProjectId  String
+  createdBy          String
   compilationResults CompilationResult[]
-  
+  dependencies       ContractDependency[]
+  deployments        ContractDeployment[]
+  creator            User                 @relation("CreatedContracts", fields: [createdBy], references: [id], onDelete: Cascade)
+  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  solidityProject    SolidityProject      @relation(fields: [solidityProjectId], references: [id], onDelete: Cascade)
+
   @@unique([solidityProjectId, fileName])
   @@index([projectId, contractType])
   @@index([compiled, lastCompiledAt])
@@ -2652,116 +2014,82 @@ model SmartContract {
 }
 
 model BlockchainNetwork {
-  id              String    @id @default(cuid())
-  name            String    // Ethereum, Polygon, BSC, etc.
-  displayName     String    // User-friendly name
-  chainId         Int       @unique // Chain ID (1 for Ethereum mainnet)
-  
-  // Network Configuration
-  rpcUrl          String    // RPC endpoint
-  wsUrl           String?   // WebSocket endpoint
-  explorerUrl     String    // Block explorer URL
-  explorerApiUrl  String?   // Explorer API URL
-  
-  // Network Details
-  symbol          String    // Native token symbol (ETH, MATIC, etc.)
-  decimals        Int       @default(18) // Native token decimals
-  isTestnet       Boolean   @default(false)
-  isMainnet       Boolean   @default(false)
-  
-  // Gas Configuration
-  gasPrice        BigInt?   // Default gas price in wei
-  gasLimit        BigInt?   // Default gas limit
-  maxFeePerGas    BigInt?   // EIP-1559 max fee per gas
-  maxPriorityFee  BigInt?   // EIP-1559 max priority fee
-  
-  // Features
-  supportsEIP1559 Boolean   @default(false) // EIP-1559 support
-  supportsContracts Boolean @default(true)  // Smart contract support
-  
-  // Status
-  isActive        Boolean   @default(true)
-  lastChecked     DateTime?
-  blockHeight     BigInt?   // Latest block height
-  
-  // Metadata
-  description     String?
-  website         String?
-  documentation   String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Foreign Keys
-  projectId       String?
-  
-  // Relations
-  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  deployments     ContractDeployment[]
-  
+  id                String               @id @default(cuid())
+  name              String
+  displayName       String
+  chainId           Int                  @unique
+  rpcUrl            String
+  wsUrl             String?
+  explorerUrl       String
+  explorerApiUrl    String?
+  symbol            String
+  decimals          Int                  @default(18)
+  isTestnet         Boolean              @default(false)
+  isMainnet         Boolean              @default(false)
+  gasPrice          BigInt?
+  gasLimit          BigInt?
+  maxFeePerGas      BigInt?
+  maxPriorityFee    BigInt?
+  supportsEIP1559   Boolean              @default(false)
+  supportsContracts Boolean              @default(true)
+  isActive          Boolean              @default(true)
+  lastChecked       DateTime?
+  blockHeight       BigInt?
+  description       String?
+  website           String?
+  documentation     String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  projectId         String?
+  project           Project?             @relation(fields: [projectId], references: [id])
+  deployments       ContractDeployment[]
+
   @@index([chainId, isActive])
   @@index([isMainnet, isTestnet])
   @@map("blockchain_networks")
 }
 
 model ContractDeployment {
-  id                String    @id @default(cuid())
-  
-  // Contract Information
-  contractAddress   String    // Deployed contract address
-  transactionHash   String    // Deployment transaction hash
-  blockNumber       BigInt    // Block number of deployment
-  blockTimestamp    DateTime  // Block timestamp
-  
-  // Deployment Details
-  deployerAddress   String    // Address that deployed the contract
-  constructorArgs   Json      @default("[]") // Constructor arguments
-  gasUsed           BigInt?   // Gas used for deployment
-  gasPrice          BigInt?   // Gas price used
-  deploymentCost    String?   // Total deployment cost in native token
-  
-  // Contract Data
-  contractName      String    // Name of the deployed contract
-  contractVersion   String?   // Version of the contract
-  verificationStatus String   @default("unverified") // verified, unverified, pending
-  verificationDate  DateTime?
-  
-  // Network Information
-  networkName       String    // Network where deployed
-  chainId           Int       // Chain ID
-  isTestnet         Boolean   @default(false)
-  
-  // Status
-  status            String    @default("active") // active, paused, upgraded, destroyed
-  isActive          Boolean   @default(true)
-  lastInteraction   DateTime?
-  
-  // Upgrade Information (for upgradeable contracts)
-  isUpgradeable     Boolean   @default(false)
-  proxyAddress      String?   // Proxy contract address if upgradeable
-  implementationAddress String? // Implementation address
-  
-  // Metadata
-  description       String?
-  tags              String[]  @default([])
-  metadata          Json      @default("{}")
-  deploymentNotes   String?   @db.Text
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Foreign Keys
-  projectId         String
-  contractId        String
-  networkId         String
-  deployedBy        String
-  solidityProjectId String?
-  
-  // Relations
-  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  contract          SmartContract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  network           BlockchainNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
-  deployer          User             @relation("DeployedContracts", fields: [deployedBy], references: [id], onDelete: Cascade)
-  solidityProject   SolidityProject? @relation(fields: [solidityProjectId], references: [id], onDelete: SetNull)
-  
+  id                    String            @id @default(cuid())
+  contractAddress       String
+  transactionHash       String
+  blockNumber           BigInt
+  blockTimestamp        DateTime
+  deployerAddress       String
+  constructorArgs       Json              @default("[]")
+  gasUsed               BigInt?
+  gasPrice              BigInt?
+  deploymentCost        String?
+  contractName          String
+  contractVersion       String?
+  verificationStatus    String            @default("unverified")
+  verificationDate      DateTime?
+  networkName           String
+  chainId               Int
+  isTestnet             Boolean           @default(false)
+  status                String            @default("active")
+  isActive              Boolean           @default(true)
+  lastInteraction       DateTime?
+  isUpgradeable         Boolean           @default(false)
+  proxyAddress          String?
+  implementationAddress String?
+  description           String?
+  tags                  String[]          @default([])
+  metadata              Json              @default("{}")
+  deploymentNotes       String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  projectId             String
+  contractId            String
+  networkId             String
+  deployedBy            String
+  solidityProjectId     String?
+  contract              SmartContract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  deployer              User              @relation("DeployedContracts", fields: [deployedBy], references: [id], onDelete: Cascade)
+  network               BlockchainNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  solidityProject       SolidityProject?  @relation(fields: [solidityProjectId], references: [id])
+
   @@unique([contractAddress, chainId])
   @@index([projectId, status])
   @@index([networkId, isActive])
@@ -2770,225 +2098,183 @@ model ContractDeployment {
 }
 
 model ContractDependency {
-  id              String    @id @default(cuid())
-  
-  // Dependency Information
-  name            String    // Import name or library name
-  importPath      String    // Import path (e.g., "@openzeppelin/contracts/token/ERC20/ERC20.sol")
-  version         String?   // Version if it's a package dependency
-  
-  // Dependency Type
-  dependencyType  String    // local, npm, github, custom
-  isDevDependency Boolean   @default(false)
-  isRequired      Boolean   @default(true)
-  
-  // Resolution
-  resolvedPath    String?   // Actual file path after resolution
-  contentHash     String?   // Hash of the dependency content for integrity
-  
-  // Metadata
+  id              String        @id @default(cuid())
+  name            String
+  importPath      String
+  version         String?
+  dependencyType  String
+  isDevDependency Boolean       @default(false)
+  isRequired      Boolean       @default(true)
+  resolvedPath    String?
+  contentHash     String?
   description     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Foreign Keys
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   contractId      String
-  
-  // Relations
   contract        SmartContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  
+
   @@unique([contractId, importPath])
   @@index([dependencyType, version])
   @@map("contract_dependencies")
 }
 
 model CompilationResult {
-  id                String    @id @default(cuid())
-  
-  // Compilation Details
-  solcVersion       String    // Compiler version used
-  evmVersion        String    // EVM version target
-  optimizationEnabled Boolean @default(true)
-  optimizationRuns  Int       @default(200)
-  
-  // Results
-  success           Boolean   @default(false)
-  warnings          Json      @default("[]")    // Compilation warnings
-  errors            Json      @default("[]")    // Compilation errors
-  
-  // Output
-  abi               Json?     // Contract ABI
-  bytecode          String?   @db.Text // Contract bytecode
-  deployedBytecode  String?   @db.Text // Runtime bytecode
-  sourceMap         String?   @db.Text // Source map for debugging
-  
-  // Analysis
-  gasEstimates      Json?     // Gas cost estimates
-  devdoc            Json?     // Developer documentation
-  userdoc           Json?     // User documentation
-  
-  // Metadata
-  compilationTime   Int?      // Compilation time in milliseconds
-  metadata          Json?     // Additional compilation metadata
-  createdAt         DateTime  @default(now())
-  
-  // Foreign Keys
-  contractId        String
-  
-  // Relations
-  contract          SmartContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  
+  id                  String        @id @default(cuid())
+  solcVersion         String
+  evmVersion          String
+  optimizationEnabled Boolean       @default(true)
+  optimizationRuns    Int           @default(200)
+  success             Boolean       @default(false)
+  warnings            Json          @default("[]")
+  errors              Json          @default("[]")
+  abi                 Json?
+  bytecode            String?
+  deployedBytecode    String?
+  sourceMap           String?
+  gasEstimates        Json?
+  devdoc              Json?
+  userdoc             Json?
+  compilationTime     Int?
+  metadata            Json?
+  createdAt           DateTime      @default(now())
+  contractId          String
+  contract            SmartContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
   @@index([contractId, success])
   @@index([solcVersion, createdAt])
   @@map("compilation_results")
 }
 
-// Additional Payment System Models
-
 model PaymentIntent {
-  id              String    @id @default(cuid())
-  userId          String
-  planId          String
-  amount          Float     // Use Float for precise currency amounts
-  currency        String    @default("USD")
-  paymentType     String    // "subscription", "one_time", "usage"
-  status          String    @default("pending") // "pending", "succeeded", "failed", "cancelled"
-  dodoCheckoutId  String?   @unique
-  frontend        String    @default("web") // "web", "chat", "mobile", "desktop", "cli"
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Relations
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan            SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
-  
+  id             String           @id @default(cuid())
+  userId         String
+  planId         String
+  amount         Float
+  currency       String           @default("USD")
+  paymentType    String
+  status         String           @default("pending")
+  dodoCheckoutId String?          @unique
+  frontend       String           @default("web")
+  metadata       Json             @default("{}")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, status])
   @@index([paymentType, status])
   @@map("payment_intents")
 }
 
 model Notification {
-  id              String    @id @default(cuid())
-  userId          String
-  title           String
-  message         String    @db.Text
-  type            String    // "usage_warning", "payment_failed", "subscription_renewed", etc.
-  read            Boolean   @default(false)
-  actionUrl       String?   // Optional URL for action button
-  actionText      String?   // Text for action button
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  readAt          DateTime?
-  
-  // Relations
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id         String    @id @default(cuid())
+  userId     String
+  title      String
+  message    String
+  type       String
+  read       Boolean   @default(false)
+  actionUrl  String?
+  actionText String?
+  metadata   Json      @default("{}")
+  createdAt  DateTime  @default(now())
+  readAt     DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, read])
   @@index([type, createdAt])
   @@map("notifications")
 }
 
 model SubscriptionPlan {
-  id              String    @id
+  id              String                    @id
   name            String
   description     String?
-  price           Decimal   @db.Decimal(10,2)
-  currency        String    @default("USD")
-  interval        String    @default("month") // month, year, week
-  intervalCount   Int       @default(1)
-  active          Boolean   @default(true)
-  sortOrder       Int       @default(0)
+  price           Decimal                   @db.Decimal(10, 2)
+  currency        String                    @default("USD")
+  interval        String                    @default("month")
+  intervalCount   Int                       @default(1)
+  active          Boolean                   @default(true)
+  sortOrder       Int                       @default(0)
   dodoProductId   String?
   stripeProductId String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Relations
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  paymentIntents  PaymentIntent[]
   features        SubscriptionPlanFeature[]
   limits          SubscriptionPlanLimits?
-  paymentIntents  PaymentIntent[]
-  
+
   @@index([active])
   @@map("subscription_plans")
 }
 
 model SubscriptionPlanFeature {
-  id          String  @id @default(cuid())
+  id          String           @id @default(cuid())
   planId      String
   name        String
   description String?
-  included    Boolean @default(true)
-  sortOrder   Int     @default(0)
-  createdAt   DateTime @default(now())
-  
-  // Relations
+  included    Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
   plan        SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  
+
   @@index([planId])
   @@map("subscription_plan_features")
 }
 
 model SubscriptionPlanLimits {
-  id                String   @id @default(cuid())
-  planId            String   @unique
-  monthlyRequests   Int      @default(0)
-  dailyRequests     Int      @default(0)
-  tokensPerRequest  Int      @default(1000)
-  modelsAvailable   Json     @default("[]")
-  features          Json     @default("[]")
-  costLimitUSD      Decimal  @db.Decimal(10,2) @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  // Relations
-  plan              SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  
+  id               String           @id @default(cuid())
+  planId           String           @unique
+  monthlyRequests  Int              @default(0)
+  dailyRequests    Int              @default(0)
+  tokensPerRequest Int              @default(1000)
+  modelsAvailable  Json             @default("[]")
+  features         Json             @default("[]")
+  costLimitUSD     Decimal          @default(0) @db.Decimal(10, 2)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
   @@map("subscription_plan_limits")
 }
 
 model UsageEvent {
-  id          String   @id @default(cuid())
-  userId      String
-  type        String
-  metadata    Json     @default("{}")
-  timestamp   DateTime @default(now())
-  processed   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  
-  // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  metadata  Json     @default("{}")
+  timestamp DateTime @default(now())
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([timestamp])
   @@map("usage_events")
 }
 
 model AIGeneratedProject {
-  id            String   @id @default(cuid())
-  sessionId     String   @unique
+  id            String                @id @default(cuid())
+  sessionId     String                @unique
   userId        String
   name          String
   description   String?
-  framework     String   // react, next, vue, angular, etc.
-  files         Json     @default("[]") // FileNode[]
-  chat          Json     @default("[]") // ChatMessage[]
-  isPublic      Boolean  @default(false)
+  framework     String
+  files         Json                  @default("[]")
+  chat          Json                  @default("[]")
+  isPublic      Boolean               @default(false)
   previewUrl    String?
   deployUrl     String?
-  stars         Int      @default(0)
-  views         Int      @default(0)
-  forks         Int      @default(0)
-  lastSavedAt   DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  // Relations
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stars         Int                   @default(0)
+  views         Int                   @default(0)
+  forks         Int                   @default(0)
+  lastSavedAt   DateTime              @default(now())
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   collaborators ProjectCollaborator[]
   comments      ProjectComment[]
   shares        ProjectShare[]
-  
+
   @@index([userId])
   @@index([framework])
   @@index([isPublic, stars])
@@ -2997,38 +2283,34 @@ model AIGeneratedProject {
 }
 
 model ProjectCollaborator {
-  id        String   @id @default(cuid())
-  projectId String
-  userId    String
-  role      String   @default("viewer") // owner, editor, viewer
-  invitedAt DateTime @default(now())
+  id         String             @id @default(cuid())
+  projectId  String
+  userId     String
+  role       String             @default("viewer")
+  invitedAt  DateTime           @default(now())
   acceptedAt DateTime?
-  
-  // Relations
-  project   AIGeneratedProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  project    AIGeneratedProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([projectId, userId])
   @@map("project_collaborators")
 }
 
 model ProjectComment {
-  id        String   @id @default(cuid())
-  projectId String
-  userId    String
-  content   String   @db.Text
-  lineNumber Int?    // For code-specific comments
-  filePath   String? // For file-specific comments
-  parentId   String? // For nested comments
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
-  // Relations
-  project   AIGeneratedProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent    ProjectComment?    @relation("CommentReplies", fields: [parentId], references: [id])
-  replies   ProjectComment[]   @relation("CommentReplies")
-  
+  id         String             @id @default(cuid())
+  projectId  String
+  userId     String
+  content    String
+  lineNumber Int?
+  filePath   String?
+  parentId   String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  parent     ProjectComment?    @relation("CommentReplies", fields: [parentId], references: [id])
+  replies    ProjectComment[]   @relation("CommentReplies")
+  project    AIGeneratedProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([projectId])
   @@index([userId])
   @@index([createdAt])
@@ -3036,38 +2318,36 @@ model ProjectComment {
 }
 
 model WebhookEvent {
-  id          String   @id @default(cuid())
-  externalId  String   @unique
-  provider    String   // dodo, stripe, github, etc.
+  id          String    @id @default(cuid())
+  externalId  String    @unique
+  provider    String
   eventType   String
   data        Json
-  processed   Boolean  @default(false)
+  processed   Boolean   @default(false)
   error       String?
-  retryCount  Int      @default(0)
+  retryCount  Int       @default(0)
   processedAt DateTime?
-  createdAt   DateTime @default(now())
-  
+  createdAt   DateTime  @default(now())
+
   @@index([provider, eventType])
   @@index([processed, createdAt])
   @@map("webhook_events")
 }
 
 model PlatformSession {
-  id           String   @id @default(cuid())
-  userId       String
-  platform     String   // cli, web, chat, mobile, desktop
-  capabilities Json     @default("[]")
-  deviceInfo   Json     @default("{}")
-  version      String   @default("unknown")
-  environment  String   @default("unknown")
-  isActive     Boolean  @default(true)
-  lastActivity DateTime @default(now())
+  id            String    @id @default(cuid())
+  userId        String
+  platform      String
+  capabilities  Json      @default("[]")
+  deviceInfo    Json      @default("{}")
+  version       String    @default("unknown")
+  environment   String    @default("unknown")
+  isActive      Boolean   @default(true)
+  lastActivity  DateTime  @default(now())
   deactivatedAt DateTime?
-  createdAt    DateTime @default(now())
-  
-  // Relations
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, isActive])
   @@index([platform, isActive])
   @@index([lastActivity])
@@ -3075,17 +2355,15 @@ model PlatformSession {
 }
 
 model ProjectShare {
-  id        String   @id @default(cuid())
+  id        String             @id @default(cuid())
   projectId String
   userId    String
-  platform  String   // cli, web, chat, mobile, desktop
-  source    String   // originating platform
-  sharedAt  DateTime @default(now())
-  
-  // Relations
+  platform  String
+  source    String
+  sharedAt  DateTime           @default(now())
   project   AIGeneratedProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@unique([projectId, platform])
   @@index([userId])
   @@index([platform])
@@ -3093,20 +2371,18 @@ model ProjectShare {
 }
 
 model RemoteAssistance {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  source      String   // originating platform
+  source      String
   sessionData Json
-  status      String   @default("pending") // pending, active, completed, expired
+  status      String    @default("pending")
   url         String
   expiresAt   DateTime
   startedAt   DateTime?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  
-  // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([status, expiresAt])
   @@map("remote_assistance")
@@ -3115,18 +2391,16 @@ model RemoteAssistance {
 model UserPricingHistory {
   id             String   @id @default(cuid())
   userId         String
-  tierId         String   // Pricing tier ID (free, weekly-10, monthly-20, etc.)
-  baseAmount     Float    // Base subscription amount
-  processingFees Float    // 5% + $0.50 processing fees
-  taxAmount      Float    // Tax amount based on region
-  totalAmount    Float    // Final total amount
+  tierId         String
+  baseAmount     Float
+  processingFees Float
+  taxAmount      Float
+  totalAmount    Float
   currency       String   @default("USD")
-  usageData      String?  // JSON string of usage data
+  usageData      String?
   calculatedAt   DateTime @default(now())
-  
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([tierId])
   @@index([calculatedAt])
@@ -3134,22 +2408,20 @@ model UserPricingHistory {
 }
 
 model BatchRequest {
-  id                   String    @id
-  userId               String
-  type                 String    // ai_generation, code_analysis, compilation, validation
-  prompt               String
-  parameters           Json      @default("{}")
-  priority             String    @default("normal") // low, normal, high
-  timestamp            DateTime  @default(now())
-  maxWaitTime          Int       // Maximum wait time in milliseconds
-  similarityThreshold  Float     @default(0.7)
-  batchId              String?   // Reference to BatchExecution when processed
-  status               String    @default("pending") // pending, processing, completed, failed
-  
-  // Relations
-  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  batchExecution       BatchExecution?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  
+  id                  String          @id
+  userId              String
+  type                String
+  prompt              String
+  parameters          Json            @default("{}")
+  priority            String          @default("normal")
+  timestamp           DateTime        @default(now())
+  maxWaitTime         Int
+  similarityThreshold Float           @default(0.7)
+  batchId             String?
+  status              String          @default("pending")
+  batchExecution      BatchExecution? @relation(fields: [batchId], references: [id])
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([type])
   @@index([status])
@@ -3159,21 +2431,19 @@ model BatchRequest {
 }
 
 model BatchExecution {
-  id              String    @id
-  type            String    // ai_generation, code_analysis, compilation, validation
-  requestCount    Int       // Number of requests in this batch
-  processingTime  Int       // Processing time in milliseconds
-  costSavings     Float     // Percentage of cost savings achieved (0-1)
-  status          String    // pending, processing, completed, failed
-  scheduledAt     DateTime?  // When batch was scheduled for execution
-  startedAt       DateTime? // When batch processing started
-  completedAt     DateTime? // When batch processing completed
-  createdAt       DateTime  @default(now())
-  metadata        Json      @default("{}")
-  
-  // Relations
-  requests        BatchRequest[]
-  
+  id             String         @id
+  type           String
+  requestCount   Int
+  processingTime Int
+  costSavings    Float
+  status         String
+  scheduledAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  metadata       Json           @default("{}")
+  requests       BatchRequest[]
+
   @@index([type])
   @@index([status])
   @@index([createdAt])
@@ -3181,25 +2451,24 @@ model BatchExecution {
   @@map("batch_executions")
 }
 
-
 model PromptCache {
-  id           String    @id
-  promptHash   String    @unique
-  prompt       String
-  response     Json
-  model        String
-  provider     String
-  parameters   Json      @default("{}")
-  hitCount     Int       @default(0)
-  cost         Float     @default(0)
-  tokens       Int       @default(0)
-  quality      Float     @default(1)
-  createdAt    DateTime  @default(now())
-  lastUsedAt   DateTime  @default(now())
-  expiresAt    DateTime?
-  tags         String[]  @default([])
-  context      Json      @default("{}")
-  
+  id         String    @id
+  promptHash String    @unique
+  prompt     String
+  response   Json
+  model      String
+  provider   String
+  parameters Json      @default("{}")
+  hitCount   Int       @default(0)
+  cost       Float     @default(0)
+  tokens     Int       @default(0)
+  quality    Float     @default(1)
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime?
+  tags       String[]  @default([])
+  context    Json      @default("{}")
+
   @@index([promptHash])
   @@index([model, provider])
   @@index([expiresAt])
@@ -3209,21 +2478,21 @@ model PromptCache {
 }
 
 model ComponentTemplate {
-  id           String    @id
+  id           String   @id
   name         String
   description  String
-  category     String    // react, vue, angular, nodejs, python, etc.
-  framework    String    // nextjs, express, fastapi, etc.
-  type         String    // component, hook, utility, api, config, etc.
-  tags         String[]  @default([])
-  code         String    @db.Text
-  dependencies String[]  @default([])
-  usageCount   Int       @default(0)
-  quality      Float     @default(1)
-  createdAt    DateTime  @default(now())
-  lastUsedAt   DateTime  @default(now())
-  metadata     Json      @default("{}")
-  
+  category     String
+  framework    String
+  type         String
+  tags         String[] @default([])
+  code         String
+  dependencies String[] @default([])
+  usageCount   Int      @default(0)
+  quality      Float    @default(1)
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+  metadata     Json     @default("{}")
+
   @@index([category, framework])
   @@index([type, category])
   @@index([usageCount])

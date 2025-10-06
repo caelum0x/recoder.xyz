@@ -1,20 +1,27 @@
 // Subscription Management API Routes
 // Handles DODO Payments integration for Recoder.xyz
 
-import express, { Request, Response, NextFunction } from 'express';
-import { body, param, query, validationResult } from 'express-validator';
-import { getDodoPaymentsInstance, SubscriptionPlan, SUBSCRIPTION_PLANS } from '../services/dodo-payments';
-import { authenticateUser } from '../middleware/auth';
-import { logger } from '../utils/logger';
-import { prisma } from '../database/prisma';
-import { APIResponse } from '../types';
-import * as crypto from 'crypto';
+const express = require('express');
+const { body, param, query, validationResult } = require('express-validator');
+const { getDodoPaymentsInstance, SUBSCRIPTION_PLANS } = require('../services/dodo-payments');
+const { authenticateUser } = require('../middleware/auth');
+const { logger } = require('../utils/logger');
+const { prisma } = require('../database/prisma');
+const crypto = require('crypto');
 
 const router = express.Router();
-const dodoPayments = getDodoPaymentsInstance();
+
+// Defer service initialization to prevent blocking module load
+let dodoPayments;
+const getDodoPayments = () => {
+  if (!dodoPayments) {
+    dodoPayments = getDodoPaymentsInstance();
+  }
+  return dodoPayments;
+};
 
 // Validation middleware
-const validateRequest = (req: Request, res: Response, next: NextFunction) => {
+const validateRequest = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     res.status(400).json({
@@ -30,7 +37,7 @@ const validateRequest = (req: Request, res: Response, next: NextFunction) => {
  * GET /api/subscriptions/plans
  * Get available subscription plans
  */
-router.get('/plans', (req: Request, res: Response) => {
+router.get('/plans', (req, res) => {
   try {
     const plans = Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => ({
       ...plan,
@@ -68,7 +75,7 @@ router.post('/create',
     body('returnUrl').optional().isURL().withMessage('Return URL must be valid')
   ],
   validateRequest,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req, res) => {
     try {
       const { planId, billingAddress, returnUrl } = req.body;
       const user = req.user;
@@ -95,7 +102,7 @@ router.post('/create',
       }
 
       // Create subscription with DODO Payments
-      const subscription = await dodoPayments.createSubscription({
+      const subscription = await getDodoPayments().createSubscription({
         planId,
         customerName: user.name,
         customerEmail: user.email,
@@ -153,7 +160,7 @@ router.post('/create',
  */
 router.get('/',
   authenticateUser,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req, res) => {
     try {
       const user = req.user;
 
@@ -169,7 +176,7 @@ router.get('/',
       });
 
       // Sync with DODO Payments
-      const dodoSubscriptions = await dodoPayments.listSubscriptions();
+      const dodoSubscriptions = await getDodoPayments().listSubscriptions();
       const userDodoSubs = dodoSubscriptions.filter(sub => 
         sub.customer.email === user.email
       );
@@ -214,7 +221,7 @@ router.get('/:id',
   authenticateUser,
   [param('id').notEmpty().withMessage('Subscription ID is required')],
   validateRequest,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req, res) => {
     try {
       const { id } = req.params;
       const user = req.user;
@@ -241,7 +248,7 @@ router.get('/:id',
       }
 
       // Get latest data from DODO Payments
-      const dodoSubscription = await dodoPayments.getSubscription(subscription.dodoSubscriptionId);
+      const dodoSubscription = await getDodoPayments().getSubscription(subscription.dodoSubscriptionId);
       const plan = SUBSCRIPTION_PLANS[subscription.planId];
 
       res.json({
@@ -280,7 +287,7 @@ router.post('/:id/change-plan',
     body('newPlanId').isIn(Object.keys(SUBSCRIPTION_PLANS)).withMessage('Invalid plan ID')
   ],
   validateRequest,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req, res) => {
     try {
       const { id } = req.params;
       const { newPlanId } = req.body;
@@ -308,7 +315,7 @@ router.post('/:id/change-plan',
       }
 
       // Update plan with DODO Payments
-      const updatedSubscription = await dodoPayments.updateSubscription(
+      const updatedSubscription = await getDodoPayments().updateSubscription(
         subscription.dodoSubscriptionId,
         newPlanId
       );
@@ -354,7 +361,7 @@ router.post('/:id/cancel',
     body('cancelAtPeriodEnd').optional().isBoolean().withMessage('cancelAtPeriodEnd must be a boolean')
   ],
   validateRequest,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req, res) => {
     try {
       const { id } = req.params;
       const { cancelAtPeriodEnd = true } = req.body;
@@ -382,7 +389,7 @@ router.post('/:id/cancel',
       }
 
       // Cancel with DODO Payments
-      await dodoPayments.cancelSubscription(
+      await getDodoPayments().cancelSubscription(
         subscription.dodoSubscriptionId,
         cancelAtPeriodEnd
       );
@@ -427,7 +434,7 @@ router.post('/:id/charge',
     body('description').notEmpty().withMessage('Description is required')
   ],
   validateRequest,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req, res) => {
     try {
       const { id } = req.params;
       const { amount, description } = req.body;
@@ -456,7 +463,7 @@ router.post('/:id/charge',
       }
 
       // Create charge with DODO Payments
-      const charge = await dodoPayments.createCharge({
+      const charge = await getDodoPayments().createCharge({
         subscriptionId: subscription.dodoSubscriptionId,
         amount,
         description
@@ -507,7 +514,7 @@ router.get('/:id/usage',
   authenticateUser,
   [param('id').notEmpty().withMessage('Subscription ID is required')],
   validateRequest,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req, res) => {
     try {
       const { id } = req.params;
       const user = req.user;
@@ -572,4 +579,4 @@ router.get('/:id/usage',
   }
 );
 
-export default router;
+module.exports = router;

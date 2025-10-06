@@ -1,18 +1,18 @@
 // Analytics API Routes
 // Enterprise usage analytics and billing monitoring
 
-import express from 'express';
-import { query, validationResult } from 'express-validator';
-import { authenticateUser, requireSubscription } from '../middleware/auth';
-import { logger } from '../utils/logger';
-import { prisma } from '../database/prisma';
-import { Parser } from 'json2csv';
-import { getErrorMessage } from '../utils/error-helpers';
+const express = require('express');
+const { query, validationResult } = require('express-validator');
+const { authenticateUser, requireSubscription } = require('../middleware/auth');
+const { logger } = require('../utils/logger');
+const { prisma } = require('../database/prisma');
+const { Parser } = require('json2csv');
+const { getErrorMessage } = require('../utils/error-helpers');
 
 const router = express.Router();
 
 // Validation middleware
-const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+const validateRequest = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     res.status(400).json({
@@ -25,7 +25,7 @@ const validateRequest = (req: express.Request, res: express.Response, next: expr
 };
 
 // Helper function to get date range
-const getDateRange = (range: string) => {
+const getDateRange = (range) => {
   const endDate = new Date();
   const startDate = new Date();
 
@@ -502,4 +502,4 @@ router.get('/export',
   }
 );
 
-export default router;
+module.exports = router;

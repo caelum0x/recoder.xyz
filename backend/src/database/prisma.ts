@@ -1,33 +1,33 @@
 // Prisma Database Client
 // Centralized database connection management with enterprise optimization
 
-import { PrismaClient } from '@prisma/client';
-import { logger } from '../utils/logger';
-// import { databaseOptimization } from '../services/database-optimization';
-// import { redisCache } from '../services/redis-cache';
+const { PrismaClient } = require('@prisma/client');
+const { logger } = require('../utils/logger');
+// const { databaseOptimization } = require('../services/database-optimization');
+const { redisCache } = require('../services/redis-cache');
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Enhanced Prisma configuration for enterprise performance
+// Safe Prisma configuration for startup
 const createPrismaClient = () => {
   return new PrismaClient({
     log: [
-      { emit: 'event', level: 'query' },
-      { emit: 'event', level: 'error' },
-      { emit: 'event', level: 'warn' },
-      { emit: 'stdout', level: 'info' }
+      // Minimal logging for startup
+      { emit: 'stdout', level: 'error' },
+      { emit: 'stdout', level: 'warn' }
     ],
     datasources: {
       db: {
-        url: process.env.DATABASE_URL + '?connection_limit=10&pool_timeout=60&statement_timeout=30000'
+        url: process.env.DATABASE_URL + '?connection_limit=5&pool_timeout=10&statement_timeout=10000&connect_timeout=3'
       }
     }
   });
 };
 
-export const basePrisma = globalForPrisma.prisma ?? createPrismaClient();
+// Create base Prisma client with CommonJS export
+const basePrisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma;
 
@@ -169,36 +169,82 @@ class EnhancedPrismaClient {
   get $transaction() { return this.client.$transaction.bind(this.client); }
   get $on() { return this.client.$on.bind(this.client); }
 
-  // Enhanced cached query method (simplified for testing)
+  // Enhanced cached query method
   async cachedQuery<T>(
     query: string,
     params: any[] = [],
     cacheKey?: string,
     cacheTtl: number = 300
   ): Promise<T> {
-    // Direct query execution without caching for testing
-    return await this.client.$queryRawUnsafe(query, ...params) as T;
+    const finalCacheKey = cacheKey || `query:${this.hashQuery(query, params)}`;
+    
+    // Try cache first
+    try {
+      const cached = await redisCache.get<T>(finalCacheKey, 'API_RESPONSES');
+      if (cached) {
+        return cached;
+      }
+    } catch (error) {
+      logger.warn('Cache lookup failed:', error);
+    }
+
+    // Execute query directly (optimization service temporarily disabled)
+    const result = await this.client.$queryRawUnsafe(query, ...params) as T;
+
+    // Cache the result
+    try {
+      await redisCache.set(finalCacheKey, result, { ttl: cacheTtl }, 'API_RESPONSES');
+    } catch (error) {
+      logger.warn('Cache storage failed:', error);
+    }
+
+    return result;
   }
 
-  // Read-optimized query (simplified for testing)
+  // Read-optimized query (optimization service temporarily disabled)
   async readQuery<T>(query: string, params: any[] = []): Promise<T> {
     return await this.client.$queryRawUnsafe(query, ...params) as T;
   }
 
-  // Write-optimized query (simplified for testing)
+  // Write-optimized query (optimization service temporarily disabled)
   async writeQuery<T>(query: string, params: any[] = []): Promise<T> {
+    // Invalidate related cache entries
+    try {
+      await this.invalidateQueryCache(query);
+    } catch (error) {
+      logger.warn('Cache invalidation failed:', error);
+    }
+    
     return await this.client.$queryRawUnsafe(query, ...params) as T;
   }
 
-  // Cached find operations (simplified for testing)
+  // Cached find operations
   async cachedFindMany<T>(
     model: string,
     args: any,
     cacheKey?: string,
     cacheTtl: number = 300
   ): Promise<T> {
+    const key = cacheKey || `find:${model}:${this.hashObject(args)}`;
+    
+    try {
+      const cached = await redisCache.get<T>(key, 'API_RESPONSES');
+      if (cached) return cached;
+    } catch (error) {
+      logger.warn('Cache lookup failed for findMany:', error);
+    }
+
+    // Execute the actual query
     const modelClient = (this.client as any)[model];
-    return await modelClient.findMany(args);
+    const result = await modelClient.findMany(args);
+
+    try {
+      await redisCache.set(key, result, { ttl: cacheTtl, tags: [model] }, 'API_RESPONSES');
+    } catch (error) {
+      logger.warn('Cache storage failed for findMany:', error);
+    }
+    
+    return result;
   }
 
   async cachedFindUnique<T>(
@@ -207,13 +253,38 @@ class EnhancedPrismaClient {
     cacheKey?: string,
     cacheTtl: number = 600
   ): Promise<T> {
+    const key = cacheKey || `findUnique:${model}:${this.hashObject(args)}`;
+    
+    try {
+      const cached = await redisCache.get<T>(key, 'API_RESPONSES');
+      if (cached) return cached;
+    } catch (error) {
+      logger.warn('Cache lookup failed for findUnique:', error);
+    }
+
     const modelClient = (this.client as any)[model];
-    return await modelClient.findUnique(args);
+    const result = await modelClient.findUnique(args);
+
+    try {
+      await redisCache.set(key, result, { ttl: cacheTtl, tags: [model] }, 'API_RESPONSES');
+    } catch (error) {
+      logger.warn('Cache storage failed for findUnique:', error);
+    }
+    
+    return result;
   }
 
-  // Invalidate cache for write operations (simplified for testing)
+  // Invalidate cache for write operations
   async invalidateCache(model: string, id?: string): Promise<void> {
-    // No-op for testing
+    try {
+      if (id) {
+        await redisCache.invalidateByTags([model, `${model}:${id}`]);
+      } else {
+        await redisCache.invalidateByTags([model]);
+      }
+    } catch (error) {
+      logger.warn('Cache invalidation failed:', error);
+    }
   }
 
   private hashQuery(query: string, params: any[]): string {
@@ -233,41 +304,73 @@ class EnhancedPrismaClient {
   }
 
   private async invalidateQueryCache(query: string): Promise<void> {
-    // No-op for testing
+    try {
+      // Extract table names from query and invalidate related caches
+      const tableMatches = query.match(/(?:FROM|INTO|UPDATE|JOIN)\s+(\w+)/gi);
+      if (tableMatches) {
+        const tables = tableMatches.map(match => match.split(/\s+/)[1]);
+        await redisCache.invalidateByTags(tables);
+      }
+    } catch (error) {
+      logger.warn('Query cache invalidation failed:', error);
+    }
   }
 }
 
-export const prisma = new EnhancedPrismaClient(basePrisma);
+// Enhanced Prisma client with proper async initialization
+const enhancedPrisma = new EnhancedPrismaClient(basePrisma);
 
-// Database connection handler with optimization integration
-basePrisma.$connect()
-  .then(async () => {
-    logger.info('Successfully connected to PostgreSQL database');
+// Re-enable Enhanced Prisma client
+const prisma = enhancedPrisma;
+
+// Database connection handler with proper async handling
+setTimeout(async () => {
+  try {
+    console.log('🔍 DEBUG: Attempting safe database connection...');
     
-    // Initialize database optimizations (non-blocking) - DISABLED FOR TESTING
-    // setImmediate(async () => {
-    //   try {
-    //     await databaseOptimization.optimizeSettings();
-    //     logger.info('Database optimization settings applied');
-    //   } catch (error) {
-    //     logger.warn('Database optimization failed:', error);
-    //   }
-    // });
-    logger.info('Database optimization disabled for testing');
-  })
-  .catch((error) => {
-    logger.error('Failed to connect to database:', error);
-    process.exit(1);
-  });
+    // Create connection promise with timeout
+    const connectionPromise = basePrisma.$connect();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database connection timeout after 5s')), 5000)
+    );
+    
+    // Race connection against timeout
+    await Promise.race([connectionPromise, timeoutPromise]);
+    
+    console.log('✅ Database connected successfully');
+    logger.info('Database connection established successfully');
+    
+    // Test database with simple query
+    await basePrisma.$queryRaw`SELECT 1 as test`;
+    logger.info('Database health check passed');
+    
+  } catch (error) {
+    console.warn('⚠️ Database connection failed, continuing without database:', error.message);
+    logger.warn('Database connection failed, server will continue without database features', { 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+}, 2000); // Wait 2 seconds after server starts before connecting
 
 // Graceful shutdown with cleanup
 process.on('beforeExit', async () => {
-  await Promise.all([
-    basePrisma.$disconnect()
-    // databaseOptimization.close(),
-    // redisCache.close()
-  ]);
-  logger.info('Database connections closed');
+  try {
+    await Promise.allSettled([
+      basePrisma.$disconnect().catch(() => {}),
+      redisCache.close().catch(() => {})
+    ]);
+    logger.info('Database connections closed gracefully');
+  } catch (error) {
+    logger.warn('Cleanup warning:', error);
+  }
 });
 
-export default prisma;
+// CommonJS exports
+module.exports = { 
+  prisma, 
+  basePrisma, 
+  enhancedPrisma, 
+  EnhancedPrismaClient 
+};
+module.exports.default = prisma;

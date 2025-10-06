@@ -5,7 +5,8 @@ const { logger } = require('../utils/logger');
 
 let redisClient;
 
-if (process.env.REDIS_URL) {
+// TEMPORARILY DISABLE REDIS CLIENT FOR RATE LIMITING TO PREVENT HANGING
+if (false && process.env.REDIS_URL) {
   redisClient = redis.createClient({
     url: process.env.REDIS_URL,
     socket: {

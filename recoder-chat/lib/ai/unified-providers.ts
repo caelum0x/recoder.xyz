@@ -21,6 +21,15 @@ interface UnifiedResponse {
 
 // 🎯 OPENROUTER MODEL MAPPING - TOP TIER MODELS
 const OPENROUTER_MODELS = {
+  // 🆓 FREE MODELS - Valid as of Jan 2025
+  'deepseek-chat-free': 'deepseek/deepseek-chat-v3.1:free',
+  'deepseek-r1-free': 'deepseek/deepseek-r1-0528:free',
+  'mistral-small-free': 'mistralai/mistral-small-3.2-24b-instruct:free',
+  'qwen-coder-free': 'qwen/qwen3-coder:free',
+  'llama-33-free': 'meta-llama/llama-3.3-8b-instruct:free',
+  'kimi-k2-free': 'moonshotai/kimi-k2:free',
+  'glm-45-air-free': 'z-ai/glm-4.5-air:free',
+  // 💰 PREMIUM MODELS
   'claude-sonnet-4': 'anthropic/claude-4-sonnet:beta',
   'gemini-flash-25': 'google/gemini-2.5-flash',
   'gemini-flash-20': 'google/gemini-2.0-flash',
@@ -28,8 +37,6 @@ const OPENROUTER_MODELS = {
   'gemini-pro-25': 'google/gemini-2.5-pro',
   'qwen-coder': 'qwen/qwen-3-coder',
   'claude-37-sonnet': 'anthropic/claude-3.7-sonnet',
-  'deepseek-r1-free': 'deepseek/r1-0528:free',
-  'deepseek-v3-free': 'deepseek/deepseek-v3-324:free',
   'deepseek-v31': 'deepseek/deepseek-v3.1',
   'gpt-4-turbo': 'openai/gpt-4-turbo',
   'gpt-4o': 'openai/gpt-4o'
@@ -58,17 +65,23 @@ type TogetherModelId = keyof typeof TOGETHER_MODELS;
 export class UnifiedAIProvider {
   private openRouterApiKey?: string;
   private togetherApiKey?: string;
+  private anthropicApiKey?: string;
   private openRouterBaseUrl = 'https://openrouter.ai/api/v1';
   private togetherBaseUrl = 'https://api.together.xyz/v1';
-  
+  private anthropicBaseUrl = 'https://api.anthropic.com/v1';
+
   constructor() {
-    // Initialize API keys
-    this.openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    this.togetherApiKey = process.env.TOGETHER_API_KEY;
-    
-    // Debug: Log API key availability (first 8 chars only for security)
-    console.log('🔑 OpenRouter API Key:', this.openRouterApiKey ? `${this.openRouterApiKey.substring(0, 8)}...` : 'NOT SET');
-    console.log('🤝 Together API Key:', this.togetherApiKey ? `${this.togetherApiKey.substring(0, 8)}...` : 'NOT SET');
+    // Initialize API keys - only on server side
+    if (typeof window === 'undefined') {
+      this.openRouterApiKey = process.env.OPENROUTER_API_KEY;
+      this.togetherApiKey = process.env.TOGETHER_API_KEY;
+      this.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+
+      // Debug: Log API key availability (first 8 chars only for security)
+      console.log('🔑 OpenRouter API Key:', this.openRouterApiKey ? `${this.openRouterApiKey.substring(0, 8)}...` : 'NOT SET');
+      console.log('🤝 Together API Key:', this.togetherApiKey ? `${this.togetherApiKey.substring(0, 8)}...` : 'NOT SET');
+      console.log('🎯 Anthropic API Key:', this.anthropicApiKey ? `${this.anthropicApiKey.substring(0, 8)}...` : 'NOT SET');
+    }
   }
 
   /**
@@ -95,16 +108,23 @@ export class UnifiedAIProvider {
       let response: UnifiedResponse;
       
       // Smart provider selection based on model and availability
-      if (options.preferredProvider === 'together' && this.togetherApiKey) {
-        response = await this.generateWithTogether(messages, options.preferredModel || 'llama-33-70b', options);
-      } else if (options.preferredProvider === 'openrouter' && this.openRouterApiKey) {
+      // Priority: OpenRouter (free Grok) > Anthropic > Together > Local
+      if (options.preferredProvider === 'openrouter' && this.openRouterApiKey) {
         response = await this.generateWithOpenRouter(messages, options.preferredModel || modelId, options);
+      } else if (options.preferredProvider === 'anthropic' && this.anthropicApiKey) {
+        response = await this.generateWithAnthropic(messages, options.preferredModel || 'claude-3-5-sonnet-20241022', options);
+      } else if (options.preferredProvider === 'together' && this.togetherApiKey) {
+        response = await this.generateWithTogether(messages, options.preferredModel || 'llama-33-70b', options);
       } else if (this.openRouterApiKey && modelId !== 'local') {
+        // Default to OpenRouter with Grok (free and fast)
         response = await this.generateWithOpenRouter(messages, modelId, options);
+      } else if (this.anthropicApiKey) {
+        // Fallback to Anthropic if OpenRouter not available
+        response = await this.generateWithAnthropic(messages, 'claude-3-5-sonnet-20241022', options);
       } else if (this.togetherApiKey) {
         response = await this.generateWithTogether(messages, 'llama-33-70b', options);
       } else {
-        // Fallback to local AI
+        // Final fallback to local AI
         response = await this.generateWithLocalAI(messages, options);
       }
       
@@ -143,13 +163,13 @@ export class UnifiedAIProvider {
       case 'balanced':
         return complexity > 0.6 ? 'gemini-flash-25' : 'gemini-flash-20'; // 253B vs 221B tokens
       case 'fast':
-        return 'deepseek-v3-free'; // 99.5B tokens, FREE!
+        return 'deepseek-chat-free'; // Free, fast DeepSeek model
       default:
         // Smart routing based on complexity
         if (complexity > 0.8) return 'claude-sonnet-4';
         if (complexity > 0.6) return 'gemini-flash-25';
-        if (complexity > 0.4) return 'deepseek-v3';
-        return 'deepseek-v3-free';
+        if (complexity > 0.4) return 'deepseek-chat-free';
+        return 'deepseek-chat-free'; // Default to free DeepSeek
     }
   }
   
@@ -158,16 +178,24 @@ export class UnifiedAIProvider {
    */
   private analyzeComplexity(messages: ChatMessage[]): number {
     const lastMessage = messages[messages.length - 1]?.content || '';
-    const content = lastMessage.toLowerCase();
-    
+
+    // Handle both string and array content (multimodal messages)
+    const content = typeof lastMessage === 'string'
+      ? lastMessage.toLowerCase()
+      : Array.isArray(lastMessage)
+      ? lastMessage.map(part => typeof part === 'object' && 'text' in part ? part.text : String(part)).join(' ').toLowerCase()
+      : String(lastMessage).toLowerCase();
+
+    const messageLength = typeof lastMessage === 'string' ? lastMessage.length : content.length;
+
     // Complexity indicators
     const indicators = {
       architecture: /architect|system|design|structure|pattern/g,
       reasoning: /explain|why|how|analyze|complex|logic/g,
       code: /function|class|component|algorithm|code|implement/g,
-      length: lastMessage.length > 500 ? 0.3 : 0
+      length: messageLength > 500 ? 0.3 : 0
     };
-    
+
     let complexity = indicators.length;
     complexity += (content.match(indicators.architecture) || []).length * 0.3;
     complexity += (content.match(indicators.reasoning) || []).length * 0.2;
@@ -189,7 +217,13 @@ export class UnifiedAIProvider {
     }
     
     const openRouterModel = OPENROUTER_MODELS[modelId as OpenRouterModelId] || modelId;
-    
+
+    console.log('🚀 OpenRouter Request:', {
+      modelId,
+      openRouterModel,
+      messageCount: messages.length
+    });
+
     const response = await fetch(`${this.openRouterBaseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -212,7 +246,14 @@ export class UnifiedAIProvider {
     });
     
     if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('❌ OpenRouter Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        model: openRouterModel,
+        error: errorText
+      });
+      throw new Error(`OpenRouter API error: ${response.statusText} - ${errorText}`);
     }
     
     const data = await response.json();
@@ -226,7 +267,54 @@ export class UnifiedAIProvider {
       tokens: (data.usage?.prompt_tokens || 0) + (data.usage?.completion_tokens || 0)
     };
   }
-  
+
+  /**
+   * 🎯 ANTHROPIC CLAUDE GENERATION - DIRECT API
+   */
+  private async generateWithAnthropic(
+    messages: ChatMessage[],
+    modelId: string = 'claude-3-5-sonnet-20241022',
+    options: { temperature?: number; maxTokens?: number } = {}
+  ): Promise<UnifiedResponse> {
+    if (!this.anthropicApiKey) {
+      throw new Error('Anthropic API key not configured');
+    }
+
+    const response = await fetch(`${this.anthropicBaseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': this.anthropicApiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: messages.filter(msg => msg.role !== 'system').map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
+        system: messages.find(msg => msg.role === 'system')?.content || 'You are a helpful AI assistant.',
+        temperature: options.temperature || 0.7,
+        max_tokens: options.maxTokens || 4096,
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.content[0]?.text || '';
+
+    return {
+      content,
+      model: modelId,
+      provider: 'anthropic',
+      tokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0)
+    };
+  }
+
   /**
    * 🤝 TOGETHER AI GENERATION - MULTI-MODEL PLATFORM
    */
@@ -300,6 +388,11 @@ export class UnifiedAIProvider {
   private calculateOpenRouterCost(modelId: string, inputTokens: number, outputTokens: number): number {
     // Approximate pricing based on model tier (OpenRouter has dynamic pricing)
     const pricing: Record<string, { input: number; output: number }> = {
+      'deepseek-chat-free': { input: 0, output: 0 }, // FREE!
+      'deepseek-r1-free': { input: 0, output: 0 }, // FREE!
+      'mistral-small-free': { input: 0, output: 0 }, // FREE!
+      'qwen-coder-free': { input: 0, output: 0 }, // FREE!
+      'llama-33-free': { input: 0, output: 0 }, // FREE!
       'claude-sonnet-4': { input: 0.000015, output: 0.000075 }, // Premium tier
       'gemini-flash-25': { input: 0.000001, output: 0.000005 }, // Fast tier
       'gemini-flash-20': { input: 0.000001, output: 0.000005 }, // Fast tier
@@ -345,10 +438,12 @@ export class UnifiedAIProvider {
     messages: ChatMessage[],
     options: { temperature?: number; maxTokens?: number } = {}
   ): Promise<UnifiedResponse> {
-    // Smart fallback chain: Free models -> Together AI -> OpenRouter -> Local AI
+    // Smart fallback chain: Free OpenRouter models (DeepSeek first) -> Anthropic -> Together AI -> Local AI
     const fallbackChain = [
-      () => this.openRouterApiKey ? this.generateWithOpenRouter(messages, 'deepseek-v3-free', options) : null,
+      () => this.openRouterApiKey ? this.generateWithOpenRouter(messages, 'deepseek-chat-free', options) : null,
       () => this.openRouterApiKey ? this.generateWithOpenRouter(messages, 'deepseek-r1-free', options) : null,
+      () => this.openRouterApiKey ? this.generateWithOpenRouter(messages, 'mistral-small-free', options) : null,
+      () => this.anthropicApiKey ? this.generateWithAnthropic(messages, 'claude-3-5-sonnet-20241022', options) : null,
       () => this.togetherApiKey ? this.generateWithTogether(messages, 'llama-31-8b', options) : null,
       () => this.togetherApiKey ? this.generateWithTogether(messages, 'deepseek-v3-together', options) : null,
       () => this.generateWithLocalAI(messages, options)

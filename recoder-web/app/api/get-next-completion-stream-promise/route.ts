@@ -2,26 +2,50 @@ import { z } from "zod";
 import Together from "together-ai";
 import Anthropic from '@anthropic-ai/sdk';
 import { advancedCache } from "@/lib/advanced-caching-system";
-import { getPrisma } from "@/lib/prisma";
+import { getPrisma, inMemoryStore } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   const prisma = getPrisma();
   const { messageId, model } = await req.json();
 
-  console.log(`🚀 Generation request - Model: ${model}, MessageId: ${messageId}`); 
+  console.log(`🚀 Generation request - Model: ${model}, MessageId: ${messageId}`);
 
-  const message = await prisma.message.findUnique({
-    where: { id: messageId },
-  });
+  let message: any;
+  let messagesRes: any[];
 
-  if (!message) {
-    return new Response(null, { status: 404 });
+  if (prisma) {
+    // Database storage
+    message = await prisma.message.findUnique({
+      where: { id: messageId },
+    });
+
+    if (!message) {
+      return new Response(null, { status: 404 });
+    }
+
+    messagesRes = await prisma.message.findMany({
+      where: { chatId: message.chatId, position: { lte: message.position ?? 0 } },
+      orderBy: { position: "asc" },
+    });
+  } else {
+    // In-memory storage
+    message = inMemoryStore.messages.get(messageId);
+
+    if (!message) {
+      console.error('Message not found in memory:', messageId);
+      return new Response(null, { status: 404 });
+    }
+
+    const chat = inMemoryStore.chats.get(message.chatId);
+    if (!chat) {
+      console.error('Chat not found in memory:', message.chatId);
+      return new Response(null, { status: 404 });
+    }
+
+    messagesRes = chat.messages
+      .filter((m: any) => (m.position ?? 0) <= (message.position ?? 0))
+      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
   }
-
-  const messagesRes = await prisma.message.findMany({
-    where: { chatId: message.chatId, position: { lte: message.position ?? 0 } },
-    orderBy: { position: "asc" },
-  });
 
   let messages = z
     .array(
@@ -91,10 +115,10 @@ export async function POST(req: Request) {
   }
 
   // Route to appropriate AI provider based on model
-  if (model.includes('claude')) {
+  if (model.includes('claude') || model.includes('anthropic')) {
     // Use Anthropic Claude
     if (!process.env.ANTHROPIC_API_KEY) {
-      return new Response("Claude API key not configured", { status: 500 });
+      return new Response("Anthropic API key not configured", { status: 500 });
     }
 
     const anthropic = new Anthropic({
@@ -147,6 +171,168 @@ export async function POST(req: Request) {
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Cache-Status': 'MISS', // Indicate cache miss
+      },
+    });
+  } else if (model.includes('deepseek') || model.includes('llama') || model.includes('mixtral') || model.includes('gemma')) {
+    // Use Groq for fast inference
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      return new Response("Groq API key not configured", { status: 500 });
+    }
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model.includes('deepseek') ? 'deepseek-r1-distill-llama-70b' :
+               model.includes('llama') ? 'llama-3.3-70b-versatile' :
+               model.includes('mixtral') ? 'mixtral-8x7b-32768' : 'gemma2-9b-it',
+        messages: messages,
+        stream: true,
+        temperature: 0.2,
+        max_tokens: 8000,
+      })
+    });
+
+    if (!response.ok) {
+      return new Response(`Groq API error: ${response.statusText}`, { status: response.status });
+    }
+
+    let fullResponse = '';
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        if (!reader) return controller.close();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = new TextDecoder().decode(value);
+            const lines = text.split('\n').filter(line => line.trim());
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') {
+                  if (fullResponse.trim().length > 50) {
+                    await advancedCache.set(userPrompt, model, quality, fullResponse);
+                    console.log(`💾 Cached Groq response for future speed`);
+                  }
+                  controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`));
+                  continue;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    fullResponse += content;
+                    controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+        } catch (error) {
+          controller.error(error);
+        } finally {
+          controller.close();
+        }
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Cache-Status': 'MISS',
+      },
+    });
+  } else if (model.includes('openrouter') || model.includes('qwen') || model.includes('glm')) {
+    // Use OpenRouter for free models
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    if (!openrouterKey) {
+      return new Response("OpenRouter API key not configured", { status: 500 });
+    }
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openrouterKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://recoder.xyz',
+        'X-Title': 'Recoder AI',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        stream: true,
+        temperature: 0.2,
+        max_tokens: 8000,
+      })
+    });
+
+    if (!response.ok) {
+      return new Response(`OpenRouter API error: ${response.statusText}`, { status: response.status });
+    }
+
+    let fullResponse = '';
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        if (!reader) return controller.close();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = new TextDecoder().decode(value);
+            const lines = text.split('\n').filter(line => line.trim());
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') {
+                  if (fullResponse.trim().length > 50) {
+                    await advancedCache.set(userPrompt, model, quality, fullResponse);
+                    console.log(`💾 Cached OpenRouter response for future speed`);
+                  }
+                  controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`));
+                  continue;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    fullResponse += content;
+                    controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+        } catch (error) {
+          controller.error(error);
+        } finally {
+          controller.close();
+        }
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Cache-Status': 'MISS',
       },
     });
   } else {
@@ -213,5 +399,5 @@ export async function POST(req: Request) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const maxDuration = 45;

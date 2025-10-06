@@ -1,24 +1,33 @@
 import { NextResponse } from 'next/server';
-import AWS from 'aws-sdk';
+import { S3Client, PutObjectCommand, ListObjectsCommand } from '@aws-sdk/client-s3';
+import { LambdaClient, InvokeCommand, CreateFunctionCommand } from '@aws-sdk/client-lambda';
+import { RDSClient, CreateDBInstanceCommand } from '@aws-sdk/client-rds';
+import { EC2Client, DescribeInstancesCommand, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
+import { CloudWatchClient, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
+import { CloudFormationClient, CreateStackCommand } from '@aws-sdk/client-cloudformation';
 
 // ☁️ AWS INTEGRATION - REAL CLOUD SERVICES MANAGEMENT
-// Complete AWS SDK integration with S3, Lambda, RDS, EC2, and more
+// Complete AWS SDK v3 integration with S3, Lambda, RDS, EC2, and more
 
-// Configure AWS SDK
-AWS.config.update({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+// Configure AWS SDK v3 clients
+const awsConfig = {
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
   region: process.env.AWS_REGION || 'us-east-1'
-});
+};
 
-const s3 = new AWS.S3();
-const lambda = new AWS.Lambda();
-const rds = new AWS.RDS();
-const ec2 = new AWS.EC2();
-const sns = new AWS.SNS();
-const sqs = new AWS.SQS();
-const cloudWatch = new AWS.CloudWatch();
-const cloudFormation = new AWS.CloudFormation();
+const s3Client = new S3Client(awsConfig);
+const lambdaClient = new LambdaClient(awsConfig);
+const rdsClient = new RDSClient(awsConfig);
+const ec2Client = new EC2Client(awsConfig);
+const snsClient = new SNSClient(awsConfig);
+const sqsClient = new SQSClient(awsConfig);
+const cloudWatchClient = new CloudWatchClient(awsConfig);
+const cloudFormationClient = new CloudFormationClient(awsConfig);
 
 interface AWSAction {
   action: 'upload_to_s3' | 'list_s3_objects' | 'invoke_lambda' | 'create_lambda' | 'list_ec2_instances' | 'start_ec2_instance' | 'stop_ec2_instance' | 'create_rds_instance' | 'send_sns_notification' | 'send_sqs_message' | 'get_cloudwatch_metrics' | 'deploy_cloudformation';
@@ -109,7 +118,7 @@ export async function POST(request: Request) {
 
 // Upload file to S3 with advanced options
 async function uploadToS3(data: any) {
-  const params = {
+  const command = new PutObjectCommand({
     Bucket: data.bucket,
     Key: data.key,
     Body: data.body,
@@ -125,32 +134,32 @@ async function uploadToS3(data: any) {
     SSEKMSKeyId: data.sse_kms_key_id,
     Tagging: data.tagging,
     WebsiteRedirectLocation: data.website_redirect_location
-  };
+  });
 
-  const result = await s3.upload(params).promise();
+  const result = await s3Client.send(command);
 
   return {
-    location: result.Location,
-    bucket: result.Bucket,
-    key: result.Key,
+    location: `https://${data.bucket}.s3.${awsConfig.region}.amazonaws.com/${data.key}`,
+    bucket: data.bucket,
+    key: data.key,
     etag: result.ETag,
-    version_id: (result as any).VersionId,
-    server_side_encryption: (result as any).ServerSideEncryption
+    version_id: result.VersionId,
+    server_side_encryption: result.ServerSideEncryption
   };
 }
 
 // List S3 objects with filtering
 async function listS3Objects(data: any) {
-  const params = {
+  const command = new ListObjectsCommand({
     Bucket: data.bucket,
     Prefix: data.prefix,
     Delimiter: data.delimiter,
     MaxKeys: data.max_keys || 1000,
     Marker: data.marker,
     EncodingType: data.encoding_type
-  };
+  });
 
-  const result = await s3.listObjects(params).promise();
+  const result = await s3Client.send(command);
 
   return {
     objects: result.Contents?.map(obj => ({
@@ -170,16 +179,16 @@ async function listS3Objects(data: any) {
 
 // Invoke Lambda function
 async function invokeLambda(data: any) {
-  const params = {
+  const command = new InvokeCommand({
     FunctionName: data.function_name,
     InvocationType: data.invocation_type || 'RequestResponse',
     LogType: data.log_type || 'None',
     Payload: JSON.stringify(data.payload || {}),
     ClientContext: data.client_context,
     Qualifier: data.qualifier
-  };
+  });
 
-  const result = await lambda.invoke(params).promise();
+  const result = await lambdaClient.send(command);
 
   return {
     status_code: result.StatusCode,
@@ -192,7 +201,7 @@ async function invokeLambda(data: any) {
 
 // Create Lambda function
 async function createLambda(data: any) {
-  const params = {
+  const command = new CreateFunctionCommand({
     FunctionName: data.function_name,
     Runtime: data.runtime || 'nodejs18.x',
     Role: data.role,
@@ -218,9 +227,9 @@ async function createLambda(data: any) {
     ImageConfig: data.image_config,
     CodeSigningConfigArn: data.code_signing_config_arn,
     Architectures: data.architectures || ['x86_64']
-  };
+  });
 
-  const result = await lambda.createFunction(params).promise();
+  const result = await lambdaClient.send(command);
 
   return {
     function_name: result.FunctionName,
@@ -241,14 +250,14 @@ async function createLambda(data: any) {
 
 // List EC2 instances
 async function listEC2Instances(data: any = {}) {
-  const params = {
+  const command = new DescribeInstancesCommand({
     Filters: data.filters,
     InstanceIds: data.instance_ids,
     MaxResults: data.max_results,
     NextToken: data.next_token
-  };
+  });
 
-  const result = await ec2.describeInstances(params).promise();
+  const result = await ec2Client.send(command);
 
   const instances: any[] = [];
   result.Reservations?.forEach(reservation => {
@@ -280,12 +289,12 @@ async function listEC2Instances(data: any = {}) {
 
 // Start EC2 instance
 async function startEC2Instance(data: any) {
-  const params = {
+  const command = new StartInstancesCommand({
     InstanceIds: [data.instance_id],
     DryRun: data.dry_run || false
-  };
+  });
 
-  const result = await ec2.startInstances(params).promise();
+  const result = await ec2Client.send(command);
 
   return {
     starting_instances: result.StartingInstances?.map(instance => ({
@@ -298,14 +307,14 @@ async function startEC2Instance(data: any) {
 
 // Stop EC2 instance
 async function stopEC2Instance(data: any) {
-  const params = {
+  const command = new StopInstancesCommand({
     InstanceIds: [data.instance_id],
     DryRun: data.dry_run || false,
     Force: data.force || false,
     Hibernate: data.hibernate || false
-  };
+  });
 
-  const result = await ec2.stopInstances(params).promise();
+  const result = await ec2Client.send(command);
 
   return {
     stopping_instances: result.StoppingInstances?.map(instance => ({
@@ -318,7 +327,7 @@ async function stopEC2Instance(data: any) {
 
 // Create RDS instance
 async function createRDSInstance(data: any) {
-  const params = {
+  const command = new CreateDBInstanceCommand({
     DBInstanceIdentifier: data.db_instance_identifier,
     DBInstanceClass: data.db_instance_class || 'db.t3.micro',
     Engine: data.engine || 'mysql',
@@ -340,9 +349,9 @@ async function createRDSInstance(data: any) {
     PreferredMaintenanceWindow: data.preferred_maintenance_window,
     Port: data.port,
     Tags: data.tags || []
-  };
+  });
 
-  const result = await rds.createDBInstance(params).promise();
+  const result = await rdsClient.send(command);
 
   return {
     db_instance_identifier: result.DBInstance?.DBInstanceIdentifier,
@@ -360,7 +369,7 @@ async function createRDSInstance(data: any) {
 
 // Send SNS notification
 async function sendSNSNotification(data: any) {
-  const params = {
+  const command = new PublishCommand({
     Message: data.message,
     TopicArn: data.topic_arn,
     Subject: data.subject,
@@ -368,9 +377,9 @@ async function sendSNSNotification(data: any) {
     MessageAttributes: data.message_attributes,
     MessageDeduplicationId: data.message_deduplication_id,
     MessageGroupId: data.message_group_id
-  };
+  });
 
-  const result = await sns.publish(params).promise();
+  const result = await snsClient.send(command);
 
   return {
     message_id: result.MessageId,
@@ -380,7 +389,7 @@ async function sendSNSNotification(data: any) {
 
 // Send SQS message
 async function sendSQSMessage(data: any) {
-  const params = {
+  const command = new SendMessageCommand({
     QueueUrl: data.queue_url,
     MessageBody: data.message_body,
     DelaySeconds: data.delay_seconds,
@@ -388,9 +397,9 @@ async function sendSQSMessage(data: any) {
     MessageSystemAttributes: data.message_system_attributes,
     MessageDeduplicationId: data.message_deduplication_id,
     MessageGroupId: data.message_group_id
-  };
+  });
 
-  const result = await sqs.sendMessage(params).promise();
+  const result = await sqsClient.send(command);
 
   return {
     message_id: result.MessageId,
@@ -402,7 +411,7 @@ async function sendSQSMessage(data: any) {
 
 // Get CloudWatch metrics
 async function getCloudWatchMetrics(data: any) {
-  const params = {
+  const command = new GetMetricStatisticsCommand({
     Namespace: data.namespace,
     MetricName: data.metric_name,
     Dimensions: data.dimensions,
@@ -410,9 +419,9 @@ async function getCloudWatchMetrics(data: any) {
     EndTime: new Date(data.end_time),
     Period: data.period || 300,
     Statistics: data.statistics || ['Average']
-  };
+  });
 
-  const result = await cloudWatch.getMetricStatistics(params).promise();
+  const result = await cloudWatchClient.send(command);
 
   return {
     label: result.Label,
@@ -430,7 +439,7 @@ async function getCloudWatchMetrics(data: any) {
 
 // Deploy CloudFormation stack
 async function deployCloudFormation(data: any) {
-  const params = {
+  const command = new CreateStackCommand({
     StackName: data.stack_name,
     TemplateBody: data.template_body,
     TemplateURL: data.template_url,
@@ -444,9 +453,9 @@ async function deployCloudFormation(data: any) {
     TimeoutInMinutes: data.timeout_in_minutes,
     NotificationARNs: data.notification_arns || [],
     EnableTerminationProtection: data.enable_termination_protection || false
-  };
+  });
 
-  const result = await cloudFormation.createStack(params).promise();
+  const result = await cloudFormationClient.send(command);
 
   return {
     stack_id: result.StackId

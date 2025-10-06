@@ -10,6 +10,7 @@
     "build:prod": "tsc",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "start:oauth": "tsx src/working-server.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
