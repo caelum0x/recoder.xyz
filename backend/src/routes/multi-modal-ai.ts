@@ -6,6 +6,7 @@
 const { Router } = require('express');
 const { multiModalAI } = require('../services/multi-modal-ai-service');
 const { logger } = require('../utils/logger');
+const { getErrorMessage } = require('../utils/error-helpers');
 const multer = require('multer');
 const path = require('path');
 
@@ -17,7 +18,7 @@ const upload = multer({
   limits: {
     fileSize: 20 * 1024 * 1024 // 20MB limit for documents
   },
-  fileFilter: (req: any, file: any, cb: any) => {
+  fileFilter: (req, file, cb) => {
     const allowedExtensions = [
       '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.go', '.rs', '.php',
       '.md', '.txt', '.html', '.json', '.yaml', '.yml', '.xml'
@@ -33,7 +34,7 @@ const upload = multer({
 });
 
 // Validation middleware
-const validateRequest = (req: any, res: any, next: any) => {
+const validateRequest = (req, res, next) => {
   const requestId = req.headers['x-request-id'] || `multimodal_${Date.now()}`;
   req.body.requestId = requestId;
   next();
@@ -43,7 +44,7 @@ const validateRequest = (req: any, res: any, next: any) => {
  * POST /api/multi-modal-ai/process
  * Process multi-modal input (code + docs + conversation)
  */
-router.post('/process', validateRequest, async (req: any, res: any) => {
+router.post('/process', validateRequest, async (req, res) => {
   try {
     const { 
       code, 
@@ -133,7 +134,7 @@ router.post('/process-files',
     { name: 'documentFiles', maxCount: 5 }
   ]), 
   validateRequest, 
-  async (req: any, res: any) => {
+  async (req, res) => {
     try {
       if (!req.files || (!req.files.codeFiles && !req.files.documentFiles)) {
         return res.status(400).json({
@@ -255,7 +256,7 @@ router.post('/process-files',
  * POST /api/multi-modal-ai/code-generation
  * Specialized endpoint for code generation with multi-modal context
  */
-router.post('/code-generation', validateRequest, async (req: any, res: any) => {
+router.post('/code-generation', validateRequest, async (req, res) => {
   try {
     const { query, context, language = 'javascript', framework } = req.body;
 
@@ -316,7 +317,7 @@ router.post('/code-generation', validateRequest, async (req: any, res: any) => {
  * POST /api/multi-modal-ai/documentation-generation
  * Specialized endpoint for documentation generation
  */
-router.post('/documentation-generation', validateRequest, async (req: any, res: any) => {
+router.post('/documentation-generation', validateRequest, async (req, res) => {
   try {
     const { query, codeContent, existingDocs, format = 'markdown' } = req.body;
 
@@ -372,7 +373,7 @@ router.post('/documentation-generation', validateRequest, async (req: any, res: 
  * POST /api/multi-modal-ai/conversation
  * Specialized endpoint for conversational AI with context
  */
-router.post('/conversation', validateRequest, async (req: any, res: any) => {
+router.post('/conversation', validateRequest, async (req, res) => {
   try {
     const { query, conversationHistory, codeContext, documentContext } = req.body;
 
@@ -435,7 +436,7 @@ router.post('/conversation', validateRequest, async (req: any, res: any) => {
  * GET /api/multi-modal-ai/capabilities
  * Get information about multi-modal AI capabilities
  */
-router.get('/capabilities', validateRequest, async (req: any, res: any) => {
+router.get('/capabilities', validateRequest, async (req, res) => {
   try {
     res.json({
       success: true,
@@ -475,7 +476,7 @@ router.get('/capabilities', validateRequest, async (req: any, res: any) => {
  * GET /api/multi-modal-ai/health
  * Health check endpoint
  */
-router.get('/health', (req: any, res: any) => {
+router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'healthy',
@@ -493,8 +494,8 @@ router.get('/health', (req: any, res: any) => {
 });
 
 // Helper functions
-function detectLanguageFromExtension(extension: string): string {
-  const langMap: { [key: string]: string } = {
+function detectLanguageFromExtension(extension) {
+  const langMap = {
     '.js': 'javascript',
     '.jsx': 'javascript',
     '.ts': 'typescript',
@@ -515,8 +516,8 @@ function detectLanguageFromExtension(extension: string): string {
   return langMap[extension.toLowerCase()] || 'text';
 }
 
-function detectDocumentFormat(extension: string): string {
-  const formatMap: { [key: string]: string } = {
+function detectDocumentFormat(extension) {
+  const formatMap = {
     '.md': 'markdown',
     '.txt': 'text',
     '.html': 'html',
@@ -531,7 +532,7 @@ function detectDocumentFormat(extension: string): string {
 }
 
 // Error handling middleware
-router.use((error: any, req: any, res: any, next: any) => {
+router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({

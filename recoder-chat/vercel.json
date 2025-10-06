@@ -1,8 +1,8 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
+  "buildCommand": "pnpm run build",
+  "devCommand": "pnpm run dev",
+  "installCommand": "pnpm install",
   "env": {
     "NODE_ENV": "production",
     "NEXTAUTH_URL": "https://chat.recoder.xyz",
@@ -19,11 +19,18 @@
     "POSTGRES_URL": "postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
     "ANTHROPIC_API_KEY": "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",
     "GROQ_API_KEY": "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",
-    "GOOGLE_API_KEY": "AIzaSyC4nq9suWOt1qQ2SCL4b1wBekMEjBD5Rs4"
+    "GOOGLE_API_KEY": "AIzaSyC4nq9suWOt1qQ2SCL4b1wBekMEjBD5Rs4",
+    "OPENROUTER_API_KEY": "sk-or-v1-your-openrouter-key-here"
   },
   "build": {
     "env": {
       "NODE_ENV": "production"
     }
-  }
+  },
+  "functions": {
+    "app/(chat)/api/chat/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "regions": ["iad1"]
 }

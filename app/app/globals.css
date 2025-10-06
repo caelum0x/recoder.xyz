@@ -4,50 +4,61 @@
 
 @layer base {
   :root {
+    /* Professional Black/Orange/Purple Theme */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 5%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 35.1%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --popover-foreground: 0 0% 5%;
+    
+    /* Orange primary */
+    --primary: 25 95% 53%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Purple secondary */
+    --secondary: 270 91% 65%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 270 91% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 25 95% 53%;
     --radius: 0.5rem;
     
-    /* Recoder brand colors for consistency */
-    --recoder-primary: 221.2 83.2% 53.3%;
-    --recoder-secondary: 267 84% 64%;
-    --recoder-accent: 338 84% 65%;
-    --recoder-success: 142 71% 45%;
-    --recoder-warning: 38 92% 50%;
-    --recoder-error: 0 84.2% 60.2%;
+    /* Recoder brand colors */
+    --recoder-orange: 25 95% 53%;
+    --recoder-purple: 270 91% 65%;
+    --recoder-dark: 0 0% 8%;
+    --recoder-darker: 0 0% 5%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 220 13% 18%;
-    --card-foreground: 210 40% 98%;
-    --popover: 220 13% 18%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 220 13% 25%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 220 13% 25%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 220 13% 25%;
+    /* Dark mode: True black with orange/purple accents */
+    --background: 0 0% 5%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 25 95% 53%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 270 91% 65%;
+    --secondary-foreground: 0 0% 5%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 270 91% 65%;
+    --accent-foreground: 0 0% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 95%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 25 95% 53%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 75% 60%;
     --destructive-foreground: 210 40% 98%;

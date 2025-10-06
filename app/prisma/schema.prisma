@@ -1,0 +1,208 @@
+// Prisma Schema for Recoder.xyz CLI Authentication
+// This extends your existing backend schema with CLI-specific tables
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// CLI Authentication Models
+// ==========================================
+
+// OAuth Authorization Codes (short-lived)
+model AuthCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  userId      String
+  clientId    String
+  redirectUri String?
+  scope       String?
+  state       String?
+  expiresAt   DateTime
+  used        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user User @relation("AuthCodes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_codes")
+}
+
+// Device Flow Codes (for headless authentication)
+model DeviceCode {
+  id           String    @id @default(cuid())
+  deviceCode   String    @unique
+  userCode     String    @unique
+  userId       String?
+  clientId     String
+  scope        String?
+  status       String    @default("pending") // pending, authorized, denied, expired, completed
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  authorizedAt DateTime?
+  deniedAt     DateTime?
+  userData     Json?
+
+  user User? @relation("DeviceCodes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([deviceCode])
+  @@index([userCode])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("device_codes")
+}
+
+// CLI Sessions (access/refresh tokens)
+model CLISession {
+  id           String    @id @default(cuid())
+  userId       String
+  deviceId     String?
+  deviceName   String?
+  deviceType   String?   @default("cli") // cli, extension, router, etc.
+  accessToken  String    @unique
+  refreshToken String?   @unique
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime  @default(now())
+  revokedAt    DateTime?
+  isActive     Boolean   @default(true)
+  ipAddress    String?
+  userAgent    String?
+  platformData Json?
+
+  user User @relation("CLISessions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([accessToken])
+  @@index([refreshToken])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([expiresAt])
+  @@map("cli_sessions")
+}
+
+// API Keys (long-lived authentication)
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  keyId       String    @unique
+  keyHash     String    @unique
+  keyPrefix   String // First 12 chars for display
+  name        String
+  description String?
+  scopes      String[] // ['cli:full', 'api:read', 'generate:code']
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  isActive    Boolean   @default(true)
+  usageCount  Int       @default(0)
+  metadata    Json?
+
+  user User @relation("ApiKeys", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([keyId])
+  @@index([keyHash])
+  @@index([userId])
+  @@index([isActive])
+  @@map("api_keys")
+}
+
+// ==========================================
+// User Model (simplified for CLI app)
+// ==========================================
+
+model User {
+  id                String         @id @default(cuid())
+  email             String         @unique
+  name              String
+  passwordHash      String?
+  avatar            String?
+  subscriptionPlan  String         @default("free") // free, pro, enterprise
+  subscriptionStatus String        @default("active")
+  emailVerified     Boolean        @default(false)
+  twoFactorEnabled  Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  lastLoginAt       DateTime?
+
+  // CLI Authentication Relations
+  authCodes    AuthCode[]    @relation("AuthCodes")
+  deviceCodes  DeviceCode[]  @relation("DeviceCodes")
+  cliSessions  CLISession[]  @relation("CLISessions")
+  apiKeys      ApiKey[]      @relation("ApiKeys")
+  
+  // Quota and Usage
+  quotas       UserQuota[]
+  usageRecords UsageRecord[]
+
+  @@index([email])
+  @@map("users")
+}
+
+// ==========================================
+// Usage & Quota Tracking
+// ==========================================
+
+model UserQuota {
+  id               String   @id @default(cuid())
+  userId           String
+  requestsLimit    Int      @default(1000)
+  requestsUsed     Int      @default(0)
+  tokensLimit      BigInt   @default(1000000)
+  tokensUsed       BigInt   @default(0)
+  periodStart      DateTime @default(now())
+  periodEnd        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodStart])
+  @@index([userId])
+  @@index([periodEnd])
+  @@map("user_quotas")
+}
+
+model UsageRecord {
+  id            String   @id @default(cuid())
+  userId        String
+  sessionId     String?
+  requestType   String // cli, api, web, router
+  endpoint      String?
+  method        String?
+  statusCode    Int?
+  tokensUsed    Int?
+  cost          Float?
+  modelUsed     String?
+  providerUsed  String?
+  duration      Int? // milliseconds
+  success       Boolean  @default(true)
+  errorMessage  String?
+  metadata      Json?
+  timestamp     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([timestamp])
+  @@index([requestType])
+  @@map("usage_records")
+}
+
+// ==========================================
+// Cleanup Jobs (for expired tokens)
+// ==========================================
+
+// Run periodically to clean up expired records
+// Example cron job query:
+// DELETE FROM auth_codes WHERE expiresAt < NOW() AND used = true;
+// DELETE FROM device_codes WHERE expiresAt < NOW() AND status != 'pending';
+// UPDATE cli_sessions SET isActive = false WHERE expiresAt < NOW();

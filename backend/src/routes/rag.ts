@@ -1,17 +1,17 @@
 // RAG System API Routes
 // Retrieval-Augmented Generation endpoints for code understanding
 
-import express from 'express';
-import { body, param, query, validationResult } from 'express-validator';
-import { authenticateUser, requireSubscription } from '../middleware/auth';
-import { codeAnalysis } from '../services/code-analysis';
-import { semanticSearch } from '../services/semantic-search';
-import { vectorDatabase } from '../services/vector-database';
-import { prisma } from '../database/prisma';
-import { logger } from '../utils/logger';
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs/promises';
+const express = require('express');
+const { body, param, query, validationResult } = require('express-validator');
+const { authenticateUser, requireSubscription } = require('../middleware/auth');
+const { codeAnalysis } = require('../services/code-analysis');
+const { semanticSearch } = require('../services/semantic-search');
+const { vectorDatabase } = require('../services/vector-database');
+const { prisma } = require('../database/prisma');
+const { logger } = require('../utils/logger');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs/promises');
 
 const router = express.Router();
 
@@ -32,7 +32,7 @@ const upload = multer({
 });
 
 // Validation middleware
-const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const validateRequest = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
@@ -543,4 +543,4 @@ router.get('/health',
   }
 );
 
-export default router;
+module.exports = router;

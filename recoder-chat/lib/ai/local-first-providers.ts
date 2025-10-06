@@ -3,7 +3,7 @@
  * With intelligent caching, performance optimization, and smart routing
  */
 
-import { aiCache } from './advanced-caching-system';
+// import { aiCache } from './advanced-caching-system';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -171,22 +171,11 @@ export class LocalAIProvider {
   ): Promise<GenerationResponse> {
     const startTime = Date.now();
     
-    // PRIORITY 1: Check intelligent cache first
-    const cached = await aiCache.getCached(messages, options);
-    if (cached) {
-      console.log('🚀 Serving from intelligent cache');
-      return {
-        content: cached.response,
-        model: cached.model,
-        provider: `${cached.provider}-cached`
-      };
-    }
-
-    // PRIORITY 2: Get best performing model recommendation
-    const bestModel = aiCache.getBestModel();
-    if (bestModel) {
-      console.log(`🎯 Using best performing model: ${bestModel.provider}:${bestModel.model}`);
-    }
+    // PRIORITY 1: Simple caching disabled for now to avoid circular deps
+    // TODO: Re-enable intelligent caching after fixing circular dependencies
+    
+    // PRIORITY 2: Use direct model selection for now
+    console.log('🚀 Using direct model selection (cache disabled)');
 
     let response: GenerationResponse;
     let success = false;
@@ -217,21 +206,22 @@ export class LocalAIProvider {
         }
       }
 
-      // Update performance metrics
+      // Update performance metrics (simplified)
       const responseTime = Date.now() - startTime;
       const tokens = response.content.split(' ').length;
-      aiCache.updatePerformance(response.provider, response.model, responseTime, success, tokens);
+      // TODO: Re-enable aiCache.updatePerformance when circular deps fixed
 
-      // Cache successful response
-      await aiCache.setCached(messages, options, response);
+      // Cache disabled for now
+      // TODO: Re-enable aiCache.setCached when circular deps fixed
       
       console.log(`⚡ Generated in ${responseTime}ms using ${response.provider}:${response.model}`);
       return response;
       
     } catch (error) {
-      // Update performance metrics for failure
+      // Update performance metrics for failure (simplified)
       const responseTime = Date.now() - startTime;
-      aiCache.updatePerformance('unknown', 'unknown', responseTime, false, 0);
+      // TODO: Re-enable aiCache.updatePerformance when circular deps fixed
+      console.log(`❌ Generation failed after ${responseTime}ms`);
       throw error;
     }
   }
