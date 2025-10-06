@@ -5,10 +5,10 @@ const express = require('express');
 const { body, query, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 
-import { aiCostOptimizer } from '../services/ai-cost-optimizer';
-import { costAnalyticsDashboard } from '../services/cost-analytics-dashboard';
-import { authenticateUser } from '../middleware/auth';
-import { logger } from '../utils/logger';
+const { aiCostOptimizer } = require('../services/ai-cost-optimizer');
+const { costAnalyticsDashboard } = require('../services/cost-analytics-dashboard');
+const { authenticateUser } = require('../middleware/auth');
+const { logger } = require('../utils/logger');
 
 const router = express.Router();
 
@@ -31,7 +31,7 @@ router.use(authenticateUser);
  * GET /api/cost-optimization/analytics
  * Get comprehensive cost analytics for user
  */
-router.get('/analytics', async (req: any, res: any) => {
+router.get('/analytics', async (req, res) => {
   try {
     const userId = req.user.id;
     const analytics = await aiCostOptimizer.getCostAnalytics(userId);
@@ -61,7 +61,7 @@ router.get('/analytics', async (req: any, res: any) => {
 router.post('/predict', [
   body('timeframe').isIn(['daily', 'weekly', 'monthly']).withMessage('Invalid timeframe'),
   body('includeRecommendations').optional().isBoolean()
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -109,7 +109,7 @@ router.post('/budget', [
   body('alertThresholds').optional().isObject(),
   body('alertThresholds.warning').optional().isFloat({ min: 0, max: 100 }).withMessage('Warning threshold must be 0-100%'),
   body('alertThresholds.critical').optional().isFloat({ min: 0, max: 100 }).withMessage('Critical threshold must be 0-100%')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -159,7 +159,7 @@ router.post('/budget', [
  * GET /api/cost-optimization/budget
  * Get current user budget and spending
  */
-router.get('/budget', async (req: any, res: any) => {
+router.get('/budget', async (req, res) => {
   try {
     const userId = req.user.id;
     const analytics = await aiCostOptimizer.getCostAnalytics(userId);
@@ -201,7 +201,7 @@ router.post('/route', [
   body('qualityRequirement').optional().isFloat({ min: 0, max: 1 }).withMessage('Quality requirement must be 0-1'),
   body('maxCost').optional().isFloat({ min: 0 }).withMessage('Max cost must be positive'),
   body('userTier').optional().isIn(['free', 'pro', 'enterprise'])
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -250,7 +250,7 @@ router.post('/track', [
   body('tokens').optional().isInt({ min: 0 }).withMessage('Tokens must be a positive integer'),
   body('quality').optional().isFloat({ min: 0, max: 1 }).withMessage('Quality must be 0-1'),
   body('responseTime').optional().isInt({ min: 0 }).withMessage('Response time must be positive')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -295,7 +295,7 @@ router.post('/track', [
 router.get('/recommendations', [
   query('limit').optional().isInt({ min: 1, max: 20 }).withMessage('Limit must be 1-20'),
   query('category').optional().isIn(['provider', 'usage', 'budget', 'quality'])
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -345,7 +345,7 @@ router.get('/recommendations', [
 router.get('/providers/comparison', [
   query('taskType').optional().isString(),
   query('complexity').optional().isIn(['simple', 'medium', 'complex'])
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const { taskType = 'code-generation', complexity = 'medium' } = req.query;
 
@@ -431,7 +431,7 @@ router.get('/providers/comparison', [
  * GET /api/cost-optimization/dashboard
  * Get comprehensive cost analytics dashboard
  */
-router.get('/dashboard', async (req: any, res: any) => {
+router.get('/dashboard', async (req, res) => {
   try {
     const userId = req.user.id;
     const dashboardMetrics = await costAnalyticsDashboard.getDashboardMetrics(userId);
@@ -459,7 +459,7 @@ router.get('/dashboard', async (req: any, res: any) => {
  * GET /api/cost-optimization/insights
  * Get cost optimization insights and recommendations
  */
-router.get('/insights', async (req: any, res: any) => {
+router.get('/insights', async (req, res) => {
   try {
     const userId = req.user.id;
     const insights = await costAnalyticsDashboard.getCostOptimizationInsights(userId);
@@ -486,7 +486,7 @@ router.get('/insights', async (req: any, res: any) => {
  * GET /api/cost-optimization/alerts
  * Get real-time cost alerts for user
  */
-router.get('/alerts', async (req: any, res: any) => {
+router.get('/alerts', async (req, res) => {
   try {
     const userId = req.user.id;
     const alerts = await costAnalyticsDashboard.generateCostAlerts(userId);
@@ -515,7 +515,7 @@ router.get('/alerts', async (req: any, res: any) => {
  * GET /api/cost-optimization/leaderboard
  * Get cost optimization leaderboard (gamification)
  */
-router.get('/leaderboard', async (req: any, res: any) => {
+router.get('/leaderboard', async (req, res) => {
   try {
     const leaderboard = await costAnalyticsDashboard.getCostOptimizationLeaderboard();
 
@@ -543,7 +543,7 @@ router.get('/leaderboard', async (req: any, res: any) => {
  * GET /api/cost-optimization/system/status
  * Get cost optimization system status
  */
-router.get('/system/status', async (req: any, res: any) => {
+router.get('/system/status', async (req, res) => {
   try {
     const optimizationStatus = aiCostOptimizer.getOptimizationStatus();
 
@@ -581,7 +581,7 @@ router.get('/system/status', async (req: any, res: any) => {
 });
 
 // Error handling middleware
-router.use((error: any, req: any, res: any, next: any) => {
+router.use((error, req, res, next) => {
   logger.error('Cost optimization API error:', {
     error: error.message,
     stack: error.stack,

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getAvailableAIProviders, getProviderCapabilities } from "@/lib/ai-integration";
 import { MODELS, AI_PROVIDERS } from "@/lib/constants";
+import { handleApiError } from "@/lib/api-error-handler";
 
 // Request schema for smart routing
 const routingRequestSchema = z.object({
@@ -54,13 +55,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : "Routing failed",
-      code: "ROUTING_ERROR"
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    return handleApiError(error);
   }
 }
 
@@ -182,15 +177,95 @@ function performSmartRouting(
   
   // Define model scoring matrix
   const modelScores: { [key: string]: any } = {
+    // FREE MODELS - Highest priority for cost-conscious development
+    "deepseek/deepseek-r1-0528:free": {
+      complexity: { simple: 0.7, medium: 0.95, complex: 1.0 },
+      taskType: {
+        "general": 1.0,
+        "api-development": 0.95,
+        "security": 0.95,
+        "database-operations": 0.9,
+        "ui-development": 0.85
+      },
+      speed: 0.7,
+      quality: 1.0,
+      cost: 1.0 // FREE!
+    },
+    "tngtech/deepseek-tng-r1t2-chimera:free": {
+      complexity: { simple: 0.8, medium: 0.95, complex: 1.0 },
+      taskType: {
+        "general": 1.0,
+        "api-development": 0.95,
+        "security": 0.9,
+        "database-operations": 0.9,
+        "ui-development": 0.85
+      },
+      speed: 0.85, // 20% faster than R1
+      quality: 0.95,
+      cost: 1.0 // FREE!
+    },
+    "zhipuai/glm-4.5-air:free": {
+      complexity: { simple: 0.9, medium: 1.0, complex: 0.95 },
+      taskType: {
+        "general": 1.0,
+        "api-development": 0.95,
+        "ui-development": 0.95,
+        "security": 0.85,
+        "database-operations": 0.9
+      },
+      speed: 0.9,
+      quality: 0.95,
+      cost: 1.0 // FREE!
+    },
+    "qwen/qwen3-coder-480b-a35b:free": {
+      complexity: { simple: 0.95, medium: 1.0, complex: 0.9 },
+      taskType: {
+        "api-development": 1.0,
+        "ui-development": 1.0,
+        "database-operations": 0.95,
+        "general": 0.9,
+        "security": 0.85
+      },
+      speed: 0.8,
+      quality: 1.0,
+      cost: 1.0 // FREE!
+    },
+    "microsoft/mai-ds-r1:free": {
+      complexity: { simple: 0.7, medium: 0.9, complex: 1.0 },
+      taskType: {
+        "general": 0.95,
+        "security": 1.0, // Enhanced safety
+        "api-development": 0.9,
+        "database-operations": 0.85,
+        "ui-development": 0.8
+      },
+      speed: 0.7,
+      quality: 0.95,
+      cost: 1.0 // FREE!
+    },
+    "deepseek/deepseek-v3-324:free": {
+      complexity: { simple: 0.7, medium: 0.9, complex: 1.0 },
+      taskType: {
+        "general": 1.0,
+        "api-development": 0.9,
+        "security": 0.9,
+        "database-operations": 0.95,
+        "ui-development": 0.8
+      },
+      speed: 0.75,
+      quality: 0.95,
+      cost: 1.0 // FREE!
+    },
+
     // Claude models - best for complex reasoning and security
     "claude-3-5-sonnet-20241022": {
       complexity: { simple: 0.7, medium: 0.9, complex: 1.0 },
-      taskType: { 
-        "security": 1.0, 
-        "api-development": 0.9, 
+      taskType: {
+        "security": 1.0,
+        "api-development": 0.9,
         "database-operations": 0.9,
         "ui-development": 0.8,
-        "general": 0.9 
+        "general": 0.9
       },
       speed: 0.6,
       quality: 1.0,
@@ -374,5 +449,5 @@ function getCostRating(cost: number): "low" | "medium" | "high" {
   return "low";
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const maxDuration = 30;

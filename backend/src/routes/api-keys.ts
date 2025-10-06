@@ -1,18 +1,18 @@
 // API Keys Management Routes
 // CRUD operations for developer API keys
 
-import express from 'express';
-import { body, query, param, validationResult } from 'express-validator';
-import { authenticateUser, requireSubscription } from '../middleware/auth';
-import { ApiKeyService } from '../models/api-key';
-import { getRateLimitStatus } from '../middleware/rate-limit';
-import { logger } from '../utils/logger';
-import { getErrorMessage } from '../utils/error-helpers';
+const express = require('express');
+const { body, query, param, validationResult } = require('express-validator');
+const { authenticateUser, requireSubscription } = require('../middleware/auth');
+const { ApiKeyService } = require('../models/api-key');
+const { getRateLimitStatus } = require('../middleware/rate-limit');
+const { logger } = require('../utils/logger');
+const { getErrorMessage } = require('../utils/error-helpers');
 
 const router = express.Router();
 
 // Validation middleware
-const validateRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const validateRequest = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
@@ -467,4 +467,4 @@ router.post('/regenerate/:keyId',
   }
 );
 
-export default router;
+module.exports = router;

@@ -501,4 +501,4 @@ router.get('/platforms',
   }
 );
 
-export default router;
+module.exports = router;

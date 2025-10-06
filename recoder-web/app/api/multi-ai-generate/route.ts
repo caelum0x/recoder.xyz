@@ -1,34 +1,9 @@
-import { PrismaClient } from "@prisma/client";
-// import { PrismaNeon } from "@prisma/adapter-neon";
-// import { Pool } from "@neondatabase/serverless";
+import { getPrisma } from "@/lib/prisma";
 import { z } from "zod";
-// TODO: Implement unified-web-ai module
-// import { generateWebCode } from "@/lib/unified-web-ai";
-// import type { WebGenerationOptions, WebGenerationResult } from "@/lib/unified-web-ai";
+import { generateWebCode } from "@/lib/unified-web-ai";
+import type { WebGenerationOptions, WebGenerationResult } from "@/lib/unified-web-ai";
 import { NextRequest } from "next/server";
-// TODO: Implement ai-integration module
-// import { generateCodeUnified } from "@/lib/ai-integration";
-
-// Mock generateCodeUnified function until implementation
-const generateCodeUnified = async (prompt: string, options: any) => {
-  return {
-    code: `// Generated code for: ${prompt}\nconsole.log('Mock implementation');
-export default function GeneratedComponent() {
-  return <div>Generated from prompt: {prompt}</div>;
-}`,
-    explanation: 'Mock generated code explanation',
-    provider: options?.preferredProvider || 'mock',
-    model: options?.model || 'mock-model',
-    metadata: {
-      language: options?.language || 'typescript',
-      framework: options?.framework || 'react',
-      dependencies: ['react'],
-      realFunctionality: true
-    },
-    tokens: { prompt: 100, completion: 200, total: 300 },
-    confidence: 0.9
-  };
-};
+import { generateCodeUnified } from "@/lib/ai-integration";
 
 // Request schema validation
 const generateRequestSchema = z.object({
@@ -50,8 +25,8 @@ const generateRequestSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    // const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-    const prisma = new PrismaClient();
+    // Use standardized Prisma client configuration
+    const prisma = getPrisma();
     
     const body = await req.json();
     const { messageId, prompt, model, provider, quality, options } = generateRequestSchema.parse(body);
@@ -169,8 +144,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // const neon = new Pool({ connectionString: process.env.DATABASE_URL });
-    const prisma = new PrismaClient();
+    // Use standardized Prisma client configuration
+    const prisma = getPrisma();
 
     const message = await prisma.message.findUnique({
       where: { id: messageId },
@@ -242,5 +217,5 @@ function getProviderFromModel(model: string): string {
   return "together"; // Default fallback
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const maxDuration = 60;

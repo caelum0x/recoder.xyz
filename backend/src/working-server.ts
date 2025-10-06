@@ -82,7 +82,7 @@ try {
 console.log('🔍 Loading OAuth routes...');
 try {
   const oauthRoutes = require('./routes/oauth');
-  app.use('/api/oauth', oauthRoutes);
+  app.use('/api/oauth', oauthRoutes.default || oauthRoutes);
   console.log('✅ OAuth routes loaded successfully');
 } catch (error) {
   console.error('❌ Failed to load OAuth routes:', error);

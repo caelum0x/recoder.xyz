@@ -30,7 +30,7 @@ const upload = multer({
 });
 
 // Validation middleware
-const validateRequest = (req: any, res: any, next: any) => {
+const validateRequest = (req, res, next) => {
   const requestId = req.headers['x-request-id'] || 'anonymous';
   req.body.requestId = requestId;
   next();
@@ -40,7 +40,7 @@ const validateRequest = (req: any, res: any, next: any) => {
  * POST /api/predictive-error-detection/analyze
  * Analyze code for potential errors and quality issues
  */
-router.post('/analyze', validateRequest, async (req: any, res: any) => {
+router.post('/analyze', validateRequest, async (req, res) => {
   try {
     const { code, filePath, language, framework, dependencies, gitHistory } = req.body;
 
@@ -106,7 +106,7 @@ router.post('/analyze', validateRequest, async (req: any, res: any) => {
  * POST /api/predictive-error-detection/analyze-file
  * Analyze uploaded file for potential errors
  */
-router.post('/analyze-file', upload.single('file'), validateRequest, async (req: any, res: any) => {
+router.post('/analyze-file', upload.single('file'), validateRequest, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -173,7 +173,7 @@ router.post('/analyze-file', upload.single('file'), validateRequest, async (req:
  * GET /api/predictive-error-detection/patterns
  * Get available error patterns and their descriptions
  */
-router.get('/patterns', validateRequest, async (req: any, res: any) => {
+router.get('/patterns', validateRequest, async (req, res) => {
   try {
     const { type, severity, language } = req.query;
 
@@ -240,7 +240,7 @@ router.get('/patterns', validateRequest, async (req: any, res: any) => {
  * GET /api/predictive-error-detection/analytics
  * Get analytics and trends for error predictions
  */
-router.get('/analytics', validateRequest, async (req: any, res: any) => {
+router.get('/analytics', validateRequest, async (req, res) => {
   try {
     const { timeRange = 7 } = req.query;
     const analytics = await predictiveErrorDetection.getAnalytics(Number(timeRange));
@@ -273,7 +273,7 @@ router.get('/analytics', validateRequest, async (req: any, res: any) => {
  * POST /api/predictive-error-detection/feedback
  * Provide feedback on prediction accuracy for model training
  */
-router.post('/feedback', validateRequest, async (req: any, res: any) => {
+router.post('/feedback', validateRequest, async (req, res) => {
   try {
     const { filePath, actualErrors, qualityFeedback, predictionAccuracy } = req.body;
 
@@ -320,7 +320,7 @@ router.post('/feedback', validateRequest, async (req: any, res: any) => {
  * POST /api/predictive-error-detection/batch-analyze
  * Analyze multiple files in batch
  */
-router.post('/batch-analyze', upload.array('files', 20), validateRequest, async (req: any, res: any) => {
+router.post('/batch-analyze', upload.array('files', 20), validateRequest, async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
@@ -415,7 +415,7 @@ router.post('/batch-analyze', upload.array('files', 20), validateRequest, async 
  * GET /api/predictive-error-detection/health
  * Health check endpoint
  */
-router.get('/health', (req: any, res: any) => {
+router.get('/health', (req, res) => {
   res.json({
     success: true,
     status: 'healthy',
@@ -456,7 +456,7 @@ function detectLanguageFromExtension(extension: string): string {
 }
 
 // Error handling middleware
-router.use((error: any, req: any, res: any, next: any) => {
+router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({

@@ -1,13 +1,13 @@
 // Advanced RAG Learning API Routes
 // RESTful endpoints for self-learning RAG system with pattern recognition
 
-import express = require('express');
-import { body, query, validationResult } from 'express-validator';
-import rateLimit from 'express-rate-limit';
-import { advancedRAGLearning } from '../services/advanced-rag-learning';
-import { authenticateUser } from '../middleware/auth';
-import { logger } from '../utils/logger';
-import { getErrorMessage } from '../utils/error-helpers';
+const express = require('express');
+const { body, query, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
+const { advancedRAGLearning } = require('../services/advanced-rag-learning');
+const { authenticateUser } = require('../middleware/auth');
+const { logger } = require('../utils/logger');
+const { getErrorMessage } = require('../utils/error-helpers');
 
 const router = express.Router();
 
@@ -37,7 +37,7 @@ router.post('/query', [
   body('framework').optional().isString().withMessage('Framework must be a string'),
   body('codeContext').optional().isString().withMessage('Code context must be a string'),
   body('learningEnabled').optional().isBoolean().withMessage('Learning enabled must be boolean')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -110,7 +110,7 @@ router.post('/feedback', [
   body('accepted').isBoolean().withMessage('Accepted must be boolean'),
   body('modifications').optional().isArray().withMessage('Modifications must be an array'),
   body('suggestedPatterns').optional().isArray().withMessage('Suggested patterns must be an array')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -166,7 +166,7 @@ router.get('/recommendations', [
   query('framework').optional().isString(),
   query('projectType').optional().isString(),
   query('taskType').optional().isString()
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -213,7 +213,7 @@ router.post('/analyze-codebase', [
   body('codeFiles.*.path').isString().withMessage('File path is required'),
   body('codeFiles.*.content').isString().withMessage('File content is required'),
   body('codeFiles.*.language').isString().withMessage('File language is required')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -274,7 +274,7 @@ router.post('/analyze-codebase', [
  */
 router.get('/analytics', [
   query('timeRange').optional().isInt({ min: 1, max: 365 }).withMessage('Time range must be 1-365 days')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -320,7 +320,7 @@ router.get('/patterns', [
   query('category').optional().isString(),
   query('language').optional().isString(),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be 1-100')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -390,7 +390,7 @@ router.post('/pattern/reinforce', [
   body('patternId').isString().withMessage('Pattern ID is required'),
   body('context').optional().isString().withMessage('Context must be a string'),
   body('example').optional().isString().withMessage('Example must be a string')
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -435,7 +435,7 @@ router.get('/insights', [
   query('taskType').optional().isString(),
   query('language').optional().isString(),
   query('framework').optional().isString()
-], async (req: any, res: any) => {
+], async (req, res) => {
   try {
     const userId = req.user.id;
     const { taskType, language, framework } = req.query;
@@ -494,7 +494,7 @@ router.get('/insights', [
  * GET /api/advanced-rag-learning/system/status
  * Get learning system status
  */
-router.get('/system/status', async (req: any, res: any) => {
+router.get('/system/status', async (req, res) => {
   try {
     // Mock system status
     const systemStatus = {
@@ -545,7 +545,7 @@ router.get('/system/status', async (req: any, res: any) => {
 });
 
 // Error handling middleware
-router.use((error: any, req: any, res: any, next: any) => {
+router.use((error, req, res, next) => {
   logger.error('Advanced RAG learning API error:', {
     error: getErrorMessage(error),
     stack: error.stack,

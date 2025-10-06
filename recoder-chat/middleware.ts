@@ -5,41 +5,81 @@ import { guestRegex, isDevelopmentEnvironment } from './lib/constants';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  /*
-   * Playwright starts the dev server and requires a 200 status to
-   * begin the tests, so this ensures that the tests can start
-   */
-  if (pathname.startsWith('/ping')) {
-    return new Response('pong', { status: 200 });
-  }
+  try {
+    /*
+     * Playwright starts the dev server and requires a 200 status to
+     * begin the tests, so this ensures that the tests can start
+     */
+    if (pathname.startsWith('/ping')) {
+      return new Response('pong', { status: 200 });
+    }
 
-  if (pathname.startsWith('/api/auth')) {
-    return NextResponse.next();
-  }
-
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET,
-    secureCookie: !isDevelopmentEnvironment,
-  });
-
-  if (!token) {
-    // Don't redirect auth pages to prevent infinite loops
-    if (['/login', '/register'].includes(pathname) || pathname.startsWith('/api/auth')) {
+    // Allow all auth API routes to pass through
+    if (pathname.startsWith('/api/auth')) {
       return NextResponse.next();
     }
 
-    // Instead of redirecting to guest auth, redirect to login
+    // Health check endpoint
+    if (pathname.startsWith('/api/health')) {
+      return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() });
+    }
+
+    // Get authentication token with error handling
+    const token = await getToken({
+      req: request,
+      secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+      secureCookie: !isDevelopmentEnvironment,
+    });
+
+    // Public routes that don't require authentication
+    const publicRoutes = ['/login', '/register', '/privacy', '/terms', '/test'];
+    const isPublicRoute = publicRoutes.includes(pathname);
+
+    if (!token) {
+      // Allow access to public routes
+      if (isPublicRoute || pathname.startsWith('/api/auth')) {
+        return NextResponse.next();
+      }
+
+      // Redirect to login for protected routes
+      const loginUrl = new URL('/login', request.url);
+      if (pathname !== '/') {
+        loginUrl.searchParams.set('callbackUrl', pathname);
+      }
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Validate token structure
+    if (!token.email || !token.id) {
+      console.warn('Invalid token structure:', { hasEmail: !!token.email, hasId: !!token.id });
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+
+    const isGuest = guestRegex.test(token.email);
+
+    // Redirect authenticated users away from auth pages
+    if (token && !isGuest && isPublicRoute) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+
+    // Add user info to headers for downstream use
+    const response = NextResponse.next();
+    response.headers.set('x-user-id', token.id);
+    response.headers.set('x-user-type', isGuest ? 'guest' : 'user');
+    
+    return response;
+
+  } catch (error) {
+    console.error('Middleware error:', error);
+    
+    // On error, allow public routes but redirect others to login
+    const publicRoutes = ['/login', '/register', '/privacy', '/terms', '/test'];
+    if (publicRoutes.includes(pathname) || pathname.startsWith('/api/auth')) {
+      return NextResponse.next();
+    }
+    
     return NextResponse.redirect(new URL('/login', request.url));
   }
-
-  const isGuest = guestRegex.test(token?.email ?? '');
-
-  if (token && !isGuest && ['/login', '/register'].includes(pathname)) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
-  return NextResponse.next();
 }
 
 export const config = {

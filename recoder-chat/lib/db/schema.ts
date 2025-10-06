@@ -13,7 +13,7 @@ import {
   unique,
 } from 'drizzle-orm/pg-core';
 
-export const user = pgTable('User', {
+export const user = pgTable('user', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   email: varchar('email', { length: 64 }).notNull(),
   password: varchar('password', { length: 64 }),
@@ -26,7 +26,7 @@ export const user = pgTable('User', {
 
 export type User = InferSelectModel<typeof user>;
 
-export const chat = pgTable('Chat', {
+export const chat = pgTable('chat', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   createdAt: timestamp('createdAt').notNull(),
   title: text('title').notNull(),
@@ -159,7 +159,7 @@ export const suggestion = pgTable(
 export type Suggestion = InferSelectModel<typeof suggestion>;
 
 export const stream = pgTable(
-  'Stream',
+  'stream',
   {
     id: uuid('id').notNull().defaultRandom(),
     chatId: uuid('chatId').notNull(),
@@ -177,7 +177,7 @@ export const stream = pgTable(
 export type Stream = InferSelectModel<typeof stream>;
 
 // OAuth Tables for NextAuth (matching existing database structure)
-export const account = pgTable('Account', {
+export const account = pgTable('account', {
   id: text('id').primaryKey().notNull(),
   userId: uuid('userId')
     .notNull()
@@ -198,7 +198,7 @@ export const account = pgTable('Account', {
 
 export type Account = InferSelectModel<typeof account>;
 
-export const session = pgTable('Session', {
+export const session = pgTable('session', {
   id: text('id').primaryKey().notNull(),
   sessionToken: text('sessionToken').notNull().unique(),
   userId: uuid('userId')
@@ -209,7 +209,7 @@ export const session = pgTable('Session', {
 
 export type Session = InferSelectModel<typeof session>;
 
-export const verificationToken = pgTable('VerificationToken', {
+export const verificationToken = pgTable('verification_token', {
   identifier: text('identifier').notNull(),
   token: text('token').notNull().unique(),
   expires: timestamp('expires').notNull(),

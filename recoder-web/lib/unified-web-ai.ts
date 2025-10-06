@@ -19,6 +19,7 @@ import {
 
 export interface WebGenerationOptions {
   preferredProvider?: string;
+  model?: string;
   maxTokens?: number;   
   temperature?: number;
   language?: string;

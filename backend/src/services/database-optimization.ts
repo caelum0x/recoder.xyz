@@ -132,17 +132,18 @@ export class DatabaseOptimizationService extends EventEmitter {
       lastUpdated: new Date()
     };
 
-    // Defer initialization to avoid blocking module initialization
-    setImmediate(async () => {
+    // Defer initialization to avoid blocking module initialization (DISABLED to prevent hanging)
+    setTimeout(() => {
       try {
-        this.initializePrisma();
-        await this.initializeConnectionPools();
-        this.startMetricsCollection();
+        logger.info('Database optimization temporarily disabled to prevent startup delays');
+        // this.initializePrisma();
+        // this.initializeConnectionPools();
+        // this.startMetricsCollection();
       } catch (error) {
         logger.error('Database optimization initialization failed:', error);
-        // Continue without optimization features
+        // Continue without optimization features - server should still start
       }
-    });
+    }, 200); // Delay to ensure module loading completes first
   }
 
   /**
