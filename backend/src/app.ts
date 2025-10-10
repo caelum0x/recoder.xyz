@@ -147,6 +147,7 @@ import usageMonitoringRoutes from './routes/usage-monitoring';
 import overageBillingRoutes from './routes/overage-billing';
 import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
+import userSettingsRoutes from './routes/user-settings';
 import { batchProcessor } from './services/batch-processor';
 import { promptCache } from './services/prompt-cache';
 import { componentLibrary } from './services/component-library';
@@ -176,6 +177,7 @@ console.log('[INFO] Overage billing service initialized');
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/oauth', oauthRoutes);
+app.use('/api/user', userSettingsRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/game-development', gameDevelopmentRoutes);
 app.use('/api/matchmaking', matchmakingRoutes);

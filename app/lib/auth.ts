@@ -3,11 +3,20 @@ import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
 import CredentialsProvider from 'next-auth/providers/credentials';
 
+// Determine which Google OAuth credentials to use based on environment
+const isProduction = process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.includes('recoder.xyz');
+const googleClientId = isProduction 
+  ? process.env.GOOGLE_CLIENT_ID 
+  : (process.env.GOOGLE_CLIENT_ID_LOCAL || process.env.GOOGLE_CLIENT_ID);
+const googleClientSecret = isProduction
+  ? process.env.GOOGLE_CLIENT_SECRET
+  : (process.env.GOOGLE_CLIENT_SECRET_LOCAL || process.env.GOOGLE_CLIENT_SECRET);
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      clientId: googleClientId || '',
+      clientSecret: googleClientSecret || '',
     }),
     GitHubProvider({
       clientId: process.env.GITHUB_ID || '',

@@ -1,33 +1,18 @@
 /**
- * CLI Registration API Route
- * Handles new user registration from CLI
+ * User Registration API Route
+ * Handles new user registration with database persistence
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
+import { prisma } from '@/lib/prisma';
+import { hashPassword } from '@/lib/crypto';
+import { getPlanLimits } from '@/lib/plan-config';
 
 interface RegisterRequest {
   email: string;
   password: string;
   name: string;
-}
-
-interface UserSession {
-  userId: string;
-  token: string;
-  email: string;
-  plan: 'free' | 'pro' | 'enterprise';
-  quotas: {
-    totalRequests: number;
-    usedRequests: number;
-    resetDate: string;
-  };
-  platforms: {
-    cli: boolean;
-    web: boolean;
-    extension: boolean;
-    router: boolean;
-  };
+  plan?: 'free' | 'pro' | 'enterprise';
 }
 
 export async function POST(request: NextRequest) {
@@ -41,38 +26,70 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For now, create a mock session
-    // In production, this would create user in database
-    const newUserSession: UserSession = {
-      userId: 'new-user-' + Date.now(),
-      token: jwt.sign({ 
-        userId: 'new-user-' + Date.now(),
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: body.email }
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'User with this email already exists' },
+        { status: 400 }
+      );
+    }
+
+    // Hash password
+    const passwordHash = await hashPassword(body.password);
+
+    // Determine plan
+    const plan = body.plan || 'free';
+
+    // Create user
+    const user = await prisma.user.create({
+      data: {
         email: body.email,
         name: body.name,
-        plan: 'free'
-      }, process.env.NEXTAUTH_SECRET || 'development-secret', { expiresIn: '7d' }),
-      email: body.email,
-      plan: 'free',
-      quotas: {
-        totalRequests: 1000,
-        usedRequests: 0,
-        resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        passwordHash,
+        subscriptionPlan: plan,
+        subscriptionStatus: 'active',
+        emailVerified: false,
       },
-      platforms: {
-        cli: true,
-        web: true,
-        extension: false,
-        router: false
-      }
-    };
+    });
+
+    // Create initial quota
+    const planLimits = getPlanLimits(plan);
+    await prisma.userQuota.create({
+      data: {
+        userId: user.id,
+        requestsLimit: planLimits.monthlyRequests === -1 ? 999999999 : planLimits.monthlyRequests,
+        requestsUsed: 0,
+        tokensLimit: BigInt(planLimits.tokensPerMonth === -1 ? 999999999 : planLimits.tokensPerMonth),
+        tokensUsed: BigInt(0),
+        periodStart: new Date(),
+        periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    // Determine if onboarding is needed (free users need to add API key)
+    const needsOnboarding = planLimits.requiresOwnApiKey;
 
     return NextResponse.json({
       success: true,
-      user: newUserSession
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.subscriptionPlan,
+        needsApiKey: needsOnboarding,
+        onboardingUrl: needsOnboarding ? `/auth/onboarding?userId=${user.id}` : null,
+      },
+      message: needsOnboarding 
+        ? 'Registration successful. Please add your OpenRouter API key to continue.' 
+        : 'Registration successful!'
     });
 
   } catch (error) {
-    console.error('CLI Registration Error:', error);
+    console.error('Registration Error:', error);
     return NextResponse.json(
       { error: 'Registration failed' },
       { status: 500 }
