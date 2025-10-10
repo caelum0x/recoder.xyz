@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Calendar, Clock, User, ArrowRight, ChevronRight, Tag } from 'lucide-react';
+import { Calendar, Clock, User, ArrowRight, ChevronRight, Tag, Terminal } from 'lucide-react';
 
 export default function BlogPage() {
   const featuredPost = {
@@ -97,29 +97,46 @@ export default function BlogPage() {
     "Analysis"
   ];
 
-  const getCategoryColor = (category: string) => {
-    const colors: { [key: string]: string } = {
-      "AI Development": "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300",
-      "Tutorial": "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300",
-      "Best Practices": "bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300",
-      "Case Study": "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300",
-      "Security": "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300",
-      "Industry Insights": "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300",
-      "Analysis": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300"
-    };
-    return colors[category] || "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300";
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="min-h-screen bg-black text-white">
+      {/* Header */}
+      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center space-x-2 group">
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
+              <Terminal className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold">recoder</span>
+          </Link>
+          
+          <nav className="flex items-center space-x-8">
+            <Link href="/docs" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Docs
+            </Link>
+            <Link href="/pricing" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Pricing
+            </Link>
+            <Link href="/blog" className="text-sm text-white">
+              Blog
+            </Link>
+            <Link 
+              href="/auth/signin" 
+              className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+            >
+              Sign In
+            </Link>
+          </nav>
+        </div>
+      </header>
+
       {/* Hero Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-6">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent mb-6">
               Recoder Blog
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-400 max-w-3xl mx-auto">
               Insights, tutorials, and industry analysis on the future of AI-powered development.
               Stay updated with the latest trends and best practices.
             </p>
@@ -131,9 +148,9 @@ export default function BlogPage() {
               <button
                 key={category}
                 className="px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 
-                         bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
-                         hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20
-                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                         bg-white/5 border border-white/10
+                         hover:border-orange-500/50 hover:bg-orange-500/10
+                         focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-black"
               >
                 {category}
               </button>
@@ -145,9 +162,9 @@ export default function BlogPage() {
       {/* Featured Post */}
       <section className="px-4 sm:px-6 lg:px-8 mb-16">
         <div className="max-w-7xl mx-auto">
-          <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
+          <div className="relative bg-black/50 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-xl">
             <div className="absolute top-4 left-4 z-10">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-600 text-white">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gradient-to-r from-orange-500 to-purple-600 text-white">
                 <Tag className="w-3 h-3 mr-1" />
                 Featured
               </span>
@@ -155,10 +172,10 @@ export default function BlogPage() {
             
             <div className="lg:flex">
               <div className="lg:w-1/2">
-                <div className="h-64 lg:h-full bg-gradient-to-br from-blue-500 to-purple-600 relative">
+                <div className="h-64 lg:h-full bg-gradient-to-br from-orange-500 to-purple-600 relative">
                   <div className="absolute inset-0 bg-black/20" />
-                  <div className="absolute bottom-4 left-4 text-white">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(featuredPost.category)}`}>
+                  <div className="absolute bottom-4 left-4">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-black/50 text-white border border-white/20">
                       {featuredPost.category}
                     </span>
                   </div>
@@ -166,15 +183,15 @@ export default function BlogPage() {
               </div>
               
               <div className="lg:w-1/2 p-8 lg:p-12">
-                <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                <h2 className="text-2xl lg:text-3xl font-bold text-white mb-4">
                   {featuredPost.title}
                 </h2>
-                <p className="text-gray-600 dark:text-gray-300 mb-6 text-lg">
+                <p className="text-gray-300 mb-6 text-lg">
                   {featuredPost.excerpt}
                 </p>
                 
                 <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center space-x-4 text-sm text-gray-400">
                     <div className="flex items-center">
                       <User className="w-4 h-4 mr-1" />
                       {featuredPost.author}
@@ -192,7 +209,7 @@ export default function BlogPage() {
                 
                 <Link 
                   href={`/blog/${featuredPost.slug}`}
-                  className="inline-flex items-center px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+                  className="inline-flex items-center px-6 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-purple-600 text-white font-medium hover:from-orange-600 hover:to-purple-700 transition-all duration-200"
                 >
                   Read Article
                   <ArrowRight className="ml-2 w-4 h-4" />
@@ -207,10 +224,10 @@ export default function BlogPage() {
       <section className="px-4 sm:px-6 lg:px-8 pb-20">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Latest Articles</h2>
+            <h2 className="text-3xl font-bold text-white">Latest Articles</h2>
             <Link 
               href="/blog/all"
-              className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+              className="inline-flex items-center text-orange-500 hover:text-orange-400 font-medium"
             >
               View All Posts
               <ChevronRight className="ml-1 w-4 h-4" />
@@ -221,25 +238,25 @@ export default function BlogPage() {
             {blogPosts.map((post) => (
               <article 
                 key={post.id}
-                className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                className="bg-black/50 border border-white/10 rounded-xl overflow-hidden hover:border-orange-500/50 transition-all duration-300 backdrop-blur-xl"
               >
-                <div className="h-48 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-slate-700 dark:to-slate-600 relative">
+                <div className="h-48 bg-gradient-to-br from-orange-500/20 to-purple-600/20 relative border-b border-white/10">
                   <div className="absolute top-3 right-3">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-black/50 text-white border border-white/20">
                       {post.category}
                     </span>
                   </div>
                 </div>
                 
                 <div className="p-6">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 line-clamp-2">
+                  <h3 className="text-xl font-bold text-white mb-3 line-clamp-2">
                     {post.title}
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
+                  <p className="text-gray-300 mb-4 line-clamp-3">
                     {post.excerpt}
                   </p>
                   
-                  <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  <div className="flex items-center justify-between text-sm text-gray-400 mb-4">
                     <div className="flex items-center">
                       <User className="w-3 h-3 mr-1" />
                       {post.author}
@@ -251,10 +268,10 @@ export default function BlogPage() {
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">{post.date}</span>
+                    <span className="text-sm text-gray-500">{post.date}</span>
                     <Link 
                       href={`/blog/${post.slug}`}
-                      className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                      className="inline-flex items-center text-orange-500 hover:text-orange-400 font-medium"
                     >
                       Read More
                       <ArrowRight className="ml-1 w-3 h-3" />
@@ -270,7 +287,7 @@ export default function BlogPage() {
       {/* Newsletter Section */}
       <section className="px-4 sm:px-6 lg:px-8 pb-20">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 lg:p-12 text-center text-white">
+          <div className="bg-gradient-to-r from-orange-500 to-purple-600 rounded-2xl p-8 lg:p-12 text-center text-white">
             <h2 className="text-3xl lg:text-4xl font-bold mb-4">
               Stay Updated with Recoder
             </h2>
@@ -282,9 +299,9 @@ export default function BlogPage() {
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 px-4 py-3 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
+                className="flex-1 px-4 py-3 rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-orange-600"
               />
-              <button className="px-6 py-3 bg-white text-blue-600 rounded-xl font-medium hover:bg-gray-50 transition-colors duration-200">
+              <button className="px-6 py-3 bg-white text-orange-600 rounded-xl font-medium hover:bg-gray-100 transition-colors duration-200">
                 Subscribe
               </button>
             </div>
@@ -295,6 +312,29 @@ export default function BlogPage() {
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-12 px-6">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
+              <span className="font-bold">recoder</span>
+            </div>
+            
+            <div className="flex items-center space-x-8 text-sm text-gray-500">
+              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
+              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
+              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Link href="mailto:support@recoder.xyz" className="hover:text-white transition-colors">Support</Link>
+            </div>
+            
+            <div className="text-sm text-gray-500">
+              © 2024 Recoder.xyz
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

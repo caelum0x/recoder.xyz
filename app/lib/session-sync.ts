@@ -15,7 +15,7 @@ export interface SessionData {
 
 export class SessionSyncManager {
   private static instance: SessionSyncManager;
-  private readonly SYNC_SECRET = process.env.SESSION_SYNC_SECRET || process.env.NEXTAUTH_SECRET;
+  private readonly SYNC_SECRET = process.env.SESSION_SYNC_SECRET || process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
   private readonly SYNC_COOKIE_NAME = 'recoder-session-sync';
   private readonly COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 
@@ -28,6 +28,10 @@ export class SessionSyncManager {
 
   // Generate cross-domain sync token
   generateSyncToken(sessionData: SessionData): string {
+    if (!this.SYNC_SECRET) {
+      throw new Error('JWT secret not configured. Please set SESSION_SYNC_SECRET, NEXTAUTH_SECRET, or JWT_SECRET in environment variables.');
+    }
+
     const payload = {
       ...sessionData,
       iat: Math.floor(Date.now() / 1000),
@@ -36,7 +40,7 @@ export class SessionSyncManager {
       aud: 'recoder-products'
     };
 
-    return jwt.sign(payload, this.SYNC_SECRET!);
+    return jwt.sign(payload, this.SYNC_SECRET);
   }
 
   // Generate sync URLs for cross-platform access
