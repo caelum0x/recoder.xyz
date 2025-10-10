@@ -132,6 +132,16 @@ model User {
   updatedAt         DateTime       @updatedAt
   lastLoginAt       DateTime?
 
+  // OpenRouter API Key Management (for free users)
+  openRouterApiKey  String?        @map("open_router_api_key") // Encrypted API key
+  hasOwnApiKey      Boolean        @default(false) @map("has_own_api_key")
+  apiKeyEncrypted   Boolean        @default(false) @map("api_key_encrypted")
+  onboardingStep    String?        @map("onboarding_step") // 'completed', 'pending_api_key', etc.
+  
+  // AI Model Preferences
+  preferredModels   String[]       @default([]) @map("preferred_models")
+  routerEnabled     Boolean        @default(true) @map("router_enabled")
+
   // CLI Authentication Relations
   authCodes    AuthCode[]    @relation("AuthCodes")
   deviceCodes  DeviceCode[]  @relation("DeviceCodes")
@@ -157,8 +167,11 @@ model UserQuota {
   requestsUsed     Int      @default(0)
   tokensLimit      BigInt   @default(1000000)
   tokensUsed       BigInt   @default(0)
+  tokensUsedThisPeriod BigInt @default(0) @map("tokens_used_this_period")
+  costThisPeriod   Float    @default(0) @map("cost_this_period")
   periodStart      DateTime @default(now())
   periodEnd        DateTime
+  lastResetAt      DateTime @default(now()) @map("last_reset_at")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -195,6 +208,27 @@ model UsageRecord {
   @@index([timestamp])
   @@index([requestType])
   @@map("usage_records")
+}
+
+// ==========================================
+// Platform API Keys (for premium users)
+// ==========================================
+
+model PlatformApiKey {
+  id                String    @id @default(cuid())
+  provider          String    // 'openrouter', 'anthropic', 'openai', etc.
+  keyEncrypted      String    @map("key_encrypted")
+  keyName           String    @map("key_name")
+  quotaLimit        Int       @default(1000000) @map("quota_limit")
+  quotaUsed         Int       @default(0) @map("quota_used")
+  isActive          Boolean   @default(true) @map("is_active")
+  priority          Int       @default(0) // Load balancing priority
+  createdAt         DateTime  @default(now()) @map("created_at")
+  lastUsedAt        DateTime? @map("last_used_at")
+  
+  @@index([provider])
+  @@index([isActive])
+  @@map("platform_api_keys")
 }
 
 // ==========================================

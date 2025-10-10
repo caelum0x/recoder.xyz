@@ -1,111 +1,116 @@
 /**
- * Enhanced Authentication API Route
- * Handles login requests with cross-platform session synchronization
+ * User Login API Route
+ * Handles login requests with database validation
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
-import { SessionSyncManager, SessionData } from '@/lib/session-sync';
+import { prisma } from '@/lib/prisma';
+import { verifyPassword } from '@/lib/crypto';
+import { getApiKeyStatus } from '@/lib/api-key-resolver';
+import { nanoid } from 'nanoid';
 
 interface LoginRequest {
-  email?: string;
-  password?: string;
-  token?: string;
-}
-
-interface UserSession {
-  userId: string;
-  token: string;
   email: string;
-  name?: string;
-  plan: 'free' | 'pro' | 'enterprise';
-  quotas: {
-    totalRequests: number;
-    usedRequests: number;
-    resetDate: string;
-  };
-  platforms: {
-    cli: boolean;
-    web: boolean;
-    extension: boolean;
-    router: boolean;
-  };
+  password: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: LoginRequest = await request.json();
-    const sessionSync = SessionSyncManager.getInstance();
 
-    // For demonstration, create a mock session
-    // In production, this would validate credentials against your auth system
-    const userId = 'user-' + Date.now();
-    const email = body.email || 'user@recoder.xyz';
-    const name = email.split('@')[0];
+    if (!body.email || !body.password) {
+      return NextResponse.json(
+        { error: 'Email and password are required' },
+        { status: 400 }
+      );
+    }
 
-    const mockSession: UserSession = {
-      userId,
-      token: jwt.sign({ 
-        userId,
-        email,
-        plan: 'free'
-      }, process.env.NEXTAUTH_SECRET || 'development-secret', { expiresIn: '7d' }),
-      email,
-      name,
-      plan: 'free',
-      quotas: {
-        totalRequests: 1000,
-        usedRequests: Math.floor(Math.random() * 150), // Random usage for demo
-        resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      platforms: {
-        cli: true,
-        web: true,
-        extension: true,
-        router: true
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email: body.email },
+      include: {
+        quotas: {
+          where: {
+            periodEnd: { gt: new Date() }
+          },
+          orderBy: { periodStart: 'desc' },
+          take: 1
+        }
       }
-    };
-
-    // Create session data for cross-platform synchronization
-    const sessionData: SessionData = {
-      userId,
-      email,
-      name,
-      plan: mockSession.plan,
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-      domains: [
-        'recoder.xyz', 
-        'chat.recoder.xyz', 
-        'worthy-truth-production.up.railway.app',    // AI App Builder (Railway)
-        'resplendent-marshmallow-7de2b1.netlify.app', // Backend API (Netlify) 
-        'recoder-production-engine.netlify.app'       // Production Engine (Netlify)
-        // CLI is npm package, not web domain
-      ]
-    };
-
-    // Generate cross-platform sync token
-    const syncToken = sessionSync.generateSyncToken(sessionData);
-
-    // Create response with session sync
-    const response = NextResponse.json({
-      success: true,
-      user: mockSession,
-      sessionData,
-      crossPlatformAccess: true,
-      syncUrls: sessionSync.generateSyncUrls(syncToken)
     });
 
-    // Set cross-platform session cookie
-    const cookieConfig = sessionSync.getCookieConfig('main');
-    response.cookies.set(cookieConfig.name, syncToken, cookieConfig.options);
+    if (!user || !user.passwordHash) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
 
-    return response;
+    // Verify password
+    const isValidPassword = await verifyPassword(body.password, user.passwordHash);
+    if (!isValidPassword) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+
+    // Generate access and refresh tokens
+    const accessToken = `rct_${nanoid(32)}`;
+    const refreshToken = `rcr_${nanoid(32)}`;
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+    // Create CLI session
+    await prisma.cLISession.create({
+      data: {
+        userId: user.id,
+        deviceName: 'Web Browser',
+        deviceType: 'web',
+        accessToken,
+        refreshToken,
+        expiresAt,
+        isActive: true,
+      },
+    });
+
+    // Update last login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
+
+    // Get API key status
+    const apiKeyStatus = await getApiKeyStatus(user.id);
+
+    // Get quota info
+    const quota = user.quotas[0] || null;
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.subscriptionPlan,
+        apiKeyStatus,
+        quota: quota ? {
+          remaining: quota.requestsLimit - quota.requestsUsed,
+          limit: quota.requestsLimit,
+          resetDate: quota.periodEnd.toISOString()
+        } : null
+      },
+      session: {
+        accessToken,
+        refreshToken,
+        expiresAt: expiresAt.toISOString()
+      }
+    });
 
   } catch (error) {
-    console.error('Authentication Error:', error);
+    console.error('Login Error:', error);
     return NextResponse.json(
       { error: 'Authentication failed' },
-      { status: 401 }
+      { status: 500 }
     );
   }
 }
