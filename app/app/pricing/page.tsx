@@ -1,36 +1,29 @@
 'use client';
 
 import Link from 'next/link';
-import { Terminal, Check, Zap, Crown, Building, ArrowRight, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { Terminal, Check, Zap, Crown, Building, Sparkles } from 'lucide-react';
 
 export default function PricingPage() {
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
-
   const plans = [
     {
       id: 'free',
       name: 'Free',
       price: 0,
       period: 'forever',
-      description: 'Try Recoder with limited usage',
+      description: 'Try Recoder with your own API key',
       icon: Terminal,
       badge: null,
       popular: false,
       features: [
-        '100 AI tokens/month',
-        '50 API calls/month',
-        '1 active project',
-        'Basic AI models',
-        'Community support',
-        'CLI + Web access'
-      ],
-      limitations: [
-        'Limited to basic models',
-        'No priority support'
+        '6 sessions per day',
+        '10k tokens/session (premium models)',
+        'Unlimited free models',
+        'Bring your own OpenRouter key',
+        'CLI + Web access',
+        'Community support'
       ],
       cta: 'Start Free',
-      href: '/auth/signup',
+      href: '/auth/signup?plan=free',
       color: 'gray'
     },
     {
@@ -43,71 +36,67 @@ export default function PricingPage() {
       badge: null,
       popular: false,
       features: [
-        '5,000 AI tokens/week',
-        '500 API calls/week',
-        'Unlimited projects',
+        '10 sessions per day',
+        '30k tokens/session (premium models)',
+        'Unlimited free models',
+        'No API key needed',
         'All AI models (Claude, GPT-4, Gemini)',
         'Priority support',
-        'Advanced features',
         'Team collaboration (3 members)',
-        'Custom templates'
+        'Advanced features'
       ],
       cta: 'Start Weekly',
-      href: '/auth/signup?plan=weekly',
+      href: '/checkout?plan=weekly',
       color: 'orange'
     },
     {
       id: 'monthly',
       name: 'Monthly',
-      price: billingCycle === 'monthly' ? 20 : 18,
-      originalPrice: billingCycle === 'yearly' ? 20 : null,
-      period: billingCycle === 'monthly' ? 'month' : 'month',
-      billedAs: billingCycle === 'yearly' ? '$216 billed yearly' : null,
+      price: 20,
+      period: 'month',
       description: 'Best for individual developers',
       icon: Sparkles,
       badge: 'MOST POPULAR',
       popular: true,
       features: [
-        '20,000 AI tokens/month',
-        '2,000 API calls/month',
-        'Unlimited projects',
+        '15 sessions per day',
+        '50k tokens/session (premium models)',
+        'Unlimited free models',
+        'No API key needed',
         'All AI models (Claude, GPT-4, Gemini)',
         'Priority support',
-        'Advanced features',
         'Team collaboration (5 members)',
-        'Custom templates',
+        'Advanced features',
         'API access'
       ],
       cta: 'Start Monthly',
-      href: '/auth/signup?plan=monthly',
+      href: '/checkout?plan=monthly',
       color: 'orange'
     },
     {
       id: 'pro',
       name: 'Pro',
-      price: billingCycle === 'monthly' ? 100 : 90,
-      originalPrice: billingCycle === 'yearly' ? 100 : null,
-      period: billingCycle === 'monthly' ? 'month' : 'month',
-      billedAs: billingCycle === 'yearly' ? '$1,080 billed yearly' : null,
+      price: 100,
+      period: 'month',
       description: 'For power users and teams',
       icon: Crown,
       badge: '5X USAGE',
       popular: false,
       features: [
-        '100,000 AI tokens/month (5x)',
-        '10,000 API calls/month (5x)',
-        'Unlimited projects',
+        '20 sessions per day',
+        '100k tokens/session (premium models)',
+        'Unlimited free models',
+        'No API key needed',
         'All AI models + Beta access',
         'Priority support + Slack',
+        'Team collaboration (10 members)',
         'Advanced features',
-        'Team collaboration (15 members)',
-        'Custom templates',
         'API access',
         'Custom AI models',
         'Dedicated account manager'
       ],
       cta: 'Start Pro',
-      href: '/auth/signup?plan=pro',
+      href: '/checkout?plan=pro',
       color: 'purple'
     }
   ];
@@ -136,24 +125,20 @@ export default function PricingPage() {
       answer: 'Yes! Upgrade or downgrade your plan anytime. Changes take effect immediately with pro-rated billing.'
     },
     {
-      question: 'What happens when I hit my usage limit?',
-      answer: 'Your service continues, but with rate limiting. Upgrade anytime to get full speed back instantly.'
+      question: 'What are "sessions"?',
+      answer: 'A session is a continuous work period. Each day you get a set number of sessions based on your plan.'
+    },
+    {
+      question: 'What happens after I hit my limits?',
+      answer: 'Daily session limits reset every 24 hours. Premium models have token limits per session, but free models are always unlimited.'
     },
     {
       question: 'Do you offer refunds?',
       answer: 'Yes, we offer a 7-day money-back guarantee on all paid plans. No questions asked.'
     },
     {
-      question: 'Can I use multiple AI models?',
-      answer: 'All paid plans include access to Claude, GPT-4, Gemini, and more. We automatically route to the best model for your task.'
-    },
-    {
-      question: 'Is my code private?',
-      answer: 'Absolutely. Your code is never used to train AI models. We have strict data privacy and security measures.'
-    },
-    {
-      question: 'Do you support team collaboration?',
-      answer: 'Yes! All paid plans include team collaboration features with shared projects and usage pools.'
+      question: 'Which models are considered "premium"?',
+      answer: 'Claude Sonnet, GPT-4, and Gemini Pro have token limits. All other models from OpenRouter are unlimited.'
     }
   ];
 
@@ -204,33 +189,6 @@ export default function PricingPage() {
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               Start free, scale when you're ready. No hidden fees, cancel anytime.
             </p>
-            
-            {/* Billing Toggle */}
-            <div className="flex items-center justify-center space-x-4 pt-8">
-              <button
-                onClick={() => setBillingCycle('monthly')}
-                className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                  billingCycle === 'monthly'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setBillingCycle('yearly')}
-                className={`px-6 py-2 rounded-lg font-medium transition-all relative ${
-                  billingCycle === 'yearly'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                Yearly
-                <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-purple-500 text-white text-xs font-bold rounded-full">
-                  Save 10%
-                </span>
-              </button>
-            </div>
           </div>
         </div>
       </section>
@@ -269,15 +227,9 @@ export default function PricingPage() {
 
                     <div className="space-y-1">
                       <div className="flex items-baseline space-x-2">
-                        {plan.originalPrice && (
-                          <span className="text-2xl line-through text-gray-600">${plan.originalPrice}</span>
-                        )}
                         <span className="text-5xl font-bold">${plan.price}</span>
                         <span className="text-gray-400">/{plan.period}</span>
                       </div>
-                      {plan.billedAs && (
-                        <p className="text-xs text-gray-500">{plan.billedAs}</p>
-                      )}
                     </div>
 
                     <Link

@@ -29,6 +29,21 @@ function SignUpForm() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('return');
 
+  // Password strength calculation
+  const getPasswordStrength = (pass: string) => {
+    let strength = 0;
+    if (pass.length >= 8) strength++;
+    if (pass.length >= 12) strength++;
+    if (/[a-z]/.test(pass) && /[A-Z]/.test(pass)) strength++;
+    if (/\d/.test(pass)) strength++;
+    if (/[^a-zA-Z\d]/.test(pass)) strength++;
+    return strength;
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
+  const strengthLabels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
+  const strengthColors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -44,6 +59,12 @@ function SignUpForm() {
     // Validate password strength
     if (formData.password.length < 8) {
       setError('Password must be at least 8 characters long');
+      setLoading(false);
+      return;
+    }
+
+    if (passwordStrength < 2) {
+      setError('Please choose a stronger password');
       setLoading(false);
       return;
     }
@@ -258,6 +279,33 @@ function SignUpForm() {
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                     required
                   />
+                  
+                  {/* Password Strength Indicator */}
+                  {formData.password && (
+                    <div className="space-y-2">
+                      <div className="flex gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <div
+                            key={i}
+                            className={`h-1 flex-1 rounded-full transition-colors ${
+                              i < passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-700'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        Strength: <span className={`font-medium ${passwordStrength >= 3 ? 'text-green-500' : 'text-orange-500'}`}>
+                          {strengthLabels[passwordStrength - 1] || 'Very Weak'}
+                        </span>
+                      </p>
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <p className={formData.password.length >= 8 ? 'text-green-500' : ''}>• At least 8 characters</p>
+                        <p className={/[a-z]/.test(formData.password) && /[A-Z]/.test(formData.password) ? 'text-green-500' : ''}>• Mix of uppercase and lowercase</p>
+                        <p className={/\d/.test(formData.password) ? 'text-green-500' : ''}>• At least one number</p>
+                        <p className={/[^a-zA-Z\d]/.test(formData.password) ? 'text-green-500' : ''}>• At least one special character</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
