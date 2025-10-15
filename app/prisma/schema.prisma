@@ -89,21 +89,33 @@ model CLISession {
 
 // API Keys (long-lived authentication)
 model ApiKey {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   userId      String
-  keyId       String    @unique
-  keyHash     String    @unique
+  keyId       String  @unique
+  keyHash     String  @unique
   keyPrefix   String // First 12 chars for display
   name        String
   description String?
+
+  // Permissions & Scope
   scopes      String[] // ['cli:full', 'api:read', 'generate:code']
-  expiresAt   DateTime?
-  lastUsedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  revokedAt   DateTime?
-  isActive    Boolean   @default(true)
-  usageCount  Int       @default(0)
-  metadata    Json?
+  permissions Json? // Detailed permissions object
+
+  // Rate Limiting
+  rateLimit Int? // Requests per hour
+
+  // Lifecycle
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  isActive   Boolean   @default(true)
+
+  // Usage Stats
+  usageCount Int @default(0)
+
+  // Metadata
+  metadata Json?
 
   user User @relation("ApiKeys", fields: [userId], references: [id], onDelete: Cascade)
 
@@ -119,94 +131,191 @@ model ApiKey {
 // ==========================================
 
 model User {
-  id                String         @id @default(cuid())
-  email             String         @unique
-  name              String
-  passwordHash      String?
-  avatar            String?
-  subscriptionPlan  String         @default("free") // free, pro, enterprise
-  subscriptionStatus String        @default("active")
-  emailVerified     Boolean        @default(false)
-  twoFactorEnabled  Boolean        @default(false)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  lastLoginAt       DateTime?
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String
+  passwordHash       String?
+  avatar             String?
+  image              String? // For OAuth provider images
+  bio                String?   @db.Text
+  company            String?
+  website            String?
+  timezone           String?   @default("UTC")
+  locale             String?   @default("en")
+  subscriptionPlan   String    @default("free") // free, weekly, monthly, pro, enterprise
+  subscriptionStatus String    @default("active") // active, cancelled, past_due, incomplete
+  emailVerified      Boolean   @default(false)
+  twoFactorEnabled   Boolean   @default(false)
+  twoFactorSecret    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastLoginAt        DateTime?
+  deletedAt          DateTime?
 
   // OpenRouter API Key Management (for free users)
-  openRouterApiKey  String?        @map("open_router_api_key") // Encrypted API key
-  hasOwnApiKey      Boolean        @default(false) @map("has_own_api_key")
-  apiKeyEncrypted   Boolean        @default(false) @map("api_key_encrypted")
-  onboardingStep    String?        @map("onboarding_step") // 'completed', 'pending_api_key', etc.
-  
+  openRouterApiKey String? @map("open_router_api_key") // Encrypted API key
+  hasOwnApiKey     Boolean @default(false) @map("has_own_api_key")
+  apiKeyEncrypted  Boolean @default(false) @map("api_key_encrypted")
+  onboardingStep   String? @map("onboarding_step") // 'completed', 'pending_api_key', etc.
+
   // AI Model Preferences
-  preferredModels   String[]       @default([]) @map("preferred_models")
-  routerEnabled     Boolean        @default(true) @map("router_enabled")
+  preferredModels String[] @default([]) @map("preferred_models")
+  routerEnabled   Boolean  @default(true) @map("router_enabled")
 
   // CLI Authentication Relations
-  authCodes    AuthCode[]    @relation("AuthCodes")
-  deviceCodes  DeviceCode[]  @relation("DeviceCodes")
-  cliSessions  CLISession[]  @relation("CLISessions")
-  apiKeys      ApiKey[]      @relation("ApiKeys")
-  
-  // Quota and Usage
-  quotas       UserQuota[]
+  authCodes   AuthCode[]   @relation("AuthCodes")
+  deviceCodes DeviceCode[] @relation("DeviceCodes")
+  cliSessions CLISession[] @relation("CLISessions")
+  apiKeys     ApiKey[]     @relation("ApiKeys")
+
+  // Session & Usage Tracking
+  workSessions WorkSession[]
+  quota        UserQuota?
   usageRecords UsageRecord[]
 
+  // New Relations for Complete System
+  emailVerifications  EmailVerification[]
+  passwordResets      PasswordReset[]
+  preferences         UserPreferences?
+  sessions            Session[]
+  auditLogs           AuditLog[]
+  invoices            Invoice[]
+  paymentMethods      PaymentMethod[]
+  subscription        Subscription?
+  integrations        Integration[]
+  webhooks            Webhook[]
+  ownedTeams          Team[]              @relation("TeamOwner")
+  teamMemberships     TeamMember[]
+  sentInvitations     Invitation[]        @relation("InvitationSender")
+  receivedInvitations Invitation[]        @relation("InvitationRecipient")
+
   @@index([email])
+  @@index([subscriptionPlan])
+  @@index([emailVerified])
   @@map("users")
 }
 
 // ==========================================
-// Usage & Quota Tracking
+// Session & Usage Tracking
 // ==========================================
 
+// Work sessions (e.g., building a feature, creating a project)
+model WorkSession {
+  id           String @id @default(cuid())
+  userId       String
+  sessionToken String @unique
+
+  // Session lifecycle
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  lastActivityAt DateTime  @default(now())
+  isActive       Boolean   @default(true)
+
+  // Usage tracking (only for pricey models)
+  tokensUsed   Int   @default(0)
+  totalCost    Float @default(0)
+  requestCount Int   @default(0)
+
+  // Metadata
+  projectName String?
+  description String?
+  platform    String? // 'cli', 'web', 'extension'
+  metadata    Json?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usageRecords UsageRecord[]
+
+  @@index([userId])
+  @@index([sessionToken])
+  @@index([startedAt])
+  @@index([isActive])
+  @@map("work_sessions")
+}
+
+// Daily quota tracking (session-based, resets daily)
 model UserQuota {
-  id               String   @id @default(cuid())
-  userId           String
-  requestsLimit    Int      @default(1000)
-  requestsUsed     Int      @default(0)
-  tokensLimit      BigInt   @default(1000000)
-  tokensUsed       BigInt   @default(0)
-  tokensUsedThisPeriod BigInt @default(0) @map("tokens_used_this_period")
-  costThisPeriod   Float    @default(0) @map("cost_this_period")
-  periodStart      DateTime @default(now())
-  periodEnd        DateTime
-  lastResetAt      DateTime @default(now()) @map("last_reset_at")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Session limits (daily reset)
+  sessionsPerDay    Int @default(6) // Based on subscription plan
+  sessionsUsedToday Int @default(0)
+
+  // Token limits per session (only for pricey models)
+  tokensPerSession Int @default(10000) // 10k, 30k, 50k, 100k based on plan
+
+  // Monthly & Yearly Limits
+  monthlyLimit Int? // Total requests per month
+  monthlyUsed  Int  @default(0)
+  yearlyLimit  Int? // Total requests per year
+  yearlyUsed   Int  @default(0)
+
+  // Period tracking
+  periodStart  DateTime @default(now()) // Start of current day
+  periodEnd    DateTime // End of current day (+24h)
+  lastResetAt  DateTime @default(now()) // Last daily reset
+  monthResetAt DateTime @default(now()) // Last monthly reset
+  yearResetAt  DateTime @default(now()) // Last yearly reset
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, periodStart])
   @@index([userId])
   @@index([periodEnd])
   @@map("user_quotas")
 }
 
+// Individual AI request tracking
 model UsageRecord {
-  id            String   @id @default(cuid())
-  userId        String
-  sessionId     String?
-  requestType   String // cli, api, web, router
-  endpoint      String?
-  method        String?
-  statusCode    Int?
-  tokensUsed    Int?
-  cost          Float?
-  modelUsed     String?
-  providerUsed  String?
-  duration      Int? // milliseconds
-  success       Boolean  @default(true)
-  errorMessage  String?
-  metadata      Json?
-  timestamp     DateTime @default(now())
+  id        String  @id @default(cuid())
+  userId    String
+  sessionId String? // Link to WorkSession
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Request details
+  requestType String // 'cli', 'api', 'web', 'extension'
+  endpoint    String?
+  prompt      String? @db.Text
+  response    String? @db.Text
+
+  // AI Model tracking
+  model         String? // 'claude-3-5-sonnet', 'gemini-flash', etc.
+  modelUsed     String? // Legacy field
+  provider      String? // 'openrouter', 'anthropic', 'openai', etc.
+  providerUsed  String? // Legacy field
+  isPriceyModel Boolean @default(false) // Track against limits
+
+  // Usage metrics
+  tokensUsed   Int? // Actual tokens consumed
+  inputTokens  Int? // Input tokens
+  outputTokens Int? // Output tokens
+  cost         Float? // Cost in USD
+  duration     Int? // Response time in ms
+
+  // Status
+  success      Boolean @default(true)
+  errorMessage String? @db.Text
+  statusCode   Int?
+
+  // Platform tracking
+  platform     String? // cli, web, extension, api
+  requestCount Int     @default(1)
+
+  // Metadata
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session WorkSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([sessionId])
   @@index([timestamp])
-  @@index([requestType])
+  @@index([model])
+  @@index([modelUsed])
+  @@index([isPriceyModel])
+  @@index([platform])
   @@map("usage_records")
 }
 
@@ -215,20 +324,447 @@ model UsageRecord {
 // ==========================================
 
 model PlatformApiKey {
-  id                String    @id @default(cuid())
-  provider          String    // 'openrouter', 'anthropic', 'openai', etc.
-  keyEncrypted      String    @map("key_encrypted")
-  keyName           String    @map("key_name")
-  quotaLimit        Int       @default(1000000) @map("quota_limit")
-  quotaUsed         Int       @default(0) @map("quota_used")
-  isActive          Boolean   @default(true) @map("is_active")
-  priority          Int       @default(0) // Load balancing priority
-  createdAt         DateTime  @default(now()) @map("created_at")
-  lastUsedAt        DateTime? @map("last_used_at")
-  
+  id           String    @id @default(cuid())
+  provider     String // 'openrouter', 'anthropic', 'openai', etc.
+  keyEncrypted String    @map("key_encrypted")
+  keyName      String    @map("key_name")
+  quotaLimit   Int       @default(1000000) @map("quota_limit")
+  quotaUsed    Int       @default(0) @map("quota_used")
+  isActive     Boolean   @default(true) @map("is_active")
+  priority     Int       @default(0) // Load balancing priority
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+
   @@index([provider])
   @@index([isActive])
   @@map("platform_api_keys")
+}
+
+// ==========================================
+// Email Verification & Password Reset
+// ==========================================
+
+model EmailVerification {
+  id        String    @id @default(cuid())
+  userId    String
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  used      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([email])
+  @@index([expiresAt])
+  @@map("email_verifications")
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  used      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  ipAddress String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_resets")
+}
+
+// ==========================================
+// User Preferences & Settings
+// ==========================================
+
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // UI Preferences
+  theme    String @default("system") // light, dark, system
+  language String @default("en")
+  timezone String @default("UTC")
+
+  // Notification Preferences
+  emailNotifications    Boolean @default(true)
+  usageAlerts           Boolean @default(true)
+  usageAlertThreshold   Int     @default(80) // Percentage
+  billingNotifications  Boolean @default(true)
+  securityNotifications Boolean @default(true)
+  productUpdates        Boolean @default(false)
+  marketingEmails       Boolean @default(false)
+
+  // Communication Preferences
+  weeklyDigest       Boolean @default(false)
+  monthlyReport      Boolean @default(false)
+  slackNotifications Boolean @default(false)
+  slackWebhookUrl    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+// ==========================================
+// Billing & Subscriptions
+// ==========================================
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Subscription Details
+  planId     String // free, weekly, monthly, pro, enterprise
+  planName   String // Display name
+  status     String // active, cancelled, past_due, incomplete, trialing
+  provider   String? // paddle, dodo, stripe
+  providerId String? // External subscription ID
+
+  // Billing Cycle
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean  @default(false)
+  cancelAt           DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  trialStart         DateTime?
+  trialEnd           DateTime?
+
+  // Pricing
+  amount   Int // Amount in USD (not cents)
+  currency String @default("USD")
+  interval String // month, year, week
+
+  // Features
+  features Json? // Array of feature strings
+
+  // Metadata
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([provider])
+  @@index([providerId])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id     String @id @default(cuid())
+  userId String
+
+  // Invoice Details
+  invoiceNumber String @unique
+  description   String @default("Subscription Payment")
+  status        String // draft, paid, pending, failed, cancelled
+
+  // Amounts (in USD, not cents)
+  amount     Float // Main amount
+  subtotal   Float? // Pre-tax amount
+  tax        Float  @default(0)
+  amountPaid Float  @default(0)
+  amountDue  Float  @default(0)
+  currency   String @default("USD")
+
+  // Dates
+  invoiceDate DateTime  @default(now())
+  dueDate     DateTime?
+  paidAt      DateTime?
+
+  // Payment Details
+  provider      String? // paddle, dodo, stripe
+  providerId    String? // External invoice ID
+  paymentMethod String? // card, crypto, paypal
+
+  // Plan Details
+  planId   String?
+  planName String?
+
+  // Line Items & Metadata
+  items    Json? // Array of line items
+  metadata Json?
+
+  // PDF Generation
+  pdfUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([invoiceNumber])
+  @@index([status])
+  @@index([invoiceDate])
+  @@map("invoices")
+}
+
+model PaymentMethod {
+  id     String @id @default(cuid())
+  userId String
+
+  // Payment Method Details
+  type       String // card, paypal, crypto, bank_account
+  provider   String  @default("stripe") // paddle, dodo, stripe
+  providerId String? // External payment method ID
+
+  // Card Details (if applicable)
+  last4        String
+  brand        String? // visa, mastercard, amex, etc.
+  holderName   String // Cardholder name
+  expiryMonth  Int
+  expiryYear   Int
+  providerToken String? // Encrypted token from payment provider
+
+  // Status
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  // Metadata
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isDefault])
+  @@map("payment_methods")
+}
+
+// ==========================================
+// Audit Logging
+// ==========================================
+
+model AuditLog {
+  id     String @id @default(cuid())
+  userId String
+
+  // Action Details
+  action     String // login, logout, create_api_key, delete_account, etc.
+  resource   String? // api_key, subscription, user, etc.
+  resourceId String?
+
+  // Request Details
+  ipAddress String?
+  userAgent String?
+  method    String? // GET, POST, PUT, DELETE
+  path      String?
+
+  // Status & Results
+  success      Boolean @default(true)
+  statusCode   Int?
+  errorMessage String? @db.Text
+
+  // Metadata
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+// ==========================================
+// Team Collaboration
+// ==========================================
+
+model Team {
+  id      String @id @default(cuid())
+  name    String
+  slug    String @unique
+  ownerId String
+
+  // Plan & Status
+  plan   String @default("free")
+  status String @default("active")
+
+  // Settings
+  avatar      String?
+  description String? @db.Text
+  website     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner       User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     TeamMember[]
+  invitations Invitation[]
+
+  @@index([ownerId])
+  @@index([slug])
+  @@map("teams")
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  teamId String
+  userId String
+
+  // Role & Permissions
+  role String // owner, admin, member, viewer
+
+  // Dates
+  invitedAt DateTime @default(now())
+  joinedAt  DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model Invitation {
+  id     String @id @default(cuid())
+  teamId String
+  email  String
+  token  String @unique
+  role   String @default("member")
+
+  // Status
+  status String @default("pending") // pending, accepted, declined, expired
+
+  // Dates
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  acceptedAt DateTime?
+  declinedAt DateTime?
+
+  // Relations
+  senderId    String
+  recipientId String?
+
+  team      Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sender    User  @relation("InvitationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User? @relation("InvitationRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([teamId])
+  @@index([email])
+  @@index([token])
+  @@index([status])
+  @@map("invitations")
+}
+
+// ==========================================
+// Integrations & Webhooks
+// ==========================================
+
+model Integration {
+  id     String @id @default(cuid())
+  userId String
+
+  // Integration Details
+  provider   String // slack, github, gitlab, discord, etc.
+  providerId String? // External integration ID
+
+  // Credentials (encrypted)
+  accessToken  String?   @db.Text
+  refreshToken String?   @db.Text
+  expiresAt    DateTime?
+
+  // Settings
+  isActive Boolean @default(true)
+  settings Json?
+
+  // Metadata
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastSyncAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([provider])
+  @@map("integrations")
+}
+
+model Webhook {
+  id     String @id @default(cuid())
+  userId String
+
+  // Webhook Details
+  url    String
+  secret String // For signature verification
+
+  // Events to listen to
+  events String[] // ['usage.alert', 'billing.success', 'subscription.cancelled']
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Delivery Stats
+  successCount Int       @default(0)
+  failureCount Int       @default(0)
+  lastSuccess  DateTime?
+  lastFailure  DateTime?
+  lastError    String?   @db.Text
+
+  // Metadata
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("webhooks")
+}
+
+// ==========================================
+// Web Sessions (for browser)
+// ==========================================
+
+model Session {
+  id     String @id @default(cuid())
+  userId String
+  token  String @unique
+
+  // Session Details
+  device    String?
+  browser   String?
+  os        String?
+  ipAddress String?
+  location  String? // City, Country
+
+  // Status
+  isActive  Boolean  @default(true)
+  expiresAt DateTime
+
+  createdAt    DateTime  @default(now())
+  lastActiveAt DateTime  @default(now())
+  revokedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("sessions")
 }
 
 // ==========================================
@@ -236,7 +772,10 @@ model PlatformApiKey {
 // ==========================================
 
 // Run periodically to clean up expired records
-// Example cron job query:
+// Example cron job queries:
 // DELETE FROM auth_codes WHERE expiresAt < NOW() AND used = true;
 // DELETE FROM device_codes WHERE expiresAt < NOW() AND status != 'pending';
 // UPDATE cli_sessions SET isActive = false WHERE expiresAt < NOW();
+// DELETE FROM email_verifications WHERE expiresAt < NOW() AND used = true;
+// DELETE FROM password_resets WHERE expiresAt < NOW() AND used = true;
+// DELETE FROM invitations WHERE expiresAt < NOW() AND status = 'pending';

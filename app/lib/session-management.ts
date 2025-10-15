@@ -1,0 +1,454 @@
+/**
+ * Session Management for Recoder.xyz
+ * Track user sessions (6/day for Free & PRO, 20/day for Enterprise)
+ */
+
+import { prisma } from './prisma';
+import { getPlanLimits, canStartSession, canUseModel, isPremiumModel } from './plan-config';
+
+export interface Session {
+  id: string;
+  userId: string;
+  platform: string;
+  deviceId?: string;
+  startTime: Date;
+  endTime?: Date;
+  tokensUsed: number;
+  premiumTokensUsed: number;
+  modelsUsed: string[];
+  costEstimate: number;
+  status: 'active' | 'completed' | 'abandoned';
+}
+
+export interface SessionUsage {
+  model: string;
+  tokens: number;
+  cost: number;
+  provider?: string;
+}
+
+/**
+ * Get count of sessions for today
+ */
+export async function getSessionsToday(userId: string): Promise<number> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const count = await prisma.usageRecord.count({
+    where: {
+      userId,
+      requestType: 'session_start',
+      timestamp: {
+        gte: startOfDay
+      }
+    }
+  });
+  
+  return count;
+}
+
+/**
+ * Get premium model tokens used today
+ */
+export async function getPremiumTokensToday(userId: string): Promise<number> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const records = await prisma.usageRecord.findMany({
+    where: {
+      userId,
+      timestamp: {
+        gte: startOfDay
+      },
+      modelUsed: {
+        not: null
+      }
+    },
+    select: {
+      modelUsed: true,
+      tokensUsed: true
+    }
+  });
+  
+  const premiumTokens = records
+    .filter(r => r.modelUsed && isPremiumModel(r.modelUsed))
+    .reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
+  
+  return premiumTokens;
+}
+
+/**
+ * Start a new session
+ */
+export async function startSession(
+  userId: string,
+  platform: string = 'recoder-code',
+  deviceId?: string
+): Promise<{
+  success: boolean;
+  session?: Session;
+  error?: string;
+  upgradeRequired?: boolean;
+}> {
+  // Get user plan
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { subscriptionPlan: true }
+  });
+  
+  if (!user) {
+    return {
+      success: false,
+      error: 'User not found'
+    };
+  }
+  
+  // Check if user can start a new session
+  const sessionsToday = await getSessionsToday(userId);
+  const sessionCheck = canStartSession(user.subscriptionPlan, sessionsToday);
+  
+  if (!sessionCheck.allowed) {
+    return {
+      success: false,
+      error: sessionCheck.reason,
+      upgradeRequired: sessionCheck.upgradeRequired
+    };
+  }
+  
+  // Create session marker in usage records
+  const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  
+  await prisma.usageRecord.create({
+    data: {
+      userId,
+      sessionId,
+      requestType: 'session_start',
+      endpoint: '/sessions/start',
+      method: 'POST',
+      statusCode: 200,
+      tokensUsed: 0,
+      cost: 0,
+      modelUsed: null,
+      providerUsed: platform,
+      duration: 0,
+      success: true,
+      metadata: {
+        platform,
+        deviceId,
+        sessionId
+      }
+    }
+  });
+  
+  const session: Session = {
+    id: sessionId,
+    userId,
+    platform,
+    deviceId,
+    startTime: new Date(),
+    tokensUsed: 0,
+    premiumTokensUsed: 0,
+    modelsUsed: [],
+    costEstimate: 0,
+    status: 'active'
+  };
+  
+  return {
+    success: true,
+    session
+  };
+}
+
+/**
+ * Track usage within a session
+ */
+export async function trackSessionUsage(
+  sessionId: string,
+  userId: string,
+  usage: SessionUsage
+): Promise<{
+  success: boolean;
+  tokensUsed?: number;
+  premiumTokensUsed?: number;
+  remainingPremiumTokens?: number;
+  error?: string;
+  shouldFallbackToFreeModels?: boolean;
+}> {
+  // Get user plan
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { subscriptionPlan: true }
+  });
+  
+  if (!user) {
+    return {
+      success: false,
+      error: 'User not found'
+    };
+  }
+  
+  const limits = getPlanLimits(user.subscriptionPlan);
+  const isPremium = isPremiumModel(usage.model);
+  
+  // Get premium tokens used today
+  const premiumTokensToday = await getPremiumTokensToday(userId);
+  
+  // Check if user can use this model
+  const modelCheck = canUseModel(user.subscriptionPlan, usage.model, premiumTokensToday);
+  
+  if (!modelCheck.allowed) {
+    return {
+      success: false,
+      error: modelCheck.reason,
+      shouldFallbackToFreeModels: !modelCheck.upgradeRequired
+    };
+  }
+  
+  // Record usage
+  await prisma.usageRecord.create({
+    data: {
+      userId,
+      sessionId,
+      requestType: 'session_usage',
+      endpoint: '/sessions/usage',
+      method: 'POST',
+      statusCode: 200,
+      tokensUsed: usage.tokens,
+      cost: usage.cost,
+      modelUsed: usage.model,
+      providerUsed: usage.provider,
+      success: true,
+      metadata: {
+        sessionId,
+        isPremiumModel: isPremium
+      }
+    }
+  });
+  
+  // Calculate totals
+  const newPremiumTokens = isPremium ? premiumTokensToday + usage.tokens : premiumTokensToday;
+  const remaining = limits.premiumModelsTokenLimit > 0 
+    ? limits.premiumModelsTokenLimit - newPremiumTokens 
+    : -1;
+  
+  return {
+    success: true,
+    tokensUsed: usage.tokens,
+    premiumTokensUsed: isPremium ? usage.tokens : 0,
+    remainingPremiumTokens: remaining
+  };
+}
+
+/**
+ * End a session
+ */
+export async function endSession(
+  sessionId: string,
+  userId: string
+): Promise<{
+  success: boolean;
+  session?: {
+    duration: number;
+    tokensUsed: number;
+    premiumTokensUsed: number;
+    costEstimate: number;
+  };
+  error?: string;
+}> {
+  // Get session start time
+  const startRecord = await prisma.usageRecord.findFirst({
+    where: {
+      sessionId,
+      userId,
+      requestType: 'session_start'
+    },
+    select: {
+      timestamp: true
+    }
+  });
+  
+  if (!startRecord) {
+    return {
+      success: false,
+      error: 'Session not found'
+    };
+  }
+  
+  // Get all usage records for this session
+  const usageRecords = await prisma.usageRecord.findMany({
+    where: {
+      sessionId,
+      userId,
+      requestType: 'session_usage'
+    },
+    select: {
+      tokensUsed: true,
+      cost: true,
+      modelUsed: true
+    }
+  });
+  
+  const totalTokens = usageRecords.reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
+  const totalCost = usageRecords.reduce((sum, r) => sum + (r.cost || 0), 0);
+  const premiumTokens = usageRecords
+    .filter(r => r.modelUsed && isPremiumModel(r.modelUsed))
+    .reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
+  
+  const duration = Math.floor((Date.now() - startRecord.timestamp.getTime()) / 1000);
+  
+  // Record session end
+  await prisma.usageRecord.create({
+    data: {
+      userId,
+      sessionId,
+      requestType: 'session_end',
+      endpoint: '/sessions/end',
+      method: 'POST',
+      statusCode: 200,
+      tokensUsed: totalTokens,
+      cost: totalCost,
+      duration,
+      success: true,
+      metadata: {
+        sessionId,
+        totalTokens,
+        premiumTokens,
+        totalCost,
+        duration
+      }
+    }
+  });
+  
+  return {
+    success: true,
+    session: {
+      duration,
+      tokensUsed: totalTokens,
+      premiumTokensUsed: premiumTokens,
+      costEstimate: totalCost
+    }
+  };
+}
+
+/**
+ * Get active session for a user
+ */
+export async function getActiveSession(userId: string): Promise<Session | null> {
+  // Get most recent session start that doesn't have a corresponding end
+  const recentSession = await prisma.usageRecord.findFirst({
+    where: {
+      userId,
+      requestType: 'session_start'
+    },
+    orderBy: {
+      timestamp: 'desc'
+    },
+    select: {
+      sessionId: true,
+      timestamp: true,
+      metadata: true
+    }
+  });
+  
+  if (!recentSession || !recentSession.sessionId) {
+    return null;
+  }
+  
+  // Check if session has ended
+  const endRecord = await prisma.usageRecord.findFirst({
+    where: {
+      sessionId: recentSession.sessionId,
+      userId,
+      requestType: 'session_end'
+    }
+  });
+  
+  if (endRecord) {
+    return null; // Session has ended
+  }
+  
+  // Get session usage
+  const usageRecords = await prisma.usageRecord.findMany({
+    where: {
+      sessionId: recentSession.sessionId,
+      userId,
+      requestType: 'session_usage'
+    },
+    select: {
+      tokensUsed: true,
+      cost: true,
+      modelUsed: true
+    }
+  });
+  
+  const totalTokens = usageRecords.reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
+  const totalCost = usageRecords.reduce((sum, r) => sum + (r.cost || 0), 0);
+  const premiumTokens = usageRecords
+    .filter(r => r.modelUsed && isPremiumModel(r.modelUsed))
+    .reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
+  const modelsUsed = [...new Set(usageRecords.map(r => r.modelUsed).filter(Boolean))] as string[];
+  
+  const metadata = recentSession.metadata as any;
+  
+  return {
+    id: recentSession.sessionId,
+    userId,
+    platform: metadata?.platform || 'unknown',
+    deviceId: metadata?.deviceId,
+    startTime: recentSession.timestamp,
+    tokensUsed: totalTokens,
+    premiumTokensUsed: premiumTokens,
+    modelsUsed,
+    costEstimate: totalCost,
+    status: 'active'
+  };
+}
+
+/**
+ * Get user session stats for today
+ */
+export async function getSessionStats(userId: string): Promise<{
+  sessionsToday: number;
+  sessionsLimit: number;
+  remainingSessions: number;
+  premiumTokensToday: number;
+  premiumTokensLimit: number;
+  remainingPremiumTokens: number;
+  activeSession: Session | null;
+}> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { subscriptionPlan: true }
+  });
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  const limits = getPlanLimits(user.subscriptionPlan);
+  const sessionsToday = await getSessionsToday(userId);
+  const premiumTokensToday = await getPremiumTokensToday(userId);
+  const activeSession = await getActiveSession(userId);
+  
+  return {
+    sessionsToday,
+    sessionsLimit: limits.sessionsPerDay,
+    remainingSessions: Math.max(0, limits.sessionsPerDay - sessionsToday),
+    premiumTokensToday,
+    premiumTokensLimit: limits.premiumModelsTokenLimit,
+    remainingPremiumTokens: limits.premiumModelsTokenLimit > 0 
+      ? Math.max(0, limits.premiumModelsTokenLimit - premiumTokensToday)
+      : -1,
+    activeSession
+  };
+}
+
+export default {
+  startSession,
+  trackSessionUsage,
+  endSession,
+  getActiveSession,
+  getSessionStats,
+  getSessionsToday,
+  getPremiumTokensToday
+};

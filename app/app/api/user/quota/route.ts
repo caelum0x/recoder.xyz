@@ -1,21 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkQuota, getCurrentUsage } from '@/lib/usage-tracking';
+import { getUserFromToken } from '@/lib/auth-helper';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.nextUrl.searchParams.get('userId');
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    const user = await getUserFromToken(request);
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [quota, usage] = await Promise.all([
-      checkQuota(userId),
-      getCurrentUsage(userId),
-    ]);
+    const quota = await prisma.userQuota.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!quota) {
+      return NextResponse.json({ error: 'Quota not found' }, { status: 404 });
+    }
 
     return NextResponse.json({
-      quota,
-      usage,
+      success: true,
+      quota: {
+        sessionsPerDay: quota.sessionsPerDay,
+        sessionsUsedToday: quota.sessionsUsedToday,
+        tokensPerSession: quota.tokensPerSession,
+        remaining: quota.sessionsPerDay - quota.sessionsUsedToday,
+        limit: quota.sessionsPerDay,
+        periodStart: quota.periodStart,
+        periodEnd: quota.periodEnd,
+        lastResetAt: quota.lastResetAt
+      }
     });
   } catch (error: any) {
     console.error('Get quota error:', error);

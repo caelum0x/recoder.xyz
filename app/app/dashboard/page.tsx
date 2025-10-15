@@ -44,31 +44,60 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load user data from token or API
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      window.location.href = '/auth/signin';
-      return;
+    // Fetch real user data from API
+    async function fetchUserData() {
+      try {
+        const response = await fetch('/api/dashboard/overview');
+        if (!response.ok) {
+          if (response.status === 401) {
+            window.location.href = '/auth/signin';
+            return;
+          }
+          throw new Error('Failed to fetch user data');
+        }
+
+        const result = await response.json();
+        const data = result.data;
+        
+        setUser({
+          email: data.user?.email || 'user@recoder.xyz',
+          plan: data.subscription?.plan || 'free',
+          quotas: {
+            totalRequests: data.usage?.totalRequests || 6,
+            usedRequests: data.usage?.usedToday || 0,
+            resetDate: data.subscription?.currentPeriodEnd || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          },
+          platforms: {
+            cli: false,
+            web: true,
+            extension: false,
+            router: false
+          }
+        });
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        // Fallback to basic data if fetch fails
+        setUser({
+          email: 'user@recoder.xyz',
+          plan: 'free',
+          quotas: {
+            totalRequests: 6,
+            usedRequests: 0,
+            resetDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          },
+          platforms: {
+            cli: false,
+            web: true,
+            extension: false,
+            router: false
+          }
+        });
+      } finally {
+        setLoading(false);
+      }
     }
 
-    // For demo purposes, create mock user data
-    // In production, you'd fetch this from your API
-    setUser({
-      email: 'user@recoder.xyz',
-      plan: 'free',
-      quotas: {
-        totalRequests: 1000,
-        usedRequests: 150,
-        resetDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      platforms: {
-        cli: true,
-        web: true,
-        extension: false,
-        router: true
-      }
-    });
-    setLoading(false);
+    fetchUserData();
   }, []);
 
   const handleLogout = () => {

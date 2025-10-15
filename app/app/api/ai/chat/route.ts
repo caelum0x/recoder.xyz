@@ -1,12 +1,15 @@
 /**
- * AI Chat API Route - Core endpoint for CLI authentication
- * Routes AI requests through recoder.xyz backend like Claude Code
+ * AI Chat API Route - Core endpoint for AI requests
+ * Routes AI requests through OpenRouter with tier-based API key selection
+ * Free users: Use their own API key
+ * Premium users: Use platform rotating keys
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+import { canMakeRequest, trackUsageEvent, getApiKeyForUser } from '@/lib/usage-service';
 
-// AI Provider interfaces (simplified for now)
+// AI Provider interfaces
 interface AIMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -14,8 +17,10 @@ interface AIMessage {
 
 interface AIRequest {
   messages: AIMessage[];
-  type: string;
-  options: any;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  stream?: boolean;
   userId?: string;
 }
 
@@ -25,30 +30,106 @@ interface AIResponse {
   usage: {
     inputTokens: number;
     outputTokens: number;
+    totalTokens: number;
     cost: number;
   };
   provider: string;
 }
 
-// Mock AI response for now - will be replaced with actual AI routing
-async function processAIRequest(request: AIRequest): Promise<AIResponse> {
-  // This is a placeholder implementation
-  // In production, this would route to different AI providers
-  const mockResponse: AIResponse = {
-    content: `Mock AI response for: ${request.messages[request.messages.length - 1]?.content || 'No message'}`,
-    model: 'mock-model-v1',
-    usage: {
-      inputTokens: 100,
-      outputTokens: 50,
-      cost: 0.001
-    },
-    provider: 'mock-provider'
+interface OpenRouterResponse {
+  id: string;
+  choices: Array<{
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }>;
+  model: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
   };
+}
 
-  return mockResponse;
+/**
+ * Process AI request through OpenRouter
+ * Uses appropriate API key based on user tier
+ */
+async function processAIRequest(
+  request: AIRequest,
+  apiKey: string
+): Promise<AIResponse> {
+  const startTime = Date.now();
+
+  // Default to a good general model if none specified
+  const model = request.model || 'anthropic/claude-3.5-sonnet';
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz',
+        'X-Title': 'Recoder.xyz AI Platform',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: request.messages,
+        temperature: request.temperature || 0.7,
+        max_tokens: request.maxTokens || 4096,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        `OpenRouter API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`
+      );
+    }
+
+    const data: OpenRouterResponse = await response.json();
+    const duration = Date.now() - startTime;
+
+    // Extract response content
+    const content = data.choices[0]?.message?.content || '';
+
+    // Calculate cost (approximate - OpenRouter provides actual cost in headers)
+    const inputTokens = data.usage?.prompt_tokens || 0;
+    const outputTokens = data.usage?.completion_tokens || 0;
+    const totalTokens = data.usage?.total_tokens || (inputTokens + outputTokens);
+
+    // Rough cost estimation (actual costs vary by model)
+    const costPer1kInput = 0.003; // $3 per 1M tokens = $0.003 per 1k
+    const costPer1kOutput = 0.015; // $15 per 1M tokens = $0.015 per 1k
+    const estimatedCost =
+      (inputTokens / 1000) * costPer1kInput +
+      (outputTokens / 1000) * costPer1kOutput;
+
+    return {
+      content,
+      model: data.model || model,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        cost: estimatedCost,
+      },
+      provider: 'openrouter',
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error('OpenRouter API Error:', error);
+    throw error;
+  }
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  let userId = '';
+
   try {
     // Check authentication - verify JWT token
     const authHeader = request.headers.get('authorization');
@@ -60,11 +141,10 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.substring(7);
-    let userId = '';
-    
+
     try {
       const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || 'development-secret') as any;
-      userId = decoded.userId;
+      userId = decoded.userId || decoded.id;
     } catch (error) {
       return NextResponse.json(
         { error: 'Invalid token' },
@@ -74,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body: AIRequest = await request.json();
-    
+
     if (!body.messages || !Array.isArray(body.messages)) {
       return NextResponse.json(
         { error: 'Invalid request format' },
@@ -82,18 +162,80 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Process AI request
-    const aiResponse = await processAIRequest({
-      ...body,
-      userId: userId
+    // Check quota and get API key
+    const requestCheck = await canMakeRequest(userId);
+    if (!requestCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Request not allowed',
+          reason: requestCheck.reason,
+          upgradeUrl: '/pricing',
+        },
+        { status: 403 }
+      );
+    }
+
+    const apiKey = requestCheck.apiKey!;
+
+    // Get API key info for logging
+    const apiKeyInfo = await getApiKeyForUser(userId);
+
+    // Process AI request through OpenRouter
+    let aiResponse: AIResponse;
+    let success = true;
+    let errorMessage: string | undefined;
+
+    try {
+      aiResponse = await processAIRequest(
+        {
+          ...body,
+          userId: userId,
+        },
+        apiKey
+      );
+    } catch (error: any) {
+      success = false;
+      errorMessage = error.message || 'AI request failed';
+
+      // Track failed request
+      await trackUsageEvent(userId, {
+        modelUsed: body.model || 'anthropic/claude-3.5-sonnet',
+        tokensUsed: 0,
+        cost: 0,
+        duration: Date.now() - startTime,
+        success: false,
+        errorMessage,
+      });
+
+      throw error;
+    }
+
+    // Track successful usage
+    await trackUsageEvent(userId, {
+      modelUsed: aiResponse.model,
+      tokensUsed: aiResponse.usage.totalTokens,
+      cost: aiResponse.usage.cost,
+      duration: Date.now() - startTime,
+      success: true,
     });
 
-    return NextResponse.json(aiResponse);
+    // Return response with usage info
+    return NextResponse.json({
+      ...aiResponse,
+      meta: {
+        keySource: apiKeyInfo?.source || 'unknown',
+        tier: apiKeyInfo?.tier || 'free',
+        duration: Date.now() - startTime,
+      },
+    });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('AI Chat API Error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: 'Internal server error',
+        message: error.message || 'An unexpected error occurred',
+      },
       { status: 500 }
     );
   }
