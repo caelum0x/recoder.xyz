@@ -11,10 +11,10 @@ const { CollaborationService } = require('recoder-shared/collaboration');
 const router = express.Router();
 
 // Global collaboration service instance
-let collaborationService: CollaborationService | null = null;
+let collaborationService = null;
 
 // In-memory session tracking (for demo purposes)
-const sessionRegistry = new Map<string, any>();
+const sessionRegistry = new Map();
 
 // Initialize collaboration service
 function initializeCollaborationService() {
@@ -87,7 +87,7 @@ router.post('/sessions', async (req, res) => {
       id: userId,
       name: userName,
       email: userEmail || 'user@recoder.dev',
-      role: 'developer' as const,
+      role: 'developer',
       isActive: true,
       lastSeen: new Date()
     };
@@ -213,7 +213,7 @@ router.post('/sessions/:sessionId/join', async (req, res) => {
       id: userId,
       name: userName,
       email: userEmail || 'user@recoder.dev',
-      role: 'developer' as const,
+      role: 'developer',
       isActive: true,
       lastSeen: new Date()
     };

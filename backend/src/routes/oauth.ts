@@ -3,16 +3,15 @@
  * Google and GitHub OAuth 2.0 implementation
  */
 
-import { Router, Request, Response } from 'express';
-import '../types'; // Import types to extend Request interface
-import crypto from 'crypto';
-import axios from 'axios';
-import { prisma } from '../database/prisma';
-import { logger } from '../utils/logger';
-import { getErrorMessage } from '../utils/error-helpers';
-import { generateTokens, logSecurityEvent } from '../middleware/auth';
+const express = require('express');
+const crypto = require('crypto');
+const axios = require('axios');
+const { prisma } = require('../database/prisma');
+const { logger } = require('../utils/logger');
+const { getErrorMessage } = require('../utils/error-helpers');
+const { generateTokens, logSecurityEvent } = require('../middleware/auth');
 
-const router = Router();
+const router = express.Router();
 
 // OAuth Configuration
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -26,7 +25,7 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:3001';
  * @desc Initiate Google OAuth flow
  * @access Public
  */
-router.get('/google', (req: Request, res: Response): void => {
+router.get('/google', (req, res) => {
   if (!GOOGLE_CLIENT_ID) {
     res.status(500).json({
       success: false,
@@ -59,7 +58,7 @@ router.get('/google', (req: Request, res: Response): void => {
  * @desc Handle Google OAuth callback
  * @access Public
  */
-router.get('/google/callback', async (req: Request, res: Response): Promise<void> => {
+router.get('/google/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
 
@@ -210,7 +209,7 @@ router.get('/google/callback', async (req: Request, res: Response): Promise<void
  * @desc Initiate GitHub OAuth flow
  * @access Public
  */
-router.get('/github', (req: Request, res: Response): void => {
+router.get('/github', (req, res) => {
   if (!GITHUB_CLIENT_ID) {
     res.status(500).json({
       success: false,
@@ -242,7 +241,7 @@ router.get('/github', (req: Request, res: Response): void => {
  * @desc Handle GitHub OAuth callback
  * @access Public
  */
-router.get('/github/callback', async (req: Request, res: Response): Promise<void> => {
+router.get('/github/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
 
@@ -409,7 +408,7 @@ router.get('/github/callback', async (req: Request, res: Response): Promise<void
  * @desc Link OAuth provider to existing account
  * @access Protected
  */
-router.post('/link-account', async (req: Request, res: Response): Promise<void> => {
+router.post('/link-account', async (req, res) => {
   // This would be implemented to link OAuth accounts to existing users
   res.status(501).json({
     success: false,
@@ -418,4 +417,4 @@ router.post('/link-account', async (req: Request, res: Response): Promise<void> 
   });
 });
 
-export default router;
+module.exports = router;

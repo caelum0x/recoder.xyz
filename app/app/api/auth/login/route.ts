@@ -25,17 +25,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user
+    // Find user with quota (singular relation)
     const user = await prisma.user.findUnique({
       where: { email: body.email },
       include: {
-        quotas: {
-          where: {
-            periodEnd: { gt: new Date() }
-          },
-          orderBy: { periodStart: 'desc' },
-          take: 1
-        }
+        quota: true
       }
     });
 
@@ -82,8 +76,8 @@ export async function POST(request: NextRequest) {
     // Get API key status
     const apiKeyStatus = await getApiKeyStatus(user.id);
 
-    // Get quota info
-    const quota = user.quotas[0] || null;
+    // Get quota info (quota is now a single object, not array)
+    const quota = user.quota || null;
 
     return NextResponse.json({
       success: true,
@@ -94,8 +88,9 @@ export async function POST(request: NextRequest) {
         plan: user.subscriptionPlan,
         apiKeyStatus,
         quota: quota ? {
-          remaining: quota.requestsLimit - quota.requestsUsed,
-          limit: quota.requestsLimit,
+          remaining: quota.sessionsPerDay - quota.sessionsUsedToday,
+          limit: quota.sessionsPerDay,
+          tokensPerSession: quota.tokensPerSession,
           resetDate: quota.periodEnd.toISOString()
         } : null
       },

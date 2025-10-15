@@ -153,10 +153,11 @@ const billingRoutes = require('./routes/billing');
 const subscriptionRoutes = require('./routes/subscriptions');
 const webhookRoutes = require('./routes/webhooks');
 const analyticsRoutes = require('./routes/analytics');
+const usageMonitoringRoutes = require('./routes/usage-monitoring');
 const apiKeyRoutes = require('./routes/api-keys');
 const aiProvidersRoutes = require('./routes/ai-providers');
 const ragRoutes = require('./routes/rag');
-const collaborationRouter = require('./routes/collaboration');
+// const collaborationRouter = require('./routes/collaboration'); // Temporarily disabled - requires recoder-shared package
 const { soc2ComplianceRouter } = require('./routes/soc2-compliance');
 const { databaseBackupRouter } = require('./routes/database-backup');
 const { enhancedAnalyticsRouter } = require('./routes/enhanced-analytics');
@@ -171,6 +172,8 @@ const multiModalAIRoutes = require('./routes/multi-modal-ai');
 const cliAuthRoutes = require('./routes/cli-auth');
 const analyticsExportRoutes = require('./routes/analytics-report-export');
 const userAccountRoutes = require('./routes/user-account');
+const oauthRoutes = require('./routes/oauth');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Import middleware
 console.log('🔍 DEBUG: About to import middleware...');
@@ -314,6 +317,11 @@ const ssoRoutes = require('./routes/sso');
 app.use('/api/sso', ssoRoutes.default || ssoRoutes);
 console.log('🔍 DEBUG: SSO routes set up');
 
+// OAuth routes for Google and GitHub
+console.log('🔍 DEBUG: Adding OAuth route...');
+app.use('/api/oauth', oauthRoutes);
+console.log('🔍 DEBUG: OAuth route added successfully');
+
 // API routes with authentication
 console.log('🔍 DEBUG: Setting up API routes...');
 console.log('🔍 DEBUG: Adding users route...');
@@ -343,6 +351,12 @@ console.log('🔍 DEBUG: Webhooks route added successfully');
 console.log('🔍 DEBUG: Adding analytics route...');
 app.use('/api/analytics', analyticsRoutes);
 console.log('🔍 DEBUG: Analytics route added successfully');
+console.log('🔍 DEBUG: Adding dashboard route...');
+app.use('/api/dashboard', dashboardRoutes.default || dashboardRoutes);
+console.log('🔍 DEBUG: Dashboard route added successfully');
+console.log('🔍 DEBUG: Adding usage-monitoring route...');
+app.use('/api/usage-monitoring', usageMonitoringRoutes);
+console.log('🔍 DEBUG: Usage-monitoring route added successfully');
 console.log('🔍 DEBUG: Re-enabling fixed routes...');
 // Re-enable API keys route (fixed ES module imports)
 console.log('🔍 DEBUG: Adding keys route...');
@@ -353,8 +367,15 @@ console.log('🔍 DEBUG: Adding ai-providers route...');
 app.use('/api/ai-providers', aiProvidersRoutes);
 console.log('🔍 DEBUG: AI-providers route added successfully');
 // Temporarily skip remaining routes that may have ES module issues
-// Re-enable rag route (fixed ES module imports)\nconsole.log('🔍 DEBUG: Adding rag route...');\napp.use('/api/rag', ragRoutes);\nconsole.log('🔍 DEBUG: RAG route added successfully');
-// Re-enable collaboration route (fixed ES module imports)\nconsole.log('🔍 DEBUG: Adding collaboration route...');\napp.use('/api/collaboration', collaborationRouter);\nconsole.log('🔍 DEBUG: Collaboration route added successfully');
+// Re-enable rag route (fixed ES module imports)
+console.log('🔍 DEBUG: Adding rag route...');
+app.use('/api/rag', ragRoutes);
+console.log('🔍 DEBUG: RAG route added successfully');
+// Re-enable collaboration route (fixed ES module imports)
+// Temporarily disabled - requires recoder-shared package
+// console.log('🔍 DEBUG: Adding collaboration route...');
+// app.use('/api/collaboration', collaborationRouter);
+// console.log('🔍 DEBUG: Collaboration route added successfully');
 // app.use('/api/compliance', soc2ComplianceRouter);
 // app.use('/api/backup', databaseBackupRouter);
 // app.use('/api/analytics/enhanced', enhancedAnalyticsRouter);
@@ -362,7 +383,10 @@ console.log('🔍 DEBUG: AI-providers route added successfully');
 // app.use('/api/theme-preferences', themePreferencesRouter);
 // app.use('/api/i18n', i18nRouter);
 // app.use('/api/responsive-design', responsiveDesignRouter);
-// Re-enable cost-optimization route (fixed ES module imports)\nconsole.log('🔍 DEBUG: Adding cost-optimization route...');\napp.use('/api/cost-optimization', costOptimizationRoutes);\nconsole.log('🔍 DEBUG: Cost-optimization route added successfully');
+// Re-enable cost-optimization route (fixed ES module imports)
+console.log('🔍 DEBUG: Adding cost-optimization route...');
+app.use('/api/cost-optimization', costOptimizationRoutes);
+console.log('🔍 DEBUG: Cost-optimization route added successfully');
 // Re-enable advanced-rag-learning route (fixed ES module imports)
 console.log('🔍 DEBUG: Adding advanced-rag-learning route...');
 app.use('/api/advanced-rag-learning', advancedRAGLearningRoutes);
@@ -375,7 +399,10 @@ console.log('🔍 DEBUG: Predictive-error-detection route added successfully');
 console.log('🔍 DEBUG: Adding multi-modal-ai route...');
 app.use('/api/multi-modal-ai', multiModalAIRoutes);
 console.log('🔍 DEBUG: Multi-modal-ai route added successfully');
-// Re-enable cli-auth route (already uses CommonJS)\nconsole.log('🔍 DEBUG: Adding cli-auth route...');\napp.use('/api/cli-auth', cliAuthRoutes);\nconsole.log('🔍 DEBUG: CLI-auth route added successfully');
+// Re-enable cli-auth route (already uses CommonJS)
+console.log('🔍 DEBUG: Adding cli-auth route...');
+app.use('/api/cli-auth', cliAuthRoutes);
+console.log('🔍 DEBUG: CLI-auth route added successfully');
 // app.use('/api/analytics/export', analyticsExportRoutes);
 // app.use('/api/user/account', userAccountRoutes);
 console.log('🔍 DEBUG: Problematic routes skipped');

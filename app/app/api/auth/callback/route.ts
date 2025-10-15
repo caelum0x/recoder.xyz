@@ -68,6 +68,10 @@ export async function GET(request: NextRequest) {
       };
     } else if (provider === 'google') {
       // Google OAuth flow
+      // Dynamic redirect URI based on environment
+      const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000';
+      const redirectUri = `${baseUrl}/api/auth/callback?provider=google`;
+
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
@@ -78,7 +82,7 @@ export async function GET(request: NextRequest) {
           client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
           code,
           grant_type: 'authorization_code',
-          redirect_uri: 'https://recoder.xyz/api/auth/callback?provider=google',
+          redirect_uri: redirectUri,
         }),
       });
 

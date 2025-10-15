@@ -22,6 +22,7 @@ import {
 function SignInForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -39,7 +40,7 @@ function SignInForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
 
       const data = await response.json();
@@ -151,9 +152,17 @@ function SignInForm() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                    Password
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                      Password
+                    </label>
+                    <Link 
+                      href="/auth/forgot-password"
+                      className="text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <input
                     id="password" 
                     type="password" 
@@ -163,6 +172,18 @@ function SignInForm() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
+                </div>
+                <div className="flex items-center">
+                  <input
+                    id="rememberMe"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                  />
+                  <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-300">
+                    Remember me for 30 days
+                  </label>
                 </div>
                 <button 
                   className="w-full px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"

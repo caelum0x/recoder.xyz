@@ -168,7 +168,7 @@ export class UsageTrackingService {
           endpoint,
           method,
           statusCode,
-          tokensUsed,
+          tokensUsed: BigInt(tokensUsed),
           cost,
           modelUsed,
           providerUsed,
@@ -226,8 +226,8 @@ export class UsageTrackingService {
       where: { id: quota.id },
       data: {
         requestsUsed: { increment: 1 },
-        tokensUsed: { increment: BigInt(tokensUsed) },
-        tokensUsedThisPeriod: { increment: BigInt(tokensUsed) },
+        tokensUsed: { increment: BigInt(Math.floor(tokensUsed)) },
+        tokensUsedThisPeriod: { increment: BigInt(Math.floor(tokensUsed)) },
         costThisPeriod: { increment: cost },
         updatedAt: new Date()
       }

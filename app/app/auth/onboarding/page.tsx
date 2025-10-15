@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
@@ -22,35 +22,13 @@ export default function OnboardingPage() {
   }, [searchParams]);
 
   const validateApiKey = async () => {
-    if (!apiKey || !apiKey.startsWith('sk-or-v1-')) {
-      setError('Please enter a valid OpenRouter API key starting with "sk-or-v1-"');
+    if (!apiKey || !apiKey.startsWith('sk-or-')) {
+      setError('Please enter a valid OpenRouter API key starting with "sk-or-"');
       return false;
     }
 
-    setValidating(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/user/openrouter/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey }),
-      });
-
-      const data = await response.json();
-
-      if (!data.valid) {
-        setError(data.error || 'Invalid API key');
-        return false;
-      }
-
-      return true;
-    } catch (err) {
-      setError('Failed to validate API key. Please try again.');
-      return false;
-    } finally {
-      setValidating(false);
-    }
+    // Format check passes, actual validation happens on save
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,19 +41,16 @@ export default function OnboardingPage() {
 
       setLoading(true);
       try {
-        const response = await fetch('/api/user/openrouter', {
+        const response = await fetch('/api/user/api-key', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            userId,
-            apiKey,
-            provider: 'openrouter'
-          }),
+          body: JSON.stringify({ apiKey }),
         });
 
-        if (!response.ok) {
-          const data = await response.json();
-          setError(data.error || 'Failed to save API key');
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          setError(data.error || data.message || 'Failed to save API key');
           return;
         }
 
@@ -258,5 +233,20 @@ export default function OnboardingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <OnboardingContent />
+    </Suspense>
   );
 }

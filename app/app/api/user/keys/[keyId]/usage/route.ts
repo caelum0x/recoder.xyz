@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
+
+/**
+ * GET /api/user/keys/[keyId]/usage
+ * Get usage statistics for a specific API key
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { keyId: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const { keyId } = params;
+
+    if (!keyId) {
+      return NextResponse.json(
+        { error: 'keyId is required' },
+        { status: 400 }
+      );
+    }
+
+    const stats = await PlatformApiKeyService.getKeyUsageStats(keyId, session.user.id);
+
+    return NextResponse.json({
+      success: true,
+      stats,
+    });
+  } catch (error: any) {
+    console.error('Error fetching key usage stats:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch usage statistics' },
+      { status: 500 }
+    );
+  }
+}

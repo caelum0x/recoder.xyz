@@ -1,35 +1,39 @@
 // User subscription management endpoint
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { userManager } from '@/lib/user-management';
-import { PlanType } from '@/lib/database';
+import { getUserFromToken } from '@/lib/auth-helper';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const user = await getUserFromToken(request);
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const profile = await userManager.getUserProfile(session.user.id);
-    
-    if (!profile) {
-      return NextResponse.json(
-        { error: 'Profile not found' },
-        { status: 404 }
-      );
+    // Get user with subscription info
+    const userWithInfo = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        subscriptionPlan: true,
+        subscriptionStatus: true,
+        hasOwnApiKey: true,
+        createdAt: true
+      }
+    });
+
+    if (!userWithInfo) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     return NextResponse.json({
-      plan: profile.subscription_plan,
-      subscription_status: profile.subscription_status,
-      subscription_ends_at: null, // This would come from subscription data
-      usage_stats: profile.quota,
+      success: true,
+      plan: userWithInfo.subscriptionPlan,
+      subscription_status: userWithInfo.subscriptionStatus,
+      subscription_ends_at: null,
       available_plans: [
         {
           name: 'FREE',
