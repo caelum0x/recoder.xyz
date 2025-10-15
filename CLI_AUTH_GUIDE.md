@@ -2,6 +2,7 @@
 
 ## 🎯 Overview
  
+ 
 The `recoder` CLI package authenticates users to **recoder.xyz** (your website) so they can use CLI commands from their terminal with their account quota, plan, and preferences synced across all platforms.
 
 ---

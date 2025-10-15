@@ -3,7 +3,6 @@
 
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
-const { getDodoPaymentsInstance, SUBSCRIPTION_PLANS } = require('../services/dodo-payments');
 const { authenticateUser } = require('../middleware/auth');
 const { logger } = require('../utils/logger');
 const { prisma } = require('../database/prisma');
@@ -11,13 +10,25 @@ const crypto = require('crypto');
 
 const router = express.Router();
 
-// Defer service initialization to prevent blocking module load
+// Lazy load dodo-payments to prevent blocking module load
 let dodoPayments;
+let SUBSCRIPTION_PLANS;
+
 const getDodoPayments = () => {
   if (!dodoPayments) {
-    dodoPayments = getDodoPaymentsInstance();
+    const dodoModule = require('../services/dodo-payments');
+    dodoPayments = dodoModule.getDodoPaymentsInstance();
+    SUBSCRIPTION_PLANS = dodoModule.SUBSCRIPTION_PLANS;
   }
   return dodoPayments;
+};
+
+const getSubscriptionPlans = () => {
+  if (!SUBSCRIPTION_PLANS) {
+    const dodoModule = require('../services/dodo-payments');
+    SUBSCRIPTION_PLANS = dodoModule.SUBSCRIPTION_PLANS;
+  }
+  return SUBSCRIPTION_PLANS;
 };
 
 // Validation middleware
@@ -39,7 +50,7 @@ const validateRequest = (req, res, next) => {
  */
 router.get('/plans', (req, res) => {
   try {
-    const plans = Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => ({
+    const plans = Object.entries(getSubscriptionPlans()).map(([key, plan]) => ({
       ...plan,
       id: key,
       priceFormatted: `$${(plan.price / 100).toFixed(2)}`,
@@ -66,7 +77,10 @@ router.get('/plans', (req, res) => {
 router.post('/create',
   authenticateUser,
   [
-    body('planId').isIn(Object.keys(SUBSCRIPTION_PLANS)).withMessage('Invalid plan ID'),
+    body('planId').custom((value) => {
+      const plans = getSubscriptionPlans();
+      return Object.keys(plans).includes(value);
+    }).withMessage('Invalid plan ID'),
     body('billingAddress.country').isLength({ min: 2, max: 2 }).withMessage('Country must be 2-letter ISO code'),
     body('billingAddress.state').notEmpty().withMessage('State is required'),
     body('billingAddress.city').notEmpty().withMessage('City is required'),
@@ -120,7 +134,7 @@ router.post('/create',
           id: subscription.subscription_id,
           userId: user.id,
           planId,
-          planName: SUBSCRIPTION_PLANS[planId]?.name || 'Unknown Plan',
+          planName: getSubscriptionPlans()[planId]?.name || 'Unknown Plan',
           dodoSubscriptionId: subscription.subscription_id,
           status: 'pending',
           amount: subscription.recurring_pre_tax_amount,
@@ -184,7 +198,7 @@ router.get('/',
       // Merge data
       const enrichedSubscriptions = subscriptions.map(sub => {
         const dodoSub = userDodoSubs.find(ds => ds.subscription_id === sub.dodoSubscriptionId);
-        const plan = SUBSCRIPTION_PLANS[sub.planId];
+        const plan = getSubscriptionPlans()[sub.planId];
 
         return {
           id: sub.id,
@@ -249,7 +263,7 @@ router.get('/:id',
 
       // Get latest data from DODO Payments
       const dodoSubscription = await getDodoPayments().getSubscription(subscription.dodoSubscriptionId);
-      const plan = SUBSCRIPTION_PLANS[subscription.planId];
+      const plan = getSubscriptionPlans()[subscription.planId];
 
       res.json({
         success: true,
@@ -284,7 +298,10 @@ router.post('/:id/change-plan',
   authenticateUser,
   [
     param('id').notEmpty().withMessage('Subscription ID is required'),
-    body('newPlanId').isIn(Object.keys(SUBSCRIPTION_PLANS)).withMessage('Invalid plan ID')
+    body('newPlanId').custom((value) => {
+      const plans = getSubscriptionPlans();
+      return Object.keys(plans).includes(value);
+    }).withMessage('Invalid plan ID')
   ],
   validateRequest,
   async (req, res) => {

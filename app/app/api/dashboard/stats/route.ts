@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:4567';
+import { getUserFromToken } from '@/lib/auth-helper';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id') || 'anonymous';
+    const user = await getUserFromToken(request);
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = user.id;
     
     // Fetch multiple data points in parallel
     const [

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/crypto';
 import { getPlanLimits } from '@/lib/plan-config';
+import { sendWelcomeEmail } from '@/lib/email';
 
 interface RegisterRequest {
   email: string;
@@ -56,22 +57,36 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create initial quota
+    // Create initial quota based on schema
     const planLimits = getPlanLimits(plan);
+    const now = new Date();
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Map plan limits to quota fields
+    let tokensPerSession = 10000; // Default for free
+    if (plan === 'pro') tokensPerSession = 100000; // 100K for pro
+    else if (plan === 'enterprise') tokensPerSession = 500000; // 500K for enterprise
+    
     await prisma.userQuota.create({
       data: {
         userId: user.id,
-        requestsLimit: planLimits.monthlyRequests === -1 ? 999999999 : planLimits.monthlyRequests,
-        requestsUsed: 0,
-        tokensLimit: BigInt(planLimits.tokensPerMonth === -1 ? 999999999 : planLimits.tokensPerMonth),
-        tokensUsed: BigInt(0),
-        periodStart: new Date(),
-        periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        sessionsPerDay: planLimits.sessionsPerDay || 6,
+        sessionsUsedToday: 0,
+        tokensPerSession: tokensPerSession,
+        periodStart: now,
+        periodEnd: endOfDay,
+        lastResetAt: now,
       },
     });
 
     // Determine if onboarding is needed (free users need to add API key)
     const needsOnboarding = planLimits.requiresOwnApiKey;
+
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(user.email, user.name).catch(err => 
+      console.error('Failed to send welcome email:', err)
+    );
 
     return NextResponse.json({
       success: true,

@@ -1,30 +1,74 @@
 // User profile API endpoint
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { userManager } from '@/lib/user-management';
+import { prisma } from '@/lib/prisma';
+
+// Helper to extract user from Bearer token
+async function getUserFromToken(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+
+  // Find session by access token
+  const session = await prisma.cLISession.findUnique({
+    where: { accessToken: token },
+    include: { user: true }
+  });
+
+  if (!session || !session.isActive || session.expiresAt < new Date()) {
+    return null;
+  }
+
+  return session.user;
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
+    const user = await getUserFromToken(request);
+
+    if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const profile = await userManager.getUserProfile(session.user.id);
-    
-    if (!profile) {
+    // Get user with quota information
+    const userWithQuota = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        quota: true
+      }
+    });
+
+    if (!userWithQuota) {
       return NextResponse.json(
         { error: 'Profile not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(profile);
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: userWithQuota.id,
+        email: userWithQuota.email,
+        name: userWithQuota.name,
+        subscriptionPlan: userWithQuota.subscriptionPlan,
+        subscriptionStatus: userWithQuota.subscriptionStatus,
+        hasOwnApiKey: userWithQuota.hasOwnApiKey,
+        onboardingStep: userWithQuota.onboardingStep,
+        createdAt: userWithQuota.createdAt,
+        quota: userWithQuota.quota ? {
+          sessionsPerDay: userWithQuota.quota.sessionsPerDay,
+          sessionsUsedToday: userWithQuota.quota.sessionsUsedToday,
+          tokensPerSession: userWithQuota.quota.tokensPerSession,
+          remaining: userWithQuota.quota.sessionsPerDay - userWithQuota.quota.sessionsUsedToday
+        } : null
+      }
+    });
   } catch (error) {
     console.error('Profile API error:', error);
     return NextResponse.json(

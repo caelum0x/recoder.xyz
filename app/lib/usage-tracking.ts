@@ -4,7 +4,7 @@
  */
 
 import { prisma } from './prisma';
-import { getPlanLimits, canMakeRequest } from './plan-config';
+import { getPlanLimits, canStartSession, canUseModel } from './plan-config';
 
 export interface UsageMetadata {
   modelUsed?: string;
@@ -17,6 +17,7 @@ export interface UsageMetadata {
   statusCode?: number;
   success?: boolean;
   errorMessage?: string;
+  keyId?: string; // API key ID for tracking usage per key
   [key: string]: any;
 }
 
@@ -84,42 +85,44 @@ export async function checkQuota(userId: string): Promise<QuotaInfo> {
     quota = await resetQuota(userId, planLimits.monthlyRequests, planLimits.tokensPerMonth);
   }
 
-  // Check rate limiting (last minute)
-  const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-  const recentRequests = await prisma.usageRecord.count({
+  // Check if user can start a new session (using sessions instead of requests)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const sessionsToday = await prisma.usageRecord.count({
     where: {
       userId,
-      timestamp: { gt: oneMinuteAgo },
+      timestamp: { gte: today },
+      requestType: 'cli',
     },
   });
 
-  const requestCheck = canMakeRequest(
+  const sessionCheck = canStartSession(
     user.subscriptionPlan,
-    quota.requestsUsed,
-    recentRequests
+    sessionsToday
   );
 
-  if (!requestCheck.allowed) {
+  if (!sessionCheck.allowed) {
     return {
       allowed: false,
       remaining: 0,
-      limit: planLimits.monthlyRequests,
-      used: quota.requestsUsed,
+      limit: planLimits.sessionsPerDay,
+      used: sessionsToday,
       resetDate: quota.periodEnd,
-      reason: requestCheck.reason,
-      upgradeRequired: requestCheck.upgradeRequired,
+      reason: sessionCheck.reason,
+      upgradeRequired: sessionCheck.upgradeRequired,
     };
   }
 
-  const remaining = planLimits.monthlyRequests === -1 
+  const remaining = planLimits.sessionsPerDay === -1 
     ? -1 
-    : planLimits.monthlyRequests - quota.requestsUsed;
+    : planLimits.sessionsPerDay - sessionsToday;
 
   return {
     allowed: true,
     remaining,
-    limit: planLimits.monthlyRequests,
-    used: quota.requestsUsed,
+    limit: planLimits.sessionsPerDay,
+    used: sessionsToday,
     resetDate: quota.periodEnd,
   };
 }
@@ -373,4 +376,81 @@ export async function bulkTrackUsage(
       metadata: record.metadata as any,
     })),
   });
+}
+
+/**
+ * Track usage for an API key request
+ * @param userId The user's ID
+ * @param keyId The API key ID that was used
+ * @param metadata Usage metadata
+ */
+export async function trackApiKeyUsage(
+  userId: string,
+  keyId: string,
+  metadata: Omit<UsageMetadata, 'keyId'>
+): Promise<void> {
+  await trackUsage(userId, null, 'api', {
+    ...metadata,
+    keyId, // Include keyId in metadata for tracking
+  });
+}
+
+/**
+ * Get usage statistics for a specific API key
+ * @param userId The user's ID
+ * @param keyId The API key ID
+ * @param startDate Optional start date
+ * @param endDate Optional end date
+ */
+export async function getApiKeyUsageStats(
+  userId: string,
+  keyId: string,
+  startDate?: Date,
+  endDate?: Date
+): Promise<{
+  totalRequests: number;
+  totalTokens: number;
+  totalCost: number;
+  lastUsed: Date | null;
+  averageTokensPerRequest: number;
+  averageCostPerRequest: number;
+}> {
+  const where: any = {
+    userId,
+    metadata: {
+      path: ['keyId'],
+      equals: keyId,
+    },
+  };
+
+  if (startDate || endDate) {
+    where.timestamp = {};
+    if (startDate) where.timestamp.gte = startDate;
+    if (endDate) where.timestamp.lte = endDate;
+  }
+
+  const records = await prisma.usageRecord.findMany({
+    where,
+    select: {
+      tokensUsed: true,
+      cost: true,
+      timestamp: true,
+    },
+    orderBy: {
+      timestamp: 'desc',
+    },
+  });
+
+  const totalRequests = records.length;
+  const totalTokens = records.reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
+  const totalCost = records.reduce((sum, r) => sum + (r.cost || 0), 0);
+
+  return {
+    totalRequests,
+    totalTokens,
+    totalCost,
+    lastUsed: records.length > 0 ? records[0].timestamp : null,
+    averageTokensPerRequest: totalRequests > 0 ? totalTokens / totalRequests : 0,
+    averageCostPerRequest: totalRequests > 0 ? totalCost / totalRequests : 0,
+  };
 }
