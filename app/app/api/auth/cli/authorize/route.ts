@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
 import { prisma } from '@/lib/prisma';
 
@@ -23,8 +25,10 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user: authUser } = authResult;
+    if (!authUser?.email) {
       return NextResponse.json(
         { error: 'Unauthorized', message: 'You must be logged in' },
         { status: 401 }
@@ -33,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     // Get user from database
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
     if (!user) {
@@ -88,8 +92,10 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
+    if (!user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

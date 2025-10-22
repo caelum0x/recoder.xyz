@@ -269,6 +269,7 @@
     "@typescript-eslint/parser": "^8.19.1",
     "@vitejs/plugin-react": "^5.0.2",
     "@vitest/ui": "^3.2.4",
+    "autoprefixer": "^10.4.21",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.1.4",
     "husky": "^9.1.7",

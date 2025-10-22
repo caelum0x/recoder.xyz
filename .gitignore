@@ -249,3 +249,5 @@ $RECYCLE.BIN/
 .nfs*
 # Local Netlify folder
 .netlify
+*.pem
+*.private-key.pem

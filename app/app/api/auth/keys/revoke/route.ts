@@ -4,8 +4,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
@@ -15,9 +17,11 @@ const revokeKeySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest) {
     const key = await prisma.apiKey.findFirst({
       where: {
         keyId,
-        userId: session.user.id as string,
+        userId: user.id as string,
       },
     });
 

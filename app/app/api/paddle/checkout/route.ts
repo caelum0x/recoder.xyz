@@ -4,12 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth.api.getSession({
+      headers: await headers()
+    });
     
     if (!session?.user) {
       return NextResponse.json({
@@ -34,9 +36,9 @@ export async function POST(request: NextRequest) {
 
     // Get product ID based on plan
     const productIds: Record<string, string> = {
-      weekly: process.env.PADDLE_PRODUCT_WEEKLY || 'prod_weekly_temp',
-      monthly: process.env.PADDLE_PRODUCT_MONTHLY || 'prod_monthly_temp',
-      pro: process.env.PADDLE_PRODUCT_PRO || 'prod_pro_temp'
+      weekly: process.env.PADDLE_PRODUCT_WEEKLY || 'pro_01jrp8y7mhdrng9hhz2e2ksxs3',
+      monthly: process.env.PADDLE_PRODUCT_MONTHLY || 'pro_01jrp8zjr8n2pc8ryt4v16qfef',
+      pro: process.env.PADDLE_PRODUCT_PRO || 'pro_01jrp90dg3hc0tn6xhm3me6bjk'
     };
 
     const productId = productIds[plan];
@@ -48,12 +50,12 @@ export async function POST(request: NextRequest) {
         productId,
         email: session.user.email,
         userId: session.user.id,
-        passthrough: JSON.stringify({
+        customData: {
           userId: session.user.id,
           plan: plan
-        }),
-        successUrl: successUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/dashboard?payment=success`,
-        cancelUrl: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/pricing`
+        },
+        successUrl: successUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard?payment=success`,
+        cancelUrl: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pricing`
       }
     });
 
