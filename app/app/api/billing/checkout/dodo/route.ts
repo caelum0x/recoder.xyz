@@ -3,15 +3,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }

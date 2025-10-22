@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, ArrowLeft, Loader2 } from 'lucide-react';
@@ -78,7 +78,7 @@ const planConfigs: Record<string, PlanDetails> = {
   },
 };
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -99,30 +99,30 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      // Create checkout session
-      const response = await fetch('/api/billing/create-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan: planId,
-          paymentMethod,
-        }),
+      // Import backend API client
+      const { backendApi } = await import('@/lib/backend-api');
+
+      // Create subscription with backend API
+      const subscription = await backendApi.createSubscription({
+        planId,
+        billingAddress: {
+          country: 'US',
+          state: 'California',
+          city: 'San Francisco',
+          street: '123 Main St',
+          zipcode: '94102',
+        },
+        returnUrl: `${window.location.origin}/billing/subscription?success=true`,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create checkout session');
-      }
-
-      // Redirect to payment provider
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+      // Redirect to payment link
+      if (subscription.paymentLink) {
+        window.location.href = subscription.paymentLink;
       } else {
-        throw new Error('No checkout URL received');
+        throw new Error('No payment link received');
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Failed to create subscription');
       setLoading(false);
     }
   };
@@ -285,5 +285,17 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+      </div>
+    }>
+      <CheckoutContent />
+    </Suspense>
   );
 }

@@ -4,7 +4,7 @@
 
 ### Database Schema (Priority: CRITICAL)
 
-#### Task 1.1: Create Complete Prisma Schema
+#### Task 1.1: Create Complete Prisma Schema 
 ```prisma
 // File: prisma/schema.prisma
 

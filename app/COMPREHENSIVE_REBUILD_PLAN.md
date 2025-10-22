@@ -216,7 +216,7 @@ You need to fix OAuth, add email integration, unify dashboard theme, replace moc
 Most errors come from encryption/decryption, database queries, API key validation, quota checks, platform key pool, AI proxying, and session handling. Each has clear error messages and locations for debugging.------- 1. OAuth (Google/GitHub) - routes exist but need proper integration with NextAuth
      2. No email service implementation
      3. Dashboard has mock data
-     4. No payment/subscription flow
+     4. No payment/subscription flow 
      5. Dashboard theme inconsistency
      6. Backend errors with encryption/API keys
 

@@ -1,5 +1,6 @@
 // User profile API endpoint
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
 
 // Helper to extract user from Bearer token
@@ -80,9 +81,11 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
     
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -100,7 +103,7 @@ export async function PUT(request: NextRequest) {
         return obj;
       }, {} as any);
 
-    const success = await userManager.updateUserProfile(session.user.id, validUpdates);
+    const success = await userManager.updateUserProfile(user.id, validUpdates);
     
     if (!success) {
       return NextResponse.json(
@@ -110,7 +113,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Return updated profile
-    const profile = await userManager.getUserProfile(session.user.id);
+    const profile = await userManager.getUserProfile(user.id);
     return NextResponse.json(profile);
   } catch (error) {
     console.error('Profile update error:', error);

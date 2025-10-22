@@ -4,20 +4,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-helpers';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
     
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (authResult.error) {
+      return authResult.response;
     }
 
+    const { user } = authResult;
+
     const keys = await prisma.apiKey.findMany({
-      where: { userId: session.user.id as string },
+      where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

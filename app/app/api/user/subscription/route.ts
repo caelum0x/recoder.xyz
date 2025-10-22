@@ -1,5 +1,6 @@
 // User subscription management endpoint
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from "@/lib/auth-helpers";
 import { getUserFromToken } from '@/lib/auth-helper';
 import { prisma } from '@/lib/prisma';
 
@@ -87,9 +88,11 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
     
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -107,7 +110,7 @@ export async function PUT(request: NextRequest) {
 
     // For now, we'll allow plan changes without payment
     // TODO: Integrate with payment provider (Wise)
-    const success = await userManager.changePlan(session.user.id, plan as PlanType);
+    const success = await userManager.changePlan(user.id, plan as PlanType);
     
     if (!success) {
       return NextResponse.json(
@@ -117,7 +120,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Return updated subscription info
-    const profile = await userManager.getUserProfile(session.user.id);
+    const profile = await userManager.getUserProfile(user.id);
     
     return NextResponse.json({
       plan: profile?.subscription_plan,

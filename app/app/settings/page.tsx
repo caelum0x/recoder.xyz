@@ -39,6 +39,13 @@ export default function SettingsPage() {
       color: 'from-purple-500 to-pink-500'
     },
     {
+      title: 'Appearance',
+      description: 'Customize theme, colors, and visual preferences',
+      icon: SettingsIcon,
+      href: '/settings/appearance',
+      color: 'from-pink-500 to-purple-500'
+    },
+    {
       title: 'Security',
       description: 'Password, 2FA, and security settings',
       icon: Shield,

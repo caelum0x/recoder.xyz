@@ -4,15 +4,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth.api.getSession({
+      headers: await headers()
+    });
     
-    if (!session?.user?.email) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -21,44 +25,20 @@ export async function POST(request: NextRequest) {
 
     const data = await request.json();
     const {
-      role,
-      company,
-      teamSize,
-      useCase,
-      platforms,
-      completedAt
+      primaryUseCase,
+      experienceLevel,
+      preferredModels,
+      wantsCliSetup,
+      onboardingCompleted
     } = data;
 
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Update user with onboarding data  
-    // Store in user table for now until we migrate UserPreferences
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
+    // Update user with onboarding data
+    await prisma.user.update({
+      where: { id: session.user.id },
       data: {
-        // Add these fields to User model or store in metadata
-        metadata: {
-          ...(typeof user.metadata === 'object' ? user.metadata : {}),
-          onboarding: {
-            completed: true,
-            role,
-            company,
-            teamSize,
-            useCase,
-            platforms,
-            completedAt: completedAt || new Date().toISOString(),
-          }
-        }
+        preferredModels: preferredModels || [],
+        onboardingStep: onboardingCompleted ? 'completed' : 'in_progress',
+        updatedAt: new Date()
       }
     });
 
@@ -67,11 +47,10 @@ export async function POST(request: NextRequest) {
       message: 'Onboarding data saved successfully',
       data: {
         onboardingCompleted: true,
-        role,
-        company,
-        teamSize,
-        useCase,
-        platforms,
+        primaryUseCase,
+        experienceLevel,
+        preferredModels,
+        wantsCliSetup
       },
     });
   } catch (error) {
@@ -89,18 +68,23 @@ export async function POST(request: NextRequest) {
 // Get onboarding status
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth.api.getSession({
+      headers: await headers()
+    });
     
-    if (!session?.user?.email) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    // Find user by email
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
+      select: {
+        onboardingStep: true,
+        preferredModels: true
+      }
     });
 
     if (!user) {
@@ -110,20 +94,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get onboarding data from metadata
-    const metadata = typeof user.metadata === 'object' ? user.metadata as any : {};
-    const onboardingData = metadata?.onboarding || {};
-
     return NextResponse.json({
-      onboardingCompleted: onboardingData.completed || false,
-      data: onboardingData.completed ? {
-        role: onboardingData.role,
-        company: onboardingData.company,
-        teamSize: onboardingData.teamSize,
-        useCase: onboardingData.useCase,
-        platforms: onboardingData.platforms,
-        completedAt: onboardingData.completedAt,
-      } : null,
+      onboardingCompleted: user.onboardingStep === 'completed',
+      data: {
+        preferredModels: user.preferredModels
+      }
     });
   } catch (error) {
     console.error('Onboarding status error:', error);

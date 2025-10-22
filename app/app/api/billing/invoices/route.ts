@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
 import { prisma } from '@/lib/prisma';
 
 // GET /api/billing/invoices - List all invoices for user
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user: authUser } = authResult;
 
-    if (!session?.user?.email) {
+    if (!authUser?.email) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -16,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
     if (!user) {

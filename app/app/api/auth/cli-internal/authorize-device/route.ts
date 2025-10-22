@@ -5,9 +5,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+
 import { 
   getDeviceFlowRequestByUserCode, 
   updateDeviceFlowRequest,
@@ -25,9 +27,11 @@ const authorizeDeviceSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // Get real user session from NextAuth
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({
         success: false,
         error: 'unauthorized',
@@ -74,15 +78,15 @@ export async function POST(request: NextRequest) {
       // Update device flow request
       await updateDeviceFlowRequest(deviceRequest.device_code, {
         status: 'authorized',
-        user_id: session.user.id,
+        user_id: user.id,
         authorized_at: new Date()
       });
 
       // Create user data for token exchange
       const userData = {
-        id: session.user.id,
-        email: session.user.email!,
-        name: session.user.name || '',
+        id: user.id,
+        email: user.email!,
+        name: user.name || '',
         subscription_plan: 'free',
         quota: {
           requests_remaining: 1000,

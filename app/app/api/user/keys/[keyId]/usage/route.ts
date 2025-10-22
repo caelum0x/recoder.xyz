@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
 
 /**
@@ -12,9 +14,11 @@ export async function GET(
   { params }: { params: { keyId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
 
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -30,7 +34,7 @@ export async function GET(
       );
     }
 
-    const stats = await PlatformApiKeyService.getKeyUsageStats(keyId, session.user.id);
+    const stats = await PlatformApiKeyService.getKeyUsageStats(keyId, user.id);
 
     return NextResponse.json({
       success: true,
