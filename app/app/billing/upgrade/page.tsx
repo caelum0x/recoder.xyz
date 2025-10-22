@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Check, ArrowRight, Loader2 } from 'lucide-react';
@@ -73,10 +73,18 @@ export default function UpgradePage() {
 
   const loadCurrentPlan = async () => {
     try {
-      const response = await fetch('/api/billing/subscription');
-      const data = await response.json();
-      if (data.success) {
-        setCurrentPlan(data.subscription?.plan || 'free');
+      const { backendApi } = await import('@/lib/backend-api');
+
+      // Get user's subscriptions
+      const subscriptions = await backendApi.getSubscriptions();
+
+      // Get the active subscription
+      const activeSub = subscriptions.find(
+        (sub) => sub.status === 'active' || sub.status === 'cancelled_at_period_end'
+      );
+
+      if (activeSub) {
+        setCurrentPlan(activeSub.planId || 'free');
       }
     } catch (error) {
       console.error('Error loading plan:', error);
@@ -104,26 +112,32 @@ export default function UpgradePage() {
   const handleUpgrade = async (planId: string) => {
     setUpgrading(planId);
     try {
-      const response = await fetch('/api/billing/upgrade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: planId })
-      });
+      const { backendApi } = await import('@/lib/backend-api');
 
-      const data = await response.json();
-
-      if (data.success) {
-        if (data.redirectUrl) {
-          window.location.href = data.redirectUrl;
-        } else {
-          router.push('/billing?upgraded=true');
-        }
-      } else {
-        alert(data.error || 'Upgrade failed');
+      if (currentPlan === 'free') {
+        // No existing subscription, redirect to checkout
+        router.push(`/checkout?plan=${planId}`);
+        return;
       }
-    } catch (error) {
+
+      // Get subscriptions to find active one
+      const subscriptions = await backendApi.getSubscriptions();
+      const activeSub = subscriptions.find(
+        (sub) => sub.status === 'active' || sub.status === 'cancelled_at_period_end'
+      );
+
+      if (!activeSub) {
+        // No active subscription, redirect to checkout
+        router.push(`/checkout?plan=${planId}`);
+        return;
+      }
+
+      // Change existing subscription plan
+      await backendApi.changePlanAlt(planId);
+      router.push('/billing/subscription?upgraded=true');
+    } catch (error: any) {
       console.error('Upgrade error:', error);
-      alert('An error occurred while upgrading');
+      alert(error.message || 'An error occurred while upgrading');
     } finally {
       setUpgrading(null);
     }

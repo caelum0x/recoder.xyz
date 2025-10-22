@@ -70,6 +70,7 @@ router.post('/register',
       // Create user
       const user = await prisma.user.create({
         data: {
+          id: crypto.randomUUID(),
           email: email.toLowerCase(),
           password: hashedPassword,
           name: name.trim(),

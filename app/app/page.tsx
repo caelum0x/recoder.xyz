@@ -124,7 +124,7 @@ export default function HomePage() {
             </Link>
 
             {/* Recoder Web */}
-            <Link href="/platform/web" className="group">
+            <Link href="/dashboard" className="group">
               <div className="relative h-full p-8 rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/5 to-transparent hover:border-purple-500/30 transition-all duration-300">
                 <div className="absolute top-8 right-8">
                   <Globe className="w-12 h-12 text-purple-500 opacity-20 group-hover:opacity-40 transition-opacity" />

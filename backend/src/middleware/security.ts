@@ -202,21 +202,12 @@ const speedLimiter = (req, res, next) => next(); // Disabled due to missing expr
 
 /**
  * Input Validation Helpers
+ * NOTE: This runs BEFORE express.json() middleware, so we can't check for undefined body
+ * Express will handle JSON parsing errors automatically
  */
 const validateJSON = (req, res, next) => {
-  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-    if (req.get('Content-Type')?.includes('application/json')) {
-      // Check if body was parsed correctly
-      if (req.body === undefined) {
-        res.status(400).json({
-          error: 'Invalid JSON',
-          message: 'Request body must be valid JSON'
-        });
-        return;
-      }
-    }
-  }
-  
+  // Skip validation - express.json() will handle parsing and errors
+  // This middleware is kept for future custom validation if needed
   return next();
 };
 

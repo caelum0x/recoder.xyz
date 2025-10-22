@@ -7,7 +7,7 @@
 
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, 
   Github, 
@@ -18,6 +18,7 @@ import {
   Code2,
   CheckCircle
 } from 'lucide-react';
+import { signIn, authClient } from '@/lib/auth-client';
 
 function SignInForm() {
   const [email, setEmail] = useState('');
@@ -27,7 +28,8 @@ function SignInForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('return');
+  const router = useRouter();
+  const returnUrl = searchParams.get('return') || '/dashboard';
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,37 +37,49 @@ function SignInForm() {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password, rememberMe }),
+      const result = await signIn.email({
+        email,
+        password,
+        callbackURL: returnUrl,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        // Store token for platform access
-        localStorage.setItem('authToken', data.user.token);
-        
-        // Show success state
-        setError(''); // Clear any previous errors
-        setSuccess(true);
-        
-        // Redirect to return URL or dashboard
-        const redirectTo = returnUrl || '/dashboard';
-        
-        // Add a brief delay to show success feedback
-        setTimeout(() => {
-          window.location.href = redirectTo;
-        }, 1500);
+      if (result.error) {
+        setError(result.error.message || 'Authentication failed. Please try again.');
       } else {
-        setError(data.error || 'Authentication failed. Please try again.');
+        setSuccess(true);
+        setTimeout(() => {
+          router.push(returnUrl);
+        }, 1000);
       }
-    } catch (err) {
-      setError('Network error. Please try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Network error. Please try again.');
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGitHubSignIn = async () => {
+    setLoading(true);
+    try {
+      await signIn.social({
+        provider: "github",
+        callbackURL: returnUrl,
+      });
+    } catch (err: any) {
+      setError(err?.message || 'GitHub authentication failed');
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      await signIn.social({
+        provider: "google",
+        callbackURL: returnUrl,
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Google authentication failed');
       setLoading(false);
     }
   };
@@ -217,9 +231,8 @@ function SignInForm() {
               
               <button
                 className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                onClick={() => {
-                  window.location.href = `https://github.com/login/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_GITHUB_ID || 'Ov23liVrw6X0xO8m2jPy'}&redirect_uri=${encodeURIComponent('https://recoder.xyz/auth/oauth-success')}&scope=user:email&state=github`;
-                }}
+                onClick={handleGitHubSignIn}
+                disabled={loading}
               >
                 <Github className="w-5 h-5" />
                 <span>Continue with GitHub</span>
@@ -227,11 +240,8 @@ function SignInForm() {
               
               <button
                 className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                onClick={() => {
-                  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com';
-                  const redirectUri = encodeURIComponent('https://recoder.xyz/auth/oauth-success');
-                  window.location.href = `https://accounts.google.com/oauth/authorize?client_id=${googleClientId}&redirect_uri=${redirectUri}&scope=openid%20email%20profile&response_type=code&state=google`;
-                }}
+                onClick={handleGoogleSignIn}
+                disabled={loading}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -244,7 +254,7 @@ function SignInForm() {
               
               <div className="text-center text-sm pt-4">
                 <span className="text-gray-400">Don't have an account? </span>
-                <Link href="/auth/register" className="text-orange-500 hover:text-orange-400 transition-colors">
+                <Link href="/auth/signup" className="text-orange-500 hover:text-orange-400 transition-colors">
                   Sign up
                 </Link>
               </div>
