@@ -1,0 +1,260 @@
+/**
+ * Recoder Backend Express App
+ * Express app configuration without server startup
+ */
+
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
+const session = require('express-session');
+const cookieParser = require('cookie-parser');
+const { logger } = require('./utils/logger');
+
+// Import performance systems - NOW FULLY INTEGRATED
+// Lazy load to avoid blocking module initialization
+let intelligentFailover: any = null;
+let redisCache: any = null;
+let databaseOptimization: any = null;
+
+// Defer loading of performance services
+setImmediate(() => {
+  try {
+    intelligentFailover = require('./services/intelligent-failover').intelligentFailover;
+    redisCache = require('./services/redis-cache').redisCache;
+    databaseOptimization = require('./services/database-optimization').databaseOptimization;
+  } catch (error) {
+    logger.warn('Performance systems failed to load, using fallbacks:', error);
+  }
+});
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+
+// Enhanced performance middleware with intelligent systems
+const performanceMiddleware = {
+  createRateLimitMiddleware: (options: any) => async (req: any, res: any, next: any) => {
+    try {
+      if (!redisCache) {
+        // Fallback if Redis not loaded yet
+        return next();
+      }
+
+      const identifier = `${req.ip}:${req.get('User-Agent')?.slice(0, 50) || 'unknown'}`;
+      const count = await redisCache.incrementRateLimit(identifier, Math.floor(options.windowMs / 1000));
+
+      if (count > options.max) {
+        return res.status(429).json({
+          error: 'Too many requests',
+          retryAfter: Math.floor(options.windowMs / 1000)
+        });
+      }
+
+      res.set('X-RateLimit-Limit', options.max);
+      res.set('X-RateLimit-Remaining', Math.max(0, options.max - count));
+      next();
+    } catch (error) {
+      logger.warn('Rate limiting failed, allowing request:', error);
+      next();
+    }
+  },
+  
+  createHealthCheckMiddleware: () => async (req: any, res: any) => {
+    try {
+      // Graceful degradation if services not loaded yet
+      const failoverStatus = intelligentFailover ? await intelligentFailover.getSystemStatus() : { overall: 'loading' };
+      const cacheHealth = redisCache ? await redisCache.healthCheck() : { status: 'loading' };
+      const dbHealth = databaseOptimization ? await databaseOptimization.healthCheck() : { status: 'loading' };
+
+      const overall = failoverStatus.overall === 'healthy' &&
+                     cacheHealth.status === 'healthy' &&
+                     dbHealth.status === 'healthy' ? 'healthy' : 'degraded';
+
+      res.json({
+        status: overall,
+        systems: {
+          aiProviders: failoverStatus.overall || 'loading',
+          cache: cacheHealth.status || 'loading',
+          database: dbHealth.status || 'loading'
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Health check failed:', error);
+      res.status(500).json({
+        status: 'error',
+        error: 'Health check failed',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+};
+
+// Middleware configuration
+const middlewareStacks = {
+  full: (options: any = {}) => [
+    // CORS
+    cors({
+      origin: process.env['CORS_ORIGIN'] || '*',
+      credentials: true
+    }),
+    
+    // Compression
+    require('compression')(options.compressionOptions || {}),
+    
+    // Security headers
+    require('helmet')(),
+    
+    // Request parsing
+    express.json({ limit: '50mb' }),
+    express.urlencoded({ extended: true, limit: '50mb' }),
+    cookieParser(),
+    
+    // Logging
+    morgan('combined', { stream: { write: (message: string) => logger.info(message.trim()) } }),
+    
+    // Rate limiting
+    performanceMiddleware.createRateLimitMiddleware({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 1000 // requests per window
+    })
+  ]
+};
+
+// Performance and optimization middleware stack
+const performanceStack = middlewareStacks.full({
+  compressionOptions: {
+    level: 6,
+    threshold: 1024
+  }
+});
+
+// Apply middleware
+performanceStack.forEach(middleware => app.use(middleware));
+
+// Session middleware for OAuth state management
+app.use(session({
+  secret: process.env.JWT_SECRET || 'recoder-xyz-session-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Health check endpoint
+app.get('/health', performanceMiddleware.createHealthCheckMiddleware());
+
+// Test endpoint for payment verification
+app.get('/api/test/ping', (req: any, res: any) => {
+  res.json({
+    success: true,
+    message: 'Test endpoint working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Import routes using CommonJS to avoid blocking
+const gameDevelopmentRoutes = require('./routes/game-development-api');
+const matchmakingRoutes = require('./routes/matchmaking-api');
+const gameAnalyticsRoutes = require('./routes/game-analytics-api');
+const solidityRoutes = require('./routes/solidity-api');
+const blockchainRoutes = require('./routes/blockchain-api');
+const unifiedPaymentsRoutes = require('./routes/unified-payments');
+const simplePaymentTestRoutes = require('./routes/simple-payment-test');
+const platformIntegrationRoutes = require('./routes/platform-integration');
+const openRouterApiRoutes = require('./routes/openrouter-api');
+const pricingRoutes = require('./routes/pricing');
+const batchProcessingRoutes = require('./routes/batch-processing');
+const promptCacheRoutes = require('./routes/prompt-cache');
+const componentLibraryRoutes = require('./routes/component-library');
+const usageMonitoringRoutes = require('./routes/usage-monitoring');
+const overageBillingRoutes = require('./routes/overage-billing');
+const authRoutes = require('./routes/auth');
+const oauthRoutes = require('./routes/oauth');
+const userSettingsRoutes = require('./routes/user-settings');
+const billingRoutes = require('./routes/billing');
+const dashboardRoutes = require('./routes/dashboard');
+const paddleWebhookRoutes = require('./routes/webhooks/paddle');
+const dodoWebhookRoutes = require('./routes/webhooks/dodo');
+const analyticsRealtimeRoutes = require('./routes/analytics-realtime');
+const cliAuthRoutes = require('./routes/cli-auth');
+const cliAIRoutes = require('./routes/cli-ai');
+const premiumRoutes = require('./routes/premium');
+const usageAnalyticsRoutes = require('./routes/usage-analytics');
+const subscriptionsRoutes = require('./routes/subscriptions');
+const { batchProcessor } = require('./services/batch-processor');
+const { promptCache } = require('./services/prompt-cache');
+const { componentLibrary } = require('./services/component-library');
+const { realTimeUsageTracker } = require('./services/real-time-usage-tracker');
+const { overageBillingService } = require('./services/overage-billing');
+const { prisma } = require('./database/prisma');
+const projectsRoutes = require('./routes/projects');
+
+// Make Prisma available to routes
+app.locals.prisma = prisma;
+
+// Initialize batch processor (singleton, starts automatically)
+console.log('[INFO] Batch processor initialized');
+
+// Initialize prompt cache (singleton, starts automatically)
+console.log('[INFO] Prompt cache initialized');
+
+// Initialize component library (singleton, starts automatically)
+console.log('[INFO] Component library initialized');
+
+// Initialize real-time usage tracker (singleton, starts automatically)
+console.log('[INFO] Real-time usage tracker initialized');
+
+// Initialize overage billing service (singleton, starts automatically)
+console.log('[INFO] Overage billing service initialized');
+
+// API Routes - Handle both CommonJS and ES6 module exports
+app.use('/api/auth', authRoutes.default || authRoutes);
+app.use('/api/auth/cli', cliAuthRoutes.default || cliAuthRoutes);
+app.use('/api/cli/ai', cliAIRoutes.default || cliAIRoutes);
+app.use('/api/oauth', oauthRoutes.default || oauthRoutes);
+app.use('/api/user', userSettingsRoutes.default || userSettingsRoutes);
+app.use('/api/billing', billingRoutes.default || billingRoutes);
+app.use('/api/dashboard', dashboardRoutes.default || dashboardRoutes);
+app.use('/api/analytics', analyticsRealtimeRoutes.default || analyticsRealtimeRoutes);
+app.use('/api/webhooks/paddle', paddleWebhookRoutes.default || paddleWebhookRoutes);
+app.use('/api/webhooks/dodo', dodoWebhookRoutes.default || dodoWebhookRoutes);
+app.use('/api/projects', projectsRoutes.default || projectsRoutes);
+app.use('/api/game-development', gameDevelopmentRoutes.default || gameDevelopmentRoutes);
+app.use('/api/matchmaking', matchmakingRoutes.default || matchmakingRoutes);
+app.use('/api/game-analytics', gameAnalyticsRoutes.default || gameAnalyticsRoutes);
+app.use('/api/solidity', solidityRoutes.default || solidityRoutes);
+app.use('/api/blockchain', blockchainRoutes.default || blockchainRoutes);
+app.use('/api/payments', unifiedPaymentsRoutes.default || unifiedPaymentsRoutes);
+app.use('/api/payment-test', simplePaymentTestRoutes.default || simplePaymentTestRoutes);
+app.use('/api/platform', platformIntegrationRoutes.default || platformIntegrationRoutes);
+app.use('/api/ai', openRouterApiRoutes.default || openRouterApiRoutes);
+app.use('/api/pricing', pricingRoutes.default || pricingRoutes);
+app.use('/api/batch', batchProcessingRoutes.default || batchProcessingRoutes);
+app.use('/api/cache', promptCacheRoutes.default || promptCacheRoutes);
+app.use('/api/components', componentLibraryRoutes.default || componentLibraryRoutes);
+app.use('/api/usage', usageMonitoringRoutes.default || usageMonitoringRoutes);
+app.use('/api/usage-analytics', usageAnalyticsRoutes.default || usageAnalyticsRoutes);
+app.use('/api/premium', premiumRoutes.default || premiumRoutes);
+app.use('/api/subscriptions', subscriptionsRoutes.default || subscriptionsRoutes);
+app.use('/api/overage', overageBillingRoutes.default || overageBillingRoutes);
+
+// Start server if not in serverless environment
+const PORT = process.env.PORT || 3001;
+if (!process.env.NETLIFY && !process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`✅ Recoder API server running on port ${PORT}`);
+  });
+  
+  server.timeout = 300000; // 5 minutes
+} else {
+  console.log('Serverless environment detected, skipping server start');
+}
+
+module.exports = app;

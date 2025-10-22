@@ -1,0 +1,155 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
+import { prisma } from '@/lib/prisma';
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        apiKeys: {
+          where: { isActive: true }
+        },
+        usageRecords: {
+          orderBy: { timestamp: 'desc' },
+          take: 30
+        },
+        quota: true
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const monthlyUsage = await prisma.usageRecord.aggregate({
+      where: {
+        userId: user.id,
+        timestamp: {
+          gte: startOfMonth
+        }
+      },
+      _sum: {
+        tokensUsed: true,
+        cost: true
+      },
+      _count: true
+    });
+
+    const todayUsage = await prisma.usageRecord.aggregate({
+      where: {
+        userId: user.id,
+        timestamp: {
+          gte: startOfDay
+        }
+      },
+      _sum: {
+        tokensUsed: true
+      },
+      _count: true
+    });
+
+    const usageByModel = await prisma.usageRecord.groupBy({
+      by: ['model'],
+      where: {
+        userId: user.id,
+        timestamp: {
+          gte: startOfMonth
+        },
+        model: { not: null }
+      },
+      _sum: {
+        tokensUsed: true,
+        cost: true
+      },
+      _count: true
+    });
+
+    const recentActivity = await prisma.auditLog.findMany({
+      where: { userId: user.id },
+      orderBy: { timestamp: 'desc' },
+      take: 10
+    });
+
+    const usageHistory = user.usageRecords.map(u => ({
+      date: u.timestamp.toISOString().split('T')[0],
+      requests: 1,
+      tokens: u.tokensUsed || 0,
+      cost: u.cost || 0
+    }));
+
+    const groupedUsage = usageHistory.reduce((acc: any, item: any) => {
+      if (!acc[item.date]) {
+        acc[item.date] = { date: item.date, requests: 0, tokens: 0, cost: 0 };
+      }
+      acc[item.date].requests += item.requests;
+      acc[item.date].tokens += item.tokens;
+      acc[item.date].cost += item.cost;
+      return acc;
+    }, {});
+
+    const chartData = Object.values(groupedUsage);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          plan: user.subscriptionPlan || 'free',
+          createdAt: user.createdAt,
+          emailVerified: user.emailVerified,
+          avatar: user.avatar
+        },
+        stats: {
+          totalRequests: monthlyUsage._count || 0,
+          requestsToday: todayUsage._count || 0,
+          tokensThisMonth: monthlyUsage._sum.tokensUsed || 0,
+          costThisMonth: monthlyUsage._sum.cost || 0,
+          activeApiKeys: user.apiKeys.length,
+          quotaUsed: user.quota?.sessionsUsedToday || 0,
+          quotaLimit: user.quota?.sessionsPerDay || 0
+        },
+        usageByModel: usageByModel.map(item => ({
+          model: item.model || 'unknown',
+          requests: item._count || 0,
+          tokens: item._sum.tokensUsed || 0,
+          cost: item._sum.cost || 0
+        })),
+        chartData,
+        recentActivity: recentActivity.map(log => ({
+          id: log.id,
+          action: log.action,
+          resource: log.resource,
+          timestamp: log.timestamp,
+          metadata: log.metadata
+        })),
+        quota: {
+          used: user.quota?.sessionsUsedToday || 0,
+          limit: user.quota?.sessionsPerDay || 0,
+          resetDate: user.quota?.periodEnd || new Date()
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Dashboard overview error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch dashboard data' },
+      { status: 500 }
+    );
+  }
+}

@@ -4,14 +4,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
 
-    if (!session?.user?.email) {
+    if (!user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -69,9 +73,9 @@ export async function POST(request: NextRequest) {
           vendor_id: paddleVendorId,
           vendor_auth_code: paddleAuthCode,
           product_id: selectedPlan.priceId,
-          customer_email: session.user.email,
+          customer_email: user.email,
           passthrough: JSON.stringify({
-            userId: session.user.id,
+            userId: user.id,
             plan,
           }),
           return_url: `${baseUrl}/checkout/success?plan=${plan}`,
@@ -112,9 +116,9 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           amount: selectedPlan.amount,
           currency: 'USD',
-          customer_email: session.user.email,
+          customer_email: user.email,
           metadata: {
-            userId: session.user.id,
+            userId: user.id,
             plan,
           },
           success_url: `${baseUrl}/checkout/success?plan=${plan}`,

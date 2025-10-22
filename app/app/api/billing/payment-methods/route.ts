@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
 import { prisma } from '@/lib/prisma';
 
 // GET /api/billing/payment-methods - List payment methods
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user: authUser } = authResult;
 
-    if (!session?.user?.email) {
+    if (!authUser?.email) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -16,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
     if (!user) {
@@ -56,9 +60,11 @@ export async function GET(req: NextRequest) {
 // POST /api/billing/payment-methods - Add payment method
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user: authUser } = authResult;
 
-    if (!session?.user?.email) {
+    if (!authUser?.email) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -66,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
     if (!user) {
@@ -144,9 +150,11 @@ export async function POST(req: NextRequest) {
 // PUT /api/billing/payment-methods - Update payment method
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user: authUser } = authResult;
 
-    if (!session?.user?.email) {
+    if (!authUser?.email) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -154,7 +162,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
     if (!user) {
@@ -194,9 +202,11 @@ export async function PUT(req: NextRequest) {
 // DELETE /api/billing/payment-methods - Delete payment method
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user: authUser } = authResult;
 
-    if (!session?.user?.email) {
+    if (!authUser?.email) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -204,7 +214,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
     if (!user) {

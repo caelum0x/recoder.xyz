@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
@@ -115,10 +115,28 @@ export default function SubscriptionPage() {
 
   const loadSubscription = async () => {
     try {
-      const response = await fetch('/api/billing/subscription');
-      const data = await response.json();
-      if (data.success) {
-        setSubscription(data.subscription);
+      const { backendApi } = await import('@/lib/backend-api');
+
+      // Get user's subscriptions
+      const subscriptions = await backendApi.getSubscriptions();
+
+      // Get the active subscription
+      const activeSub = subscriptions.find(
+        (sub) => sub.status === 'active' || sub.status === 'cancelled_at_period_end'
+      );
+
+      if (activeSub) {
+        // Map backend data to frontend format
+        const plan = PLANS.find((p) => p.id === activeSub.planId) || PLANS[0];
+
+        setSubscription({
+          id: activeSub.id,
+          plan,
+          status: activeSub.status === 'cancelled_at_period_end' ? 'active' : activeSub.status,
+          currentPeriodStart: activeSub.currentPeriodStart || new Date().toISOString(),
+          currentPeriodEnd: activeSub.nextBillingDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          cancelAtPeriodEnd: activeSub.cancelAtPeriodEnd || activeSub.status === 'cancelled_at_period_end',
+        });
       }
     } catch (error) {
       console.error('Error loading subscription:', error);
@@ -130,26 +148,20 @@ export default function SubscriptionPage() {
   const handleUpgrade = async (planId: string) => {
     setProcessing(true);
     try {
-      const response = await fetch('/api/billing/subscription', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPlanId: planId }),
-      });
+      const { backendApi } = await import('@/lib/backend-api');
 
-      const data = await response.json();
-      if (data.success) {
-        // Redirect to checkout for plan upgrade
-        if (data.checkoutUrl) {
-          window.location.href = data.checkoutUrl;
-        } else {
-          await loadSubscription();
-        }
-      } else {
-        alert(data.error || 'Failed to upgrade plan');
+      if (!subscription) {
+        // No existing subscription, redirect to checkout
+        router.push(`/checkout?plan=${planId}`);
+        return;
       }
-    } catch (error) {
+
+      // Change existing subscription plan
+      await backendApi.changePlan(subscription.id, planId);
+      await loadSubscription();
+    } catch (error: any) {
       console.error('Error upgrading plan:', error);
-      alert('Failed to upgrade plan');
+      alert(error.message || 'Failed to upgrade plan');
     } finally {
       setProcessing(false);
     }
@@ -158,23 +170,21 @@ export default function SubscriptionPage() {
   const handleCancelSubscription = async () => {
     setProcessing(true);
     try {
-      const response = await fetch('/api/billing/subscription', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: cancelReason }),
-      });
+      const { backendApi } = await import('@/lib/backend-api');
 
-      const data = await response.json();
-      if (data.success) {
-        setShowCancelModal(false);
-        setCancelReason('');
-        await loadSubscription();
-      } else {
-        alert(data.error || 'Failed to cancel subscription');
+      if (!subscription) {
+        throw new Error('No active subscription found');
       }
-    } catch (error) {
+
+      // Cancel subscription (at period end by default)
+      await backendApi.cancelSubscription(subscription.id, true);
+
+      setShowCancelModal(false);
+      setCancelReason('');
+      await loadSubscription();
+    } catch (error: any) {
       console.error('Error cancelling subscription:', error);
-      alert('Failed to cancel subscription');
+      alert(error.message || 'Failed to cancel subscription');
     } finally {
       setProcessing(false);
     }
@@ -183,19 +193,18 @@ export default function SubscriptionPage() {
   const handleReactivate = async () => {
     setProcessing(true);
     try {
-      const response = await fetch('/api/billing/subscription/reactivate', {
-        method: 'POST',
-      });
+      const { backendApi } = await import('@/lib/backend-api');
 
-      const data = await response.json();
-      if (data.success) {
-        await loadSubscription();
-      } else {
-        alert(data.error || 'Failed to reactivate subscription');
+      if (!subscription) {
+        throw new Error('No subscription found');
       }
-    } catch (error) {
+
+      // Reactivate subscription
+      await backendApi.reactivateSubscriptionAlt();
+      await loadSubscription();
+    } catch (error: any) {
       console.error('Error reactivating subscription:', error);
-      alert('Failed to reactivate subscription');
+      alert(error.message || 'Failed to reactivate subscription');
     } finally {
       setProcessing(false);
     }

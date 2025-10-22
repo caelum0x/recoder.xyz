@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSession } from '@/lib/auth-client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 
-export default function CLIAuthPage() {
+function CLIAuthContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -309,5 +309,20 @@ export default function CLIAuthPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CLIAuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <div className="text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="mt-4">Loading...</p>
+        </div>
+      </div>
+    }>
+      <CLIAuthContent />
+    </Suspense>
   );
 }

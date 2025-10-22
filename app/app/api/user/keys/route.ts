@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
 import { z } from 'zod';
 
@@ -16,16 +18,18 @@ const createKeySchema = z.object({
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
 
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const keys = await PlatformApiKeyService.listUserApiKeys(session.user.id);
+    const keys = await PlatformApiKeyService.listUserApiKeys(user.id);
 
     return NextResponse.json({
       success: true,
@@ -46,9 +50,11 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
 
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -68,7 +74,7 @@ export async function POST(req: NextRequest) {
     const { name, description, expiresAt } = validation.data;
 
     // Check if user can create more keys
-    const canCreate = await PlatformApiKeyService.canCreateApiKey(session.user.id);
+    const canCreate = await PlatformApiKeyService.canCreateApiKey(user.id);
 
     if (!canCreate.canCreate) {
       return NextResponse.json(
@@ -83,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     // Generate the API key
     const result = await PlatformApiKeyService.generateApiKey(
-      session.user.id,
+      user.id,
       name,
       description,
       expiresAt ? new Date(expiresAt) : undefined
@@ -117,9 +123,11 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
 
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -136,7 +144,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const result = await PlatformApiKeyService.revokeApiKey(keyId, session.user.id);
+    const result = await PlatformApiKeyService.revokeApiKey(keyId, user.id);
 
     if (!result.success) {
       return NextResponse.json(

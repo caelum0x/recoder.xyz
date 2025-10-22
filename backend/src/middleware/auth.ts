@@ -501,6 +501,7 @@ declare global {
 const authExports = {
   authenticate: authenticateUser,
   authenticateUser,
+  authenticateToken: authenticateUser, // Add authenticateToken alias
   requireAdmin,
   requireSubscription,
   requireEmailVerification,
@@ -516,9 +517,5 @@ const authExports = {
   ROLE_PERMISSIONS,
   UserRole
 };
-
-// Debug: Log what we're exporting
-console.log('[AUTH] Exporting functions:', Object.keys(authExports));
-console.log('[AUTH] authenticate type:', typeof authExports.authenticate);
 
 module.exports = authExports;

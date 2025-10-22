@@ -4,7 +4,15 @@
 const { PrismaClient } = require('@prisma/client');
 const { logger } = require('../utils/logger');
 // const { databaseOptimization } = require('../services/database-optimization');
-const { redisCache } = require('../services/redis-cache');
+// Lazy load redisCache to avoid circular dependency
+let redisCache: any = null;
+setImmediate(() => {
+  try {
+    redisCache = require('../services/redis-cache').redisCache;
+  } catch (err) {
+    logger.warn('Could not load redis cache in prisma.ts');
+  }
+});
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -61,7 +69,8 @@ class EnhancedPrismaClient {
   }
 
   // Core Prisma models - only including models that exist in schema
-  get user() { return this.client.user; }
+  get user() { return this.client.users; }
+  get users() { return this.client.users; } // Alias for compatibility
   get project() { return this.client.project; }
   get template() { return this.client.template; }
   get agent() { return this.client.agent; }
@@ -127,10 +136,14 @@ class EnhancedPrismaClient {
   get unrealAssetReference() { return this.client.unrealAssetReference; }
   get unrealBuildConfig() { return this.client.unrealBuildConfig; }
 
-  // Blockchain models  
+  // Blockchain models
   get solidityProject() { return this.client.solidityProject; }
   get smartContract() { return this.client.smartContract; }
   get blockchainNetwork() { return this.client.blockchainNetwork; }
+
+  // CLI Authentication
+  get cli_sessions() { return this.client.cli_sessions; }
+  get cLISession() { return this.client.cli_sessions; } // Alias for compatibility
   get contractDeployment() { return this.client.contractDeployment; }
   get contractDependency() { return this.client.contractDependency; }
   get compilationResult() { return this.client.compilationResult; }
@@ -323,43 +336,16 @@ const enhancedPrisma = new EnhancedPrismaClient(basePrisma);
 // Re-enable Enhanced Prisma client
 const prisma = enhancedPrisma;
 
-// Database connection handler with proper async handling
-setTimeout(async () => {
-  try {
-    console.log('🔍 DEBUG: Attempting safe database connection...');
-    
-    // Create connection promise with timeout
-    const connectionPromise = basePrisma.$connect();
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database connection timeout after 5s')), 5000)
-    );
-    
-    // Race connection against timeout
-    await Promise.race([connectionPromise, timeoutPromise]);
-    
-    console.log('✅ Database connected successfully');
-    logger.info('Database connection established successfully');
-    
-    // Test database with simple query
-    await basePrisma.$queryRaw`SELECT 1 as test`;
-    logger.info('Database health check passed');
-    
-  } catch (error) {
-    console.warn('⚠️ Database connection failed, continuing without database:', error.message);
-    logger.warn('Database connection failed, server will continue without database features', { 
-      error: error.message,
-      stack: error.stack 
-    });
-  }
-}, 2000); // Wait 2 seconds after server starts before connecting
+// Database connection handler - connection will happen lazily on first query
 
 // Graceful shutdown with cleanup
 process.on('beforeExit', async () => {
   try {
-    await Promise.allSettled([
-      basePrisma.$disconnect().catch(() => {}),
-      redisCache.close().catch(() => {})
-    ]);
+    const promises = [basePrisma.$disconnect().catch(() => {})];
+    if (redisCache && typeof redisCache.close === 'function') {
+      promises.push(redisCache.close().catch(() => {}));
+    }
+    await Promise.allSettled(promises);
     logger.info('Database connections closed gracefully');
   } catch (error) {
     logger.warn('Cleanup warning:', error);
