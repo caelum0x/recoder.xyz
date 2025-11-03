@@ -5,6 +5,10 @@
 
 import nodemailer from 'nodemailer';
 
+const FROM_EMAIL = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'noreply@recoder.xyz';
+const FROM_NAME = 'Recoder.xyz';
+
+// Initialize SMTP transporter (fallback if Resend is not configured)
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -15,9 +19,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const FROM_EMAIL = process.env.SMTP_FROM || 'noreply@recoder.xyz';
-const FROM_NAME = 'Recoder.xyz';
-
 interface EmailOptions {
   to: string;
   subject: string;
@@ -26,6 +27,50 @@ interface EmailOptions {
 }
 
 async function sendEmail({ to, subject, html, text }: EmailOptions) {
+  // Development: Just log emails if no service configured
+  if (process.env.NODE_ENV === 'development' && !process.env.RESEND_API_KEY && !process.env.SMTP_USER) {
+    console.log('\n📧 ==================== EMAIL ====================');
+    console.log(`To: ${to}`);
+    console.log(`Subject: ${subject}`);
+    console.log(`From: ${FROM_NAME} <${FROM_EMAIL}>`);
+    console.log('HTML content length:', html.length);
+    console.log('================================================\n');
+    return { success: true, messageId: 'dev-' + Date.now() };
+  }
+
+  // Option 1: Use Resend (recommended for production)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        },
+        body: JSON.stringify({
+          from: `${FROM_NAME} <${FROM_EMAIL}>`,
+          to: [to],
+          subject,
+          html,
+          text: text || html.replace(/<[^>]*>/g, ''),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Resend API error: ${JSON.stringify(error)}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Email sent via Resend:', data.id);
+      return { success: true, messageId: data.id };
+    } catch (error) {
+      console.error('❌ Resend email error:', error);
+      return { success: false, error };
+    }
+  }
+
+  // Option 2: Use SMTP (fallback or if explicitly configured)
   try {
     const info = await transporter.sendMail({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
@@ -35,10 +80,10 @@ async function sendEmail({ to, subject, html, text }: EmailOptions) {
       text: text || html.replace(/<[^>]*>/g, ''),
     });
 
-    console.log('Email sent:', info.messageId);
+    console.log('✅ Email sent via SMTP:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('Email send error:', error);
+    console.error('❌ SMTP email error:', error);
     return { success: false, error };
   }
 }
@@ -238,11 +283,11 @@ export async function sendApiKeyCreatedEmail(email: string, name: string) {
           <div class="content">
             <p>Hi ${name},</p>
             <p>A new API key has been created for your Recoder.xyz account.</p>
-            
+
             <div class="warning">
               <strong>Security Notice:</strong> Keep your API key secure. Never share it publicly or commit it to version control.
             </div>
-            
+
             <p>You can manage your API keys from your dashboard settings.</p>
             <p>If you didn't create this key, please contact support immediately at support@recoder.xyz</p>
           </div>
@@ -254,10 +299,87 @@ export async function sendApiKeyCreatedEmail(email: string, name: string) {
   return sendEmail({ to: email, subject, html });
 }
 
+export async function sendTemporaryPasswordEmail(email: string, tempPassword: string) {
+  const subject = 'Your Temporary Password - Recoder.xyz';
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .password-box { background: #1a1a1a; color: #f97316; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0; border: 2px solid #333; }
+          .password { font-size: 32px; font-weight: bold; letter-spacing: 3px; font-family: 'Courier New', monospace; }
+          .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: 600; }
+          .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🚀 Welcome to Recoder.xyz!</h1>
+          </div>
+          <div class="content">
+            <h2>Your Account is Ready</h2>
+            <p>Your account has been created successfully. Here's your temporary password:</p>
+
+            <div class="password-box">
+              <div style="font-size: 12px; color: #999; margin-bottom: 10px;">TEMPORARY PASSWORD</div>
+              <div class="password">${tempPassword}</div>
+            </div>
+
+            <div class="warning">
+              <strong>⚠️ Important Security Notice:</strong><br>
+              Please change this password immediately after your first login. This temporary password should not be shared with anyone.
+            </div>
+
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/signin" class="button">Sign In Now</a>
+
+            <h3>Getting Started:</h3>
+            <ul>
+              <li>Sign in with your email and temporary password</li>
+              <li>Change your password in settings</li>
+              <li>Explore our AI-powered code generation</li>
+              <li>Access all platforms with one account</li>
+            </ul>
+
+            <p>If you didn't create an account, please contact support at support@recoder.xyz</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `
+Welcome to Recoder.xyz!
+
+Your account has been created successfully.
+
+TEMPORARY PASSWORD: ${tempPassword}
+
+⚠️ Important: Please change this password immediately after your first login.
+
+Sign in at: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/signin
+
+Getting Started:
+- Sign in with your email and temporary password
+- Change your password in settings
+- Explore our AI-powered code generation
+- Access all platforms with one account
+
+If you didn't create an account, please contact support at support@recoder.xyz
+  `;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
 export default {
   sendWelcomeEmail,
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendSubscriptionConfirmationEmail,
   sendApiKeyCreatedEmail,
+  sendTemporaryPasswordEmail,
 };

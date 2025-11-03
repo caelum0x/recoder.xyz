@@ -5,91 +5,123 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sendVerificationEmail } from '@/lib/email';
 import crypto from 'crypto';
 
-// Email service (you'll need to implement this based on your email provider)
-async function sendVerificationEmail(email: string, token: string) {
-  // TODO: Implement with your email service (SendGrid, AWS SES, etc.)
-  const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/auth/verify-email?token=${token}`;
-  
-  console.log(`📧 Verification email would be sent to ${email}`);
-  console.log(`🔗 Verification URL: ${verificationUrl}`);
-  
-  // For now, just log it. Replace with actual email sending
-  // await emailService.send({
-  //   to: email,
-  //   subject: 'Verify your email - recoder.xyz',
-  //   html: `Click here to verify: ${verificationUrl}`
-  // });
-  
-  return true;
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const token = searchParams.get('token');
+
+    if (!token) {
+      return NextResponse.redirect(new URL('/auth/signin?error=invalid_token', request.url));
+    }
+
+    // Hash the token to match stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find verification token
+    const verifications = await prisma.verifications.findMany({
+      where: {
+        value: hashedToken,
+        expiresAt: {
+          gt: new Date()
+        }
+      }
+    });
+
+    const verification = verifications.find(v =>
+      v.identifier.startsWith('email-verify:')
+    );
+
+    if (!verification) {
+      return NextResponse.redirect(new URL('/auth/signin?error=expired_token', request.url));
+    }
+
+    // Extract email from identifier
+    const email = verification.identifier.replace('email-verify:', '');
+
+    // Update user email verified status
+    await prisma.users.update({
+      where: { email },
+      data: {
+        emailVerified: true,
+        updatedAt: new Date()
+      }
+    });
+
+    // Delete the verification token
+    await prisma.verifications.delete({
+      where: { id: verification.id }
+    });
+
+    console.log(`✅ Email verified for ${email}`);
+
+    // Redirect to signin with success message
+    return NextResponse.redirect(new URL('/auth/signin?verified=true', request.url));
+
+  } catch (error) {
+    console.error('Email verification error:', error);
+    return NextResponse.redirect(new URL('/auth/signin?error=verification_failed', request.url));
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { token, email, resend } = body;
+    const { email } = body;
 
-    // Handle resending verification email
-    if (resend && email) {
-      const user = await prisma.user.findUnique({
-        where: { email }
-      });
-
-      if (!user) {
-        return NextResponse.json(
-          { success: false, error: 'User not found' },
-          { status: 404 }
-        );
-      }
-
-      if (user.emailVerified) {
-        return NextResponse.json(
-          { success: false, error: 'Email already verified' },
-          { status: 400 }
-        );
-      }
-
-      // Generate new verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-      // Store token (you'll need to create EmailVerification table in Prisma schema)
-      // For now, we'll use a simple approach
-      // TODO: Create proper EmailVerification model in Prisma
-      
-      await sendVerificationEmail(email, verificationToken);
-
-      return NextResponse.json({
-        success: true,
-        message: 'Verification email sent'
-      });
+    if (!email) {
+      return NextResponse.json(
+        { success: false, error: 'Email is required' },
+        { status: 400 }
+      );
     }
 
-    // Handle token verification
-    if (token) {
-      // TODO: Implement proper token verification with database
-      // For now, we'll do a simple check
-      
-      // Find user by token (this is simplified - you need proper token storage)
-      // const verification = await prisma.emailVerification.findUnique({
-      //   where: { token },
-      //   include: { user: true }
-      // });
+    const user = await prisma.users.findUnique({
+      where: { email }
+    });
 
-      // Temporary: Just mark any user as verified for testing
-      // In production, you need proper token validation
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Email verified successfully'
-      });
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Invalid request' },
-      { status: 400 }
-    );
+    if (user.emailVerified) {
+      return NextResponse.json(
+        { success: false, error: 'Email already verified' },
+        { status: 400 }
+      );
+    }
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Store token in verifications table
+    await prisma.verifications.create({
+      data: {
+        id: crypto.randomUUID(),
+        identifier: `email-verify:${email}`,
+        value: hashedToken,
+        expiresAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    });
+
+    // Send verification email
+    await sendVerificationEmail(email, verificationToken);
+
+    console.log(`✅ Verification email sent to ${email}`);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Verification email sent. Please check your inbox.'
+    });
 
   } catch (error) {
     console.error('Email verification error:', error);
