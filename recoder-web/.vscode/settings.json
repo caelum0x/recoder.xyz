@@ -1,37 +1,5 @@
 {
-  "typescript.preferences.maxInlayHintLength": 30,
-  "typescript.preferences.enableCompletions": true,
-  "typescript.preferences.includeCompletionsWithSnippetText": true,
-  "typescript.tsserver.maxTsServerMemory": 8192,
-  "typescript.tsserver.experimental.enableProjectDiagnostics": false,
-  "typescript.suggest.autoImports": false,
-  "typescript.preferences.includeCompletionsForModuleExports": false,
-  "typescript.preferences.includeCompletionsForImportStatements": false,
-  "typescript.disableAutomaticTypeAcquisition": true,
-  "typescript.surveys.enabled": false,
-  "typescript.format.enable": false,
-  "editor.inlayHints.enabled": "off",
-  "files.exclude": {
-    "**/.git": true,
-    "**/.svn": true,
-    "**/.hg": true,
-    "**/CVS": true,
-    "**/.DS_Store": true,
-    "**/node_modules": true,
-    "**/.next": true,
-    "**/dist": true,
-    "**/build": true,
-    "**/*.log": true
-  },
-  "search.exclude": {
-    "**/node_modules": true,
-    "**/.next": true,
-    "**/dist": true,
-    "**/build": true,
-    "**/*.log": true
-  },
-  "emmet.includeLanguages": {
-    "javascript": "javascriptreact",
-    "typescript": "typescriptreact"
-  }
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.preferences.includePackageJsonAutoImports": "on"
 }

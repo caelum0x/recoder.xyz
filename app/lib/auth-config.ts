@@ -1,15 +1,9 @@
 import { betterAuth } from "better-auth";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { customPrismaAdapter } from "./custom-prisma-adapter";
+import { prisma } from "./prisma";
 
 export const auth = betterAuth({
-  database: prismaAdapter(prisma, {
-    provider: "postgresql",
-    usePlural: true, // Use plural table names (users instead of user)
-    generateTables: true, // Automatically generate missing tables
-  }),
+  database: customPrismaAdapter(prisma),
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false, // Disable email verification temporarily
@@ -50,8 +44,16 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // Update session every 24 hours
     cookieCache: {
       enabled: true,
-      maxAge: 60 * 5, // 5 minutes
+      maxAge: 60 * 60 * 24 * 30, // 30 days to match session expiry
     },
+  },
+  advanced: {
+    cookiePrefix: "recoder",
+    crossSubDomainCookies: {
+      enabled: true,
+    },
+    useSecureCookies: process.env.NODE_ENV === 'production',
+    generateId: () => crypto.randomUUID(),
   },
   trustedOrigins: [
     "http://localhost:3000",
@@ -60,12 +62,6 @@ export const auth = betterAuth({
     "https://recoder.xyz",
     "https://www.recoder.xyz",
   ],
-  advanced: {
-    cookiePrefix: "recoder",
-    crossSubDomainCookies: {
-      enabled: true,
-    },
-  },
 });
 
 export type Session = typeof auth.$Infer.Session;

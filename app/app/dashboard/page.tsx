@@ -30,7 +30,14 @@ function DashboardContent() {
 
   useEffect(() => {
     if (session) {
-      fetch('/api/cli/quota').then(r => r.json()).then(setQuota).catch(console.error);
+      fetch('/api/user/quota')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.quota) {
+            setQuota(data.quota);
+          }
+        })
+        .catch(console.error);
     }
   }, [session]);
 
@@ -49,7 +56,7 @@ function DashboardContent() {
 
   const plan = session?.user?.subscriptionPlan || 'free';
   const sessionsUsed = quota?.sessionsUsedToday || 0;
-  const sessionsTotal = quota?.sessionsPerDay || 6;
+  const sessionsTotal = quota?.sessionsPerDay || (plan === 'free' ? 6 : 50);
   const sessionsPercent = (sessionsUsed / sessionsTotal) * 100;
 
   return (

@@ -10,6 +10,18 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  
+  // Webpack configuration for Prisma
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Don't bundle Prisma Client - use the node_modules version
+      config.externals.push('_http_common');
+    }
+    return config;
+  },
+  
+  // Ensure Prisma is not bundled (moved from experimental in Next.js 15.5+)
+  serverExternalPackages: ['@prisma/client', '.prisma/client'],
 
   // Security headers
   async headers() {
@@ -47,7 +59,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://openrouter.ai; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://openrouter.ai https://api.openai.com https://api.anthropic.com; frame-ancestors 'self';"
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://openrouter.ai; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:3001 https://openrouter.ai https://api.openai.com https://api.anthropic.com; frame-ancestors 'self';"
           },
         ],
       },

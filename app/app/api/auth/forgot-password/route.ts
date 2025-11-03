@@ -5,24 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sendPasswordResetEmail } from '@/lib/email';
 import crypto from 'crypto';
-
-// Email service
-async function sendPasswordResetEmail(email: string, token: string) {
-  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/auth/reset-password?token=${token}`;
-  
-  console.log(`📧 Password reset email would be sent to ${email}`);
-  console.log(`🔗 Reset URL: ${resetUrl}`);
-  
-  // TODO: Implement with your email service
-  // await emailService.send({
-  //   to: email,
-  //   subject: 'Reset your password - recoder.xyz',
-  //   html: `Click here to reset your password: ${resetUrl}`
-  // });
-  
-  return true;
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,8 +20,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
+    // Find user (check both User and users tables for compatibility)
+    let user = await prisma.users.findUnique({
       where: { email }
     });
 
@@ -56,18 +40,22 @@ export async function POST(request: NextRequest) {
     const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Store token (you'll need to create PasswordReset table in Prisma schema)
-    // TODO: Create proper PasswordReset model in Prisma
-    // await prisma.passwordReset.create({
-    //   data: {
-    //     userId: user.id,
-    //     token: hashedToken,
-    //     expiresAt,
-    //     used: false
-    //   }
-    // });
+    // Store token in verifications table (reusing existing table)
+    await prisma.verifications.create({
+      data: {
+        id: crypto.randomUUID(),
+        identifier: `password-reset:${email}`,
+        value: hashedToken,
+        expiresAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    });
 
+    // Send password reset email
     await sendPasswordResetEmail(email, resetToken);
+
+    console.log(`✅ Password reset email sent to ${email}`);
 
     return NextResponse.json({
       success: true,
@@ -82,6 +70,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-// Rate limiting would be important here
-// Implement rate limiting to prevent abuse

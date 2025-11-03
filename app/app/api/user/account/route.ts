@@ -15,17 +15,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
       select: {
         id: true,
         email: true,
         name: true,
-        avatar: true,
+        image: true,
         organization: true,
         createdAt: true,
         emailVerified: true,
-        subscription: true
+        subscription: true,
+        role: true,
+        isActive: true,
+        twoFactorEnabled: true,
       }
     });
 
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user preferences if they exist
-    const preferences = await prisma.userPreferences.findUnique({
+    const preferences = await prisma.user_preferences.findUnique({
       where: { userId: user.id }
     });
 
@@ -71,7 +74,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { name, email, timezone, language, organization } = body;
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email }
     });
 
@@ -91,35 +94,44 @@ export async function PUT(request: NextRequest) {
       // TODO: Send verification email
     }
 
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisma.users.update({
       where: { id: user.id },
-      data: updateData
+      data: {
+        ...updateData,
+        updatedAt: new Date(),
+      }
     });
 
     // Update preferences
     if (timezone || language) {
-      await prisma.userPreferences.upsert({
+      await prisma.user_preferences.upsert({
         where: { userId: user.id },
         create: {
+          id: crypto.randomUUID(),
           userId: user.id,
           developerPreferences: { timezone: timezone || 'America/New_York' },
-          languagePreferences: { language: language || 'en' }
+          languagePreferences: { language: language || 'en' },
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
         update: {
           developerPreferences: timezone ? { timezone } : undefined,
-          languagePreferences: language ? { language } : undefined
+          languagePreferences: language ? { language } : undefined,
+          updatedAt: new Date(),
         }
       });
     }
 
     // Log audit event
-    await prisma.auditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.id,
         action: 'updated',
         resource: 'account',
         resourceId: user.id,
-        metadata: { fields: Object.keys(updateData) }
+        metadata: { fields: Object.keys(updateData) },
+        createdAt: new Date(),
       }
     });
 
@@ -148,8 +160,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: user.email }
+    const user = await prisma.users.findUnique({
+      where: { email: authUser.email }
     });
 
     if (!user) {
@@ -157,18 +169,20 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Log audit event before deletion
-    await prisma.auditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.id,
         action: 'deleted',
         resource: 'account',
         resourceId: user.id,
-        metadata: { email: user.email }
+        metadata: { email: user.email },
+        createdAt: new Date(),
       }
     });
 
     // Delete user (cascade will handle related records)
-    await prisma.user.delete({
+    await prisma.users.delete({
       where: { id: user.id }
     });
 

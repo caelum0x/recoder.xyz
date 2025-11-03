@@ -1,242 +1,55 @@
-<a href="https://web.recoder.xyz">
-  <img alt="Recoder Web Platform" src="./public/recoder-og.png">
-  <h1 align="center">Recoder Web Platform</h1>
-</a>
+[![Bolt.new: AI-Powered Full-Stack Web Development in the Browser](./public/social_preview_index.jpg)](https://bolt.new)
 
-<p align="center">
-  AI-powered code generation platform that creates <strong>real, production-ready applications</strong> with multi-AI intelligence and offline capabilities.
-</p>
+# Bolt.new: AI-Powered Full-Stack Web Development in the Browser
 
-<p align="center">
-  <a href="https://web.recoder.xyz">🌐 Live Platform</a> •
-  <a href="https://docs.recoder.xyz">📚 Documentation</a> •
-  <a href="https://github.com/recoderxyz/recoder.xyz">💻 CLI Tool</a> •
-  <a href="https://marketplace.visualstudio.com/items?itemName=recoderxyz.recoder-vscode">🔧 VS Code Extension</a>
-</p>
+Bolt.new is an AI-powered web development agent that allows you to prompt, run, edit, and deploy full-stack applications directly from your browser—no local setup required. If you're here to build your own AI-powered web dev agent using the Bolt open source codebase, [click here to get started!](./CONTRIBUTING.md)
 
----
+## What Makes Bolt.new Different
 
-## ✨ What Makes Recoder Different
+Claude, v0, etc are incredible- but you can't install packages, run backends or edit code. That’s where Bolt.new stands out:
 
-Unlike other AI coding tools that generate mock implementations, **Recoder creates real, working applications** that you can deploy immediately:
+- **Full-Stack in the Browser**: Bolt.new integrates cutting-edge AI models with an in-browser development environment powered by **StackBlitz’s WebContainers**. This allows you to:
+  - Install and run npm tools and libraries (like Vite, Next.js, and more)
+  - Run Node.js servers
+  - Interact with third-party APIs
+  - Deploy to production from chat
+  - Share your work via a URL
 
-- 🚀 **Real Functionality**: Actual working code, not placeholder implementations
-- 🧠 **Multi-AI Intelligence**: Leverages Claude, Groq, Gemini & Ollama for optimal results  
-- 🌐 **Offline-First**: Full functionality without internet using local AI models
-- ⚡ **Production-Ready**: Enterprise-grade security, performance, and reliability
-- 🎯 **Intelligent Context**: Deep project understanding with smart recommendations
+- **AI with Environment Control**: Unlike traditional dev environments where the AI can only assist in code generation, Bolt.new gives AI models **complete control** over the entire  environment including the filesystem, node server, package manager, terminal, and browser console. This empowers AI agents to handle the entire app lifecycle—from creation to deployment.
 
-## 🏗️ Tech Stack
+Whether you’re an experienced developer, a PM or designer, Bolt.new allows you to build production-grade full-stack applications with ease.
 
-- **AI Models**: Claude 4 Sonnet/Opus, Groq LLaMA, Gemini 2.5 Pro, Ollama (local)
-- **Frontend**: Next.js 15 with App Router, React 19, Tailwind CSS
-- **Code Execution**: Advanced Sandpack integration with real runtime environments
-- **Database**: PostgreSQL with Prisma ORM, Neon serverless database
-- **Deployment**: Vercel with automatic scaling and edge optimization
-- **Analytics**: Privacy-focused analytics with Plausible
-- **Integration**: Connected to Recoder CLI and VS Code extension ecosystem
+For developers interested in building their own AI-powered development tools with WebContainers, check out the open-source Bolt codebase in this repo!
 
-## 🚀 Quick Start
+## Tips and Tricks
 
-### 1. Clone and Setup
-```bash
-git clone https://github.com/recoderxyz/recoder.xyz.git
-cd recoder.xyz/recoder-web
-npm install
-```
+Here are some tips to get the most out of Bolt.new:
 
-### 2. Environment Configuration
-```bash
-# Copy environment template
-cp .env.example .env
+- **Be specific about your stack**: If you want to use specific frameworks or libraries (like Astro, Tailwind, ShadCN, or any other popular JavaScript framework), mention them in your initial prompt to ensure Bolt scaffolds the project accordingly.
 
-# Required environment variables:
-ANTHROPIC_API_KEY=your_claude_api_key        # For Claude AI
-GROQ_API_KEY=your_groq_api_key              # For Groq LLaMA  
-GOOGLE_API_KEY=your_gemini_api_key          # For Gemini
-DATABASE_URL=your_postgresql_connection     # Database
-NEXT_PUBLIC_APP_URL=http://localhost:3000   # App URL
-```
+- **Use the enhance prompt icon**: Before sending your prompt, try clicking the 'enhance' icon to have the AI model help you refine your prompt, then edit the results before submitting.
 
-### 3. Database Setup
-```bash
-# Generate Prisma client
-npx prisma generate
+- **Scaffold the basics first, then add features**: Make sure the basic structure of your application is in place before diving into more advanced functionality. This helps Bolt understand the foundation of your project and ensure everything is wired up right before building out more advanced functionality.
 
-# Run database migrations
-npx prisma migrate dev
+- **Batch simple instructions**: Save time by combining simple instructions into one message. For example, you can ask Bolt to change the color scheme, add mobile responsiveness, and restart the dev server, all in one go saving you time and reducing API credit consumption significantly.
 
-# (Optional) Seed database
-npx prisma db seed
-```
+## FAQs
 
-### 4. Development Server
-```bash
-npm run dev
-# Open http://localhost:3000
-```
+**Where do I sign up for a paid plan?**  
+Bolt.new is free to get started. If you need more AI tokens or want private projects, you can purchase a paid subscription in your [Bolt.new](https://bolt.new) settings, in the lower-left hand corner of the application. 
 
-## 🌟 Key Features
+**What happens if I hit the free usage limit?**  
+Once your free daily token limit is reached, AI interactions are paused until the next day or until you upgrade your plan.
 
-### Multi-AI Code Generation
-- **Claude**: Complex logic, architecture design, code review
-- **Groq**: Fast prototyping, API endpoints, data processing  
-- **Gemini**: Large codebases, multimodal tasks, documentation
-- **Ollama**: Offline generation, private code, custom models
+**Is Bolt in beta?**  
+Yes, Bolt.new is in beta, and we are actively improving it based on feedback.
 
-### Real Application Examples
-```typescript
-// Generate a complete e-commerce platform
-"Create a full-stack e-commerce app with user authentication, 
-product catalog, shopping cart, payment processing via Stripe, 
-admin dashboard, and order management"
+**How can I report Bolt.new issues?**  
+Check out the [Issues section](https://github.com/stackblitz/bolt.new/issues) to report an issue or request a new feature. Please use the search feature to check if someone else has already submitted the same issue/request.
 
-// Result: Fully working application with:
-// ✅ Real Stripe payment integration
-// ✅ Authentication with NextAuth.js  
-// ✅ Database with Prisma + PostgreSQL
-// ✅ Admin dashboard with real CRUD operations
-// ✅ Responsive UI with Tailwind CSS
-// ✅ Email notifications with real SMTP
-```
+**What frameworks/libraries currently work on Bolt?**  
+Bolt.new supports most popular JavaScript frameworks and libraries. If it runs on StackBlitz, it will run on Bolt.new as well.
 
-### Intelligent Context Understanding
-- **Project Analysis**: Understands existing codebase and conventions
-- **Smart Suggestions**: Recommends optimal AI models for each task
-- **Code Review**: Real security and performance analysis
-- **Documentation**: Auto-generates comprehensive project docs
-
-### Offline-First Architecture
-- **Local AI Models**: Full functionality with Ollama integration
-- **Smart Caching**: Intelligent response caching for speed
-- **Progressive Enhancement**: Graceful degradation without internet
-- **Sync Queue**: Background synchronization when connection returns
-
-## 🔧 Development
-
-### Project Structure
-```
-recoder-web/
-├── app/                    # Next.js App Router
-│   ├── (main)/            # Main application pages
-│   ├── api/               # API routes and endpoints
-│   └── globals.css        # Global styles with Recoder branding
-├── components/            # Reusable UI components
-│   ├── ui/               # Shadcn/ui components
-│   └── code-runner.tsx   # Enhanced code execution
-├── lib/                  # Utilities and configurations
-│   ├── ai-integration.ts # Multi-AI provider management
-│   ├── recoder-config.ts # Recoder-specific configuration
-│   └── prisma.ts        # Database client
-├── prisma/              # Database schema and migrations
-└── public/              # Static assets with Recoder branding
-```
-
-### Available Scripts
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production  
-npm run start        # Start production server
-npm run lint         # Run ESLint and TypeScript checks
-npm run db:migrate   # Run database migrations
-npm run db:studio    # Open Prisma Studio
-npm run analyze      # Bundle analyzer
-```
-
-### Adding New AI Providers
-```typescript
-// lib/ai-providers/custom-provider.ts
-export class CustomAIProvider implements AIProvider {
-  async generateCode(prompt: string, options: GenerationOptions) {
-    // Implementation for custom AI provider
-    return {
-      code: generatedCode,
-      explanation: explanation,
-      confidence: confidenceScore
-    };
-  }
-}
-```
-
-## 🌐 Integration with Recoder Ecosystem
-
-### CLI Integration
-```bash
-# Generate code and sync with web platform
-recoder generate "React dashboard" --sync-web
-recoder deploy --platform web --auto-configure
-```
-
-### VS Code Extension Integration
-- **Project Sync**: Share generated code between web platform and editor
-- **Context Sharing**: Unified project analysis across platforms
-- **Model Preferences**: Consistent AI provider settings
-- **Offline Mode**: Seamless transition between online and local AI
-
-### API Integration
-```typescript
-// Use Recoder API in your applications
-import { RecoderAPI } from '@recoder/api-client';
-
-const recoder = new RecoderAPI({ apiKey: 'your-api-key' });
-
-const result = await recoder.generateCode({
-  prompt: 'Create a React component for user authentication',
-  provider: 'auto', // Let Recoder choose optimal AI
-  realCode: true,   // Generate production-ready code
-  context: projectContext
-});
-```
-
-## 🔒 Security & Privacy
-
-- **API Key Security**: All AI provider keys encrypted and stored securely
-- **Code Privacy**: Generated code never stored without explicit permission
-- **Local Processing**: Sensitive code can be processed entirely locally with Ollama
-- **Audit Trails**: Complete logging of all AI interactions for compliance
-- **Data Sovereignty**: Choose where your code and data are processed
-
-## 📈 Performance & Scalability
-
-- **Edge Computing**: Global deployment with Vercel Edge Functions
-- **Intelligent Caching**: Multi-layer caching for sub-second responses  
-- **Load Balancing**: Automatic scaling based on demand
-- **Performance Monitoring**: Real-time metrics and optimization
-- **Resource Optimization**: Efficient AI provider routing to minimize costs
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
-
-### Development Setup
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes and add tests
-4. Run the test suite: `npm test`
-5. Submit a pull request
-
-### Reporting Issues
-- **Bug Reports**: Use our [issue template](https://github.com/recoderxyz/recoder.xyz/issues/new?template=bug_report.md)
-- **Feature Requests**: Use our [feature template](https://github.com/recoderxyz/recoder.xyz/issues/new?template=feature_request.md)
-- **Security Issues**: Email security@recoder.xyz
-
-## 📜 License
-
-MIT License - see [LICENSE](./LICENSE) for details.
-
-## 🙏 Acknowledgments
-
-- Built on the foundation of modern web technologies
-- Inspired by the need for real, production-ready AI code generation
-- Thanks to the open-source community for amazing tools and libraries
-
----
-
-<p align="center">
-  <strong>Ready to generate real, production-ready code?</strong><br>
-  <a href="https://web.recoder.xyz">🚀 Try Recoder Web Platform</a>
-</p>
-
-<p align="center">
-  <sub>Built with ❤️ by the Recoder.xyz team</sub>
-</p>
+**How can I add make sure my framework/project works well in bolt?**  
+We are excited to work with the JavaScript ecosystem to improve functionality in Bolt. Reach out to us via [hello@stackblitz.com](mailto:hello@stackblitz.com) to discuss how we can partner!
+# recoder-web
