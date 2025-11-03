@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
           plan: user.subscriptionPlan || 'free',
           createdAt: user.createdAt,
           emailVerified: user.emailVerified,
-          avatar: user.avatar
+          avatar: user.image
         },
         stats: {
           totalRequests: monthlyUsage._count || 0,

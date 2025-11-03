@@ -84,23 +84,35 @@ export default function SecuritySettingsPage() {
       return;
     }
 
+    if (passwordData.newPassword.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      const response = await fetch('/api/user/security/password', {
+      const response = await fetch('/api/user/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(passwordData)
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword
+        })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setSuccess('Password changed successfully');
+        setSuccess('Password changed successfully! You will be signed out shortly.');
         setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        setTimeout(() => setSuccess(''), 3000);
+
+        // Sign out after 2 seconds
+        setTimeout(() => {
+          window.location.href = '/auth/signin';
+        }, 2000);
       } else {
         setError(data.error || 'Failed to change password');
       }

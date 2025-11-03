@@ -33,7 +33,7 @@ export class UserService {
           id: user.id,
           email: user.email,
           name: user.name,
-          avatar: user.avatar,
+          avatar: user.image,
           image: user.image,
           bio: user.bio,
           company: user.company,
@@ -112,7 +112,7 @@ export class UserService {
     try {
       const user = await prisma.user.update({
         where: { id: userId },
-        data: { avatar: avatarUrl },
+        data: { image: avatarUrl },
       });
 
       // Log avatar update
@@ -126,7 +126,7 @@ export class UserService {
 
       return {
         success: true,
-        avatar: user.avatar,
+        avatar: user.image,
       };
     } catch (error: any) {
       console.error('Upload avatar error:', error);
@@ -141,7 +141,7 @@ export class UserService {
     try {
       await prisma.user.update({
         where: { id: userId },
-        data: { avatar: null },
+        data: { image: null },
       });
 
       // Log avatar deletion

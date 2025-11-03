@@ -23,32 +23,37 @@ export async function POST(request: NextRequest) {
     // Hash the token to match stored hash
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-    // TODO: Implement proper token validation with PasswordReset table
-    // const resetRequest = await prisma.passwordReset.findFirst({
-    //   where: {
-    //     token: hashedToken,
-    //     used: false,
-    //     expiresAt: {
-    //       gt: new Date()
-    //     }
-    //   },
-    //   include: {
-    //     user: true
-    //   }
-    // });
+    // Find all password-reset verifications
+    const verifications = await prisma.verifications.findMany({
+      where: {
+        value: hashedToken,
+        expiresAt: {
+          gt: new Date()
+        }
+      }
+    });
 
-    // if (!resetRequest) {
-    //   return NextResponse.json(
-    //     { valid: false, error: 'Invalid or expired reset link' },
-    //     { status: 400 }
-    //   );
-    // }
+    // Find the password-reset verification
+    const verification = verifications.find(v =>
+      v.identifier.startsWith('password-reset:')
+    );
+
+    if (!verification) {
+      return NextResponse.json(
+        { valid: false, error: 'Invalid or expired reset link' },
+        { status: 400 }
+      );
+    }
+
+    // Extract email from identifier
+    const email = verification.identifier.replace('password-reset:', '');
 
     // If just validating token
     if (validate) {
       return NextResponse.json({
         valid: true,
-        message: 'Token is valid'
+        message: 'Token is valid',
+        email
       });
     }
 
@@ -72,29 +77,33 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Update user password
-    // TODO: Get actual user from token validation above
-    // await prisma.user.update({
-    //   where: { id: resetRequest.userId },
-    //   data: { password: hashedPassword }
-    // });
+    await prisma.users.update({
+      where: { email },
+      data: {
+        password: hashedPassword,
+        updatedAt: new Date()
+      }
+    });
 
-    // Mark token as used
-    // await prisma.passwordReset.update({
-    //   where: { id: resetRequest.id },
-    //   data: { used: true }
-    // });
+    // Delete the verification token (marking it as used)
+    await prisma.verifications.delete({
+      where: { id: verification.id }
+    });
 
-    // TODO: Send confirmation email
-    // await sendPasswordChangedEmail(resetRequest.user.email);
+    // Revoke all existing sessions for security
+    await prisma.sessions.deleteMany({
+      where: {
+        users: {
+          email
+        }
+      }
+    });
 
-    // TODO: Revoke all existing sessions for security
-    // await revokeAllSessions(resetRequest.userId);
-
-    console.log('✅ Password reset successfully');
+    console.log(`✅ Password reset successfully for ${email}`);
 
     return NextResponse.json({
       success: true,
-      message: 'Password has been reset successfully'
+      message: 'Password has been reset successfully. Please sign in with your new password.'
     });
 
   } catch (error) {

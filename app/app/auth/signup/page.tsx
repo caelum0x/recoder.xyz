@@ -27,6 +27,7 @@ function SignUpForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [emailOnlyMode, setEmailOnlyMode] = useState(false); // Toggle for email-only signup
   const searchParams = useSearchParams();
   const router = useRouter();
   const returnUrl = searchParams.get('return') || '/dashboard';
@@ -51,6 +52,35 @@ function SignUpForm() {
     setLoading(true);
     setError('');
 
+    // Email-only mode: send temporary password
+    if (emailOnlyMode) {
+      try {
+        const response = await fetch('/api/auth/signup-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            name: formData.name
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setSuccess(true);
+          setError('');
+        } else {
+          setError(data.error || 'Failed to create account');
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Network error. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Password mode: traditional signup
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
@@ -240,9 +270,28 @@ function SignUpForm() {
                 )}
                 {success && (
                   <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
-                    ✓ Account created successfully! Redirecting...
+                    {emailOnlyMode
+                      ? '✓ Account created! Check your email for your temporary password.'
+                      : '✓ Account created successfully! Redirecting...'
+                    }
                   </div>
                 )}
+
+                {/* Toggle between password and email-only mode */}
+                <div className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="emailOnly"
+                      checked={emailOnlyMode}
+                      onChange={(e) => setEmailOnlyMode(e.target.checked)}
+                      className="w-4 h-4 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                    />
+                    <label htmlFor="emailOnly" className="text-sm text-gray-300 cursor-pointer">
+                      Send me a temporary password via email
+                    </label>
+                  </div>
+                </div>
                 
                 <div className="space-y-2">
                   <label htmlFor="name" className="block text-sm font-medium text-gray-300">
@@ -274,62 +323,66 @@ function SignUpForm() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                    Password
-                  </label>
-                  <input
-                    id="password" 
-                    type="password" 
-                    placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                    value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    required
-                  />
-                  
-                  {/* Password Strength Indicator */}
-                  {formData.password && (
+                {!emailOnlyMode && (
+                  <>
                     <div className="space-y-2">
-                      <div className="flex gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <div
-                            key={i}
-                            className={`h-1 flex-1 rounded-full transition-colors ${
-                              i < passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-700'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-400">
-                        Strength: <span className={`font-medium ${passwordStrength >= 3 ? 'text-green-500' : 'text-orange-500'}`}>
-                          {strengthLabels[passwordStrength - 1] || 'Very Weak'}
-                        </span>
-                      </p>
-                      <div className="text-xs text-gray-500 space-y-1">
-                        <p className={formData.password.length >= 8 ? 'text-green-500' : ''}>• At least 8 characters</p>
-                        <p className={/[a-z]/.test(formData.password) && /[A-Z]/.test(formData.password) ? 'text-green-500' : ''}>• Mix of uppercase and lowercase</p>
-                        <p className={/\d/.test(formData.password) ? 'text-green-500' : ''}>• At least one number</p>
-                        <p className={/[^a-zA-Z\d]/.test(formData.password) ? 'text-green-500' : ''}>• At least one special character</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                      <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                        Password
+                      </label>
+                      <input
+                        id="password"
+                        type="password"
+                        placeholder="••••••••"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                        value={formData.password}
+                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                        required={!emailOnlyMode}
+                      />
 
-                <div className="space-y-2">
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">
-                    Confirm Password
-                  </label>
-                  <input
-                    id="confirmPassword" 
-                    type="password" 
-                    placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                    required
-                  />
-                </div>
+                      {/* Password Strength Indicator */}
+                      {formData.password && (
+                        <div className="space-y-2">
+                          <div className="flex gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <div
+                                key={i}
+                                className={`h-1 flex-1 rounded-full transition-colors ${
+                                  i < passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-700'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-400">
+                            Strength: <span className={`font-medium ${passwordStrength >= 3 ? 'text-green-500' : 'text-orange-500'}`}>
+                              {strengthLabels[passwordStrength - 1] || 'Very Weak'}
+                            </span>
+                          </p>
+                          <div className="text-xs text-gray-500 space-y-1">
+                            <p className={formData.password.length >= 8 ? 'text-green-500' : ''}>• At least 8 characters</p>
+                            <p className={/[a-z]/.test(formData.password) && /[A-Z]/.test(formData.password) ? 'text-green-500' : ''}>• Mix of uppercase and lowercase</p>
+                            <p className={/\d/.test(formData.password) ? 'text-green-500' : ''}>• At least one number</p>
+                            <p className={/[^a-zA-Z\d]/.test(formData.password) ? 'text-green-500' : ''}>• At least one special character</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">
+                        Confirm Password
+                      </label>
+                      <input
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="••••••••"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                        value={formData.confirmPassword}
+                        onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                        required={!emailOnlyMode}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <button 
                   className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
