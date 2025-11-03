@@ -1,0 +1,256 @@
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
+import type { Messages } from '~/lib/types/chat';
+import SwitchableStream from '~/lib/.server/llm/switchable-stream';
+import { chatRateLimiter, applyRateLimit, createRateLimitResponse } from '~/lib/.server/middleware/rate-limiter';
+import { detectAndPrepareStarter, createDirectStarterResponse } from '~/lib/.server/llm/starter-injector';
+import { log } from '~/lib/.server/llm/starter-config';
+import { streamOpenRouterResponse } from '~/lib/.server/llm/openrouter-stream';
+import { getSystemPrompt } from '~/lib/.server/llm/prompts';
+
+/**
+ * FIX #2: Detect GitHub URL in user message
+ * Supports various GitHub URL formats
+ */
+function detectGitHubUrl(message: string): string | null {
+  // Match various GitHub URL formats
+  const patterns = [
+    // Full HTTPS URLs
+    /https?:\/\/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i,
+    // github.com without protocol
+    /github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i,
+    // owner/repo format (only if surrounded by spaces or at boundaries)
+    /(?:^|\s)([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)(?:\s|$)/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match) {
+      const url = match[1] || match[0];
+      // Return normalized URL
+      if (url.startsWith('http')) {
+        return url;
+      } else if (url.includes('github.com')) {
+        return url;
+      } else {
+        // owner/repo format
+        return url;
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Check if user message requires customization beyond the starter
+ */
+function checkIfNeedsCustomization(message: string): boolean {
+  const customizationKeywords = [
+    // Styling/theme
+    'dark mode', 'light mode', 'theme', 'color', 'style', 'design',
+    // Features to add
+    'add', 'include', 'integrate', 'with authentication', 'with auth',
+    'with payment', 'with stripe', 'with database', 'with', 
+    // Modifications
+    'modify', 'change', 'update', 'edit', 'custom', 'customize',
+    'different', 'instead of', 'replace',
+    // Specific requirements
+    'i want', 'i need', 'should have', 'must have', 'need to',
+    'but', 'however', 'except', 'also', 'additionally',
+    // Multiple features
+    'and', '&', '+',
+  ];
+
+  const lowerMessage = message.toLowerCase();
+  return customizationKeywords.some(keyword => lowerMessage.includes(keyword));
+}
+
+export async function action(args: ActionFunctionArgs) {
+  // Apply rate limiting
+  const rateLimitResult = await applyRateLimit(args.request, chatRateLimiter);
+
+  if (!rateLimitResult.allowed) {
+    return createRateLimitResponse(rateLimitResult.headers, rateLimitResult.error);
+  }
+
+  // Add rate limit headers to successful response
+  const response = await chatAction(args);
+
+  // Add rate limit headers
+  Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+
+  return response;
+}
+
+async function chatAction({ context, request }: ActionFunctionArgs) {
+  let messages: Messages;
+
+  try {
+    const body = await request.json<{ messages: Messages }>();
+
+    // Validate messages
+    const { validateChatMessages, createValidationErrorResponse } = await import('~/lib/.server/middleware/request-validator');
+    const validation = validateChatMessages(body.messages);
+
+    if (!validation.valid) {
+      console.error('Message validation failed:', validation.errors);
+      return createValidationErrorResponse(validation.errors);
+    }
+
+    messages = validation.sanitized as Messages;
+  } catch (error) {
+    console.error('Failed to parse request:', error);
+    throw new Response(JSON.stringify({ error: 'Invalid request format' }), {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+  }
+
+  // Extract the last user message for starter detection
+  const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
+  
+  // FIX #2: Detect GitHub URL BEFORE AI processing
+  const githubUrl = detectGitHubUrl(lastUserMessage);
+  if (githubUrl) {
+    log(`🔀 GitHub URL detected: ${githubUrl}`);
+    // Add ULTRA-EXPLICIT instruction to AI to ONLY use cloneGitHub
+    messages.push({
+      role: 'system',
+      content: `🚨 CRITICAL - GITHUB REPOSITORY DETECTED 🚨
+
+Repository: ${githubUrl}
+
+MANDATORY REQUIREMENTS:
+1. You MUST use ONLY this action: <boltAction type="cloneGitHub" repoUrl="${githubUrl}" reason="User requested to clone this repository">
+2. The cloneGitHub action MUST be the ONLY action in your entire response
+3. DO NOT use any <boltAction type="file"> actions - NOT EVEN ONE
+4. DO NOT generate, create, modify, or add ANY files whatsoever
+5. DO NOT suggest improvements or customizations
+6. The cloned repository is complete and perfect as-is
+
+VIOLATION CONSEQUENCES:
+- Any file actions will CORRUPT the repository
+- Mixing cloned files with generated files will BREAK the project
+- You will cause CRITICAL ERRORS if you add anything beyond the cloneGitHub action
+
+CORRECT RESPONSE FORMAT:
+<boltArtifact id="github-clone" title="Clone ${githubUrl}">
+  <boltAction type="cloneGitHub" repoUrl="${githubUrl}" reason="User requested to clone this repository">
+    Cloning the complete repository from GitHub.
+  </boltAction>
+</boltArtifact>
+
+That's it. Nothing else. Just the clone action.`,
+    });
+  }
+  
+  // CRITICAL FIX: Detect and prepare starter template BEFORE AI processing
+  log('🔍 Checking if user request matches a starter template...');
+  const starterInjection = await detectAndPrepareStarter(lastUserMessage);
+  
+  // If we found a matching starter template, handle it appropriately
+  if (starterInjection.shouldInject) {
+    log(`✅ Starter detected: ${starterInjection.starterId} (confidence: ${starterInjection.confidence?.toFixed(2)})`);
+    
+    // Always return the starter - either directly or for AI to customize
+    const directResponse = createDirectStarterResponse(starterInjection, lastUserMessage);
+    
+    if (directResponse) {
+      log('🚀 Returning pre-loaded starter (with or without AI customization)');
+      
+      // Check if we need AI customization
+      const needsCustomization = checkIfNeedsCustomization(lastUserMessage);
+      
+      if (!needsCustomization) {
+        // Return directly without AI - saves 100% of AI costs!
+        log('   → Direct return (no customization needed)');
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(directResponse));
+            controller.close();
+          }
+        });
+
+        return new Response(stream, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        });
+      } else {
+        // AI will add customizations on top of the starter
+        log('   → AI will customize the loaded starter');
+        // Prepend the starter to the conversation
+        messages.push({
+          role: 'assistant',
+          content: directResponse,
+        });
+        // Add a follow-up user message for customization
+        messages.push({
+          role: 'user',
+          content: `The base starter is loaded above. Now please add the customizations I requested: ${lastUserMessage}`,
+        });
+      }
+    }
+  } else {
+    log('   → No starter match found, proceeding with normal AI generation');
+  }
+
+  const stream = new SwitchableStream();
+
+  try {
+    // Get system prompt
+    const systemPrompt = getSystemPrompt();
+    
+    // Get OpenRouter API key
+    const apiKey = context.cloudflare.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY not configured');
+    }
+
+    // Stream directly from OpenRouter (NO AI SDK)
+    const openrouterStream = await streamOpenRouterResponse(
+      systemPrompt,
+      messages,
+      apiKey,
+      {
+        model: 'x-ai/grok-code-fast-1', // Fast coding model
+        temperature: 0.7,
+        max_tokens: 8000,
+      }
+    );
+
+    stream.switchSource(openrouterStream);
+
+    return new Response(stream.readable, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
+  } catch (error) {
+    console.error('Chat action error:', error);
+
+    // Log full error details for debugging
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+
+    // Check if it's an API error with response body
+    if (error && typeof error === 'object' && 'responseBody' in error) {
+      console.error('API Response Body:', (error as any).responseBody);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+
+    throw new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+  }
+}
