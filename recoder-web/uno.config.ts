@@ -72,6 +72,19 @@ const BASE_COLORS = {
     800: '#93370D',
     900: '#792E0D',
   },
+  purple: {
+    50: '#FAF5FF',
+    100: '#F3E8FF',
+    200: '#E9D5FF',
+    300: '#D8B4FE',
+    400: '#C084FC',
+    500: '#B941F5',
+    600: '#A030E6',
+    700: '#8820C7',
+    800: '#6B1AA8',
+    900: '#581C87',
+    950: '#3B0764',
+  },
   red: {
     50: '#FEF2F2',
     100: '#FEE2E2',
@@ -94,6 +107,7 @@ const COLOR_PRIMITIVES = {
     gray: generateAlphaPalette(BASE_COLORS.gray[900]),
     red: generateAlphaPalette(BASE_COLORS.red[500]),
     accent: generateAlphaPalette(BASE_COLORS.accent[500]),
+    purple: generateAlphaPalette(BASE_COLORS.purple[500]),
   },
 };
 
