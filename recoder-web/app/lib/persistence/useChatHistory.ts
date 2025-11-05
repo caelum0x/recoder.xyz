@@ -247,9 +247,13 @@ export function useChatHistory() {
       clearSessionState();
       setUrlId(undefined);
       setInitialMessages([]);
+      setReady(false); // ← Force re-mount to ensure clean state
     } else if (currentPath.startsWith('/chat/') && previousPath.startsWith('/chat/') && currentPath !== previousPath) {
       console.log('🔄 [useChatHistory] Navigated between chats - clearing for fresh load');
       clearSessionState();
+      setUrlId(undefined);
+      setInitialMessages([]); // ← CRITICAL: Clear old messages so component updates
+      setReady(false); // ← Force component to re-mount with new chat data
     }
 
     previousPathRef.current = currentPath;
@@ -323,7 +327,7 @@ export function useChatHistory() {
             
             // Set ready LAST
             setReady(true);
-            return;
+            return { success: true }; // ← FIXED: Return success marker to skip next .then()
           }
 
           // Fallback to IndexedDB
@@ -333,18 +337,24 @@ export function useChatHistory() {
           return null;
         })
         .then((storedMessages) => {
-          if (storedMessages && storedMessages.messages.length > 0) {
+          // Skip if database already loaded successfully
+          if (storedMessages && typeof storedMessages === 'object' && 'success' in storedMessages) {
+            console.log('✅ Database load already handled, skipping IndexedDB fallback');
+            return; // ← Don't navigate to home!
+          }
+
+          if (storedMessages && storedMessages.messages && storedMessages.messages.length > 0) {
             console.log('✅ Loaded chat from IndexedDB:', storedMessages.id);
             setInitialMessages(storedMessages.messages);
             setUrlId(storedMessages.urlId);
             description.set(storedMessages.description);
             chatId.set(storedMessages.id);
-          } else if (!initialMessages.length) {
+            setReady(true);
+          } else {
             console.warn('No messages found for chat:', mixedId);
             navigate(`/`, { replace: true });
+            setReady(true);
           }
-
-          setReady(true);
         })
         .catch((error) => {
           console.error('Failed to load chat history:', error);
