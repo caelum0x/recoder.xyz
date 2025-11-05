@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { motion, type HTMLMotionProps, type Variants } from 'framer-motion';
 import { computed } from 'nanostores';
-import { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import {
   type OnChangeCallback as OnEditorChange,
@@ -16,6 +16,7 @@ import { cubicEasingFn } from '~/utils/easings';
 import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
+import { GitHubSyncModal } from './GitHubSyncModal';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -108,6 +109,151 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     workbenchStore.resetCurrentDocument();
   }, []);
 
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [showGitHubModal, setShowGitHubModal] = useState(false);
+
+  const handleDownloadCode = useCallback(async () => {
+    setIsDownloading(true);
+    try {
+      console.log('📥 Downloading code...');
+
+      // Convert files to plain object
+      const filesToDownload: Record<string, string> = {};
+      Object.entries(files).forEach(([path, file]) => {
+        if (file.type === 'file') {
+          filesToDownload[path] = file.content;
+        }
+      });
+
+      if (Object.keys(filesToDownload).length === 0) {
+        toast.error('No files to download');
+        return;
+      }
+
+      const response = await fetch('/api/download-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: filesToDownload,
+          projectName: 'recoder-project',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download code');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'recoder-project.zip';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('Code downloaded successfully!');
+    } catch (error) {
+      console.error('❌ Download failed:', error);
+      toast.error('Failed to download code');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [files]);
+
+  const handlePushToGitHub = useCallback(async () => {
+    setIsPushing(true);
+    try {
+      // Convert files to plain object
+      const filesToPush: Record<string, string> = {};
+      Object.entries(files).forEach(([path, file]) => {
+        if (file.type === 'file') {
+          filesToPush[path] = file.content;
+        }
+      });
+
+      if (Object.keys(filesToPush).length === 0) {
+        toast.error('No files to push');
+        return;
+      }
+
+      // Prompt for repository name
+      const repoName = prompt('Enter repository name:', 'my-recoder-project');
+      if (!repoName) {
+        toast.info('GitHub push cancelled');
+        return;
+      }
+
+      // Prompt for GitHub token
+      const accessToken = prompt('Enter your GitHub Personal Access Token:\n(Create one at: https://github.com/settings/tokens)');
+      if (!accessToken) {
+        toast.info('GitHub push cancelled - token required');
+        return;
+      }
+
+      console.log('📤 Pushing to GitHub...');
+      toast.info('Pushing to GitHub...');
+
+      const response = await fetch('/api/github/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: filesToPush,
+          repoName,
+          description: 'Created with Recoder.xyz',
+          isPrivate: false,
+          accessToken,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to push to GitHub');
+      }
+
+      toast.success(
+        <div>
+          Successfully pushed to GitHub!
+          <br />
+          <a href={result.repoUrl} target="_blank" rel="noopener noreferrer" className="underline">
+            View Repository
+          </a>
+        </div>
+      );
+    } catch (error: any) {
+      console.error('❌ GitHub push failed:', error);
+      toast.error(`Failed to push to GitHub: ${error.message}`);
+    } finally {
+      setIsPushing(false);
+    }
+  }, [files]);
+
+  const handleFilesUpdate = useCallback((newFiles: Record<string, string>) => {
+    console.log('📥 Updating files from GitHub:', Object.keys(newFiles).length, 'files');
+
+    // Convert plain object to workbench format
+    const updatedFiles: Record<string, any> = {};
+    Object.entries(newFiles).forEach(([path, content]) => {
+      updatedFiles[path] = {
+        type: 'file',
+        content,
+        isBinary: false,
+      };
+    });
+
+    workbenchStore.files.set(updatedFiles);
+    workbenchStore.setDocuments(updatedFiles);
+    workbenchStore.showWorkbench.set(true);
+    toast.success(`Updated ${Object.keys(newFiles).length} files from GitHub`);
+  }, []);
+
   return (
     chatStarted && (
       <motion.div
@@ -131,15 +277,32 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                 <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
                 <div className="ml-auto" />
                 {selectedView === 'code' && (
-                  <PanelHeaderButton
-                    className="mr-1 text-sm"
-                    onClick={() => {
-                      workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
-                    }}
-                  >
-                    <div className="i-ph:terminal" />
-                    Toggle Terminal
-                  </PanelHeaderButton>
+                  <>
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={() => setShowGitHubModal(true)}
+                    >
+                      <div className="i-ph:git-branch" />
+                      GitHub Sync
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={handleDownloadCode}
+                      disabled={isDownloading || Object.keys(files).length === 0}
+                    >
+                      <div className={isDownloading ? "i-ph:spinner animate-spin" : "i-ph:download-simple"} />
+                      {isDownloading ? 'Downloading...' : 'Download'}
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={() => {
+                        workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
+                      }}
+                    >
+                      <div className="i-ph:terminal" />
+                      Toggle Terminal
+                    </PanelHeaderButton>
+                  </>
                 )}
                 <IconButton
                   icon="i-ph:x-circle"
@@ -178,6 +341,12 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
             </div>
           </div>
         </div>
+        <GitHubSyncModal
+          isOpen={showGitHubModal}
+          onClose={() => setShowGitHubModal(false)}
+          files={files}
+          onFilesUpdate={handleFilesUpdate}
+        />
       </motion.div>
     )
   );
