@@ -349,10 +349,12 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
   // Listen for import events from GitHub/Starters/Templates
   useEffect(() => {
     const handleImport = async (event: CustomEvent) => {
-      const { prompt, files, repository, template } = event.detail;
+      const { prompt, files, repository, template, isLocal } = event.detail;
 
       console.log('🎯 Received bolt:import event:', {
-        prompt: prompt.substring(0, 100),
+        isLocal: isLocal || false,
+        hasPrompt: !!prompt,
+        prompt: prompt ? prompt.substring(0, 100) : 'No prompt (local starter)',
         fileCount: Object.keys(files).length,
         repository: repository.name,
         template: template?.name

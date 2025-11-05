@@ -1,17 +1,52 @@
 import { useStore } from '@nanostores/react';
-import type { LinksFunction } from '@remix-run/cloudflare';
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
+import type { LinksFunction, LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { json, redirect } from '@remix-run/cloudflare';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData } from '@remix-run/react';
 import tailwindReset from '@unocss/reset/tailwind-compat.css?url';
 import { themeStore } from './lib/stores/theme';
 import { stripIndents } from './utils/stripIndent';
-import { createHead } from 'remix-island'; 
+import { createHead } from 'remix-island';
 import { useEffect } from 'react';
+import { verifySession, getLoginUrl } from './lib/auth/session.server';
+import { AuthProvider } from './lib/contexts/AuthContext';
 
 import reactToastifyStyles from 'react-toastify/dist/ReactToastify.css?url';
 import globalStyles from './styles/index.scss?url';
 import xtermStyles from '@xterm/xterm/css/xterm.css?url';
 
 import 'virtual:uno.css';
+
+/**
+ * Root loader - Verify authentication before loading the app
+ */
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+
+  // Allow public routes (if any exist in the future)
+  const publicPaths = ['/api/', '/health'];
+  if (publicPaths.some(path => url.pathname.startsWith(path))) {
+    return json({ user: null });
+  }
+
+  // Verify session with main site
+  const session = await verifySession(request);
+
+  if (!session?.user) {
+    // Not authenticated - redirect to main site login
+    const redirectUrl = getLoginUrl(url.toString());
+    console.log('[Auth] Redirecting to login:', redirectUrl);
+    return redirect(redirectUrl);
+  }
+
+  console.log('[Auth] User authenticated:', session.user.email);
+
+  return json({
+    user: session.user,
+    ENV: {
+      MAIN_SITE_URL: process.env.MAIN_SITE_URL || 'http://localhost:3000',
+    },
+  });
+}
 
 export const links: LinksFunction = () => [
   {
@@ -79,5 +114,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const { user } = useLoaderData<typeof loader>();
+
+  return (
+    <AuthProvider user={user}>
+      <Outlet />
+    </AuthProvider>
+  );
 }
