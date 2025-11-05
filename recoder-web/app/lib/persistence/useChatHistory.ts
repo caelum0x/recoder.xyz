@@ -422,16 +422,21 @@ export function useChatHistory() {
       }
 
       // Set URL ID from artifact or chat ID
-      if (!urlId && firstArtifact?.id) {
+      // CRITICAL: Track urlId locally to avoid React state race condition
+      let currentUrlId = urlId;
+
+      if (!currentUrlId && firstArtifact?.id) {
         const newUrlId = db ? await getUrlId(db, firstArtifact.id) : firstArtifact.id;
         navigateChat(newUrlId);
         setUrlId(newUrlId);
+        currentUrlId = newUrlId; // ← Store locally to avoid race condition
         console.log('🔗 [useChatHistory] Set URL ID from artifact:', newUrlId);
-      } else if (!urlId && chatId.get()) {
+      } else if (!currentUrlId && chatId.get()) {
         // If no artifact but we have a chat ID, use that as URL ID
         const chatIdValue = chatId.get()!;
         navigateChat(chatIdValue);
         setUrlId(chatIdValue);
+        currentUrlId = chatIdValue; // ← Store locally to avoid race condition
         console.log('🔗 [useChatHistory] Set URL ID from chat ID:', chatIdValue);
       }
 
@@ -452,7 +457,7 @@ export function useChatHistory() {
       }
 
       const finalChatId = chatId.get();
-      const finalUrlId = urlId;
+      const finalUrlId = currentUrlId; // ← Use local variable instead of state
       const finalDescription = description.get();
 
       if (!finalChatId || !finalUrlId) {

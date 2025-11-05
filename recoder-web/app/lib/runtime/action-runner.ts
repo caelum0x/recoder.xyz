@@ -180,21 +180,45 @@ export class ActionRunner {
     // CRITICAL: Block dev server commands entirely - they should never execute
     // These commands run forever and freeze the UI at "Step 7 of 7"
     if (isDevServer) {
-      const errorMsg = '🚨 BLOCKED: Development server commands are not allowed!\n\n' +
-        'Commands like "npm run dev", "npm start", "vite", etc. run forever and will freeze the application.\n\n' +
-        'The AI should NOT generate these commands. The project is ready to use after dependencies are installed.\n\n' +
-        'Blocked command: ' + action.content.substring(0, 200);
+      const blockedCommand = action.content.substring(0, 100).trim();
+      const errorMsg = `🚨 BLOCKED DEV SERVER COMMAND
+
+This command was automatically blocked because it would run indefinitely:
+"${blockedCommand}"
+
+Why was this blocked?
+• Development servers (npm run dev, vite, etc.) run continuously
+• They never complete, causing the application to freeze
+• This would create a poor user experience
+
+Your project is ready!
+✓ All files have been created
+✓ Dependencies are installed (or will be by the next command)
+✓ You can manually start the dev server when ready
+
+To start your project:
+1. Open the terminal (bottom panel)
+2. Run the dev command manually if needed
+3. Use the preview pane to view your app
+
+The AI should not generate dev server commands.`;
 
       logger.error(errorMsg);
-      throw new Error('Dev server command blocked - these commands run indefinitely and should not be executed');
+      console.error(errorMsg); // Also log to console for visibility
+
+      // Throw a user-friendly error
+      throw new Error('🚫 Dev server command blocked (runs indefinitely). Your project is ready - start the dev server manually if needed.');
     }
 
     // All dev server commands are blocked above, so we only execute regular commands
+    logger.info(`✅ Command allowed - executing: ${action.content.substring(0, 100)}`);
+
     let process;
     try {
       process = await webcontainer.spawn('jsh', ['-c', action.content], {
         env: { npm_config_yes: true },
       });
+      logger.info('📦 Process spawned successfully, waiting for completion...');
     } catch (error) {
       logger.error('Failed to spawn shell process:', error);
       throw error;
@@ -218,13 +242,18 @@ export class ActionRunner {
     process.output.pipeTo(outputWriter);
 
     // For regular commands, wait for completion with timeout
-    // REDUCED: Changed from 5 minutes to 30 seconds for faster failure detection
-    // Most commands (npm install) complete in < 30 seconds
+    // Increased timeout for npm install on large projects
+    // Small projects: ~10-20s, Large projects: ~60-90s
+    const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
+    const timeoutDuration = isInstallCommand ? 120000 : 60000; // 2 min for install, 1 min for others
+
+    logger.info(`⏱️ Timeout set to ${timeoutDuration / 1000}s (install command: ${isInstallCommand})`);
+
     const exitPromise = process.exit;
     const timeoutPromise = new Promise<number>((_, reject) => {
       setTimeout(() => {
-        reject(new Error('Command timed out after 30 seconds'));
-      }, 30 * 1000); // 30 seconds (reduced from 5 minutes)
+        reject(new Error(`Command timed out after ${timeoutDuration / 1000} seconds`));
+      }, timeoutDuration);
     });
 
     let exitCode: number;
