@@ -3,7 +3,8 @@
  * Provides user session data throughout the app
  */
 
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext } from 'react';
+import type { ReactNode } from 'react';
 import type { User } from '../auth/session.server';
 
 interface AuthContextType {

@@ -70,6 +70,11 @@ export class ChatHistoryDB {
         ${data.description || null},
         ${data.artifactId || null}
       )
+      ON CONFLICT (url_id) DO UPDATE SET
+        title = EXCLUDED.title,
+        description = EXCLUDED.description,
+        artifact_id = EXCLUDED.artifact_id,
+        updated_at = NOW()
       RETURNING *
     ` as unknown as ChatSession[];
 

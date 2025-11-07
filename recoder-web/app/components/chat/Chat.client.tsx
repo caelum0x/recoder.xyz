@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react';
 import { useAnimate } from 'framer-motion';
 import { memo, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
+import { useLoaderData } from '@remix-run/react';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { useSimpleChat, type Message } from '~/lib/hooks/useSimpleChat';
 import { useKeyboardShortcuts, COMMON_SHORTCUTS } from '~/lib/hooks/useKeyboardShortcuts';
@@ -28,10 +29,11 @@ export function Chat() {
   renderLogger.trace('Chat');
 
   const { ready, initialMessages, storeMessageHistory } = useChatHistory();
+  const { id: chatId } = useLoaderData<{ id?: string }>();
 
   return (
     <>
-      {ready && <ChatImpl initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
+      {ready && <ChatImpl key={chatId || 'new'} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
       <ToastContainer
         closeButton={({ closeToast }) => {
           return (

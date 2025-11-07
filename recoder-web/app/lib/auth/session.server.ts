@@ -28,7 +28,7 @@ function getMainSiteUrl(): string {
   // Default to production
   return process.env.NODE_ENV === 'production'
     ? 'https://recoder.xyz'
-    : 'http://localhost:3000';
+    : 'http://localhost:3001';
 }
 
 /**
