@@ -67,10 +67,11 @@ export function clearSessionState() {
   console.log('🧹 [clearSessionState] Clearing all session state atoms');
   chatId.set(undefined);
   description.set(undefined);
-  // Clear workbench firstArtifact to prevent artifact ID contamination
-  // @ts-ignore - workbenchStore might not have firstArtifact setter
-  if (workbenchStore.firstArtifact) {
-    workbenchStore.firstArtifact = undefined;
+  // Clear workbench artifact list to prevent artifact ID contamination
+  // firstArtifact is a getter that returns artifactIdList[0], so clear the array
+  if (workbenchStore.artifactIdList.length > 0) {
+    workbenchStore.artifactIdList = [];
+    console.log('🧹 [clearSessionState] Cleared artifact ID list');
   }
 }
 
@@ -408,14 +409,21 @@ export function useChatHistory() {
       // ALWAYS create chat ID if not set (removed initialMessages.length check to fix session contamination)
       // This ensures every conversation gets a fresh ID, even if user navigated from another chat
       if (!chatId.get()) {
-        if (db) {
-          const nextId = await getNextId(db);
-          chatId.set(nextId);
-          console.log('🆔 [useChatHistory] Created new chat ID from DB:', nextId);
-        } else {
-          const newId = Date.now().toString();
-          chatId.set(newId);
-          console.log('🆔 [useChatHistory] Created timestamp-based chat ID:', newId);
+        try {
+          if (db) {
+            const nextId = await getNextId(db);
+            chatId.set(nextId);
+            console.log('🆔 [useChatHistory] Created new chat ID from DB:', nextId);
+          } else {
+            const newId = Date.now().toString();
+            chatId.set(newId);
+            console.log('🆔 [useChatHistory] Created timestamp-based chat ID:', newId);
+          }
+        } catch (error) {
+          // CRITICAL FIX: Ensure chatId is ALWAYS set even if DB fails
+          const fallbackId = Date.now().toString();
+          chatId.set(fallbackId);
+          console.warn('⚠️ [useChatHistory] DB error, using fallback chat ID:', fallbackId, error);
         }
       } else {
         console.log('🆔 [useChatHistory] Using existing chat ID:', chatId.get());
@@ -426,11 +434,19 @@ export function useChatHistory() {
       let currentUrlId = urlId;
 
       if (!currentUrlId && firstArtifact?.id) {
-        const newUrlId = db ? await getUrlId(db, firstArtifact.id) : firstArtifact.id;
-        navigateChat(newUrlId);
-        setUrlId(newUrlId);
-        currentUrlId = newUrlId; // ← Store locally to avoid race condition
-        console.log('🔗 [useChatHistory] Set URL ID from artifact:', newUrlId);
+        try {
+          const newUrlId = db ? await getUrlId(db, firstArtifact.id) : firstArtifact.id;
+          navigateChat(newUrlId);
+          setUrlId(newUrlId);
+          currentUrlId = newUrlId; // ← Store locally to avoid race condition
+          console.log('🔗 [useChatHistory] Set URL ID from artifact:', newUrlId);
+        } catch (error) {
+          // Fallback: use artifact ID directly if getUrlId fails
+          console.warn('⚠️ [useChatHistory] getUrlId failed, using artifact ID directly:', error);
+          navigateChat(firstArtifact.id);
+          setUrlId(firstArtifact.id);
+          currentUrlId = firstArtifact.id;
+        }
       } else if (!currentUrlId && chatId.get()) {
         // If no artifact but we have a chat ID, use that as URL ID
         const chatIdValue = chatId.get()!;
@@ -438,6 +454,17 @@ export function useChatHistory() {
         setUrlId(chatIdValue);
         currentUrlId = chatIdValue; // ← Store locally to avoid race condition
         console.log('🔗 [useChatHistory] Set URL ID from chat ID:', chatIdValue);
+      }
+
+      // CRITICAL FIX: Final safety net - if STILL no urlId, use chatId as absolute fallback
+      if (!currentUrlId) {
+        const finalChatId = chatId.get();
+        if (finalChatId) {
+          console.warn('⚠️ [useChatHistory] No urlId set, using chatId as final fallback:', finalChatId);
+          navigateChat(finalChatId);
+          setUrlId(finalChatId);
+          currentUrlId = finalChatId;
+        }
       }
 
       // Set description from artifact title or generate one
