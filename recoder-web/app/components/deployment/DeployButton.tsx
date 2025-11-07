@@ -20,8 +20,8 @@ export function DeployButton({ className }: DeployButtonProps) {
         onClick={() => setIsModalOpen(true)}
         className={`
           flex items-center gap-2 px-4 py-2
-          bg-gradient-to-r from-green-500 to-blue-600
-          hover:from-green-600 hover:to-blue-700
+          bg-gradient-to-r from-orange-500 to-orange-600
+          hover:from-orange-600 hover:to-orange-700
           text-white rounded-lg font-medium
           transition-all shadow-lg hover:shadow-xl
           transform hover:scale-105
