@@ -19,12 +19,12 @@ export function getMainSiteUrl(): string {
   if (typeof window === 'undefined') {
     return process.env.NODE_ENV === 'production'
       ? 'https://recoder.xyz'
-      : 'http://localhost:3000';
+      : 'http://localhost:3001';
   }
 
   // Client-side: check if we're on localhost
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:3000';
+    return 'http://localhost:3001';
   }
 
   return 'https://recoder.xyz';
@@ -64,6 +64,17 @@ export function logout(): void {
 
   const mainSiteUrl = getMainSiteUrl();
   window.location.href = `${mainSiteUrl}/api/auth/sign-out?callbackURL=${encodeURIComponent(window.location.origin)}`;
+}
+
+/**
+ * Get current user from client-side session
+ * Note: Returns null if not authenticated
+ * TODO: Implement proper client-side session retrieval
+ */
+export function getCurrentUser(): User | null {
+  // Temporary stub - returns null (anonymous user)
+  // In production, this should check client-side session/cookie
+  return null;
 }
 
 /**

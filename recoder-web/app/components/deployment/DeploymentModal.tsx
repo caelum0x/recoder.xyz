@@ -147,13 +147,6 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
             {step === 'deploying' && '🔨 Deploying...'}
             {step === 'complete' && '✅ Deployment Complete!'}
           </DialogTitle>
-          {!isDeploying && (
-            <IconButton
-              icon="i-ph:x"
-              onClick={handleClose}
-              className="hover:bg-bolt-elements-background-depth-3"
-            />
-          )}
         </div>
 
         <div className="space-y-6">
