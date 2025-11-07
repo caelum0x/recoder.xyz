@@ -68,11 +68,13 @@ export function clearSessionState() {
   console.log('🧹 [clearSessionState] Clearing all session state atoms');
   chatId.set(undefined);
   description.set(undefined);
-  // Clear workbench firstArtifact to prevent artifact ID contamination
-  // @ts-ignore - workbenchStore might not have firstArtifact setter
-  if (workbenchStore.firstArtifact) {
-    workbenchStore.firstArtifact = undefined;
-  }
+
+  // Clear workbench artifacts to prevent artifact ID contamination
+  // firstArtifact is a getter, so we clear the underlying data structures
+  workbenchStore.artifacts.set({});
+  workbenchStore.artifactIdList = [];
+
+  console.log('✅ [clearSessionState] Session state cleared successfully');
 }
 
 // Initialize database on first import (but don't await - lazy load)
@@ -404,7 +406,7 @@ export function useChatHistory() {
     };
 
     initAndLoad();
-  }, [mixedId, navigate]);
+  }, [mixedId, navigate, location.pathname]); // Added location.pathname to force reload on navigation
 
   return {
     ready: !mixedId || ready,

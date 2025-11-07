@@ -276,12 +276,9 @@ export class ChatHistoryDB {
     artifactId?: string;
     fileSnapshot?: Record<string, string>;
   }): Promise<ChatSession> {
-    // Check if session exists
-    let session = await this.getSessionByUrlId(data.urlId);
-
     // Calculate file snapshot stats
     const fileCount = data.fileSnapshot ? Object.keys(data.fileSnapshot).length : 0;
-    const totalFileSize = data.fileSnapshot 
+    const totalFileSize = data.fileSnapshot
       ? Object.values(data.fileSnapshot).reduce((sum, content) => sum + content.length, 0)
       : 0;
 
@@ -293,8 +290,12 @@ export class ChatHistoryDB {
       lastUpdated: new Date().toISOString(),
     };
 
-    if (!session) {
-      // Create new session
+    // Use UPSERT pattern to prevent race condition with duplicate keys
+    // This handles concurrent save requests gracefully
+    let session: ChatSession;
+
+    try {
+      // Try to create new session
       session = await this.createSession({
         userId: data.userId,
         anonymousId: data.anonymousId,
@@ -308,14 +309,29 @@ export class ChatHistoryDB {
       await this.updateSession(session.id, {
         metadata: sessionMetadata,
       });
-    } else {
-      // Update existing session with new metadata
-      await this.updateSession(session.id, {
-        title: data.title,
-        description: data.description,
-        artifactId: data.artifactId,
-        metadata: sessionMetadata,
-      });
+    } catch (error: any) {
+      // If duplicate key error, session already exists - update it instead
+      if (error.code === '23505' && error.constraint === 'chat_sessions_url_id_key') {
+        const existingSession = await this.getSessionByUrlId(data.urlId);
+
+        if (!existingSession) {
+          // Extremely rare: session was deleted between create attempt and now
+          throw new Error('Session disappeared during upsert');
+        }
+
+        session = existingSession;
+
+        // Update existing session with new metadata
+        await this.updateSession(session.id, {
+          title: data.title,
+          description: data.description,
+          artifactId: data.artifactId,
+          metadata: sessionMetadata,
+        });
+      } else {
+        // Other error - rethrow
+        throw error;
+      }
     }
 
     // Get existing messages to compare and update

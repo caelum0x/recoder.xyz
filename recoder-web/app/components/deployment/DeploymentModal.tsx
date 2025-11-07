@@ -147,7 +147,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
             {step === 'deploying' && '🔨 Deploying...'}
             {step === 'complete' && '✅ Deployment Complete!'}
           </DialogTitle>
-          {!isDeploying && (
+          {!isDeploying && step !== 'complete' && (
             <IconButton
               icon="i-ph:x"
               onClick={handleClose}
