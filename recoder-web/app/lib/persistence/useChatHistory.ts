@@ -7,6 +7,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { getMessages, getNextId, getUrlId, openDatabase, setMessages } from './db';
 import { getCurrentUser } from '~/utils/auth-utils';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
+import { webcontainer } from '~/lib/webcontainer';
 
 export interface ChatHistoryItem {
   id: string;
@@ -298,31 +299,67 @@ export function useChatHistory() {
               console.log('📂 [useChatHistory] Scheduling workbench restoration:',
                 Object.keys(dbChat.fileSnapshot).length, 'files');
 
-              setTimeout(() => {
-                console.log('🔄 [useChatHistory] Restoring files to workbench...');
+              setTimeout(async () => {
+                console.log('🔄 [useChatHistory] Restoring files to WebContainer...');
 
                 try {
-                  // Update files store directly with the file snapshot
-                  const currentFiles = workbenchStore.files.get();
-                  const updatedFiles = { ...currentFiles };
+                  // Wait for WebContainer to be ready
+                  const wc = await webcontainer;
+                  console.log('✅ WebContainer ready, writing files...');
 
-                  Object.entries(dbChat.fileSnapshot!).forEach(([path, content]) => {
-                    updatedFiles[path] = {
-                      type: 'file',
-                      content: content as string,
-                      isBinary: false,
-                    };
-                  });
+                  // Write each file to WebContainer filesystem
+                  // The FilesStore watcher will automatically pick up the changes
+                  const fileEntries = Object.entries(dbChat.fileSnapshot!);
+                  let successCount = 0;
 
-                  workbenchStore.files.set(updatedFiles);
-                  workbenchStore.setDocuments(updatedFiles);
+                  for (const [path, content] of fileEntries) {
+                    try {
+                      // Extract relative path (remove leading /home/project/ if present)
+                      const relativePath = path.startsWith('/home/project/')
+                        ? path.substring('/home/project/'.length)
+                        : path.startsWith('/')
+                          ? path.substring(1)
+                          : path;
+
+                      console.log(`📝 Writing file: ${relativePath}`);
+
+                      // Ensure parent directories exist
+                      const pathParts = relativePath.split('/');
+                      if (pathParts.length > 1) {
+                        let currentPath = '';
+                        for (let i = 0; i < pathParts.length - 1; i++) {
+                          currentPath += (currentPath ? '/' : '') + pathParts[i];
+                          try {
+                            await wc.fs.mkdir(currentPath, { recursive: true });
+                          } catch (mkdirError) {
+                            // Directory might already exist, ignore
+                          }
+                        }
+                      }
+
+                      // Write the file
+                      await wc.fs.writeFile(relativePath, content as string);
+                      successCount++;
+                    } catch (fileError) {
+                      console.error(`❌ Failed to write file ${path}:`, fileError);
+                    }
+                  }
+
+                  // Show workbench after files are written
                   workbenchStore.showWorkbench.set(true);
-                  console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
+
+                  console.log(`✅ [useChatHistory] Successfully restored ${successCount}/${fileEntries.length} files to WebContainer`);
+
+                  if (successCount === fileEntries.length) {
+                    toast.success(`Restored ${successCount} files from previous session`);
+                  } else {
+                    toast.warning(`Restored ${successCount}/${fileEntries.length} files (some failed)`);
+                  }
                 } catch (error) {
                   console.error('❌ [useChatHistory] Failed to restore workbench files:', error);
                   toast.error('Failed to restore project files');
                 }
-              }, 500); // Increased from 100ms to 500ms to allow WebContainer initialization
+              }, 1000); // Increased to 1000ms to ensure WebContainer is fully initialized
             }
             
             // Set ready LAST
