@@ -8,7 +8,8 @@ import { getDB, deleteById, getAll, chatId, type ChatHistoryItem } from '~/lib/p
 import { cubicEasingFn } from '~/utils/easings';
 import { logger } from '~/utils/logger';
 import { showSmartError, showQuickError } from '~/lib/errors/toast-error';
-import { getCurrentUser } from '~/utils/auth-utils';
+import { useAuth } from '~/lib/contexts/AuthContext';
+import type { User } from '~/lib/auth/session.server';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import { HistoryItem } from './HistoryItem';
 import { binDates } from './date-binning';
@@ -39,9 +40,8 @@ type DialogContent = { type: 'delete'; item: ChatHistoryItem } | null;
 /**
  * Load chat history from database API
  */
-async function loadHistoryFromDatabase(): Promise<ChatHistoryItem[]> {
+async function loadHistoryFromDatabase(user: User | null): Promise<ChatHistoryItem[]> {
   try {
-    const user = getCurrentUser();
     const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
     const params = new URLSearchParams();
@@ -104,6 +104,7 @@ async function loadHistoryFromDatabase(): Promise<ChatHistoryItem[]> {
 
 export function Menu() {
   const menuRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
   const [list, setList] = useState<ChatHistoryItem[]>([]);
   const [open, setOpen] = useState(false);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
@@ -116,7 +117,7 @@ export function Menu() {
     try {
       // Try loading from database first
       console.log('📋 [Menu.loadEntries] Attempting database load...');
-      const dbChats = await loadHistoryFromDatabase();
+      const dbChats = await loadHistoryFromDatabase(user);
 
       console.log('📋 [Menu.loadEntries] Database returned:', dbChats.length, 'chats');
 
@@ -167,7 +168,7 @@ export function Menu() {
       setLoadingFromDb(false);
       console.log('📋 [Menu.loadEntries] Load complete');
     }
-  }, []);
+  }, [user]);
 
   const deleteItem = useCallback(async (event: React.UIEvent, item: ChatHistoryItem) => {
     event.preventDefault();

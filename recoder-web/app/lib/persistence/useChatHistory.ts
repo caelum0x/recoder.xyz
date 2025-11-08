@@ -5,7 +5,8 @@ import type { Message } from 'ai';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { getMessages, getNextId, getUrlId, openDatabase, setMessages } from './db';
-import { getCurrentUser } from '~/utils/auth-utils';
+import { useAuth } from '~/lib/contexts/AuthContext';
+import type { User } from '~/lib/auth/session.server';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import { webcontainer } from '~/lib/webcontainer';
 
@@ -93,6 +94,7 @@ getDatabase().then(() => {
 async function saveChatToDatabase(
   urlId: string,
   messages: Message[],
+  user: User | null,
   desc?: string,
   artifactId?: string,
   fileSnapshot?: Record<string, string>
@@ -107,7 +109,6 @@ async function saveChatToDatabase(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const user = getCurrentUser();
       const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
       const fileCount = fileSnapshot ? Object.keys(fileSnapshot).length : 0;
@@ -182,13 +183,12 @@ async function saveChatToDatabase(
 /**
  * Load chat from database API
  */
-async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | null> {
+async function loadChatFromDatabase(mixedId: string, user: User | null): Promise<ChatHistoryItem | null> {
   if (!USE_DATABASE) {
     return null;
   }
 
   try {
-    const user = getCurrentUser();
     const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
     const params = new URLSearchParams();
@@ -233,6 +233,7 @@ export function useChatHistory() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id: mixedId } = useLoaderData<{ id?: string }>();
+  const { user } = useAuth();
 
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState<boolean>(false);
@@ -284,7 +285,7 @@ export function useChatHistory() {
 
       if (mixedId) {
       // Try loading from database first, then fallback to IndexedDB
-      loadChatFromDatabase(mixedId)
+      loadChatFromDatabase(mixedId, user)
         .then((dbChat) => {
           if (dbChat && dbChat.messages.length > 0) {
             console.log('✅ Loaded chat from database:', dbChat.id);
@@ -541,6 +542,7 @@ export function useChatHistory() {
       const dbSaved = await saveChatToDatabase(
         finalUrlId,
         enhancedMessages,
+        user,
         finalDescription,
         firstArtifact?.id,
         fileSnapshot
