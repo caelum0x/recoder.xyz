@@ -1,0 +1,108 @@
+# Recoder-Code Services
+# Docker Compose file for all microservices
+
+services:
+  # ML Training Service
+  ml-training:
+    build: ./ml-training-service
+    image: recoder/ml-training:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ml-training-service/models:/app/models
+      - ./ml-training-service/checkpoints:/app/checkpoints
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://recoder:recoder123@postgres:5432/recoder
+    depends_on:
+      - redis
+      - postgres
+
+  # Real-time Collaboration Service
+  collaboration:
+    build: ./collaboration-service
+    image: recoder/collaboration:latest
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://recoder:recoder123@postgres:5432/recoder
+    depends_on:
+      - redis
+      - postgres
+
+  # Plugin Registry Service
+  plugin-registry:
+    build: ./plugin-registry-service
+    image: recoder/plugin-registry:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://recoder:recoder123@postgres:5432/recoder
+    depends_on:
+      - redis
+      - postgres
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: recoder
+      POSTGRES_USER: recoder
+      POSTGRES_PASSWORD: recoder123
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  # Prometheus Monitoring (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  # Grafana Dashboard (optional)
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=recoder123
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:

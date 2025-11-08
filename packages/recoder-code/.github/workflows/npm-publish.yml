@@ -1,0 +1,362 @@
+name: Publish to NPM Registry
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish'
+        required: true
+        default: 'latest'
+      dry_run:
+        description: 'Dry run (will not actually publish)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  publish-npm:
+    name: 📦 Publish to NPM
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'enhanced-ai-cli'
+    environment: npm-publish
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run package validation
+        run: |
+          npm run lint
+          node scripts/optimize-package.js
+          node scripts/security-audit.js
+
+      - name: Update package version
+        if: github.event_name == 'release'
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          npm version $VERSION --no-git-tag-version
+          echo "Publishing version $VERSION"
+
+      - name: Create production build
+        run: |
+          # Remove dev dependencies and files not needed for distribution
+          rm -rf tests/ docs/ .github/ terraform/ kubernetes/
+          rm -f docker-compose*.yml Dockerfile* .env.example
+          
+          # Ensure only production files are included
+          npm prune --production
+
+      - name: Generate package README for NPM
+        run: |
+          cat > README-NPM.md << 'EOF'
+          # 🤖 Enhanced AI CLI
+          
+          [![npm version](https://badge.fury.io/js/enhanced-ai-cli.svg)](https://badge.fury.io/js/enhanced-ai-cli)
+          [![Downloads](https://img.shields.io/npm/dm/enhanced-ai-cli.svg)](https://npmjs.com/package/enhanced-ai-cli)
+          [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+          
+          Enterprise-grade AI development assistant with intelligent model selection, advanced automation, and seamless tool integration.
+          
+          ## 🚀 Quick Start
+          
+          ```bash
+          # Install globally
+          npm install -g enhanced-ai-cli
+          
+          # Setup and configure
+          enhanced-ai-cli --setup
+          
+          # Start using
+          enhanced-ai-cli "build a todo app with authentication"
+          enhanced-ai-cli --interactive
+          ```
+          
+          ## ✨ Key Features
+          
+          - 🤖 **32+ AI models** with Claude Sonnet 4 prioritized
+          - 📋 **Advanced rules engine** with auto-discovery
+          - ⚡ **Smart task automation** with file watchers
+          - 🔧 **Native dev tools integration** (Docker, Git, IDEs)
+          - 🏢 **Enterprise security & compliance**
+          - 📊 **Performance monitoring** and optimization
+          
+          ## 📖 Documentation
+          
+          - [Full Documentation](https://github.com/enhanced-ai-cli/enhanced-ai-cli#readme)
+          - [Getting Started Guide](https://github.com/enhanced-ai-cli/enhanced-ai-cli/blob/main/examples/basic-usage.md)
+          - [Advanced Features](https://github.com/enhanced-ai-cli/enhanced-ai-cli/blob/main/examples/advanced-features.md)
+          - [Enterprise Deployment](https://github.com/enhanced-ai-cli/enhanced-ai-cli/blob/main/examples/enterprise-deployment.md)
+          
+          ## 🆘 Support
+          
+          - 🐛 [Issues](https://github.com/enhanced-ai-cli/enhanced-ai-cli/issues)
+          - 💬 [Discussions](https://github.com/enhanced-ai-cli/enhanced-ai-cli/discussions)
+          - 📧 Email: support@enhanced-ai-cli.com
+          
+          ## 📄 License
+          
+          MIT © Enhanced AI CLI Team
+          EOF
+          
+          mv README-NPM.md README.md
+
+      - name: Validate package.json
+        run: |
+          node -e "
+          const pkg = require('./package.json');
+          
+          // Validate required fields
+          const required = ['name', 'version', 'description', 'main', 'bin', 'scripts', 'keywords', 'author', 'license'];
+          const missing = required.filter(field => !pkg[field]);
+          if (missing.length > 0) {
+            console.error('Missing required fields:', missing);
+            process.exit(1);
+          }
+          
+          // Validate files array
+          if (!pkg.files || pkg.files.length === 0) {
+            console.error('Package files array is empty');
+            process.exit(1);
+          }
+          
+          // Validate engines
+          if (!pkg.engines || !pkg.engines.node) {
+            console.error('Node.js engine requirement missing');
+            process.exit(1);
+          }
+          
+          console.log('Package validation passed');
+          console.log('Name:', pkg.name);
+          console.log('Version:', pkg.version);
+          console.log('Files:', pkg.files);
+          "
+
+      - name: Create package tarball
+        run: npm pack
+
+      - name: Test package installation
+        run: |
+          # Test global installation from tarball
+          TARBALL=$(ls enhanced-ai-cli-*.tgz)
+          npm install -g ./$TARBALL
+          
+          # Test basic functionality
+          enhanced-ai-cli --version
+          enhanced-ai-cli --help
+          
+          # Cleanup
+          npm uninstall -g enhanced-ai-cli
+
+      - name: Publish to NPM (dry run)
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "🧪 DRY RUN - Would publish with:"
+          npm publish --dry-run --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to NPM
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          echo "📦 Publishing to NPM..."
+          
+          # Determine tag
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+              TAG="beta"
+            else
+              TAG="latest"
+            fi
+          else
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          
+          echo "Publishing with tag: $TAG"
+          npm publish --access public --tag $TAG
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Update NPM package info
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          # Add additional tags if this is a stable release
+          if [[ "${{ github.event_name }}" == "release" && "${{ github.event.release.prerelease }}" != "true" ]]; then
+            VERSION=$(node -p "require('./package.json').version")
+            MAJOR_VERSION=$(echo $VERSION | cut -d. -f1)
+            MINOR_VERSION=$(echo $VERSION | cut -d. -f1-2)
+            
+            # Tag major and minor versions
+            npm dist-tag add enhanced-ai-cli@$VERSION v$MAJOR_VERSION
+            npm dist-tag add enhanced-ai-cli@$VERSION v$MINOR_VERSION
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Update package stats
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          # Get package info
+          PACKAGE_INFO=$(npm view enhanced-ai-cli --json)
+          VERSION=$(echo "$PACKAGE_INFO" | jq -r '.version')
+          DOWNLOADS=$(npm view enhanced-ai-cli --json | jq -r '.downloadCount // 0')
+          
+          echo "✅ Package published successfully!"
+          echo "📦 Package: enhanced-ai-cli@$VERSION"
+          echo "📊 Total downloads: $DOWNLOADS"
+          echo "🔗 NPM URL: https://www.npmjs.com/package/enhanced-ai-cli"
+
+  publish-github-packages:
+    name: 📦 Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'enhanced-ai-cli'
+    needs: publish-npm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@enhanced-ai-cli'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Update package for GitHub Packages
+        run: |
+          # Update package name for GitHub Packages
+          node -e "
+          const pkg = require('./package.json');
+          pkg.name = '@enhanced-ai-cli/enhanced-ai-cli';
+          pkg.publishConfig = {
+            registry: 'https://npm.pkg.github.com',
+            access: 'public'
+          };
+          require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+
+      - name: Publish to GitHub Packages
+        if: github.event.inputs.dry_run != 'true'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  announce-release:
+    name: 📢 Announce Release
+    runs-on: ubuntu-latest
+    needs: [publish-npm, publish-github-packages]
+    if: github.event_name == 'release' && github.event.inputs.dry_run != 'true'
+    steps:
+      - name: Get package info
+        id: package
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Get download stats
+          DOWNLOADS=$(curl -s "https://api.npmjs.org/downloads/point/last-month/enhanced-ai-cli" | jq -r '.downloads // 0')
+          echo "downloads=$DOWNLOADS" >> $GITHUB_OUTPUT
+
+      - name: Announce on Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#announcements'
+          text: |
+            🎉 **Enhanced AI CLI v${{ steps.package.outputs.version }} Released!**
+            
+            📦 **Now available on NPM:**
+            ```bash
+            npm install -g enhanced-ai-cli@${{ steps.package.outputs.version }}
+            ```
+            
+            ✨ **What's New:**
+            • 32+ AI models with intelligent selection
+            • Advanced automation and file watchers
+            • Enterprise security and compliance
+            • Native development tools integration
+            
+            📊 **Stats:**
+            • Monthly downloads: ${{ steps.package.outputs.downloads }}
+            • GitHub stars: ${{ github.event.repository.stargazers_count }}
+            
+            🔗 **Links:**
+            • NPM: https://www.npmjs.com/package/enhanced-ai-cli
+            • Docs: https://github.com/enhanced-ai-cli/enhanced-ai-cli
+            • Demo: `npx enhanced-ai-cli --demo`
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Announce on Twitter
+        uses: infraway/tweet-action@v1.0.1
+        with:
+          status: |
+            🚀 Enhanced AI CLI v${{ steps.package.outputs.version }} is now live!
+            
+            ✨ Enterprise-grade AI development assistant with:
+            🤖 32+ AI models
+            📋 Smart automation
+            🔧 Native tool integration
+            🏢 Enterprise security
+            
+            Get started: npm i -g enhanced-ai-cli
+            
+            #AI #CLI #Developer #OpenSource #Productivity
+        env:
+          TWITTER_CONSUMER_API_KEY: ${{ secrets.TWITTER_CONSUMER_API_KEY }}
+          TWITTER_CONSUMER_API_SECRET: ${{ secrets.TWITTER_CONSUMER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+
+      - name: Update documentation
+        run: |
+          # Update download badge and stats in README
+          curl -X POST "${{ secrets.DOCS_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "version": "${{ steps.package.outputs.version }}",
+              "downloads": "${{ steps.package.outputs.downloads }}",
+              "action": "update_stats"
+            }'
+
+      - name: Notify package managers
+        run: |
+          # Notify other package managers about the release
+          echo "Notifying package aggregators..."
+          
+          # Libraries.io
+          curl -X POST "https://libraries.io/api/github/${{ github.repository }}/sync" \
+            -H "Authorization: Bearer ${{ secrets.LIBRARIES_IO_TOKEN }}" || true
+          
+          # npm-check-updates
+          curl -X POST "https://registry.npmjs.org/-/package/enhanced-ai-cli/dist-tags" \
+            -H "Authorization: Bearer ${{ secrets.NPM_TOKEN }}" \
+            -H "Content-Type: application/json" || true
