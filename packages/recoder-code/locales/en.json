@@ -1,0 +1,16 @@
+{
+  "welcome_message": "Welcome to Recoder Code - Command-line AI using the Open Router API",
+  "usage_instruction": "Usage: recoder \"your prompt\"",
+  "api_error": "Error interacting with Open Router API",
+  "prompt_template": "You are a powerful command-line AI assistant using the Open Router API. Your task is to {{userInput}}. Provide detailed instructions and code snippets as needed.",
+  "configExists": "A configuration file already exists. Do you want to overwrite it? (y/n): ",
+  "mergeConfig": "Do you want to merge with the existing configuration? (y/n): ",
+  "configAborted": "Configuration setup aborted.",
+  "configOverwritten": "Overwriting existing configuration.",
+  "encryptionError": "Encryption key and IV are not set.",
+  "apiKeyPrompt": "Enter your Open Router API key: ",
+  "modelPrompt": "Enter the Open Router model (default: gpt-3.5-turbo): ",
+  "proxyUrlPrompt": "Enter the Open Router proxy URL (optional): ",
+  "analyticsOptInPrompt": "Do you want to opt-in to usage analytics? (y/n): ",
+  "configSaved": "Configuration saved successfully."
+}

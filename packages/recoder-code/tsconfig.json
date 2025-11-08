@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["*"]
+    },
+    "rootDir": "./",
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "./declarations"],
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "jsx": "react-jsx",
+    "moduleResolution": "node"
+  },
+  "include": ["**/*.js", "**/*.ts", "**/*.tsx"],
+  "exclude": [
+    "node_modules",
+    "plugin-registry-service",
+    "ml-training-service",
+    "collaboration-service",
+    "dist",
+    "temp",
+    "venv",
+    "checkpoints",
+    "datasets",
+    "models",
+    "packages/*/dist",
+    "packages/*/node_modules",
+    "**/node_modules/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "packages/cli/**/*",
+    "packages/core/**/*",
+    "packages/vscode-ide-companion/**/*",
+    "**/vitest.config.ts",
+    "**/test-setup.ts",
+    "scripts/tests/**/*"
+  ],
+  "references": [
+    { "path": "./packages/cli" },
+    { "path": "./packages/core" }
+  ]
+}

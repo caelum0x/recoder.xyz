@@ -1,0 +1,1 @@
+export PATH=$PATH:/opt/homebrew/Cellar/node/24.3.0/bin

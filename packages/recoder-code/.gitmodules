@@ -1,0 +1,3 @@
+[submodule "packages/recoder-code"]
+	path = packages/recoder-code
+	url = https://github.com/caelum0x/recoder-code.git
