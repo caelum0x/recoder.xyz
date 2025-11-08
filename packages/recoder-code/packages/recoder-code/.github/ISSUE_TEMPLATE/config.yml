@@ -1,0 +1,17 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord Community
+    url: https://anthropic.com/discord
+    about: Get help, ask questions, and chat with other Recoder Code users
+  - name: 📖 Documentation
+    url: https://docs.anthropic.com/en/docs/claude-code
+    about: Read the official documentation and guides
+  - name: 🎓 Getting Started Guide
+    url: https://docs.anthropic.com/en/docs/claude-code/getting-started
+    about: New to Recoder Code? Start here
+  - name: 🔧 Troubleshooting Guide
+    url: https://docs.anthropic.com/en/docs/claude-code/troubleshooting
+    about: Common issues and how to fix them
+  - name: 💡 Discussions
+    url: https://github.com/anthropics/claude-code/discussions
+    about: Share ideas, tips, and chat with maintainers
