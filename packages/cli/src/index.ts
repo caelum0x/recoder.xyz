@@ -56,6 +56,7 @@ import AICommandsRegistry from './commands/ai';
 import { createAuthCommand } from './commands/auth';
 import { createIntegrationStatusCommand } from './commands/integration-status';
 import { createWebCommand } from './commands/web';
+import { createProjectsCommand } from './commands/projects';
 import { createAssistantCommand } from './commands/assistant';
 import { createPluginsCommand } from './commands/plugins';
 import { createConsensusCommand } from './commands/consensus';
@@ -894,6 +895,7 @@ Make this a production-ready plan that can actually be executed.`;
   
   // Add web ecosystem commands
   program.addCommand(createWebCommand());
+  program.addCommand(createProjectsCommand()); // NEW: Web ↔ CLI project sync
   program.addCommand(createAssistantCommand());
   program.addCommand(createPluginsCommand());
   

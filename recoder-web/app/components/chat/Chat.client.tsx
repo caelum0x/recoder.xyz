@@ -14,6 +14,7 @@ import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { showSmartError } from '~/lib/errors/toast-error';
 import { BaseChat } from './BaseChat';
 import { QuickActions } from './QuickActions';
+import { ProjectInfo } from './ProjectInfo';
 import { KeyboardShortcutsDialog } from '~/components/ui/KeyboardShortcutsDialog';
 import { SaveIndicator } from './SaveIndicator';
 
@@ -80,6 +81,11 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
   const [lastSaved, setLastSaved] = useState<Date | undefined>();
 
   const { showChat } = useStore(chatStore);
+
+  // Get project ID from URL for CLI integration
+  const urlId = typeof window !== 'undefined'
+    ? window.location.pathname.match(/\/chat\/([^\/]+)/)?.[1]
+    : undefined;
 
   const [animationScope, animate] = useAnimate();
 
@@ -472,6 +478,13 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
           });
         }}
       />
+
+      {/* CLI Integration - Show project ID for download */}
+      {urlId && chatStarted && messages.length > 0 && (
+        <div className="fixed top-20 right-4 z-50 max-w-md">
+          <ProjectInfo urlId={urlId} />
+        </div>
+      )}
 
       {/* Quick Actions Floating Button */}
       {chatStarted && (

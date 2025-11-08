@@ -34,7 +34,17 @@ export function Header() {
         >
           <div className="i-ph:clock-clockwise text-xl text-white" />
         </button>
-        
+
+        {/* My Projects Button - Orange Accent */}
+        <a
+          href="/projects"
+          className="p-2.5 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-md transition-all"
+          title="My Projects"
+          aria-label="View my projects"
+        >
+          <div className="i-ph:folder-open text-xl text-white" />
+        </a>
+
         <a href="/" className="text-2xl font-semibold text-accent flex items-center cursor-pointer hover:opacity-80 transition-opacity">
           <span className="font-bold">Recoder</span>
         </a>
