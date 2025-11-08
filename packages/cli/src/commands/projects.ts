@@ -13,6 +13,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { backendClient } from '../services/backend-client';
 import { Logger } from 'recoder-shared';
+import { updateDownloadStatus, updateUploadStatus, showSyncStatus, getProjectId } from '../utils/sync-status';
 
 const logger = Logger.getInstance();
 
@@ -216,12 +217,23 @@ export function createProjectsCommand(): Command {
 
         spinner.succeed(`Downloaded ${fileCount} files to ${outputDir}`);
 
+        // Save sync status
+        const webUrl = `${webAppUrl}/chat/${projectId}`;
+        await updateDownloadStatus(
+          projectId,
+          fileCount,
+          webUrl,
+          chat.description || undefined
+        );
+
         console.log(chalk.green(`\n✅ Project downloaded successfully!`));
         console.log(chalk.gray('\n📁 Project location: ') + chalk.cyan(outputDir));
+        console.log(chalk.gray('🔗 Web URL:          ') + chalk.blue(webUrl));
         console.log(chalk.gray('\n💡 Next steps:'));
         console.log(chalk.gray('   1. ') + chalk.cyan(`cd ${path.basename(outputDir)}`));
         console.log(chalk.gray('   2. ') + chalk.cyan('npm install'));
         console.log(chalk.gray('   3. ') + chalk.cyan('npm run dev'));
+        console.log(chalk.gray('\n   To upload changes: ') + chalk.cyan(`recoder projects upload ${projectId}`));
         console.log();
 
         logger.info(`Downloaded project ${projectId} to ${outputDir} (${fileCount} files)`);
@@ -292,6 +304,242 @@ export function createProjectsCommand(): Command {
       } catch (error: any) {
         spinner.fail('Failed to fetch project info');
         console.error(chalk.red(`\n❌ Error: ${error.message}\n`));
+        process.exit(1);
+      }
+    });
+
+  /**
+   * Upload/sync local files to web project
+   * Usage: recoder projects upload <projectId> [--dir ./my-project]
+   */
+  projectsCommand
+    .command('upload <projectId>')
+    .description('Upload local files to web.recoder.xyz project')
+    .option('-d, --dir <directory>', 'Directory to upload from', '.')
+    .option('-m, --message <message>', 'Upload message/description')
+    .option('--dry-run', 'Show what would be uploaded without uploading')
+    .action(async (projectId: string, options: any) => {
+      const spinner = ora('Preparing to upload files...').start();
+
+      try {
+        const webAppUrl = process.env.RECODER_WEB_URL || 'https://web.recoder.xyz';
+        const sourceDir = path.resolve(options.dir);
+
+        // Check if directory exists
+        if (!(await fs.pathExists(sourceDir))) {
+          spinner.fail('Directory not found');
+          console.log(chalk.red(`\n❌ Directory does not exist: ${sourceDir}\n`));
+          return;
+        }
+
+        spinner.text = 'Scanning directory for files...';
+
+        // Read all files recursively
+        const files: Record<string, string> = {};
+        const ignorePatterns = [
+          'node_modules',
+          '.git',
+          '.next',
+          'dist',
+          'build',
+          '.recoder-sync.json',
+        ];
+
+        async function readDirRecursive(dir: string, basePath: string = '') {
+          const entries = await fs.readdir(dir, { withFileTypes: true });
+
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            const relativePath = path.join(basePath, entry.name);
+
+            // Skip ignored patterns
+            if (ignorePatterns.some(pattern => relativePath.includes(pattern))) {
+              continue;
+            }
+
+            if (entry.isDirectory()) {
+              await readDirRecursive(fullPath, relativePath);
+            } else if (entry.isFile()) {
+              // Read file content
+              const content = await fs.readFile(fullPath, 'utf-8');
+              files[relativePath] = content;
+            }
+          }
+        }
+
+        await readDirRecursive(sourceDir);
+
+        const fileCount = Object.keys(files).length;
+
+        if (fileCount === 0) {
+          spinner.warn('No files found to upload');
+          console.log(chalk.yellow('\n⚠️  No files found in directory\n'));
+          return;
+        }
+
+        spinner.stop();
+
+        console.log(chalk.cyan(`\n📤 Ready to upload ${fileCount} files\n`));
+
+        if (options.dryRun) {
+          console.log(chalk.yellow('🔍 DRY RUN - Files that would be uploaded:\n'));
+          Object.keys(files).slice(0, 20).forEach(filePath => {
+            console.log(chalk.gray('   • ') + filePath);
+          });
+          if (fileCount > 20) {
+            console.log(chalk.gray(`   ... and ${fileCount - 20} more files`));
+          }
+          console.log(chalk.yellow('\n   Run without --dry-run to actually upload\n'));
+          return;
+        }
+
+        // Confirm upload
+        console.log(chalk.yellow('Files to upload:'));
+        Object.keys(files).slice(0, 10).forEach(filePath => {
+          console.log(chalk.gray('   • ') + filePath);
+        });
+        if (fileCount > 10) {
+          console.log(chalk.gray(`   ... and ${fileCount - 10} more files`));
+        }
+        console.log();
+
+        spinner.start('Uploading files to web.recoder.xyz...');
+
+        // Upload files
+        const response = await fetch(`${webAppUrl}/api/projects/upload`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            urlId: projectId,
+            files,
+            message: options.message || `Uploaded ${fileCount} files from CLI`,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        spinner.succeed('Files uploaded successfully!');
+
+        // Update sync status
+        await updateUploadStatus(projectId, result.data.totalFiles);
+
+        console.log(chalk.green(`\n✅ Upload Complete!\n`));
+        console.log(chalk.gray('Files uploaded:  ') + chalk.white(result.data.filesUploaded));
+        console.log(chalk.gray('Total files:     ') + chalk.white(result.data.totalFiles));
+        console.log(chalk.gray('Project ID:      ') + chalk.white(projectId));
+        console.log(chalk.gray('\n🔗 View in web:  ') + chalk.blue(`${webAppUrl}/chat/${projectId}`));
+        console.log();
+
+        logger.info(`Uploaded ${result.data.filesUploaded} files to project ${projectId}`);
+
+      } catch (error: any) {
+        spinner.fail('Upload failed');
+        console.error(chalk.red(`\n❌ Error: ${error.message}\n`));
+        logger.error('Failed to upload files:', error);
+        process.exit(1);
+      }
+    });
+
+  /**
+   * Show sync status
+   * Usage: recoder projects sync
+   */
+  projectsCommand
+    .command('sync')
+    .description('Show project sync status')
+    .action(async () => {
+      await showSyncStatus();
+    });
+
+  /**
+   * Create new project from CLI
+   * Usage: recoder projects create "My Project" [--from ./template]
+   */
+  projectsCommand
+    .command('create <name>')
+    .description('Create a new project in web.recoder.xyz')
+    .option('-f, --from <directory>', 'Create from existing directory')
+    .option('-d, --description <text>', 'Project description')
+    .action(async (name: string, options: any) => {
+      const spinner = ora('Creating new project...').start();
+
+      try {
+        const webAppUrl = process.env.RECODER_WEB_URL || 'https://web.recoder.xyz';
+
+        // If creating from directory, read files
+        let files: Record<string, string> = {};
+
+        if (options.from) {
+          const sourceDir = path.resolve(options.from);
+
+          if (!(await fs.pathExists(sourceDir))) {
+            spinner.fail('Directory not found');
+            console.log(chalk.red(`\n❌ Directory does not exist: ${sourceDir}\n`));
+            return;
+          }
+
+          spinner.text = 'Reading files from directory...';
+
+          // Read files (simplified - no recursion for create)
+          const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isFile() && !entry.name.startsWith('.')) {
+              const content = await fs.readFile(path.join(sourceDir, entry.name), 'utf-8');
+              files[entry.name] = content;
+            }
+          }
+        }
+
+        spinner.text = 'Creating project on web.recoder.xyz...';
+
+        // Create project by creating a chat with initial message
+        const projectId = Date.now().toString();
+        const initialMessage = options.description || `Created project: ${name}`;
+
+        // Save to database via upload endpoint
+        const response = await fetch(`${webAppUrl}/api/projects/upload`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            urlId: projectId,
+            files,
+            message: initialMessage,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to create project: ${response.statusText}`);
+        }
+
+        spinner.succeed('Project created successfully!');
+
+        console.log(chalk.green(`\n✅ Project Created!\n`));
+        console.log(chalk.gray('Name:        ') + chalk.white(name));
+        console.log(chalk.gray('Project ID:  ') + chalk.white(projectId));
+        console.log(chalk.gray('Files:       ') + chalk.white(Object.keys(files).length));
+        console.log(chalk.gray('\n🔗 Open in web:  ') + chalk.blue(`${webAppUrl}/chat/${projectId}`));
+        console.log(chalk.gray('\n💡 Next steps:'));
+        console.log(chalk.gray('   • ') + chalk.cyan(`recoder projects open ${projectId}`));
+        console.log(chalk.gray('   • ') + chalk.cyan(`recoder projects upload ${projectId} --dir ./my-code`));
+        console.log();
+
+        logger.info(`Created project ${name} (${projectId})`);
+
+      } catch (error: any) {
+        spinner.fail('Failed to create project');
+        console.error(chalk.red(`\n❌ Error: ${error.message}\n`));
+        logger.error('Failed to create project:', error);
         process.exit(1);
       }
     });

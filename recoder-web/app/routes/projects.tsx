@@ -193,6 +193,11 @@ export default function ProjectsPage() {
                       <div className="text-white">$ recoder projects info {project.urlId}</div>
                     </div>
 
+                    <div className="bg-black text-orange-400 rounded p-2 font-mono text-xs border border-orange-500/30">
+                      <div># Upload changes back to web</div>
+                      <div className="text-white">$ recoder projects upload {project.urlId}</div>
+                    </div>
+
                     <button
                       onClick={() => {
                         const allCommands = `# Download project
@@ -202,7 +207,10 @@ recoder projects download ${project.urlId}
 recoder projects open ${project.urlId}
 
 # View info
-recoder projects info ${project.urlId}`;
+recoder projects info ${project.urlId}
+
+# Upload changes back
+recoder projects upload ${project.urlId}`;
                         copyCommand(allCommands, `all-${project.urlId}`);
                       }}
                       className="mt-2 text-xs text-orange-600 hover:text-orange-700 font-medium"
@@ -249,7 +257,10 @@ recoder projects info ${project.urlId}`;
               <div className="pt-3 border-t border-bolt-elements-borderColor">
                 <p className="text-xs text-bolt-elements-textTertiary">
                   💡 <strong>Tip:</strong> The CLI lets you download web projects to your local machine,
-                  edit with your favorite editor, and seamlessly sync between web and terminal!
+                  edit with your favorite editor, and upload changes back to the web - seamless bidirectional sync!
+                </p>
+                <p className="text-xs text-bolt-elements-textTertiary mt-2">
+                  🔄 <strong>Full workflow:</strong> Download → Edit locally → Upload → Continue in web
                 </p>
               </div>
             </div>
