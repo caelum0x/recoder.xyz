@@ -187,9 +187,13 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
     },
   ]);
 
+  // Update chat started state when initialMessages change (important for loading old chats)
   useEffect(() => {
-    chatStore.setKey('started', initialMessages.length > 0);
-  }, []);
+    const hasMessages = initialMessages.length > 0;
+    chatStore.setKey('started', hasMessages);
+    setChatStarted(hasMessages);
+    console.log('🔄 [ChatImpl] Chat started state updated:', hasMessages, 'messages:', initialMessages.length);
+  }, [initialMessages]);
 
   // Store the previous isLoading state to detect when streaming completes
   const prevIsLoading = useRef(isLoading);

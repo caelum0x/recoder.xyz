@@ -253,8 +253,8 @@ export function useChatHistory() {
       console.log('🔄 [useChatHistory] Navigated between chats - clearing for fresh load');
       clearSessionState();
       setUrlId(undefined);
-      setInitialMessages([]); // ← CRITICAL: Clear old messages so component updates
-      setReady(false); // ← Force component to re-mount with new chat data
+      // DON'T clear initialMessages or ready - the React key prop will force remount
+      // and the useEffect will load fresh data which updates the component
     }
 
     previousPathRef.current = currentPath;
