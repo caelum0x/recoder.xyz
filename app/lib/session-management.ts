@@ -34,7 +34,7 @@ export async function getSessionsToday(userId: string): Promise<number> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   
-  const count = await prisma.usageRecord.count({
+  const count = await prisma.usage_records.count({
     where: {
       userId,
       requestType: 'session_start',
@@ -54,24 +54,24 @@ export async function getPremiumTokensToday(userId: string): Promise<number> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   
-  const records = await prisma.usageRecord.findMany({
+  const records = await prisma.usage_records.findMany({
     where: {
       userId,
       timestamp: {
         gte: startOfDay
       },
-      modelUsed: {
+      model: {
         not: null
       }
     },
     select: {
-      modelUsed: true,
+      model: true,
       tokensUsed: true
     }
   });
   
   const premiumTokens = records
-    .filter(r => r.modelUsed && isPremiumModel(r.modelUsed))
+    .filter(r => r.model && isPremiumModel(r.model))
     .reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
   
   return premiumTokens;
@@ -91,7 +91,7 @@ export async function startSession(
   upgradeRequired?: boolean;
 }> {
   // Get user plan
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: { subscriptionPlan: true }
   });
@@ -118,20 +118,20 @@ export async function startSession(
   // Create session marker in usage records
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
   
-  await prisma.usageRecord.create({
+  await prisma.usage_records.create({
     data: {
+      id: sessionId,
       userId,
-      sessionId,
       requestType: 'session_start',
-      endpoint: '/sessions/start',
-      method: 'POST',
-      statusCode: 200,
+      type: 'session',
+      tokens: 0,
       tokensUsed: 0,
       cost: 0,
-      modelUsed: null,
-      providerUsed: platform,
+      model: null,
+      provider: platform,
       duration: 0,
       success: true,
+      platform,
       metadata: {
         platform,
         deviceId,
@@ -175,7 +175,7 @@ export async function trackSessionUsage(
   shouldFallbackToFreeModels?: boolean;
 }> {
   // Get user plan
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: { subscriptionPlan: true }
   });
@@ -205,19 +205,19 @@ export async function trackSessionUsage(
   }
   
   // Record usage
-  await prisma.usageRecord.create({
+  await prisma.usage_records.create({
     data: {
+      id: `usage_${Date.now()}_${Math.random().toString(36).substring(7)}`,
       userId,
-      sessionId,
       requestType: 'session_usage',
-      endpoint: '/sessions/usage',
-      method: 'POST',
-      statusCode: 200,
+      type: 'usage',
       tokensUsed: usage.tokens,
+      tokens: usage.tokens,
       cost: usage.cost,
-      modelUsed: usage.model,
-      providerUsed: usage.provider,
+      model: usage.model,
+      provider: usage.provider,
       success: true,
+      isPriceyModel: isPremium,
       metadata: {
         sessionId,
         isPremiumModel: isPremium
@@ -255,10 +255,10 @@ export async function endSession(
   };
   error?: string;
 }> {
-  // Get session start time
-  const startRecord = await prisma.usageRecord.findFirst({
+  // Get session start time using the session ID as record ID
+  const startRecord = await prisma.usage_records.findFirst({
     where: {
-      sessionId,
+      id: sessionId,
       userId,
       requestType: 'session_start'
     },
@@ -274,38 +274,40 @@ export async function endSession(
     };
   }
   
-  // Get all usage records for this session
-  const usageRecords = await prisma.usageRecord.findMany({
+  // Get all usage records for this session using metadata
+  const usageRecords = await prisma.usage_records.findMany({
     where: {
-      sessionId,
       userId,
-      requestType: 'session_usage'
+      requestType: 'session_usage',
+      metadata: {
+        path: ['sessionId'],
+        equals: sessionId
+      }
     },
     select: {
       tokensUsed: true,
       cost: true,
-      modelUsed: true
+      model: true
     }
   });
   
   const totalTokens = usageRecords.reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
   const totalCost = usageRecords.reduce((sum, r) => sum + (r.cost || 0), 0);
   const premiumTokens = usageRecords
-    .filter(r => r.modelUsed && isPremiumModel(r.modelUsed))
+    .filter(r => r.model && isPremiumModel(r.model))
     .reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
   
   const duration = Math.floor((Date.now() - startRecord.timestamp.getTime()) / 1000);
   
   // Record session end
-  await prisma.usageRecord.create({
+  await prisma.usage_records.create({
     data: {
+      id: `end_${sessionId}`,
       userId,
-      sessionId,
       requestType: 'session_end',
-      endpoint: '/sessions/end',
-      method: 'POST',
-      statusCode: 200,
+      type: 'session',
       tokensUsed: totalTokens,
+      tokens: totalTokens,
       cost: totalCost,
       duration,
       success: true,
@@ -335,7 +337,7 @@ export async function endSession(
  */
 export async function getActiveSession(userId: string): Promise<Session | null> {
   // Get most recent session start that doesn't have a corresponding end
-  const recentSession = await prisma.usageRecord.findFirst({
+  const recentSession = await prisma.usage_records.findFirst({
     where: {
       userId,
       requestType: 'session_start'
@@ -344,20 +346,22 @@ export async function getActiveSession(userId: string): Promise<Session | null> 
       timestamp: 'desc'
     },
     select: {
-      sessionId: true,
+      id: true,
       timestamp: true,
       metadata: true
     }
   });
   
-  if (!recentSession || !recentSession.sessionId) {
+  if (!recentSession || !recentSession.id) {
     return null;
   }
+
+  const sessionId = recentSession.id;
   
   // Check if session has ended
-  const endRecord = await prisma.usageRecord.findFirst({
+  const endRecord = await prisma.usage_records.findFirst({
     where: {
-      sessionId: recentSession.sessionId,
+      id: `end_${sessionId}`,
       userId,
       requestType: 'session_end'
     }
@@ -368,30 +372,33 @@ export async function getActiveSession(userId: string): Promise<Session | null> 
   }
   
   // Get session usage
-  const usageRecords = await prisma.usageRecord.findMany({
+  const usageRecords = await prisma.usage_records.findMany({
     where: {
-      sessionId: recentSession.sessionId,
       userId,
-      requestType: 'session_usage'
+      requestType: 'session_usage',
+      metadata: {
+        path: ['sessionId'],
+        equals: sessionId
+      }
     },
     select: {
       tokensUsed: true,
       cost: true,
-      modelUsed: true
+      model: true
     }
   });
   
   const totalTokens = usageRecords.reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
   const totalCost = usageRecords.reduce((sum, r) => sum + (r.cost || 0), 0);
   const premiumTokens = usageRecords
-    .filter(r => r.modelUsed && isPremiumModel(r.modelUsed))
+    .filter(r => r.model && isPremiumModel(r.model))
     .reduce((sum, r) => sum + (r.tokensUsed || 0), 0);
-  const modelsUsed = [...new Set(usageRecords.map(r => r.modelUsed).filter(Boolean))] as string[];
+  const modelsUsed = [...new Set(usageRecords.map(r => r.model).filter(Boolean))] as string[];
   
   const metadata = recentSession.metadata as any;
   
   return {
-    id: recentSession.sessionId,
+    id: sessionId,
     userId,
     platform: metadata?.platform || 'unknown',
     deviceId: metadata?.deviceId,
@@ -416,7 +423,7 @@ export async function getSessionStats(userId: string): Promise<{
   remainingPremiumTokens: number;
   activeSession: Session | null;
 }> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: { subscriptionPlan: true }
   });

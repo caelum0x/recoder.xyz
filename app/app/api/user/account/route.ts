@@ -111,7 +111,6 @@ export async function PUT(request: NextRequest) {
           userId: user.id,
           developerPreferences: { timezone: timezone || 'America/New_York' },
           languagePreferences: { language: language || 'en' },
-          createdAt: new Date(),
           updatedAt: new Date(),
         },
         update: {
@@ -131,7 +130,6 @@ export async function PUT(request: NextRequest) {
         resource: 'account',
         resourceId: user.id,
         metadata: { fields: Object.keys(updateData) },
-        createdAt: new Date(),
       }
     });
 
@@ -177,7 +175,6 @@ export async function DELETE(request: NextRequest) {
         resource: 'account',
         resourceId: user.id,
         metadata: { email: user.email },
-        createdAt: new Date(),
       }
     });
 

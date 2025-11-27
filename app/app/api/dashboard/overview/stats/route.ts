@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
       include: {
         subscriptions: {
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
     // Current month usage
-    const currentMonthUsage = await prisma.usageRecord.aggregate({
+    const currentMonthUsage = await prisma.usage_records.aggregate({
       where: {
         userId: user.id,
         timestamp: { gte: startOfMonth }
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Last month usage for trend calculation
-    const lastMonthUsage = await prisma.usageRecord.aggregate({
+    const lastMonthUsage = await prisma.usage_records.aggregate({
       where: {
         userId: user.id,
         timestamp: {
@@ -70,18 +70,18 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // Projects stats
-    const totalProjects = await prisma.project.count({
+    const totalProjects = await prisma.projects.count({
       where: { userId: user.id }
     });
 
-    const activeProjects = await prisma.project.count({
-      where: { 
+    const activeProjects = await prisma.projects.count({
+      where: {
         userId: user.id,
         status: 'active'
       }
     });
 
-    const lastMonthProjects = await prisma.project.count({
+    const lastMonthProjects = await prisma.projects.count({
       where: {
         userId: user.id,
         createdAt: {
@@ -96,11 +96,11 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // API Keys stats
-    const totalApiKeys = await prisma.apiKey.count({
+    const totalApiKeys = await prisma.api_keys.count({
       where: { userId: user.id }
     });
 
-    const activeApiKeys = await prisma.apiKey.count({
+    const activeApiKeys = await prisma.api_keys.count({
       where: { 
         userId: user.id,
         isActive: true

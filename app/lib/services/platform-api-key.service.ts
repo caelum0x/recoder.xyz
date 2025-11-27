@@ -32,7 +32,7 @@ export class PlatformApiKeyService {
   }> {
     try {
       // Check if user is premium
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
         select: {
           subscriptionPlan: true,
@@ -74,25 +74,25 @@ export class PlatformApiKeyService {
       const scopes = this.getScopesForPlan(user.subscriptionPlan);
 
       // Create API key record
-      await prisma.apiKey.create({
+      await prisma.api_keys.create({
         data: {
           userId,
-          keyId,
+          id: keyId,
           keyHash,
           keyPrefix,
           name,
-          description,
-          scopes,
+          permissions: scopes,
           expiresAt,
           isActive: true,
           usageCount: 0,
+          updatedAt: new Date(),
         },
       });
 
       return {
         success: true,
         apiKey, // Only returned once!
-        keyId,
+        keyId: keyId,
         message: 'API key created successfully. Save it securely - you won\'t see it again!',
       };
     } catch (error: any) {
@@ -126,10 +126,10 @@ export class PlatformApiKeyService {
     try {
       const keyHash = this.hashKey(apiKey);
 
-      const key = await prisma.apiKey.findUnique({
+      const key = await prisma.api_keys.findUnique({
         where: { keyHash },
         include: {
-          user: {
+          users: {
             select: {
               id: true,
               email: true,
@@ -153,12 +153,12 @@ export class PlatformApiKeyService {
         return { valid: false, message: 'API key has expired' };
       }
 
-      if (key.user.subscriptionStatus !== 'active') {
+      if (key.users.subscriptionStatus !== 'active') {
         return { valid: false, message: 'Subscription is not active' };
       }
 
       // Update last used timestamp and usage count
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data: {
           lastUsedAt: new Date(),
@@ -168,18 +168,18 @@ export class PlatformApiKeyService {
 
       return {
         valid: true,
-        userId: key.user.id,
+        userId: key.users.id,
         user: {
-          id: key.user.id,
-          email: key.user.email,
-          name: key.user.name,
-          plan: key.user.subscriptionPlan,
-          status: key.user.subscriptionStatus,
+          id: key.users.id,
+          email: key.users.email,
+          name: key.users.name,
+          plan: key.users.subscriptionPlan,
+          status: key.users.subscriptionStatus,
         },
         keyInfo: {
-          keyId: key.keyId,
+          keyId: key.id,
           name: key.name,
-          scopes: key.scopes,
+          scopes: key.permissions,
         },
       };
     } catch (error: any) {
@@ -191,18 +191,16 @@ export class PlatformApiKeyService {
    * List all API keys for a user
    */
   static async listUserApiKeys(userId: string) {
-    const keys = await prisma.apiKey.findMany({
+    const keys = await prisma.api_keys.findMany({
       where: {
         userId,
         isActive: true,
       },
       select: {
         id: true,
-        keyId: true,
         keyPrefix: true,
         name: true,
-        description: true,
-        scopes: true,
+        permissions: true,
         createdAt: true,
         lastUsedAt: true,
         expiresAt: true,
@@ -219,10 +217,10 @@ export class PlatformApiKeyService {
   /**
    * Get API key usage statistics
    */
-  static async getKeyUsageStats(keyId: string, userId: string): Promise<ApiKeyUsageStats> {
-    const key = await prisma.apiKey.findFirst({
+  static async getKeyUsageStats(id: string, userId: string): Promise<ApiKeyUsageStats> {
+    const key = await prisma.api_keys.findFirst({
       where: {
-        keyId,
+        id: id,
         userId,
       },
     });
@@ -237,13 +235,13 @@ export class PlatformApiKeyService {
     }
 
     // Get usage records for this key
-    const usageRecords = await prisma.usageRecord.findMany({
+    const usageRecords = await prisma.usage_records.findMany({
       where: {
         userId,
         // We need to track which key was used - add this to schema
         metadata: {
           path: ['keyId'],
-          equals: keyId,
+          equals: id,
         },
       },
       select: {
@@ -271,14 +269,14 @@ export class PlatformApiKeyService {
   /**
    * Revoke an API key
    */
-  static async revokeApiKey(keyId: string, userId: string): Promise<{
+  static async revokeApiKey(id: string, userId: string): Promise<{
     success: boolean;
     message: string;
   }> {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -287,11 +285,11 @@ export class PlatformApiKeyService {
         return { success: false, message: 'API key not found' };
       }
 
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data: {
           isActive: false,
-          revokedAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
@@ -305,17 +303,17 @@ export class PlatformApiKeyService {
    * Update API key name/description
    */
   static async updateApiKey(
-    keyId: string,
+    id: string,
     userId: string,
-    updates: { name?: string; description?: string }
+    updates: { name?: string }
   ): Promise<{
     success: boolean;
     message: string;
   }> {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -324,7 +322,7 @@ export class PlatformApiKeyService {
         return { success: false, message: 'API key not found' };
       }
 
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data: updates,
       });
@@ -366,7 +364,7 @@ export class PlatformApiKeyService {
     limit?: number;
     current?: number;
   }> {
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: userId },
       select: { subscriptionPlan: true },
     });
@@ -386,7 +384,7 @@ export class PlatformApiKeyService {
 
     const limit = limits[user.subscriptionPlan] || 0;
 
-    const currentCount = await prisma.apiKey.count({
+    const currentCount = await prisma.api_keys.count({
       where: {
         userId,
         isActive: true,

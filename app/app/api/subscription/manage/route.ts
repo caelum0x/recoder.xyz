@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import crypto from 'crypto';
 
 import { prisma } from '@/lib/prisma';
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch user's subscription from database
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
       select: {
         id: true,
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
           orderBy: { createdAt: 'desc' },
           take: 1,
           include: {
-            paymentMethod: true,
+            payment_methods: true,
             invoices: {
               orderBy: { createdAt: 'desc' },
               take: 10,
@@ -57,12 +58,12 @@ export async function GET(request: NextRequest) {
     const subscription = user.subscriptions[0] || null;
 
     // Get subscription plan details
-    const plans = await prisma.subscriptionPlan.findMany({
+    const plans = await prisma.subscription_plans.findMany({
       include: {
-        features: {
+        subscription_plan_features: {
           orderBy: { sortOrder: 'asc' },
         },
-        limits: true,
+        subscription_plan_limits: true,
       },
       where: { active: true },
       orderBy: { sortOrder: 'asc' },
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify plan exists
-    const plan = await prisma.subscriptionPlan.findUnique({
+    const plan = await prisma.subscription_plans.findUnique({
       where: { id: planId },
     });
 
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
       include: {
         subscriptions: {
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
     
     if (currentSubscription) {
       // Update existing subscription
-      subscription = await prisma.subscription.update({
+      subscription = await prisma.subscriptions.update({
         where: { id: currentSubscription.id },
         data: {
           planId,
@@ -178,12 +179,14 @@ export async function POST(request: NextRequest) {
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: false,
           paymentMethodId: paymentMethodId || currentSubscription.paymentMethodId,
+          updatedAt: new Date(),
         },
       });
     } else {
       // Create new subscription
-      subscription = await prisma.subscription.create({
+      subscription = await prisma.subscriptions.create({
         data: {
+          id: crypto.randomUUID(),
           userId: user.id,
           planId,
           status: 'active',
@@ -191,12 +194,13 @@ export async function POST(request: NextRequest) {
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: false,
           paymentMethodId,
+          updatedAt: new Date(),
         },
       });
     }
 
     // Update user's subscription plan
-    await prisma.user.update({
+    await prisma.users.update({
       where: { id: user.id },
       data: {
         subscriptionPlan: planId,
@@ -244,7 +248,7 @@ export async function DELETE(request: NextRequest) {
     const immediately = searchParams.get('immediately') === 'true';
 
     // Get user
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
       include: {
         subscriptions: {
@@ -272,17 +276,18 @@ export async function DELETE(request: NextRequest) {
 
     if (immediately) {
       // Cancel immediately
-      await prisma.subscription.update({
+      await prisma.subscriptions.update({
         where: { id: subscription.id },
         data: {
           status: 'cancelled',
           cancelledAt: new Date(),
           cancelAtPeriodEnd: false,
+          updatedAt: new Date(),
         },
       });
 
       // Downgrade user to free plan
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: user.id },
         data: {
           subscriptionPlan: 'free',
@@ -296,11 +301,12 @@ export async function DELETE(request: NextRequest) {
       });
     } else {
       // Cancel at period end
-      await prisma.subscription.update({
+      await prisma.subscriptions.update({
         where: { id: subscription.id },
         data: {
           cancelAtPeriodEnd: true,
           cancelledAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 

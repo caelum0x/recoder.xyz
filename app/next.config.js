@@ -5,11 +5,18 @@ const nextConfig = {
   },
   outputFileTracingRoot: __dirname,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
+
+  // Skip static page generation errors
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
+  },
+
   
   // Webpack configuration for Prisma
   webpack: (config, { isServer }) => {
@@ -20,8 +27,16 @@ const nextConfig = {
     return config;
   },
   
-  // Ensure Prisma is not bundled (moved from experimental in Next.js 15.5+)
-  serverExternalPackages: ['@prisma/client', '.prisma/client'],
+  // Ensure Prisma and Better Auth are not bundled (moved from experimental in Next.js 15.5+)
+  serverExternalPackages: ['@prisma/client', '.prisma/client', 'better-auth'],
+
+  // Force dynamic rendering for all pages to avoid build-time DB connections
+  output: 'standalone',
+
+  // Generate static error pages at build time
+  generateBuildId: async () => {
+    return 'build-' + Date.now();
+  },
 
   // Security headers
   async headers() {

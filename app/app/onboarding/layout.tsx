@@ -3,13 +3,9 @@
  * Shared layout for onboarding flow pages
  */
 
-import { ReactNode } from 'react';
+import React from 'react';
 
-interface OnboardingLayoutProps {
-  children: ReactNode;
-}
-
-export default function OnboardingLayout({ children }: OnboardingLayoutProps) {
+export default function OnboardingLayout({ children }: React.PropsWithChildren) {
   return (
     <div className="onboarding-flow">
       {children}

@@ -14,8 +14,8 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
-    
+    const { user, session } = authResult;
+
     if (!user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized', message: 'Please sign in' },
@@ -26,10 +26,10 @@ export async function DELETE(request: NextRequest) {
     const response = await fetch(`${BACKEND_URL}/api/auth/cli/sessions/all`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${(session as any).accessToken}`,
+        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
         'Content-Type': 'application/json',
         'X-User-Email': user.email,
-        'X-User-ID': (session.user as any).id || '',
+        'X-User-ID': user.id || '',
       },
     });
 

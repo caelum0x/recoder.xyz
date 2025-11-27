@@ -34,6 +34,7 @@ import { aiCommand } from '../commands/ai.js';
 import { authCommand } from '../commands/auth.js';
 import { extensionsCommand } from '../commands/extensions.js';
 import { mcpCommand } from '../commands/mcp.js';
+import { webCommand } from '../commands/web.js';
 import type { Settings } from './settings.js';
 
 import { resolvePath } from '../utils/resolvePath.js';
@@ -351,7 +352,9 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     // Register auth subcommands
     .command(authCommand)
     // Register AI subcommands
-    .command(aiCommand);
+    .command(aiCommand)
+    // Register web project management commands
+    .command(webCommand);
 
   if (settings?.experimental?.extensionManagement ?? false) {
     yargsInstance.command(extensionsCommand);

@@ -24,11 +24,14 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    // Get authorization header from the request
+    const authHeader = request.headers.get('authorization');
+
     const response = await fetch(`${BACKEND_URL}/api/billing/checkout/paddle`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(session as any).accessToken}`,
+        ...(authHeader && { 'Authorization': authHeader }),
       },
       body: JSON.stringify(body),
     });

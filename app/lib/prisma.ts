@@ -3,6 +3,7 @@
  * Singleton pattern to prevent multiple instances
  */
 
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
@@ -11,29 +12,47 @@ export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// Graceful shutdown - close Prisma connection when process terminates
+if (typeof window === 'undefined') {
+  const cleanup = async () => {
+    await prisma.$disconnect();
+  };
+
+  process.on('beforeExit', cleanup);
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
+}
 
 // Helper functions for common operations
 export const prismaHelpers = {
   // User operations
   async findOrCreateUser(email: string, name: string, provider?: string) {
-    let user = await prisma.user.findUnique({ where: { email } });
+    let user = await prisma.users.findUnique({ where: { email } });
     
     if (!user) {
-      user = await prisma.user.create({
+      user = await prisma.users.create({
         data: {
+          id: crypto.randomUUID(),
           email,
           name,
           subscriptionPlan: 'free',
           subscriptionStatus: 'active',
           emailVerified: provider ? true : false,
+          updatedAt: new Date()
         },
       });
       
       // Create initial quota
-      await prisma.userQuota.create({
+      await prisma.user_quota.create({
         data: {
           userId: user.id,
           requestsLimit: 1000,
@@ -53,6 +72,7 @@ export const prismaHelpers = {
     
     await prisma.authCode.create({
       data: {
+        id: crypto.randomUUID(),
         code,
         userId,
         clientId,
@@ -118,7 +138,6 @@ export const prismaHelpers = {
       data: {
         userId,
         status: 'authorized',
-        authorizedAt: new Date(),
       },
     });
   },
@@ -147,8 +166,9 @@ export const prismaHelpers = {
     const accessToken = `rct_${crypto.randomUUID()}`;
     const refreshToken = `rcr_${crypto.randomUUID()}`;
     
-    const session = await prisma.cLISession.create({
+    const session = await prisma.cli_sessions.create({
       data: {
+        id: crypto.randomUUID(),
         userId,
         deviceId: crypto.randomUUID(),
         deviceName: deviceName || 'CLI',
@@ -163,7 +183,7 @@ export const prismaHelpers = {
   },
 
   async validateSession(token: string) {
-    const session = await prisma.cLISession.findFirst({
+    const session = await prisma.cli_sessions.findFirst({
       where: {
         OR: [
           { accessToken: token },
@@ -172,12 +192,12 @@ export const prismaHelpers = {
         isActive: true,
         expiresAt: { gt: new Date() },
       },
-      include: { user: true },
+      include: { users: true },
     });
     
     if (session) {
       // Update last used
-      await prisma.cLISession.update({
+      await prisma.cli_sessions.update({
         where: { id: session.id },
         data: { lastUsedAt: new Date() },
       });
@@ -187,9 +207,9 @@ export const prismaHelpers = {
   },
 
   async refreshSession(refreshToken: string) {
-    const session = await prisma.cLISession.findUnique({
+    const session = await prisma.cli_sessions.findUnique({
       where: { refreshToken },
-      include: { user: true },
+      include: { users: true },
     });
     
     if (!session || !session.isActive || session.expiresAt < new Date()) {
@@ -198,13 +218,13 @@ export const prismaHelpers = {
     
     const newAccessToken = `rct_${crypto.randomUUID()}`;
     
-    return await prisma.cLISession.update({
+    return await prisma.cli_sessions.update({
       where: { id: session.id },
       data: {
         accessToken: newAccessToken,
         lastUsedAt: new Date(),
       },
-      include: { user: true },
+      include: { users: true },
     });
   },
 
@@ -214,14 +234,15 @@ export const prismaHelpers = {
     const apiKey = `rck_${crypto.randomUUID()}`;
     const keyHash = await hashApiKey(apiKey);
     
-    await prisma.apiKey.create({
+    await prisma.api_keys.create({
       data: {
+        id: crypto.randomUUID(),
         userId,
-        keyId,
         keyHash,
         keyPrefix: apiKey.substring(0, 12),
         name,
-        scopes,
+        permissions: scopes,
+        updatedAt: new Date()
       },
     });
     
@@ -231,9 +252,9 @@ export const prismaHelpers = {
   async validateApiKey(apiKey: string) {
     const keyHash = await hashApiKey(apiKey);
     
-    const key = await prisma.apiKey.findUnique({
+    const key = await prisma.api_keys.findFirst({
       where: { keyHash },
-      include: { user: true },
+      include: { users: true },
     });
     
     if (!key || !key.isActive || (key.expiresAt && key.expiresAt < new Date())) {
@@ -241,7 +262,7 @@ export const prismaHelpers = {
     }
     
     // Update usage
-    await prisma.apiKey.update({
+    await prisma.api_keys.update({
       where: { id: key.id },
       data: {
         lastUsedAt: new Date(),
@@ -253,12 +274,13 @@ export const prismaHelpers = {
   },
 
   // Usage tracking
-  async recordUsage(userId: string, sessionId: string, requestType: string, metadata: any) {
-    await prisma.usageRecord.create({
+  async recordUsage(userId: string, requestType: string, metadata: any) {
+    await prisma.usage_records.create({
       data: {
+        id: crypto.randomUUID(),
         userId,
-        sessionId,
         requestType,
+        type: 'api_usage',
         ...metadata,
       },
     });
@@ -296,7 +318,7 @@ export const prismaHelpers = {
     });
     
     // Deactivate expired sessions
-    await prisma.cLISession.updateMany({
+    await prisma.cli_sessions.updateMany({
       where: {
         expiresAt: { lt: now },
         isActive: true,

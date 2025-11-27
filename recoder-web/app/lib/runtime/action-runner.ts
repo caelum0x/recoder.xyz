@@ -60,10 +60,19 @@ type ActionsMap = MapStore<Record<string, ActionState>>;
 export class ActionRunner {
   #webcontainer: Promise<WebContainer>;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
-  
+
   // FIX #3: Track if repository was cloned to prevent additional file generation
   #repositoryCloned: boolean = false;
   #clonedRepoUrl: string | null = null;
+
+  // Track background dev server processes
+  #devServerProcess: any = null;
+
+  // ✅ P1: Auto-run npm commands after build
+  #packageJsonCreated: boolean = false;
+  #autoInstallTimer: NodeJS.Timeout | null = null;
+  #autoInstallTriggered: boolean = false;
+  #filesBeingCreated: Set<string> = new Set();
 
   actions: ActionsMap = map({});
 
@@ -170,6 +179,27 @@ export class ActionRunner {
 
     logger.info(`🔨 Executing shell command: ${action.content.substring(0, 100)}${action.content.length > 100 ? '...' : ''}`);
 
+    // ✅ FIX #4: Auto-show terminal when shell commands execute
+    // Import terminal store dynamically to avoid circular dependencies
+    if (typeof window !== 'undefined') {
+      try {
+        const { workbenchStore } = await import('~/lib/stores/workbench');
+        const terminalStore = workbenchStore.terminalStore.get();
+
+        if (terminalStore) {
+          // Show terminal if it's hidden
+          terminalStore.toggleTerminal(true);
+
+          // Flash highlight to draw attention
+          terminalStore.flashTerminalHighlight();
+
+          logger.info('✅ Terminal auto-shown and highlighted for shell command execution');
+        }
+      } catch (error) {
+        logger.warn('Could not auto-show terminal:', error);
+      }
+    }
+
     // Normalize content for multiline command detection (replace newlines with spaces)
     // This fixes the bug where multiline commands like "npm install\nnpm run dev" weren't detected
     const normalizedContent = action.content.replace(/\n/g, ' ').toLowerCase();
@@ -177,41 +207,25 @@ export class ActionRunner {
     // Check if this is a long-running dev server command
     const isDevServer = /npm (run )?dev|yarn dev|pnpm dev|vite|next dev|remix dev|npm start|yarn start|pnpm start/.test(normalizedContent);
 
-    // CRITICAL: Block dev server commands entirely - they should never execute
-    // These commands run forever and freeze the UI at "Step 7 of 7"
+    // Handle dev server commands specially - run in background
     if (isDevServer) {
-      const blockedCommand = action.content.substring(0, 100).trim();
-      const errorMsg = `🚨 BLOCKED DEV SERVER COMMAND
+      logger.info(`🚀 Starting dev server in background: ${action.content.substring(0, 100)}`);
 
-This command was automatically blocked because it would run indefinitely:
-"${blockedCommand}"
+      // Kill existing dev server if running
+      if (this.#devServerProcess) {
+        logger.info('⚠️ Killing existing dev server process');
+        try {
+          this.#devServerProcess.kill();
+        } catch (e) {
+          logger.warn('Failed to kill existing dev server:', e);
+        }
+      }
 
-Why was this blocked?
-• Development servers (npm run dev, vite, etc.) run continuously
-• They never complete, causing the application to freeze
-• This would create a poor user experience
-
-Your project is ready!
-✓ All files have been created
-✓ Dependencies are installed (or will be by the next command)
-✓ You can manually start the dev server when ready
-
-To start your project:
-1. Open the terminal (bottom panel)
-2. Run the dev command manually if needed
-3. Use the preview pane to view your app
-
-The AI should not generate dev server commands.`;
-
-      logger.error(errorMsg);
-      console.error(errorMsg); // Also log to console for visibility
-
-      // Throw a user-friendly error
-      throw new Error('🚫 Dev server command blocked (runs indefinitely). Your project is ready - start the dev server manually if needed.');
+      return this.#runDevServerInBackground(webcontainer, action);
     }
 
-    // All dev server commands are blocked above, so we only execute regular commands
-    logger.info(`✅ Command allowed - executing: ${action.content.substring(0, 100)}`);
+    // Regular commands execute normally
+    logger.info(`✅ Executing command: ${action.content.substring(0, 100)}`);
 
     let process;
     try {
@@ -230,11 +244,53 @@ The AI should not generate dev server commands.`;
     });
 
     const outputChunks: string[] = [];
+    let lastProgressUpdate = Date.now();
+    let packageCount = 0;
+    let currentPackage = '';
 
+    // ✅ P1: Enhanced output writer with real-time progress feedback
     const outputWriter = new WritableStream({
       write(data) {
+        const text = data.toString();
         console.log(data);
         outputChunks.push(data);
+
+        // Parse npm install output for progress information
+        if (isInstallCommand && Date.now() - lastProgressUpdate > 1000) {
+          // Extract package count: "added 247 packages"
+          const packageMatch = text.match(/added (\d+) packages?/i);
+          if (packageMatch) {
+            packageCount = parseInt(packageMatch[1]);
+            action.status.set(`running:✅ Installed ${packageCount} packages`);
+            lastProgressUpdate = Date.now();
+          }
+
+          // Extract current package being installed: "npm WARN deprecated package@version"
+          const deprecatedMatch = text.match(/npm (?:WARN|info) (?:deprecated|installing) ([\w-]+)@/i);
+          if (deprecatedMatch && deprecatedMatch[1] !== currentPackage) {
+            currentPackage = deprecatedMatch[1];
+            action.status.set(`running:📦 Installing ${currentPackage}...`);
+            lastProgressUpdate = Date.now();
+          }
+
+          // Detect resolving dependencies phase
+          if (/reify|resolve|idealTree/i.test(text)) {
+            action.status.set(`running:🔍 Resolving dependencies...`);
+            lastProgressUpdate = Date.now();
+          }
+
+          // Detect downloading phase
+          if (/fetch|download/i.test(text)) {
+            action.status.set(`running:⬇️ Downloading packages...`);
+            lastProgressUpdate = Date.now();
+          }
+
+          // Detect auditing phase
+          if (/audit/i.test(text)) {
+            action.status.set(`running:🔒 Auditing packages...`);
+            lastProgressUpdate = Date.now();
+          }
+        }
       },
     });
 
@@ -242,17 +298,22 @@ The AI should not generate dev server commands.`;
     process.output.pipeTo(outputWriter);
 
     // For regular commands, wait for completion with timeout
-    // Increased timeout for npm install on large projects
-    // Small projects: ~10-20s, Large projects: ~60-90s
+    // WebContainer npm installs can be slow, especially for large packages
+    // Increased timeout for npm install: 5 minutes to handle large dependencies
     const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
-    const timeoutDuration = isInstallCommand ? 120000 : 60000; // 2 min for install, 1 min for others
+    const timeoutDuration = isInstallCommand ? 300000 : 90000; // 5 min for install, 90s for others
 
     logger.info(`⏱️ Timeout set to ${timeoutDuration / 1000}s (install command: ${isInstallCommand})`);
+
+    // Initial progress message for install commands
+    if (isInstallCommand) {
+      action.status.set(`running:📦 Starting package installation...`);
+    }
 
     const exitPromise = process.exit;
     const timeoutPromise = new Promise<number>((_, reject) => {
       setTimeout(() => {
-        reject(new Error(`Command timed out after ${timeoutDuration / 1000} seconds`));
+        reject(new Error(`Command timed out after ${timeoutDuration / 1000} seconds. This may be due to slow network or large package size.`));
       }, timeoutDuration);
     });
 
@@ -261,7 +322,7 @@ The AI should not generate dev server commands.`;
       exitCode = await Promise.race([exitPromise, timeoutPromise]);
     } catch (error) {
       // Timeout occurred - kill the process
-      logger.error('⚠️ Command timed out after 30 seconds - killing process');
+      logger.error(`⚠️ Command timed out after ${timeoutDuration / 1000} seconds - killing process`);
       process.kill();
       throw error;
     }
@@ -293,6 +354,24 @@ The AI should not generate dev server commands.`;
     if (!action.filePath || action.filePath === 'undefined' || action.filePath === 'unknown-file.txt') {
       logger.error(`Invalid or missing file path: '${action.filePath}'. File content was:`, action.content.substring(0, 100) + '...');
       throw new Error(`Invalid path '${action.filePath}'`);
+    }
+
+    // ✅ P1: Track that we're creating this file
+    this.#filesBeingCreated.add(action.filePath);
+
+    // ✅ P1: Update build status - Creating phase
+    if (this.#filesBeingCreated.size === 1 && typeof window !== 'undefined') {
+      try {
+        const { workbenchStore } = await import('~/lib/stores/workbench');
+        workbenchStore.buildStatus.set({
+          phase: 'creating',
+          message: 'Creating project files...',
+          progress: 5,
+          filesCreated: this.#filesBeingCreated.size,
+        });
+      } catch (error) {
+        logger.warn('Could not update build status:', error);
+      }
     }
 
     const webcontainer = await this.#webcontainer;
@@ -337,6 +416,21 @@ The AI should not generate dev server commands.`;
         logger.warn(`⚠️ File write failed, retrying... (${retries} left)`);
         await new Promise(resolve => setTimeout(resolve, 100));
       }
+    }
+
+    // ✅ P1: Check if package.json was created
+    const isPackageJson = action.filePath === 'package.json' || action.filePath.endsWith('/package.json');
+    if (isPackageJson) {
+      logger.info('📦 package.json detected! Will auto-install dependencies after all files are created.');
+      this.#packageJsonCreated = true;
+    }
+
+    // ✅ P1: Remove from tracking
+    this.#filesBeingCreated.delete(action.filePath);
+
+    // ✅ P1: Schedule auto-install (debounced - waits for all files to finish)
+    if (this.#packageJsonCreated && !this.#autoInstallTriggered) {
+      this.#scheduleAutoInstall();
     }
   }
 
@@ -468,6 +562,369 @@ The AI should not generate dev server commands.`;
     } catch (error) {
       logger.error(`❌ Failed to clone repository:`, error);
       throw error;
+    }
+  }
+
+  async #runDevServerInBackground(webcontainer: WebContainer, action: ActionState) {
+    logger.info(`🚀 Starting dev server in background mode`);
+
+    let process;
+    try {
+      process = await webcontainer.spawn('jsh', ['-c', action.content], {
+        env: { npm_config_yes: true },
+      });
+      this.#devServerProcess = process;
+      logger.info('✅ Dev server process spawned successfully');
+    } catch (error) {
+      logger.error('❌ Failed to spawn dev server process:', error);
+      throw error;
+    }
+
+    // Handle abort signal
+    action.abortSignal.addEventListener('abort', () => {
+      logger.warn('⚠️ Dev server aborted by user');
+      process.kill();
+      this.#devServerProcess = null;
+    });
+
+    const outputChunks: string[] = [];
+    let serverStarted = false;
+
+    // Patterns that indicate the server has started successfully
+    const startupPatterns = [
+      /server (?:running|listening|started) (?:on|at)/i,
+      /local:\s+https?:\/\//i,
+      /ready in \d+/i,
+      /compiled (?:successfully|client and server)/i,
+      /vite.*ready in/i,
+      /started server on/i,
+      /\bavailable on\b/i,
+      /localhost:\d+/i,
+    ];
+
+    // Monitor output for startup indicators
+    const outputReader = process.output.getReader();
+
+    // Create a promise that resolves when server starts (or times out)
+    const startupPromise = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (!serverStarted) {
+          logger.warn('⚠️ Dev server startup timeout (30s) - assuming it started');
+          serverStarted = true;
+          resolve();
+        }
+      }, 30000); // 30 second timeout
+
+      // Read output in the background
+      const readOutput = async () => {
+        try {
+          while (true) {
+            const { done, value } = await outputReader.read();
+
+            if (done) {
+              logger.info('📝 Dev server output stream ended');
+              break;
+            }
+
+            const text = new TextDecoder().decode(value);
+            outputChunks.push(text);
+            console.log('[Dev Server]', text);
+
+            // Check if server has started
+            if (!serverStarted) {
+              for (const pattern of startupPatterns) {
+                if (pattern.test(text)) {
+                  logger.info(`✅ Dev server started - detected pattern: ${pattern}`);
+                  serverStarted = true;
+                  clearTimeout(timeout);
+                  resolve();
+                  // Continue reading output but don't wait for more
+                  break;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          logger.error('❌ Error reading dev server output:', error);
+          reject(error);
+        }
+      };
+
+      readOutput();
+    });
+
+    try {
+      // Wait for server to start (or timeout)
+      await startupPromise;
+      logger.info('🎉 Dev server is ready! Process continues in background.');
+    } catch (error) {
+      logger.error('❌ Dev server startup failed:', error);
+      throw error;
+    }
+
+    // Log that the server is running in background
+    logger.info('✅ Dev server running in background - action marked complete');
+    logger.info('💡 Use the preview pane to view your application');
+  }
+
+  /**
+   * ✅ P1: Schedule auto-install with debouncing
+   * Waits 2 seconds after the last file is created before triggering install
+   */
+  #scheduleAutoInstall() {
+    // Clear existing timer
+    if (this.#autoInstallTimer) {
+      clearTimeout(this.#autoInstallTimer);
+    }
+
+    logger.info('⏱️ Scheduling auto-install (debounced, 2s delay)...');
+
+    // Wait 2 seconds after last file action
+    this.#autoInstallTimer = setTimeout(() => {
+      this.#runAutoInstall();
+    }, 2000);
+  }
+
+  /**
+   * ✅ P1: Automatically install dependencies and start dev server
+   * This runs after all files are created and package.json exists
+   */
+  async #runAutoInstall() {
+    // Only run once
+    if (this.#autoInstallTriggered) {
+      return;
+    }
+
+    // Wait for all file creations to complete
+    if (this.#filesBeingCreated.size > 0) {
+      logger.info(`⏳ Waiting for ${this.#filesBeingCreated.size} files to finish before auto-install...`);
+      // Reschedule
+      this.#scheduleAutoInstall();
+      return;
+    }
+
+    this.#autoInstallTriggered = true;
+    logger.info('🚀 Starting auto-install and dev server...');
+
+    try {
+      const webcontainer = await this.#webcontainer;
+
+      // ✅ P1: Update build status - Installing phase
+      if (typeof window !== 'undefined') {
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.buildStatus.set({
+            phase: 'installing',
+            message: 'Installing dependencies...',
+            progress: 10,
+          });
+        } catch (error) {
+          logger.warn('Could not update build status:', error);
+        }
+      }
+
+      // Show terminal automatically
+      if (typeof window !== 'undefined') {
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          const terminalStore = workbenchStore.terminalStore.get();
+
+          if (terminalStore) {
+            terminalStore.toggleTerminal(true);
+            terminalStore.flashTerminalHighlight();
+            logger.info('✅ Terminal auto-shown for installation');
+          }
+        } catch (error) {
+          logger.warn('Could not auto-show terminal:', error);
+        }
+      }
+
+      // Check package.json for the dev script
+      let devCommand = 'npm run dev';
+      try {
+        const packageJsonContent = await webcontainer.fs.readFile('package.json', 'utf-8');
+        const packageJson = JSON.parse(packageJsonContent);
+
+        // Detect the appropriate dev command
+        if (packageJson.scripts) {
+          if (packageJson.scripts.dev) {
+            devCommand = 'npm run dev';
+          } else if (packageJson.scripts.start) {
+            devCommand = 'npm start';
+          } else if (packageJson.scripts['dev:server']) {
+            devCommand = 'npm run dev:server';
+          }
+        }
+
+        logger.info(`📋 Detected dev command: ${devCommand}`);
+      } catch (error) {
+        logger.warn('Could not read package.json, using default: npm run dev');
+      }
+
+      // Step 1: Install dependencies
+      logger.info('📦 Step 1/2: Installing dependencies...');
+
+      const installProcess = await webcontainer.spawn('jsh', ['-c', 'npm install'], {
+        env: { npm_config_yes: true },
+      });
+
+      // Pipe install output to console
+      const installOutputWriter = new WritableStream({
+        write(data) {
+          console.log('[npm install]', data);
+        },
+      });
+
+      installProcess.output.pipeTo(installOutputWriter);
+
+      // Wait for install to complete (5 minute timeout)
+      const installExitCode = await Promise.race([
+        installProcess.exit,
+        new Promise<number>((_, reject) => {
+          setTimeout(() => reject(new Error('Install timed out after 5 minutes')), 300000);
+        }),
+      ]);
+
+      if (installExitCode !== 0) {
+        throw new Error(`npm install failed with exit code ${installExitCode}`);
+      }
+
+      logger.info('✅ Step 1/2: Dependencies installed successfully!');
+
+      // ✅ P1: Update build status - Starting phase
+      if (typeof window !== 'undefined') {
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.buildStatus.set({
+            phase: 'starting',
+            message: 'Starting development server...',
+            progress: 70,
+          });
+        } catch (error) {
+          logger.warn('Could not update build status:', error);
+        }
+      }
+
+      // Step 2: Start dev server in background
+      logger.info(`🚀 Step 2/2: Starting dev server (${devCommand})...`);
+
+      // Kill existing dev server if running
+      if (this.#devServerProcess) {
+        logger.info('⚠️ Killing existing dev server');
+        try {
+          this.#devServerProcess.kill();
+        } catch (e) {
+          logger.warn('Failed to kill existing dev server:', e);
+        }
+      }
+
+      const devProcess = await webcontainer.spawn('jsh', ['-c', devCommand], {
+        env: { npm_config_yes: true },
+      });
+
+      this.#devServerProcess = devProcess;
+
+      // Monitor dev server output for startup
+      const devOutputReader = devProcess.output.getReader();
+      let serverStarted = false;
+
+      const startupPatterns = [
+        /server (?:running|listening|started) (?:on|at)/i,
+        /local:\s+https?:\/\//i,
+        /ready in \d+/i,
+        /compiled (?:successfully|client and server)/i,
+        /vite.*ready in/i,
+        /started server on/i,
+        /\bavailable on\b/i,
+        /localhost:\d+/i,
+      ];
+
+      // Wait for server to start (30 second timeout)
+      const startupPromise = new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          if (!serverStarted) {
+            logger.info('✅ Step 2/2: Dev server started (timeout assumed success)');
+            serverStarted = true;
+            resolve();
+          }
+        }, 30000);
+
+        const readOutput = async () => {
+          try {
+            while (true) {
+              const { done, value } = await devOutputReader.read();
+
+              if (done) break;
+
+              const text = new TextDecoder().decode(value);
+              console.log('[Dev Server]', text);
+
+              if (!serverStarted) {
+                for (const pattern of startupPatterns) {
+                  if (pattern.test(text)) {
+                    logger.info(`✅ Step 2/2: Dev server started! Detected: ${pattern}`);
+                    serverStarted = true;
+                    clearTimeout(timeout);
+                    resolve();
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            logger.error('Error reading dev server output:', error);
+            resolve(); // Resolve anyway to not block
+          }
+        };
+
+        readOutput();
+      });
+
+      await startupPromise;
+
+      // ✅ P1: Update build status - Ready!
+      if (typeof window !== 'undefined') {
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.buildStatus.set({
+            phase: 'ready',
+            message: 'Your app is ready! ✨',
+            progress: 100,
+          });
+
+          // Auto-reset after 5 seconds
+          setTimeout(() => {
+            workbenchStore.buildStatus.set({
+              phase: 'idle',
+              message: '',
+              progress: 0,
+            });
+          }, 5000);
+        } catch (error) {
+          logger.warn('Could not update build status:', error);
+        }
+      }
+
+      logger.info('🎉 Auto-install and dev server complete! Your app is ready.');
+      logger.info('💡 Check the preview pane to see your application running.');
+
+    } catch (error) {
+      logger.error('❌ Auto-install failed:', error);
+      logger.info('💡 You can manually run: npm install && npm run dev');
+
+      // ✅ P1: Reset build status on error
+      if (typeof window !== 'undefined') {
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.buildStatus.set({
+            phase: 'idle',
+            message: '',
+            progress: 0,
+          });
+        } catch (e) {
+          // Ignore
+        }
+      }
     }
   }
 

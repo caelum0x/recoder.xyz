@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { getUserFromToken } from '@/lib/auth-helper';
 import { prisma } from '@/lib/prisma';
+import { userManager } from '@/lib/user-management';
+
+type PlanType = 'free' | 'pro' | 'enterprise';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user with subscription info
-    const userWithInfo = await prisma.user.findUnique({
+    const userWithInfo = await prisma.users.findUnique({
       where: { id: user.id },
       select: {
         id: true,

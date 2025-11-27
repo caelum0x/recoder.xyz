@@ -8,9 +8,12 @@ import { prisma } from '@/lib/prisma';
 // GET /api/billing/invoices/[id] - Get invoice details
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
+    // In Next.js 15, params is a Promise that must be awaited
+    const params = await props.params;
+
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
@@ -22,7 +25,7 @@ export async function GET(
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -33,7 +36,7 @@ export async function GET(
       );
     }
 
-    const invoice = await prisma.invoice.findFirst({
+    const invoice = await prisma.invoices.findFirst({
       where: {
         id: params.id,
         userId: user.id,
@@ -51,14 +54,14 @@ export async function GET(
       success: true,
       invoice: {
         id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
+        invoiceNumber: invoice.id, // Use id as invoice number since invoiceNumber field doesn't exist
         date: invoice.createdAt.toISOString(),
-        dueDate: invoice.dueDate?.toISOString(),
+        dueDate: invoice.createdAt.toISOString(), // dueDate field doesn't exist, using createdAt
         amount: invoice.amount,
         currency: invoice.currency || 'USD',
         status: invoice.status,
-        description: invoice.description,
-        pdfUrl: invoice.pdfUrl,
+        description: invoice.description || '',
+        pdfUrl: null, // pdfUrl field doesn't exist in schema
         items: invoice.items || [],
       },
     });

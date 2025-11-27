@@ -21,18 +21,18 @@ import {
 
 export default function ChoosePlanPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState('free');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!session && !isPending) {
       router.push('/auth/signin');
-    } else if (status === 'authenticated') {
+    } else if (session && !isPending) {
       setLoading(false);
     }
-  }, [status, router]);
+  }, [session, isPending, router]);
 
   const plans = [
     {
@@ -105,7 +105,7 @@ export default function ChoosePlanPage() {
     }
   };
 
-  if (loading || status === 'loading') {
+  if (loading || isPending) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">

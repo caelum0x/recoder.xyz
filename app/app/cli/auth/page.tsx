@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 
 function CLIAuthContent() {
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const codeFromUrl = searchParams.get('code');
@@ -20,10 +20,10 @@ function CLIAuthContent() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!session && !isPending) {
       router.push(`/auth/signin?callbackUrl=${encodeURIComponent('/cli/auth' + (codeFromUrl ? `?code=${codeFromUrl}` : ''))}`);
     }
-  }, [status, router, codeFromUrl]);
+  }, [session, isPending, router, codeFromUrl]);
 
   // Load device code info when user code is provided
   useEffect(() => {
@@ -106,7 +106,7 @@ function CLIAuthContent() {
   };
 
   // Loading state
-  if (status === 'loading') {
+  if (isPending) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
         <div className="text-white">
@@ -228,12 +228,21 @@ function CLIAuthContent() {
             <div className="mb-6 bg-gray-900/50 border border-gray-700 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-white mb-4">Authorizing as:</h3>
               <div className="flex items-center gap-4">
-                {session?.user?.image && (
+                {session?.user?.image ? (
                   <img
                     src={session.user.image}
                     alt={session.user.name || ''}
                     className="w-12 h-12 rounded-full border-2 border-orange-500"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center border-2 border-orange-500">
+                    <span className="text-white font-semibold text-sm">
+                      {session?.user?.name?.charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  </div>
                 )}
                 <div>
                   <p className="text-white font-medium">{session?.user?.name}</p>

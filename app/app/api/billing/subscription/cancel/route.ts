@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { reason, feedback, cancelImmediate } = body;
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email }
     });
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       ? new Date() 
       : user.subscriptionEndDate || new Date();
 
-    await prisma.user.update({
+    await prisma.users.update({
       where: { id: user.id },
       data: {
         subscriptionStatus: cancelImmediate ? 'cancelled' : 'cancelling',
@@ -45,8 +45,9 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    await prisma.auditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.id,
         action: 'subscription_cancelled',
         resource: 'billing',
@@ -57,8 +58,7 @@ export async function POST(request: NextRequest) {
           oldPlan: user.plan,
           subscriptionId: user.subscriptionId
         },
-        ipAddress: request.headers.get('x-forwarded-for') || '0.0.0.0',
-        timestamp: new Date()
+        ipAddress: request.headers.get('x-forwarded-for') || '0.0.0.0'
       }
     });
 

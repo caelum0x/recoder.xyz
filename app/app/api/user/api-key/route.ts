@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
     // Get session
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
-    
+    const { user, session } = authResult;
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(session as any).accessToken}`,
+        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
       },
       body: JSON.stringify({ apiKey }),
     });
@@ -66,8 +66,8 @@ export async function DELETE(request: NextRequest) {
     // Get session
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
-    
+    const { user, session } = authResult;
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -79,7 +79,7 @@ export async function DELETE(request: NextRequest) {
     const response = await fetch(`${BACKEND_URL}/api/user/api-key`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${(session as any).accessToken}`,
+        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
       },
     });
 

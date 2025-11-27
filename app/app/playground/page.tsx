@@ -62,7 +62,7 @@ const API_ENDPOINTS = [
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
 export default function PlaygroundPage() {
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const router = useRouter();
 
   const [selectedEndpoint, setSelectedEndpoint] = useState(API_ENDPOINTS[0]);

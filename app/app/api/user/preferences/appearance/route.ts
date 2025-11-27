@@ -25,7 +25,7 @@ export async function PUT(request: Request) {
     const { theme, fontSize, density, accentColor, reduceAnimations } = body;
 
     // TODO: Save to database when UserPreferences model is added
-    // await prisma.userPreferences.upsert({
+    // await prisma.usersPreferences.upsert({
     //   where: { userId: user.id },
     //   create: {
     //     userId: user.id,
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
     }
 
     // TODO: Fetch from database when UserPreferences model is added
-    // const preferences = await prisma.userPreferences.findUnique({
+    // const preferences = await prisma.usersPreferences.findUnique({
     //   where: { userId: user.id }
     // });
 

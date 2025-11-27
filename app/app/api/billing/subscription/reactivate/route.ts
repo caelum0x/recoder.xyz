@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const subscription = await prisma.subscription.findFirst({
-      where: { 
+    const subscription = await prisma.subscriptions.findFirst({
+      where: {
         userId: user.id,
         cancelAtPeriodEnd: true,
       },
@@ -54,12 +54,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Reactivate the subscription
-    await prisma.subscription.update({
+    await prisma.subscriptions.update({
       where: { id: subscription.id },
       data: {
         cancelAtPeriodEnd: false,
         cancelledAt: null,
-        cancellationReason: null,
+        updatedAt: new Date(),
       },
     });
 

@@ -67,10 +67,10 @@ export default function SettingsPage() {
       color: 'from-indigo-500 to-blue-500'
     },
     {
-      title: 'API',
-      description: 'Manage your API keys and configuration',
+      title: 'AI Providers',
+      description: 'Manage your AI provider API keys (OpenRouter, Anthropic, OpenAI)',
       icon: Key,
-      href: '/settings/api',
+      href: '/settings/ai-providers',
       color: 'from-orange-500 to-purple-600'
     }
   ];
@@ -156,8 +156,8 @@ export default function SettingsPage() {
                 <div className="text-xs text-gray-400">Security Level</div>
               </div>
               <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <div className="text-2xl font-bold text-purple-500 mb-1">Pro</div>
-                <div className="text-xs text-gray-400">Current Plan</div>
+                <div className="text-2xl font-bold text-green-500 mb-1">Beta</div>
+                <div className="text-xs text-gray-400">100% Free</div>
               </div>
             </div>
           </div>

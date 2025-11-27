@@ -16,16 +16,16 @@ export async function getUserFromToken(request: NextRequest) {
 
   try {
     // Find session by access token
-    const session = await prisma.cLISession.findUnique({
+    const session = await prisma.cli_sessions.findUnique({
       where: { accessToken: token },
-      include: { user: true }
+      include: { users: true }
     });
 
     if (!session || !session.isActive || session.expiresAt < new Date()) {
       return null;
     }
 
-    return session.user;
+    return session.users;
   } catch (error) {
     console.error('Token validation error:', error);
     return null;

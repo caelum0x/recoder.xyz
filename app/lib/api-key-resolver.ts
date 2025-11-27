@@ -38,7 +38,7 @@ export async function resolveApiKey(
   provider: string = 'openrouter'
 ): Promise<ResolvedApiKey> {
   // Get user and their plan
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -122,14 +122,14 @@ async function getPlatformApiKey(provider: string = 'openrouter'): Promise<{
   keyId: string;
 }> {
   // Get all active platform keys for the provider
-  const keys = await prisma.platformApiKey.findMany({
+  const keys = await prisma.platform_api_keys.findMany({
     where: {
       provider,
       isActive: true,
     },
     orderBy: [
-      { priority: 'desc' }, // Higher priority first
       { quotaUsed: 'asc' },  // Less used keys first
+      { lastUsedAt: 'asc' }, // Least recently used first
     ],
   });
 
@@ -154,10 +154,10 @@ async function getPlatformApiKey(provider: string = 'openrouter'): Promise<{
   // Select key with load balancing (lowest usage)
   const selectedKey = keys[0];
 
-  // Check if key is approaching quota limit
-  if (selectedKey.quotaLimit > 0 && selectedKey.quotaUsed >= selectedKey.quotaLimit) {
+  // Simple quota check - if quotaUsed is very high, try next key
+  if (selectedKey.quotaUsed && selectedKey.quotaUsed >= 10000) {
     // Try next key
-    const nextKey = keys.find(k => k.quotaUsed < k.quotaLimit);
+    const nextKey = keys.find(k => (k.quotaUsed || 0) < 10000);
     if (!nextKey) {
       throw new ApiKeyResolverError(
         'All platform API keys have reached their quota. Please try again later.',
@@ -167,7 +167,7 @@ async function getPlatformApiKey(provider: string = 'openrouter'): Promise<{
     }
     
     // Update last used time
-    await prisma.platformApiKey.update({
+    await prisma.platform_api_keys.update({
       where: { id: nextKey.id },
       data: { 
         lastUsedAt: new Date(),
@@ -182,7 +182,7 @@ async function getPlatformApiKey(provider: string = 'openrouter'): Promise<{
   }
 
   // Update usage and last used time
-  await prisma.platformApiKey.update({
+  await prisma.platform_api_keys.update({
     where: { id: selectedKey.id },
     data: { 
       lastUsedAt: new Date(),
@@ -256,7 +256,7 @@ export async function validateUserApiKey(
  * @returns True if user needs to add their API key
  */
 export async function needsApiKey(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       subscriptionPlan: true,
@@ -283,7 +283,7 @@ export async function getApiKeyStatus(userId: string): Promise<{
   requiresApiKey: boolean;
   keyMasked?: string;
 }> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       subscriptionPlan: true,

@@ -47,7 +47,7 @@ interface Project {
 }
 
 export default function ProjectsDashboardPage() {
-  const { data: session, status: authStatus } = useSession();
+  const { data: session, isPending } = useSession();
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,17 +59,17 @@ export default function ProjectsDashboardPage() {
 
   // Redirect if not authenticated
   useEffect(() => {
-    if (authStatus === 'unauthenticated') {
+    if (!isPending && !session) {
       router.push('/auth/signin');
     }
-  }, [authStatus, router]);
+  }, [session, isPending, router]);
 
   // Load projects
   useEffect(() => {
-    if (authStatus === 'authenticated') {
+    if (session && !isPending) {
       loadProjects();
     }
-  }, [authStatus, filterStatus]);
+  }, [session, isPending, filterStatus]);
 
   const loadProjects = async () => {
     try {
@@ -174,7 +174,7 @@ export default function ProjectsDashboardPage() {
     return colors[language] || 'bg-gray-500/20 text-gray-500';
   };
 
-  if (authStatus === 'loading' || loading) {
+  if (isPending || loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">

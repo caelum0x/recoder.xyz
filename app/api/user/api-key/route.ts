@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verify } from 'jsonwebtoken';
 import crypto from 'crypto';
+import { nanoid } from 'nanoid';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const ENCRYPTION_SECRET = process.env.API_KEY_ENCRYPTION_SECRET!;
@@ -42,14 +43,14 @@ export async function POST(request: NextRequest) {
   try {
     const userId = await authenticateRequest(request);
     const { apiKey } = await request.json();
-    
+
     if (!apiKey || !apiKey.startsWith('sk-or-v1-')) {
       return NextResponse.json(
         { success: false, error: 'Invalid OpenRouter API key format' },
         { status: 400 }
       );
     }
-    
+
     // Validate with OpenRouter
     const isValid = await validateOpenRouterKey(apiKey);
     if (!isValid) {
@@ -58,19 +59,35 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
-    // Encrypt and save
+
+    // Encrypt and save to user_api_keys table
     const encrypted = encryptApiKey(apiKey);
-    await prisma.user.update({
-      where: { id: userId },
+    const keyPrefix = apiKey.substring(0, 10);
+
+    // Deactivate any existing OpenRouter keys for this user
+    await prisma.user_api_keys.updateMany({
+      where: {
+        userId,
+        provider: 'openrouter'
+      },
       data: {
-        openRouterApiKey: encrypted,
-        hasOwnApiKey: true,
-        apiKeyEncrypted: true,
-        onboardingStep: 'completed'
+        isActive: false
       }
     });
-    
+
+    // Create new API key record
+    await prisma.user_api_keys.create({
+      data: {
+        id: nanoid(),
+        userId,
+        provider: 'openrouter',
+        name: 'OpenRouter API Key',
+        keyPrefix,
+        encryptedKey: encrypted,
+        isActive: true
+      }
+    });
+
     return NextResponse.json({
       success: true,
       message: 'API key saved successfully'
@@ -86,16 +103,18 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const userId = await authenticateRequest(request);
-    
-    await prisma.user.update({
-      where: { id: userId },
+
+    // Deactivate all OpenRouter keys for this user
+    await prisma.user_api_keys.updateMany({
+      where: {
+        userId,
+        provider: 'openrouter'
+      },
       data: {
-        openRouterApiKey: null,
-        hasOwnApiKey: false,
-        onboardingStep: 'pending_api_key'
+        isActive: false
       }
     });
-    
+
     return NextResponse.json({
       success: true,
       message: 'API key removed'

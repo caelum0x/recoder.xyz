@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,6 +5,43 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model accounts {
+  id                    String    @id
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now())
+  users                 users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
 }
 
 model agents {
@@ -102,24 +138,24 @@ model analytics_reports {
 
 model api_keys {
   id               String        @id
-  name             String
+  userId           String
+  keyHash          String        @unique
   keyPrefix        String
-  keyHash          String
+  name             String
+  expiresAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  isActive         Boolean       @default(true)
+  usageCount       Int           @default(0)
+  metadata         Json          @default("{}")
+  lastResetAt      DateTime      @default(now())
   permissions      String[]      @default([])
   rateLimit        Json          @default("{}")
-  metadata         Json          @default("{}")
-  isActive         Boolean       @default(true)
-  lastUsedAt       DateTime?
-  expiresAt        DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime
-  userId           String
-  lastResetAt      DateTime      @default(now())
   rateLimitDaily   Int?
   rateLimitMonthly Int?
   sessionId        String?
   source           String        @default("web")
-  usageCount       Int           @default(0)
+  updatedAt        DateTime
   cli_sessions     cli_sessions? @relation(fields: [sessionId], references: [id])
   users            users         @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -345,32 +381,67 @@ model blockchain_networks {
   @@index([isMainnet, isTestnet])
 }
 
-model cli_sessions {
-  id             String      @id
-  deviceCode     String      @unique
-  userCode       String      @unique
-  accessToken    String?     @unique
-  refreshToken   String?     @unique
-  expiresAt      DateTime
-  tokenExpiresAt DateTime?
-  status         String      @default("pending")
-  deviceInfo     Json        @default("{}")
-  ipAddress      String?
-  userAgent      String?
-  lastUsedAt     DateTime?
-  authorizedAt   DateTime?
-  revokedAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime
-  userId         String?
-  api_keys       api_keys[]
-  users          users?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cli_usage      cli_usage[]
+model AuthCode {
+  id          String    @id
+  code        String    @unique
+  userId      String
+  clientId    String
+  redirectUri String?
+  scope       String?
+  state       String?
+  expiresAt   DateTime
+  used        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  user        users     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([deviceCode, status])
+  @@index([code])
+  @@index([userId])
   @@index([expiresAt])
+}
+
+model DeviceCode {
+  id         String    @id @default(uuid())
+  deviceCode String    @unique
+  userCode   String    @unique
+  clientId   String    @default("recoder-cli")
+  scope      String?
+  status     String    @default("pending")
+  expiresAt  DateTime
+  userId     String?
+  createdAt  DateTime  @default(now())
+  user       users?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([deviceCode])
+  @@index([userCode])
   @@index([status])
-  @@index([userId, status])
+  @@index([expiresAt])
+}
+
+model cli_sessions {
+  id           String      @id
+  userId       String
+  deviceId     String?
+  deviceName   String?
+  deviceType   String      @default("cli")
+  accessToken  String      @unique
+  refreshToken String?     @unique
+  expiresAt    DateTime
+  createdAt    DateTime    @default(now())
+  lastUsedAt   DateTime    @default(now())
+  revokedAt    DateTime?
+  isActive     Boolean     @default(true)
+  ipAddress    String?
+  userAgent    String?
+  platformData Json?
+  api_keys     api_keys[]
+  users        users       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cli_usage    cli_usage[]
+
+  @@index([accessToken])
+  @@index([deviceId])
+  @@index([expiresAt])
+  @@index([refreshToken])
+  @@index([userId])
 }
 
 model cli_usage {
@@ -1175,20 +1246,41 @@ model payment_intents {
 }
 
 model payment_methods {
-  id            String          @id
-  type          String
-  provider      String          @default("stripe")
-  providerId    String
-  brand         String?
-  last4         String?
-  expMonth      Int?
-  expYear       Int?
-  isDefault     Boolean         @default(false)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime
-  userId        String
-  users         users           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscriptions subscriptions[]
+  id             String          @id
+  type           String
+  provider       String          @default("stripe")
+  providerId     String
+  providerToken  String?
+  brand          String?
+  last4          String?
+  expMonth       Int?
+  expYear        Int?
+  holderName     String?
+  isDefault      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime
+  userId         String
+  users          users           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions  subscriptions[]
+}
+
+model platform_api_keys {
+  id           String    @id @default(uuid())
+  userId       String
+  provider     String
+  keyName      String?
+  encryptedKey String
+  keyEncrypted String?
+  keyPrefix    String?
+  quotaUsed    Int?      @default(0)
+  isActive     Boolean   @default(true)
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now())
+  users        users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([provider])
 }
 
 model platform_sessions {
@@ -1737,6 +1829,38 @@ model semantic_search_results {
   @@index([similarity])
 }
 
+model session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model sessions {
+  id           String    @id
+  userId       String
+  expiresAt    DateTime
+  token        String    @unique
+  ipAddress    String?
+  userAgent    String?
+  device       String?
+  browser      String?
+  os           String?
+  location     String?
+  isActive     Boolean   @default(true)
+  lastActiveAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now())
+  users        users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model smart_contracts {
   id                    String                  @id
   name                  String
@@ -1851,16 +1975,21 @@ model subscription_plans {
 
 model subscriptions {
   id                 String           @id
-  planId             String
+  userId             String           @unique
   status             String
   currentPeriodStart DateTime
   currentPeriodEnd   DateTime
   cancelAtPeriodEnd  Boolean          @default(false)
-  cancelledAt        DateTime?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime
-  userId             String
+  cancelledAt        DateTime?
   paymentMethodId    String?
+  planId             String
+  provider           String?
+  providerId         String?
+  amount             Float?
+  currency           String           @default("USD")
+  interval           String?
   invoices           invoices[]
   payment_methods    payment_methods? @relation(fields: [paymentMethodId], references: [id])
   users              users            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2164,20 +2293,59 @@ model usage_events {
 }
 
 model usage_records {
-  id        String    @id
-  type      String
-  metadata  Json      @default("{}")
-  tokens    Int?
-  cost      Float?
-  duration  Int?
-  success   Boolean   @default(true)
-  timestamp DateTime  @default(now())
-  userId    String
-  projectId String?
-  agentId   String?
-  agents    agents?   @relation(fields: [agentId], references: [id])
-  projects  projects? @relation(fields: [projectId], references: [id])
-  users     users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id
+  userId        String
+  cost          Float?
+  duration      Int?
+  success       Boolean   @default(true)
+  metadata      Json      @default("{}")
+  timestamp     DateTime  @default(now())
+  agentId       String?
+  projectId     String?
+  tokens        Int?
+  tokensUsed    Int?
+  inputTokens   Int?
+  outputTokens  Int?
+  type          String
+  requestType   String?
+  model         String?
+  platform      String?
+  provider      String?
+  requestCount  Int?
+  isPriceyModel Boolean?
+  errorMessage  String?
+  agents        agents?   @relation(fields: [agentId], references: [id])
+  projects      projects? @relation(fields: [projectId], references: [id])
+  users         users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model user {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now())
+  account       account[]
+  session       session[]
+}
+
+model user_api_keys {
+  id           String    @id
+  userId       String
+  provider     String
+  name         String?
+  keyPrefix    String
+  encryptedKey String
+  isActive     Boolean   @default(true)
+  lastUsed     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now())
+  users        users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([provider])
+  @@index([userId])
 }
 
 model user_devices {
@@ -2254,34 +2422,53 @@ model user_roles {
 model users {
   id                                                 String                    @id
   email                                              String                    @unique
-  password                                           String?
   name                                               String
-  organization                                       String?
-  role                                               String                    @default("user")
-  isActive                                           Boolean                   @default(true)
   emailVerified                                      Boolean                   @default(false)
-  subscription                                       String                    @default("free")
-  apiKey                                             String?                   @unique
-  refreshToken                                       String?
-  lastLoginAt                                        DateTime?
+  twoFactorEnabled                                   Boolean                   @default(false)
   createdAt                                          DateTime                  @default(now())
   updatedAt                                          DateTime
+  lastLoginAt                                        DateTime?
   image                                              String?
+  password                                           String?
+  apiKey                                             String?                   @unique
   backupCodes                                        String?
   backupCodesTemp                                    String?
+  isActive                                           Boolean                   @default(true)
+  organization                                       String?
+  refreshToken                                       String?
+  role                                               String                    @default("user")
+  subscription                                       String                    @default("free")
+  subscriptionPlan                                   String?                   @default("free")
+  subscriptionStatus                                 String?                   @default("active")
+  subscriptionId                                     String?
+  subscriptionEndDate                                DateTime?
+  subscriptionCancelledAt                            DateTime?
+  cancelReason                                       String?
+  cancelFeedback                                     String?
+  hasOwnApiKey                                       Boolean                   @default(false)
+  openRouterApiKey                                   String?
+  apiKeyEncrypted                                    String?
+  lastPaymentDate                                    DateTime?
+  lastPaymentAmount                                  Float?
+  paymentStatus                                      String?
+  plan                                               String?
+  onboardingStep                                     String?
+  preferredModels                                    Json?
   totpSecret                                         String?
   totpSecretTemp                                     String?
-  twoFactorEnabled                                   Boolean                   @default(false)
   twoFactorEnabledAt                                 DateTime?
   twoFactorSetupAt                                   DateTime?
+  accounts                                           accounts[]
   agents                                             agents[]
   ai_generated_projects                              ai_generated_projects[]
   analytics_reports                                  analytics_reports[]
   api_keys                                           api_keys[]
   audit_logs                                         audit_logs[]
+  AuthCode                                           AuthCode[]
   backup_access                                      backup_access?
   batch_requests                                     batch_requests[]
   cli_sessions                                       cli_sessions[]
+  DeviceCode                                         DeviceCode[]
   cli_usage                                          cli_usage[]
   code_generations                                   code_generations[]
   codebase_knowledge                                 codebase_knowledge[]
@@ -2307,6 +2494,7 @@ model users {
   offline_actions                                    offline_actions[]
   payment_intents                                    payment_intents[]
   payment_methods                                    payment_methods[]
+  platform_api_keys                                  platform_api_keys[]
   platform_sessions                                  platform_sessions[]
   project_collaborators                              project_collaborators[]
   project_comments                                   project_comments[]
@@ -2326,6 +2514,7 @@ model users {
   restore_jobs                                       restore_jobs[]
   scheduled_executions                               scheduled_executions[]
   semantic_queries                                   semantic_queries[]
+  sessions                                           sessions[]
   smart_contracts                                    smart_contracts[]
   subscriptions                                      subscriptions[]
   sync_states                                        sync_states[]
@@ -2334,14 +2523,32 @@ model users {
   usage_analytics                                    usage_analytics[]
   usage_events                                       usage_events[]
   usage_records                                      usage_records[]
+  user_api_keys                                      user_api_keys[]
   user_devices                                       user_devices[]
   user_preferences                                   user_preferences?
   user_pricing_history                               user_pricing_history[]
+  quota                                              user_quota?        @relation("UserQuota")
   user_roles                                         user_roles[]
   visual_scripts                                     visual_scripts[]
   webhooks                                           webhooks[]
-  accounts                                           accounts[]
-  sessions                                           sessions[]
+}
+
+model user_quota {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  sessionsPerDay    Int      @default(5)
+  sessionsUsedToday Int      @default(0)
+  tokensPerSession  Int      @default(10000)
+  periodStart       DateTime @default(now())
+  periodEnd         DateTime
+  lastResetAt       DateTime @default(now())
+  requestsLimit     Int      @default(1000)
+  requestsUsed      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+  users             users    @relation("UserQuota", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model vector_embeddings {
@@ -2362,6 +2569,24 @@ model vector_embeddings {
 
   @@index([contentHash])
   @@index([knowledgeBaseId])
+}
+
+model verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+}
+
+model verifications {
+  id         String   @id
+  identifier String
+  value      String
+  expires_at DateTime
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
 }
 
 model visual_scripts {
@@ -2437,108 +2662,4 @@ model webhooks {
   userId             String
   webhook_deliveries webhook_deliveries[]
   users              users                @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model verifications {
-  id         String   @id
-  identifier String
-  value      String
-  expiresAt  DateTime @map("expires_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
-}
-
-model accounts {
-  id                    String    @id
-  userId                String    @map("user_id")
-  accountId             String    @map("account_id")
-  providerId            String    @map("provider_id")
-  accessToken           String?   @map("access_token")
-  refreshToken          String?   @map("refresh_token")
-  idToken               String?   @map("id_token")
-  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
-  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
-  users                 users     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([providerId, accountId])
-  @@index([userId])
-  @@map("accounts")
-}
-
-model sessions {
-  id        String   @id
-  userId    String   @map("user_id")
-  expiresAt DateTime @map("expires_at")
-  token     String   @unique
-  ipAddress String?  @map("ip_address")
-  userAgent String?  @map("user_agent")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-
-  @@unique([email])
-  @@map("user")
-}
-
-model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([token])
-  @@map("session")
-}
-
-model Account {
-  id                    String    @id
-  accountId             String
-  providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  @@map("account")
-}
-
-model Verification {
-  id         String   @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
-
-  @@map("verification")
 }

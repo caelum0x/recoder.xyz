@@ -52,7 +52,7 @@ interface KeyStats {
 }
 
 export default function ApiKeysDashboardPage() {
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const router = useRouter();
 
   const [showNewKeyModal, setShowNewKeyModal] = useState(false);
@@ -67,14 +67,14 @@ export default function ApiKeysDashboardPage() {
 
   // Redirect if not authenticated
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!session && !isPending) {
       router.push('/auth/signin');
     }
-  }, [status, router]);
+  }, [session, isPending, router]);
 
   // Load API keys
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (session && !isPending) {
       loadKeys();
     }
   }, [status]);

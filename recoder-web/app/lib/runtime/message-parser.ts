@@ -19,36 +19,32 @@ const REGEX_CACHE = {
 };
 
 /**
- * Validate shell command content for forbidden patterns
- * This prevents dev server commands from being parsed at all
+ * Validate shell command content for truly dangerous patterns
+ * NOTE: Dev server commands (npm run dev, etc.) are ALLOWED - action-runner handles them properly in background
  */
 function validateShellCommand(content: string): { valid: boolean; reason?: string } {
   // Normalize for detection (remove newlines, convert to lowercase)
   const normalized = content.replace(/\n/g, ' ').toLowerCase();
 
-  // Forbidden patterns that indicate dev server commands
+  // Only block truly dangerous/destructive commands
   const forbiddenPatterns = [
-    { pattern: /npm\s+(run\s+)?dev\b/, name: 'npm run dev' },
-    { pattern: /npm\s+start\b/, name: 'npm start' },
-    { pattern: /yarn\s+dev\b/, name: 'yarn dev' },
-    { pattern: /yarn\s+start\b/, name: 'yarn start' },
-    { pattern: /pnpm\s+dev\b/, name: 'pnpm dev' },
-    { pattern: /pnpm\s+start\b/, name: 'pnpm start' },
-    { pattern: /\bvite\b(?!\s+build)/, name: 'vite' },
-    { pattern: /next\s+dev\b/, name: 'next dev' },
-    { pattern: /remix\s+dev\b/, name: 'remix dev' },
-    { pattern: /react-scripts\s+start\b/, name: 'react-scripts start' },
+    { pattern: /rm\s+-rf\s+\/\s*$/, name: 'rm -rf /' },
+    { pattern: /rm\s+-rf\s+~\s*$/, name: 'rm -rf ~' },
+    { pattern: /:\(\)\{\s*:\|:\&\s*\};:/, name: 'fork bomb' },
+    { pattern: /mkfs\./, name: 'disk formatting' },
+    { pattern: /dd\s+if=/, name: 'direct disk write' },
   ];
 
   for (const { pattern, name } of forbiddenPatterns) {
     if (pattern.test(normalized)) {
       return {
         valid: false,
-        reason: `Forbidden command detected: "${name}". Dev server commands run indefinitely and will freeze the application at "Step 7 of 7". The AI should NOT generate these commands.`,
+        reason: `Dangerous command blocked: "${name}". This command could harm the system.`,
       };
     }
   }
 
+  // ✅ Dev server commands are now ALLOWED - action-runner.ts handles them properly with background execution
   return { valid: true };
 }
 

@@ -76,12 +76,12 @@ export default function DashboardOverviewPage() {
         apiClient.get('/api/dashboard/overview/activities')
       ]);
 
-      if (statsRes.success) {
-        setStats(statsRes.data);
+      if (statsRes.success && statsRes.data) {
+        setStats(statsRes.data as DashboardStats);
       }
 
-      if (activitiesRes.success) {
-        setActivities(activitiesRes.data.activities || []);
+      if (activitiesRes.success && activitiesRes.data) {
+        setActivities((activitiesRes.data as any).activities || []);
       }
     } catch (err: any) {
       console.error('Failed to load dashboard:', err);

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email }
     });
 
@@ -51,14 +51,14 @@ export async function POST(request: NextRequest) {
       `success_url=${encodeURIComponent(process.env.NEXT_PUBLIC_APP_URL + '/billing?upgraded=true')}&` +
       `cancel_url=${encodeURIComponent(process.env.NEXT_PUBLIC_APP_URL + '/billing/upgrade')}`;
 
-    await prisma.auditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.id,
         action: 'upgrade_initiated',
         resource: 'billing',
         metadata: { newPlan: plan, oldPlan: user.plan },
         ipAddress: request.headers.get('x-forwarded-for') || '0.0.0.0',
-        timestamp: new Date()
       }
     });
 

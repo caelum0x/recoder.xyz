@@ -84,10 +84,10 @@ export default function DocsPage() {
   ];
 
   const quickLinks = [
+    { title: 'Getting Started', href: '/docs/getting-started', icon: Rocket, description: 'Set up your account in 5 minutes' },
+    { title: 'FAQ', href: '/docs/faq', icon: BookOpen, description: 'Frequently asked questions' },
     { title: 'Install CLI', href: '/cli', icon: Terminal, description: 'Get started with the command line' },
-    { title: 'Open Web Platform', href: '/platform/web', icon: Globe, description: 'Launch the web interface' },
-    { title: 'Join Chat', href: '/platform/chat', icon: MessageSquare, description: 'Start AI-powered conversations' },
-    { title: 'View Examples', href: 'https://github.com/recoderxyz/examples', icon: Github, description: 'Explore code examples' }
+    { title: 'Open Web Platform', href: '/platform/web', icon: Globe, description: 'Launch the web interface' }
   ];
 
   return (
@@ -219,31 +219,42 @@ export default function DocsPage() {
 
               <div className="p-6 rounded-2xl border border-white/10 bg-black/50 text-center space-y-4">
                 <Github className="w-12 h-12 mx-auto text-gray-400" />
-                <h3 className="text-xl font-bold">Examples</h3>
+                <h3 className="text-xl font-bold">GitHub</h3>
                 <p className="text-sm text-gray-400">
-                  Real-world examples and starter templates
+                  Follow our development and contribute
                 </p>
-                <Link 
-                  href="https://github.com/recoder-xyz/examples" 
+                <a
+                  href="https://github.com/recoderxyz"
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
                 >
-                  View Examples
-                </Link>
+                  View GitHub
+                </a>
               </div>
 
               <div className="p-6 rounded-2xl border border-white/10 bg-black/50 text-center space-y-4">
                 <MessageSquare className="w-12 h-12 mx-auto text-purple-500" />
-                <h3 className="text-xl font-bold">Community</h3>
+                <h3 className="text-xl font-bold">Get in Touch</h3>
                 <p className="text-sm text-gray-400">
-                  Join discussions and get help from the community
+                  Email us or message on Twitter
                 </p>
-                <Link 
-                  href="/community"
-                  className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
-                >
-                  Join Community
-                </Link>
+                <div className="flex flex-col gap-2">
+                  <a
+                    href="mailto:recoderxyz@gmail.com"
+                    className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
+                  >
+                    Email Us
+                  </a>
+                  <a
+                    href="https://twitter.com/recoderxyz"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
+                  >
+                    Twitter
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -262,8 +273,8 @@ export default function DocsPage() {
             <div className="flex items-center space-x-8 text-sm text-gray-500">
               <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
               <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
-              <Link href="mailto:support@recoder.xyz" className="hover:text-white transition-colors">Support</Link>
+              <a href="https://twitter.com/recoderxyz" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Twitter</a>
+              <a href="mailto:recoderxyz@gmail.com" className="hover:text-white transition-colors">Support</a>
             </div>
             
             <div className="text-sm text-gray-500">

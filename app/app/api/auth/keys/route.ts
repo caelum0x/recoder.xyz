@@ -19,16 +19,13 @@ export async function GET(request: NextRequest) {
 
     const { user } = authResult;
 
-    const keys = await prisma.apiKey.findMany({
+    const keys = await prisma.api_keys.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
-        keyId: true,
         keyPrefix: true,
         name: true,
-        description: true,
-        scopes: true,
         createdAt: true,
         lastUsedAt: true,
         usageCount: true,
