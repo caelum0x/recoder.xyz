@@ -26,12 +26,12 @@ export async function POST(request: NextRequest) {
     const encrypted = encryptApiKey(apiKey);
 
     // Update user
-    await prisma.user.update({
+    await prisma.users.update({
       where: { id: userId },
       data: {
         openRouterApiKey: encrypted,
         hasOwnApiKey: true,
-        apiKeyEncrypted: true,
+        apiKeyEncrypted: 'encrypted',
         onboardingStep: 'completed',
       },
     });
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: userId },
       select: {
         hasOwnApiKey: true,
@@ -83,12 +83,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    await prisma.user.update({
+    await prisma.users.update({
       where: { id: userId },
       data: {
         openRouterApiKey: null,
         hasOwnApiKey: false,
-        apiKeyEncrypted: false,
+        apiKeyEncrypted: null,
       },
     });
 

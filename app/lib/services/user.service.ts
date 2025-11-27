@@ -5,6 +5,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../crypto';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -14,12 +15,16 @@ export class UserService {
    */
   async getProfile(userId: string) {
     try {
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
         include: {
-          preferences: true,
+          user_preferences: true,
           quota: true,
-          subscription: true,
+          subscriptions: {
+            where: { status: 'active' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
       });
 
@@ -28,27 +33,22 @@ export class UserService {
       }
 
       return {
-        success: true,
         user: {
           id: user.id,
           email: user.email,
           name: user.name,
           avatar: user.image,
           image: user.image,
-          bio: user.bio,
-          company: user.company,
-          website: user.website,
-          timezone: user.timezone,
-          locale: user.locale,
+          organization: user.organization,
           subscriptionPlan: user.subscriptionPlan,
           subscriptionStatus: user.subscriptionStatus,
           emailVerified: user.emailVerified,
           twoFactorEnabled: user.twoFactorEnabled,
           createdAt: user.createdAt,
           lastLoginAt: user.lastLoginAt,
-          preferences: user.preferences,
+          preferences: user.user_preferences,
           quota: user.quota,
-          subscription: user.subscription,
+          subscription: user.subscriptions[0] || null,
         },
       };
     } catch (error: any) {
@@ -64,39 +64,36 @@ export class UserService {
     userId: string,
     data: {
       name?: string;
-      bio?: string;
-      company?: string;
-      website?: string;
-      timezone?: string;
-      locale?: string;
+      organization?: string;
+      image?: string;
     }
   ) {
     try {
-      const user = await prisma.user.update({
+      const user = await prisma.users.update({
         where: { id: userId },
-        data,
+        data: {
+          ...data,
+          updatedAt: new Date(),
+        },
       });
 
       // Log profile update
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'profile_updated',
+          resource: 'user',
           metadata: data,
-          success: true,
         },
       });
 
       return {
-        success: true,
         user: {
           id: user.id,
           name: user.name,
-          bio: user.bio,
-          company: user.company,
-          website: user.website,
-          timezone: user.timezone,
-          locale: user.locale,
+          organization: user.organization,
+          image: user.image,
         },
       };
     } catch (error: any) {
@@ -110,22 +107,22 @@ export class UserService {
    */
   async uploadAvatar(userId: string, avatarUrl: string) {
     try {
-      const user = await prisma.user.update({
+      const user = await prisma.users.update({
         where: { id: userId },
         data: { image: avatarUrl },
       });
 
       // Log avatar update
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'avatar_updated',
-          success: true,
+          resource: 'user',
         },
       });
 
       return {
-        success: true,
         avatar: user.image,
       };
     } catch (error: any) {
@@ -139,21 +136,21 @@ export class UserService {
    */
   async deleteAvatar(userId: string) {
     try {
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: { image: null },
       });
 
       // Log avatar deletion
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'avatar_deleted',
-          success: true,
+          resource: 'user',
         },
       });
 
-      return { success: true, message: 'Avatar deleted successfully' };
     } catch (error: any) {
       console.error('Delete avatar error:', error);
       throw error;
@@ -165,19 +162,22 @@ export class UserService {
    */
   async getPreferences(userId: string) {
     try {
-      let preferences = await prisma.userPreferences.findUnique({
+      let preferences = await prisma.user_preferences.findUnique({
         where: { userId },
       });
 
       // Create default preferences if they don't exist
       if (!preferences) {
-        preferences = await prisma.userPreferences.create({
-          data: { userId },
+        preferences = await prisma.user_preferences.create({
+          data: { 
+            id: crypto.randomUUID(),
+            userId,
+            updatedAt: new Date()
+          },
         });
       }
 
       return {
-        success: true,
         preferences,
       };
     } catch (error: any) {
@@ -209,27 +209,58 @@ export class UserService {
     }
   ) {
     try {
-      const preferences = await prisma.userPreferences.upsert({
+      const preferences = await prisma.user_preferences.upsert({
         where: { userId },
-        update: data,
+        update: {
+          themePreferences: data.theme ? { theme: data.theme } : undefined,
+          languagePreferences: data.language ? { language: data.language } : undefined,
+          notificationPreferences: {
+            emailNotifications: data.emailNotifications,
+            usageAlerts: data.usageAlerts,
+            billingNotifications: data.billingNotifications,
+            securityNotifications: data.securityNotifications,
+            productUpdates: data.productUpdates,
+            marketingEmails: data.marketingEmails,
+            weeklyDigest: data.weeklyDigest,
+            monthlyReport: data.monthlyReport,
+            slackNotifications: data.slackNotifications,
+            slackWebhookUrl: data.slackWebhookUrl
+          },
+          updatedAt: new Date()
+        },
         create: {
+          id: crypto.randomUUID(),
           userId,
-          ...data,
+          themePreferences: data.theme ? { theme: data.theme } : {},
+          languagePreferences: data.language ? { language: data.language } : {},
+          notificationPreferences: {
+            emailNotifications: data.emailNotifications || false,
+            usageAlerts: data.usageAlerts || false,
+            billingNotifications: data.billingNotifications || true,
+            securityNotifications: data.securityNotifications || true,
+            productUpdates: data.productUpdates || true,
+            marketingEmails: data.marketingEmails || false,
+            weeklyDigest: data.weeklyDigest || false,
+            monthlyReport: data.monthlyReport || false,
+            slackNotifications: data.slackNotifications || false,
+            slackWebhookUrl: data.slackWebhookUrl
+          },
+          updatedAt: new Date()
         },
       });
 
       // Log preferences update
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'preferences_updated',
+          resource: 'user',
           metadata: data,
-          success: true,
         },
       });
 
       return {
-        success: true,
         preferences,
       };
     } catch (error: any) {
@@ -243,43 +274,44 @@ export class UserService {
    */
   async deleteAccount(userId: string) {
     try {
-      // Soft delete - just mark as deleted
-      await prisma.user.update({
+      // Soft delete - just mark as inactive and anonymize
+      await prisma.users.update({
         where: { id: userId },
         data: {
-          deletedAt: new Date(),
           email: `deleted_${userId}@recoder.xyz`, // Free up email
+          isActive: false,
+          updatedAt: new Date()
         },
       });
 
       // Revoke all sessions
-      await prisma.session.updateMany({
+      await prisma.sessions.updateMany({
         where: { userId },
         data: {
           isActive: false,
-          revokedAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
       // Revoke all API keys
-      await prisma.apiKey.updateMany({
+      await prisma.api_keys.updateMany({
         where: { userId },
         data: {
           isActive: false,
-          revokedAt: new Date(),
+          updatedAt: new Date()
         },
       });
 
       // Log account deletion
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'account_deleted',
-          success: true,
+          resource: 'user',
         },
       });
 
-      return { success: true, message: 'Account deleted successfully' };
     } catch (error: any) {
       console.error('Delete account error:', error);
       throw error;
@@ -291,13 +323,17 @@ export class UserService {
    */
   async exportUserData(userId: string) {
     try {
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
         include: {
-          preferences: true,
+          user_preferences: true,
           quota: true,
-          subscription: true,
-          apiKeys: {
+          subscriptions: {
+            where: { status: 'active' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          api_keys: {
             select: {
               name: true,
               createdAt: true,
@@ -305,7 +341,7 @@ export class UserService {
               usageCount: true,
             },
           },
-          usageRecords: {
+          usage_records: {
             take: 100,
             orderBy: { timestamp: 'desc' },
             select: {
@@ -316,7 +352,7 @@ export class UserService {
               timestamp: true,
             },
           },
-          auditLogs: {
+          audit_logs: {
             take: 100,
             orderBy: { timestamp: 'desc' },
           },
@@ -328,16 +364,16 @@ export class UserService {
       }
 
       // Log data export
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'data_exported',
-          success: true,
+          resource: 'user',
         },
       });
 
       return {
-        success: true,
         data: user,
       };
     } catch (error: any) {
@@ -352,7 +388,7 @@ export class UserService {
   async getUserStats(userId: string) {
     try {
       // Get usage stats
-      const usageStats = await prisma.usageRecord.aggregate({
+      const usageStats = await prisma.usage_records.aggregate({
         where: { userId },
         _sum: {
           tokensUsed: true,
@@ -367,7 +403,7 @@ export class UserService {
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      const monthlyUsage = await prisma.usageRecord.aggregate({
+      const monthlyUsage = await prisma.usage_records.aggregate({
         where: {
           userId,
           timestamp: { gte: startOfMonth },
@@ -380,12 +416,12 @@ export class UserService {
       });
 
       // Get API key count
-      const apiKeyCount = await prisma.apiKey.count({
+      const apiKeyCount = await prisma.api_keys.count({
         where: { userId, isActive: true },
       });
 
       // Get active sessions
-      const activeSessions = await prisma.session.count({
+      const activeSessions = await prisma.sessions.count({
         where: {
           userId,
           isActive: true,
@@ -394,7 +430,6 @@ export class UserService {
       });
 
       return {
-        success: true,
         stats: {
           totalUsage: {
             tokens: usageStats._sum.tokensUsed || 0,
@@ -422,24 +457,25 @@ export class UserService {
    */
   async listSessions(userId: string) {
     try {
-      const sessions = await prisma.session.findMany({
+      const sessions = await prisma.sessions.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         take: 20,
       });
 
       return {
-        success: true,
         sessions: sessions.map((s) => ({
           id: s.id,
           device: s.device,
           browser: s.browser,
           os: s.os,
           ipAddress: s.ipAddress,
+          userAgent: s.userAgent,
           location: s.location,
           isActive: s.isActive,
           createdAt: s.createdAt,
           lastActiveAt: s.lastActiveAt,
+          updatedAt: s.updatedAt,
           expiresAt: s.expiresAt,
         })),
       };
@@ -454,7 +490,7 @@ export class UserService {
    */
   async revokeSession(userId: string, sessionId: string) {
     try {
-      const session = await prisma.session.findFirst({
+      const session = await prisma.sessions.findFirst({
         where: {
           id: sessionId,
           userId,
@@ -465,25 +501,25 @@ export class UserService {
         throw new Error('Session not found');
       }
 
-      await prisma.session.update({
+      await prisma.sessions.update({
         where: { id: sessionId },
         data: {
           isActive: false,
-          revokedAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
       // Log session revocation
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'session_revoked',
+          resource: 'session',
           resourceId: sessionId,
-          success: true,
         },
       });
 
-      return { success: true, message: 'Session revoked successfully' };
     } catch (error: any) {
       console.error('Revoke session error:', error);
       throw error;
@@ -495,23 +531,23 @@ export class UserService {
    */
   async changeEmail(userId: string, newEmail: string, password: string) {
     try {
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
       });
 
-      if (!user || !user.passwordHash) {
+      if (!user || !user.password) {
         throw new Error('User not found');
       }
 
       // Verify password
       const bcrypt = await import('bcryptjs');
-      const isValid = await bcrypt.compare(password, user.passwordHash);
+      const isValid = await bcrypt.compare(password, user.password);
       if (!isValid) {
         throw new Error('Password is incorrect');
       }
 
       // Check if new email is already taken
-      const existing = await prisma.user.findUnique({
+      const existing = await prisma.users.findUnique({
         where: { email: newEmail },
       });
 
@@ -520,7 +556,7 @@ export class UserService {
       }
 
       // Update email
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: {
           email: newEmail,
@@ -529,17 +565,17 @@ export class UserService {
       });
 
       // Log email change
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'email_changed',
+          resource: 'user',
           metadata: { oldEmail: user.email, newEmail },
-          success: true,
         },
       });
 
       return {
-        success: true,
         message: 'Email changed successfully. Please verify your new email.',
       };
     } catch (error: any) {

@@ -15,13 +15,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
       include: {
-        apiKeys: {
+        api_keys: {
           where: { isActive: true }
         },
-        usageRecords: {
+        usage_records: {
           orderBy: { timestamp: 'desc' },
           take: 30
         },
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const monthlyUsage = await prisma.usageRecord.aggregate({
+    const monthlyUsage = await prisma.usage_records.aggregate({
       where: {
         userId: user.id,
         timestamp: {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       _count: true
     });
 
-    const todayUsage = await prisma.usageRecord.aggregate({
+    const todayUsage = await prisma.usage_records.aggregate({
       where: {
         userId: user.id,
         timestamp: {
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       _count: true
     });
 
-    const usageByModel = await prisma.usageRecord.groupBy({
+    const usageByModel = await prisma.usage_records.groupBy({
       by: ['model'],
       where: {
         userId: user.id,
@@ -80,13 +80,13 @@ export async function GET(request: NextRequest) {
       _count: true
     });
 
-    const recentActivity = await prisma.auditLog.findMany({
+    const recentActivity = await prisma.audit_logs.findMany({
       where: { userId: user.id },
       orderBy: { timestamp: 'desc' },
       take: 10
     });
 
-    const usageHistory = user.usageRecords.map(u => ({
+    const usageHistory = user.usage_records.map(u => ({
       date: u.timestamp.toISOString().split('T')[0],
       requests: 1,
       tokens: u.tokensUsed || 0,
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
           requestsToday: todayUsage._count || 0,
           tokensThisMonth: monthlyUsage._sum.tokensUsed || 0,
           costThisMonth: monthlyUsage._sum.cost || 0,
-          activeApiKeys: user.apiKeys.length,
+          activeApiKeys: user.api_keys.length,
           quotaUsed: user.quota?.sessionsUsedToday || 0,
           quotaLimit: user.quota?.sessionsPerDay || 0
         },

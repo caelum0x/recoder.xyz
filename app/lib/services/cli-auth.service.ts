@@ -82,7 +82,7 @@ export class CLIAuthService {
     }
 
     // Get user data
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -102,13 +102,10 @@ export class CLIAuthService {
       data: {
         status: 'authorized',
         userId: user.id,
-        authorizedAt: new Date(),
-        userData: user as any,
       },
     });
 
     return {
-      success: true,
       user: {
         email: user.email,
         name: user.name,
@@ -208,8 +205,9 @@ export class CLIAuthService {
 
     const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-    await prisma.cLISession.create({
+    await prisma.cli_sessions.create({
       data: {
+        id: `cli_${nanoid(24)}`,
         userId,
         deviceId,
         deviceName,
@@ -233,10 +231,10 @@ export class CLIAuthService {
    * Validate access token
    */
   static async validateAccessToken(token: string) {
-    const session = await prisma.cLISession.findUnique({
+    const session = await prisma.cli_sessions.findUnique({
       where: { accessToken: token },
       include: {
-        user: {
+        users: {
           select: {
             id: true,
             email: true,
@@ -261,17 +259,17 @@ export class CLIAuthService {
     }
 
     // Update last used
-    await prisma.cLISession.update({
+    await prisma.cli_sessions.update({
       where: { id: session.id },
       data: { lastUsedAt: new Date() },
     });
 
     return {
-      userId: session.user.id,
-      email: session.user.email,
-      name: session.user.name,
-      plan: session.user.subscriptionPlan,
-      status: session.user.subscriptionStatus,
+      userId: session.users.id,
+      email: session.users.email,
+      name: session.users.name,
+      plan: session.users.subscriptionPlan,
+      status: session.users.subscriptionStatus,
       sessionId: session.id,
     };
   }
@@ -280,7 +278,7 @@ export class CLIAuthService {
    * Refresh access token
    */
   static async refreshAccessToken(refreshToken: string) {
-    const session = await prisma.cLISession.findUnique({
+    const session = await prisma.cli_sessions.findUnique({
       where: { refreshToken },
     });
 
@@ -292,7 +290,7 @@ export class CLIAuthService {
     const newAccessToken = `reco_${nanoid(48)}`;
     const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-    await prisma.cLISession.update({
+    await prisma.cli_sessions.update({
       where: { id: session.id },
       data: {
         accessToken: newAccessToken,
@@ -312,7 +310,7 @@ export class CLIAuthService {
    * Revoke CLI session
    */
   static async revokeSession(sessionId: string, userId: string) {
-    const session = await prisma.cLISession.findFirst({
+    const session = await prisma.cli_sessions.findFirst({
       where: {
         id: sessionId,
         userId,
@@ -323,7 +321,7 @@ export class CLIAuthService {
       throw new Error('Session not found');
     }
 
-    await prisma.cLISession.update({
+    await prisma.cli_sessions.update({
       where: { id: sessionId },
       data: {
         isActive: false,
@@ -338,7 +336,7 @@ export class CLIAuthService {
    * List user's CLI sessions
    */
   static async listUserSessions(userId: string) {
-    const sessions = await prisma.cLISession.findMany({
+    const sessions = await prisma.cli_sessions.findMany({
       where: {
         userId,
         isActive: true,
@@ -375,17 +373,18 @@ export class CLIAuthService {
     const keyHash = hashToken(apiKey);
     const keyPrefix = apiKey.substring(0, 12);
 
-    await prisma.apiKey.create({
+    await prisma.api_keys.create({
       data: {
+        id: keyId,
         userId,
-        keyId,
         keyHash,
         keyPrefix,
         name,
-        description,
-        scopes,
+        permissions: scopes || [],
         expiresAt,
         isActive: true,
+        source: 'cli',
+        updatedAt: new Date(),
       },
     });
 
@@ -407,10 +406,10 @@ export class CLIAuthService {
   static async validateApiKey(apiKey: string) {
     const keyHash = hashToken(apiKey);
 
-    const key = await prisma.apiKey.findUnique({
+    const key = await prisma.api_keys.findUnique({
       where: { keyHash },
       include: {
-        user: {
+        users: {
           select: {
             id: true,
             email: true,
@@ -435,7 +434,7 @@ export class CLIAuthService {
     }
 
     // Update usage stats
-    await prisma.apiKey.update({
+    await prisma.api_keys.update({
       where: { id: key.id },
       data: {
         lastUsedAt: new Date(),
@@ -444,13 +443,13 @@ export class CLIAuthService {
     });
 
     return {
-      userId: key.user.id,
-      email: key.user.email,
-      name: key.user.name,
-      plan: key.user.subscriptionPlan,
-      status: key.user.subscriptionStatus,
-      scopes: key.scopes,
-      keyId: key.keyId,
+      userId: key.users.id,
+      email: key.users.email,
+      name: key.users.name,
+      plan: key.users.subscriptionPlan,
+      status: key.users.subscriptionStatus,
+      scopes: key.permissions,
+      keyId: key.id,
     };
   }
 
@@ -458,18 +457,16 @@ export class CLIAuthService {
    * List user's API keys
    */
   static async listApiKeys(userId: string) {
-    const keys = await prisma.apiKey.findMany({
+    const keys = await prisma.api_keys.findMany({
       where: {
         userId,
         isActive: true,
       },
       select: {
         id: true,
-        keyId: true,
         keyPrefix: true,
         name: true,
-        description: true,
-        scopes: true,
+        permissions: true,
         createdAt: true,
         lastUsedAt: true,
         expiresAt: true,
@@ -487,9 +484,9 @@ export class CLIAuthService {
    * Revoke API key
    */
   static async revokeApiKey(keyId: string, userId: string) {
-    const key = await prisma.apiKey.findFirst({
+    const key = await prisma.api_keys.findFirst({
       where: {
-        keyId,
+        id: keyId,
         userId,
       },
     });
@@ -498,11 +495,11 @@ export class CLIAuthService {
       throw new Error('API key not found');
     }
 
-    await prisma.apiKey.update({
+    await prisma.api_keys.update({
       where: { id: key.id },
       data: {
         isActive: false,
-        revokedAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -528,7 +525,6 @@ export class CLIAuthService {
       where: { id: deviceCode.id },
       data: {
         status: 'denied',
-        deniedAt: new Date(),
       },
     });
 

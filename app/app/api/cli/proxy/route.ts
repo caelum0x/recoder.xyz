@@ -21,7 +21,7 @@ export const POST = withCLIAuth(
       }
 
       // Check quota
-      const quota = await prisma.userQuota.findUnique({
+      const quota = await prisma.user_quota.findUnique({
         where: { userId: context.userId },
       });
 
@@ -43,7 +43,7 @@ export const POST = withCLIAuth(
       }
 
       // Get platform API key from pool
-      const platformKey = await prisma.platformApiKey.findFirst({
+      const platformKey = await prisma.platform_api_keys.findFirst({
         where: {
           provider: 'openrouter',
           isActive: true,
@@ -97,9 +97,11 @@ export const POST = withCLIAuth(
       const tokensUsed = data.usage?.total_tokens || 0;
       const cost = data.usage?.total_cost || 0;
 
-      await prisma.usageRecord.create({
+      await prisma.usage_records.create({
         data: {
+          id: crypto.randomUUID(),
           userId: context.userId,
+          type: 'cli',
           requestType: 'cli',
           model,
           provider: 'openrouter',
@@ -116,7 +118,7 @@ export const POST = withCLIAuth(
 
       // Update quota
       if (quota) {
-        await prisma.userQuota.update({
+        await prisma.user_quota.update({
           where: { id: quota.id },
           data: {
             sessionsUsedToday: { increment: 1 },
@@ -125,7 +127,7 @@ export const POST = withCLIAuth(
       }
 
       // Update platform key usage
-      await prisma.platformApiKey.update({
+      await prisma.platform_api_keys.update({
         where: { id: platformKey.id },
         data: {
           quotaUsed: { increment: tokensUsed },

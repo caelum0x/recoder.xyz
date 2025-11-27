@@ -6,7 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Plan configuration matching the subscription service
-export const SUBSCRIPTION_PLANS = {
+// Note: Not exported because route files can only export HTTP handlers
+const SUBSCRIPTION_PLANS = {
   'free': {
     id: 'free',
     name: 'Free',

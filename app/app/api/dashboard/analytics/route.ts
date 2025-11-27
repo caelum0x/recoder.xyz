@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const period = searchParams.get('period') || '30d';
     const groupBy = searchParams.get('groupBy') || 'day';
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email }
     });
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - periodDays);
 
-    const usage = await prisma.usageRecord.findMany({
+    const usage = await prisma.usage_records.findMany({
       where: {
         userId: user.id,
         timestamp: {
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       usageByHour[hour].tokens += record.tokensUsed || 0;
     });
 
-    const totalUsage = await prisma.usageRecord.aggregate({
+    const totalUsage = await prisma.usage_records.aggregate({
       where: {
         userId: user.id,
         timestamp: {
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { format, period } = body;
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email }
     });
 
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - periodDays);
 
-    const usage = await prisma.usageRecord.findMany({
+    const usage = await prisma.usage_records.findMany({
       where: {
         userId: user.id,
         timestamp: {

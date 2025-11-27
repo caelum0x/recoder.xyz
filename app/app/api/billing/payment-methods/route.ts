@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const paymentMethods = await prisma.paymentMethod.findMany({
+    const paymentMethods = await prisma.payment_methods.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
@@ -42,8 +42,8 @@ export async function GET(req: NextRequest) {
         type: method.type,
         brand: method.brand,
         last4: method.last4,
-        expiryMonth: method.expiryMonth,
-        expiryYear: method.expiryYear,
+        expiryMonth: method.expMonth,
+        expiryYear: method.expYear,
         isDefault: method.isDefault,
         holderName: method.holderName,
       })),
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -104,24 +104,28 @@ export async function POST(req: NextRequest) {
 
     // If setting as default, update other methods
     if (setAsDefault) {
-      await prisma.paymentMethod.updateMany({
+      await prisma.payment_methods.updateMany({
         where: { userId: user.id },
         data: { isDefault: false },
       });
     }
 
-    const paymentMethod = await prisma.paymentMethod.create({
+    const paymentMethod = await prisma.payment_methods.create({
       data: {
-        userId: user.id,
+        id: `pm_${Math.random().toString(36).substring(7)}`,
         type: 'card',
+        providerId: `card_${Math.random().toString(36).substring(7)}`,
         brand,
         last4,
-        expiryMonth,
-        expiryYear,
+        expMonth: expiryMonth,
+        expYear: expiryYear,
         holderName: cardName,
         isDefault: setAsDefault || false,
-        // In production, store encrypted token from payment provider
         providerToken: `tok_${Math.random().toString(36).substring(7)}`,
+        updatedAt: new Date(),
+        users: {
+          connect: { id: user.id }
+        },
       },
     });
 
@@ -132,8 +136,8 @@ export async function POST(req: NextRequest) {
         type: paymentMethod.type,
         brand: paymentMethod.brand,
         last4: paymentMethod.last4,
-        expiryMonth: paymentMethod.expiryMonth,
-        expiryYear: paymentMethod.expiryYear,
+        expiryMonth: paymentMethod.expMonth,
+        expiryYear: paymentMethod.expYear,
         isDefault: paymentMethod.isDefault,
         holderName: paymentMethod.holderName,
       },
@@ -161,7 +165,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -177,13 +181,13 @@ export async function PUT(req: NextRequest) {
 
     if (setAsDefault) {
       // Unset all other defaults
-      await prisma.paymentMethod.updateMany({
+      await prisma.payment_methods.updateMany({
         where: { userId: user.id },
         data: { isDefault: false },
       });
 
       // Set this one as default
-      await prisma.paymentMethod.update({
+      await prisma.payment_methods.update({
         where: { id: methodId, userId: user.id },
         data: { isDefault: true },
       });
@@ -213,7 +217,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -234,7 +238,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const method = await prisma.paymentMethod.findFirst({
+    const method = await prisma.payment_methods.findFirst({
       where: { id: methodId, userId: user.id },
     });
 
@@ -252,7 +256,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    await prisma.paymentMethod.delete({
+    await prisma.payment_methods.delete({
       where: { id: methodId },
     });
 

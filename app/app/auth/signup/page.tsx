@@ -30,7 +30,8 @@ function SignUpForm() {
   const [emailOnlyMode, setEmailOnlyMode] = useState(false); // Toggle for email-only signup
   const searchParams = useSearchParams();
   const router = useRouter();
-  const returnUrl = searchParams.get('return') || '/dashboard';
+  // Support both 'return' and 'redirect' params for cross-platform compatibility
+  const returnUrl = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
 
   // Password strength calculation
   const getPasswordStrength = (pass: string) => {
@@ -114,7 +115,14 @@ function SignUpForm() {
       } else {
         setSuccess(true);
         setTimeout(() => {
-          router.push(returnUrl);
+          // Check if returnUrl is an external URL (starts with http)
+          if (returnUrl.startsWith('http')) {
+            // Use window.location for cross-domain redirects
+            window.location.href = returnUrl;
+          } else {
+            // Use router.push for same-domain navigation
+            router.push(returnUrl);
+          }
         }, 1000);
       }
     } catch (err: any) {

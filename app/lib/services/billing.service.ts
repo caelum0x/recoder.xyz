@@ -5,6 +5,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { sendSubscriptionConfirmationEmail } from '../email';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -34,10 +35,10 @@ export class BillingService {
       }
 
       // Create subscription
-      const subscription = await prisma.subscription.upsert({
+      const subscription = await prisma.subscriptions.upsert({
         where: { userId },
         update: {
-          plan,
+          planId: plan,
           status: 'active',
           provider,
           providerId,
@@ -45,10 +46,12 @@ export class BillingService {
           currentPeriodEnd,
           amount,
           interval,
+          updatedAt: new Date(),
         },
         create: {
+          id: crypto.randomUUID(),
           userId,
-          plan,
+          planId: plan,
           status: 'active',
           provider,
           providerId,
@@ -57,11 +60,12 @@ export class BillingService {
           amount,
           currency: 'USD',
           interval,
+          updatedAt: new Date(),
         },
       });
 
       // Update user subscription plan
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: {
           subscriptionPlan: plan,
@@ -73,7 +77,7 @@ export class BillingService {
       await this.updateUserQuota(userId, plan);
 
       // Get user for email
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
       });
 
@@ -88,16 +92,16 @@ export class BillingService {
       }
 
       // Log subscription creation
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: randomUUID(),
           userId,
           action: 'subscription_created',
+          resource: 'subscription',
           metadata: { plan, provider, amount },
-          success: true,
         },
       });
 
-      return { success: true, subscription };
     } catch (error: any) {
       console.error('Create subscription error:', error);
       throw error;
@@ -109,11 +113,10 @@ export class BillingService {
    */
   async getSubscription(userId: string) {
     try {
-      const subscription = await prisma.subscription.findUnique({
+      const subscription = await prisma.subscriptions.findUnique({
         where: { userId },
       });
 
-      return { success: true, subscription };
     } catch (error: any) {
       console.error('Get subscription error:', error);
       throw error;
@@ -125,7 +128,7 @@ export class BillingService {
    */
   async updateSubscription(userId: string, newPlan: string) {
     try {
-      const subscription = await prisma.subscription.findUnique({
+      const subscription = await prisma.subscriptions.findUnique({
         where: { userId },
       });
 
@@ -137,16 +140,17 @@ export class BillingService {
       const newAmount = this.getPlanAmount(newPlan);
 
       // Update subscription
-      const updated = await prisma.subscription.update({
+      const updated = await prisma.subscriptions.update({
         where: { userId },
         data: {
-          plan: newPlan,
+          planId: newPlan,
           amount: newAmount,
+          updatedAt: new Date(),
         },
       });
 
       // Update user plan
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: { subscriptionPlan: newPlan },
       });
@@ -155,16 +159,16 @@ export class BillingService {
       await this.updateUserQuota(userId, newPlan);
 
       // Log update
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: randomUUID(),
           userId,
           action: 'subscription_updated',
-          metadata: { oldPlan: subscription.plan, newPlan },
-          success: true,
+          resource: 'subscription',
+          metadata: { oldPlan: subscription.planId, newPlan },
         },
       });
 
-      return { success: true, subscription: updated };
     } catch (error: any) {
       console.error('Update subscription error:', error);
       throw error;
@@ -176,7 +180,7 @@ export class BillingService {
    */
   async cancelSubscription(userId: string, immediately: boolean = false) {
     try {
-      const subscription = await prisma.subscription.findUnique({
+      const subscription = await prisma.subscriptions.findUnique({
         where: { userId },
       });
 
@@ -186,7 +190,7 @@ export class BillingService {
 
       if (immediately) {
         // Cancel immediately
-        await prisma.subscription.update({
+        await prisma.subscriptions.update({
           where: { userId },
           data: {
             status: 'cancelled',
@@ -194,10 +198,10 @@ export class BillingService {
           },
         });
 
-        await prisma.user.update({
+        await prisma.users.update({
           where: { id: userId },
           data: {
-            subscriptionPlan: 'free',
+            plan: 'free',
             subscriptionStatus: 'cancelled',
           },
         });
@@ -206,27 +210,28 @@ export class BillingService {
         await this.updateUserQuota(userId, 'free');
       } else {
         // Cancel at end of period
-        await prisma.subscription.update({
+        await prisma.subscriptions.update({
           where: { userId },
           data: {
-            cancelAt: subscription.currentPeriodEnd,
+            cancelAtPeriodEnd: true,
             status: 'active', // Still active until period ends
+            updatedAt: new Date(),
           },
         });
       }
 
       // Log cancellation
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: randomUUID(),
           userId,
           action: 'subscription_cancelled',
+          resource: 'subscription',
           metadata: { immediately },
-          success: true,
         },
       });
 
       return {
-        success: true,
         message: immediately
           ? 'Subscription cancelled immediately'
           : 'Subscription will cancel at end of billing period',
@@ -242,7 +247,7 @@ export class BillingService {
    */
   async resumeSubscription(userId: string) {
     try {
-      const subscription = await prisma.subscription.findUnique({
+      const subscription = await prisma.subscriptions.findUnique({
         where: { userId },
       });
 
@@ -250,24 +255,26 @@ export class BillingService {
         throw new Error('No subscription found');
       }
 
-      await prisma.subscription.update({
+      await prisma.subscriptions.update({
         where: { userId },
         data: {
           status: 'active',
-          cancelAt: null,
+          cancelAtPeriodEnd: false,
+          cancelledAt: null,
+          updatedAt: new Date(),
         },
       });
 
       // Log resume
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: randomUUID(),
           userId,
           action: 'subscription_resumed',
-          success: true,
+          resource: 'subscription',
         },
       });
 
-      return { success: true, message: 'Subscription resumed successfully' };
     } catch (error: any) {
       console.error('Resume subscription error:', error);
       throw error;
@@ -284,7 +291,6 @@ export class BillingService {
       const amount = this.getPlanAmount(planId);
 
       return {
-        success: true,
         checkoutUrl: `https://checkout.paddle.com/...`, // Would be real URL
         sessionId: `session_${Date.now()}`,
         amount,
@@ -332,7 +338,6 @@ export class BillingService {
           console.log(`Unhandled webhook event: ${eventType}`);
       }
 
-      return { success: true, processed: true };
     } catch (error: any) {
       console.error('Handle webhook error:', error);
       throw error;
@@ -344,13 +349,12 @@ export class BillingService {
    */
   async getInvoices(userId: string, limit: number = 20) {
     try {
-      const invoices = await prisma.invoice.findMany({
+      const invoices = await prisma.invoices.findMany({
         where: { userId },
-        orderBy: { invoiceDate: 'desc' },
+        orderBy: { createdAt: 'desc' },
         take: limit,
       });
 
-      return { success: true, invoices };
     } catch (error: any) {
       console.error('Get invoices error:', error);
       throw error;
@@ -362,7 +366,7 @@ export class BillingService {
    */
   async getInvoice(invoiceId: string, userId: string) {
     try {
-      const invoice = await prisma.invoice.findFirst({
+      const invoice = await prisma.invoices.findFirst({
         where: {
           id: invoiceId,
           userId,
@@ -373,7 +377,6 @@ export class BillingService {
         throw new Error('Invoice not found');
       }
 
-      return { success: true, invoice };
     } catch (error: any) {
       console.error('Get invoice error:', error);
       throw error;
@@ -390,22 +393,18 @@ export class BillingService {
     dueDate?: Date
   ) {
     try {
-      const invoiceNumber = `INV-${Date.now()}`;
-
-      const invoice = await prisma.invoice.create({
+      const invoice = await prisma.invoices.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
-          invoiceNumber,
+          amount,
           status: 'open',
-          subtotal: amount,
-          total: amount,
-          amountDue: amount,
           currency: 'USD',
-          dueDate,
+          description: `Invoice for ${dueDate}`,
+          updatedAt: new Date(),
         },
       });
 
-      return { success: true, invoice };
     } catch (error: any) {
       console.error('Create invoice error:', error);
       throw error;
@@ -424,21 +423,22 @@ export class BillingService {
       // This would integrate with payment provider
       // For now, create mock payment method
 
-      const paymentMethod = await prisma.paymentMethod.create({
+      const paymentMethod = await prisma.payment_methods.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           type: 'card',
           provider,
           providerId: `pm_${Date.now()}`,
           last4: '4242',
           brand: 'visa',
-          expiryMonth: 12,
-          expiryYear: 2025,
+          expMonth: 12,
+          expYear: 2025,
           isDefault: true,
+          updatedAt: new Date(),
         },
       });
 
-      return { success: true, paymentMethod };
     } catch (error: any) {
       console.error('Add payment method error:', error);
       throw error;
@@ -450,12 +450,11 @@ export class BillingService {
    */
   async listPaymentMethods(userId: string) {
     try {
-      const methods = await prisma.paymentMethod.findMany({
-        where: { userId, isActive: true },
+      const methods = await prisma.payment_methods.findMany({
+        where: { userId },
         orderBy: { createdAt: 'desc' },
       });
 
-      return { success: true, methods };
     } catch (error: any) {
       console.error('List payment methods error:', error);
       throw error;
@@ -468,18 +467,17 @@ export class BillingService {
   async setDefaultPaymentMethod(userId: string, methodId: string) {
     try {
       // Remove default from all methods
-      await prisma.paymentMethod.updateMany({
+      await prisma.payment_methods.updateMany({
         where: { userId },
         data: { isDefault: false },
       });
 
       // Set new default
-      await prisma.paymentMethod.update({
+      await prisma.payment_methods.update({
         where: { id: methodId },
         data: { isDefault: true },
       });
 
-      return { success: true, message: 'Default payment method updated' };
     } catch (error: any) {
       console.error('Set default payment method error:', error);
       throw error;
@@ -491,12 +489,10 @@ export class BillingService {
    */
   async removePaymentMethod(userId: string, methodId: string) {
     try {
-      await prisma.paymentMethod.update({
+      await prisma.payment_methods.delete({
         where: { id: methodId },
-        data: { isActive: false },
       });
 
-      return { success: true, message: 'Payment method removed' };
     } catch (error: any) {
       console.error('Remove payment method error:', error);
       throw error;
@@ -508,7 +504,7 @@ export class BillingService {
    */
   async calculateProration(userId: string, newPlanId: string) {
     try {
-      const subscription = await prisma.subscription.findUnique({
+      const subscription = await prisma.subscriptions.findUnique({
         where: { userId },
       });
 
@@ -549,31 +545,33 @@ export class BillingService {
   private async updateUserQuota(userId: string, plan: string) {
     const quotaConfig = this.getQuotaConfig(plan);
 
-    await prisma.userQuota.upsert({
+    await prisma.user_quota.upsert({
       where: { userId },
       update: {
         sessionsPerDay: quotaConfig.sessionsPerDay,
         tokensPerSession: quotaConfig.tokensPerSession,
-        monthlyLimit: quotaConfig.monthlyLimit,
+        requestsLimit: quotaConfig.requestsLimit,
+        updatedAt: new Date(),
       },
       create: {
         userId,
         sessionsPerDay: quotaConfig.sessionsPerDay,
         tokensPerSession: quotaConfig.tokensPerSession,
-        monthlyLimit: quotaConfig.monthlyLimit,
+        requestsLimit: quotaConfig.requestsLimit,
         periodStart: new Date(),
-        periodEnd: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        updatedAt: new Date(),
       },
     });
   }
 
   private getQuotaConfig(plan: string) {
     const configs: Record<string, any> = {
-      free: { sessionsPerDay: 6, tokensPerSession: 10000, monthlyLimit: null },
-      weekly: { sessionsPerDay: 10, tokensPerSession: 30000, monthlyLimit: 5000 },
-      monthly: { sessionsPerDay: 15, tokensPerSession: 50000, monthlyLimit: 10000 },
-      pro: { sessionsPerDay: 20, tokensPerSession: 100000, monthlyLimit: 50000 },
-      enterprise: { sessionsPerDay: 100, tokensPerSession: 500000, monthlyLimit: 500000 },
+      free: { sessionsPerDay: 6, tokensPerSession: 10000, requestsLimit: 1000 },
+      weekly: { sessionsPerDay: 10, tokensPerSession: 30000, requestsLimit: 5000 },
+      monthly: { sessionsPerDay: 15, tokensPerSession: 50000, requestsLimit: 10000 },
+      pro: { sessionsPerDay: 20, tokensPerSession: 100000, requestsLimit: 50000 },
+      enterprise: { sessionsPerDay: 100, tokensPerSession: 500000, requestsLimit: 500000 },
     };
     return configs[plan] || configs.free;
   }

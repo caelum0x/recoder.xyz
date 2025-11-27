@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
+import { nanoid } from 'nanoid';
 
 // API Key schema for validation
 const apiKeySchema = z.object({
@@ -15,8 +16,8 @@ const apiKeySchema = z.object({
 // GET - Fetch user's API keys
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const apiKeys = await prisma.apiKey.findMany({
+    const apiKeys = await prisma.api_keys.findMany({
       where: {
         userId: session.user.id,
       },
@@ -36,8 +37,7 @@ export async function GET(request: NextRequest) {
         expiresAt: true,
         isActive: true,
         createdAt: true,
-        // Don't return the actual key for security
-        keyPreview: true, // First few characters
+        keyPrefix: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
 // POST - Create new API key
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -71,39 +71,43 @@ export async function POST(request: NextRequest) {
 
     // Generate a secure API key
     const apiKey = generateApiKey();
-    const keyPreview = `${apiKey.substring(0, 8)}...${apiKey.substring(apiKey.length - 4)}`;
+    const keyPrefix = apiKey.substring(0, 10);
 
-    // Hash the API key for storage (in production, use bcrypt or similar)
+    // Hash the API key for storage
     const hashedKey = hashApiKey(apiKey);
 
     // Create the API key record
-    const newApiKey = await prisma.apiKey.create({
+    const newApiKey = await prisma.api_keys.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         name: validatedData.name,
         keyHash: hashedKey,
-        keyPreview: keyPreview,
+        keyPrefix: keyPrefix,
         permissions: validatedData.permissions,
         expiresAt: validatedData.expiresAt ? new Date(validatedData.expiresAt) : null,
         isActive: true,
+        updatedAt: new Date(),
       },
       select: {
         id: true,
         name: true,
         permissions: true,
-        keyPreview: true,
+        keyPrefix: true,
         expiresAt: true,
         createdAt: true,
       },
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         action: 'API_KEY_CREATED',
-        details: {
-          apiKeyId: newApiKey.id,
+        resource: 'api_key',
+        resourceId: newApiKey.id,
+        metadata: {
           apiKeyName: newApiKey.name,
           permissions: newApiKey.permissions,
         },
@@ -137,8 +141,8 @@ export async function POST(request: NextRequest) {
 // PUT - Update API key (permissions, name, etc.)
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -157,7 +161,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Verify the API key belongs to the user
-    const existingApiKey = await prisma.apiKey.findFirst({
+    const existingApiKey = await prisma.api_keys.findFirst({
       where: {
         id: id,
         userId: session.user.id,
@@ -172,7 +176,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update the API key
-    const updatedApiKey = await prisma.apiKey.update({
+    const updatedApiKey = await prisma.api_keys.update({
       where: { id: id },
       data: {
         ...updateData,
@@ -182,7 +186,7 @@ export async function PUT(request: NextRequest) {
         id: true,
         name: true,
         permissions: true,
-        keyPreview: true,
+        keyPrefix: true,
         expiresAt: true,
         isActive: true,
         updatedAt: true,
@@ -190,12 +194,14 @@ export async function PUT(request: NextRequest) {
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         action: 'API_KEY_UPDATED',
-        details: {
-          apiKeyId: id,
+        resource: 'api_key',
+        resourceId: id,
+        metadata: {
           changes: updateData,
         },
       },
@@ -217,8 +223,8 @@ export async function PUT(request: NextRequest) {
 // DELETE - Revoke API key
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -237,7 +243,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify the API key belongs to the user
-    const apiKey = await prisma.apiKey.findFirst({
+    const apiKey = await prisma.api_keys.findFirst({
       where: {
         id: apiKeyId,
         userId: session.user.id,
@@ -252,17 +258,19 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete the API key
-    await prisma.apiKey.delete({
+    await prisma.api_keys.delete({
       where: { id: apiKeyId },
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         action: 'API_KEY_REVOKED',
-        details: {
-          apiKeyId: apiKeyId,
+        resource: 'api_key',
+        resourceId: apiKeyId,
+        metadata: {
           apiKeyName: apiKey.name,
         },
       },

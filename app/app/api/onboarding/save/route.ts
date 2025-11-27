@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     } = data;
 
     // Update user with onboarding data
-    await prisma.user.update({
+    await prisma.users.update({
       where: { id: session.user.id },
       data: {
         preferredModels: preferredModels || [],
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: session.user.id },
       select: {
         onboardingStep: true,

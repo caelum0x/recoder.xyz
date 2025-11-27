@@ -5,6 +5,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from './prisma';
 import { verifyPassword } from './crypto';
 import { sendWelcomeEmail } from './email';
+import crypto from 'crypto';
 
 // Determine which Google OAuth credentials to use based on environment
 const isProduction = process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.includes('recoder.xyz');
@@ -50,16 +51,16 @@ export const authOptions: NextAuthOptions = {
 
         try {
           // Find user in database
-          const user = await prisma.user.findUnique({
+          const user = await prisma.users.findUnique({
             where: { email: credentials.email }
           });
 
-          if (!user || !user.passwordHash) {
+          if (!user || !user.password) {
             throw new Error('Invalid email or password');
           }
 
           // Verify password
-          const isValid = await verifyPassword(credentials.password, user.passwordHash);
+          const isValid = await verifyPassword(credentials.password, user.password);
           if (!isValid) {
             throw new Error('Invalid email or password');
           }
@@ -82,20 +83,22 @@ export const authOptions: NextAuthOptions = {
       if (account?.provider === 'google' || account?.provider === 'github') {
         try {
           // Check if user exists
-          const existingUser = await prisma.user.findUnique({
+          const existingUser = await prisma.users.findUnique({
             where: { email: user.email! }
           });
 
           if (!existingUser) {
             // Create new user from OAuth
-            const newUser = await prisma.user.create({
+            const newUser = await prisma.users.create({
               data: {
+                id: crypto.randomUUID(),
                 email: user.email!,
                 name: user.name || user.email!.split('@')[0],
                 image: user.image,
                 emailVerified: true, // OAuth emails are pre-verified
                 subscriptionPlan: 'free',
                 subscriptionStatus: 'active',
+                updatedAt: new Date()
               }
             });
 
@@ -104,7 +107,7 @@ export const authOptions: NextAuthOptions = {
             const endOfDay = new Date(now);
             endOfDay.setHours(23, 59, 59, 999);
             
-            await prisma.userQuota.create({
+            await prisma.user_quota.create({
               data: {
                 userId: newUser.id,
                 sessionsPerDay: 6,
@@ -134,7 +137,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, account, trigger }) {
       if (user) {
         // Fetch full user data from database
-        const dbUser = await prisma.user.findUnique({
+        const dbUser = await prisma.users.findUnique({
           where: { email: user.email! }
         });
 
@@ -142,7 +145,7 @@ export const authOptions: NextAuthOptions = {
           token.userId = dbUser.id;
           token.email = dbUser.email;
           token.name = dbUser.name;
-          token.plan = dbUser.subscriptionPlan;
+          token.plan = dbUser.plan;
           token.subscriptionStatus = dbUser.subscriptionStatus;
         }
       }
@@ -154,11 +157,11 @@ export const authOptions: NextAuthOptions = {
 
       // Handle token refresh
       if (trigger === 'update') {
-        const dbUser = await prisma.user.findUnique({
+        const dbUser = await prisma.users.findUnique({
           where: { email: token.email as string }
         });
         if (dbUser) {
-          token.plan = dbUser.subscriptionPlan;
+          token.plan = dbUser.plan;
           token.subscriptionStatus = dbUser.subscriptionStatus;
         }
       }

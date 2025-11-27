@@ -1,22 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { nanoid } from 'nanoid';
 
 // Integration schema for validation
 const integrationSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['github', 'gitlab', 'bitbucket', 'aws', 'gcp', 'azure', 'vercel', 'netlify', 'docker', 'kubernetes']),
   config: z.record(z.any()),
-  isEnabled: z.boolean().optional().default(true),
+  status: z.string().optional().default('inactive'),
 });
 
 // GET - Fetch user's integrations
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const integrations = await prisma.userIntegration.findMany({
+    const integrations = await prisma.integrations.findMany({
       where: {
         userId: session.user.id,
       },
@@ -32,9 +33,8 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         type: true,
-        isEnabled: true,
-        isConnected: true,
-        lastSyncAt: true,
+        provider: true,
+        status: true,
         createdAt: true,
         updatedAt: true,
         // Don't return sensitive config data
@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
 // POST - Create new integration
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const validatedData = integrationSchema.parse(body);
 
     // Check if integration with same name already exists
-    const existingIntegration = await prisma.userIntegration.findFirst({
+    const existingIntegration = await prisma.integrations.findFirst({
       where: {
         userId: session.user.id,
         name: validatedData.name,
@@ -85,32 +85,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the integration
-    const integration = await prisma.userIntegration.create({
+    const integration = await prisma.integrations.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         name: validatedData.name,
         type: validatedData.type,
+        provider: validatedData.type,
         config: validatedData.config,
-        isEnabled: validatedData.isEnabled,
-        isConnected: false, // Will be set to true after successful connection test
+        status: validatedData.status,
+        updatedAt: new Date(),
       },
       select: {
         id: true,
         name: true,
         type: true,
-        isEnabled: true,
-        isConnected: true,
+        provider: true,
+        status: true,
         createdAt: true,
       },
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         action: 'INTEGRATION_CREATED',
-        details: {
-          integrationId: integration.id,
+        resource: 'integration',
+        resourceId: integration.id,
+        metadata: {
           integrationType: integration.type,
           integrationName: integration.name,
         },
@@ -140,8 +144,8 @@ export async function POST(request: NextRequest) {
 // PUT - Update integration settings
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -160,7 +164,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Verify the integration belongs to the user
-    const existingIntegration = await prisma.userIntegration.findFirst({
+    const existingIntegration = await prisma.integrations.findFirst({
       where: {
         id: id,
         userId: session.user.id,
@@ -175,7 +179,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update the integration
-    const updatedIntegration = await prisma.userIntegration.update({
+    const updatedIntegration = await prisma.integrations.update({
       where: { id: id },
       data: {
         ...updateData,
@@ -185,20 +189,21 @@ export async function PUT(request: NextRequest) {
         id: true,
         name: true,
         type: true,
-        isEnabled: true,
-        isConnected: true,
-        lastSyncAt: true,
+        provider: true,
+        status: true,
         updatedAt: true,
       },
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         action: 'INTEGRATION_UPDATED',
-        details: {
-          integrationId: id,
+        resource: 'integration',
+        resourceId: id,
+        metadata: {
           changes: updateData,
         },
       },
@@ -220,8 +225,8 @@ export async function PUT(request: NextRequest) {
 // DELETE - Remove integration
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
+    const session = await auth.api.getSession({ headers: await headers() });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -240,7 +245,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify the integration belongs to the user
-    const integration = await prisma.userIntegration.findFirst({
+    const integration = await prisma.integrations.findFirst({
       where: {
         id: integrationId,
         userId: session.user.id,
@@ -255,17 +260,19 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete the integration
-    await prisma.userIntegration.delete({
+    await prisma.integrations.delete({
       where: { id: integrationId },
     });
 
     // Create audit log entry
-    await prisma.userAuditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: nanoid(),
         userId: session.user.id,
         action: 'INTEGRATION_DELETED',
-        details: {
-          integrationId: integrationId,
+        resource: 'integration',
+        resourceId: integrationId,
+        metadata: {
           integrationType: integration.type,
           integrationName: integration.name,
         },

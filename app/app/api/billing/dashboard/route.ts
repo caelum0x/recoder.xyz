@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -31,30 +31,33 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch subscription
-    const subscription = await prisma.subscription.findFirst({
+    const subscription = await prisma.subscriptions.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Fetch current month usage
+    // Fetch current month usage from usage_records
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const usage = await prisma.usage.aggregate({
+    const usageRecords = await prisma.usage_records.findMany({
       where: {
         userId: user.id,
         timestamp: { gte: startOfMonth },
       },
-      _sum: {
-        requestCount: true,
-        totalTokens: true,
-        totalCost: true,
-      },
     });
 
+    const usage = {
+      _sum: {
+        requestCount: usageRecords.length,
+        totalTokens: usageRecords.reduce((sum, r) => sum + (r.tokens || 0), 0),
+        totalCost: usageRecords.reduce((sum, r) => sum + (r.cost || 0), 0),
+      }
+    };
+
     // Fetch default payment method
-    const paymentMethod = await prisma.paymentMethod.findFirst({
+    const paymentMethod = await prisma.payment_methods.findFirst({
       where: {
         userId: user.id,
         isDefault: true,
@@ -72,7 +75,7 @@ export async function GET(req: NextRequest) {
           status: subscription.status,
           currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
           cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-          amount: subscription.amount,
+          amount: 0, // Amount is in subscription_plans, not subscriptions
           currency: 'USD',
         } : {
           plan: 'free',
@@ -89,12 +92,14 @@ export async function GET(req: NextRequest) {
         },
         nextPayment: subscription ? {
           date: subscription.currentPeriodEnd.toISOString(),
-          amount: subscription.amount,
+          amount: 0,
         } : null,
         paymentMethod: paymentMethod ? {
           type: paymentMethod.brand || 'Card',
           last4: paymentMethod.last4,
-          expiry: `${paymentMethod.expiryMonth.toString().padStart(2, '0')}/${paymentMethod.expiryYear}`,
+          expiry: paymentMethod.expMonth && paymentMethod.expYear
+            ? `${paymentMethod.expMonth.toString().padStart(2, '0')}/${paymentMethod.expYear}`
+            : 'N/A',
         } : null,
       },
     });

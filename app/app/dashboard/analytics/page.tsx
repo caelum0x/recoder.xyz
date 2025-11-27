@@ -33,6 +33,7 @@ export default function AdvancedAnalyticsDashboard() {
   const router = useRouter();
   const [metrics, setMetrics] = useState<RealTimeMetrics | null>(null);
   const [modelPerformance, setModelPerformance] = useState<ModelPerformance[]>([]);
+  const [costBreakdown, setCostBreakdown] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());

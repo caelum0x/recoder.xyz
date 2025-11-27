@@ -207,6 +207,33 @@ class ApiClient {
   async getProviderBreakdown(timeRange: string = '7d') {
     return this.request<any>(`/api/analytics/providers?range=${timeRange}`);
   }
+
+  /**
+   * Generic GET request
+   */
+  async get<T>(endpoint: string): Promise<{ success: boolean; data: T; error?: string }> {
+    try {
+      const data = await this.request<T>(endpoint);
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null as any, error: error.message };
+    }
+  }
+
+  /**
+   * Generic POST request
+   */
+  async post<T>(endpoint: string, body: any): Promise<{ success: boolean; data: T; error?: string }> {
+    try {
+      const data = await this.request<T>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null as any, error: error.message };
+    }
+  }
 }
 
 export const apiClient = new ApiClient();

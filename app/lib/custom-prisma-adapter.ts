@@ -8,12 +8,13 @@ import { PrismaClient } from "@prisma/client";
  * field name to column name mapping defined in the schema.
  */
 export function customPrismaAdapter(prisma: PrismaClient) {
-  // Map Better Auth model names to Prisma model names (capitalized)
+  // Map Better Auth model names to Prisma model names
+  // Better Auth uses singular names, but this DB uses plural 'users' for the main table
   const modelMap: Record<string, string> = {
-    user: 'user',
-    account: 'account',
-    session: 'session',
-    verification: 'verification',
+    user: 'users',  // Map to plural 'users' table which has all the fields
+    account: 'accounts',
+    session: 'sessions',
+    verification: 'verifications',
   };
 
   // Transform Better Auth where conditions to Prisma format
@@ -58,9 +59,8 @@ export function customPrismaAdapter(prisma: PrismaClient) {
     return sortBy;
   }
 
-  return () => {
-    return {
-      id: "custom-prisma",
+  return {
+    id: "custom-prisma",
       
       async create({ model, data }: any) {
         try {
@@ -256,5 +256,4 @@ export function customPrismaAdapter(prisma: PrismaClient) {
         }
       },
     };
-  };
 }

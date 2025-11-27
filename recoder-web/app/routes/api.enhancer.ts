@@ -9,6 +9,21 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 async function enhancerAction({ context, request }: ActionFunctionArgs) {
+  // CRITICAL: Verify user authentication for AI features
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+
+  if (!session?.user) {
+    // User not authenticated - return error
+    throw new Response(JSON.stringify({ error: 'Authentication required' }), {
+      status: 401,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Error-Type': 'NOT_AUTHENTICATED',
+      },
+    });
+  }
+
   const { message } = await request.json<{ message: string }>();
 
   try {

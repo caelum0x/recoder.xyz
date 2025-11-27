@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
     const { user } = authResult;
-    
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -24,11 +24,14 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    // Get authorization header from the request
+    const authHeader = request.headers.get('authorization');
+
     const response = await fetch(`${BACKEND_URL}/api/billing/checkout/dodo`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(session as any).accessToken}`,
+        ...(authHeader && { 'Authorization': authHeader }),
       },
       body: JSON.stringify(body),
     });

@@ -12,8 +12,8 @@ export async function GET(request: Request) {
       // GET BILLING, CUSTOMER INFO FROM CUSTOMER AND PASS IT.
       // FOR COUNTRY CODE THE VALUE SHOULD BE - ISO country code alpha2 variant
         billing: {
-            city: "", 
-            country: "",
+            city: "",
+            country: "US" as any, // Default to US, should be from user data
             state: "",
             street: "",
             zipcode: "",

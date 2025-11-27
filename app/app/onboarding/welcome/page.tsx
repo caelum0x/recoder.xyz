@@ -22,7 +22,7 @@ import {
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,14 +43,14 @@ export default function WelcomePage() {
       setLoading(false);
     };
 
-    if (status === 'authenticated') {
+    if (session && !isPending) {
       checkOnboarding();
-    } else if (status === 'unauthenticated') {
+    } else if (!session && !isPending) {
       router.push('/auth/signin');
     }
-  }, [status, router]);
+  }, [session, isPending, router]);
 
-  if (loading || status === 'loading') {
+  if (loading || isPending) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">

@@ -22,19 +22,19 @@ import {
 
 export default function CompletePage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!session && !isPending) {
       router.push('/auth/signin');
-    } else if (status === 'authenticated') {
+    } else if (session && !isPending) {
       setLoading(false);
       // Save onboarding completion
       completeOnboarding();
     }
-  }, [status, router]);
+  }, [session, isPending, router]);
 
   const completeOnboarding = async () => {
     setSaving(true);
@@ -71,7 +71,7 @@ export default function CompletePage() {
     }
   };
 
-  if (loading || status === 'loading') {
+  if (loading || isPending) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">

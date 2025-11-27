@@ -87,20 +87,26 @@ export default function OnboardingPage() {
           {step === 'welcome' && (
             <div className="space-y-8 animate-fadeIn">
               <div className="text-center space-y-4">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-purple-600 rounded-2xl mb-4">
-                  <Sparkles className="w-10 h-10 text-white" />
+                <div className="inline-flex items-center space-x-2 px-6 py-3 rounded-full border-2 border-green-500/30 bg-green-500/10 mb-4">
+                  <Sparkles className="w-5 h-5 text-green-400" />
+                  <span className="text-sm font-bold text-green-400">🎉 FREE BETA - No Credit Card Required</span>
                 </div>
                 <h1 className="text-5xl font-bold">
-                  Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">Recoder</span>
+                  Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">Recoder.xyz</span>
                 </h1>
-                <p className="text-xl text-gray-400">Let's get you set up in less than 2 minutes</p>
+                <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+                  The only platform combining <span className="text-orange-500 font-semibold">Web IDE + Terminal CLI</span> with seamless sync
+                </p>
+                <p className="text-lg text-gray-500">
+                  <span className="text-white font-semibold">100% Free</span> - Just bring your API key
+                </p>
               </div>
 
               <div className="grid md:grid-cols-3 gap-6 mt-12">
                 {[
-                  { icon: Terminal, title: 'CLI Access', desc: 'Generate code from terminal' },
-                  { icon: Brain, title: 'Multi-AI Models', desc: 'Claude, GPT-4, Gemini' },
-                  { icon: Rocket, title: 'Production Ready', desc: 'Real code, not mockups' }
+                  { icon: Code2, title: 'Web IDE', desc: 'Code in your browser with AI assistance' },
+                  { icon: Terminal, title: 'Terminal CLI', desc: 'Full local file system access' },
+                  { icon: Zap, title: '40+ AI Models', desc: 'GPT-4, Claude, Gemini, and more' }
                 ].map((item, i) => (
                   <div key={i} className="p-6 rounded-2xl border border-white/10 bg-white/5">
                     <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center mb-4">
@@ -110,6 +116,28 @@ export default function OnboardingPage() {
                     <p className="text-sm text-gray-400">{item.desc}</p>
                   </div>
                 ))}
+              </div>
+
+              <div className="p-6 rounded-lg bg-blue-500/10 border border-blue-500/20 max-w-2xl mx-auto">
+                <h3 className="font-semibold text-white mb-2">How it works:</h3>
+                <ul className="space-y-2 text-sm text-gray-300">
+                  <li className="flex items-start space-x-2">
+                    <span className="text-orange-500">1.</span>
+                    <span>Start projects in Web IDE (browser-based)</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-orange-500">2.</span>
+                    <span>Download to your local machine with CLI</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-orange-500">3.</span>
+                    <span>Edit locally with your favorite editor</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-orange-500">4.</span>
+                    <span>Sync changes back seamlessly</span>
+                  </li>
+                </ul>
               </div>
 
               <div className="flex justify-center mt-12">
@@ -278,59 +306,143 @@ export default function OnboardingPage() {
           {step === 'api-key' && (
             <div className="space-y-8 animate-fadeIn">
               <div className="text-center space-y-4">
-                <h2 className="text-4xl font-bold">Choose Your Plan</h2>
-                <p className="text-xl text-gray-400">Start free or unlock premium features</p>
+                <div className="inline-flex items-center space-x-2 px-6 py-3 rounded-full border-2 border-green-500/30 bg-green-500/10 mb-4">
+                  <Sparkles className="w-5 h-5 text-green-400" />
+                  <span className="text-sm font-bold text-green-400">100% FREE - Just bring your API key</span>
+                </div>
+                <h2 className="text-4xl font-bold">Add Your API Key</h2>
+                <p className="text-xl text-gray-400">Choose an AI provider to get started</p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="p-8 rounded-2xl border border-white/10 bg-white/5">
-                  <div className="mb-6">
-                    <h3 className="text-2xl font-bold mb-2">Free Tier</h3>
-                    <div className="flex items-baseline space-x-2">
-                      <span className="text-4xl font-bold">$0</span>
-                      <span className="text-gray-400">/forever</span>
+              <div className="space-y-4 max-w-2xl mx-auto">
+                {/* OpenRouter */}
+                <div className="p-6 rounded-xl border border-green-500/30 bg-green-500/5 hover:border-green-500/50 transition-all">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <span className="text-2xl">📦</span>
+                        <h3 className="text-xl font-bold">OpenRouter</h3>
+                        <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400">Recommended</span>
+                      </div>
+                      <p className="text-sm text-gray-400 mb-3">
+                        Access 40+ AI models with one key
+                      </p>
+                      <ul className="space-y-1 text-sm text-gray-300">
+                        <li>✓ GPT-4, Claude 3.5, Gemini, and more</li>
+                        <li>✓ Pay only $0.01 per chat</li>
+                        <li>✓ $5 credit = 500+ requests</li>
+                      </ul>
                     </div>
                   </div>
-                  <div className="space-y-3 mb-8">
-                    {['6 sessions/day', '10k tokens/session', 'Bring own API key', 'Free models', 'Community support'].map((f, i) => (
-                      <div key={i} className="flex items-center space-x-3 text-gray-300">
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                        <span>{f}</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-3">
+                    <a
+                      href="https://openrouter.ai/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg font-medium text-center transition-all inline-flex items-center justify-center space-x-2"
+                    >
+                      <span>Get OpenRouter Key</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </a>
+                    <button
+                      onClick={() => router.push('/settings/ai-providers')}
+                      className="px-4 py-2 border border-white/20 hover:border-white/40 rounded-lg transition-all"
+                    >
+                      Add Key
+                    </button>
                   </div>
-                  <button onClick={() => setStep('complete')} className="w-full px-6 py-3 border border-white/20 bg-white/5 hover:bg-white/10 rounded-lg font-medium">
-                    Start Free
-                  </button>
                 </div>
 
-                <div className="p-8 rounded-2xl border-2 border-orange-500 bg-gradient-to-br from-orange-500/10 to-purple-600/10 relative">
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <span className="px-4 py-1 bg-gradient-to-r from-orange-500 to-purple-600 rounded-full text-sm font-bold">RECOMMENDED</span>
-                  </div>
-                  <div className="mb-6">
-                    <h3 className="text-2xl font-bold mb-2">Monthly Pro</h3>
-                    <div className="flex items-baseline space-x-2">
-                      <span className="text-4xl font-bold">$20</span>
-                      <span className="text-gray-400">/month</span>
+                {/* Anthropic */}
+                <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:border-white/20 transition-all">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <span className="text-2xl">🤖</span>
+                        <h3 className="text-xl font-bold">Anthropic</h3>
+                      </div>
+                      <p className="text-sm text-gray-400 mb-3">
+                        Direct access to Claude models
+                      </p>
+                      <ul className="space-y-1 text-sm text-gray-300">
+                        <li>✓ Claude 3.5 Sonnet</li>
+                        <li>✓ Best for coding tasks</li>
+                        <li>✓ $5 free credit on signup</li>
+                      </ul>
                     </div>
                   </div>
-                  <div className="space-y-3 mb-8">
-                    {['15 sessions/day', '50k tokens/session', 'All AI models', 'No API key needed', 'Priority support', 'Team collab', 'API access'].map((f, i) => (
-                      <div key={i} className="flex items-center space-x-3">
-                        <CheckCircle className="w-5 h-5 text-orange-500" />
-                        <span>{f}</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-3">
+                    <a
+                      href="https://console.anthropic.com/settings/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 px-4 py-2 border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg font-medium text-center transition-all inline-flex items-center justify-center space-x-2"
+                    >
+                      <span>Get Anthropic Key</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </a>
+                    <button
+                      onClick={() => router.push('/settings/ai-providers')}
+                      className="px-4 py-2 border border-white/20 hover:border-white/40 rounded-lg transition-all"
+                    >
+                      Add Key
+                    </button>
                   </div>
-                  <button onClick={() => router.push('/checkout?plan=monthly')} className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium">
-                    Start Pro
-                  </button>
                 </div>
+
+                {/* OpenAI */}
+                <div className="p-6 rounded-xl border border-white/10 bg-white/5 hover:border-white/20 transition-all">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <span className="text-2xl">🔷</span>
+                        <h3 className="text-xl font-bold">OpenAI</h3>
+                      </div>
+                      <p className="text-sm text-gray-400 mb-3">
+                        Direct access to GPT models
+                      </p>
+                      <ul className="space-y-1 text-sm text-gray-300">
+                        <li>✓ GPT-4 & GPT-4 Turbo</li>
+                        <li>✓ Most popular choice</li>
+                        <li>✓ $5 free credit on signup</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href="https://platform.openai.com/api-keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 px-4 py-2 border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg font-medium text-center transition-all inline-flex items-center justify-center space-x-2"
+                    >
+                      <span>Get OpenAI Key</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </a>
+                    <button
+                      onClick={() => router.push('/settings/ai-providers')}
+                      className="px-4 py-2 border border-white/20 hover:border-white/40 rounded-lg transition-all"
+                    >
+                      Add Key
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 max-w-2xl mx-auto">
+                <p className="text-sm text-gray-300">
+                  <span className="font-semibold text-white">Your keys are secure.</span> We encrypt them with AES-256-GCM before storage. We never see your usage or conversations.
+                </p>
               </div>
 
               <div className="flex items-center justify-between mt-12 pt-8 border-t border-white/10">
                 <button onClick={() => setStep('preferences')} className="px-6 py-3 border border-white/10 hover:border-white/20 rounded-lg">Back</button>
+                <button
+                  onClick={() => setStep('complete')}
+                  className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium flex items-center space-x-2 hover:from-orange-600 hover:to-purple-700"
+                >
+                  <span>Skip for now</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
               </div>
             </div>
           )}

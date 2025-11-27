@@ -25,41 +25,37 @@ export class ApiKeyService {
       const keyString = `rck_${generateSecureToken()}`;
       const keyHash = crypto.createHash('sha256').update(keyString).digest('hex');
       const keyPrefix = keyString.substring(0, 12);
-      const keyId = `key_${Date.now()}`;
 
       // Create API key record
-      const apiKey = await prisma.apiKey.create({
+      const apiKey = await prisma.api_keys.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
-          keyId,
           keyHash,
           keyPrefix,
           name,
-          scopes: permissions,
-          permissions: permissions.length > 0 ? { scopes: permissions } : null,
+          permissions: permissions,
           expiresAt,
-          rateLimit,
           isActive: true,
+          updatedAt: new Date(),
         },
       });
 
       // Log API key creation
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'api_key_created',
           resource: 'api_key',
           resourceId: apiKey.id,
-          success: true,
         },
       });
 
       // Return the full key only once
       return {
-        success: true,
         apiKey: {
           id: apiKey.id,
-          keyId: apiKey.keyId,
           key: keyString, // Only returned once!
           keyPrefix: apiKey.keyPrefix,
           name: apiKey.name,
@@ -80,27 +76,23 @@ export class ApiKeyService {
    */
   async listKeys(userId: string) {
     try {
-      const keys = await prisma.apiKey.findMany({
+      const keys = await prisma.api_keys.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
-          keyId: true,
           keyPrefix: true,
           name: true,
-          description: true,
-          scopes: true,
+          permissions: true,
           isActive: true,
           createdAt: true,
           lastUsedAt: true,
           expiresAt: true,
           usageCount: true,
-          rateLimit: true,
         },
       });
 
       return {
-        success: true,
         keys: keys.map((k) => ({
           ...k,
           masked: `${k.keyPrefix}...`,
@@ -115,11 +107,11 @@ export class ApiKeyService {
   /**
    * Get API key details
    */
-  async getKey(keyId: string, userId: string) {
+  async getKey(id: string, userId: string) {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -129,15 +121,12 @@ export class ApiKeyService {
       }
 
       return {
-        success: true,
         key: {
           id: key.id,
-          keyId: key.keyId,
           keyPrefix: key.keyPrefix,
           masked: `${key.keyPrefix}...`,
           name: key.name,
-          description: key.description,
-          scopes: key.scopes,
+          scopes: key.permissions,
           isActive: key.isActive,
           createdAt: key.createdAt,
           lastUsedAt: key.lastUsedAt,
@@ -155,11 +144,11 @@ export class ApiKeyService {
   /**
    * Revoke an API key
    */
-  async revokeKey(keyId: string, userId: string) {
+  async revokeKey(id: string, userId: string) {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -168,27 +157,26 @@ export class ApiKeyService {
         throw new Error('API key not found');
       }
 
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data: {
           isActive: false,
-          revokedAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
       // Log revocation
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'api_key_revoked',
           resource: 'api_key',
           resourceId: key.id,
-          success: true,
         },
       });
 
       return {
-        success: true,
         message: 'API key revoked successfully',
       };
     } catch (error: any) {
@@ -200,11 +188,11 @@ export class ApiKeyService {
   /**
    * Rotate an API key (create new, revoke old)
    */
-  async rotateKey(keyId: string, userId: string) {
+  async rotateKey(id: string, userId: string) {
     try {
-      const oldKey = await prisma.apiKey.findFirst({
+      const oldKey = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -217,26 +205,25 @@ export class ApiKeyService {
       const newKey = await this.createKey(
         userId,
         oldKey.name,
-        oldKey.scopes,
-        oldKey.expiresAt || undefined,
-        oldKey.rateLimit || undefined
+        oldKey.permissions,
+        oldKey.expiresAt || undefined
       );
 
       // Revoke old key
-      await this.revokeKey(keyId, userId);
+      await this.revokeKey(id, userId);
 
       // Log rotation
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'api_key_rotated',
-          metadata: { oldKeyId: keyId, newKeyId: newKey.apiKey.keyId },
-          success: true,
+          resource: 'api_key',
+          metadata: { oldKeyId: id, newKeyId: newKey.apiKey.id },
         },
       });
 
       return {
-        success: true,
         newKey: newKey.apiKey,
         message: 'API key rotated successfully. Old key has been revoked.',
       };
@@ -253,10 +240,10 @@ export class ApiKeyService {
     try {
       const keyHash = crypto.createHash('sha256').update(keyString).digest('hex');
 
-      const key = await prisma.apiKey.findUnique({
+      const key = await prisma.api_keys.findFirst({
         where: { keyHash },
         include: {
-          user: {
+          users: {
             select: {
               id: true,
               email: true,
@@ -280,7 +267,7 @@ export class ApiKeyService {
       }
 
       // Update usage stats
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data: {
           lastUsedAt: new Date(),
@@ -292,12 +279,11 @@ export class ApiKeyService {
         valid: true,
         key: {
           id: key.id,
-          keyId: key.keyId,
           userId: key.userId,
-          scopes: key.scopes,
+          scopes: key.permissions,
           rateLimit: key.rateLimit,
         },
-        user: key.user,
+        user: key.users,
       };
     } catch (error: any) {
       console.error('Validate API key error:', error);
@@ -308,11 +294,11 @@ export class ApiKeyService {
   /**
    * Get API key usage statistics
    */
-  async getKeyUsage(keyId: string, userId: string, startDate: Date, endDate: Date) {
+  async getKeyUsage(id: string, userId: string, startDate: Date, endDate: Date) {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -330,7 +316,6 @@ export class ApiKeyService {
       };
 
       return {
-        success: true,
         usage,
       };
     } catch (error: any) {
@@ -342,11 +327,11 @@ export class ApiKeyService {
   /**
    * Update API key permissions
    */
-  async updateKeyPermissions(keyId: string, userId: string, permissions: string[]) {
+  async updateKeyPermissions(id: string, userId: string, permissions: string[]) {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -355,28 +340,26 @@ export class ApiKeyService {
         throw new Error('API key not found');
       }
 
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data: {
-          scopes: permissions,
-          permissions: { scopes: permissions },
+          permissions: permissions,
         },
       });
 
       // Log permission update
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
           action: 'api_key_permissions_updated',
           resource: 'api_key',
           resourceId: key.id,
           metadata: { permissions },
-          success: true,
         },
       });
 
       return {
-        success: true,
         message: 'Permissions updated successfully',
       };
     } catch (error: any) {
@@ -388,11 +371,11 @@ export class ApiKeyService {
   /**
    * Set API key rate limit
    */
-  async setKeyRateLimit(keyId: string, userId: string, limit: number) {
+  async setKeyRateLimit(id: string, userId: string, limit: number) {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -401,13 +384,12 @@ export class ApiKeyService {
         throw new Error('API key not found');
       }
 
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data: { rateLimit: limit },
       });
 
       return {
-        success: true,
         message: 'Rate limit updated successfully',
       };
     } catch (error: any) {
@@ -420,7 +402,7 @@ export class ApiKeyService {
    * Update API key metadata
    */
   async updateKeyMetadata(
-    keyId: string,
+    id: string,
     userId: string,
     data: {
       name?: string;
@@ -428,9 +410,9 @@ export class ApiKeyService {
     }
   ) {
     try {
-      const key = await prisma.apiKey.findFirst({
+      const key = await prisma.api_keys.findFirst({
         where: {
-          keyId,
+          id: id,
           userId,
         },
       });
@@ -439,13 +421,12 @@ export class ApiKeyService {
         throw new Error('API key not found');
       }
 
-      await prisma.apiKey.update({
+      await prisma.api_keys.update({
         where: { id: key.id },
         data,
       });
 
       return {
-        success: true,
         message: 'API key updated successfully',
       };
     } catch (error: any) {

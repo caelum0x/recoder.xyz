@@ -98,7 +98,7 @@ async function handlePaymentSucceeded(data: any) {
     return;
   }
 
-  await prisma.user.update({
+  await prisma.users.update({
     where: { id: userId },
     data: {
       lastPaymentDate: new Date(),
@@ -107,8 +107,9 @@ async function handlePaymentSucceeded(data: any) {
     }
   });
 
-  await prisma.auditLog.create({
+  await prisma.audit_logs.create({
     data: {
+        id: crypto.randomUUID(),
       userId,
       action: 'payment_succeeded',
       resource: 'billing',
@@ -120,7 +121,6 @@ async function handlePaymentSucceeded(data: any) {
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
-      timestamp: new Date()
     }
   });
 
@@ -141,7 +141,7 @@ async function handleSubscriptionCreated(data: any) {
     return;
   }
 
-  await prisma.user.update({
+  await prisma.users.update({
     where: { id: userId },
     data: {
       plan: planName,
@@ -151,8 +151,9 @@ async function handleSubscriptionCreated(data: any) {
     }
   });
 
-  await prisma.auditLog.create({
+  await prisma.audit_logs.create({
     data: {
+        id: crypto.randomUUID(),
       userId,
       action: 'subscription_created',
       resource: 'billing',
@@ -163,7 +164,6 @@ async function handleSubscriptionCreated(data: any) {
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
-      timestamp: new Date()
     }
   });
 
@@ -184,7 +184,7 @@ async function handleSubscriptionUpdated(data: any) {
     return;
   }
 
-  await prisma.user.update({
+  await prisma.users.update({
     where: { id: userId },
     data: {
       plan: planName,
@@ -193,8 +193,9 @@ async function handleSubscriptionUpdated(data: any) {
     }
   });
 
-  await prisma.auditLog.create({
+  await prisma.audit_logs.create({
     data: {
+        id: crypto.randomUUID(),
       userId,
       action: 'subscription_updated',
       resource: 'billing',
@@ -205,7 +206,6 @@ async function handleSubscriptionUpdated(data: any) {
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
-      timestamp: new Date()
     }
   });
 
@@ -224,7 +224,7 @@ async function handleSubscriptionCancelled(data: any) {
     return;
   }
 
-  await prisma.user.update({
+  await prisma.users.update({
     where: { id: userId },
     data: {
       subscriptionStatus: 'cancelled',
@@ -232,8 +232,9 @@ async function handleSubscriptionCancelled(data: any) {
     }
   });
 
-  await prisma.auditLog.create({
+  await prisma.audit_logs.create({
     data: {
+        id: crypto.randomUUID(),
       userId,
       action: 'subscription_cancelled',
       resource: 'billing',
@@ -243,7 +244,6 @@ async function handleSubscriptionCancelled(data: any) {
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
-      timestamp: new Date()
     }
   });
 
@@ -262,7 +262,7 @@ async function handleSubscriptionPaymentSucceeded(data: any) {
     return;
   }
 
-  await prisma.user.update({
+  await prisma.users.update({
     where: { id: userId },
     data: {
       subscriptionEndDate: new Date(next_bill_date),
@@ -272,8 +272,9 @@ async function handleSubscriptionPaymentSucceeded(data: any) {
     }
   });
 
-  await prisma.auditLog.create({
+  await prisma.audit_logs.create({
     data: {
+        id: crypto.randomUUID(),
       userId,
       action: 'subscription_payment_succeeded',
       resource: 'billing',
@@ -284,7 +285,6 @@ async function handleSubscriptionPaymentSucceeded(data: any) {
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
-      timestamp: new Date()
     }
   });
 
@@ -303,15 +303,16 @@ async function handleSubscriptionPaymentFailed(data: any) {
     return;
   }
 
-  await prisma.user.update({
+  await prisma.users.update({
     where: { id: userId },
     data: {
       paymentStatus: 'failed'
     }
   });
 
-  await prisma.auditLog.create({
+  await prisma.audit_logs.create({
     data: {
+        id: crypto.randomUUID(),
       userId,
       action: 'subscription_payment_failed',
       resource: 'billing',
@@ -322,7 +323,6 @@ async function handleSubscriptionPaymentFailed(data: any) {
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
-      timestamp: new Date()
     }
   });
 
@@ -341,8 +341,9 @@ async function handleSubscriptionPaymentRefunded(data: any) {
     return;
   }
 
-  await prisma.auditLog.create({
+  await prisma.audit_logs.create({
     data: {
+        id: crypto.randomUUID(),
       userId,
       action: 'subscription_payment_refunded',
       resource: 'billing',
@@ -353,7 +354,6 @@ async function handleSubscriptionPaymentRefunded(data: any) {
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
-      timestamp: new Date()
     }
   });
 

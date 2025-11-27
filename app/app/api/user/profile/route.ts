@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
+import { userManager } from '@/lib/user-management';
 
 // Helper to extract user from Bearer token
 async function getUserFromToken(request: NextRequest) {
@@ -13,16 +14,16 @@ async function getUserFromToken(request: NextRequest) {
   const token = authHeader.substring(7);
 
   // Find session by access token
-  const session = await prisma.cLISession.findUnique({
+  const session = await prisma.cli_sessions.findUnique({
     where: { accessToken: token },
-    include: { user: true }
+    include: { users: true }
   });
 
   if (!session || !session.isActive || session.expiresAt < new Date()) {
     return null;
   }
 
-  return session.user;
+  return session.users;
 }
 
 export async function GET(request: NextRequest) {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user with quota information
-    const userWithQuota = await prisma.user.findUnique({
+    const userWithQuota = await prisma.users.findUnique({
       where: { id: user.id },
       include: {
         quota: true

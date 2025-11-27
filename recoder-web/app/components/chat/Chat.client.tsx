@@ -81,12 +81,38 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | undefined>();
 
+  // Provider and Model Selection
+  const [selectedProvider, setSelectedProvider] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedProvider') || 'openrouter';
+    }
+    return 'openrouter';
+  });
+  const [selectedModel, setSelectedModel] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedModel') || 'x-ai/grok-code-fast-1';
+    }
+    return 'x-ai/grok-code-fast-1';
+  });
+
+  // Save preferences to localStorage when they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedProvider', selectedProvider);
+      localStorage.setItem('selectedModel', selectedModel);
+    }
+  }, [selectedProvider, selectedModel]);
+
   const { showChat } = useStore(chatStore);
 
   const [animationScope, animate] = useAnimate();
 
   const { messages, isLoading, input, handleInputChange, setInput, stop, append } = useSimpleChat({
     api: '/api/chat',
+    body: {
+      provider: selectedProvider,
+      model: selectedModel,
+    },
     onError: (error) => {
       logger.error('Request failed\n\n', error);
       console.error('❌ Chat API error:', error);
@@ -456,6 +482,19 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
         isStreaming={isLoading}
         enhancingPrompt={enhancingPrompt}
         promptEnhanced={promptEnhanced}
+        selectedProvider={selectedProvider}
+        selectedModel={selectedModel}
+        onProviderChange={setSelectedProvider}
+        onModelChange={setSelectedModel}
+        onSettingsClick={() => {
+          // Navigate to API key management page
+          if (typeof window !== 'undefined') {
+            const mainAppUrl = window.location.hostname.includes('localhost')
+              ? 'http://localhost:3000'
+              : 'https://recoder.xyz';
+            window.open(`${mainAppUrl}/settings/ai-providers`, '_blank');
+          }
+        }}
         sendMessage={sendMessage}
         messageRef={messageRef}
         scrollRef={scrollRef}

@@ -23,7 +23,7 @@ import {
 
 export default function SetupApiKeyPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [apiKey, setApiKey] = useState('');
@@ -32,12 +32,12 @@ export default function SetupApiKeyPage() {
   const [validating, setValidating] = useState(false);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!session && !isPending) {
       router.push('/auth/signin');
-    } else if (status === 'authenticated') {
+    } else if (session && !isPending) {
       setLoading(false);
     }
-  }, [status, router]);
+  }, [session, isPending, router]);
 
   const validateApiKey = (key: string): boolean => {
     // OpenRouter keys start with sk-or-v1-
@@ -86,7 +86,7 @@ export default function SetupApiKeyPage() {
     router.push('/onboarding/complete');
   };
 
-  if (loading || status === 'loading') {
+  if (loading || isPending) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">

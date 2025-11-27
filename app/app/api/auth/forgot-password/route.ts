@@ -46,9 +46,9 @@ export async function POST(request: NextRequest) {
         id: crypto.randomUUID(),
         identifier: `password-reset:${email}`,
         value: hashedToken,
-        expiresAt,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        expires_at: expiresAt,
+        created_at: new Date(),
+        updated_at: new Date(),
       }
     });
 
