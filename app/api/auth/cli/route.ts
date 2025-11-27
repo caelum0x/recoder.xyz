@@ -7,8 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { nanoid } from 'nanoid';
 import { sign, verify } from 'jsonwebtoken';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../[...nextauth]/route';
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'recoder_jwt_secret_key_for_token_generation_minimum_32_characters_long';
 const CLI_CLIENT_ID = process.env.CLI_CLIENT_ID || 'recoder-code';
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Check if user is logged in
-  const session = await getServerSession(authOptions);
+  const session = await auth.api.getSession({ headers: await headers() });
   
   if (!session?.user?.email) {
     // Redirect to sign in page with callback
@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
 
   await prisma.authCode.create({
     data: {
+      id: nanoid(),
       code,
       userId: user.id,
       clientId: clientId!,
@@ -183,8 +184,9 @@ async function handleCodeExchange(body: any) {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
   // Create CLI session
-  await prisma.cLISession.create({
+  await prisma.cli_sessions.create({
     data: {
+      id: nanoid(),
       userId: authCode.userId,
       deviceType: 'cli',
       accessToken,
@@ -195,7 +197,7 @@ async function handleCodeExchange(body: any) {
   });
 
   // Get user quota info
-  const quota = await prisma.userQuota.findFirst({
+  const quota = await prisma.user_quota.findFirst({
     where: {
       userId: authCode.userId,
       periodEnd: { gt: new Date() }
@@ -213,9 +215,7 @@ async function handleCodeExchange(body: any) {
       id: authCode.user.id,
       email: authCode.user.email,
       name: authCode.user.name,
-      subscriptionPlan: authCode.user.subscriptionPlan,
-      hasOwnApiKey: authCode.user.hasOwnApiKey,
-      onboardingStep: authCode.user.onboardingStep,
+      subscription: authCode.user.subscription,
       quota: quota ? {
         requests_remaining: quota.requestsLimit - quota.requestsUsed,
         requests_limit: quota.requestsLimit,
@@ -245,6 +245,7 @@ async function handleDeviceFlowInit(body: any) {
 
   await prisma.deviceCode.create({
     data: {
+      id: nanoid(),
       deviceCode,
       userCode,
       clientId: client_id,
@@ -342,8 +343,9 @@ async function handleDeviceToken(body: any) {
   });
 
   // Create CLI session
-  await prisma.cLISession.create({
+  await prisma.cli_sessions.create({
     data: {
+      id: nanoid(),
       userId: deviceCodeRecord.userId,
       deviceType: 'cli',
       accessToken,
@@ -354,7 +356,7 @@ async function handleDeviceToken(body: any) {
   });
 
   // Get quota
-  const quota = await prisma.userQuota.findFirst({
+  const quota = await prisma.user_quota.findFirst({
     where: {
       userId: deviceCodeRecord.userId,
       periodEnd: { gt: new Date() }
@@ -372,9 +374,7 @@ async function handleDeviceToken(body: any) {
       id: deviceCodeRecord.user.id,
       email: deviceCodeRecord.user.email,
       name: deviceCodeRecord.user.name,
-      subscriptionPlan: deviceCodeRecord.user.subscriptionPlan,
-      hasOwnApiKey: deviceCodeRecord.user.hasOwnApiKey,
-      onboardingStep: deviceCodeRecord.user.onboardingStep,
+      subscription: deviceCodeRecord.user.subscription,
       quota: quota ? {
         requests_remaining: quota.requestsLimit - quota.requestsUsed,
         requests_limit: quota.requestsLimit,
@@ -395,7 +395,7 @@ async function handleTokenValidation(body: any) {
     const decoded = verify(token, JWT_SECRET) as any;
     
     if (decoded.type === 'access') {
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: decoded.userId }
       });
 
@@ -406,7 +406,7 @@ async function handleTokenValidation(body: any) {
         );
       }
 
-      const quota = await prisma.userQuota.findFirst({
+      const quota = await prisma.user_quota.findFirst({
         where: {
           userId: user.id,
           periodEnd: { gt: new Date() }
@@ -420,9 +420,7 @@ async function handleTokenValidation(body: any) {
           id: user.id,
           email: user.email,
           name: user.name,
-          subscriptionPlan: user.subscriptionPlan,
-          hasOwnApiKey: user.hasOwnApiKey,
-          onboardingStep: user.onboardingStep,
+          subscription: user.subscription,
           quota: quota ? {
             requests_remaining: quota.requestsLimit - quota.requestsUsed,
             requests_limit: quota.requestsLimit,
@@ -436,16 +434,16 @@ async function handleTokenValidation(body: any) {
   }
 
   // Try as API key
-  const apiKey = await prisma.apiKey.findFirst({
+  const apiKey = await prisma.api_keys.findFirst({
     where: {
-      keyId: token,
+      keyPrefix: token,
       isActive: true,
       OR: [
         { expiresAt: null },
         { expiresAt: { gt: new Date() } }
       ]
     },
-    include: { user: true }
+    include: { users: true }
   });
 
   if (!apiKey) {
@@ -456,7 +454,7 @@ async function handleTokenValidation(body: any) {
   }
 
   // Update last used
-  await prisma.apiKey.update({
+  await prisma.api_keys.update({
     where: { id: apiKey.id },
     data: {
       lastUsedAt: new Date(),
@@ -464,7 +462,7 @@ async function handleTokenValidation(body: any) {
     }
   });
 
-  const quota = await prisma.userQuota.findFirst({
+  const quota = await prisma.user_quota.findFirst({
     where: {
       userId: apiKey.userId,
       periodEnd: { gt: new Date() }
@@ -475,12 +473,10 @@ async function handleTokenValidation(body: any) {
   return NextResponse.json({
     success: true,
     user: {
-      id: apiKey.user.id,
-      email: apiKey.user.email,
-      name: apiKey.user.name,
-      subscriptionPlan: apiKey.user.subscriptionPlan,
-      hasOwnApiKey: apiKey.user.hasOwnApiKey,
-      onboardingStep: apiKey.user.onboardingStep,
+      id: apiKey.users.id,
+      email: apiKey.users.email,
+      name: apiKey.users.name,
+      subscription: apiKey.users.subscription,
       quota: quota ? {
         requests_remaining: quota.requestsLimit - quota.requestsUsed,
         requests_limit: quota.requestsLimit,
@@ -516,7 +512,7 @@ async function handleTokenRefresh(body: any) {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     // Update session
-    await prisma.cLISession.updateMany({
+    await prisma.cli_sessions.updateMany({
       where: {
         refreshToken: refresh_token,
         isActive: true
@@ -550,7 +546,7 @@ async function handleTokenRevoke(body: any) {
   const { token } = body;
 
   // Revoke CLI session
-  await prisma.cLISession.updateMany({
+  await prisma.cli_sessions.updateMany({
     where: {
       OR: [
         { accessToken: token },

@@ -3,18 +3,22 @@ import { atom, type WritableAtom } from 'nanostores';
 import type { ITerminal } from '~/types/terminal';
 import { newShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
+import { installGlobalPackages, getTerminalWelcomeMessage } from '~/lib/webcontainer/package-manager';
 
 export class TerminalStore {
   #webcontainer: Promise<WebContainer>;
   #terminals: Array<{ terminal: ITerminal; process: WebContainerProcess }> = [];
+  #globalPackagesInstalled: boolean = false;
 
   showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(false);
+  highlightTerminal: WritableAtom<boolean> = import.meta.hot?.data.highlightTerminal ?? atom(false);
 
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;
 
     if (import.meta.hot) {
       import.meta.hot.data.showTerminal = this.showTerminal;
+      import.meta.hot.data.highlightTerminal = this.highlightTerminal;
     }
   }
 
@@ -22,8 +26,43 @@ export class TerminalStore {
     this.showTerminal.set(value !== undefined ? value : !this.showTerminal.get());
   }
 
+  /**
+   * Highlight terminal to draw attention (e.g., when new output arrives)
+   * Automatically fades after 3 seconds
+   */
+  flashTerminalHighlight() {
+    this.highlightTerminal.set(true);
+
+    // Auto-fade after 3 seconds
+    setTimeout(() => {
+      this.highlightTerminal.set(false);
+    }, 3000);
+  }
+
   async attachTerminal(terminal: ITerminal) {
     try {
+      // Show welcome message
+      terminal.write(getTerminalWelcomeMessage());
+
+      // Install global packages (recoder-code) on first terminal attach
+      if (!this.#globalPackagesInstalled) {
+        terminal.write('\x1b[1;33m⏳ Setting up terminal environment...\x1b[0m\n');
+
+        const webcontainer = await this.#webcontainer;
+
+        // Install global packages in the background
+        installGlobalPackages(webcontainer)
+          .then(() => {
+            terminal.write('\x1b[1;32m✅ Terminal environment ready! You can now use recoder-code CLI.\x1b[0m\n\n');
+          })
+          .catch((error) => {
+            terminal.write(coloredText.red('⚠️ Warning: Failed to install global packages. You may need to install recoder-code manually:\n'));
+            terminal.write('   npm install -g recoder-code\n\n');
+          });
+
+        this.#globalPackagesInstalled = true;
+      }
+
       const shellProcess = await newShellProcess(await this.#webcontainer, terminal);
       this.#terminals.push({ terminal, process: shellProcess });
     } catch (error: any) {

@@ -17,6 +17,7 @@ import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import { GitHubSyncModal } from './GitHubSyncModal';
+import { BuildProgressIndicator } from './BuildProgressIndicator';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -347,6 +348,8 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
           files={files}
           onFilesUpdate={handleFilesUpdate}
         />
+        {/* ✅ P1: Build Progress Indicator */}
+        <BuildProgressIndicator />
       </motion.div>
     )
   );

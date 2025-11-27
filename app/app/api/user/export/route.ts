@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
       include: {
         projects: {
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
             updatedAt: true
           }
         },
-        apiKeys: {
+        api_keys: {
           select: {
             id: true,
             name: true,
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
             lastUsedAt: true
           }
         },
-        usageRecords: {
+        usage_records: {
           select: {
             id: true,
             type: true,
@@ -54,14 +54,13 @@ export async function GET(request: NextRequest) {
         subscriptions: {
           select: {
             id: true,
-            planId: true,
             status: true,
             createdAt: true,
             currentPeriodStart: true,
             currentPeriodEnd: true
           }
         },
-        preferences: true
+        user_preferences: true
       }
     });
 
@@ -81,22 +80,23 @@ export async function GET(request: NextRequest) {
         subscription: user.subscription
       },
       projects: user.projects,
-      apiKeys: user.apiKeys,
-      usageRecords: user.usageRecords,
+      apiKeys: user.api_keys,
+      usageRecords: user.usage_records,
       subscriptions: user.subscriptions,
-      preferences: user.preferences,
+      preferences: user.user_preferences,
       exportedAt: new Date().toISOString(),
       version: '1.0.0'
     };
 
     // Log audit event
-    await prisma.auditLog.create({
+    await prisma.audit_logs.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.id,
         action: 'exported',
         resource: 'account_data',
         resourceId: user.id,
-        metadata: { recordCount: user.usageRecords.length }
+        metadata: { recordCount: user.usage_records.length },
       }
     });
 

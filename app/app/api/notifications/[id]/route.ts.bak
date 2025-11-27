@@ -1,0 +1,48 @@
+/**
+ * Delete Notification API
+ * DELETE - Remove a specific notification
+ */
+
+import { NextResponse } from 'next/server';
+import { requireAuth } from "@/lib/auth-helpers";
+import { auth } from '@/lib/auth-config';
+import { headers } from 'next/headers';
+
+export async function DELETE(
+  request: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    // In Next.js 15, params is a Promise that must be awaited
+    const params = await props.params;
+
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const notificationId = params.id;
+
+    // TODO: Delete from database when Notification model is added
+    // await prisma.notification.delete({
+    //   where: { id: notificationId }
+    // });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Notification deleted',
+    });
+  } catch (error) {
+    console.error('Failed to delete notification:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to delete notification' },
+      { status: 500 }
+    );
+  }
+}

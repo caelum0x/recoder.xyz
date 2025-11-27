@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendTemporaryPasswordEmail } from '@/lib/email';
+import { sendTemporaryPasswordEmail, sendWelcomeEmail } from '@/lib/email';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
         subscription: 'free',
         role: 'user',
         isActive: true,
-        createdAt: new Date(),
         updatedAt: new Date(),
       }
     });
@@ -81,11 +80,14 @@ export async function POST(request: NextRequest) {
     // Send temporary password email
     await sendTemporaryPasswordEmail(email, tempPassword);
 
-    console.log(`✅ Account created for ${email}, temporary password sent`);
+    // ✅ Send welcome email to new user
+    await sendWelcomeEmail(email, name);
+
+    console.log(`✅ Account created for ${email}, welcome and temporary password emails sent`);
 
     return NextResponse.json({
       success: true,
-      message: 'Account created successfully! Check your email for your temporary password.',
+      message: 'Account created successfully! Check your email for your temporary password and welcome message.',
       email
     });
 

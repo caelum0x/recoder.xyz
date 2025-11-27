@@ -1,30 +1,76 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { Terminal, Copy, CheckCircle, ArrowRight, Zap, Shield, Globe, Sparkles, Code2, Rocket, Download } from 'lucide-react';
+import {
+  Terminal, Copy, Check, ArrowRight, Zap, Shield, Globe,
+  Sparkles, Code2, Rocket, Download, Repeat, Package, Lock
+} from 'lucide-react';
 
 export default function CLIPage() {
+  const [copiedStep, setCopiedStep] = useState<number | null>(null);
+
+  const copyToClipboard = async (text: string, stepIndex: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedStep(stepIndex);
+      setTimeout(() => setCopiedStep(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
+
   const installSteps = [
     {
       title: "Install Recoder CLI",
-      code: "npm install -g @recoder/cli",
-      description: "Install the CLI in seconds"
+      code: "npm install -g recoder-code",
+      description: "Install the CLI globally in seconds"
     },
     {
       title: "Authenticate",
       code: "recoder auth login",
-      description: "Connect to your Recoder.xyz account"
+      description: "Device-flow authentication (like GitHub CLI)"
     },
     {
       title: "Start Building",
-      code: 'recoder "create a Next.js app with auth"',
+      code: 'recoder "create a Next.js dashboard with auth"',
       description: "Generate production-ready code instantly"
+    }
+  ];
+
+  const webCliFeatures = [
+    {
+      icon: Globe,
+      title: "Start in Web IDE",
+      description: "Build projects visually with AI assistance in your browser"
+    },
+    {
+      icon: Download,
+      title: "Download to Local",
+      description: "Use 'recoder web download' to get your project files locally"
+    },
+    {
+      icon: Code2,
+      title: "Edit with Any Editor",
+      description: "Use VSCode, Cursor, or any editor you prefer"
+    },
+    {
+      icon: Repeat,
+      title: "Sync Back to Web",
+      description: "Push changes back with 'recoder web sync' for two-way flow"
     }
   ];
 
   const features = [
     {
+      icon: Sparkles,
+      title: "100% FREE Beta",
+      description: "No credit card, no payment. Just bring your own API key (BYOK)."
+    },
+    {
       icon: Zap,
-      title: "Multi-AI Intelligence",
-      description: "Automatically routes to the best AI model (Claude, GPT-4, Gemini)"
+      title: "40+ AI Models",
+      description: "Access Claude, GPT-4, Gemini, Groq, and more with one tool"
     },
     {
       icon: Shield,
@@ -32,24 +78,42 @@ export default function CLIPage() {
       description: "Real code that works, not mock implementations"
     },
     {
+      icon: Lock,
+      title: "Secure & Private",
+      description: "Your API keys are encrypted. We never see your conversations."
+    },
+    {
       icon: Rocket,
-      title: "Deploy Instantly",
-      description: "From idea to production in minutes"
+      title: "Web ↔ CLI Sync",
+      description: "Only platform offering seamless browser + terminal workflow"
+    },
+    {
+      icon: Package,
+      title: "Multi-Provider",
+      description: "OpenRouter, Anthropic, OpenAI, Groq - all in one CLI"
     }
   ];
 
-  const examples = [
+  const cliCommands = [
     {
-      prompt: 'recoder "build a REST API with auth"',
-      description: "Full backend with authentication"
+      command: 'recoder "build a REST API with auth"',
+      description: "Full backend with authentication and database"
     },
     {
-      prompt: 'recoder "create a dashboard with charts"',
-      description: "React dashboard with real data"
+      command: 'recoder web list',
+      description: "List all your Web IDE projects"
     },
     {
-      prompt: 'recoder "add Stripe payments to my app"',
-      description: "Complete payment integration"
+      command: 'recoder web download <urlId>',
+      description: "Download a web project to your local machine"
+    },
+    {
+      command: 'recoder web sync <urlId>',
+      description: "Two-way sync between local and web"
+    },
+    {
+      command: 'recoder auth status',
+      description: "Check authentication and API key status"
     }
   ];
 
@@ -64,16 +128,16 @@ export default function CLIPage() {
             </div>
             <span className="text-xl font-bold">recoder</span>
           </Link>
-          
+
           <nav className="flex items-center space-x-8">
-            <Link href="/docs" className="text-sm text-gray-400 hover:text-white transition-colors">
-              Docs
+            <Link href="/projects" className="text-sm text-gray-400 hover:text-white transition-colors">
+              My Projects
             </Link>
-            <Link href="/pricing" className="text-sm text-gray-400 hover:text-white transition-colors">
-              Pricing
+            <Link href="/settings/ai-providers" className="text-sm text-gray-400 hover:text-white transition-colors">
+              API Keys
             </Link>
-            <Link 
-              href="/auth/signin" 
+            <Link
+              href="/auth/signin"
               className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
             >
               Sign In
@@ -86,38 +150,73 @@ export default function CLIPage() {
       <section className="pt-32 pb-20 px-6">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center space-y-8">
-            <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border border-orange-500/20 bg-orange-500/5">
-              <Terminal className="w-4 h-4 text-orange-500" />
-              <span className="text-sm text-orange-500">Terminal-First Development</span>
+            <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border-2 border-green-500/20 bg-green-500/10">
+              <Sparkles className="w-4 h-4 text-green-400" />
+              <span className="text-sm text-green-400 font-semibold">🎉 FREE BETA - No Credit Card Required</span>
             </div>
-            
+
             <h1 className="text-6xl md:text-8xl font-bold tracking-tight">
-              CLI That
+              Terminal + Web
               <br />
               <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
-                Actually Codes
+                In One Platform
               </span>
             </h1>
-            
+
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Generate production-ready code from your terminal. Multi-AI powered, instantly deployable.
+              The only AI coding platform with <span className="text-orange-500 font-semibold">seamless Web IDE + CLI sync</span>. Start in browser, continue in terminal.
             </p>
+
+            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 max-w-2xl mx-auto">
+              <p className="text-sm text-gray-300">
+                <span className="font-semibold text-white">BYOK (Bring Your Own Key):</span> Use your own API keys from OpenRouter, Anthropic, OpenAI, or Groq. We encrypt them with AES-256-GCM.
+              </p>
+            </div>
 
             <div className="flex items-center justify-center space-x-4 pt-8">
               <Link
                 href="/auth/signup"
-                className="group px-8 py-4 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium transition-all flex items-center space-x-2"
+                className="group px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
               >
                 <Download className="w-5 h-5" />
-                <span>Install Now</span>
+                <span>Get Started Free</span>
               </Link>
               <Link
-                href="/docs"
+                href="/projects"
                 className="px-8 py-4 border border-white/10 hover:border-white/20 rounded-lg font-medium transition-colors"
               >
-                View Docs
+                View My Projects
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Web ↔ CLI Flow */}
+      <section className="py-20 px-6 border-t border-white/10 bg-gradient-to-b from-transparent to-orange-500/5">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold mb-4">The Web ↔ CLI Workflow</h2>
+            <p className="text-gray-400">Nobody else offers this. Start anywhere, work everywhere.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {webCliFeatures.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <div
+                  key={index}
+                  className="relative p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-orange-500/30 transition-all"
+                >
+                  <div className="absolute -top-3 left-6 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-black">
+                    {index + 1}
+                  </div>
+                  <Icon className="w-10 h-10 text-orange-500 mb-4 mt-2" />
+                  <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
+                  <p className="text-sm text-gray-400">{feature.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -144,9 +243,16 @@ export default function CLIPage() {
                     <h3 className="text-xl font-bold">{step.title}</h3>
                     <p className="text-gray-400">{step.description}</p>
                     <div className="flex items-center space-x-2 p-4 bg-black border border-white/10 rounded-lg font-mono text-sm">
-                      <code className="flex-1 text-orange-500">{step.code}</code>
-                      <button className="p-2 hover:bg-white/5 rounded transition-colors">
-                        <Copy className="w-4 h-4 text-gray-400" />
+                      <code className="flex-1 text-green-400">{step.code}</code>
+                      <button
+                        onClick={() => copyToClipboard(step.code, index)}
+                        className="p-2 hover:bg-white/5 rounded transition-colors"
+                      >
+                        {copiedStep === index ? (
+                          <Check className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-gray-400" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -154,24 +260,30 @@ export default function CLIPage() {
               </div>
             ))}
           </div>
+
+          <div className="mt-8 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+            <p className="text-sm text-gray-300">
+              <span className="font-semibold text-yellow-400">📦 Package Name:</span> The CLI is published as <code className="font-mono text-yellow-400">recoder-code</code> on npm
+            </p>
+          </div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="py-20 px-6">
+      <section className="py-20 px-6 border-t border-white/10">
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-4xl font-bold text-center mb-16">Why Recoder CLI?</h2>
-          
-          <div className="grid md:grid-cols-3 gap-8">
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => {
               const Icon = feature.icon;
               return (
                 <div
                   key={index}
-                  className="p-8 rounded-2xl border border-white/10 bg-black/50 hover:border-orange-500/30 transition-all"
+                  className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-orange-500/30 transition-all"
                 >
-                  <Icon className="w-12 h-12 text-orange-500 mb-4" />
-                  <h3 className="text-2xl font-bold mb-2">{feature.title}</h3>
+                  <Icon className="w-10 h-10 text-orange-500 mb-4" />
+                  <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
                   <p className="text-gray-400">{feature.description}</p>
                 </div>
               );
@@ -180,41 +292,65 @@ export default function CLIPage() {
         </div>
       </section>
 
-      {/* Examples */}
-      <section className="py-20 px-6 border-t border-white/10">
+      {/* Command Reference */}
+      <section className="py-20 px-6 border-t border-white/10 bg-gradient-to-b from-transparent to-purple-500/5">
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">See It In Action</h2>
-            <p className="text-gray-400">Real commands, real results</p>
+            <h2 className="text-4xl font-bold mb-4">Command Reference</h2>
+            <p className="text-gray-400">Essential commands to master the CLI</p>
           </div>
 
-          <div className="space-y-6">
-            {examples.map((example, index) => (
+          <div className="space-y-4">
+            {cliCommands.map((item, index) => (
               <div
                 key={index}
                 className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-purple-500/30 transition-all"
               >
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-2 p-4 bg-black border border-white/10 rounded-lg font-mono text-sm">
-                    <Terminal className="w-4 h-4 text-orange-500" />
-                    <code className="flex-1 text-green-400">{example.prompt}</code>
+                  <div className="flex items-center space-x-2 p-3 bg-black border border-white/10 rounded-lg font-mono text-sm">
+                    <Terminal className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                    <code className="flex-1 text-green-400 overflow-x-auto">{item.command}</code>
+                    <button
+                      onClick={() => copyToClipboard(item.command, 100 + index)}
+                      className="p-2 hover:bg-white/5 rounded transition-colors flex-shrink-0"
+                    >
+                      {copiedStep === 100 + index ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
                   </div>
-                  <p className="text-gray-400 text-sm pl-4">→ {example.description}</p>
+                  <p className="text-gray-400 text-sm pl-4">→ {item.description}</p>
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-8 p-6 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <h3 className="font-semibold text-white mb-3">💡 Pro Tip: BYOK Setup</h3>
+            <ol className="space-y-2 text-sm text-gray-300">
+              <li>1. Sign up at <a href="/auth/signup" className="text-orange-500 hover:underline">recoder.xyz</a></li>
+              <li>2. Add your API key at <Link href="/settings/ai-providers" className="text-orange-500 hover:underline">Settings → AI Providers</Link></li>
+              <li>3. Run <code className="font-mono bg-black/50 px-2 py-1 rounded">recoder auth login</code> in terminal</li>
+              <li>4. Start building! Your API key is securely synced.</li>
+            </ol>
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 border-t border-white/10">
         <div className="container mx-auto max-w-4xl text-center space-y-8">
+          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border-2 border-green-500/20 bg-green-500/10 mb-4">
+            <Sparkles className="w-4 h-4 text-green-400" />
+            <span className="text-sm text-green-400 font-semibold">100% FREE During Beta</span>
+          </div>
           <h2 className="text-5xl font-bold">
-            Ready to 10x your development speed?
+            Ready to Build Faster?
           </h2>
           <p className="text-xl text-gray-400">
-            Install the CLI and start building production code in minutes.
+            Install the CLI and start building with 40+ AI models. No credit card needed.
           </p>
           <div className="flex items-center justify-center space-x-4">
             <Link
@@ -222,13 +358,13 @@ export default function CLIPage() {
               className="px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
             >
               <Download className="w-5 h-5" />
-              <span>Install Recoder CLI</span>
+              <span>Get Started Free</span>
             </Link>
             <Link
-              href="/pricing"
+              href="/settings/ai-providers"
               className="px-8 py-4 border border-white/10 hover:border-white/20 rounded-lg font-medium transition-colors"
             >
-              View Pricing
+              Setup API Keys
             </Link>
           </div>
         </div>
@@ -242,14 +378,14 @@ export default function CLIPage() {
               <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
               <span className="font-bold">recoder</span>
             </div>
-            
+
             <div className="flex items-center space-x-8 text-sm text-gray-500">
-              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
-              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
-              <Link href="mailto:support@recoder.xyz" className="hover:text-white transition-colors">Support</Link>
+              <Link href="/projects" className="hover:text-white transition-colors">My Projects</Link>
+              <Link href="/settings/ai-providers" className="hover:text-white transition-colors">API Keys</Link>
+              <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+              <a href="https://github.com/recoder-xyz" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
             </div>
-            
+
             <div className="text-sm text-gray-500">
               © 2024 Recoder.xyz
             </div>

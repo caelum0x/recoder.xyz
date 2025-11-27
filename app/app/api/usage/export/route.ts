@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { format, startDate, endDate } = body;
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email }
     });
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const usageRecords = await prisma.usageRecord.findMany({
+    const usageRecords = await prisma.usage_records.findMany({
       where,
       orderBy: { timestamp: 'desc' }
     });

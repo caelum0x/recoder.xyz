@@ -1,0 +1,359 @@
+/**
+ * Professional Email Templates
+ * Using React Email for better maintainability
+ */
+
+import {
+  Html,
+  Head,
+  Preview,
+  Body,
+  Container,
+  Section,
+  Text,
+  Link,
+  Button,
+  Img,
+  Hr,
+} from '@react-email/components';
+
+// Base styles for all emails
+const main = {
+  backgroundColor: '#f6f9fc',
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
+};
+
+const container = {
+  backgroundColor: '#ffffff',
+  margin: '0 auto',
+  padding: '20px 0 48px',
+  marginBottom: '64px',
+};
+
+const box = {
+  padding: '0 48px',
+};
+
+const hr = {
+  borderColor: '#e6ebf1',
+  margin: '20px 0',
+};
+
+const paragraph = {
+  color: '#525f7f',
+  fontSize: '16px',
+  lineHeight: '24px',
+  textAlign: 'left' as const,
+};
+
+const button = {
+  backgroundColor: '#667eea',
+  borderRadius: '5px',
+  color: '#fff',
+  fontSize: '16px',
+  fontWeight: 'bold',
+  textDecoration: 'none',
+  textAlign: 'center' as const,
+  display: 'block',
+  width: '100%',
+  padding: '12px',
+};
+
+const footer = {
+  color: '#8898aa',
+  fontSize: '12px',
+  lineHeight: '16px',
+};
+
+// Welcome Email
+export const WelcomeEmail = ({ name, dashboardUrl }: { name: string; dashboardUrl: string }) => (
+  <Html>
+    <Head />
+    <Preview>Welcome to Recoder.xyz - Let's build something amazing!</Preview>
+    <Body style={main}>
+      <Container style={container}>
+        <Section style={box}>
+          <Img
+            src={`${process.env.NEXTAUTH_URL}/logo.png`}
+            width="49"
+            height="49"
+            alt="Recoder.xyz"
+          />
+          <Hr style={hr} />
+          <Text style={paragraph}>Hi {name}! 👋</Text>
+          <Text style={paragraph}>
+            Welcome to <strong>Recoder.xyz</strong> - the AI-powered development platform that generates real, production-ready code.
+          </Text>
+          <Text style={paragraph}>
+            You're now part of a community of developers using AI to build faster, smarter, and better.
+          </Text>
+          <Text style={paragraph}>
+            <strong>What you can do now:</strong>
+          </Text>
+          <Text style={paragraph}>
+            • Access your personal dashboard to manage projects<br/>
+            • Install our CLI for terminal-based development<br/>
+            • Choose from Claude, GPT-4, Gemini, and more AI models<br/>
+            • Use our browser-based development environment<br/>
+          </Text>
+          <Button style={button} href={dashboardUrl}>
+            Go to Dashboard
+          </Button>
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            Need help? Check out our <Link href={`${process.env.NEXTAUTH_URL}/docs`}>documentation</Link> or reach out to our support team at support@recoder.xyz
+          </Text>
+          <Text style={paragraph}>
+            Happy coding! 🎉
+          </Text>
+          <Text style={footer}>
+            © 2024 Recoder.xyz. All rights reserved.
+          </Text>
+        </Section>
+      </Container>
+    </Body>
+  </Html>
+);
+
+// Email Verification
+export const VerificationEmail = ({ verificationUrl }: { verificationUrl: string }) => (
+  <Html>
+    <Head />
+    <Preview>Verify your email address</Preview>
+    <Body style={main}>
+      <Container style={container}>
+        <Section style={box}>
+          <Img
+            src={`${process.env.NEXTAUTH_URL}/logo.png`}
+            width="49"
+            height="49"
+            alt="Recoder.xyz"
+          />
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            Please verify your email address by clicking the button below:
+          </Text>
+          <Button style={button} href={verificationUrl}>
+            Verify Email Address
+          </Button>
+          <Text style={paragraph}>
+            Or copy and paste this link into your browser:
+          </Text>
+          <Text style={{ ...paragraph, fontFamily: 'monospace', fontSize: '14px' }}>
+            {verificationUrl}
+          </Text>
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            This link will expire in 24 hours.
+          </Text>
+          <Text style={paragraph}>
+            If you didn't create an account with Recoder.xyz, please ignore this email.
+          </Text>
+          <Text style={footer}>
+            © 2024 Recoder.xyz. All rights reserved.
+          </Text>
+        </Section>
+      </Container>
+    </Body>
+  </Html>
+);
+
+// Password Reset
+export const PasswordResetEmail = ({ resetUrl }: { resetUrl: string }) => (
+  <Html>
+    <Head />
+    <Preview>Reset your password</Preview>
+    <Body style={main}>
+      <Container style={container}>
+        <Section style={box}>
+          <Img
+            src={`${process.env.NEXTAUTH_URL}/logo.png`}
+            width="49"
+            height="49"
+            alt="Recoder.xyz"
+          />
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            We received a request to reset your password. Click the button below to create a new password:
+          </Text>
+          <Button style={{ ...button, backgroundColor: '#dc2626' }} href={resetUrl}>
+            Reset Password
+          </Button>
+          <Text style={paragraph}>
+            This link will expire in 1 hour.
+          </Text>
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            If you didn't request a password reset, please ignore this email and your password will remain unchanged.
+          </Text>
+          <Text style={footer}>
+            © 2024 Recoder.xyz. All rights reserved.
+          </Text>
+        </Section>
+      </Container>
+    </Body>
+  </Html>
+);
+
+// Subscription Confirmation
+export const SubscriptionEmail = ({
+  name,
+  plan,
+  amount,
+  dashboardUrl
+}: {
+  name: string;
+  plan: string;
+  amount: number;
+  dashboardUrl: string;
+}) => (
+  <Html>
+    <Head />
+    <Preview>Subscription Confirmed - {plan} Plan</Preview>
+    <Body style={main}>
+      <Container style={container}>
+        <Section style={box}>
+          <Img
+            src={`${process.env.NEXTAUTH_URL}/logo.png`}
+            width="49"
+            height="49"
+            alt="Recoder.xyz"
+          />
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            <strong>✓ Subscription Confirmed!</strong>
+          </Text>
+          <Text style={paragraph}>
+            Hi {name},
+          </Text>
+          <Text style={paragraph}>
+            Your subscription to Recoder.xyz has been confirmed. Here are your subscription details:
+          </Text>
+          <Section style={{ backgroundColor: '#f6f9fc', padding: '20px', borderRadius: '5px' }}>
+            <Text style={{ ...paragraph, margin: '0 0 10px 0' }}>
+              <strong>Plan:</strong> {plan}
+            </Text>
+            <Text style={{ ...paragraph, margin: '0 0 10px 0' }}>
+              <strong>Amount:</strong> ${amount}/month
+            </Text>
+            <Text style={{ ...paragraph, margin: '0' }}>
+              <strong>Status:</strong> Active
+            </Text>
+          </Section>
+          <Text style={paragraph}>
+            You now have access to all premium features. Start building amazing projects today!
+          </Text>
+          <Button style={{ ...button, backgroundColor: '#10b981' }} href={dashboardUrl}>
+            Go to Dashboard
+          </Button>
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            Manage your subscription anytime from your dashboard billing section.
+          </Text>
+          <Text style={footer}>
+            © 2024 Recoder.xyz. All rights reserved.
+          </Text>
+        </Section>
+      </Container>
+    </Body>
+  </Html>
+);
+
+// Usage Alert
+export const UsageAlertEmail = ({
+  name,
+  percentage,
+  limit,
+  dashboardUrl
+}: {
+  name: string;
+  percentage: number;
+  limit: string;
+  dashboardUrl: string;
+}) => (
+  <Html>
+    <Head />
+    <Preview>{`Usage Alert - ${percentage}% of quota used`}</Preview>
+    <Body style={main}>
+      <Container style={container}>
+        <Section style={box}>
+          <Img
+            src={`${process.env.NEXTAUTH_URL}/logo.png`}
+            width="49"
+            height="49"
+            alt="Recoder.xyz"
+          />
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            Hi {name},
+          </Text>
+          <Text style={paragraph}>
+            You've used <strong>{percentage}%</strong> of your monthly quota ({limit}).
+          </Text>
+          <Text style={paragraph}>
+            {percentage >= 90 ? (
+              <>You're approaching your limit. Consider upgrading your plan to avoid service interruption.</>
+            ) : (
+              <>This is a friendly heads up about your current usage.</>
+            )}
+          </Text>
+          <Button style={button} href={dashboardUrl}>
+            View Usage Details
+          </Button>
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            Need more quota? You can upgrade your plan anytime from your dashboard.
+          </Text>
+          <Text style={footer}>
+            © 2024 Recoder.xyz. All rights reserved.
+          </Text>
+        </Section>
+      </Container>
+    </Body>
+  </Html>
+);
+
+// Team Invitation
+export const TeamInvitationEmail = ({
+  inviterName,
+  teamName,
+  inviteUrl
+}: {
+  inviterName: string;
+  teamName: string;
+  inviteUrl: string;
+}) => (
+  <Html>
+    <Head />
+    <Preview>{inviterName} invited you to join {teamName}</Preview>
+    <Body style={main}>
+      <Container style={container}>
+        <Section style={box}>
+          <Img
+            src={`${process.env.NEXTAUTH_URL}/logo.png`}
+            width="49"
+            height="49"
+            alt="Recoder.xyz"
+          />
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            <strong>{inviterName}</strong> has invited you to join <strong>{teamName}</strong> on Recoder.xyz.
+          </Text>
+          <Text style={paragraph}>
+            Accept this invitation to start collaborating on projects with your team.
+          </Text>
+          <Button style={button} href={inviteUrl}>
+            Accept Invitation
+          </Button>
+          <Hr style={hr} />
+          <Text style={paragraph}>
+            This invitation will expire in 7 days.
+          </Text>
+          <Text style={footer}>
+            © 2024 Recoder.xyz. All rights reserved.
+          </Text>
+        </Section>
+      </Container>
+    </Body>
+  </Html>
+);

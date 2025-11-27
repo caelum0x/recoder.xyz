@@ -23,6 +23,13 @@ type Artifacts = MapStore<Record<string, ArtifactState>>;
 
 export type WorkbenchViewType = 'code' | 'preview';
 
+export interface BuildStatus {
+  phase: 'idle' | 'creating' | 'installing' | 'starting' | 'ready';
+  message: string;
+  progress: number; // 0-100
+  filesCreated?: number;
+}
+
 export class WorkbenchStore {
   #previewsStore = new PreviewsStore(webcontainer);
   #filesStore = new FilesStore(webcontainer);
@@ -37,12 +44,20 @@ export class WorkbenchStore {
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
 
+  // ✅ P1: Build progress feedback
+  buildStatus: WritableAtom<BuildStatus> = import.meta.hot?.data.buildStatus ?? atom({
+    phase: 'idle',
+    message: '',
+    progress: 0,
+  });
+
   constructor() {
     if (import.meta.hot) {
       import.meta.hot.data.artifacts = this.artifacts;
       import.meta.hot.data.unsavedFiles = this.unsavedFiles;
       import.meta.hot.data.showWorkbench = this.showWorkbench;
       import.meta.hot.data.currentView = this.currentView;
+      import.meta.hot.data.buildStatus = this.buildStatus;
     }
   }
 
@@ -74,8 +89,22 @@ export class WorkbenchStore {
     return this.#terminalStore.showTerminal;
   }
 
+  get highlightTerminal() {
+    return this.#terminalStore.highlightTerminal;
+  }
+
+  get terminalStore() {
+    return {
+      get: () => this.#terminalStore
+    };
+  }
+
   toggleTerminal(value?: boolean) {
     this.#terminalStore.toggleTerminal(value);
+  }
+
+  flashTerminalHighlight() {
+    this.#terminalStore.flashTerminalHighlight();
   }
 
   attachTerminal(terminal: ITerminal) {

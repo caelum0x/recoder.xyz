@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const verifications = await prisma.verifications.findMany({
       where: {
         value: hashedToken,
-        expiresAt: {
+        expires_at: {
           gt: new Date()
         }
       }
@@ -107,9 +107,9 @@ export async function POST(request: NextRequest) {
         id: crypto.randomUUID(),
         identifier: `email-verify:${email}`,
         value: hashedToken,
-        expiresAt,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        expires_at: expiresAt,
+        created_at: new Date(),
+        updated_at: new Date(),
       }
     });
 

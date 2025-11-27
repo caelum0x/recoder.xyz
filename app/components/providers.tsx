@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { ThemeProvider } from './ThemeProvider';
 import { CommandPalette } from './CommandPalette';
+import { SessionProvider } from "better-auth/react";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -10,9 +11,11 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <ThemeProvider>
-      {children}
-      <CommandPalette />
-    </ThemeProvider>
+    <SessionProvider>
+      <ThemeProvider>
+        {children}
+        <CommandPalette />
+      </ThemeProvider>
+    </SessionProvider>
   );
 }

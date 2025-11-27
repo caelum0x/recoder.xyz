@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const model = searchParams.get('model');
     const limit = parseInt(searchParams.get('limit') || '100');
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email }
     });
 
@@ -44,13 +44,13 @@ export async function GET(request: NextRequest) {
       where.model = model;
     }
 
-    const usageRecords = await prisma.usageRecord.findMany({
+    const usageRecords = await prisma.usage_records.findMany({
       where,
       orderBy: { timestamp: 'desc' },
       take: limit
     });
 
-    const summary = await prisma.usageRecord.aggregate({
+    const summary = await prisma.usage_records.aggregate({
       where,
       _sum: {
         tokensUsed: true,

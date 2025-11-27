@@ -26,14 +26,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user with quota (singular relation)
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: body.email },
       include: {
         quota: true
       }
     });
 
-    if (!user || !user.passwordHash) {
+    if (!user || !user.password) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
-    const isValidPassword = await verifyPassword(body.password, user.passwordHash);
+    const isValidPassword = await verifyPassword(body.password, user.password);
     if (!isValidPassword) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
     // Create CLI session
-    await prisma.cLISession.create({
+    await prisma.cli_sessions.create({
       data: {
+        id: nanoid(),
         userId: user.id,
         deviceName: 'Web Browser',
         deviceType: 'web',
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Update last login
-    await prisma.user.update({
+    await prisma.users.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() }
     });
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
         id: user.id,
         email: user.email,
         name: user.name,
-        plan: user.subscriptionPlan,
+        plan: user.subscription,
         apiKeyStatus,
         quota: quota ? {
           remaining: quota.sessionsPerDay - quota.sessionsUsedToday,

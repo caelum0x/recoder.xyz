@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     // TODO: Update in database when Notification model is added
-    // await prisma.notification.updateMany({
+    // await prisma.notifications.updateMany({
     //   where: { userId: user.id, read: false },
     //   data: { read: true }
     // });

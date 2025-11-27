@@ -23,7 +23,7 @@ import {
 
 export default function SetupProfilePage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -35,12 +35,12 @@ export default function SetupProfilePage() {
   });
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!session && !isPending) {
       router.push('/auth/signin');
-    } else if (status === 'authenticated') {
+    } else if (session && !isPending) {
       setLoading(false);
     }
-  }, [status, router]);
+  }, [session, isPending, router]);
 
   const roles = [
     { id: 'developer', label: 'Developer', icon: Code2 },
@@ -98,7 +98,7 @@ export default function SetupProfilePage() {
     }
   };
 
-  if (loading || status === 'loading') {
+  if (loading || isPending) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">

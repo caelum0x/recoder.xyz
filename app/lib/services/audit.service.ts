@@ -27,20 +27,22 @@ export class AuditService {
    */
   static async log(data: AuditLogData): Promise<void> {
     try {
-      await prisma.auditLog.create({
+      await prisma.audit_logs.create({
         data: {
+          id: crypto.randomUUID(),
           userId: data.userId,
           action: data.action,
           resource: data.resource,
           resourceId: data.resourceId,
-          success: data.success !== undefined ? data.success : true,
-          statusCode: data.statusCode,
-          errorMessage: data.errorMessage,
-          metadata: data.metadata,
+          metadata: {
+            ...data.metadata,
+            success: data.success !== undefined ? data.success : true,
+            statusCode: data.statusCode,
+            errorMessage: data.errorMessage,
+            method: data.method,
+            path: data.path,
+          },
           ipAddress: data.ipAddress,
-          userAgent: data.userAgent,
-          method: data.method,
-          path: data.path,
         },
       });
     } catch (error) {
@@ -242,7 +244,7 @@ export class AuditService {
       where.action = options.action;
     }
 
-    const logs = await prisma.auditLog.findMany({
+    const logs = await prisma.audit_logs.findMany({
       where,
       orderBy: { timestamp: 'desc' },
       take: limit,
@@ -252,15 +254,13 @@ export class AuditService {
         action: true,
         resource: true,
         resourceId: true,
-        success: true,
         timestamp: true,
         ipAddress: true,
-        method: true,
-        path: true,
+        metadata: true,
       },
     });
 
-    const total = await prisma.auditLog.count({ where });
+    const total = await prisma.audit_logs.count({ where });
 
     return {
       logs,
@@ -280,7 +280,7 @@ export class AuditService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    return await prisma.auditLog.findMany({
+    return await prisma.audit_logs.findMany({
       where: {
         userId,
         resource: 'security',
@@ -305,7 +305,7 @@ export class AuditService {
     last24Hours.setHours(last24Hours.getHours() - 24);
 
     // Check failed login attempts
-    const failedLogins = await prisma.auditLog.count({
+    const failedLogins = await prisma.audit_logs.count({
       where: {
         userId,
         action: 'security_login_failed',
@@ -323,7 +323,7 @@ export class AuditService {
     }
 
     // Check logins from multiple IPs
-    const recentLogins = await prisma.auditLog.findMany({
+    const recentLogins = await prisma.audit_logs.findMany({
       where: {
         userId,
         action: 'login',

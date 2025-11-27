@@ -6,6 +6,23 @@
 import { neon } from '@neondatabase/serverless';
 import type { Message } from 'ai';
 
+/**
+ * Sanitize content for PostgreSQL UTF8 encoding
+ * Removes null bytes (0x00) and other invalid UTF8 sequences
+ */
+function sanitizeContent(content: string): string {
+  if (!content) return content;
+
+  // Remove null bytes (0x00) which cause "invalid byte sequence for encoding UTF8" error
+  let sanitized = content.replace(/\0/g, '');
+
+  // Remove other potentially problematic characters
+  // Keep only valid UTF-8 characters
+  sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+
+  return sanitized;
+}
+
 export interface ChatSession {
   id: string;
   user_id?: string;
@@ -160,6 +177,9 @@ export class ChatHistoryDB {
     artifacts?: any;
     metadata?: Record<string, any>;
   }): Promise<ChatMessage> {
+    // Sanitize content to prevent UTF8 encoding errors
+    const sanitizedContent = sanitizeContent(data.content);
+
     const result = await this.sql`
       INSERT INTO chat_messages (
         session_id,
@@ -173,7 +193,7 @@ export class ChatHistoryDB {
       ) VALUES (
         ${data.sessionId},
         ${data.role},
-        ${data.content},
+        ${sanitizedContent},
         ${data.modelUsed || null},
         ${data.tokensUsed || 0},
         ${JSON.stringify(data.toolCalls || null)},
@@ -261,9 +281,12 @@ export class ChatHistoryDB {
    * Update an existing message
    */
   async updateMessage(messageId: string, content: string): Promise<void> {
+    // Sanitize content to prevent UTF8 encoding errors
+    const sanitizedContent = sanitizeContent(content);
+
     await this.sql`
       UPDATE chat_messages
-      SET content = ${content}, updated_at = NOW()
+      SET content = ${sanitizedContent}, updated_at = NOW()
       WHERE id = ${messageId}
     `;
   }

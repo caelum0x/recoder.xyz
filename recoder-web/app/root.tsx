@@ -7,8 +7,7 @@ import { themeStore } from './lib/stores/theme';
 import { stripIndents } from './utils/stripIndent';
 import { createHead } from 'remix-island';
 import { useEffect } from 'react';
-// TEMPORARILY DISABLED: Auth imports moved to server-only context
-// import { verifySession, getLoginUrl } from './lib/auth/session.server';
+import { verifySession, getLoginUrl } from './lib/auth/session.server';
 import { AuthProvider } from './lib/contexts/AuthContext';
 
 import reactToastifyStyles from 'react-toastify/dist/ReactToastify.css?url';
@@ -29,14 +28,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({ user: null });
   }
 
-  // TEMPORARY: Authentication disabled for development/testing
-  // TODO: Re-enable authentication before production deployment
-  console.log('[Auth] Authentication bypassed for development');
+  // Verify session with main site
+  const session = await verifySession(request);
+
+  // If no session, redirect to login on main site
+  if (!session) {
+    console.log('[Auth] No session found, redirecting to login');
+    const loginUrl = getLoginUrl(url.pathname);
+    return redirect(loginUrl);
+  }
+
+  console.log('[Auth] Session verified for user:', session.user.email);
 
   return json({
-    user: null,
+    user: session.user,
     ENV: {
-      MAIN_SITE_URL: process.env.MAIN_SITE_URL || 'http://localhost:3001',
+      MAIN_SITE_URL: process.env.MAIN_SITE_URL || 'http://localhost:3000',
     },
   });
 }
