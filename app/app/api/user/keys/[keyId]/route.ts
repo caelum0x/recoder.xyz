@@ -17,9 +17,12 @@ const updateKeySchema = z.object({
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { keyId: string } }
+  props: { params: Promise<{ keyId: string }> }
 ) {
   try {
+    // In Next.js 15, params is a Promise that must be awaited
+    const params = await props.params;
+
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
     const { user } = authResult;

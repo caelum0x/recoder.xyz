@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromToken } from '@/lib/auth-helper';
 import { prisma } from '@/lib/prisma';
 
+const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromToken(request);

@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -28,10 +29,24 @@ export class AnalyticsService {
     }
   ) {
     try {
-      const usage = await prisma.usageRecord.create({
+      const usage = await prisma.usage_records.create({
         data: {
+          id: crypto.randomUUID(),
           userId,
-          ...data,
+          type: 'analytics',
+          requestType: data.requestType,
+          model: data.model,
+          provider: data.provider,
+          tokens: data.tokensUsed || 0,
+          cost: data.cost || 0,
+          duration: data.duration || 0,
+          platform: data.platform || 'web',
+          timestamp: new Date(),
+          metadata: {
+            success: data.success,
+            inputTokens: data.inputTokens,
+            outputTokens: data.outputTokens,
+          }
         },
       });
 
@@ -57,7 +72,7 @@ export class AnalyticsService {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
       // Today's usage
-      const todayUsage = await prisma.usageRecord.aggregate({
+      const todayUsage = await prisma.usage_records.aggregate({
         where: {
           userId,
           timestamp: { gte: today },
@@ -71,7 +86,7 @@ export class AnalyticsService {
       });
 
       // This week's usage
-      const weekUsage = await prisma.usageRecord.aggregate({
+      const weekUsage = await prisma.usage_records.aggregate({
         where: {
           userId,
           timestamp: { gte: startOfWeek },
@@ -84,7 +99,7 @@ export class AnalyticsService {
       });
 
       // This month's usage
-      const monthUsage = await prisma.usageRecord.aggregate({
+      const monthUsage = await prisma.usage_records.aggregate({
         where: {
           userId,
           timestamp: { gte: startOfMonth },
@@ -97,7 +112,7 @@ export class AnalyticsService {
       });
 
       // Get user quota
-      const quota = await prisma.userQuota.findUnique({
+      const quota = await prisma.user_quota.findUnique({
         where: { userId },
       });
 
@@ -126,8 +141,8 @@ export class AnalyticsService {
                 sessionsUsed: quota.sessionsUsedToday,
                 sessionsRemaining: quota.sessionsPerDay - quota.sessionsUsedToday,
                 tokensPerSession: quota.tokensPerSession,
-                monthlyLimit: quota.monthlyLimit,
-                monthlyUsed: quota.monthlyUsed,
+                monthlyLimit: quota.requestsLimit,
+                monthlyUsed: quota.requestsUsed,
               }
             : null,
         },
@@ -148,7 +163,7 @@ export class AnalyticsService {
     groupBy: 'hour' | 'day' | 'week' | 'month' = 'day'
   ) {
     try {
-      const usage = await prisma.usageRecord.findMany({
+      const usage = await prisma.usage_records.findMany({
         where: {
           userId,
           timestamp: {
@@ -176,7 +191,7 @@ export class AnalyticsService {
     try {
       const startDate = this.getStartDate(period);
 
-      const usage = await prisma.usageRecord.groupBy({
+      const usage = await prisma.usage_records.groupBy({
         by: ['model'],
         where: {
           userId,
@@ -213,7 +228,7 @@ export class AnalyticsService {
     try {
       const startDate = this.getStartDate(period);
 
-      const usage = await prisma.usageRecord.findMany({
+      const usage = await prisma.usage_records.findMany({
         where: {
           userId,
           timestamp: { gte: startDate },
@@ -229,7 +244,7 @@ export class AnalyticsService {
         },
       });
 
-      const totalCost = await prisma.usageRecord.aggregate({
+      const totalCost = await prisma.usage_records.aggregate({
         where: {
           userId,
           timestamp: { gte: startDate },
@@ -253,7 +268,7 @@ export class AnalyticsService {
    */
   async exportUsageData(userId: string, format: 'json' | 'csv' = 'json') {
     try {
-      const usage = await prisma.usageRecord.findMany({
+      const usage = await prisma.usage_records.findMany({
         where: { userId },
         orderBy: { timestamp: 'desc' },
         take: 10000, // Limit to last 10k records
@@ -288,7 +303,7 @@ export class AnalyticsService {
     endDate: Date
   ) {
     try {
-      const usage = await prisma.usageRecord.findMany({
+      const usage = await prisma.usage_records.findMany({
         where: {
           userId,
           timestamp: {
@@ -323,7 +338,7 @@ export class AnalyticsService {
    */
   async getQuotaStatus(userId: string) {
     try {
-      const quota = await prisma.userQuota.findUnique({
+      const quota = await prisma.user_quota.findUnique({
         where: { userId },
       });
 
@@ -362,7 +377,7 @@ export class AnalyticsService {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const usage = await prisma.usageRecord.aggregate({
+      const usage = await prisma.usage_records.aggregate({
         where: {
           userId,
           timestamp: { gte: thirtyDaysAgo },
@@ -403,7 +418,7 @@ export class AnalyticsService {
 
   private async updateQuotaUsage(userId: string, tokensUsed: number) {
     try {
-      const quota = await prisma.userQuota.findUnique({
+      const quota = await prisma.user_quota.findUnique({
         where: { userId },
       });
 
@@ -415,22 +430,22 @@ export class AnalyticsService {
         const newPeriodEnd = new Date(now);
         newPeriodEnd.setHours(23, 59, 59, 999);
 
-        await prisma.userQuota.update({
+        await prisma.user_quota.update({
           where: { userId },
           data: {
             sessionsUsedToday: 1,
-            monthlyUsed: quota.monthlyUsed + tokensUsed,
+            requestsUsed: quota.requestsUsed + tokensUsed,
             periodStart: now,
             periodEnd: newPeriodEnd,
             lastResetAt: now,
           },
         });
       } else {
-        await prisma.userQuota.update({
+        await prisma.user_quota.update({
           where: { userId },
           data: {
             sessionsUsedToday: quota.sessionsUsedToday + 1,
-            monthlyUsed: quota.monthlyUsed + tokensUsed,
+            requestsUsed: quota.requestsUsed + tokensUsed,
           },
         });
       }

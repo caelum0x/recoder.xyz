@@ -6,6 +6,7 @@
 
 import { prisma } from './prisma';
 import { getPlanLimits } from './plan-config';
+import crypto from 'crypto';
 
 export interface ApiKeyInfo {
   apiKey: string;
@@ -33,7 +34,7 @@ export interface QuotaStatus {
  * @returns API key information or null if none available
  */
 export async function getApiKeyForUser(userId: string): Promise<ApiKeyInfo | null> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       subscriptionPlan: true,
@@ -110,10 +111,10 @@ export async function getApiKeyForUser(userId: string): Promise<ApiKeyInfo | nul
  * @returns Platform API key or null
  */
 async function getPlatformApiKey(tier: string): Promise<any | null> {
-  // Get all active keys for this tier, ordered by least recently used
-  const keys = await prisma.platformApiKey.findMany({
+  // Get all active keys, ordered by least recently used
+  // Note: tier field doesn't exist in platform_api_keys schema
+  const keys = await prisma.platform_api_keys.findMany({
     where: {
-      tier: tier,
       isActive: true,
     },
     orderBy: {
@@ -129,7 +130,7 @@ async function getPlatformApiKey(tier: string): Promise<any | null> {
   const selectedKey = keys[0];
 
   // Update last used timestamp
-  await prisma.platformApiKey.update({
+  await prisma.platform_api_keys.update({
     where: { id: selectedKey.id },
     data: {
       lastUsedAt: new Date(),
@@ -148,17 +149,11 @@ async function getPlatformApiKey(tier: string): Promise<any | null> {
  * @returns Quota status information
  */
 export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       subscriptionPlan: true,
-      quotas: {
-        where: {
-          periodEnd: { gt: new Date() },
-        },
-        orderBy: { periodStart: 'desc' },
-        take: 1,
-      },
+      quota: true,
     },
   });
 
@@ -176,15 +171,14 @@ export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
   const planLimits = getPlanLimits(user.subscriptionPlan);
 
   // Get or create current quota period
-  let quota = user.quotas[0];
+  let quota = user.quota;
   if (!quota) {
-    quota = await prisma.userQuota.create({
+    quota = await prisma.user_quota.create({
       data: {
+        id: crypto.randomUUID(),
         userId,
         requestsLimit: planLimits.monthlyRequests,
         requestsUsed: 0,
-        tokensLimit: BigInt(planLimits.tokensPerMonth),
-        tokensUsed: BigInt(0),
         periodStart: new Date(),
         periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
       },
@@ -262,23 +256,23 @@ export async function trackUsageEvent(
   }
 ): Promise<void> {
   // Record usage
-  await prisma.usageRecord.create({
+  await prisma.usage_records.create({
     data: {
+      id: crypto.randomUUID(),
       userId,
-      sessionId: null,
+      type: 'api_request',
       requestType: 'api',
-      modelUsed: metadata.modelUsed,
+      model: metadata.modelUsed,
       tokensUsed: metadata.tokensUsed || 0,
       cost: metadata.cost || 0,
       duration: metadata.duration || 0,
       success: metadata.success ?? true,
-      errorMessage: metadata.errorMessage,
       metadata: metadata as any,
     },
   });
 
   // Update quota
-  const quota = await prisma.userQuota.findFirst({
+  const quota = await prisma.user_quota.findFirst({
     where: {
       userId,
       periodEnd: { gt: new Date() },
@@ -287,16 +281,11 @@ export async function trackUsageEvent(
   });
 
   if (quota) {
-    await prisma.userQuota.update({
+    await prisma.user_quota.update({
       where: { id: quota.id },
       data: {
         requestsUsed: { increment: 1 },
-        tokensUsed: {
-          increment: BigInt(metadata.tokensUsed || 0),
-        },
-        costThisPeriod: {
-          increment: metadata.cost || 0,
-        },
+        updatedAt: new Date(),
       },
     });
   }
@@ -316,18 +305,12 @@ export async function getUsageSummary(userId: string): Promise<{
   tier: string;
   hasApiKey: boolean;
 }> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       subscriptionPlan: true,
       hasOwnApiKey: true,
-      quotas: {
-        where: {
-          periodEnd: { gt: new Date() },
-        },
-        orderBy: { periodStart: 'desc' },
-        take: 1,
-      },
+      quota: true,
     },
   });
 
@@ -336,7 +319,7 @@ export async function getUsageSummary(userId: string): Promise<{
   }
 
   const planLimits = getPlanLimits(user.subscriptionPlan);
-  const quota = user.quotas[0];
+  const quota = user.quota;
 
   if (!quota) {
     return {
@@ -354,11 +337,10 @@ export async function getUsageSummary(userId: string): Promise<{
       ? 0
       : (quota.requestsUsed / planLimits.monthlyRequests) * 100;
 
-  const tokensUsed = Number(quota.tokensUsed);
-  const tokensPercentage =
-    planLimits.tokensPerMonth === -1
-      ? 0
-      : (tokensUsed / planLimits.tokensPerMonth) * 100;
+  // Note: tokensUsed and costThisPeriod fields don't exist in current schema
+  // Using 0 as placeholder
+  const tokensUsed = 0;
+  const tokensPercentage = 0;
 
   return {
     requests: {
@@ -371,7 +353,7 @@ export async function getUsageSummary(userId: string): Promise<{
       limit: planLimits.tokensPerMonth,
       percentage: tokensPercentage,
     },
-    cost: quota.costThisPeriod,
+    cost: 0,
     periodEnd: quota.periodEnd,
     tier: user.subscriptionPlan,
     hasApiKey: user.hasOwnApiKey || user.subscriptionPlan !== 'free',

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const verifications = await prisma.verifications.findMany({
       where: {
         value: hashedToken,
-        expiresAt: {
+        expires_at: {
           gt: new Date()
         }
       }

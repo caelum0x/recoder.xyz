@@ -8,9 +8,12 @@ import { prisma } from '@/lib/prisma';
 // GET /api/billing/invoices/[id]/download - Download invoice PDF
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
+    // In Next.js 15, params is a Promise that must be awaited
+    const params = await props.params;
+
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
@@ -22,7 +25,7 @@ export async function GET(
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -33,7 +36,7 @@ export async function GET(
       );
     }
 
-    const invoice = await prisma.invoice.findFirst({
+    const invoice = await prisma.invoices.findFirst({
       where: {
         id: params.id,
         userId: user.id,
@@ -55,10 +58,10 @@ export async function GET(
     // For now, return a simple PDF generation placeholder
     const pdfContent = generateInvoicePDF(invoice, user);
 
-    return new NextResponse(pdfContent, {
+    return new NextResponse(pdfContent as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`,
+        'Content-Disposition': `attachment; filename="invoice-${invoice.id}.pdf"`,
       },
     });
   } catch (error) {
@@ -74,17 +77,17 @@ export async function GET(
 function generateInvoicePDF(invoice: any, user: any): Buffer {
   // This is a placeholder - in production use pdfkit, puppeteer, or similar
   const pdfContent = `
-    INVOICE #${invoice.invoiceNumber}
+    INVOICE #${invoice.id}
     Date: ${new Date(invoice.createdAt).toLocaleDateString()}
-    
+
     Bill To:
     ${user.name}
     ${user.email}
-    
+
     Description: ${invoice.description}
     Amount: $${invoice.amount}
     Status: ${invoice.status}
-    
+
     Thank you for your business!
   `;
 

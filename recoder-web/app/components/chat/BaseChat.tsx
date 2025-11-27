@@ -9,6 +9,7 @@ import { classNames } from '~/utils/classNames';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import { ExamplePrompts } from './ExamplePrompts';
+import { ModelSelector } from './ModelSelector';
 import type { TemplateRepo } from '~/lib/.server/github/types';
 
 import styles from './BaseChat.module.scss';
@@ -24,6 +25,11 @@ interface BaseChatProps {
   enhancingPrompt?: boolean;
   promptEnhanced?: boolean;
   input?: string;
+  selectedProvider?: string;
+  selectedModel?: string;
+  onProviderChange?: (provider: string) => void;
+  onModelChange?: (model: string) => void;
+  onSettingsClick?: () => void;
   handleStop?: () => void;
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -45,6 +51,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       promptEnhanced = false,
       messages,
       input = '',
+      selectedProvider = 'openrouter',
+      selectedModel = 'x-ai/grok-code-fast-1',
+      onProviderChange = () => {},
+      onModelChange = () => {},
+      onSettingsClick = () => {},
       sendMessage,
       handleInputChange,
       enhancePrompt,
@@ -103,6 +114,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg overflow-hidden',
                   )}
                 >
+                  {/* Model Selection */}
+                  <ClientOnly>
+                    {() => (
+                      <ModelSelector
+                        selectedProvider={selectedProvider}
+                        selectedModel={selectedModel}
+                        onProviderChange={onProviderChange}
+                        onModelChange={onModelChange}
+                        onSettingsClick={onSettingsClick}
+                      />
+                    )}
+                  </ClientOnly>
+
                   <textarea
                     ref={textareaRef}
                     className={`w-full pl-4 pt-4 pr-16 focus:outline-none resize-none text-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}

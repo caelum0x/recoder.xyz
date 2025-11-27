@@ -19,12 +19,12 @@ export function getMainSiteUrl(): string {
   if (typeof window === 'undefined') {
     return process.env.NODE_ENV === 'production'
       ? 'https://recoder.xyz'
-      : 'http://localhost:3001';
+      : 'http://localhost:3000'; // Main app port
   }
 
   // Client-side: check if we're on localhost
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:3001';
+    return 'http://localhost:3000'; // Main app port
   }
 
   return 'https://recoder.xyz';
@@ -38,7 +38,7 @@ export function redirectToLogin(): void {
 
   const currentUrl = window.location.href;
   const mainSiteUrl = getMainSiteUrl();
-  const loginUrl = `${mainSiteUrl}/login?redirect=${encodeURIComponent(currentUrl)}`;
+  const loginUrl = `${mainSiteUrl}/auth/signin?redirect=${encodeURIComponent(currentUrl)}`;
 
   window.location.href = loginUrl;
 }
@@ -51,7 +51,7 @@ export function redirectToSignup(): void {
 
   const currentUrl = window.location.href;
   const mainSiteUrl = getMainSiteUrl();
-  const signupUrl = `${mainSiteUrl}/signup?redirect=${encodeURIComponent(currentUrl)}`;
+  const signupUrl = `${mainSiteUrl}/auth/signup?redirect=${encodeURIComponent(currentUrl)}`;
 
   window.location.href = signupUrl;
 }

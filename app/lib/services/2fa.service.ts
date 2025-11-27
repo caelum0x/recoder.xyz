@@ -65,7 +65,7 @@ export class TwoFactorAuthService {
   }> {
     try {
       // Get user
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
       });
 
@@ -77,12 +77,12 @@ export class TwoFactorAuthService {
         return { success: false, message: '2FA is already enabled' };
       }
 
-      if (!user.twoFactorSecret) {
+      if (!user.totpSecret) {
         return { success: false, message: 'No 2FA secret found. Generate one first.' };
       }
 
       // Verify the token
-      const isValid = this.verifyToken(token, user.twoFactorSecret);
+      const isValid = this.verifyToken(token, user.totpSecret);
       if (!isValid) {
         return { success: false, message: 'Invalid verification code' };
       }
@@ -92,7 +92,7 @@ export class TwoFactorAuthService {
       const hashedCodes = backupCodes.map(code => this.hashBackupCode(code));
 
       // Enable 2FA
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: true,
@@ -124,7 +124,7 @@ export class TwoFactorAuthService {
     message: string;
   }> {
     try {
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
       });
 
@@ -138,11 +138,11 @@ export class TwoFactorAuthService {
 
       // TODO: Verify password before disabling
 
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: false,
-          twoFactorSecret: null,
+          totpSecret: null,
         },
       });
 
@@ -168,7 +168,7 @@ export class TwoFactorAuthService {
     message: string;
   }> {
     try {
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
       });
 
@@ -181,10 +181,10 @@ export class TwoFactorAuthService {
       const qrCodeURL = this.generateQRCodeURL(user.email, secret);
 
       // Save secret (not enabled yet)
-      await prisma.user.update({
+      await prisma.users.update({
         where: { id: userId },
         data: {
-          twoFactorSecret: secret,
+          totpSecret: secret,
         },
       });
 
@@ -210,7 +210,7 @@ export class TwoFactorAuthService {
     message: string;
   }> {
     try {
-      const user = await prisma.user.findUnique({
+      const user = await prisma.users.findUnique({
         where: { id: userId },
       });
 
@@ -218,12 +218,12 @@ export class TwoFactorAuthService {
         return { success: false, message: 'User not found' };
       }
 
-      if (!user.twoFactorEnabled || !user.twoFactorSecret) {
+      if (!user.twoFactorEnabled || !user.totpSecret) {
         return { success: false, message: '2FA is not enabled' };
       }
 
       // Verify token
-      const isValid = this.verifyToken(token, user.twoFactorSecret);
+      const isValid = this.verifyToken(token, user.totpSecret);
 
       if (!isValid) {
         // TODO: Check backup codes

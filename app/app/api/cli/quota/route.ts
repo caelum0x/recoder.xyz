@@ -10,7 +10,7 @@ import { prisma } from '@/lib/prisma';
 export const GET = withCLIAuth(async (request: NextRequest, context) => {
   try {
     // Get user quota
-    const quota = await prisma.userQuota.findUnique({
+    const quota = await prisma.user_quota.findUnique({
       where: { userId: context.userId },
     });
 
@@ -20,7 +20,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
       const endOfDay = new Date(now);
       endOfDay.setHours(23, 59, 59, 999);
 
-      const newQuota = await prisma.userQuota.create({
+      const newQuota = await prisma.user_quota.create({
         data: {
           userId: context.userId,
           sessionsPerDay: context.isPremium ? 50 : 6,
@@ -51,7 +51,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
       const endOfDay = new Date(now);
       endOfDay.setHours(23, 59, 59, 999);
 
-      await prisma.userQuota.update({
+      await prisma.user_quota.update({
         where: { id: quota.id },
         data: {
           sessionsUsedToday: 0,

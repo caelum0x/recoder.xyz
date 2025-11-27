@@ -38,7 +38,7 @@ interface EditorPanelProps {
 }
 
 const MAX_TERMINALS = 3;
-const DEFAULT_TERMINAL_SIZE = 25;
+const DEFAULT_TERMINAL_SIZE = 35; // ✅ P2: Increased from 25% to 35% for better visibility
 const DEFAULT_EDITOR_SIZE = 100 - DEFAULT_TERMINAL_SIZE;
 
 const editorSettings: EditorSettings = { tabSize: 2 };
@@ -60,6 +60,7 @@ export const EditorPanel = memo(
 
     const theme = useStore(themeStore);
     const showTerminal = useStore(workbenchStore.showTerminal);
+    const highlightTerminal = useStore(workbenchStore.highlightTerminal);
 
     const terminalRefs = useRef<Array<TerminalRef | null>>([]);
     const terminalPanelRef = useRef<ImperativePanelHandle>(null);
@@ -126,7 +127,12 @@ export const EditorPanel = memo(
       <PanelGroup direction="vertical">
         <Panel defaultSize={showTerminal ? DEFAULT_EDITOR_SIZE : 100} minSize={20}>
           <PanelGroup direction="horizontal">
-            <Panel defaultSize={20} minSize={10} collapsible>
+            <Panel
+              defaultSize={25}  // ✅ P2: Increased from 20% to 25% for file tree
+              minSize={15}      // ✅ P2: Increased from 10% to 15% minimum
+              maxSize={40}      // ✅ P2: Added max size to prevent over-expansion
+              collapsible
+            >
               <div className="flex flex-col border-r border-bolt-elements-borderColor h-full">
                 <PanelHeader>
                   <div className="i-ph:tree-structure-duotone shrink-0" />
@@ -144,7 +150,11 @@ export const EditorPanel = memo(
               </div>
             </Panel>
             <PanelResizeHandle />
-            <Panel className="flex flex-col" defaultSize={80} minSize={20}>
+            <Panel
+              className="flex flex-col"
+              defaultSize={75}  // ✅ P2: Adjusted from 80% (25% + 75% = 100%)
+              minSize={30}      // ✅ P2: Increased from 20% to 30% to prevent squishing
+            >
               <PanelHeader className="overflow-x-auto">
                 {activeFileSegments?.length && (
                   <div className="flex items-center flex-1 text-sm">
@@ -183,7 +193,8 @@ export const EditorPanel = memo(
         <Panel
           ref={terminalPanelRef}
           defaultSize={showTerminal ? DEFAULT_TERMINAL_SIZE : 0}
-          minSize={10}
+          minSize={15}      // ✅ P2: Increased from 10% to 15% for better terminal visibility
+          maxSize={60}      // ✅ P2: Added max size to prevent terminal taking over screen
           collapsible
           onExpand={() => {
             if (!terminalToggledByShortcut.current) {
@@ -198,7 +209,15 @@ export const EditorPanel = memo(
         >
           <div className="h-full">
             <div className="bg-bolt-elements-terminals-background h-full flex flex-col">
-              <div className="flex items-center bg-bolt-elements-background-depth-2 border-y border-bolt-elements-borderColor gap-1.5 min-h-[34px] p-2">
+              <div
+                className={classNames(
+                  'flex items-center bg-bolt-elements-background-depth-2 border-y border-bolt-elements-borderColor gap-1.5 min-h-[34px] p-2 transition-all duration-300',
+                  {
+                    'animate-pulse bg-gradient-to-r from-orange-500/20 via-orange-400/30 to-orange-500/20 border-orange-500/50':
+                      highlightTerminal,
+                  },
+                )}
+              >
                 {Array.from({ length: terminalCount }, (_, index) => {
                   const isActive = activeTerminal === index;
 
@@ -217,6 +236,11 @@ export const EditorPanel = memo(
                     >
                       <div className="i-ph:terminal-window-duotone text-lg" />
                       Terminal {terminalCount > 1 && index + 1}
+                      {highlightTerminal && isActive && (
+                        <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-semibold animate-bounce">
+                          New Output ⚡
+                        </span>
+                      )}
                     </button>
                   );
                 })}

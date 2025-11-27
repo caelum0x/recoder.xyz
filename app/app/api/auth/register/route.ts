@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/crypto';
 import { getPlanLimits } from '@/lib/plan-config';
 import { sendWelcomeEmail } from '@/lib/email';
+import { nanoid } from 'nanoid';
 
 interface RegisterRequest {
   email: string;
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await prisma.users.findUnique({
       where: { email: body.email }
     });
 
@@ -46,14 +47,15 @@ export async function POST(request: NextRequest) {
     const plan = body.plan || 'free';
 
     // Create user
-    const user = await prisma.user.create({
+    const user = await prisma.users.create({
       data: {
+        id: nanoid(),
         email: body.email,
         name: body.name,
-        passwordHash,
-        subscriptionPlan: plan,
-        subscriptionStatus: 'active',
+        password: passwordHash,
+        subscription: plan,
         emailVerified: false,
+        updatedAt: new Date(),
       },
     });
 
@@ -68,8 +70,9 @@ export async function POST(request: NextRequest) {
     if (plan === 'pro') tokensPerSession = 100000; // 100K for pro
     else if (plan === 'enterprise') tokensPerSession = 500000; // 500K for enterprise
     
-    await prisma.userQuota.create({
+    await prisma.user_quota.create({
       data: {
+        id: nanoid(),
         userId: user.id,
         sessionsPerDay: planLimits.sessionsPerDay || 6,
         sessionsUsedToday: 0,
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
         id: user.id,
         email: user.email,
         name: user.name,
-        plan: user.subscriptionPlan,
+        plan: user.subscription,
         needsApiKey: needsOnboarding,
         onboardingUrl: needsOnboarding ? `/auth/onboarding?userId=${user.id}` : null,
       },

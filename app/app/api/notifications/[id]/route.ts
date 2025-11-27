@@ -10,13 +10,16 @@ import { headers } from 'next/headers';
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
+    // In Next.js 15, params is a Promise that must be awaited
+    const params = await props.params;
+
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
     const { user } = authResult;
-    
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -27,7 +30,7 @@ export async function DELETE(
     const notificationId = params.id;
 
     // TODO: Delete from database when Notification model is added
-    // await prisma.notification.delete({
+    // await prisma.notifications.delete({
     //   where: { id: notificationId }
     // });
 

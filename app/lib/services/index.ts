@@ -8,7 +8,7 @@ export { userService, UserService } from './user.service';
 export { billingService, BillingService } from './billing.service';
 export { analyticsService, AnalyticsService } from './analytics.service';
 export { apiKeyService, ApiKeyService } from './apikey.service';
-export { teamService, TeamService } from './team.service';
+// export { teamService, TeamService } from './team.service'; // TODO: Create team.service
 
 // Re-export email functions
 export {

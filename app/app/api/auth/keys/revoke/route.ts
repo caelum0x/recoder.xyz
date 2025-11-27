@@ -38,9 +38,9 @@ export async function POST(request: NextRequest) {
     const { keyId } = validation.data;
 
     // Verify key belongs to user and revoke it
-    const key = await prisma.apiKey.findFirst({
+    const key = await prisma.api_keys.findFirst({
       where: {
-        keyId,
+        id: keyId,
         userId: user.id as string,
       },
     });
@@ -49,11 +49,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'API key not found' }, { status: 404 });
     }
 
-    await prisma.apiKey.update({
+    await prisma.api_keys.update({
       where: { id: key.id },
       data: {
         isActive: false,
-        revokedAt: new Date(),
       },
     });
 

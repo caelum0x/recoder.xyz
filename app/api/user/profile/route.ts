@@ -18,30 +18,28 @@ async function authenticateRequest(request: NextRequest): Promise<string> {
 export async function GET(request: NextRequest) {
   try {
     const userId = await authenticateRequest(request);
-    
-    const user = await prisma.user.findUnique({
+
+    const user = await prisma.users.findUnique({
       where: { id: userId }
     });
-    
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }
       );
     }
-    
+
     const sessionStats = await getSessionStats(userId);
-    
+
     return NextResponse.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        subscriptionPlan: user.subscriptionPlan,
-        subscriptionStatus: user.subscriptionStatus,
-        hasOwnApiKey: user.hasOwnApiKey,
-        onboardingStep: user.onboardingStep
+        subscription: user.subscription,
+        role: user.role
       },
       sessions: {
         today: sessionStats.sessionsToday,
@@ -66,13 +64,16 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const userId = await authenticateRequest(request);
-    const { name, preferredModels } = await request.json();
-    
-    await prisma.user.update({
+    const { name } = await request.json();
+
+    await prisma.users.update({
       where: { id: userId },
-      data: { name, preferredModels }
+      data: {
+        name,
+        updatedAt: new Date()
+      }
     });
-    
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(

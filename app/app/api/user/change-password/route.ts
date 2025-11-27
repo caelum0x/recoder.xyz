@@ -95,7 +95,6 @@ export async function POST(request: NextRequest) {
         resource: 'user',
         resourceId: user.id,
         metadata: { email: user.email },
-        createdAt: new Date(),
       }
     });
 

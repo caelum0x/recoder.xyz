@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
   try {
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
-    
+    const { user, session } = authResult;
+
     if (!user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized', message: 'Please sign in' },
@@ -32,10 +32,10 @@ export async function GET(request: NextRequest) {
     const response = await fetch(`${BACKEND_URL}/api/premium/api-keys`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${(session as any).accessToken}`,
+        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
         'Content-Type': 'application/json',
         'X-User-Email': user.email,
-        'X-User-ID': (session.user as any).id || '',
+        'X-User-ID': user.id || '',
       },
       cache: 'no-store',
     });
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   try {
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const { user, session } = authResult;
     
     if (!user?.email) {
       return NextResponse.json(
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${(session as any).accessToken}`,
         'Content-Type': 'application/json',
         'X-User-Email': user.email,
-        'X-User-ID': (session.user as any).id || '',
+        'X-User-ID': user.id || '',
       },
       body: JSON.stringify({ 
         name: name.trim(),
@@ -152,7 +152,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const { user, session } = authResult;
     
     if (!user?.email) {
       return NextResponse.json(
@@ -179,7 +179,7 @@ export async function PATCH(request: NextRequest) {
         'Authorization': `Bearer ${(session as any).accessToken}`,
         'Content-Type': 'application/json',
         'X-User-Email': user.email,
-        'X-User-ID': (session.user as any).id || '',
+        'X-User-ID': user.id || '',
       },
       body: JSON.stringify(body),
     });
@@ -221,7 +221,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const { user, session } = authResult;
     
     if (!user?.email) {
       return NextResponse.json(
@@ -246,7 +246,7 @@ export async function DELETE(request: NextRequest) {
         'Authorization': `Bearer ${(session as any).accessToken}`,
         'Content-Type': 'application/json',
         'X-User-Email': user.email,
-        'X-User-ID': (session.user as any).id || '',
+        'X-User-ID': user.id || '',
       },
     });
 

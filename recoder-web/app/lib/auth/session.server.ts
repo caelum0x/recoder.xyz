@@ -25,10 +25,10 @@ function getMainSiteUrl(): string {
   if (typeof process !== 'undefined' && process.env.MAIN_SITE_URL) {
     return process.env.MAIN_SITE_URL;
   }
-  // Default to production
+  // Default to production or development
   return process.env.NODE_ENV === 'production'
     ? 'https://recoder.xyz'
-    : 'http://localhost:3001';
+    : 'http://localhost:3000'; // Main app port
 }
 
 /**
@@ -129,18 +129,44 @@ export async function hasSubscription(
 
 /**
  * Build login redirect URL
+ * @param currentUrl - Full current URL to redirect back to after login
  */
-export function getLoginUrl(redirectTo?: string): string {
+export function getLoginUrl(currentUrl?: string): string {
   const mainSiteUrl = getMainSiteUrl();
-  const redirect = redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : '';
-  return `${mainSiteUrl}/login${redirect}`;
+
+  // If currentUrl is provided and it's a full URL (starts with http), use it directly
+  // Otherwise, construct the Web IDE URL from the pathname
+  let redirectUrl = currentUrl;
+  if (currentUrl && !currentUrl.startsWith('http')) {
+    // currentUrl is just a pathname, construct full Web IDE URL
+    const webIdeUrl = typeof process !== 'undefined' && process.env.RECODER_WEB_URL
+      ? process.env.RECODER_WEB_URL
+      : (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
+    redirectUrl = `${webIdeUrl}${currentUrl}`;
+  }
+
+  const redirect = redirectUrl ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
+  return `${mainSiteUrl}/auth/signin${redirect}`;
 }
 
 /**
  * Build signup redirect URL
+ * @param currentUrl - Full current URL to redirect back to after signup
  */
-export function getSignupUrl(redirectTo?: string): string {
+export function getSignupUrl(currentUrl?: string): string {
   const mainSiteUrl = getMainSiteUrl();
-  const redirect = redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : '';
-  return `${mainSiteUrl}/signup${redirect}`;
+
+  // If currentUrl is provided and it's a full URL (starts with http), use it directly
+  // Otherwise, construct the Web IDE URL from the pathname
+  let redirectUrl = currentUrl;
+  if (currentUrl && !currentUrl.startsWith('http')) {
+    // currentUrl is just a pathname, construct full Web IDE URL
+    const webIdeUrl = typeof process !== 'undefined' && process.env.RECODER_WEB_URL
+      ? process.env.RECODER_WEB_URL
+      : (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
+    redirectUrl = `${webIdeUrl}${currentUrl}`;
+  }
+
+  const redirect = redirectUrl ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
+  return `${mainSiteUrl}/auth/signup${redirect}`;
 }

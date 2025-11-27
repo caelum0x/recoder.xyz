@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { email: authUser.email },
     });
 
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch invoices from database
     // In a real app, this would come from your payment provider (Paddle/DODO/Stripe)
-    const invoices = await prisma.invoice.findMany({
+    const invoices = await prisma.invoices.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
@@ -40,14 +40,14 @@ export async function GET(req: NextRequest) {
     // Transform to match frontend interface
     const formattedInvoices = invoices.map(invoice => ({
       id: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
+      invoiceNumber: invoice.id, // Use id as invoice number
       date: invoice.createdAt.toISOString(),
-      dueDate: invoice.dueDate?.toISOString() || invoice.createdAt.toISOString(),
+      dueDate: invoice.createdAt.toISOString(), // dueDate field doesn't exist
       amount: invoice.amount,
       currency: invoice.currency || 'USD',
       status: invoice.status,
-      description: invoice.description || `${invoice.planName} Subscription`,
-      pdfUrl: invoice.pdfUrl,
+      description: invoice.description || 'Subscription Invoice',
+      pdfUrl: null, // pdfUrl field doesn't exist in schema
     }));
 
     return NextResponse.json({

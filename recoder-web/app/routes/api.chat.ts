@@ -4,7 +4,7 @@ import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { chatRateLimiter, applyRateLimit, createRateLimitResponse } from '~/lib/.server/middleware/rate-limiter';
 import { detectAndPrepareStarter, createDirectStarterResponse } from '~/lib/.server/llm/starter-injector';
 import { log } from '~/lib/.server/llm/starter-config';
-import { streamOpenRouterResponse } from '~/lib/.server/llm/openrouter-stream';
+// Removed top-level import - using dynamic import inside action instead
 import { getSystemPrompt } from '~/lib/.server/llm/prompts';
 
 /**
@@ -85,10 +85,65 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
+  // CRITICAL: Verify user authentication FIRST
+  const { isAuthenticated, hasUserApiKey, getSessionCookie } = await import('~/lib/.server/llm/user-api-key');
+  const { verifySession } = await import('~/lib/auth/session.server');
+
+  const session = await verifySession(request);
+
+  if (!session?.user) {
+    // User not authenticated - return helpful error
+    const encoder = new TextEncoder();
+    const errorMessage = `🔐 Authentication Required
+
+To use the Web IDE, you need to create an account:
+
+1. Sign up at recoder.xyz (100% free!)
+2. Add your AI provider API key (OpenRouter, Anthropic, or OpenAI)
+3. Come back and start coding!
+
+💡 Why? Recoder.xyz uses your own API key so we can stay free forever!
+
+Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000'}/auth/signup`;
+
+    const errorStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(errorMessage));
+        controller.close();
+      }
+    });
+
+    return new Response(errorStream, {
+      status: 401,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Error-Type': 'NOT_AUTHENTICATED',
+      },
+    });
+  }
+
+  console.log(`[Chat API] Authenticated user: ${session.user.email}`);
+
   let messages: Messages;
+  let provider: string = 'openrouter'; // Default provider
+  let model: string | undefined;
 
   try {
-    const body = await request.json<{ messages: Messages }>();
+    const body = await request.json<{
+      messages: Messages;
+      provider?: string;
+      model?: string;
+    }>();
+
+    // Extract provider and model from request
+    if (body.provider) {
+      provider = body.provider;
+    }
+    if (body.model) {
+      model = body.model;
+    }
+
+    console.log(`[Chat API] Provider: ${provider}, Model: ${model || 'default'}`);
 
     // Validate messages
     const { validateChatMessages, createValidationErrorResponse } = await import('~/lib/.server/middleware/request-validator');
@@ -204,26 +259,110 @@ That's it. Nothing else. Just the clone action.`,
   try {
     // Get system prompt
     const systemPrompt = getSystemPrompt();
-    
-    // Get OpenRouter API key
-    const apiKey = context.cloudflare.env.OPENROUTER_API_KEY;
+
+    // Get API key (User's BYOK > Environment variable)
+    const { getAPIKey } = await import('~/lib/.server/llm/api-key');
+    const apiKey = await getAPIKey(context.cloudflare.env, request, provider);
+
     if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY not configured');
+      // User hasn't configured API key - return helpful error
+      const encoder = new TextEncoder();
+      const providerUrls: Record<string, string> = {
+        openrouter: 'https://openrouter.ai/keys',
+        anthropic: 'https://console.anthropic.com/settings/keys',
+        openai: 'https://platform.openai.com/api-keys',
+      };
+
+      const providerNames: Record<string, string> = {
+        openrouter: 'OpenRouter',
+        anthropic: 'Anthropic',
+        openai: 'OpenAI',
+      };
+
+      const errorMessage = `🔑 No ${providerNames[provider] || provider} API Key Configured
+
+To use AI features with ${providerNames[provider] || provider}, please add your API key:
+
+1. Go to Settings → AI Providers
+2. Click "Add ${providerNames[provider] || provider} API Key"
+3. Get your key from: ${providerUrls[provider] || 'your provider dashboard'}
+4. Add it and start coding!
+
+💡 Recoder.xyz is 100% free - you just need to bring your own API key!`;
+
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(errorMessage));
+          controller.close();
+        }
+      });
+
+      return new Response(errorStream, {
+        status: 200, // Return 200 so frontend displays the message
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Error-Type': 'NO_API_KEY',
+        },
+      });
     }
 
-    // Stream directly from OpenRouter (NO AI SDK)
-    const openrouterStream = await streamOpenRouterResponse(
-      systemPrompt,
-      messages,
-      apiKey,
-      {
-        model: 'x-ai/grok-code-fast-1', // Fast coding model
-        temperature: 0.7,
-        max_tokens: 8000,
-      }
-    );
+    // Route to the correct provider's streaming function
+    let aiStream: ReadableStream<Uint8Array>;
 
-    stream.switchSource(openrouterStream);
+    const streamOptions = {
+      model,
+      temperature: 0.7,
+      max_tokens: 8000,
+    };
+
+    switch (provider.toLowerCase()) {
+      case 'openrouter': {
+        const { streamOpenRouterResponse } = await import('~/lib/.server/llm/openrouter-stream');
+        aiStream = await streamOpenRouterResponse(
+          systemPrompt,
+          messages,
+          apiKey,
+          {
+            ...streamOptions,
+            model: model || 'x-ai/grok-code-fast-1', // Default to #1 most used model
+          }
+        );
+        break;
+      }
+
+      case 'anthropic': {
+        const { streamAnthropicResponse } = await import('~/lib/.server/llm/anthropic-stream');
+        aiStream = await streamAnthropicResponse(
+          systemPrompt,
+          messages,
+          apiKey,
+          {
+            ...streamOptions,
+            model: model || 'claude-3-5-sonnet-20241022', // Default to Claude 3.5 Sonnet
+          }
+        );
+        break;
+      }
+
+      case 'openai': {
+        const { streamOpenAIResponse } = await import('~/lib/.server/llm/openai-stream');
+        aiStream = await streamOpenAIResponse(
+          systemPrompt,
+          messages,
+          apiKey,
+          {
+            ...streamOptions,
+            model: model || 'gpt-4-turbo-preview', // Default to GPT-4 Turbo
+          }
+        );
+        break;
+      }
+
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
+
+    stream.switchSource(aiStream);
 
     return new Response(stream.readable, {
       status: 200,

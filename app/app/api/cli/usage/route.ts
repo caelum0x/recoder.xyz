@@ -23,9 +23,11 @@ export const POST = withCLIAuth(async (request: NextRequest, context) => {
     } = body;
 
     // Create usage record
-    const usageRecord = await prisma.usageRecord.create({
+    const usageRecord = await prisma.usage_records.create({
       data: {
+        id: crypto.randomUUID(),
         userId: context.userId,
+        type: 'cli',
         requestType: 'cli',
         model,
         provider,
@@ -43,12 +45,12 @@ export const POST = withCLIAuth(async (request: NextRequest, context) => {
 
     // Update quota if it's a pricey model
     if (usageRecord.isPriceyModel && success) {
-      const quota = await prisma.userQuota.findUnique({
+      const quota = await prisma.user_quota.findUnique({
         where: { userId: context.userId },
       });
 
       if (quota) {
-        await prisma.userQuota.update({
+        await prisma.user_quota.update({
           where: { id: quota.id },
           data: {
             sessionsUsedToday: { increment: 1 },
@@ -80,7 +82,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
     const limit = parseInt(url.searchParams.get('limit') || '50');
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
-    const usageRecords = await prisma.usageRecord.findMany({
+    const usageRecords = await prisma.usage_records.findMany({
       where: {
         userId: context.userId,
         platform: 'cli',
@@ -102,7 +104,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
       },
     });
 
-    const total = await prisma.usageRecord.count({
+    const total = await prisma.usage_records.count({
       where: {
         userId: context.userId,
         platform: 'cli',
