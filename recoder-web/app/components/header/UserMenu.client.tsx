@@ -22,6 +22,7 @@ export function UserMenu() {
   const userProfile = useStore(userProfileStore);
   const [showMenu, setShowMenu] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     loadUserProfile();
@@ -66,6 +67,16 @@ export function UserMenu() {
     window.location.href = `${getMainSiteUrl()}/dashboard`;
   }
 
+  const getInitials = (name?: string) => {
+    if (!name) return userProfile?.email.charAt(0).toUpperCase();
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   if (loading) {
     return (
       <div className="px-3 py-2 text-sm text-bolt-elements-textSecondary">
@@ -84,18 +95,6 @@ export function UserMenu() {
       </a>
     );
   }
-
-  const getInitials = (name?: string) => {
-    if (!name) return userProfile.email.charAt(0).toUpperCase();
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const [imageError, setImageError] = useState(false);
 
   return (
     <div className="relative">

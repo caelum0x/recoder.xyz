@@ -1,22 +1,70 @@
 /**
  * Auth Helper Functions for API Routes
- * Provides convenient wrappers for Better Auth
+ * Provides convenient wrappers for JWT authentication
  */
 
-import { auth } from './auth-config';
-import { headers } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from './prisma';
+import jwt from 'jsonwebtoken';
+import { cookies } from 'next/headers';
 
 /**
- * Get session in API routes
+ * Get session from JWT token
+ * @param request - NextRequest object (optional)
  * @returns Session object or null
  */
-export async function getSession() {
+export async function getSession(request?: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers()
+    let token: string | undefined;
+    
+    if (request) {
+      // Get token from request cookies or Authorization header
+      token = request.cookies.get('auth-token')?.value || 
+              request.headers.get('authorization')?.replace('Bearer ', '');
+    } else {
+      // Get token from server-side cookies
+      const cookieStore = cookies();
+      token = cookieStore.get('auth-token')?.value;
+    }
+
+    if (!token) {
+      return null;
+    }
+
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+    
+    // Fetch user from database
+    const user = await prisma.users.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+        hasOwnApiKey: true,
+        apiKey: true,
+        subscription: true,
+        role: true,
+      }
     });
-    return session;
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        hasApiKey: !!(user.hasOwnApiKey || user.apiKey),
+        subscription: user.subscription,
+        role: user.role,
+      },
+      expires: new Date(decoded.exp * 1000).toISOString()
+    };
   } catch (error) {
     console.error('Failed to get session:', error);
     return null;
@@ -27,8 +75,8 @@ export async function getSession() {
  * Require authentication in API routes
  * Returns session or throws 401 response
  */
-export async function requireAuth() {
-  const session = await getSession();
+export async function requireAuth(request?: NextRequest) {
+  const session = await getSession(request);
   
   if (!session?.user) {
     return {
@@ -70,6 +118,14 @@ export async function hasSubscription(requiredPlan: 'free' | 'pro' | 'premium' |
   const session = await getSession();
   if (!session?.user) return false;
 
+  // Fetch user's subscription plan from database
+  const user = await prisma.users.findUnique({
+    where: { id: session.user.id },
+    select: { subscriptionPlan: true }
+  });
+
+  if (!user) return false;
+
   const planHierarchy = {
     free: 0,
     pro: 1,
@@ -77,7 +133,7 @@ export async function hasSubscription(requiredPlan: 'free' | 'pro' | 'premium' |
     enterprise: 3,
   };
 
-  const userPlanLevel = planHierarchy[session.user.subscriptionPlan as keyof typeof planHierarchy] || 0;
+  const userPlanLevel = planHierarchy[user.subscriptionPlan as keyof typeof planHierarchy] || 0;
   const requiredPlanLevel = planHierarchy[requiredPlan];
 
   return userPlanLevel >= requiredPlanLevel;

@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft,
@@ -33,6 +33,7 @@ interface NotificationSetting {
 }
 
 export default function NotificationSettingsPage() {
+  const [pageLoading, setPageLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -95,6 +96,86 @@ export default function NotificationSettingsPage() {
     frequency: 'daily' as 'daily' | 'weekly' | 'monthly'
   });
 
+  // Load notification settings on mount
+  useEffect(() => {
+    loadNotificationSettings();
+  }, []);
+
+  async function loadNotificationSettings() {
+    try {
+      setPageLoading(true);
+      const response = await fetch('/api/settings/notifications');
+      const data = await response.json();
+
+      if (data.success && data.settings) {
+        const s = data.settings;
+
+        // Map database settings to UI structure
+        setNotifications([
+          {
+            id: 'usage',
+            title: 'Usage Alerts',
+            description: 'Get notified when you reach 80%, 90%, and 100% of your quota',
+            icon: Zap,
+            channels: {
+              email: s.email_notifications && s.project_updates,
+              inApp: s.desktop_notifications
+            }
+          },
+          {
+            id: 'billing',
+            title: 'Billing & Payments',
+            description: 'Invoices, payment confirmations, and subscription changes',
+            icon: DollarSign,
+            channels: {
+              email: s.email_notifications && s.billing_updates,
+              inApp: false
+            }
+          },
+          {
+            id: 'security',
+            title: 'Security Alerts',
+            description: 'Login notifications, password changes, and security updates',
+            icon: Shield,
+            channels: {
+              email: s.email_notifications && s.security_alerts,
+              inApp: s.desktop_notifications
+            }
+          },
+          {
+            id: 'product',
+            title: 'Product Updates',
+            description: 'New features, improvements, and platform announcements',
+            icon: Bell,
+            channels: {
+              email: s.email_notifications,
+              inApp: s.desktop_notifications
+            }
+          },
+          {
+            id: 'marketing',
+            title: 'Marketing Emails',
+            description: 'Tips, tutorials, case studies, and promotional content',
+            icon: Mail,
+            channels: {
+              email: false,
+              inApp: false
+            }
+          }
+        ]);
+
+        setDigestSettings({
+          enabled: s.email_digest || false,
+          frequency: (s.notification_frequency || 'daily') as 'daily' | 'weekly' | 'monthly'
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load notification settings:', err);
+    } finally {
+      setPageLoading(false);
+    }
+  }
+
   const toggleChannel = (notificationId: string, channel: 'email' | 'inApp') => {
     setNotifications(notifications.map(n => {
       if (n.id === notificationId) {
@@ -116,10 +197,27 @@ export default function NotificationSettingsPage() {
     setSuccess(false);
 
     try {
-      const response = await fetch('/api/user/notifications', {
+      // Map UI structure to database schema
+      const hasAnyEmail = notifications.some(n => n.channels.email);
+      const hasAnyInApp = notifications.some(n => n.channels.inApp);
+
+      const billingNotif = notifications.find(n => n.id === 'billing');
+      const securityNotif = notifications.find(n => n.id === 'security');
+      const usageNotif = notifications.find(n => n.id === 'usage');
+
+      const response = await fetch('/api/settings/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notifications, digestSettings })
+        body: JSON.stringify({
+          email_notifications: hasAnyEmail,
+          desktop_notifications: hasAnyInApp,
+          sound_enabled: true,
+          notification_frequency: digestSettings.frequency,
+          email_digest: digestSettings.enabled,
+          project_updates: usageNotif?.channels.email || false,
+          security_alerts: securityNotif?.channels.email || false,
+          billing_updates: billingNotif?.channels.email || false,
+        })
       });
 
       const data = await response.json();

@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { 
@@ -25,25 +25,59 @@ import {
 } from 'lucide-react';
 
 export default function ProfileSettingsPage() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profileData, setProfileData] = useState({
-    displayName: 'John Doe',
-    bio: 'Full-stack developer passionate about AI and automation',
-    company: 'Acme Inc.',
-    website: 'https://johndoe.com',
-    location: 'San Francisco, CA',
-    publicProfile: true,
-    social: {
-      github: 'johndoe',
-      twitter: 'johndoe',
-      linkedin: 'johndoe'
-    }
+    display_name: '',
+    bio: '',
+    company: '',
+    website: '',
+    location: '',
+    avatar_url: '',
+    github_username: '',
+    twitter_username: '',
+    linkedin_username: '',
+    public_profile: true
   });
+
+  // Load profile data from API
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  async function loadProfile() {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/settings/profile');
+      const data = await response.json();
+
+      if (data.success && data.profile) {
+        setProfileData({
+          display_name: data.profile.display_name || '',
+          bio: data.profile.bio || '',
+          company: data.profile.company || '',
+          website: data.profile.website || '',
+          location: data.profile.location || '',
+          avatar_url: data.profile.avatar_url || '',
+          github_username: data.profile.github_username || '',
+          twitter_username: data.profile.twitter_username || '',
+          linkedin_username: data.profile.linkedin_username || '',
+          public_profile: data.profile.public_profile ?? true
+        });
+        setAvatarPreview(data.profile.avatar_url);
+      }
+    } catch (err) {
+      console.error('Failed to load profile:', err);
+      setError('Failed to load profile settings');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,15 +98,21 @@ export default function ProfileSettingsPage() {
   };
 
   const handleSave = async () => {
-    setLoading(true);
+    setSaving(true);
     setError('');
     setSuccess(false);
 
     try {
-      const response = await fetch('/api/user/profile', {
+      // Update avatar_url if preview changed
+      const dataToSave = {
+        ...profileData,
+        avatar_url: avatarPreview || profileData.avatar_url
+      };
+
+      const response = await fetch('/api/settings/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileData)
+        body: JSON.stringify(dataToSave)
       });
 
       const data = await response.json();
@@ -86,7 +126,7 @@ export default function ProfileSettingsPage() {
     } catch (err) {
       setError('Network error. Please try again.');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -193,8 +233,8 @@ export default function ProfileSettingsPage() {
                   <input
                     id="displayName"
                     type="text"
-                    value={profileData.displayName}
-                    onChange={(e) => setProfileData({ ...profileData, displayName: e.target.value })}
+                    value={profileData.display_name}
+                    onChange={(e) => setProfileData({ ...profileData, display_name: e.target.value })}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
                   />
                 </div>
@@ -277,10 +317,10 @@ export default function ProfileSettingsPage() {
                     <input
                       id="github"
                       type="text"
-                      value={profileData.social.github}
-                      onChange={(e) => setProfileData({ 
-                        ...profileData, 
-                        social: { ...profileData.social, github: e.target.value }
+                      value={profileData.github_username}
+                      onChange={(e) => setProfileData({
+                        ...profileData,
+                        github_username: e.target.value
                       })}
                       className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
                       placeholder="username"
@@ -297,10 +337,10 @@ export default function ProfileSettingsPage() {
                     <input
                       id="twitter"
                       type="text"
-                      value={profileData.social.twitter}
-                      onChange={(e) => setProfileData({ 
-                        ...profileData, 
-                        social: { ...profileData.social, twitter: e.target.value }
+                      value={profileData.twitter_username}
+                      onChange={(e) => setProfileData({
+                        ...profileData,
+                        twitter_username: e.target.value
                       })}
                       className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
                       placeholder="username"
@@ -317,10 +357,10 @@ export default function ProfileSettingsPage() {
                     <input
                       id="linkedin"
                       type="text"
-                      value={profileData.social.linkedin}
-                      onChange={(e) => setProfileData({ 
-                        ...profileData, 
-                        social: { ...profileData.social, linkedin: e.target.value }
+                      value={profileData.linkedin_username}
+                      onChange={(e) => setProfileData({
+                        ...profileData,
+                        linkedin_username: e.target.value
                       })}
                       className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
                       placeholder="username"
@@ -339,14 +379,14 @@ export default function ProfileSettingsPage() {
                   <div className="text-sm text-gray-400">Make your profile visible to everyone</div>
                 </div>
                 <button
-                  onClick={() => setProfileData({ ...profileData, publicProfile: !profileData.publicProfile })}
+                  onClick={() => setProfileData({ ...profileData, public_profile: !profileData.public_profile })}
                   className={`relative w-12 h-6 rounded-full transition-colors ${
-                    profileData.publicProfile ? 'bg-orange-500' : 'bg-gray-700'
+                    profileData.public_profile ? 'bg-orange-500' : 'bg-gray-700'
                   }`}
                 >
                   <div
                     className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                      profileData.publicProfile ? 'translate-x-7' : 'translate-x-1'
+                      profileData.public_profile ? 'translate-x-7' : 'translate-x-1'
                     }`}
                   />
                 </button>
@@ -363,10 +403,10 @@ export default function ProfileSettingsPage() {
               </Link>
               <button
                 onClick={handleSave}
-                disabled={loading}
+                disabled={saving || loading}
                 className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50"
               >
-                {loading ? (
+                {saving ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Saving...</span>
