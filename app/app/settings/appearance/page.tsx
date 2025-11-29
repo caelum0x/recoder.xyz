@@ -5,10 +5,10 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useThemeContext } from '@/components/ThemeProvider';
-import { 
+import {
   ArrowLeft,
   Terminal,
   Sun,
@@ -18,11 +18,17 @@ import {
   Layers,
   Palette,
   Sparkles,
-  Check
+  Check,
+  Loader2,
+  Save
 } from 'lucide-react';
 
 export default function AppearanceSettingsPage() {
   const { theme, setTheme } = useThemeContext();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
   const [fontSize, setFontSize] = useState('medium');
   const [density, setDensity] = useState('comfortable');
   const [accentColor, setAccentColor] = useState('orange');
@@ -54,9 +60,39 @@ export default function AppearanceSettingsPage() {
     { value: 'pink', label: 'Pink', color: 'bg-pink-500' },
   ];
 
-  const handleSave = async () => {
+  // Load appearance settings from API
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  async function loadSettings() {
     try {
-      const response = await fetch('/api/user/preferences/appearance', {
+      setLoading(true);
+      const response = await fetch('/api/settings/appearance');
+      const data = await response.json();
+
+      if (data.success && data.settings) {
+        setFontSize(data.settings.fontSize || 'medium');
+        setDensity(data.settings.density || 'comfortable');
+        setAccentColor(data.settings.accentColor || 'orange');
+        setReduceAnimations(data.settings.reduceAnimations || false);
+        // Theme is managed by ThemeContext
+      }
+    } catch (err) {
+      console.error('Failed to load appearance settings:', err);
+      setError('Failed to load appearance settings');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    setSuccess(false);
+
+    try {
+      const response = await fetch('/api/settings/appearance', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,12 +104,19 @@ export default function AppearanceSettingsPage() {
         }),
       });
 
-      if (response.ok) {
-        // Show success toast
-        alert('Appearance settings saved!');
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      } else {
+        setError(data.error || 'Failed to save appearance settings');
       }
-    } catch (error) {
-      console.error('Failed to save appearance settings:', error);
+    } catch (err) {
+      console.error('Failed to save appearance settings:', err);
+      setError('Network error. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -109,6 +152,20 @@ export default function AppearanceSettingsPage() {
               </div>
             </div>
           </div>
+
+          {/* Success/Error Messages */}
+          {success && (
+            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center space-x-3">
+              <Check className="w-5 h-5 text-green-500" />
+              <span className="text-green-400">Appearance settings saved successfully!</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
+              {error}
+            </div>
+          )}
 
           <div className="space-y-6">
             {/* Theme Selection */}
@@ -265,9 +322,20 @@ export default function AppearanceSettingsPage() {
               </Link>
               <button
                 onClick={handleSave}
-                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+                disabled={saving || loading}
+                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50"
               >
-                Save Changes
+                {saving ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    <span>Save Changes</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

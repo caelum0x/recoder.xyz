@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { randomUUID } from "crypto";
 
 /**
  * Custom Prisma adapter for Better Auth that properly handles Prisma models
@@ -74,7 +75,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           
           // Generate ID if not provided (Better Auth doesn't always provide IDs)
           if (!data.id) {
-            data.id = crypto.randomUUID();
+            data.id = randomUUID();
           }
           
           const result = await modelClient.create({ data });
