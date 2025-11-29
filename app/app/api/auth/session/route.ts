@@ -1,48 +1,57 @@
 /**
- * Session verification endpoint for recoder-web
+ * Session verification endpoint
  * GET /api/auth/session
  *
  * Returns the current user session if authenticated
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
+import { prisma } from '@/lib/prisma';
+import jwt from 'jsonwebtoken';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get session from better-auth using the request headers
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    // Get token from cookies or Authorization header
+    const token = request.cookies.get('auth-token')?.value || 
+                  request.headers.get('authorization')?.replace('Bearer ', '');
 
-    if (!session) {
-      return NextResponse.json(
-        { user: null, session: null },
-        { status: 401 }
-      );
+    if (!token) {
+      return NextResponse.json({ user: null }, { status: 200 });
     }
 
-    // Return session data in the format recoder-web expects
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+    
+    // Fetch user from database
+    const user = await prisma.users.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+        hasOwnApiKey: true,
+        apiKey: true,
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json({ user: null }, { status: 200 });
+    }
+
     return NextResponse.json({
       user: {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        image: session.user.image,
-        subscriptionPlan: (session.user as any).subscriptionPlan || 'free',
-        subscriptionStatus: (session.user as any).subscriptionStatus || 'active',
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        hasApiKey: !!(user.hasOwnApiKey || user.apiKey),
       },
-      session: {
-        id: session.session.id,
-        expiresAt: session.session.expiresAt,
-      },
+      expires: new Date(decoded.exp * 1000).toISOString()
     });
+
   } catch (error) {
-    console.error('[API] Session verification error:', error);
-    return NextResponse.json(
-      { user: null, session: null, error: 'Session verification failed' },
-      { status: 500 }
-    );
+    console.error('Session verification error:', error);
+    return NextResponse.json({ user: null }, { status: 200 });
   }
 }

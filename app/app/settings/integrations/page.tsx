@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft,
@@ -34,6 +34,7 @@ interface Integration {
 }
 
 export default function IntegrationsSettingsPage() {
+  const [pageLoading, setPageLoading] = useState(true);
   const [loading, setLoading] = useState<string | null>(null);
   const [success, setSuccess] = useState('');
 
@@ -44,82 +45,90 @@ export default function IntegrationsSettingsPage() {
       description: 'Connect your GitHub account for seamless code management',
       icon: Github,
       color: 'from-gray-700 to-gray-900',
-      connected: true,
-      lastSync: '5 minutes ago',
-      features: ['Repository access', 'Issue tracking', 'Pull requests']
-    },
-    {
-      id: 'slack',
-      name: 'Slack',
-      description: 'Get notifications and updates in your Slack workspace',
-      icon: MessageSquare,
-      color: 'from-purple-600 to-pink-600',
       connected: false,
-      features: ['Notifications', 'Command shortcuts', 'Team collaboration']
+      lastSync: undefined,
+      features: ['Repository access', 'OAuth authentication', 'Profile sync']
     },
     {
-      id: 'discord',
-      name: 'Discord',
-      description: 'Integrate with Discord for team communication',
-      icon: MessageSquare,
-      color: 'from-indigo-600 to-blue-600',
+      id: 'google',
+      name: 'Google',
+      description: 'Sign in with your Google account',
+      icon: Chrome,
+      color: 'from-blue-600 to-red-600',
       connected: false,
-      features: ['Bot commands', 'Notifications', 'Server integration']
-    },
-    {
-      id: 'gitlab',
-      name: 'GitLab',
-      description: 'Connect GitLab for source code management',
-      icon: GitBranch,
-      color: 'from-orange-600 to-red-600',
-      connected: false,
-      features: ['Repository sync', 'CI/CD integration', 'Issue management']
-    },
-    {
-      id: 'vscode',
-      name: 'VS Code',
-      description: 'Install the VS Code extension for enhanced productivity',
-      icon: Code2,
-      color: 'from-blue-600 to-cyan-600',
-      connected: true,
-      lastSync: 'Just now',
-      features: ['Code completion', 'Inline suggestions', 'Context awareness']
-    },
-    {
-      id: 'webhooks',
-      name: 'Webhooks',
-      description: 'Configure custom webhooks for your workflows',
-      icon: Webhook,
-      color: 'from-green-600 to-emerald-600',
-      connected: false,
-      features: ['Custom endpoints', 'Event triggers', 'Real-time updates']
+      lastSync: undefined,
+      features: ['OAuth authentication', 'Profile sync', 'Email integration']
     }
   ]);
 
+  const [comingSoon] = useState([
+    { name: 'Slack', icon: MessageSquare, description: 'Team notifications and collaboration' },
+    { name: 'Discord', icon: MessageSquare, description: 'Community integration and bots' },
+    { name: 'GitLab', icon: GitBranch, description: 'Source code management and CI/CD' },
+    { name: 'Webhooks', icon: Webhook, description: 'Custom event triggers and automation' }
+  ]);
+
+  // Load integration settings on mount
+  useEffect(() => {
+    loadIntegrationSettings();
+  }, []);
+
+  async function loadIntegrationSettings() {
+    try {
+      setPageLoading(true);
+      const response = await fetch('/api/auth/oauth-status');
+      const data = await response.json();
+
+      if (data.success && data.providers) {
+        // Update integrations based on actual OAuth connections
+        setIntegrations(prev => prev.map(integration => {
+          if (integration.id === 'github') {
+            return {
+              ...integration,
+              connected: data.providers.github || false,
+              lastSync: data.providers.github ? 'Connected' : undefined
+            };
+          }
+          if (integration.id === 'google') {
+            return {
+              ...integration,
+              connected: data.providers.google || false,
+              lastSync: data.providers.google ? 'Connected' : undefined
+            };
+          }
+          return integration;
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load OAuth status:', err);
+    } finally {
+      setPageLoading(false);
+    }
+  }
+
   const handleToggleIntegration = async (integrationId: string) => {
     setLoading(integrationId);
-    
+
     try {
       const integration = integrations.find(i => i.id === integrationId);
-      
+
       if (!integration) return;
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      setIntegrations(integrations.map(i => {
-        if (i.id === integrationId) {
-          return {
-            ...i,
-            connected: !i.connected,
-            lastSync: i.connected ? undefined : 'Just now'
-          };
+      if (!integration.connected) {
+        // Connecting - initiate OAuth flow using Better Auth
+        if (integrationId === 'github') {
+          window.location.href = '/api/auth/signin/github';
+          return;
+        } else if (integrationId === 'google') {
+          window.location.href = '/api/auth/signin/google';
+          return;
         }
-        return i;
-      }));
-
-      setSuccess(`${integration.name} ${integration.connected ? 'disconnected' : 'connected'} successfully`);
-      setTimeout(() => setSuccess(''), 3000);
+      } else {
+        // Disconnecting - this would need to be implemented
+        // For now, just show a message
+        setSuccess(`To disconnect ${integration.name}, please sign out and sign back in with a different method`);
+        setTimeout(() => setSuccess(''), 5000);
+      }
     } catch (error) {
       console.error('Error toggling integration:', error);
     } finally {
@@ -246,11 +255,41 @@ export default function IntegrationsSettingsPage() {
             })}
           </div>
 
+          {/* Coming Soon */}
+          <div className="mt-8">
+            <h2 className="text-xl font-bold mb-4">Coming Soon</h2>
+            <p className="text-sm text-gray-400 mb-6">
+              More integrations are on the way. Vote for your favorites on our roadmap.
+            </p>
+            <div className="grid md:grid-cols-2 gap-4">
+              {comingSoon.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.name}
+                    className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl opacity-60"
+                  >
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold">{item.name}</h3>
+                        <span className="text-xs text-orange-500">Coming Soon</span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-500">{item.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Custom Integrations */}
           <div className="mt-8 p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
-            <h2 className="text-lg font-bold mb-4">Custom Integrations</h2>
+            <h2 className="text-lg font-bold mb-4">Need Something Custom?</h2>
             <p className="text-sm text-gray-400 mb-4">
-              Need a custom integration? Use our API or webhooks to build your own.
+              Build your own integrations using our API. Full documentation and examples available.
             </p>
             <div className="flex space-x-3">
               <Link
@@ -259,13 +298,6 @@ export default function IntegrationsSettingsPage() {
               >
                 <Code2 className="w-4 h-4" />
                 <span>API Documentation</span>
-              </Link>
-              <Link
-                href="/settings/api"
-                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium transition-all flex items-center space-x-2"
-              >
-                <Webhook className="w-4 h-4" />
-                <span>Webhook Settings</span>
               </Link>
             </div>
           </div>

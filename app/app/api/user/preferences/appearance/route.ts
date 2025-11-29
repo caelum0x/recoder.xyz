@@ -10,7 +10,7 @@ import { headers } from 'next/headers';
 
 export async function PUT(request: Request) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user } = authResult;
     
@@ -66,7 +66,7 @@ export async function PUT(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user } = authResult;
     

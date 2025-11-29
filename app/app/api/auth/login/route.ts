@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyPassword } from '@/lib/crypto';
 import { getApiKeyStatus } from '@/lib/api-key-resolver';
 import { nanoid } from 'nanoid';
+import jwt from 'jsonwebtoken';
 
 interface LoginRequest {
   email: string;
@@ -49,7 +50,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate access and refresh tokens
+    // Check if 2FA is enabled
+    const securitySettings = await prisma.$queryRaw<any[]>`
+      SELECT two_factor_enabled FROM security_settings WHERE user_id = ${user.id}
+    `;
+
+    const has2FA = securitySettings && securitySettings.length > 0 && securitySettings[0].two_factor_enabled;
+
+    // If 2FA is enabled, require 2FA verification
+    if (has2FA) {
+      return NextResponse.json({
+        success: false,
+        requires2FA: true,
+        userId: user.id,
+        message: 'Two-factor authentication required'
+      }, { status: 200 });
+    }
+
+    // Generate JWT token for session
+    const jwtToken = jwt.sign(
+      { 
+        userId: user.id,
+        email: user.email,
+        name: user.name
+      },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '30d' }
+    );
+
+    // Generate access and refresh tokens for CLI
     const accessToken = `rct_${nanoid(32)}`;
     const refreshToken = `rcr_${nanoid(32)}`;
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
@@ -80,7 +109,8 @@ export async function POST(request: NextRequest) {
     // Get quota info (quota is now a single object, not array)
     const quota = user.quota || null;
 
-    return NextResponse.json({
+    // Create response with cookie
+    const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -101,6 +131,17 @@ export async function POST(request: NextRequest) {
         expiresAt: expiresAt.toISOString()
       }
     });
+
+    // Set JWT token as HTTP-only cookie
+    response.cookies.set('auth-token', jwtToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+      path: '/',
+    });
+
+    return response;
 
   } catch (error) {
     console.error('Login Error:', error);
