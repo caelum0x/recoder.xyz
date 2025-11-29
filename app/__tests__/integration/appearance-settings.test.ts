@@ -121,7 +121,7 @@ test.describe('Theme Persistence', () => {
 
   test('should load saved theme on page reload', async ({ page }) => {
     // Set theme in localStorage
-    await page.evaluateAsync(() => {
+    await page.evaluate(() => {
       localStorage.setItem('recoder-theme', 'dark');
     });
     

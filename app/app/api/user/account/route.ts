@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
-
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
 
@@ -63,7 +60,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
 
@@ -150,7 +147,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
 

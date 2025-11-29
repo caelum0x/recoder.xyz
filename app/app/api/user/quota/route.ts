@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
+import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const authResult = await requireAuth(request);
+    if (authResult.error) return authResult.response;
+    const { user: authUser } = authResult;
 
-    if (!session?.user) {
+    if (!authUser?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userEmail = session.user.email;
+    const userEmail = authUser.email;
 
     // Get user data from users table
     const user = await prisma.users.findUnique({

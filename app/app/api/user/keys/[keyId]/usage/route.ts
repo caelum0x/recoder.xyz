@@ -17,7 +17,7 @@ export async function GET(
     // In Next.js 15, params is a Promise that must be awaited
     const params = await props.params;
 
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user } = authResult;
 
