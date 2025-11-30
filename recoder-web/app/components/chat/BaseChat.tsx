@@ -3,18 +3,26 @@ import React, { type RefCallback } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { IconButton } from '~/components/ui/IconButton';
-import { TemplateQuickStart } from '~/components/ui/TemplateQuickStart';
 import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import { ExamplePrompts } from './ExamplePrompts';
 import { ModelSelector } from './ModelSelector';
+import { GitHubBar } from './GitHubBar';
+import { MCPButton } from './MCPButton';
+import { ProjectGallery } from '~/components/gallery/ProjectGallery';
 import type { TemplateRepo } from '~/lib/.server/github/types';
+
+import { LightningMode } from './LightningMode';
+import { TaskCategories, type TaskCategory } from './TaskCategories';
 
 import styles from './BaseChat.module.scss';
 
 interface BaseChatProps {
+  chatId?: string;
+  projectId?: string;
+  projectName?: string;
   textareaRef?: React.RefObject<HTMLTextAreaElement> | undefined;
   messageRef?: RefCallback<HTMLDivElement> | undefined;
   scrollRef?: RefCallback<HTMLDivElement> | undefined;
@@ -27,8 +35,12 @@ interface BaseChatProps {
   input?: string;
   selectedProvider?: string;
   selectedModel?: string;
+  lightningMode?: boolean;
+  taskCategory?: TaskCategory;
   onProviderChange?: (provider: string) => void;
   onModelChange?: (model: string) => void;
+  onLightningModeChange?: (enabled: boolean) => void;
+  onTaskCategoryChange?: (category: TaskCategory) => void;
   onSettingsClick?: () => void;
   handleStop?: () => void;
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
@@ -36,11 +48,14 @@ interface BaseChatProps {
   enhancePrompt?: () => void;
 }
 
-const TEXTAREA_MIN_HEIGHT = 76;
+const TEXTAREA_MIN_HEIGHT = 140; // Increased from 76 to 140 for larger input area
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
   (
     {
+      chatId,
+      projectId,
+      projectName,
       textareaRef,
       messageRef,
       scrollRef,
@@ -53,8 +68,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       input = '',
       selectedProvider = 'openrouter',
       selectedModel = 'x-ai/grok-code-fast-1',
+      lightningMode = false,
+      taskCategory = 'general',
       onProviderChange = () => {},
       onModelChange = () => {},
+      onLightningModeChange = () => {},
+      onTaskCategoryChange = () => {},
       onSettingsClick = () => {},
       sendMessage,
       handleInputChange,
@@ -111,25 +130,42 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               >
                 <div
                   className={classNames(
-                    'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg overflow-hidden',
+                    'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg',
                   )}
                 >
-                  {/* Model Selection */}
+                  {/* Model Selection - Above textarea */}
                   <ClientOnly>
                     {() => (
-                      <ModelSelector
-                        selectedProvider={selectedProvider}
-                        selectedModel={selectedModel}
-                        onProviderChange={onProviderChange}
-                        onModelChange={onModelChange}
-                        onSettingsClick={onSettingsClick}
-                      />
+                      <div className="p-3 border-b border-bolt-elements-borderColor">
+                        <ModelSelector
+                          selectedProvider={selectedProvider}
+                          selectedModel={selectedModel}
+                          onProviderChange={onProviderChange}
+                          onModelChange={onModelChange}
+                          onSettingsClick={onSettingsClick}
+                        />
+                      </div>
                     )}
                   </ClientOnly>
 
-                  <textarea
-                    ref={textareaRef}
-                    className={`w-full pl-4 pt-4 pr-16 focus:outline-none resize-none text-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}
+                  {/* GitHub Integration */}
+                  {chatId && (
+                    <ClientOnly>
+                      {() => (
+                        <GitHubBar 
+                          chatId={chatId} 
+                          projectId={projectId}
+                          projectName={projectName}
+                        />
+                      )}
+                    </ClientOnly>
+                  )}
+
+                  <div className="relative">
+                    {/* Larger Chat Input Textarea - Wider */}
+                    <textarea
+                      ref={textareaRef}
+                      className={`w-full pl-4 pt-4 pr-20 pb-4 focus:outline-none resize-none text-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         if (event.shiftKey) {
@@ -155,6 +191,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     translate="no"
                     aria-label="Enter your prompt"
                   />
+                  
                   <ClientOnly>
                     {() => (
                       <SendButton
@@ -172,8 +209,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       />
                     )}
                   </ClientOnly>
+                  </div>
                   <div className="flex justify-between text-sm p-4 pt-2">
-                    <div className="flex gap-1 items-center">
+                    <div className="flex gap-2 items-center">
                       <IconButton
                         title="Enhance prompt"
                         disabled={input.length === 0 || enhancingPrompt}
@@ -196,6 +234,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           </>
                         )}
                       </IconButton>
+                      {/* Small controls next to prompt enhancer */}
+                      <ClientOnly>
+                        {() => (
+                          <>
+                            <TaskCategories
+                              selected={taskCategory}
+                              onChange={onTaskCategoryChange}
+                            />
+                            <LightningMode
+                              enabled={lightningMode}
+                              onChange={onLightningModeChange}
+                            />
+                            <MCPButton />
+                          </>
+                        )}
+                      </ClientOnly>
                     </div>
                     {input.length > 3 ? (
                       <div className="text-xs text-bolt-elements-textTertiary">
@@ -204,7 +258,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     ) : null}
                   </div>
                 </div>
-                <div className="bg-bolt-elements-background-depth-1 pb-6">{/* Ghost Element */}</div>
               </div>
             </div>
             {!chatStarted && (
@@ -222,17 +275,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   </ClientOnly>
                 </div>
 
-                {/* Template Quick Start */}
-                <ClientOnly>
-                  {() => (
-                    <TemplateQuickStart
-                      onSelectTemplate={(template: TemplateRepo) => {
-                        const prompt = `Create a ${template.name} project. Set up the complete project structure and ensure it's ready to run with all dependencies installed.`;
-                        sendMessage?.({} as React.UIEvent, prompt);
-                      }}
-                    />
-                  )}
-                </ClientOnly>
+                {/* Community Projects Gallery */}
+                <div className="mt-8">
+                  <ClientOnly>
+                    {() => <ProjectGallery />}
+                  </ClientOnly>
+                </div>
               </div>
             )}
           </div>

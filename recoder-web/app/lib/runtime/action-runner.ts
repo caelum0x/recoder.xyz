@@ -4,6 +4,7 @@ import type { BoltAction } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
+import { autoSyncToGitHub } from './github-auto-sync';
 
 // Browser-compatible path utilities
 const nodePath = {
@@ -60,6 +61,8 @@ type ActionsMap = MapStore<Record<string, ActionState>>;
 export class ActionRunner {
   #webcontainer: Promise<WebContainer>;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
+  #chatId: string | null = null;
+  #modifiedFiles: Array<{ path: string; content: string }> = [];
 
   // FIX #3: Track if repository was cloned to prevent additional file generation
   #repositoryCloned: boolean = false;
@@ -76,8 +79,9 @@ export class ActionRunner {
 
   actions: ActionsMap = map({});
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
+  constructor(webcontainerPromise: Promise<WebContainer>, chatId?: string) {
     this.#webcontainer = webcontainerPromise;
+    this.#chatId = chatId || null;
   }
 
   addAction(data: ActionCallbackData) {
@@ -207,6 +211,9 @@ export class ActionRunner {
     // Check if this is a long-running dev server command
     const isDevServer = /npm (run )?dev|yarn dev|pnpm dev|vite|next dev|remix dev|npm start|yarn start|pnpm start/.test(normalizedContent);
 
+    // Check if this is an install command (needed for progress tracking)
+    const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
+
     // Handle dev server commands specially - run in background
     if (isDevServer) {
       logger.info(`🚀 Starting dev server in background: ${action.content.substring(0, 100)}`);
@@ -300,7 +307,6 @@ export class ActionRunner {
     // For regular commands, wait for completion with timeout
     // WebContainer npm installs can be slow, especially for large packages
     // Increased timeout for npm install: 5 minutes to handle large dependencies
-    const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
     const timeoutDuration = isInstallCommand ? 300000 : 90000; // 5 min for install, 90s for others
 
     logger.info(`⏱️ Timeout set to ${timeoutDuration / 1000}s (install command: ${isInstallCommand})`);
@@ -406,6 +412,21 @@ export class ActionRunner {
       try {
         await webcontainer.fs.writeFile(action.filePath, action.content);
         logger.info(`✅ File created successfully: ${action.filePath} (${action.content.length} bytes)`);
+        
+        // Track modified file for GitHub sync
+        this.#modifiedFiles.push({ path: action.filePath, content: action.content });
+        
+        // Trigger GitHub sync after a short delay (batch multiple files)
+        if (this.#chatId) {
+          setTimeout(() => {
+            if (this.#modifiedFiles.length > 0) {
+              const filesToSync = [...this.#modifiedFiles];
+              this.#modifiedFiles = [];
+              autoSyncToGitHub(this.#chatId!, filesToSync);
+            }
+          }, 2000);
+        }
+        
         break;
       } catch (error) {
         if (retries === 0) {

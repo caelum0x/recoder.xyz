@@ -1,0 +1,98 @@
+/**
+ * Scroll Improvements
+ * Fixes scroll issues in chat, editor, and terminal
+ */
+
+/* Chat Messages Scroll */
+.chat-messages {
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bolt-elements-borderColor) transparent;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: var(--bolt-elements-borderColor);
+  border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background-color: var(--bolt-elements-borderColorActive);
+}
+
+/* Editor Scroll */
+.editor-container {
+  overflow: auto;
+  scroll-behavior: smooth;
+}
+
+/* Terminal Scroll */
+.terminal-container {
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+/* Smooth scroll for all scrollable elements */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar for workbench */
+.workbench-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bolt-elements-borderColor) var(--bolt-elements-background-depth-1);
+}
+
+.workbench-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.workbench-scroll::-webkit-scrollbar-track {
+  background: var(--bolt-elements-background-depth-1);
+}
+
+.workbench-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--bolt-elements-borderColor);
+  border-radius: 5px;
+  border: 2px solid var(--bolt-elements-background-depth-1);
+}
+
+.workbench-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--bolt-elements-borderColorActive);
+}
+
+/* Prevent scroll conflicts */
+.no-scroll-conflict {
+  overscroll-behavior: contain;
+}
+
+/* Full-screen mode */
+.fullscreen-mode {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: var(--bolt-elements-background-depth-1);
+}

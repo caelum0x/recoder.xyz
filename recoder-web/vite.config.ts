@@ -4,7 +4,6 @@ import { defineConfig, type ViteDevServer } from 'vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { optimizeCssModules } from 'vite-plugin-optimize-css-modules';
 import tsconfigPaths from 'vite-tsconfig-paths';
-import commonjs from '@rollup/plugin-commonjs';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -17,6 +16,11 @@ export default defineConfig((config) => {
   const isDev = config.mode === 'development';
 
   return {
+    resolve: {
+      alias: {
+        'remix-island': resolve(__dirname, 'node_modules/.pnpm/remix-island@0.2.0_@remix-run+react@2.17.1_react-dom@18.3.1_react@18.3.1__react@18.3.1_typesc_765fcejahjdq6wbeh2gedzhktu/node_modules/remix-island/dist/index.mjs'),
+      },
+    },
     build: {
       target: 'esnext',
     },
@@ -156,6 +160,10 @@ export default defineConfig((config) => {
         'remark-gfm',
         'unist-util-visit',
       ],
+      resolve: {
+        conditions: ['node'],
+        externalConditions: ['node'],
+      },
     },
     define: {
       'process.env.NODE_ENV': JSON.stringify(config.mode || 'development'),
@@ -177,6 +185,10 @@ export default defineConfig((config) => {
           v3_fetcherPersist: true,
           v3_relativeSplatPath: true,
           v3_throwAbortReason: true,
+        },
+        serverModuleFormat: 'esm',
+        buildEnd: async () => {
+          // Build completed
         },
       }),
       UnoCSS(),

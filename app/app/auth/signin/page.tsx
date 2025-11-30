@@ -18,7 +18,7 @@ import {
   Code2,
   CheckCircle
 } from 'lucide-react';
-import { signIn, authClient } from '@/lib/auth-client';
+import { signIn } from '@/lib/auth-client';
 
 function SignInForm() {
   const [email, setEmail] = useState('');
@@ -59,15 +59,12 @@ function SignInForm() {
         }
       }
 
-      // If no 2FA or 2FA already provided, proceed with Better Auth sign-in
-      const result = await signIn.email({
-        email,
-        password,
-        callbackURL: returnUrl,
-      });
+      // If no 2FA or 2FA already provided, proceed with sign-in
+      const result = await signIn(email, password);
 
-      if (result.error) {
-        setError(result.error.message || 'Authentication failed. Please try again.');
+      if (!result.ok) {
+        const errorData = await result.json();
+        setError(errorData.message || 'Authentication failed. Please try again.');
       } else {
         setSuccess(true);
         setTimeout(() => {

@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { canMakeRequest, trackUsageEvent, getApiKeyForUser } from '@/lib/usage-service';
+import { getMCPTools, formatMCPToolsForAI, executeMCPTool } from '@/lib/mcp/tools-integration';
 
 // AI Provider interfaces
 interface AIMessage {
@@ -59,7 +60,8 @@ interface OpenRouterResponse {
  */
 async function processAIRequest(
   request: AIRequest,
-  apiKey: string
+  apiKey: string,
+  tools?: any[]
 ): Promise<AIResponse> {
   const startTime = Date.now();
 
@@ -80,6 +82,7 @@ async function processAIRequest(
         messages: request.messages,
         temperature: request.temperature || 0.7,
         max_tokens: request.maxTokens || 4096,
+        ...(tools && tools.length > 0 ? { tools } : {}),
       }),
     });
 
@@ -180,6 +183,10 @@ export async function POST(request: NextRequest) {
     // Get API key info for logging
     const apiKeyInfo = await getApiKeyForUser(userId);
 
+    // Load MCP tools for user
+    const mcpTools = await getMCPTools(userId);
+    const formattedTools = formatMCPToolsForAI(mcpTools);
+
     // Process AI request through OpenRouter
     let aiResponse: AIResponse;
     let success = true;
@@ -191,8 +198,26 @@ export async function POST(request: NextRequest) {
           ...body,
           userId: userId,
         },
-        apiKey
+        apiKey,
+        formattedTools
       );
+
+      // Handle tool calls if present
+      const data = aiResponse as any;
+      if (data.choices?.[0]?.message?.tool_calls) {
+        const toolCalls = data.choices[0].message.tool_calls;
+        
+        for (const toolCall of toolCalls) {
+          const [serverId, toolName] = toolCall.function.name.split('_', 2);
+          const args = JSON.parse(toolCall.function.arguments);
+          
+          try {
+            await executeMCPTool(userId, serverId, toolName, args);
+          } catch (error) {
+            console.error('MCP tool execution failed:', error);
+          }
+        }
+      }
     } catch (error: any) {
       success = false;
       errorMessage = error.message || 'AI request failed';

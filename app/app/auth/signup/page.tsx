@@ -103,15 +103,15 @@ function SignUpForm() {
     }
 
     try {
-      const result = await signUp.email({
-        email: formData.email,
-        password: formData.password,
-        name: formData.name,
-        callbackURL: returnUrl,
-      });
+      const result = await signUp(
+        formData.email,
+        formData.password,
+        formData.name
+      );
 
-      if (result.error) {
-        setError(result.error.message || 'Registration failed. Please try again.');
+      if (!result.ok) {
+        const errorData = await result.json();
+        setError(errorData.message || 'Registration failed. Please try again.');
       } else {
         setSuccess(true);
         setTimeout(() => {

@@ -12,6 +12,7 @@ import { getCurrentUser } from '~/utils/auth-utils';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import { HistoryItem } from './HistoryItem';
 import { binDates } from './date-binning';
+import { ProjectsList } from './ProjectsList';
 
 const menuVariants = {
   closed: {
@@ -108,6 +109,7 @@ export function Menu() {
   const [open, setOpen] = useState(false);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
   const [loadingFromDb, setLoadingFromDb] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const loadEntries = useCallback(async () => {
     console.log('📋 [Menu.loadEntries] Starting to load chat history...');
@@ -217,6 +219,41 @@ export function Menu() {
     }
   }, [open, loadEntries]);
 
+  // Listen for modal state changes
+  useEffect(() => {
+    function handleModalOpen() {
+      setIsModalOpen(true);
+    }
+
+    function handleModalClose() {
+      setIsModalOpen(false);
+    }
+
+    // Listen for modal events
+    window.addEventListener('modal-opened', handleModalOpen);
+    window.addEventListener('modal-closed', handleModalClose);
+
+    // Also detect if there are any modal overlays present
+    const checkForModals = () => {
+      // Look for modal elements with specific patterns
+      const modalOverlays = document.querySelectorAll('.fixed.inset-0, [class*="fixed inset-0"]');
+      const createProjectText = document.querySelector('h2');
+      const hasCreateProjectModal = createProjectText?.textContent?.includes('Create Project');
+      
+      setIsModalOpen(modalOverlays.length > 0 || hasCreateProjectModal || false);
+    };
+
+    // Check for modals on mount and periodically
+    checkForModals();
+    const modalCheckInterval = setInterval(checkForModals, 500);
+
+    return () => {
+      window.removeEventListener('modal-opened', handleModalOpen);
+      window.removeEventListener('modal-closed', handleModalClose);
+      clearInterval(modalCheckInterval);
+    };
+  }, []);
+
   useEffect(() => {
     const enterThreshold = 40;
     const exitThreshold = 40;
@@ -224,6 +261,11 @@ export function Menu() {
     function onMouseMove(event: MouseEvent) {
       if (event.pageX < enterThreshold) {
         setOpen(true);
+      }
+
+      // Don't close sidebar if a modal is open
+      if (isModalOpen) {
+        return;
       }
 
       if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
@@ -243,7 +285,7 @@ export function Menu() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('toggle-history', handleToggleEvent);
     };
-  }, []);
+  }, [isModalOpen]);
 
   return (
     <>
@@ -255,8 +297,7 @@ export function Menu() {
         variants={menuVariants}
         className="flex flex-col side-menu fixed top-0 w-[350px] h-full bg-bolt-elements-background-depth-2 border-r rounded-r-3xl border-bolt-elements-borderColor z-sidebar shadow-xl shadow-bolt-elements-sidebar-dropdownShadow text-sm"
       >
-        <div className="flex items-center justify-between h-[var(--header-height)] px-4">
-          <span className="font-semibold text-bolt-elements-textPrimary">Chat History</span>
+        <div className="flex items-center justify-end h-[var(--header-height)] px-4">
           <IconButton
             icon="i-ph:x"
             onClick={() => setOpen(false)}
@@ -273,6 +314,9 @@ export function Menu() {
             <span className="inline-block i-bolt:chat scale-110" />
             Start new chat
           </a>
+        </div>
+        <div className="px-4 mb-2">
+          <ProjectsList />
         </div>
         <div className="text-bolt-elements-textPrimary font-medium pl-6 pr-5 my-2">Your Chats</div>
         <div className="flex-1 overflow-scroll pl-4 pr-5 pb-5">

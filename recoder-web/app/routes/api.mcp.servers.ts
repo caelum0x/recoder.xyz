@@ -1,82 +1,58 @@
-/**
- * MCP Servers API - Manage MCP server connections
- * GET /api/mcp/servers - List all servers
- * POST /api/mcp/servers - Add new server
- * DELETE /api/mcp/servers/:id - Remove server
- * POST /api/mcp/servers/:id/connect - Connect to server
- * POST /api/mcp/servers/:id/disconnect - Disconnect from server
- */
-
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
-import { createMCPServerManager } from '~/lib/.server/mcp/server-manager';
+
+const DEFAULT_SERVERS = [
+  { id: 'github', name: 'GitHub', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] },
+  { id: 'filesystem', name: 'Filesystem', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/workspace'] },
+  { id: 'brave-search', name: 'Web Search', command: 'npx', args: ['-y', '@modelcontextprotocol/server-brave-search'] },
+  { id: 'playwright', name: 'Browser', command: 'npx', args: ['-y', '@modelcontextprotocol/server-playwright'] },
+];
 
 export async function loader({ context }: LoaderFunctionArgs) {
+  const { cloudflare } = context;
+  const db = cloudflare.env.DB;
+
   try {
-    const manager = createMCPServerManager(context.cloudflare.env);
-    const servers = await manager.listServers();
+    const servers = await db
+      .prepare('SELECT * FROM mcp_servers WHERE enabled = 1')
+      .all();
 
     return json({
-      success: true,
-      servers,
+      servers: servers.results || [],
+      defaults: DEFAULT_SERVERS,
     });
   } catch (error) {
-    console.error('Failed to list MCP servers:', error);
-    return json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to list servers',
-      },
-      { status: 500 }
-    );
+    return json({ servers: [], defaults: DEFAULT_SERVERS });
   }
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const method = request.method;
+  const { cloudflare } = context;
+  const db = cloudflare.env.DB;
 
-  try {
-    const manager = createMCPServerManager(context.cloudflare.env);
+  if (request.method === 'POST') {
+    const config = await request.json();
 
-    switch (method) {
-      case 'POST': {
-        // Add new server
-        const body = await request.json();
-        const server = await manager.addServer(body);
+    try {
+      await db
+        .prepare(
+          'INSERT INTO mcp_servers (id, server_id, name, command, args, env, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        )
+        .bind(
+          crypto.randomUUID(),
+          config.id,
+          config.name,
+          config.command,
+          JSON.stringify(config.args || []),
+          JSON.stringify(config.env || {}),
+          1
+        )
+        .run();
 
-        return json({
-          success: true,
-          server,
-        });
-      }
-
-      case 'DELETE': {
-        // Delete server (from URL params)
-        const url = new URL(request.url);
-        const serverId = url.searchParams.get('id');
-
-        if (!serverId) {
-          return json({ success: false, error: 'Server ID required' }, { status: 400 });
-        }
-
-        await manager.removeServer(serverId);
-
-        return json({
-          success: true,
-          message: 'Server removed',
-        });
-      }
-
-      default:
-        return json({ success: false, error: 'Method not allowed' }, { status: 405 });
+      return json({ success: true });
+    } catch (error) {
+      return json({ error: 'Failed to add server' }, { status: 500 });
     }
-  } catch (error) {
-    console.error('MCP server action error:', error);
-    return json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Server action failed',
-      },
-      { status: 500 }
-    );
   }
+
+  return json({ error: 'Method not allowed' }, { status: 405 });
 }

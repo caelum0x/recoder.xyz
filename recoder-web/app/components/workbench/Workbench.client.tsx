@@ -64,6 +64,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   const unsavedFiles = useStore(workbenchStore.unsavedFiles);
   const files = useStore(workbenchStore.files);
   const selectedView = useStore(workbenchStore.currentView);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   console.log('🔧 Workbench render:', { 
     chatStarted, 
@@ -267,8 +268,9 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
           className={classNames(
             'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
             {
-              'left-[var(--workbench-left)]': showWorkbench,
+              'left-[var(--workbench-left)]': showWorkbench && !isFullscreen,
               'left-[100%]': !showWorkbench,
+              'left-0 right-0 top-0 bottom-0 w-full mr-0 z-50': isFullscreen,
             },
           )}
         >
@@ -279,6 +281,13 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                 <div className="ml-auto" />
                 {selectedView === 'code' && (
                   <>
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                    >
+                      <div className={isFullscreen ? "i-ph:arrows-in" : "i-ph:arrows-out"} />
+                    </PanelHeaderButton>
                     <PanelHeaderButton
                       className="mr-1 text-sm"
                       onClick={() => setShowGitHubModal(true)}

@@ -294,11 +294,11 @@ export const MODEL_PROVIDERS: Record<string, ProviderConfig> = {
 export function getSpeedIndicator(speed: number): string {
   switch (speed) {
     case 3:
-      return '⚡⚡⚡';
+      return 'Fast';
     case 2:
-      return '⚡⚡';
+      return 'Medium';
     case 1:
-      return '⚡';
+      return 'Slow';
     default:
       return '';
   }
@@ -319,4 +319,27 @@ export function getProvider(providerId: string): ProviderConfig | undefined {
 export function getModel(providerId: string, modelId: string): ModelInfo | undefined {
   const provider = getProvider(providerId);
   return provider?.models.find((m) => m.id === modelId);
+}
+
+export function addCustomModel(providerId: string, model: Omit<ModelInfo, 'provider'>): boolean {
+  const provider = MODEL_PROVIDERS[providerId];
+  
+  if (!provider) {
+    return false;
+  }
+
+  // Check if model with same ID already exists
+  const existingModel = provider.models.find((m) => m.id === model.id);
+  if (existingModel) {
+    return false;
+  }
+
+  // Add the new model to the provider
+  const newModel: ModelInfo = {
+    ...model,
+    provider: providerId as any
+  };
+
+  provider.models.push(newModel);
+  return true;
 }

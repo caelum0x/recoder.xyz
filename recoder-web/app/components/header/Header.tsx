@@ -39,6 +39,15 @@ export function Header() {
         <a href="/" className="text-2xl font-semibold text-accent flex items-center cursor-pointer hover:opacity-80 transition-opacity">
           <span className="font-bold">Recoder</span>
         </a>
+        
+        {/* Projects Link */}
+        <a 
+          href="/projects" 
+          className="ml-4 px-3 py-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors rounded-md hover:bg-bolt-elements-background-depth-2 flex items-center gap-1"
+        >
+          <div className="i-ph:folder text-sm" />
+          Projects
+        </a>
       </div>
       <span className="flex-1 px-4 truncate text-center text-bolt-elements-textPrimary">
         <ClientOnly>{() => <ChatDescription />}</ClientOnly>
