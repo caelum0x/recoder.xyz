@@ -1,5 +1,5 @@
 import type { Message } from 'ai';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -14,9 +14,15 @@ interface MessagesProps {
 
 export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: MessagesProps, ref) => {
   const { id, isStreaming = false, messages = [] } = props;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isStreaming]);
 
   return (
-    <div id={id} ref={ref} className={props.className}>
+    <div id={id} ref={ref} className={props.className} style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 250px)' }}>
       {messages.length > 0
         ? messages.map((message, index) => {
             const { role, content } = message;
@@ -51,6 +57,7 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
           <LoadingIndicator />
         </div>
       )}
+      <div ref={messagesEndRef} />
     </div>
   );
 });

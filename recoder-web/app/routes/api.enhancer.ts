@@ -45,23 +45,8 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       context.cloudflare.env,
     );
 
-    // AI SDK v3: Manually process fullStream to avoid transformation bugs
-    const byteStream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of result.fullStream) {
-            if (chunk.type === 'text-delta') {
-              controller.enqueue(encoder.encode(chunk.textDelta));
-            }
-          }
-          controller.close();
-        } catch (error) {
-          controller.error(error);
-        }
-      }
-    });
-
-    return new Response(byteStream, {
+    // Use textStream from native implementation
+    return new Response(result.textStream, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',

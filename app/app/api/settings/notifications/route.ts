@@ -6,7 +6,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
-import { getSession } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 
 // GET /api/settings/notifications

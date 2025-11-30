@@ -6,16 +6,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
-
-
 import { prisma } from '@/lib/prisma';
 
 // GET /api/settings/ai
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers()
-    });
+    const session = await getSession(request);
 
     if (!session?.user) {
       return NextResponse.json(
@@ -73,9 +69,7 @@ export async function GET(request: NextRequest) {
 // PUT /api/settings/ai
 export async function PUT(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers()
-    });
+    const session = await getSession(request);
 
     if (!session?.user) {
       return NextResponse.json(

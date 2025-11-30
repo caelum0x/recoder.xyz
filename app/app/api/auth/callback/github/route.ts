@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
           name: githubUser.name || githubUser.login,
           image: githubUser.avatar_url,
           emailVerified: true,
+          updatedAt: new Date(),
         },
       });
     }

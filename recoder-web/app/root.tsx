@@ -5,7 +5,7 @@ import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData } from '
 import tailwindReset from '@unocss/reset/tailwind-compat.css?url';
 import { themeStore } from './lib/stores/theme';
 import { stripIndents } from './utils/stripIndent';
-import { createHead } from 'remix-island';
+import { createHead } from './lib/remix-island';
 import { useEffect } from 'react';
 import { verifySession, getLoginUrl } from './lib/auth/session.server';
 import { AuthProvider } from './lib/contexts/AuthContext';

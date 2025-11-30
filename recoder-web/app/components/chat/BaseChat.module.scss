@@ -17,3 +17,117 @@
 .Chat {
   opacity: 1;
 }
+
+.controlsBar {
+  min-height: 60px;
+  
+  &::-webkit-scrollbar {
+    height: 12px;
+    border-radius: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--bolt-elements-background-depth-3);
+    border-radius: 6px;
+    border: 1px solid var(--bolt-elements-borderColor);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: linear-gradient(45deg, var(--bolt-elements-borderColor), var(--bolt-elements-textSecondary));
+    border-radius: 6px;
+    border: 1px solid var(--bolt-elements-borderColor);
+    
+    &:hover {
+      background: linear-gradient(45deg, var(--bolt-elements-textSecondary), var(--bolt-elements-textPrimary));
+    }
+    
+    &:active {
+      background: var(--bolt-elements-textPrimary);
+    }
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: var(--bolt-elements-background-depth-3);
+  }
+
+  scrollbar-width: thick;
+  scrollbar-color: var(--bolt-elements-textSecondary) var(--bolt-elements-background-depth-3);
+  
+  // Ensure scrolling is visible and functional
+  scroll-behavior: smooth;
+  overflow-y: hidden;
+  overflow-x: auto;
+  
+  // Show scrollbar always
+  &::-webkit-scrollbar {
+    -webkit-appearance: none;
+  }
+  
+  // Better responsiveness
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    overflow-x: visible;
+    
+    > div {
+      width: 100%;
+      overflow-x: auto;
+    }
+  }
+}
+
+.controlsOverlay {
+  min-height: 24px;
+  max-height: 32px;
+  z-index: 10;
+  white-space: nowrap;
+  
+  &::-webkit-scrollbar {
+    height: 4px;
+    border-radius: 2px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(var(--bolt-elements-background-depth-3), 0.3);
+    border-radius: 2px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--bolt-elements-borderColor);
+    border-radius: 2px;
+    
+    &:hover {
+      background: var(--bolt-elements-textSecondary);
+    }
+  }
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--bolt-elements-textSecondary) rgba(var(--bolt-elements-background-depth-3), 0.3);
+  
+  // Ensure scrolling is smooth and functional
+  scroll-behavior: smooth;
+  overflow-y: hidden;
+  overflow-x: auto;
+  
+  // Show scrollbar on hover/always
+  &::-webkit-scrollbar {
+    -webkit-appearance: none;
+  }
+  
+  // Force single line, no wrapping
+  > div {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  
+  // Better responsiveness for smaller overlay
+  @media (max-width: 768px) {
+    gap: 2px;
+    padding: 4px;
+    
+    > div {
+      gap: 2px;
+    }
+  }
+}
