@@ -100,7 +100,7 @@ export function UserMenu() {
     <div className="relative">
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-bolt-elements-background-depth-2 transition-colors"
+        className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors border border-gray-700 text-white"
       >
         {userProfile.image && !imageError ? (
           <img
@@ -114,7 +114,7 @@ export function UserMenu() {
             {getInitials(userProfile.name)}
           </div>
         )}
-        <div className="i-ph:caret-down text-bolt-elements-textSecondary" />
+        <div className="i-ph:caret-down text-gray-300" />
       </button>
 
       {/* Dropdown Menu */}
@@ -127,41 +127,50 @@ export function UserMenu() {
           />
 
           {/* Menu */}
-          <div className="absolute right-0 mt-2 w-64 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 shadow-2xl z-50 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-64 rounded-lg border border-gray-800 shadow-2xl z-50 overflow-hidden" style={{ backgroundColor: '#000000', color: '#ffffff' }}>
             {/* User Info */}
-            <div className="p-4 border-b border-bolt-elements-borderColor">
-              <div className="font-medium text-bolt-elements-textPrimary truncate">
+            <div className="p-4 border-b border-gray-800" style={{ backgroundColor: '#000000', color: '#ffffff' }}>
+              <div className="font-medium truncate" style={{ color: '#ffffff' }}>
                 {userProfile.name || 'User'}
               </div>
-              <div className="text-sm text-bolt-elements-textSecondary truncate">
+              <div className="text-sm truncate" style={{ color: '#9ca3af' }}>
                 {userProfile.email}
               </div>
               {userProfile.subscription && (
-                <div className="mt-2 inline-flex px-2 py-0.5 bg-bolt-elements-background-depth-2 rounded-full text-xs text-bolt-elements-textTertiary">
+                <div className="mt-2 inline-flex px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: '#374151', color: '#d1d5db' }}>
                   {userProfile.subscription === 'free' ? 'Free Beta' : userProfile.subscription}
                 </div>
               )}
             </div>
 
             {/* Menu Items */}
-            <div className="p-2">
+            <div className="p-2" style={{ backgroundColor: '#000000' }}>
               <button
                 onClick={goToDashboard}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-bolt-elements-background-depth-2 transition-colors text-bolt-elements-textPrimary"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors"
+                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1f2937'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 <div className="i-ph:house text-lg" />
                 <span className="text-sm">Dashboard</span>
               </button>
               <button
                 onClick={goToAccount}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-bolt-elements-background-depth-2 transition-colors text-bolt-elements-textPrimary"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors"
+                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1f2937'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 <div className="i-ph:user text-lg" />
                 <span className="text-sm">Account</span>
               </button>
               <button
                 onClick={goToSettings}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-bolt-elements-background-depth-2 transition-colors text-bolt-elements-textPrimary"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors"
+                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1f2937'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 <div className="i-ph:gear text-lg" />
                 <span className="text-sm">Settings</span>
@@ -169,10 +178,13 @@ export function UserMenu() {
             </div>
 
             {/* Sign Out */}
-            <div className="p-2 border-t border-bolt-elements-borderColor">
+            <div className="p-2 border-t border-gray-800" style={{ backgroundColor: '#000000' }}>
               <button
                 onClick={handleSignOut}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors text-bolt-elements-textPrimary group"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group"
+                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 <div className="i-ph:sign-out text-lg group-hover:text-red-500" />
                 <span className="text-sm group-hover:text-red-500">Sign Out</span>

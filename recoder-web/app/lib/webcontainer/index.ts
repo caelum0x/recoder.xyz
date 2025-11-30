@@ -1,5 +1,6 @@
 import { WebContainer } from '@webcontainer/api';
 import { WORK_DIR_NAME } from '~/utils/constants';
+import { installRecoderCLI } from './cli-installer';
 
 interface WebContainerContext {
   loaded: boolean;
@@ -45,6 +46,11 @@ if (!import.meta.env.SSR) {
 
             webcontainerContext.healthy = true;
             webcontainerContext.lastBootTime = bootDuration;
+
+            // Install recoder-code CLI in background
+            installRecoderCLI(wc).catch((error) => {
+              console.warn('⚠️ Failed to install recoder-code CLI:', error);
+            });
 
             return wc;
           } catch (error) {

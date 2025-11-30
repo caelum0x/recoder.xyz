@@ -18,9 +18,9 @@ const createKeySchema = z.object({
  */
 export async function GET(req: NextRequest) {
   try {
-    const authResult = await requireAuth(request);
+    const authResult = await requireAuth(req);
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const user = authResult.user;
 
     if (!user?.id) {
       return NextResponse.json(
@@ -50,9 +50,9 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const authResult = await requireAuth(request);
+    const authResult = await requireAuth(req);
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const user = authResult.user;
 
     if (!user?.id) {
       return NextResponse.json(
@@ -123,9 +123,9 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const authResult = await requireAuth(request);
+    const authResult = await requireAuth(req);
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const user = authResult.user;
 
     if (!user?.id) {
       return NextResponse.json(

@@ -25,32 +25,27 @@ function sanitizeContent(content: string): string {
 
 export interface ChatSession {
   id: string;
-  user_id?: string;
-  anonymous_id?: string;
+  userId?: string;
+  anonymousId?: string;
   title?: string;
   description?: string;
-  url_id: string;
-  total_messages: number;
-  last_message_at?: Date;
-  project_id?: string;
-  artifact_id?: string;
+  urlId: string;
+  totalMessages: number;
+  lastMessageAt?: Date;
+  projectId?: string;
+  artifactId?: string;
   metadata: Record<string, any>;
-  created_at: Date;
-  updated_at: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ChatMessage {
   id: string;
-  session_id: string;
+  sessionId: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  model_used?: string;
-  tokens_used?: number;
-  stream_complete: boolean;
-  tool_calls?: any;
-  artifacts?: any;
   metadata: Record<string, any>;
-  created_at: Date;
+  createdAt: Date;
 }
 
 export class ChatHistoryDB {
@@ -73,25 +68,31 @@ export class ChatHistoryDB {
   }): Promise<ChatSession> {
     const result = await this.sql`
       INSERT INTO chat_sessions (
-        user_id,
-        anonymous_id,
-        url_id,
+        id,
+        "userId",
+        "anonymousId",
+        "urlId",
         title,
         description,
-        artifact_id
+        "artifactId",
+        "createdAt",
+        "updatedAt"
       ) VALUES (
+        gen_random_uuid()::text,
         ${data.userId || null},
         ${data.anonymousId || null},
         ${data.urlId},
         ${data.title || null},
         ${data.description || null},
-        ${data.artifactId || null}
+        ${data.artifactId || null},
+        NOW(),
+        NOW()
       )
-      ON CONFLICT (url_id) DO UPDATE SET
+      ON CONFLICT ("urlId") DO UPDATE SET
         title = EXCLUDED.title,
         description = EXCLUDED.description,
-        artifact_id = EXCLUDED.artifact_id,
-        updated_at = NOW()
+        "artifactId" = EXCLUDED."artifactId",
+        "updatedAt" = NOW()
       RETURNING *
     ` as unknown as ChatSession[];
 
@@ -104,7 +105,7 @@ export class ChatHistoryDB {
   async getSessionByUrlId(urlId: string): Promise<ChatSession | null> {
     const result = await this.sql`
       SELECT * FROM chat_sessions
-      WHERE url_id = ${urlId}
+      WHERE "urlId" = ${urlId}
       LIMIT 1
     ` as unknown as ChatSession[];
 
@@ -137,7 +138,7 @@ export class ChatHistoryDB {
     }
   ): Promise<void> {
     // Use parameterized query to safely handle large JSON objects
-    const updates: any = { updated_at: new Date() };
+    const updates: any = { updatedAt: new Date() };
     
     if (data.title !== undefined) updates.title = data.title;
     if (data.description !== undefined) updates.description = data.description;
@@ -149,18 +150,18 @@ export class ChatHistoryDB {
 
     // Build update query safely - Neon uses ${} template literals
     if (data.title !== undefined) {
-      await this.sql`UPDATE chat_sessions SET title = ${data.title}, updated_at = NOW() WHERE id = ${sessionId}`;
+      await this.sql`UPDATE chat_sessions SET title = ${data.title}, "updatedAt" = NOW() WHERE id = ${sessionId}`;
     }
     if (data.description !== undefined) {
-      await this.sql`UPDATE chat_sessions SET description = ${data.description}, updated_at = NOW() WHERE id = ${sessionId}`;
+      await this.sql`UPDATE chat_sessions SET description = ${data.description}, "updatedAt" = NOW() WHERE id = ${sessionId}`;
     }
     if (data.artifactId !== undefined) {
-      await this.sql`UPDATE chat_sessions SET artifact_id = ${data.artifactId}, updated_at = NOW() WHERE id = ${sessionId}`;
+      await this.sql`UPDATE chat_sessions SET "artifactId" = ${data.artifactId}, "updatedAt" = NOW() WHERE id = ${sessionId}`;
     }
     if (data.metadata !== undefined) {
       // Safely pass large JSON objects - Neon handles this correctly
       const metadataJson = JSON.stringify(data.metadata);
-      await this.sql`UPDATE chat_sessions SET metadata = ${metadataJson}::jsonb, updated_at = NOW() WHERE id = ${sessionId}`;
+      await this.sql`UPDATE chat_sessions SET metadata = ${metadataJson}::jsonb, "updatedAt" = NOW() WHERE id = ${sessionId}`;
     }
   }
 
@@ -182,23 +183,19 @@ export class ChatHistoryDB {
 
     const result = await this.sql`
       INSERT INTO chat_messages (
-        session_id,
+        id,
+        "sessionId",
         role,
         content,
-        model_used,
-        tokens_used,
-        tool_calls,
-        artifacts,
-        metadata
+        metadata,
+        "createdAt"
       ) VALUES (
+        gen_random_uuid()::text,
         ${data.sessionId},
         ${data.role},
         ${sanitizedContent},
-        ${data.modelUsed || null},
-        ${data.tokensUsed || 0},
-        ${JSON.stringify(data.toolCalls || null)},
-        ${JSON.stringify(data.artifacts || null)},
-        ${JSON.stringify(data.metadata || {})}
+        ${JSON.stringify(data.metadata || {})}::jsonb,
+        NOW()
       )
       RETURNING *
     ` as unknown as ChatMessage[];
@@ -212,8 +209,8 @@ export class ChatHistoryDB {
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
     const result = await this.sql`
       SELECT * FROM chat_messages
-      WHERE session_id = ${sessionId}
-      ORDER BY created_at ASC
+      WHERE "sessionId" = ${sessionId}
+      ORDER BY "createdAt" ASC
     `;
 
     return result as ChatMessage[];
@@ -228,8 +225,8 @@ export class ChatHistoryDB {
   ): Promise<ChatSession[]> {
     const result = await this.sql`
       SELECT * FROM chat_sessions
-      WHERE user_id = ${userId}
-      ORDER BY updated_at DESC
+      WHERE "userId" = ${userId}
+      ORDER BY "updatedAt" DESC
       LIMIT ${limit}
     `;
 
@@ -245,8 +242,8 @@ export class ChatHistoryDB {
   ): Promise<ChatSession[]> {
     const result = await this.sql`
       SELECT * FROM chat_sessions
-      WHERE anonymous_id = ${anonymousId}
-      ORDER BY updated_at DESC
+      WHERE "anonymousId" = ${anonymousId}
+      ORDER BY "updatedAt" DESC
       LIMIT ${limit}
     `;
 
@@ -286,7 +283,7 @@ export class ChatHistoryDB {
 
     await this.sql`
       UPDATE chat_messages
-      SET content = ${sanitizedContent}, updated_at = NOW()
+      SET content = ${sanitizedContent}, "updatedAt" = NOW()
       WHERE id = ${messageId}
     `;
   }
@@ -386,15 +383,15 @@ export class ChatHistoryDB {
     // Update message count
     await this.sql`
       UPDATE chat_sessions
-      SET total_messages = ${data.messages.length},
-          last_message_at = NOW(),
-          updated_at = NOW()
+      SET "totalMessages" = ${data.messages.length},
+          "lastMessageAt" = NOW(),
+          "updatedAt" = NOW()
       WHERE id = ${session.id}
     `;
 
     console.log('✅ [saveChat] Complete chat saved:', {
       sessionId: session.id,
-      urlId: session.url_id,
+      urlId: session.urlId,
       messages: data.messages.length,
       files: fileCount,
     });
@@ -432,14 +429,14 @@ export class ChatHistoryDB {
 
     console.log('📂 [loadChat] Loaded chat with file snapshot:', {
       sessionId: session.id,
-      urlId: session.url_id,
+      urlId: session.urlId,
       messageCount: messages.length,
       fileCount: Object.keys(fileSnapshot).length,
     });
 
     return {
       id: session.id,
-      urlId: session.url_id,
+      urlId: session.urlId,
       description: session.description || undefined,
       messages,
       fileSnapshot,
@@ -472,10 +469,10 @@ export class ChatHistoryDB {
 
     return sessions.map((session) => ({
       id: session.id,
-      urlId: session.url_id,
+      urlId: session.urlId,
       description: session.description || session.title || 'Untitled Chat',
-      timestamp: session.updated_at.toISOString(),
-      messageCount: session.total_messages,
+      timestamp: session.updatedAt.toISOString(),
+      messageCount: session.totalMessages,
     }));
   }
 }

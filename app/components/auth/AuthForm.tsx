@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { authClient } from '@/lib/auth-client';
+import { signIn, signUp } from '@/lib/auth-client';
 
 interface AuthFormProps {
   mode: 'signin' | 'signup';
@@ -25,27 +25,29 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === 'signup') {
-        const result = await authClient.signUp.email({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-        });
+        const result = await signUp(
+          formData.email,
+          formData.password,
+          formData.name
+        );
 
-        if (result.error) {
-          setError(result.error.message || 'Signup failed');
+        if (!result.ok) {
+          const errorData = await result.json();
+          setError(errorData.message || 'Signup failed');
           return;
         }
 
         // Redirect to dashboard on success
         router.push('/dashboard');
       } else {
-        const result = await authClient.signIn.email({
-          email: formData.email,
-          password: formData.password,
-        });
+        const result = await signIn(
+          formData.email,
+          formData.password
+        );
 
-        if (result.error) {
-          setError(result.error.message || 'Login failed');
+        if (!result.ok) {
+          const errorData = await result.json();
+          setError(errorData.message || 'Login failed');
           return;
         }
 
@@ -64,7 +66,7 @@ export function AuthForm({ mode }: AuthFormProps) {
     setError(null);
 
     try {
-      await authClient.signIn.social({
+      await signIn.social({
         provider,
         callbackURL: '/dashboard',
       });

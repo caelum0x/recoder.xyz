@@ -23,7 +23,7 @@ export async function getSession(request?: NextRequest) {
               request.headers.get('authorization')?.replace('Bearer ', '');
     } else {
       // Get token from server-side cookies
-      const cookieStore = cookies();
+      const cookieStore = await cookies();
       token = cookieStore.get('auth-token')?.value;
     }
 

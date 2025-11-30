@@ -12,6 +12,12 @@ export default function SettingsLayout() {
 
   const settingsSections = [
     {
+      title: 'Project',
+      items: [
+        { name: 'Project Context', path: '/settings/context', icon: '📝' },
+      ],
+    },
+    {
       title: 'Preferences',
       items: [
         { name: 'Editor', path: '/settings/editor', icon: '⚙️' },

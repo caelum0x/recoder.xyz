@@ -6,17 +6,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
-
-
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 
 // GET /api/settings/editor - Get editor settings
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers()
-    });
+    const session = await getSession(request);
 
     if (!session?.user) {
       return NextResponse.json(
@@ -72,9 +68,7 @@ export async function GET(request: NextRequest) {
 // PUT /api/settings/editor - Update editor settings
 export async function PUT(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers()
-    });
+    const session = await getSession(request);
 
     if (!session?.user) {
       return NextResponse.json(

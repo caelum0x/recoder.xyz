@@ -33,7 +33,7 @@ export function Chat() {
 
   return (
     <>
-      {ready && <ChatImpl key={chatId || 'new'} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
+      {ready && <ChatImpl key={chatId || 'new'} chatId={chatId} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
       <ToastContainer
         closeButton={({ closeToast }) => {
           return (
@@ -66,11 +66,12 @@ export function Chat() {
 }
 
 interface ChatProps {
+  chatId?: string;
   initialMessages: Message[];
   storeMessageHistory: (messages: Message[]) => Promise<void>;
 }
 
-export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProps) => {
+export const ChatImpl = memo(({ chatId, initialMessages, storeMessageHistory }: ChatProps) => {
   useShortcuts();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -80,6 +81,20 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | undefined>();
+
+  // Lightning Mode and Task Categories
+  const [lightningMode, setLightningMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lightningMode') === 'true';
+    }
+    return false;
+  });
+  const [taskCategory, setTaskCategory] = useState<'code' | 'debug' | 'refactor' | 'explain' | 'test' | 'deploy' | 'general'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('taskCategory') as any) || 'general';
+    }
+    return 'general';
+  });
 
   // Provider and Model Selection
   const [selectedProvider, setSelectedProvider] = useState(() => {
@@ -100,8 +115,37 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedProvider', selectedProvider);
       localStorage.setItem('selectedModel', selectedModel);
+      localStorage.setItem('lightningMode', String(lightningMode));
+      localStorage.setItem('taskCategory', taskCategory);
     }
-  }, [selectedProvider, selectedModel]);
+  }, [selectedProvider, selectedModel, lightningMode, taskCategory]);
+
+  // Auto-switch model when Lightning Mode changes
+  useEffect(() => {
+    if (lightningMode) {
+      // Switch to fast models
+      const fastModels: Record<string, string> = {
+        'openrouter': 'google/gemini-2.0-flash-exp:free',
+        'anthropic': 'anthropic/claude-3-haiku',
+        'openai': 'openai/gpt-4o-mini',
+        'google': 'google/gemini-2.0-flash-exp:free',
+        'groq': 'groq/llama-3.3-70b-versatile',
+      };
+      const fastModel = fastModels[selectedProvider] || fastModels['openrouter'];
+      setSelectedModel(fastModel);
+    } else {
+      // Switch back to standard models
+      const standardModels: Record<string, string> = {
+        'openrouter': 'anthropic/claude-3.5-sonnet',
+        'anthropic': 'anthropic/claude-3.5-sonnet',
+        'openai': 'openai/gpt-4o',
+        'google': 'google/gemini-2.0-flash-thinking-exp:free',
+        'groq': 'groq/llama-3.3-70b-versatile',
+      };
+      const standardModel = standardModels[selectedProvider] || standardModels['openrouter'];
+      setSelectedModel(standardModel);
+    }
+  }, [lightningMode, selectedProvider]);
 
   const { showChat } = useStore(chatStore);
 
@@ -112,6 +156,8 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
     body: {
       provider: selectedProvider,
       model: selectedModel,
+      lightningMode,
+      taskCategory,
     },
     onError: (error) => {
       logger.error('Request failed\n\n', error);
@@ -475,6 +521,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
     <>
       <BaseChat
         ref={animationScope}
+        chatId={chatId}
         textareaRef={textareaRef}
         input={input}
         showChat={showChat}
@@ -484,8 +531,12 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
         promptEnhanced={promptEnhanced}
         selectedProvider={selectedProvider}
         selectedModel={selectedModel}
+        lightningMode={lightningMode}
+        taskCategory={taskCategory}
         onProviderChange={setSelectedProvider}
         onModelChange={setSelectedModel}
+        onLightningModeChange={setLightningMode}
+        onTaskCategoryChange={setTaskCategory}
         onSettingsClick={() => {
           // Navigate to API key management page
           if (typeof window !== 'undefined') {

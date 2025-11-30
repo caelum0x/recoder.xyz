@@ -1,10 +1,11 @@
 import { useStore } from '@nanostores/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { GitHubIntegration } from '~/components/github/GitHubIntegration';
 import { DeployButton } from '~/components/deployment/DeployButton';
+import { SaveToProject } from '~/components/chat/SaveToProject';
 import type { TemplateRepo } from '~/lib/.server/github/types';
 
 interface HeaderActionButtonsProps {}
@@ -13,6 +14,13 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
   const showWorkbench = useStore(workbenchStore.showWorkbench);
   const { showChat } = useStore(chatStore);
   const [showGitHubIntegration, setShowGitHubIntegration] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Get chatId from URL
+    const match = window.location.pathname.match(/\/chat\/([^\/]+)/);
+    setChatId(match ? match[1] : null);
+  }, []);
 
   const canHideChat = showWorkbench || !showChat;
 
@@ -112,6 +120,9 @@ Please analyze the project structure, create all files, install dependencies, an
             <div className="i-ph:code-bold" />
           </Button>
         </div>
+
+        {/* Save to Project Button */}
+        {chatId && <SaveToProject chatId={chatId} />}
 
         {/* GitHub Integration Button */}
         <Button

@@ -84,10 +84,10 @@ const EXAMPLE_PROMPTS = [
 
 export function ExamplePrompts({ onSelectPrompt }: ExamplePromptsProps) {
   return (
-    <div className="w-full max-w-6xl mx-auto">
+    <div className="w-full max-w-6xl mx-auto mb-12">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-bolt-elements-textPrimary mb-2">
-          ✨ What would you like to build today?
+          What would you like to build today?
         </h2>
         <p className="text-bolt-elements-textSecondary">
           From simple UIs to complete full-stack applications with backends and databases
