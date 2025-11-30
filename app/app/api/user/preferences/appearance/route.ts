@@ -3,16 +3,14 @@
  * PUT - Update user appearance preferences
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
     const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const user = authResult.user;
     
     if (!user) {
       return NextResponse.json(
@@ -64,11 +62,11 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
-    const { user } = authResult;
+    const user = authResult.user;
     
     if (!user) {
       return NextResponse.json(

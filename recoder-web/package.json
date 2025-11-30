@@ -61,6 +61,7 @@
     "@iconify-json/ph": "^1.1.13",
     "@iconify-json/svg-spinners": "^1.1.2",
     "@lezer/highlight": "^1.2.0",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "@nanostores/react": "^0.7.2",
     "@neondatabase/serverless": "^1.0.2",
     "@octokit/rest": "^22.0.1",

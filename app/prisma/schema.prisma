@@ -382,17 +382,17 @@ model blockchain_networks {
 }
 
 model AuthCode {
-  id          String    @id
-  code        String    @unique
+  id          String   @id
+  code        String   @unique
   userId      String
   clientId    String
   redirectUri String?
   scope       String?
   state       String?
   expiresAt   DateTime
-  used        Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  user        users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  used        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  user        users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([code])
   @@index([userId])
@@ -400,16 +400,16 @@ model AuthCode {
 }
 
 model DeviceCode {
-  id         String    @id @default(uuid())
-  deviceCode String    @unique
-  userCode   String    @unique
-  clientId   String    @default("recoder-cli")
+  id         String   @id @default(uuid())
+  deviceCode String   @unique
+  userCode   String   @unique
+  clientId   String   @default("recoder-cli")
   scope      String?
-  status     String    @default("pending")
+  status     String   @default("pending")
   expiresAt  DateTime
   userId     String?
-  createdAt  DateTime  @default(now())
-  user       users?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  user       users?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([deviceCode])
   @@index([userCode])
@@ -1246,22 +1246,22 @@ model payment_intents {
 }
 
 model payment_methods {
-  id             String          @id
-  type           String
-  provider       String          @default("stripe")
-  providerId     String
-  providerToken  String?
-  brand          String?
-  last4          String?
-  expMonth       Int?
-  expYear        Int?
-  holderName     String?
-  isDefault      Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime
-  userId         String
-  users          users           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscriptions  subscriptions[]
+  id            String          @id
+  type          String
+  provider      String          @default("stripe")
+  providerId    String
+  providerToken String?
+  brand         String?
+  last4         String?
+  expMonth      Int?
+  expYear       Int?
+  holderName    String?
+  isDefault     Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  userId        String
+  users         users           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions subscriptions[]
 }
 
 model platform_api_keys {
@@ -1372,6 +1372,7 @@ model projects {
   projectPath           String?
   agents                agents[]
   blockchain_networks   blockchain_networks[]
+  chat_sessions         chat_sessions[]
   code_generations      code_generations[]
   codebase_knowledge    codebase_knowledge[]
   contract_deployments  contract_deployments[]
@@ -1853,7 +1854,7 @@ model sessions {
   os           String?
   location     String?
   isActive     Boolean   @default(true)
-  lastActiveAt DateTime?
+  lastActiveAt DateTime? @default(now())
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @default(now())
   users        users     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2163,7 +2164,7 @@ model unreal_blueprint_nodes {
   metadata        Json            @default("{}")
   nodeGuid        String?
   createdAt       DateTime        @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime        @default(now())
   unreal_projects unreal_projects @relation(fields: [unrealProjectId], references: [id], onDelete: Cascade)
 
   @@index([blueprintName, nodeType])
@@ -2458,17 +2459,21 @@ model users {
   totpSecretTemp                                     String?
   twoFactorEnabledAt                                 DateTime?
   twoFactorSetupAt                                   DateTime?
+  AuthCode                                           AuthCode[]
+  DeviceCode                                         DeviceCode[]
+  MCPServer                                          MCPServer[]
+  MCPToolCall                                        MCPToolCall[]
   accounts                                           accounts[]
   agents                                             agents[]
   ai_generated_projects                              ai_generated_projects[]
   analytics_reports                                  analytics_reports[]
   api_keys                                           api_keys[]
   audit_logs                                         audit_logs[]
-  AuthCode                                           AuthCode[]
   backup_access                                      backup_access?
   batch_requests                                     batch_requests[]
+  user_chat_sessions                                 chat_sessions[]           @relation("UserChatSessions")
+  chat_github_connections                            chat_github_connections[]
   cli_sessions                                       cli_sessions[]
-  DeviceCode                                         DeviceCode[]
   cli_usage                                          cli_usage[]
   code_generations                                   code_generations[]
   codebase_knowledge                                 codebase_knowledge[]
@@ -2516,7 +2521,7 @@ model users {
   semantic_queries                                   semantic_queries[]
   sessions                                           sessions[]
   smart_contracts                                    smart_contracts[]
-  subscriptions                                      subscriptions[]
+  subscriptions                                      subscriptions?
   sync_states                                        sync_states[]
   templates                                          templates[]
   translations                                       translations[]
@@ -2527,7 +2532,7 @@ model users {
   user_devices                                       user_devices[]
   user_preferences                                   user_preferences?
   user_pricing_history                               user_pricing_history[]
-  quota                                              user_quota?        @relation("UserQuota")
+  quota                                              user_quota?               @relation("UserQuota")
   user_roles                                         user_roles[]
   visual_scripts                                     visual_scripts[]
   webhooks                                           webhooks[]
@@ -2577,7 +2582,7 @@ model verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now())
+  updatedAt  DateTime
 }
 
 model verifications {
@@ -2662,4 +2667,92 @@ model webhooks {
   userId             String
   webhook_deliveries webhook_deliveries[]
   users              users                @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MCPServer {
+  id        String   @id @default(cuid())
+  userId    String
+  serverId  String
+  name      String
+  command   String
+  args      Json
+  env       Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serverId])
+  @@index([userId])
+}
+
+model MCPToolCall {
+  id        String   @id @default(cuid())
+  userId    String
+  serverId  String
+  toolName  String
+  params    Json
+  result    Json?
+  error     String?
+  createdAt DateTime @default(now())
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([serverId])
+}
+
+model chat_sessions {
+  id            String                    @id @default(cuid())
+  userId        String?
+  anonymousId   String?
+  urlId         String                    @unique
+  title         String?
+  description   String?
+  artifactId    String?
+  metadata      Json                      @default("{}")
+  totalMessages Int                       @default(0)
+  lastMessageAt DateTime?
+  projectId     String?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @default(now())
+  chat_messages chat_messages[]
+  projects      projects?                 @relation(fields: [projectId], references: [id])
+  users         users?                    @relation("UserChatSessions", fields: [userId], references: [id], onDelete: Cascade)
+  githubConnection chat_github_connections?
+
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([urlId])
+  @@index([updatedAt])
+  @@index([projectId])
+}
+
+model chat_messages {
+  id            String        @id @default(cuid())
+  sessionId     String
+  role          String
+  content       String
+  metadata      Json          @default("{}")
+  createdAt     DateTime      @default(now())
+  chat_sessions chat_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model chat_github_connections {
+  id         String         @id @default(cuid())
+  chatId     String         @unique @map("chat_id")
+  userId     String         @map("user_id")
+  repo       String
+  branch     String         @default("main")
+  autoSync   Boolean        @default(true) @map("auto_sync")
+  lastSync   DateTime?      @map("last_sync")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  
+  // Relations
+  chatSession chat_sessions @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user        users         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([chatId])
 }

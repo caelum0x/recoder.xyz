@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
           name: googleUser.name,
           image: googleUser.picture,
           emailVerified: true,
+          updatedAt: new Date(),
         },
       });
     }

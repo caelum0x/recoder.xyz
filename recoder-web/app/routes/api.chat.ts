@@ -1,71 +1,30 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import type { Messages } from '~/lib/types/chat';
-import SwitchableStream from '~/lib/.server/llm/switchable-stream';
-import { chatRateLimiter, applyRateLimit, createRateLimitResponse } from '~/lib/.server/middleware/rate-limiter';
-import { detectAndPrepareStarter, createDirectStarterResponse } from '~/lib/.server/llm/starter-injector';
-import { log } from '~/lib/.server/llm/starter-config';
-// Removed top-level import - using dynamic import inside action instead
-import { getSystemPrompt } from '~/lib/.server/llm/prompts';
-
-/**
- * FIX #2: Detect GitHub URL in user message
- * Supports various GitHub URL formats
- */
-function detectGitHubUrl(message: string): string | null {
-  // Match various GitHub URL formats
-  const patterns = [
-    // Full HTTPS URLs
-    /https?:\/\/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i,
-    // github.com without protocol
-    /github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i,
-    // owner/repo format (only if surrounded by spaces or at boundaries)
-    /(?:^|\s)([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)(?:\s|$)/,
-  ];
-  
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
-    if (match) {
-      const url = match[1] || match[0];
-      // Return normalized URL
-      if (url.startsWith('http')) {
-        return url;
-      } else if (url.includes('github.com')) {
-        return url;
-      } else {
-        // owner/repo format
-        return url;
-      }
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Check if user message requires customization beyond the starter
- */
-function checkIfNeedsCustomization(message: string): boolean {
-  const customizationKeywords = [
-    // Styling/theme
-    'dark mode', 'light mode', 'theme', 'color', 'style', 'design',
-    // Features to add
-    'add', 'include', 'integrate', 'with authentication', 'with auth',
-    'with payment', 'with stripe', 'with database', 'with', 
-    // Modifications
-    'modify', 'change', 'update', 'edit', 'custom', 'customize',
-    'different', 'instead of', 'replace',
-    // Specific requirements
-    'i want', 'i need', 'should have', 'must have', 'need to',
-    'but', 'however', 'except', 'also', 'additionally',
-    // Multiple features
-    'and', '&', '+',
-  ];
-
-  const lowerMessage = message.toLowerCase();
-  return customizationKeywords.some(keyword => lowerMessage.includes(keyword));
-}
 
 export async function action(args: ActionFunctionArgs) {
+  // Dynamic imports for server-only modules
+  const [
+    { default: SwitchableStream },
+    { chatRateLimiter, applyRateLimit, createRateLimitResponse },
+    { detectAndPrepareStarter },
+    { loadRecoderContext, formatContextForAI },
+    { initializeRecoderDirectory },
+    starterConfigModule,
+    { getSystemPrompt },
+  ] = await Promise.all([
+    import('~/lib/.server/llm/switchable-stream'),
+    import('~/lib/.server/middleware/rate-limiter'),
+    import('~/lib/.server/llm/starter-injector'),
+    import('~/lib/recoder-context/loader'),
+    import('~/lib/recoder-context/initializer'),
+    import('~/lib/.server/llm/starter-config'),
+    import('~/lib/.server/llm/prompts'),
+  ]);
+
+  // Extract log function from starter config module
+  const { log } = starterConfigModule;
+
+
   // Apply rate limiting
   const rateLimitResult = await applyRateLimit(args.request, chatRateLimiter);
 
@@ -85,6 +44,71 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
+  // Import required modules
+  const { detectAndPrepareStarter } = await import('~/lib/.server/llm/starter-injector');
+  const { createDirectStarterResponse } = await import('~/lib/.server/llm/starter-injector');
+  const { default: SwitchableStream } = await import('~/lib/.server/llm/switchable-stream');
+  const { streamText } = await import('~/lib/.server/llm/stream-text');
+  const { getSystemPrompt } = await import('~/lib/.server/llm/prompts');
+
+  /**
+   * FIX #2: Detect GitHub URL in user message
+   * Supports various GitHub URL formats
+   */
+  function detectGitHubUrl(message: string): string | null {
+    // Match various GitHub URL formats
+    const patterns = [
+      // Full HTTPS URLs
+      /https?:\/\/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i,
+      // github.com without protocol
+      /github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i,
+      // owner/repo format (only if surrounded by spaces or at boundaries)
+      /(?:^|\s)([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)(?:\s|$)/,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+      if (match) {
+        const url = match[1] || match[0];
+        // Return normalized URL
+        if (url.startsWith('http')) {
+          return url;
+        } else if (url.includes('github.com')) {
+          return url;
+        } else {
+          // owner/repo format
+          return url;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Check if user message requires customization beyond the starter
+   */
+  function checkIfNeedsCustomization(message: string): boolean {
+    const customizationKeywords = [
+      // Styling/theme
+      'dark mode', 'light mode', 'theme', 'color', 'style', 'design',
+      // Features to add
+      'add', 'include', 'integrate', 'with authentication', 'with auth',
+      'with payment', 'with stripe', 'with database', 'with', 
+      // Modifications
+      'modify', 'change', 'update', 'edit', 'custom', 'customize',
+      'different', 'instead of', 'replace',
+      // Specific requirements
+      'i want', 'i need', 'should have', 'must have', 'need to',
+      'but', 'however', 'except', 'also', 'additionally',
+      // Multiple features
+      'and', '&', '+',
+    ];
+
+    const lowerMessage = message.toLowerCase();
+    return customizationKeywords.some(keyword => lowerMessage.includes(keyword));
+  }
+
   // CRITICAL: Verify user authentication FIRST
   const { isAuthenticated, hasUserApiKey, getSessionCookie } = await import('~/lib/.server/llm/user-api-key');
   const { verifySession } = await import('~/lib/auth/session.server');
@@ -127,27 +151,29 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   let messages: Messages;
   let provider: string = 'openrouter'; // Default provider
   let model: string | undefined;
+  let requestBody: any;
 
   try {
-    const body = await request.json<{
+    requestBody = await request.json<{
       messages: Messages;
       provider?: string;
       model?: string;
+      recoderContext?: string;
     }>();
 
     // Extract provider and model from request
-    if (body.provider) {
-      provider = body.provider;
+    if (requestBody.provider) {
+      provider = requestBody.provider;
     }
-    if (body.model) {
-      model = body.model;
+    if (requestBody.model) {
+      model = requestBody.model;
     }
 
     console.log(`[Chat API] Provider: ${provider}, Model: ${model || 'default'}`);
 
     // Validate messages
     const { validateChatMessages, createValidationErrorResponse } = await import('~/lib/.server/middleware/request-validator');
-    const validation = validateChatMessages(body.messages);
+    const validation = validateChatMessages(requestBody.messages);
 
     if (!validation.valid) {
       console.error('Message validation failed:', validation.errors);
@@ -169,7 +195,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   // FIX #2: Detect GitHub URL BEFORE AI processing
   const githubUrl = detectGitHubUrl(lastUserMessage);
   if (githubUrl) {
-    log(`🔀 GitHub URL detected: ${githubUrl}`);
+    console.log(`🔀 GitHub URL detected: ${githubUrl}`);
     // Add ULTRA-EXPLICIT instruction to AI to ONLY use cloneGitHub
     messages.push({
       role: 'system',
@@ -202,25 +228,25 @@ That's it. Nothing else. Just the clone action.`,
   }
   
   // CRITICAL FIX: Detect and prepare starter template BEFORE AI processing
-  log('🔍 Checking if user request matches a starter template...');
+  console.log('🔍 Checking if user request matches a starter template...');
   const starterInjection = await detectAndPrepareStarter(lastUserMessage);
   
   // If we found a matching starter template, handle it appropriately
-  if (starterInjection.shouldInject) {
-    log(`✅ Starter detected: ${starterInjection.starterId} (confidence: ${starterInjection.confidence?.toFixed(2)})`);
+  if (starterInjection.shouldInject && createDirectStarterResponse) {
+    console.log(`✅ Starter detected: ${starterInjection.starterId} (confidence: ${starterInjection.confidence?.toFixed(2)})`);
     
     // Always return the starter - either directly or for AI to customize
     const directResponse = createDirectStarterResponse(starterInjection, lastUserMessage);
     
     if (directResponse) {
-      log('🚀 Returning pre-loaded starter (with or without AI customization)');
+      console.log('🚀 Returning pre-loaded starter (with or without AI customization)');
       
       // Check if we need AI customization
       const needsCustomization = checkIfNeedsCustomization(lastUserMessage);
       
       if (!needsCustomization) {
         // Return directly without AI - saves 100% of AI costs!
-        log('   → Direct return (no customization needed)');
+        console.log('   → Direct return (no customization needed)');
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
           start(controller) {
@@ -237,7 +263,7 @@ That's it. Nothing else. Just the clone action.`,
         });
       } else {
         // AI will add customizations on top of the starter
-        log('   → AI will customize the loaded starter');
+        console.log('   → AI will customize the loaded starter');
         // Prepend the starter to the conversation
         messages.push({
           role: 'assistant',
@@ -251,14 +277,34 @@ That's it. Nothing else. Just the clone action.`,
       }
     }
   } else {
-    log('   → No starter match found, proceeding with normal AI generation');
+    console.log('   → No starter match found, proceeding with normal AI generation');
   }
 
   const stream = new SwitchableStream();
 
   try {
-    // Get system prompt
-    const systemPrompt = getSystemPrompt();
+    // Get .recoder/ context from request body (already parsed)
+    console.log('📖 Loading .recoder/ project context...');
+    const recoderContextPrompt = requestBody.recoderContext || '';
+    
+    if (recoderContextPrompt) {
+      console.log(`   ✅ Loaded .recoder/ context (${recoderContextPrompt.length} chars)`);
+    } else {
+      console.log('   → No .recoder/ context provided');
+    }
+
+    // Load MCP tools
+    console.log('🔧 Loading MCP tools...');
+    const { loadMCPTools } = await import('~/lib/.server/mcp/tools-loader');
+    const mcpToolsPrompt = await loadMCPTools(context.cloudflare.env.DB);
+    
+    if (mcpToolsPrompt) {
+      console.log('   ✅ MCP tools loaded');
+    }
+
+    // Get system prompt and append .recoder/ context + MCP tools
+    const baseSystemPrompt = getSystemPrompt();
+    const systemPrompt = baseSystemPrompt + recoderContextPrompt + mcpToolsPrompt;
 
     // Get API key (User's BYOK > Environment variable)
     const { getAPIKey } = await import('~/lib/.server/llm/api-key');

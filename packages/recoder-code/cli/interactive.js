@@ -29,6 +29,7 @@ const TodoManager = require('./todo-manager.js');
 const FileWatcherManager = require('./file-watcher-manager.js');
 const ConversationContextManager = require('./conversation-context-manager.js');
 const EnhancedOutputFormatter = require('./enhanced-output-formatter.js');
+const DragDropHandler = require('./drag-drop-handler.js');
 
 // PHASE 1: Claude Code-like Systems
 const SessionManager = require('./session-manager.js');
@@ -1524,6 +1525,9 @@ class InteractiveRecoderChat {
       this.rl.prompt();
       return;
     }
+
+    // Process drag-and-drop files/folders
+    input = await DragDropHandler.processInput(input);
 
     // Handle slash commands
     if (input.startsWith('/')) {
