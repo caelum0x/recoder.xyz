@@ -53,7 +53,7 @@ export async function installRecoderCLI(webcontainer: WebContainer): Promise<boo
         await webcontainer.fs.mkdir('bin', { recursive: true });
         
         // Create a simple shell script that calls the locally installed CLI
-        const cliScript = `#!/bin/bash
+        const cliScript = `#!/bin/sh
 node /home/project/cli-tools/node_modules/recoder-code/bin/recoder.js "$@"`;
         
         await webcontainer.fs.writeFile('bin/recoder', cliScript);

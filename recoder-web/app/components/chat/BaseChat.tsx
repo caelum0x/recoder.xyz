@@ -10,7 +10,7 @@ import { SendButton } from './SendButton.client';
 import { ExamplePrompts } from './ExamplePrompts';
 import { ModelSelector } from './ModelSelector';
 import { GitHubBar } from './GitHubBar';
-import { MCPButton } from './MCPButton';
+import MCPButton from './MCPButton';
 import { ProjectGallery } from '~/components/gallery/ProjectGallery';
 import type { TemplateRepo } from '~/lib/.server/github/types';
 

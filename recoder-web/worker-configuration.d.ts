@@ -7,6 +7,7 @@ interface Env {
 
   // Database
   DATABASE_URL?: string;
+  DB?: D1Database; // Cloudflare D1 binding for MCP
 
   // Paddle Payment Provider (US/EU markets)
   PADDLE_VENDOR_ID?: string;

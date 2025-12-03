@@ -1,0 +1,26 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth-helpers';
+import { installServer } from '@/lib/services/mcp.service';
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { serverId, config } = await req.json();
+    if (!serverId) {
+      return NextResponse.json({ error: 'serverId is required' }, { status: 400 });
+    }
+
+    const server = await installServer(user.id, serverId, config);
+    return NextResponse.json({ server });
+  } catch (error) {
+    console.error('Failed to install server:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to install server' },
+      { status: 500 }
+    );
+  }
+}

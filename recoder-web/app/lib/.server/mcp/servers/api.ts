@@ -241,7 +241,7 @@ export class APIMCPServer {
         data,
         duration,
       };
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
 
       if (error.name === 'AbortError') {

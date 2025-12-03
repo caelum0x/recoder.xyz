@@ -1,5 +1,39 @@
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 
+// GET - Get server details
+export async function loader({ params, context }: LoaderFunctionArgs) {
+  const { cloudflare } = context;
+  const db = cloudflare.env.DB;
+  const { serverId } = params;
+
+  try {
+    const server = await db
+      .prepare('SELECT * FROM mcp_servers WHERE server_id = ?')
+      .bind(serverId)
+      .first();
+
+    if (!server) {
+      return json({ error: 'Server not found' }, { status: 404 });
+    }
+
+    return json({
+      server: {
+        id: server.id,
+        serverId: server.server_id,
+        name: server.name,
+        command: server.command,
+        args: JSON.parse(server.args as string),
+        env: JSON.parse(server.env as string),
+        enabled: server.enabled === 1,
+        createdAt: server.created_at,
+      }
+    });
+  } catch (error: any) {
+    return json({ error: 'Failed to get server', details: error.message }, { status: 500 });
+  }
+}
+
+// POST/PATCH/DELETE
 export async function action({ request, params, context }: ActionFunctionArgs) {
   const { cloudflare } = context;
   const db = cloudflare.env.DB;
@@ -13,8 +47,73 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
         .run();
 
       return json({ success: true });
-    } catch (error) {
-      return json({ error: 'Failed to delete server' }, { status: 500 });
+    } catch (error: any) {
+      return json({ error: 'Failed to delete server', details: error.message }, { status: 500 });
+    }
+  }
+
+  if (request.method === 'PATCH') {
+    try {
+      const body = await request.json();
+      const updates: string[] = [];
+      const bindings: any[] = [];
+
+      if (body.enabled !== undefined) {
+        updates.push('enabled = ?');
+        bindings.push(body.enabled ? 1 : 0);
+      }
+
+      if (body.name) {
+        updates.push('name = ?');
+        bindings.push(body.name);
+      }
+
+      if (body.command) {
+        updates.push('command = ?');
+        bindings.push(body.command);
+      }
+
+      if (body.args) {
+        updates.push('args = ?');
+        bindings.push(JSON.stringify(body.args));
+      }
+
+      if (body.env) {
+        updates.push('env = ?');
+        bindings.push(JSON.stringify(body.env));
+      }
+
+      if (updates.length === 0) {
+        return json({ error: 'No fields to update' }, { status: 400 });
+      }
+
+      bindings.push(serverId);
+
+      await db
+        .prepare(`UPDATE mcp_servers SET ${updates.join(', ')} WHERE server_id = ?`)
+        .bind(...bindings)
+        .run();
+
+      // Get updated server
+      const server = await db
+        .prepare('SELECT * FROM mcp_servers WHERE server_id = ?')
+        .bind(serverId)
+        .first();
+
+      return json({
+        success: true,
+        server: {
+          id: server.id,
+          serverId: server.server_id,
+          name: server.name,
+          command: server.command,
+          args: JSON.parse(server.args as string),
+          env: JSON.parse(server.env as string),
+          enabled: server.enabled === 1,
+        }
+      });
+    } catch (error: any) {
+      return json({ error: 'Failed to update server', details: error.message }, { status: 500 });
     }
   }
 

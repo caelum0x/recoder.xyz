@@ -8,17 +8,34 @@ const logger = createScopedLogger('ChatHistory');
 export async function openDatabase(): Promise<IDBDatabase | undefined> {
   return new Promise((resolve) => {
     console.log('🗄️ Opening IndexedDB: boltHistory');
-    const request = indexedDB.open('boltHistory', 1);
+    const request = indexedDB.open('boltHistory', 2); // Increment version to trigger upgrade
 
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
-      console.log('🔧 IndexedDB upgrade needed - creating chats store');
+      console.log('🔧 IndexedDB upgrade needed - creating/updating chats store');
       const db = (event.target as IDBOpenDBRequest).result;
+      const oldVersion = event.oldVersion;
 
       if (!db.objectStoreNames.contains('chats')) {
+        // Fresh install - create store with correct schema
         const store = db.createObjectStore('chats', { keyPath: 'id' });
         store.createIndex('id', 'id', { unique: true });
-        store.createIndex('urlId', 'urlId', { unique: true });
-        console.log('✅ Created chats object store');
+        store.createIndex('urlId', 'urlId', { unique: false }); // ✅ FIXED: urlId should not be unique
+        console.log('✅ Created chats object store with non-unique urlId index');
+      } else if (oldVersion < 2) {
+        // Upgrade from v1 to v2 - fix urlId index
+        console.log('🔄 Migrating from v1 to v2 - fixing urlId unique constraint');
+        const transaction = (event.target as IDBOpenDBRequest).transaction!;
+        const store = transaction.objectStore('chats');
+
+        // Delete old unique urlId index
+        if (store.indexNames.contains('urlId')) {
+          store.deleteIndex('urlId');
+          console.log('🗑️ Deleted old unique urlId index');
+        }
+
+        // Create new non-unique urlId index
+        store.createIndex('urlId', 'urlId', { unique: false });
+        console.log('✅ Created new non-unique urlId index');
       }
     };
 
@@ -85,8 +102,23 @@ export async function setMessages(
       timestamp: new Date().toISOString(),
     });
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      console.log('✅ IndexedDB: Chat saved successfully', { id, urlId });
+      resolve();
+    };
+
+    request.onerror = () => {
+      const error = request.error;
+      console.error('❌ IndexedDB: Failed to save chat', {
+        id,
+        urlId,
+        error: error?.message,
+        name: error?.name
+      });
+      // Log but don't reject - we don't want to break the UI for IndexedDB errors
+      // since database is the primary storage
+      resolve(); // Resolve anyway to prevent UI breaks
+    };
   });
 }
 

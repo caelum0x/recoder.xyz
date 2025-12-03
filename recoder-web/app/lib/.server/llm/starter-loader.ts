@@ -73,7 +73,7 @@ export async function loadStarterFiles(starterId: string): Promise<LoadedStarter
 
 /**
  * Generate artifact with pre-loaded starter files
- * This creates a complete boltArtifact with all starter files already included
+ * This creates a complete recoderArtifact with all starter files already included
  */
 export function generateStarterArtifact(
   loadedStarter: LoadedStarterFiles,
@@ -82,13 +82,13 @@ export function generateStarterArtifact(
 ): string {
   const { files, packageJson } = loadedStarter;
 
-  let artifact = `<boltArtifact id="${artifactId}" title="${title}">\n`;
+  let artifact = `<recoderArtifact id="${artifactId}" title="${title}">\n`;
 
   // Add package.json first if it exists
   if (packageJson && files['package.json']) {
-    artifact += `  <boltAction type="file" filePath="package.json">\n`;
+    artifact += `  <recoderAction type="file" filePath="package.json">\n`;
     artifact += files['package.json'];
-    artifact += `\n  </boltAction>\n\n`;
+    artifact += `\n  </recoderAction>\n\n`;
   }
 
   // Add all other files
@@ -112,30 +112,30 @@ export function generateStarterArtifact(
 
   for (const filePath of sortedFiles) {
     const content = files[filePath];
-    artifact += `  <boltAction type="file" filePath="${filePath}">\n`;
+    artifact += `  <recoderAction type="file" filePath="${filePath}">\n`;
     artifact += content;
-    artifact += `\n  </boltAction>\n\n`;
+    artifact += `\n  </recoderAction>\n\n`;
   }
 
   // Add install command
   if (packageJson) {
-    artifact += `  <boltAction type="shell">\n`;
+    artifact += `  <recoderAction type="shell">\n`;
     artifact += `npm install\n`;
-    artifact += `  </boltAction>\n\n`;
+    artifact += `  </recoderAction>\n\n`;
 
     // Add README with dev server instructions instead of running it
     const devCommand = packageJson.scripts?.dev || packageJson.scripts?.start || 'npm run dev';
-    artifact += `  <boltAction type="file" filePath="README.md">\n`;
+    artifact += `  <recoderAction type="file" filePath="README.md">\n`;
     artifact += `# Getting Started\n\n`;
     artifact += `Dependencies are installed. To start the development server:\n\n`;
     artifact += `\`\`\`bash\n`;
     artifact += `${devCommand}\n`;
     artifact += `\`\`\`\n\n`;
     artifact += `The server will start and provide a URL to access your application.\n`;
-    artifact += `  </boltAction>\n`;
+    artifact += `  </recoderAction>\n`;
   }
 
-  artifact += `</boltArtifact>`;
+  artifact += `</recoderArtifact>`;
 
   return artifact;
 }

@@ -7,9 +7,9 @@
 
 /**
  * Schema for Bolt artifact responses
- * Enforces the <boltArtifact> and <boltAction> XML structure
+ * Enforces the <recoderArtifact> and <recoderAction> XML structure
  */
-export const BOLT_ARTIFACT_SCHEMA = {
+export const RECODER_ARTIFACT_SCHEMA = {
   type: 'json_schema',
   json_schema: {
     name: 'bolt_artifact_response',
@@ -106,21 +106,21 @@ export function convertStructuredToXML(structured: any): string {
   const { message, artifact } = structured;
 
   let xml = message + '\n\n';
-  xml += `<boltArtifact id="${artifact.id}" title="${artifact.title}">\n`;
+  xml += `<recoderArtifact id="${artifact.id}" title="${artifact.title}">\n`;
 
   for (const action of artifact.actions) {
     if (action.type === 'shell') {
-      xml += `  <boltAction type="shell">\n`;
+      xml += `  <recoderAction type="shell">\n`;
       xml += `${action.content}\n`;
-      xml += `  </boltAction>\n`;
+      xml += `  </recoderAction>\n`;
     } else if (action.type === 'file') {
-      xml += `  <boltAction type="file" filePath="${action.filePath}">\n`;
+      xml += `  <recoderAction type="file" filePath="${action.filePath}">\n`;
       xml += `${action.content}\n`;
-      xml += `  </boltAction>\n`;
+      xml += `  </recoderAction>\n`;
     }
   }
 
-  xml += `</boltArtifact>`;
+  xml += `</recoderArtifact>`;
 
   return xml;
 }
@@ -154,7 +154,7 @@ export const SIMPLE_RESPONSE_SCHEMA = {
 /**
  * Determine which schema to use based on the user's request
  */
-export function selectSchema(userMessage: string): typeof BOLT_ARTIFACT_SCHEMA | typeof SIMPLE_RESPONSE_SCHEMA | null {
+export function selectSchema(userMessage: string): typeof RECODER_ARTIFACT_SCHEMA | typeof SIMPLE_RESPONSE_SCHEMA | null {
   const lowerMessage = userMessage.toLowerCase();
 
   // Keywords that indicate need for artifact/code
@@ -168,7 +168,7 @@ export function selectSchema(userMessage: string): typeof BOLT_ARTIFACT_SCHEMA |
   const needsArtifact = artifactKeywords.some(keyword => lowerMessage.includes(keyword));
 
   if (needsArtifact) {
-    return BOLT_ARTIFACT_SCHEMA;
+    return RECODER_ARTIFACT_SCHEMA;
   }
 
   // For simple questions, use simple schema
@@ -183,7 +183,7 @@ export function shouldUseStructuredOutputs(
   modelId: string,
   userMessage: string,
   useStructuredOutputs: boolean = true
-): typeof BOLT_ARTIFACT_SCHEMA | typeof SIMPLE_RESPONSE_SCHEMA | null {
+): typeof RECODER_ARTIFACT_SCHEMA | typeof SIMPLE_RESPONSE_SCHEMA | null {
   // Feature flag check
   if (!useStructuredOutputs) {
     return null;

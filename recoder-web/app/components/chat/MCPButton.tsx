@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { classNames } from '~/utils/classNames';
+import type { MCPServersResponse } from '~/types/mcp';
 
-export function MCPButton() {
+export default function MCPButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [servers, setServers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -14,10 +15,10 @@ export function MCPButton() {
     try {
       const res = await fetch('/api/mcp/servers');
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as MCPServersResponse;
         setServers(data.servers || []);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load MCP servers:', error);
     }
   }
@@ -31,7 +32,7 @@ export function MCPButton() {
         body: JSON.stringify(config),
       });
       await loadServers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to add server:', error);
     }
     setLoading(false);
@@ -42,7 +43,7 @@ export function MCPButton() {
     try {
       await fetch(`/api/mcp/servers/${serverId}`, { method: 'DELETE' });
       await loadServers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to remove server:', error);
     }
     setLoading(false);

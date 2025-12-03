@@ -376,7 +376,7 @@ export function matchUserRequestToTemplate(
     // Common project patterns
     const patterns: Record<string, RegExp[]> = {
       'nextjs-shadcn': [/dashboard/, /admin/, /saas/, /crud/, /full.*stack/],
-      'bolt-vite-react-ts': [/simple.*react/, /quick.*react/, /basic.*spa/],
+      'recoder-vite-react-ts': [/simple.*react/, /quick.*react/, /basic.*spa/],
       'express-simple': [/rest.*api/, /backend/, /api.*server/],
       'static': [/landing.*page/, /portfolio/, /simple.*site/],
       'bolt-expo': [/mobile/, /ios.*android/, /react.*native/],
@@ -443,15 +443,15 @@ INSTRUCTIONS:
 ARTIFACT FORMAT (CRITICAL):
 You MUST use the following format to create/modify files:
 
-<boltArtifact id="customization" title="Template Customization">
-  <boltAction type="file" filePath="relative/path/to/file.ext">
+<recoderArtifact id="customization" title="Template Customization">
+  <recoderAction type="file" filePath="relative/path/to/file.ext">
     // file content here
-  </boltAction>
+  </recoderAction>
 
-  <boltAction type="shell">
+  <recoderAction type="shell">
     npm install && npm run dev
-  </boltAction>
-</boltArtifact>
+  </recoderAction>
+</recoderArtifact>
 
 IMPORTANT:
 - Every file action MUST have a filePath attribute: filePath="path/to/file.ext"

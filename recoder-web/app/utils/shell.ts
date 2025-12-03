@@ -11,6 +11,10 @@ export async function newShellProcess(webcontainer: WebContainer, terminal: ITer
       cols: terminal.cols ?? 80,
       rows: terminal.rows ?? 15,
     },
+    env: {
+      // Add bin directory to PATH for recoder command
+      PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
+    },
   });
 
   const input = process.input.getWriter();

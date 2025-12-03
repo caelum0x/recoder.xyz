@@ -6,18 +6,8 @@
 import { useState, useEffect } from 'react';
 import { Server, Plus, Trash2, Power, PowerOff, AlertCircle, CheckCircle, Loader2, Settings } from 'lucide-react';
 import { toast } from 'react-toastify';
-
-interface MCPServer {
-  id: string;
-  name: string;
-  command: string;
-  args: string[];
-  env?: Record<string, string>;
-  status: 'connected' | 'disconnected' | 'error';
-  type: 'filesystem' | 'git' | 'database' | 'custom';
-  lastConnected?: Date;
-  error?: string;
-}
+import type { MCPServer, MCPServersResponse, MCPServerResponse } from '~/types/mcp';
+import { get, post, del } from '~/lib/api-client';
 
 const PRESET_SERVERS = [
   {
@@ -51,12 +41,18 @@ export default function MCPServerManager() {
   const [selectedPreset, setSelectedPreset] = useState<typeof PRESET_SERVERS[0] | null>(null);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    command: string;
+    args: string;
+    env: string;
+    type: 'filesystem' | 'git' | 'database' | 'custom';
+  }>({
     name: '',
     command: '',
     args: '',
     env: '',
-    type: 'custom' as MCPServer['type'],
+    type: 'custom',
   });
 
   useEffect(() => {
@@ -65,11 +61,8 @@ export default function MCPServerManager() {
 
   const loadServers = async () => {
     try {
-      const response = await fetch('/api/mcp/servers');
-      if (response.ok) {
-        const data = await response.json();
-        setServers(data.servers || []);
-      }
+      const data = await get<MCPServersResponse>('/api/mcp/servers');
+      setServers(data.servers || []);
     } catch (error) {
       console.error('Failed to load MCP servers:', error);
     }
@@ -83,23 +76,16 @@ export default function MCPServerManager() {
 
     setLoading(true);
     try {
-      const server: Omit<MCPServer, 'id' | 'status'> = {
-        name: formData.name,
-        command: formData.command,
-        args: formData.args.split(' ').filter(Boolean),
-        type: formData.type,
-        env: formData.env ? JSON.parse(formData.env) : undefined,
+      const serverData = {
+        serverId: formData.name.toLowerCase().replace(/\s+/g, '-'),
+        config: {
+          command: formData.command,
+          args: formData.args.split(' ').filter(Boolean),
+          env: formData.env ? JSON.parse(formData.env) : undefined,
+        },
       };
 
-      const response = await fetch('/api/mcp/servers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(server),
-      });
-
-      if (!response.ok) throw new Error('Failed to add server');
-
-      const data = await response.json();
+      const data = await post<MCPServerResponse>('/api/mcp/servers', serverData);
       setServers([...servers, data.server]);
       toast.success(`Server "${formData.name}" added successfully`);
       
@@ -123,16 +109,10 @@ export default function MCPServerManager() {
 
   const handleConnectServer = async (serverId: string) => {
     try {
-      const response = await fetch(`/api/mcp/servers/${serverId}/connect`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Failed to connect');
-
-      const data = await response.json();
-      setServers(servers.map(s => 
-        s.id === serverId 
-          ? { ...s, status: 'connected', lastConnected: new Date() }
+      const data = await post<MCPServerResponse>(`/api/mcp/servers/${serverId}/connect`, {});
+      setServers(servers.map(s =>
+        s.id === serverId || s.serverId === serverId
+          ? { ...s, status: 'connected' as const }
           : s
       ));
       toast.success(`Connected to "${data.server.name}"`);
@@ -302,7 +282,7 @@ export default function MCPServerManager() {
                   </label>
                   <select
                     value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as MCPServer['type'] })}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value as 'filesystem' | 'git' | 'database' | 'custom' })}
                     className="w-full px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="custom">Custom</option>
@@ -396,7 +376,7 @@ export default function MCPServerManager() {
                       </div>
                       <p className="text-sm text-bolt-elements-textSecondary mt-1">
                         <span className="font-mono">{server.command}</span>
-                        {server.args.length > 0 && (
+                        {server.args && server.args.length > 0 && (
                           <span className="ml-2 text-bolt-elements-textTertiary">
                             {server.args.join(' ')}
                           </span>

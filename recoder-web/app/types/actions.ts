@@ -1,4 +1,4 @@
-export type ActionType = 'file' | 'shell' | 'importStarter' | 'cloneGitHub';
+export type ActionType = 'file' | 'shell' | 'importStarter' | 'cloneGitHub' | 'readFile' | 'listFiles' | 'searchFiles';
 
 export interface BaseAction {
   content: string;
@@ -25,6 +25,23 @@ export interface CloneGitHubAction extends BaseAction {
   reason: string;
 }
 
-export type BoltAction = FileAction | ShellAction | ImportStarterAction | CloneGitHubAction;
+export interface ReadFileAction extends BaseAction {
+  type: 'readFile';
+  filePath: string;
+}
 
-export type BoltActionData = BoltAction | BaseAction;
+export interface ListFilesAction extends BaseAction {
+  type: 'listFiles';
+  path?: string;
+  recursive?: boolean;
+}
+
+export interface SearchFilesAction extends BaseAction {
+  type: 'searchFiles';
+  query: string;
+  filePattern?: string;
+}
+
+export type RecoderAction = FileAction | ShellAction | ImportStarterAction | CloneGitHubAction | ReadFileAction | ListFilesAction | SearchFilesAction;
+
+export type RecoderActionData = RecoderAction | BaseAction;

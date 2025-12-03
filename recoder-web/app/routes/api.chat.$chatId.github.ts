@@ -36,7 +36,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ params, request }: ActionFunctionArgs) {
-  const session = await getSession(request);
+  const session = await verifySession(request);
   if (!session) return json({ error: 'Unauthorized' }, { status: 401 });
 
   const chatId = params.chatId;
@@ -78,18 +78,18 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     const [oauthAccount] = await sql`
-      SELECT access_token FROM oauth_accounts
-      WHERE user_id = ${session.user.id} AND provider = 'github'
-      ORDER BY created_at DESC LIMIT 1
+      SELECT "accessToken" FROM oauth_accounts
+      WHERE "userId" = ${session.user.id} AND provider = 'github'
+      ORDER BY "createdAt" DESC LIMIT 1
     `;
 
-    if (!oauthAccount?.access_token) {
+    if (!oauthAccount?.accessToken) {
       return json({ error: 'GitHub not connected' }, { status: 400 });
     }
 
     try {
-      const { Octokit } = await import('@octokit/rest');
-      const octokit = new Octokit({ auth: oauthAccount.access_token });
+      const { Octokit} = await import('@octokit/rest');
+      const octokit = new Octokit({ auth: oauthAccount.accessToken });
 
       const [owner, repo] = connection.repo.split('/');
       const targetBranch = branch || connection.default_branch;
@@ -157,6 +157,138 @@ export async function action({ params, request }: ActionFunctionArgs) {
     } catch (error: any) {
       console.error('GitHub push error:', error);
       return json({ error: error.message || 'Failed to push to GitHub' }, { status: 500 });
+    }
+  }
+
+  if (action === 'clone') {
+    const { repo, branch = 'main' } = body;
+
+    const [oauthAccount] = await sql`
+      SELECT "accessToken" FROM oauth_accounts
+      WHERE "userId" = ${session.user.id} AND provider = 'github'
+      ORDER BY "createdAt" DESC LIMIT 1
+    `;
+
+    const token = oauthAccount?.accessToken;
+
+    try {
+      const { Octokit } = await import('@octokit/rest');
+      const octokit = new Octokit({ auth: token });
+
+      const [owner, repoName] = repo.split('/');
+
+      const { data: refData } = await octokit.git.getRef({
+        owner,
+        repo: repoName,
+        ref: `heads/${branch}`
+      });
+
+      const { data: treeData } = await octokit.git.getTree({
+        owner,
+        repo: repoName,
+        tree_sha: refData.object.sha,
+        recursive: 'true'
+      });
+
+      const files = await Promise.all(
+        treeData.tree
+          .filter((item: any) => item.type === 'blob')
+          .map(async (item: any) => {
+            const { data: blob } = await octokit.git.getBlob({
+              owner,
+              repo: repoName,
+              file_sha: item.sha!
+            });
+
+            const content = Buffer.from(blob.content, 'base64').toString('utf-8');
+            return {
+              path: item.path,
+              content,
+              type: 'file'
+            };
+          })
+      );
+
+      const id = `ghc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await sql`
+        INSERT INTO chat_github_connections (id, chat_id, user_id, repo, branch, auto_sync, last_sync)
+        VALUES (${id}, ${chatId}, ${session.user.id}, ${repo}, ${branch}, true, NOW())
+        ON CONFLICT (chat_id) DO UPDATE SET repo = ${repo}, branch = ${branch}, last_sync = NOW()
+      `;
+
+      return json({ success: true, files });
+    } catch (error: any) {
+      console.error('GitHub clone error:', error);
+      return json({ error: error.message || 'Failed to clone repository' }, { status: 500 });
+    }
+  }
+
+  if (action === 'pull') {
+    const [connection] = await sql`
+      SELECT repo, branch FROM chat_github_connections
+      WHERE chat_id = ${chatId} AND user_id = ${session.user.id}
+    `;
+
+    if (!connection) {
+      return json({ error: 'Not connected to GitHub' }, { status: 400 });
+    }
+
+    const [oauthAccount] = await sql`
+      SELECT "accessToken" FROM oauth_accounts
+      WHERE "userId" = ${session.user.id} AND provider = 'github'
+      ORDER BY "createdAt" DESC LIMIT 1
+    `;
+
+    const token = oauthAccount?.accessToken;
+
+    try {
+      const { Octokit } = await import('@octokit/rest');
+      const octokit = new Octokit({ auth: token });
+
+      const [owner, repoName] = connection.repo.split('/');
+
+      const { data: refData } = await octokit.git.getRef({
+        owner,
+        repo: repoName,
+        ref: `heads/${connection.branch}`
+      });
+
+      const { data: treeData } = await octokit.git.getTree({
+        owner,
+        repo: repoName,
+        tree_sha: refData.object.sha,
+        recursive: 'true'
+      });
+
+      const files = await Promise.all(
+        treeData.tree
+          .filter((item: any) => item.type === 'blob')
+          .map(async (item: any) => {
+            const { data: blob } = await octokit.git.getBlob({
+              owner,
+              repo: repoName,
+              file_sha: item.sha!
+            });
+
+            const content = Buffer.from(blob.content, 'base64').toString('utf-8');
+            return {
+              path: item.path,
+              content,
+              type: 'file'
+            };
+          })
+      );
+
+      await sql`
+        UPDATE chat_github_connections 
+        SET last_sync = NOW() 
+        WHERE chat_id = ${chatId}
+      `;
+
+      return json({ success: true, files });
+    } catch (error: any) {
+      console.error('GitHub pull error:', error);
+      return json({ error: error.message || 'Failed to pull from GitHub' }, { status: 500 });
     }
   }
 

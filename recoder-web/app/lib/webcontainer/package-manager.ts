@@ -11,43 +11,47 @@ const logger = createScopedLogger('PackageManager');
 /**
  * Global packages that should be available in all terminals
  */
-const GLOBAL_PACKAGES = [
+const GLOBAL_PACKAGES: string[] = [
   'recoder-code', // Recoder CLI package
 ];
 
 /**
- * Check if a package is installed globally in WebContainer
+ * Check if a package is installed locally in WebContainer
  */
 export async function isPackageInstalled(
   webcontainer: WebContainer,
   packageName: string
 ): Promise<boolean> {
   try {
-    const process = await webcontainer.spawn('npm', ['list', '-g', packageName], {
-      env: { npm_config_yes: 'true' }
-    });
-
-    const exitCode = await process.exit;
-    return exitCode === 0;
+    // Check if package exists in cli-tools/node_modules
+    const packagePath = `cli-tools/node_modules/${packageName}/package.json`;
+    const packageJson = await webcontainer.fs.readFile(packagePath, 'utf-8');
+    return !!packageJson;
   } catch (error) {
-    logger.error(`Failed to check if ${packageName} is installed:`, error);
     return false;
   }
 }
 
 /**
- * Install a package globally in WebContainer
+ * Install a package locally in WebContainer (no global permissions needed)
  */
 export async function installGlobalPackage(
   webcontainer: WebContainer,
   packageName: string
 ): Promise<boolean> {
   try {
-    logger.info(`📦 Installing global package: ${packageName}...`);
+    logger.info(`📦 Installing package locally: ${packageName}...`);
 
-    const process = await webcontainer.spawn('npm', ['install', '-g', packageName], {
-      env: { npm_config_yes: 'true' }
-    });
+    // Install locally in cli-tools directory (no -g flag)
+    const process = await webcontainer.spawn('npm', [
+      'install',
+      packageName,
+      '--prefix',
+      './cli-tools',
+      '--no-save',
+      '--no-audit',
+      '--no-fund'
+    ]);
 
     // Capture output for debugging
     const outputChunks: string[] = [];
@@ -62,7 +66,7 @@ export async function installGlobalPackage(
     const exitCode = await process.exit;
 
     if (exitCode === 0) {
-      logger.info(`✅ Successfully installed ${packageName} globally`);
+      logger.info(`✅ Successfully installed ${packageName} locally`);
       return true;
     } else {
       const output = outputChunks.join('');
@@ -76,23 +80,85 @@ export async function installGlobalPackage(
 }
 
 /**
+ * Clear npm cache (fixes EEXIST errors after WebContainer restarts)
+ */
+export async function clearNpmCache(webcontainer: WebContainer): Promise<boolean> {
+  try {
+    logger.info('🧹 Clearing npm cache...');
+
+    const process = await webcontainer.spawn('npm', ['cache', 'clean', '--force']);
+    const exitCode = await process.exit;
+
+    if (exitCode === 0) {
+      logger.info('✅ npm cache cleared');
+      return true;
+    } else {
+      logger.warn('⚠️ npm cache clean returned non-zero exit code:', exitCode);
+      return false;
+    }
+  } catch (error) {
+    logger.error('Failed to clear npm cache:', error);
+    return false;
+  }
+}
+
+/**
  * Install all global packages required for the terminal
  */
 export async function installGlobalPackages(webcontainer: WebContainer): Promise<void> {
-  logger.info('🔧 Checking global packages...');
+  logger.info('🔧 Setting up terminal packages...');
+
+  // Clear npm cache first to prevent EEXIST errors
+  await clearNpmCache(webcontainer);
+
+  // Create cli-tools directory
+  try {
+    await webcontainer.fs.mkdir('cli-tools', { recursive: true });
+  } catch (error) {
+    // Directory might already exist
+  }
 
   for (const packageName of GLOBAL_PACKAGES) {
     const isInstalled = await isPackageInstalled(webcontainer, packageName);
 
     if (!isInstalled) {
       logger.info(`${packageName} not found, installing...`);
-      await installGlobalPackage(webcontainer, packageName);
+      const success = await installGlobalPackage(webcontainer, packageName);
+      
+      if (success && packageName === 'recoder-code') {
+        // Setup recoder command symlink
+        await setupRecoderCommand(webcontainer);
+      }
     } else {
       logger.info(`✓ ${packageName} is already installed`);
     }
   }
 
-  logger.info('✅ Global packages ready');
+  logger.info('✅ Terminal packages ready');
+}
+
+/**
+ * Setup recoder command to be available in PATH
+ */
+async function setupRecoderCommand(webcontainer: WebContainer): Promise<void> {
+  try {
+    // Create bin directory
+    await webcontainer.fs.mkdir('bin', { recursive: true });
+    
+    // Create wrapper script for recoder
+    const recoderScript = `#!/bin/sh
+node /home/project/cli-tools/node_modules/recoder-code/bin/recoder.js "$@"
+`;
+    
+    await webcontainer.fs.writeFile('bin/recoder-code', recoderScript);
+    
+    // Make executable
+    await webcontainer.spawn('chmod', ['+x', 'bin/recoder-code']);
+    
+    logger.info('✅ recoder-code command available in PATH');
+  } catch (error) {
+    logger.error('Failed to setup recoder-code command:', error);
+  }
 }
 
 /**
@@ -104,15 +170,12 @@ export function getTerminalWelcomeMessage(): string {
 ║               Welcome to Recoder.xyz Terminal              ║
 ╚════════════════════════════════════════════════════════════╝\x1b[0m
 
-\x1b[1;33m🚀 Recoder CLI is available!\x1b[0m
-   Type \x1b[1;32mrecoder --help\x1b[0m to see available commands
+\x1b[1;33m⏳ Installing recoder-code CLI...\x1b[0m (this may take a moment)
 
-\x1b[1;33m📦 Quick Commands:\x1b[0m
-   \x1b[32mrecoder chat\x1b[0m           - Start AI chat session
-   \x1b[32mrecoder generate\x1b[0m       - Generate code with AI
-   \x1b[32mrecoder agent\x1b[0m          - Run specialized AI agents
+\x1b[1;33m💡 Quick Commands:\x1b[0m
    \x1b[32mnpm install\x1b[0m            - Install project dependencies
    \x1b[32mnpm run dev\x1b[0m            - Start development server
+   \x1b[32mrecoder-code --help\x1b[0m    - Recoder CLI (after install completes)
 
 \x1b[90m─────────────────────────────────────────────────────────────\x1b[0m
 `;

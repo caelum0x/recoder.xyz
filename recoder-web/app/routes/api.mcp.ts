@@ -86,7 +86,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('MCP API error:', error);
     return json(
       {
@@ -143,7 +143,7 @@ export async function action({ request }: ActionFunctionArgs) {
       error: result.error,
       executionTime: result.executionTime,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Tool execution error:', error);
     return json(
       {

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const config = await req.json();
-  const server = await mcpService.addServer(user.id, config);
+  const { serverId, config } = await req.json();
+  const server = await mcpService.installServer(user.id, serverId, config);
   return NextResponse.json({ server });
 }
