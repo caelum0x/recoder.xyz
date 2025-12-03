@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import type { ApiResponse } from "~/types/api-responses";
 
 interface OptimizationStats {
   templateBasedSavings: number;

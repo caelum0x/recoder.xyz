@@ -7,6 +7,61 @@ import { tool } from 'ai';
 import { z } from 'zod';
 
 /**
+ * Tool for reading file contents
+ */
+export const readFileTool = tool({
+  description: 'Read the contents of a file. Use this to see what exists before editing.',
+  parameters: z.object({
+    filePath: z.string().describe('Relative path to the file to read (e.g., "src/App.tsx")'),
+  }),
+  execute: async ({ filePath }) => {
+    return {
+      success: true,
+      filePath,
+      action: 'read_file',
+    };
+  },
+});
+
+/**
+ * Tool for listing files in a directory
+ */
+export const listFilesTool = tool({
+  description: 'List all files in a directory or show project structure. Use this to understand what files exist.',
+  parameters: z.object({
+    path: z.string().optional().describe('Directory path to list (default: root directory)'),
+    recursive: z.boolean().optional().describe('List files recursively (default: false)'),
+  }),
+  execute: async ({ path, recursive }) => {
+    return {
+      success: true,
+      path: path || '.',
+      recursive: recursive || false,
+      action: 'list_files',
+    };
+  },
+});
+
+/**
+ * Tool for searching files by content (grep)
+ */
+export const searchFilesTool = tool({
+  description: 'Search for text across all files in the project (like grep). Use this to find where something is defined or used.',
+  parameters: z.object({
+    query: z.string().describe('Text to search for'),
+    filePattern: z.string().optional().describe('File pattern to search in (e.g., "*.tsx", "src/**")'),
+  }),
+  execute: async ({ query, filePattern }) => {
+    return {
+      success: true,
+      query,
+      filePattern: filePattern || '**/*',
+      action: 'search_files',
+    };
+  },
+});
+
+/**
  * Tool for creating or updating files
  */
 export const createFileTool = tool({
@@ -74,7 +129,7 @@ export const createFilesTool = tool({
 export const importStarterTemplateTool = tool({
   description: 'Import a complete pre-built starter template with all files and dependencies. Use this when user wants a blog, dashboard, API, or any project that matches existing templates. This is MUCH faster than creating files one-by-one.',
   parameters: z.object({
-    templateId: z.string().describe('Template ID from starters bundle (e.g., "BlogApp", "angular", "express-typescript-auth", "bolt-vite-react-ts")'),
+    templateId: z.string().describe('Template ID from starters bundle (e.g., "BlogApp", "angular", "express-typescript-auth", "recoder-vite-react-ts")'),
     reason: z.string().describe('Brief explanation of why this template is being imported'),
     customizations: z.string().optional().describe('What customizations will be made after import'),
   }),
@@ -112,7 +167,10 @@ export const cloneGitHubRepoTool = tool({
 /**
  * All available tools
  */
-export const boltTools = {
+export const recoderTools = {
+  readFile: readFileTool,
+  listFiles: listFilesTool,
+  searchFiles: searchFilesTool,
   createFile: createFileTool,
   runShellCommand: runShellCommandTool,
   createFiles: createFilesTool,

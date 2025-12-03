@@ -1,12 +1,12 @@
-import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction, ImportStarterAction, CloneGitHubAction } from '~/types/actions';
-import type { BoltArtifactData } from '~/types/artifact';
+import type { ActionType, RecoderAction, RecoderActionData, FileAction, ShellAction, ImportStarterAction, CloneGitHubAction } from '~/types/actions';
+import type { RecoderArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 
-const ARTIFACT_TAG_OPEN = '<boltArtifact';
-const ARTIFACT_TAG_CLOSE = '</boltArtifact>';
-const ARTIFACT_ACTION_TAG_OPEN = '<boltAction';
-const ARTIFACT_ACTION_TAG_CLOSE = '</boltAction>';
+const ARTIFACT_TAG_OPEN = '<recoderArtifact';
+const ARTIFACT_TAG_CLOSE = '</recoderArtifact>';
+const ARTIFACT_ACTION_TAG_OPEN = '<recoderAction';
+const ARTIFACT_ACTION_TAG_CLOSE = '</recoderAction>';
 
 const logger = createScopedLogger('MessageParser');
 
@@ -48,7 +48,7 @@ function validateShellCommand(content: string): { valid: boolean; reason?: strin
   return { valid: true };
 }
 
-export interface ArtifactCallbackData extends BoltArtifactData {
+export interface ArtifactCallbackData extends RecoderArtifactData {
   messageId: string;
 }
 
@@ -56,7 +56,7 @@ export interface ActionCallbackData {
   artifactId: string;
   messageId: string;
   actionId: string;
-  action: BoltAction;
+  action: RecoderAction;
 }
 
 export type ArtifactCallback = (data: ArtifactCallbackData) => void;
@@ -84,8 +84,8 @@ interface MessageState {
   position: number;
   insideArtifact: boolean;
   insideAction: boolean;
-  currentArtifact?: BoltArtifactData;
-  currentAction: BoltActionData;
+  currentArtifact?: RecoderArtifactData;
+  currentAction: RecoderActionData;
   actionId: number;
   parseAttempts: number; // Safety counter
 }
@@ -119,9 +119,9 @@ export class StreamingMessageParser {
     }
 
     // Log chunk for debugging file path issues
-    if (input.includes('<boltAction')) {
-      const snippet = input.substring(Math.max(0, input.indexOf('<boltAction') - 20), input.indexOf('<boltAction') + 150);
-      logger.debug('📨 Chunk contains <boltAction>:', snippet);
+    if (input.includes('<recoderAction')) {
+      const snippet = input.substring(Math.max(0, input.indexOf('<recoderAction') - 20), input.indexOf('<recoderAction') + 150);
+      logger.debug('📨 Chunk contains <recoderAction>:', snippet);
     }
 
     let output = '';
@@ -180,7 +180,7 @@ export class StreamingMessageParser {
                */
               actionId: String(state.actionId - 1),
 
-              action: currentAction as BoltAction,
+              action: currentAction as RecoderAction,
             });
 
             state.insideAction = false;
@@ -206,7 +206,7 @@ export class StreamingMessageParser {
                 artifactId: currentArtifact.id,
                 messageId,
                 actionId: String(state.actionId++),
-                action: state.currentAction as BoltAction,
+                action: state.currentAction as RecoderAction,
               });
 
               i = actionEndIndex + 1;
@@ -261,7 +261,7 @@ export class StreamingMessageParser {
               const currentArtifact = {
                 id: artifactId,
                 title: artifactTitle,
-              } satisfies BoltArtifactData;
+              } satisfies RecoderArtifactData;
 
               state.currentArtifact = currentArtifact;
 
@@ -385,7 +385,7 @@ export class StreamingMessageParser {
       logger.warn(`Unknown action type '${actionType}'`);
     }
 
-    return actionAttributes as BoltAction;
+    return actionAttributes as RecoderAction;
   }
 
   #extractAttribute(tag: string, attributeName: string): string | undefined {
@@ -407,7 +407,7 @@ export class StreamingMessageParser {
 
 const createArtifactElement: ElementFactory = (props) => {
   const elementProps = [
-    'class="__boltArtifact__"',
+    'class="__recoderArtifact__"',
     ...Object.entries(props).map(([key, value]) => {
       return `data-${camelToDashCase(key)}=${JSON.stringify(value)}`;
     }),

@@ -126,12 +126,12 @@ class QualityValidator {
 
     if (typeof artifact === 'string') {
       // Parse artifact content to extract files
-      const fileMatches = artifact.match(/<boltAction[^>]*type="file"[^>]*filePath="([^"]*)"[^>]*>(.*?)<\/boltAction>/gs);
+      const fileMatches = artifact.match(/<recoderAction[^>]*type="file"[^>]*filePath="([^"]*)"[^>]*>(.*?)<\/recoderAction>/gs);
 
       if (fileMatches) {
         fileMatches.forEach(match => {
           const pathMatch = match.match(/filePath="([^"]*)"/);
-          const contentMatch = match.match(/>(.*?)<\/boltAction>/s);
+          const contentMatch = match.match(/>(.*?)<\/recoderAction>/s);
 
           if (pathMatch && contentMatch) {
             files[pathMatch[1]] = contentMatch[1].trim();

@@ -366,7 +366,7 @@ export class GitHubMCPServer {
       throw new Error(`Failed to create repository: ${error.message}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     return {
       name: data.name,
@@ -399,7 +399,7 @@ export class GitHubMCPServer {
       throw new Error('Failed to list repositories');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     return data.map((repo: any) => ({
       name: repo.name,
@@ -432,7 +432,7 @@ export class GitHubMCPServer {
       throw new Error('Repository not found');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     return {
       name: data.name,
@@ -476,7 +476,7 @@ export class GitHubMCPServer {
       throw new Error(`Failed to create issue: ${error.message}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     return {
       number: data.number,
@@ -513,7 +513,7 @@ export class GitHubMCPServer {
       throw new Error(`Failed to create pull request: ${error.message}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     return {
       number: data.number,
@@ -541,7 +541,7 @@ export class GitHubMCPServer {
       throw new Error('Failed to list branches');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     return data.map((branch: any) => ({
       name: branch.name,
@@ -571,7 +571,7 @@ export class GitHubMCPServer {
       throw new Error('File not found');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     // Decode base64 content
     const content = Buffer.from(data.content, 'base64').toString('utf-8');
@@ -603,7 +603,7 @@ export class GitHubMCPServer {
       throw new Error('Search failed');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     return data.items.map((repo: any) => ({
       name: repo.name,

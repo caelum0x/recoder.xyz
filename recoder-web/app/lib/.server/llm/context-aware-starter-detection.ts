@@ -26,8 +26,8 @@ function analyzeConversationContext(messages: Array<{ role: string; content: str
   // Check if there's already a project/artifact in the conversation
   const assistantMessages = messages.filter(m => m.role === 'assistant');
   const hasExistingProject = assistantMessages.some(m => 
-    m.content.includes('<boltArtifact') || 
-    m.content.includes('boltAction') ||
+    m.content.includes('<recoderArtifact') || 
+    m.content.includes('recoderAction') ||
     m.content.includes('I\'ve created') ||
     m.content.includes('I\'ve loaded')
   );

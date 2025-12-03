@@ -1,19 +1,23 @@
 import { useState, useEffect } from 'react';
-import { GitBranch, Github, Settings, Loader2, X } from 'lucide-react';
+import { GitBranch, Github, Settings, Loader2, X, Download, Upload, RefreshCw } from 'lucide-react';
 import { ProjectActions } from '~/components/project/ProjectActions';
+import { toast } from 'react-hot-toast';
 
 interface GitHubBarProps {
   chatId: string;
   projectId?: string;
   projectName?: string;
+  onFilesLoaded?: (files: any[]) => void;
+  getCurrentFiles?: () => any[];
 }
 
-export function GitHubBar({ chatId, projectId, projectName }: GitHubBarProps) {
+export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCurrentFiles }: GitHubBarProps) {
   const [connected, setConnected] = useState(false);
   const [repo, setRepo] = useState<string | null>(null);
   const [branch, setBranch] = useState('main');
   const [syncing, setSyncing] = useState(false);
   const [showRepoSelector, setShowRepoSelector] = useState(false);
+  const [repoInput, setRepoInput] = useState('');
 
   useEffect(() => {
     loadGitHubStatus();
@@ -33,24 +37,156 @@ export function GitHubBar({ chatId, projectId, projectName }: GitHubBarProps) {
     }
   }
 
-  async function connectRepo(repoName: string) {
+  async function syncWithGitHub() {
     setSyncing(true);
     try {
-      await fetch(`/api/chat/${chatId}/github`, {
+      // First pull latest changes
+      const pullResponse = await fetch(`/api/chat/${chatId}/github`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'connect', repo: repoName })
+        body: JSON.stringify({ action: 'pull' })
       });
-      setConnected(true);
-      setRepo(repoName);
-    } catch (error) {
-      console.error('Failed to connect repo:', error);
+
+      const pullData = await pullResponse.json();
+      
+      if (!pullResponse.ok) {
+        throw new Error(pullData.error || 'Failed to pull changes');
+      }
+
+      if (pullData.files && onFilesLoaded) {
+        onFilesLoaded(pullData.files);
+      }
+
+      // Then push local changes if any
+      if (getCurrentFiles) {
+        const localFiles = getCurrentFiles();
+        if (localFiles.length > 0) {
+          const pushResponse = await fetch(`/api/chat/${chatId}/github`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              action: 'push', 
+              files: localFiles, 
+              message: 'Sync from Recoder AI',
+              branch 
+            })
+          });
+
+          const pushData = await pushResponse.json();
+          
+          if (!pushResponse.ok) {
+            throw new Error(pushData.error || 'Failed to push changes');
+          }
+        }
+      }
+      
+      toast.success('Synced with GitHub!');
+    } catch (error: any) {
+      console.error('Failed to sync:', error);
+      toast.error(error.message || 'Failed to sync with GitHub');
     } finally {
       setSyncing(false);
     }
   }
 
-  async function disconnect() {
+  async function cloneRepo() {
+    if (!repoInput.trim()) {
+      toast.error('Please enter a repository URL or owner/repo');
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      // Extract owner/repo from URL or use as-is
+      let repoPath = repoInput.trim();
+      if (repoPath.includes('github.com/')) {
+        const match = repoPath.match(/github\.com\/([^\/]+\/[^\/]+)/);
+        if (match) repoPath = match[1];
+      }
+      repoPath = repoPath.replace(/\.git$/, '');
+
+      const response = await fetch(`/api/chat/${chatId}/github`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clone', repo: repoPath, branch })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to clone repository');
+      }
+
+      setConnected(true);
+      setRepo(repoPath);
+      setShowRepoSelector(false);
+      
+      if (data.files && onFilesLoaded) {
+        onFilesLoaded(data.files);
+      }
+      
+      toast.success(`Cloned ${repoPath} successfully!`);
+    } catch (error: any) {
+      console.error('Failed to clone repo:', error);
+      toast.error(error.message || 'Failed to clone repository');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function pullChanges() {
+    setSyncing(true);
+    try {
+      const response = await fetch(`/api/chat/${chatId}/github`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pull' })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to pull changes');
+      }
+
+      if (data.files && onFilesLoaded) {
+        onFilesLoaded(data.files);
+      }
+      
+      toast.success('Pulled latest changes!');
+    } catch (error: any) {
+      console.error('Failed to pull:', error);
+      toast.error(error.message || 'Failed to pull changes');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function pushChanges(files: any[], message: string) {
+    setSyncing(true);
+    try {
+      const response = await fetch(`/api/chat/${chatId}/github`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'push', files, message, branch })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to push changes');
+      }
+      
+      toast.success('Pushed changes to GitHub!');
+    } catch (error: any) {
+      console.error('Failed to push:', error);
+      toast.error(error.message || 'Failed to push changes');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function disconnectRepo() {
     try {
       await fetch(`/api/chat/${chatId}/github`, {
         method: 'POST',
@@ -59,30 +195,48 @@ export function GitHubBar({ chatId, projectId, projectName }: GitHubBarProps) {
       });
       setConnected(false);
       setRepo(null);
+      toast.success('Disconnected from GitHub');
     } catch (error) {
       console.error('Failed to disconnect:', error);
+      toast.error('Failed to disconnect');
     }
   }
 
   if (!connected) {
     return (
       <div className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-4 py-2">
-        <button
-          onClick={() => setShowRepoSelector(true)}
-          className="flex items-center gap-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
-        >
-          <Github size={16} />
-          Connect GitHub Repository
-        </button>
-
-        {showRepoSelector && (
-          <RepoSelectorModal
-            onClose={() => setShowRepoSelector(false)}
-            onSelect={(repo) => {
-              connectRepo(repo);
-              setShowRepoSelector(false);
-            }}
-          />
+        {!showRepoSelector ? (
+          <button
+            onClick={() => setShowRepoSelector(true)}
+            className="flex items-center gap-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+          >
+            <Github size={16} />
+            Connect GitHub Repository
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={repoInput}
+              onChange={(e) => setRepoInput(e.target.value)}
+              placeholder="https://github.com/owner/repo or owner/repo"
+              className="flex-1 px-3 py-1.5 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              onKeyDown={(e) => e.key === 'Enter' && cloneRepo()}
+            />
+            <button
+              onClick={cloneRepo}
+              disabled={syncing}
+              className="px-3 py-1.5 text-sm bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded hover:bg-bolt-elements-button-primary-backgroundHover disabled:opacity-50"
+            >
+              {syncing ? <Loader2 size={14} className="animate-spin" /> : 'Clone'}
+            </button>
+            <button
+              onClick={() => setShowRepoSelector(false)}
+              className="p-1.5 hover:bg-bolt-elements-item-backgroundActive rounded"
+            >
+              <X size={14} />
+            </button>
+          </div>
         )}
       </div>
     );
@@ -101,106 +255,37 @@ export function GitHubBar({ chatId, projectId, projectName }: GitHubBarProps) {
           <span>{branch}</span>
         </div>
 
-        {syncing && (
-          <div className="flex items-center gap-1 text-bolt-elements-textSecondary">
-            <Loader2 size={14} className="animate-spin" />
-            <span className="text-xs">Syncing...</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={syncWithGitHub}
+            disabled={syncing}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover rounded disabled:opacity-50"
+            title="Sync (pull + push)"
+          >
+            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+            Sync
+          </button>
 
-        {/* Project Export Actions */}
-        {projectId && (
-          <div className="flex items-center gap-2 ml-auto mr-2">
-            <ProjectActions
-              projectId={projectId}
-              projectName={projectName}
-              variant="icons"
-            />
-          </div>
-        )}
+          <button
+            onClick={pullChanges}
+            disabled={syncing}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover rounded disabled:opacity-50"
+            title="Pull latest changes"
+          >
+            <Download size={12} />
+            Pull
+          </button>
 
-        <button
-          onClick={disconnect}
-          className="p-1 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors"
-          title="Disconnect"
-        >
-          <X size={14} className="text-bolt-elements-textSecondary" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function RepoSelectorModal({ onClose, onSelect }: { onClose: () => void; onSelect: (repo: string) => void }) {
-  const [repos, setRepos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    loadRepos();
-  }, []);
-
-  async function loadRepos() {
-    try {
-      const response = await fetch('/api/github/repos');
-      const data = await response.json();
-      setRepos(data.repos || []);
-    } catch (error) {
-      console.error('Failed to load repos:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const filtered = repos.filter(r =>
-    r.name?.toLowerCase().includes(search.toLowerCase()) ||
-    r.full_name?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg p-6 w-[500px] max-w-full max-h-[600px] flex flex-col" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4 text-bolt-elements-textPrimary">Connect GitHub Repository</h2>
-
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search repositories..."
-          className="w-full px-3 py-2 mb-4 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
-        />
-
-        <div className="flex-1 overflow-y-auto space-y-2">
-          {loading ? (
-            <div className="text-center py-8 text-bolt-elements-textSecondary">Loading repositories...</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-8 text-bolt-elements-textSecondary">No repositories found</div>
-          ) : (
-            filtered.map(repo => (
-              <button
-                key={repo.id}
-                onClick={() => onSelect(repo.full_name)}
-                className="w-full flex items-start gap-3 p-3 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors text-left"
-              >
-                <Github size={20} className="text-bolt-elements-textSecondary mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-bolt-elements-textPrimary">{repo.name}</div>
-                  {repo.description && (
-                    <div className="text-sm text-bolt-elements-textSecondary truncate">{repo.description}</div>
-                  )}
-                </div>
-              </button>
-            ))
-          )}
+          <button
+            onClick={disconnectRepo}
+            className="p-1 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors"
+            title="Disconnect"
+          >
+            <X size={14} className="text-bolt-elements-textSecondary" />
+          </button>
         </div>
-
-        <button
-          onClick={onClose}
-          className="mt-4 px-4 py-2 text-sm text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive rounded"
-        >
-          Cancel
-        </button>
       </div>
     </div>
   );
 }
+

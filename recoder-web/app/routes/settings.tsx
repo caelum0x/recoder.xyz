@@ -18,6 +18,13 @@ export default function SettingsLayout() {
       ],
     },
     {
+      title: 'Integrations',
+      items: [
+        { name: 'MCP Servers', path: '/settings/mcp', icon: '🔌' },
+        { name: 'GitHub', path: '/settings/github', icon: '🐙' },
+      ],
+    },
+    {
       title: 'Preferences',
       items: [
         { name: 'Editor', path: '/settings/editor', icon: '⚙️' },

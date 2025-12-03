@@ -2674,11 +2674,10 @@ model MCPServer {
   userId    String
   serverId  String
   name      String
-  command   String
-  args      Json
-  env       Json
+  config    Json
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, serverId])
