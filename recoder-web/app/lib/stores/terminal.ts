@@ -44,20 +44,18 @@ export class TerminalStore {
       // Show welcome message
       terminal.write(getTerminalWelcomeMessage());
 
-      // Install global packages (recoder-code) on first terminal attach
+      // Install global packages on first terminal attach
       if (!this.#globalPackagesInstalled) {
-        terminal.write('\x1b[1;33m⏳ Setting up terminal environment...\x1b[0m\n');
-
         const webcontainer = await this.#webcontainer;
 
-        // Install global packages in the background
+        // Install in background
         installGlobalPackages(webcontainer)
           .then(() => {
-            terminal.write('\x1b[1;32m✅ Terminal environment ready! You can now use recoder-code CLI.\x1b[0m\n\n');
+            terminal.write('\x1b[1;32m✅ recoder-code CLI installed! Try: recoder-code --help\x1b[0m\n\n');
           })
           .catch((error) => {
-            terminal.write(coloredText.red('⚠️ Warning: Failed to install global packages. You may need to install recoder-code manually:\n'));
-            terminal.write('   npm install -g recoder-code\n\n');
+            terminal.write(coloredText.yellow('⚠️ recoder-code installation failed. You can install manually:\n'));
+            terminal.write('   npm install recoder-code\n\n');
           });
 
         this.#globalPackagesInstalled = true;

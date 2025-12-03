@@ -3,13 +3,21 @@
  */
 
 import { useState } from 'react';
+import type { ApiResponse } from "~/types/api-responses";
 import { Button } from '~/components/ui/button';
+import type { ApiResponse } from "~/types/api-responses";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '~/components/ui/simple-dialog';
+import type { ApiResponse } from "~/types/api-responses";
 import { Input } from '~/components/ui/input';
+import type { ApiResponse } from "~/types/api-responses";
 import { Label } from '~/components/ui/label';
+import type { ApiResponse } from "~/types/api-responses";
 import { Checkbox } from '~/components/ui/checkbox';
+import type { ApiResponse } from "~/types/api-responses";
 import { Textarea } from '~/components/ui/textarea';
+import type { ApiResponse } from "~/types/api-responses";
 import { Loader2, Github, ExternalLink } from 'lucide-react';
+import type { ApiResponse } from "~/types/api-responses";
 
 interface PushToGitHubButtonProps {
   projectId: string;

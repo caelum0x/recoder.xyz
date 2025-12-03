@@ -1,4 +1,4 @@
-export interface BoltArtifactData {
+export interface RecoderArtifactData {
   id: string;
   title: string;
 }

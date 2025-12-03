@@ -43,7 +43,7 @@ const STARTER_KEYWORDS = {
   },
   'vite-react': {
     keywords: ['vite', 'vite react', 'fast react', 'react vite', 'modern react'],
-    starterId: 'bolt-vite-react-ts',
+    starterId: 'recoder-vite-react-ts',
     confidence: 0.85,
   },
   'express-backend': {

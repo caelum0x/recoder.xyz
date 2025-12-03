@@ -33,7 +33,7 @@ export class MCPClient {
   async listTools(serverId: string) {
     const client = this.clients.get(serverId);
     if (!client) throw new Error('Server not connected');
-    const response = await client.request({ method: 'tools/list' }, {});
+    const response = await client.request({ method: 'tools/list' }, {} as any);
     return response.tools || [];
   }
 
@@ -43,7 +43,7 @@ export class MCPClient {
     const response = await client.request({
       method: 'tools/call',
       params: { name, arguments: args },
-    }, {});
+    }, {} as any);
     return response.content;
   }
 

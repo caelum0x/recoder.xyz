@@ -204,9 +204,9 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
 Repository: ${githubUrl}
 
 MANDATORY REQUIREMENTS:
-1. You MUST use ONLY this action: <boltAction type="cloneGitHub" repoUrl="${githubUrl}" reason="User requested to clone this repository">
+1. You MUST use ONLY this action: <recoderAction type="cloneGitHub" repoUrl="${githubUrl}" reason="User requested to clone this repository">
 2. The cloneGitHub action MUST be the ONLY action in your entire response
-3. DO NOT use any <boltAction type="file"> actions - NOT EVEN ONE
+3. DO NOT use any <recoderAction type="file"> actions - NOT EVEN ONE
 4. DO NOT generate, create, modify, or add ANY files whatsoever
 5. DO NOT suggest improvements or customizations
 6. The cloned repository is complete and perfect as-is
@@ -217,11 +217,11 @@ VIOLATION CONSEQUENCES:
 - You will cause CRITICAL ERRORS if you add anything beyond the cloneGitHub action
 
 CORRECT RESPONSE FORMAT:
-<boltArtifact id="github-clone" title="Clone ${githubUrl}">
-  <boltAction type="cloneGitHub" repoUrl="${githubUrl}" reason="User requested to clone this repository">
+<recoderArtifact id="github-clone" title="Clone ${githubUrl}">
+  <recoderAction type="cloneGitHub" repoUrl="${githubUrl}" reason="User requested to clone this repository">
     Cloning the complete repository from GitHub.
-  </boltAction>
-</boltArtifact>
+  </recoderAction>
+</recoderArtifact>
 
 That's it. Nothing else. Just the clone action.`,
     });

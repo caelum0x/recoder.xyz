@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ApiResponse } from "~/types/api-responses";
 
 interface DeployButtonProps {
   files: Record<string, string>;

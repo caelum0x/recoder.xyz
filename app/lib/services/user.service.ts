@@ -16,16 +16,7 @@ export class UserService {
   async getProfile(userId: string) {
     try {
       const user = await prisma.users.findUnique({
-        where: { id: userId },
-        include: {
-          user_preferences: true,
-          quota: true,
-          subscriptions: {
-            where: { status: 'active' },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-        },
+        where: { id: userId }
       });
 
       if (!user) {
@@ -46,9 +37,9 @@ export class UserService {
           twoFactorEnabled: user.twoFactorEnabled,
           createdAt: user.createdAt,
           lastLoginAt: user.lastLoginAt,
-          preferences: user.user_preferences,
-          quota: user.quota,
-          subscription: user.subscriptions[0] || null,
+          preferences: null,
+          quota: null,
+          subscription: null,
         },
       };
     } catch (error: any) {
@@ -326,13 +317,6 @@ export class UserService {
       const user = await prisma.users.findUnique({
         where: { id: userId },
         include: {
-          user_preferences: true,
-          quota: true,
-          subscriptions: {
-            where: { status: 'active' },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
           api_keys: {
             select: {
               name: true,

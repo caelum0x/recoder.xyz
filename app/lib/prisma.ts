@@ -3,7 +3,7 @@
  * Singleton pattern to prevent multiple instances
  */
 
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };

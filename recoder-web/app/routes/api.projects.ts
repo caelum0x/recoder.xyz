@@ -31,7 +31,26 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     const projectsDB = new ProjectsDB();
-    const data = await request.json();
+
+    // Handle both FormData and JSON (frontend sends FormData)
+    const contentType = request.headers.get('content-type');
+    let data: any;
+
+    if (contentType?.includes('multipart/form-data') || contentType?.includes('application/x-www-form-urlencoded')) {
+      // Frontend sends FormData
+      const formData = await request.formData();
+      data = {
+        name: formData.get('name') as string,
+        description: formData.get('description') as string,
+        icon: formData.get('icon') as string,
+        color: formData.get('color') as string,
+        userId: formData.get('userId') as string,
+        anonymousId: formData.get('anonymousId') as string,
+      };
+    } else {
+      // Fallback to JSON
+      data = await request.json();
+    }
 
     if (request.method === 'POST') {
       const { name, description, icon, color, userId, anonymousId } = data;
@@ -51,6 +70,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json({ error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
     console.error('Projects API action error:', error);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    return json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
   }
 }

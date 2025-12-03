@@ -1,5 +1,11 @@
+/**
+ * MCP Tools Loader
+ * Loads MCP tools and formats them for AI system prompt
+ */
+
 export async function loadMCPTools(db: any) {
   try {
+    // Check database for enabled MCP servers
     const servers = await db
       .prepare('SELECT * FROM mcp_servers WHERE enabled = 1')
       .all();
@@ -19,11 +25,11 @@ You have access to these external tools via Model Context Protocol:
 
 ${toolsList}
 
-You can use these tools to:
-- GitHub: Clone repos, create PRs, read files
-- Filesystem: Read/write files, search directories
-- Web Search: Search the web for information
-- Browser: Automate browser tasks, take screenshots
+These tools run in recoder-web and provide access to:
+- GitHub operations (repos, PRs, issues, files)
+- Filesystem operations (read, write, search)
+- Database queries
+- API requests
 
 When you need to use these tools, mention them in your response.
 `;

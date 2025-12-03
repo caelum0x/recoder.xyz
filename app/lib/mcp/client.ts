@@ -160,9 +160,10 @@ export class MCPClient {
   }
 
   async disconnectAll(): Promise<void> {
+    const serverIds = Array.from(this.clients.keys());
     const disconnectPromises: Promise<void>[] = [];
     
-    for (const serverId of this.clients.keys()) {
+    for (const serverId of serverIds) {
       disconnectPromises.push(this.disconnect(serverId));
     }
 

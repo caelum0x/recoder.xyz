@@ -23,6 +23,7 @@ import { isMobile } from '~/utils/mobile';
 import { FileBreadcrumb } from './FileBreadcrumb';
 import { FileTree } from './FileTree';
 import { Terminal, type TerminalRef } from './terminal/Terminal';
+import { CLIStatus } from './terminal/CLIStatus';
 
 interface EditorPanelProps {
   files?: FileMap;
@@ -245,6 +246,7 @@ export const EditorPanel = memo(
                   );
                 })}
                 {terminalCount < MAX_TERMINALS && <IconButton icon="i-ph:plus" size="md" onClick={addTerminal} />}
+                <CLIStatus />
                 <IconButton
                   className="ml-auto"
                   icon="i-ph:caret-down"
