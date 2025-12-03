@@ -15,7 +15,7 @@ const CATEGORY_MAPPING: Record<string, string> = {
   'nextjs-shadcn': 'nextjs',
   'react': 'react',
   'react-ts': 'react',
-  'bolt-vite-react-ts': 'react',
+  'recoder-vite-react-ts': 'react',
   'vite-shadcn': 'react',
   'vue': 'vue',
   'angular': 'angular',
@@ -56,7 +56,7 @@ const CATEGORY_MAPPING: Record<string, string> = {
 const FEATURED_STARTERS = [
   'nextjs',
   'nextjs-shadcn',
-  'bolt-vite-react-ts',
+  'recoder-vite-react-ts',
   'vite-shadcn',
   'express-simple',
   'vue',
@@ -220,7 +220,7 @@ function generateDescription(name: string, packageInfo: any): string {
   const customDescriptions: Record<string, string> = {
     'nextjs': 'Next.js application with TypeScript and Tailwind CSS',
     'nextjs-shadcn': 'Next.js with shadcn/ui components and modern UI patterns',
-    'bolt-vite-react-ts': 'React application with Vite, TypeScript and modern tooling',
+    'recoder-vite-react-ts': 'React application with Vite, TypeScript and modern tooling',
     'vite-shadcn': 'React with Vite and shadcn/ui component library',
     'express-simple': 'Simple Express.js server with basic routing',
     'react': 'React application with Create React App',

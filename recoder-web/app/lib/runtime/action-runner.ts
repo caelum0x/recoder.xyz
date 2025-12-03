@@ -1,10 +1,11 @@
 import { WebContainer } from '@webcontainer/api';
 import { map, type MapStore } from 'nanostores';
-import type { BoltAction } from '~/types/actions';
+import type { RecoderAction } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
+import { clearNpmCache } from '~/lib/webcontainer/package-manager';
 
 // Browser-compatible path utilities
 const nodePath = {
@@ -35,14 +36,14 @@ const logger = createScopedLogger('ActionRunner');
 
 export type ActionStatus = 'pending' | 'running' | 'complete' | 'aborted' | 'failed';
 
-export type BaseActionState = BoltAction & {
+export type BaseActionState = RecoderAction & {
   status: Exclude<ActionStatus, 'failed'>;
   abort: () => void;
   executed: boolean;
   abortSignal: AbortSignal;
 };
 
-export type FailedActionState = BoltAction &
+export type FailedActionState = RecoderAction &
   Omit<BaseActionState, 'status'> & {
     status: Extract<ActionStatus, 'failed'>;
     error: string;
@@ -159,6 +160,18 @@ export class ActionRunner {
           await this.#runCloneGitHubAction(action);
           break;
         }
+        case 'readFile': {
+          await this.#runReadFileAction(action);
+          break;
+        }
+        case 'listFiles': {
+          await this.#runListFilesAction(action);
+          break;
+        }
+        case 'searchFiles': {
+          await this.#runSearchFilesAction(action);
+          break;
+        }
       }
 
       this.#updateAction(actionId, { status: action.abortSignal.aborted ? 'aborted' : 'complete' });
@@ -237,7 +250,10 @@ export class ActionRunner {
     let process;
     try {
       process = await webcontainer.spawn('jsh', ['-c', action.content], {
-        env: { npm_config_yes: true },
+        env: {
+          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
+          npm_config_yes: 'true',
+        },
       });
       logger.info('📦 Process spawned successfully, waiting for completion...');
     } catch (error) {
@@ -259,16 +275,16 @@ export class ActionRunner {
     const outputWriter = new WritableStream({
       write(data) {
         const text = data.toString();
-        console.log(data);
+        // Only push to chunks, don't spam console with every character
         outputChunks.push(data);
 
-        // Parse npm install output for progress information
+        // Parse npm install output for progress information (logging only)
         if (isInstallCommand && Date.now() - lastProgressUpdate > 1000) {
           // Extract package count: "added 247 packages"
           const packageMatch = text.match(/added (\d+) packages?/i);
           if (packageMatch) {
             packageCount = parseInt(packageMatch[1]);
-            action.status.set(`running:✅ Installed ${packageCount} packages`);
+            logger.info(`✅ Installed ${packageCount} packages`);
             lastProgressUpdate = Date.now();
           }
 
@@ -276,33 +292,46 @@ export class ActionRunner {
           const deprecatedMatch = text.match(/npm (?:WARN|info) (?:deprecated|installing) ([\w-]+)@/i);
           if (deprecatedMatch && deprecatedMatch[1] !== currentPackage) {
             currentPackage = deprecatedMatch[1];
-            action.status.set(`running:📦 Installing ${currentPackage}...`);
+            logger.info(`📦 Installing ${currentPackage}...`);
             lastProgressUpdate = Date.now();
           }
 
           // Detect resolving dependencies phase
           if (/reify|resolve|idealTree/i.test(text)) {
-            action.status.set(`running:🔍 Resolving dependencies...`);
+            logger.info(`🔍 Resolving dependencies...`);
             lastProgressUpdate = Date.now();
           }
 
           // Detect downloading phase
           if (/fetch|download/i.test(text)) {
-            action.status.set(`running:⬇️ Downloading packages...`);
+            logger.info(`⬇️ Downloading packages...`);
             lastProgressUpdate = Date.now();
           }
 
           // Detect auditing phase
           if (/audit/i.test(text)) {
-            action.status.set(`running:🔒 Auditing packages...`);
+            logger.info(`🔒 Auditing packages...`);
             lastProgressUpdate = Date.now();
           }
         }
       },
+      abort(err) {
+        // Stream was aborted - this is normal when process exits
+        logger.info('Command output stream closed');
+      },
+      close() {
+        // Stream closed normally
+        logger.info('Command output stream completed');
+      },
     });
 
-    // Start piping output (don't await - it runs in background)
-    process.output.pipeTo(outputWriter);
+    // Start piping output with error handling for stream closure
+    process.output.pipeTo(outputWriter).catch((err) => {
+      // Ignore "enqueue into closed stream" errors - they happen when process exits
+      if (!err.message?.includes('closed readable stream')) {
+        logger.warn('Output pipe error:', err);
+      }
+    });
 
     // For regular commands, wait for completion with timeout
     // WebContainer npm installs can be slow, especially for large packages
@@ -311,9 +340,9 @@ export class ActionRunner {
 
     logger.info(`⏱️ Timeout set to ${timeoutDuration / 1000}s (install command: ${isInstallCommand})`);
 
-    // Initial progress message for install commands
+    // Log initial progress message for install commands
     if (isInstallCommand) {
-      action.status.set(`running:📦 Starting package installation...`);
+      logger.info(`📦 Starting package installation...`);
     }
 
     const exitPromise = process.exit;
@@ -592,7 +621,10 @@ export class ActionRunner {
     let process;
     try {
       process = await webcontainer.spawn('jsh', ['-c', action.content], {
-        env: { npm_config_yes: true },
+        env: {
+          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
+          npm_config_yes: 'true',
+        },
       });
       this.#devServerProcess = process;
       logger.info('✅ Dev server process spawned successfully');
@@ -785,18 +817,47 @@ export class ActionRunner {
       // Step 1: Install dependencies
       logger.info('📦 Step 1/2: Installing dependencies...');
 
-      const installProcess = await webcontainer.spawn('jsh', ['-c', 'npm install'], {
-        env: { npm_config_yes: true },
-      });
+      // Clear npm cache first to prevent EEXIST errors
+      logger.info('🧹 Clearing npm cache before install...');
+      await clearNpmCache(webcontainer);
 
-      // Pipe install output to console
-      const installOutputWriter = new WritableStream({
-        write(data) {
-          console.log('[npm install]', data);
+      const installProcess = await webcontainer.spawn('jsh', ['-c', 'npm install'], {
+        env: {
+          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
+          npm_config_yes: 'true',
         },
       });
 
-      installProcess.output.pipeTo(installOutputWriter);
+      // Collect install output for error diagnosis
+      let installOutput = '';
+      const installOutputWriter = new WritableStream({
+        write(data) {
+          const text = data.toString();
+          installOutput += text;
+          // Log only errors and warnings
+          if (text.includes('npm error') || text.includes('npm ERR!')) {
+            logger.error('[npm install]', text.trim());
+          } else if (text.includes('npm WARN')) {
+            logger.warn('[npm install]', text.trim());
+          }
+        },
+        abort(err) {
+          // Stream was aborted - this is normal when process exits
+          logger.info('Install output stream closed');
+        },
+        close() {
+          // Stream closed normally
+          logger.info('Install output stream completed');
+        },
+      });
+
+      // Pipe with error handling for stream closure
+      installProcess.output.pipeTo(installOutputWriter).catch((err) => {
+        // Ignore "enqueue into closed stream" errors - they happen when process exits
+        if (!err.message?.includes('closed readable stream')) {
+          logger.warn('Install output pipe error:', err);
+        }
+      });
 
       // Wait for install to complete (5 minute timeout)
       const installExitCode = await Promise.race([
@@ -807,7 +868,12 @@ export class ActionRunner {
       ]);
 
       if (installExitCode !== 0) {
-        throw new Error(`npm install failed with exit code ${installExitCode}`);
+        // Extract error message from npm output
+        const errorLines = installOutput.split('\n').filter(line =>
+          line.includes('npm error') || line.includes('npm ERR!')
+        ).slice(0, 5); // Show first 5 error lines
+        const errorDetail = errorLines.length > 0 ? `\n${errorLines.join('\n')}` : '';
+        throw new Error(`npm install failed with exit code ${installExitCode}${errorDetail}`);
       }
 
       logger.info('✅ Step 1/2: Dependencies installed successfully!');
@@ -840,7 +906,10 @@ export class ActionRunner {
       }
 
       const devProcess = await webcontainer.spawn('jsh', ['-c', devCommand], {
-        env: { npm_config_yes: true },
+        env: {
+          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
+          npm_config_yes: 'true',
+        },
       });
 
       this.#devServerProcess = devProcess;
@@ -953,5 +1022,105 @@ export class ActionRunner {
     const actions = this.actions.get();
 
     this.actions.setKey(id, { ...actions[id], ...newState });
+  }
+
+  async #runReadFileAction(action: ActionState) {
+    if (action.type !== 'readFile') {
+      unreachable('Expected readFile action');
+    }
+
+    logger.info(`📖 Reading file: ${action.filePath}`);
+
+    try {
+      const webcontainer = await this.#webcontainer;
+      const content = await webcontainer.fs.readFile(action.filePath, 'utf-8');
+      
+      // Update action content with file contents
+      action.content = content;
+      
+      logger.info(`✅ Read ${content.length} characters from ${action.filePath}`);
+    } catch (error) {
+      logger.error(`❌ Failed to read file ${action.filePath}:`, error);
+      throw new Error(`Could not read file: ${action.filePath}`);
+    }
+  }
+
+  async #runListFilesAction(action: ActionState) {
+    if (action.type !== 'listFiles') {
+      unreachable('Expected listFiles action');
+    }
+
+    const path = action.path || '.';
+    logger.info(`📁 Listing files in: ${path}`);
+
+    try {
+      const webcontainer = await this.#webcontainer;
+      const files = await webcontainer.fs.readdir(path, { withFileTypes: true });
+      
+      const fileList = files.map(file => ({
+        name: file.name,
+        isDirectory: file.isDirectory(),
+      }));
+
+      // Update action content with file list
+      action.content = JSON.stringify(fileList, null, 2);
+      
+      logger.info(`✅ Found ${fileList.length} items in ${path}`);
+    } catch (error) {
+      logger.error(`❌ Failed to list files in ${path}:`, error);
+      throw new Error(`Could not list files in: ${path}`);
+    }
+  }
+
+  async #runSearchFilesAction(action: ActionState) {
+    if (action.type !== 'searchFiles') {
+      unreachable('Expected searchFiles action');
+    }
+
+    logger.info(`🔍 Searching for: "${action.query}"`);
+
+    try {
+      const webcontainer = await this.#webcontainer;
+      
+      // Use grep to search files
+      const grepProcess = await webcontainer.spawn('grep', [
+        '-r',           // recursive
+        '-n',           // line numbers
+        '-i',           // case insensitive
+        action.query,
+        '.',
+      ]);
+
+      const outputChunks: string[] = [];
+
+      grepProcess.output.pipeTo(
+        new WritableStream({
+          write(data) {
+            outputChunks.push(data);
+          },
+          abort(err) {
+            logger.info('Grep output stream closed');
+          },
+          close() {
+            logger.info('Grep output stream completed');
+          },
+        })
+      ).catch((err) => {
+        // Ignore "enqueue into closed stream" errors
+        if (!err.message?.includes('closed readable stream')) {
+          logger.warn('Grep pipe error:', err);
+        }
+      });
+
+      await grepProcess.exit;
+
+      const results = outputChunks.join('');
+      action.content = results || 'No matches found';
+      
+      logger.info(`✅ Search complete: ${results.split('\n').length} matches`);
+    } catch (error) {
+      logger.error(`❌ Search failed:`, error);
+      action.content = 'No matches found';
+    }
   }
 }

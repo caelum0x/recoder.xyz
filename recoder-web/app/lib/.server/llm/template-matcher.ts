@@ -48,9 +48,9 @@ export const STARTER_TEMPLATES: TemplateInfo[] = [
     features: ['Vite dev server', 'shadcn/ui', 'Tailwind CSS', 'TypeScript']
   },
   {
-    id: 'bolt-vite-react-ts',
+    id: 'recoder-vite-react-ts',
     name: 'Bolt Vite React TypeScript',
-    path: '/starters/bolt-vite-react-ts',
+    path: '/starters/recoder-vite-react-ts',
     description: 'Optimized Vite + React + TypeScript starter for Bolt',
     keywords: ['vite', 'react', 'typescript', 'bolt', 'fast'],
     framework: 'vite',
@@ -582,6 +582,21 @@ This saves significant processing and ensures consistency with the proven templa
  * Analyze if request is template-suitable
  */
 export function isTemplateSuitable(userMessage: string): boolean {
+  // ❌ BLOCK vague requests that shouldn't use templates
+  const vaguePatterns = [
+    /^(make|create|build)\s+(a|an)?\s*component\s*library/i,  // "make a component library"
+    /^(make|create|build)\s+(a|an)?\s*trading\s+component/i,  // "make a trading component"
+    /^(make|create|build)\s+(a|an)?\s*component(?!\s+(for|in|with))/i,  // "make a component" (standalone)
+    /^(add|create)\s+(a|an)?\s*\w+\s+component$/i,  // "add a button component"
+    /^(turn|convert|change)\s+this/i,  // "turn this into..."
+  ];
+
+  // Check if request is too vague
+  if (vaguePatterns.some(pattern => pattern.test(userMessage.trim()))) {
+    return false;  // Don't use templates for vague requests
+  }
+
+  // ✅ ALLOW specific project types
   const templateIndicators = [
     /create (a |an )?(.+)?(app|application|website|site|project)/i,
     /build (a |an )?(.+)?(app|application|website|site)/i,
@@ -600,7 +615,7 @@ export function isTemplateSuitable(userMessage: string): boolean {
  */
 export function getDefaultTemplateForFramework(framework: string): TemplateInfo | null {
   const frameworkMap: Record<string, string> = {
-    'react': 'bolt-vite-react-ts',
+    'react': 'recoder-vite-react-ts',
     'nextjs': 'nextjs-shadcn',
     'next': 'nextjs-shadcn',
     'vue': 'vue',

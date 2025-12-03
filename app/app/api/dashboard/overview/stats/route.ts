@@ -16,14 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     const user = await prisma.users.findUnique({
-      where: { email: authUser.email },
-      include: {
-        subscriptions: {
-          where: { status: 'active' },
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
-      }
+      where: { email: authUser.email }
     });
 
     if (!user) {
@@ -108,26 +101,12 @@ export async function GET(request: NextRequest) {
     });
 
     // Subscription info
-    const subscription = user.subscriptions[0];
-    let subscriptionInfo = {
+    const subscriptionInfo = {
       plan: user.subscription || 'free',
       status: 'active',
       renewsAt: '',
       daysRemaining: 0
     };
-
-    if (subscription) {
-      const daysUntilRenewal = Math.ceil(
-        (subscription.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      subscriptionInfo = {
-        plan: subscription.planId,
-        status: subscription.status,
-        renewsAt: subscription.currentPeriodEnd.toISOString(),
-        daysRemaining: daysUntilRenewal
-      };
-    }
 
     return NextResponse.json({
       success: true,

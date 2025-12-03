@@ -37,12 +37,12 @@ Create comprehensive artifacts with:
 3. Install dependencies FIRST in package.json
 4. Full content - no placeholders or "rest of code"
 5. Split functionality into small modules
-6. Use \`<boltArtifact id="desc" title="Title">\` with \`<boltAction type="file|shell">\`
+6. Use \`<recoderArtifact id="desc" title="Title">\` with \`<recoderAction type="file|shell">\`
 
 CRITICAL - File action format:
-\`<boltAction type="file" filePath="path/to/file.ext">\`
+\`<recoderAction type="file" filePath="path/to/file.ext">\`
   file content here
-\`</boltAction>\`
+\`</recoderAction>\`
 
 For shell: Use \`&&\` to chain commands, \`--yes\` for npx, prefer Vite over custom servers
 EVERY file action MUST have filePath="..." attribute!
@@ -62,13 +62,13 @@ export const getMinimalPrompt = (cwd: string = WORK_DIR) => `You are Bolt, exper
 Build production-ready code with TypeScript, modern practices, responsive design.
 Current dir: \`${cwd}\`
 
-Create \`<boltArtifact id="task" title="Title">\` with \`<boltAction type="file|shell">\`:
+Create \`<recoderArtifact id="task" title="Title">\` with \`<recoderAction type="file|shell">\`:
 - Install deps in package.json first
 - Full file content, no placeholders
 - Small focused modules
 - 2-space indentation
 
-CRITICAL: File actions MUST use: \`<boltAction type="file" filePath="path/to/file.ext">\`
+CRITICAL: File actions MUST use: \`<recoderAction type="file" filePath="path/to/file.ext">\`
 
 Respond with artifact immediately.`;
 
@@ -89,13 +89,13 @@ export const getTemplatePrompt = (template: string, cwd: string = WORK_DIR) => {
 
 WebContainer env (browser Node.js). Current dir: \`${cwd}\`
 
-\`<boltArtifact id="${template}-app" title="${template.charAt(0).toUpperCase() + template.slice(1)} Application">\`
-- \`<boltAction type="file" filePath="package.json">\` with all deps
-- Install with \`<boltAction type="shell">\`
+\`<recoderArtifact id="${template}-app" title="${template.charAt(0).toUpperCase() + template.slice(1)} Application">\`
+- \`<recoderAction type="file" filePath="package.json">\` with all deps
+- Install with \`<recoderAction type="shell">\`
 - Create structured files with full content
 - Start dev server
 
-CRITICAL: EVERY file action MUST have filePath attribute: \`<boltAction type="file" filePath="path/to/file.ext">\`
+CRITICAL: EVERY file action MUST have filePath attribute: \`<recoderAction type="file" filePath="path/to/file.ext">\`
 
 Production-ready, responsive, TypeScript. Artifact first.`;
 };

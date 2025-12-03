@@ -27,7 +27,7 @@ interface MCPStats {
   totalTools: number;
 }
 
-export function MCPServerPanel() {
+export default function MCPServerPanel() {
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [stats, setStats] = useState<MCPStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +37,7 @@ export function MCPServerPanel() {
     setLoading(true);
     try {
       const response = await fetch('/api/mcp?action=list');
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (data.success) {
         setServers(data.servers);
@@ -45,7 +45,7 @@ export function MCPServerPanel() {
       } else {
         toast.error('Failed to load MCP servers');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load MCP servers:', error);
       toast.error('Error loading MCP servers');
     } finally {
@@ -68,7 +68,7 @@ export function MCPServerPanel() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (data.success) {
         toast.success(`Server ${enabled ? 'enabled' : 'disabled'} successfully`);
@@ -76,7 +76,7 @@ export function MCPServerPanel() {
       } else {
         toast.error(data.error || 'Failed to update server');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to toggle server:', error);
       toast.error('Error updating server');
     }

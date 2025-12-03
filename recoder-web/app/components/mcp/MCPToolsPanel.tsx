@@ -28,7 +28,7 @@ interface MCPServer {
   toolCount: number;
 }
 
-export function MCPToolsPanel() {
+export default function MCPToolsPanel() {
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,18 +45,18 @@ export function MCPToolsPanel() {
     try {
       // Load servers
       const serversRes = await fetch('/api/mcp?action=list-servers');
-      const serversData = await serversRes.json();
+      const serversData = (await serversRes.json()) as any;
       if (serversData.success) {
         setServers(serversData.data);
       }
 
       // Load tools
       const toolsRes = await fetch('/api/mcp?action=list-tools');
-      const toolsData = await toolsRes.json();
+      const toolsData = (await toolsRes.json()) as any;
       if (toolsData.success) {
         setTools(toolsData.data);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load MCP data:', error);
       toast.error('Failed to load MCP tools');
     } finally {
@@ -79,7 +79,7 @@ export function MCPToolsPanel() {
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as any;
 
       if (result.success) {
         toast.success(`Tool executed successfully: ${tool.name}`);
@@ -87,7 +87,7 @@ export function MCPToolsPanel() {
       } else {
         throw new Error(result.error || 'Tool execution failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Tool execution error:', error);
       toast.error(`Failed to execute ${tool.name}`);
     } finally {

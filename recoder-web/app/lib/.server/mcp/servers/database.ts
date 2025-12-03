@@ -222,10 +222,11 @@ export class DatabaseMCPServer {
 
     try {
       const db = neon(this.connectionString);
-      
+
       // Execute query
-      const result = await db(sql, params || []);
-      
+      // Note: neon accepts raw SQL strings despite the type signature
+      const result = await (db as any)(sql, params || []);
+
       const executionTime = Date.now() - startTime;
 
       return {
@@ -234,7 +235,7 @@ export class DatabaseMCPServer {
         fields: result.length > 0 ? Object.keys(result[0]) : [],
         executionTime,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Query execution failed: ${error.message}`);
     }
   }

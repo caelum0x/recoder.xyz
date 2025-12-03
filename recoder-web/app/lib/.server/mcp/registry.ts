@@ -10,11 +10,19 @@ export class MCPRegistry {
   private tools: Map<string, {tool: MCPTool, serverId: string}> = new Map();
 
   /**
-   * Register a new MCP server
+   * Register a new MCP server (or update if already registered)
    */
   register(server: MCPServer): void {
+    // Allow re-registration (for hot reload)
     if (this.servers.has(server.id)) {
-      throw new Error(`Server ${server.id} is already registered`);
+      console.log(`🔄 Re-registering MCP server: ${server.name} (${server.id})`);
+      // Remove old tools
+      for (const tool of this.servers.get(server.id)!.tools) {
+        const toolKey = `${server.id}:${tool.name}`;
+        this.tools.delete(toolKey);
+      }
+    } else {
+      console.log(`✅ Registered MCP server: ${server.name} (${server.id})`);
     }
 
     this.servers.set(server.id, server);
@@ -24,8 +32,6 @@ export class MCPRegistry {
       const toolKey = `${server.id}:${tool.name}`;
       this.tools.set(toolKey, { tool, serverId: server.id });
     }
-
-    console.log(`✅ Registered MCP server: ${server.name} (${server.id})`);
   }
 
   /**

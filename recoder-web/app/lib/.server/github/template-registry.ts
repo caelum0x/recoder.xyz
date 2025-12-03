@@ -63,10 +63,10 @@ const TEMPLATE_REGISTRY: TemplateRepo[] = [
     isLocal: true,
   },
   {
-    id: 'local-bolt-vite-react',
+    id: 'local-recoder-vite-react',
     name: 'Bolt Vite React TS',
     description: 'Bolt with Vite, React, and TypeScript',
-    repo: 'local:bolt-vite-react-ts',
+    repo: 'local:recoder-vite-react-ts',
     category: 'react',
     tags: ['vite', 'react', 'typescript'],
     featured: true,

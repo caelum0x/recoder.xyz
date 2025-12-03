@@ -33,18 +33,7 @@ export async function GET(request: NextRequest) {
         email: true,
         name: true,
         subscriptionPlan: true,
-        subscriptionStatus: true,
-        subscriptions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          include: {
-            payment_methods: true,
-            invoices: {
-              orderBy: { createdAt: 'desc' },
-              take: 10,
-            },
-          },
-        },
+        subscriptionStatus: true
       },
     });
 
@@ -54,8 +43,6 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       );
     }
-
-    const subscription = user.subscriptions[0] || null;
 
     // Get subscription plan details
     const plans = await prisma.subscription_plans.findMany({
@@ -78,7 +65,6 @@ export async function GET(request: NextRequest) {
         plan: user.subscriptionPlan || 'free',
         status: user.subscriptionStatus || 'active',
       },
-      subscription,
       availablePlans: plans,
     });
 
@@ -143,13 +129,7 @@ export async function POST(request: NextRequest) {
 
     // Get user
     const user = await prisma.users.findUnique({
-      where: { email: authUser.email },
-      include: {
-        subscriptions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
+      where: { email: authUser.email }
     });
 
     if (!user) {
@@ -159,45 +139,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentSubscription = user.subscriptions[0];
-
     // Create or update subscription
     const now = new Date();
     const periodEnd = new Date();
     periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-    let subscription;
-    
-    if (currentSubscription) {
-      // Update existing subscription
-      subscription = await prisma.subscriptions.update({
-        where: { id: currentSubscription.id },
-        data: {
-          planId,
-          status: 'active',
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: false,
-          paymentMethodId: paymentMethodId || currentSubscription.paymentMethodId,
-          updatedAt: new Date(),
-        },
-      });
-    } else {
-      // Create new subscription
-      subscription = await prisma.subscriptions.create({
-        data: {
-          id: crypto.randomUUID(),
-          userId: user.id,
-          planId,
-          status: 'active',
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: false,
-          paymentMethodId,
-          updatedAt: new Date(),
-        },
-      });
-    }
+    // Create new subscription
+    const subscription = await prisma.subscriptions.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        planId,
+        status: 'active',
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        cancelAtPeriodEnd: false,
+        paymentMethodId,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
 
     // Update user's subscription plan
     await prisma.users.update({
@@ -249,13 +210,7 @@ export async function DELETE(request: NextRequest) {
 
     // Get user
     const user = await prisma.users.findUnique({
-      where: { email: authUser.email },
-      include: {
-        subscriptions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
+      where: { email: authUser.email }
     });
 
     if (!user) {
@@ -265,7 +220,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const subscription = user.subscriptions[0];
+    // Get active subscription
+    const subscription = await prisma.subscriptions.findFirst({
+      where: { 
+        userId: user.id,
+        status: 'active'
+      }
+    });
 
     if (!subscription) {
       return NextResponse.json(
