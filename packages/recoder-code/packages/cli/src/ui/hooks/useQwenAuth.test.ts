@@ -12,12 +12,12 @@ import {
   AuthType,
   qwenOAuth2Events,
   QwenOAuth2Event,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import type { LoadedSettings } from '../../config/settings.js';
 
 // Mock the qwenOAuth2Events
-vi.mock('@qwen-code/qwen-code-core', async () => {
-  const actual = await vi.importActual('@qwen-code/qwen-code-core');
+vi.mock('recoder-code-core', async () => {
+  const actual = await vi.importActual('recoder-code-core');
   const mockEmitter = {
     on: vi.fn().mockReturnThis(),
     off: vi.fn().mockReturnThis(),

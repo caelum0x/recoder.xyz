@@ -20,11 +20,39 @@ export default function CLIPage() {
     }
   };
 
+  const installMethods = [
+    {
+      title: "Quick Install (Recommended)",
+      code: "curl -fsSL https://recoder.xyz/api/install | bash",
+      description: "One-line installer for macOS/Linux"
+    },
+    {
+      title: "npm",
+      code: "npm install -g recoder-code-cli",
+      description: "Install via npm (all platforms)"
+    },
+    {
+      title: "Homebrew",
+      code: "brew install https://recoder.xyz/api/brew/recoder-code.rb",
+      description: "Install via Homebrew (macOS/Linux)"
+    },
+    {
+      title: "pnpm",
+      code: "pnpm add -g recoder-code-cli",
+      description: "Install via pnpm"
+    },
+    {
+      title: "yarn",
+      code: "yarn global add recoder-code-cli",
+      description: "Install via yarn"
+    }
+  ];
+
   const installSteps = [
     {
       title: "Install Recoder CLI",
-      code: "npm install -g recoder-code",
-      description: "Install the CLI globally in seconds"
+      code: "curl -fsSL https://recoder.xyz/api/install | bash",
+      description: "One-line install (or use npm/brew below)"
     },
     {
       title: "Authenticate",
@@ -263,8 +291,37 @@ export default function CLIPage() {
 
           <div className="mt-8 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
             <p className="text-sm text-gray-300">
-              <span className="font-semibold text-yellow-400">📦 Package Name:</span> The CLI is published as <code className="font-mono text-yellow-400">recoder-code</code> on npm
+              <span className="font-semibold text-yellow-400">📦 Package Name:</span> The CLI is published as <code className="font-mono text-yellow-400">recoder-code-cli</code> on npm
             </p>
+          </div>
+
+          {/* Alternative Installation Methods */}
+          <div className="mt-12">
+            <h3 className="text-2xl font-bold mb-6 text-center">Alternative Installation Methods</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              {installMethods.map((method, index) => (
+                <div
+                  key={index}
+                  className="p-4 rounded-xl border border-white/10 bg-black/30 hover:border-white/20 transition-all"
+                >
+                  <h4 className="font-semibold text-white mb-1">{method.title}</h4>
+                  <p className="text-xs text-gray-500 mb-2">{method.description}</p>
+                  <div className="flex items-center space-x-2 p-2 bg-black border border-white/10 rounded font-mono text-xs">
+                    <code className="flex-1 text-green-400 overflow-x-auto">{method.code}</code>
+                    <button
+                      onClick={() => copyToClipboard(method.code, 200 + index)}
+                      className="p-1 hover:bg-white/5 rounded transition-colors flex-shrink-0"
+                    >
+                      {copiedStep === 200 + index ? (
+                        <Check className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

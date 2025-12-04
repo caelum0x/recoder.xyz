@@ -381,6 +381,28 @@ export class StreamingMessageParser {
 
       (actionAttributes as CloneGitHubAction).repoUrl = repoUrl || '';
       (actionAttributes as CloneGitHubAction).reason = reason || '';
+    } else if (actionType === 'readFile') {
+      // Extract filePath for readFile action
+      let filePath = this.#extractAttribute(actionTag, 'filePath') as string;
+      if (!filePath) {
+        filePath = this.#extractAttribute(actionTag, 'filepath') as string;
+      }
+      if (!filePath) {
+        filePath = this.#extractAttribute(actionTag, 'path') as string;
+      }
+      if (!filePath) {
+        const pathMatch = actionTag.match(REGEX_CACHE.aggressivePath);
+        if (pathMatch) filePath = pathMatch[1];
+      }
+
+      if (!filePath) {
+        logger.error('❌ File path not specified in readFile action:', actionTag);
+        filePath = 'unknown-file.txt';
+      } else {
+        logger.info(`✅ ReadFile path: ${filePath}`);
+      }
+
+      (actionAttributes as any).filePath = filePath;
     } else if (actionType !== 'shell') {
       logger.warn(`Unknown action type '${actionType}'`);
     }

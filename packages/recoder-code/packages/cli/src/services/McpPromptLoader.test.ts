@@ -5,7 +5,7 @@
  */
 
 import { McpPromptLoader } from './McpPromptLoader.js';
-import type { Config } from '@qwen-code/qwen-code-core';
+import type { Config } from 'recoder-code-core';
 import type { PromptArgument } from '@modelcontextprotocol/sdk/types.js';
 import { describe, it, expect } from 'vitest';
 

@@ -159,6 +159,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
       provider?: string;
       model?: string;
       recoderContext?: string;
+      projectContext?: string;
     }>();
 
     // Extract provider and model from request
@@ -302,9 +303,21 @@ That's it. Nothing else. Just the clone action.`,
       console.log('   ✅ MCP tools loaded');
     }
 
-    // Get system prompt and append .recoder/ context + MCP tools
-    const baseSystemPrompt = getSystemPrompt();
-    const systemPrompt = baseSystemPrompt + recoderContextPrompt + mcpToolsPrompt;
+    // Get project context from request (tracks what project is being built)
+    const projectContext = requestBody.projectContext || '';
+    if (projectContext) {
+      console.log('   ✅ Project context loaded');
+    }
+
+    // Get custom tools from request
+    const customTools = requestBody.customTools || '';
+
+    // Get client-side MCP tools from request
+    const clientMcpTools = requestBody.mcpTools || '';
+
+    // Get system prompt and append all context
+    const baseSystemPrompt = getSystemPrompt(undefined, customTools);
+    const systemPrompt = baseSystemPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext;
 
     // Get API key (User's BYOK > Environment variable)
     const { getAPIKey } = await import('~/lib/.server/llm/api-key');
@@ -432,10 +445,50 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+    
+    // Return user-friendly error as streamed text (so it shows in chat)
+    const encoder = new TextEncoder();
+    let userMessage = '❌ An error occurred while processing your request.';
+    
+    // Check for common error types
+    if (errorMessage.includes('maximum prompt length') || errorMessage.includes('tokens')) {
+      userMessage = `⚠️ Context Too Large
 
-    throw new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      statusText: 'Internal Server Error',
+The conversation has grown too large for the AI model to process. 
+
+**Solutions:**
+1. Start a new chat for your next task
+2. Try a model with larger context (Claude 3.5 Sonnet supports 200K tokens)
+3. Remove some earlier messages from the conversation
+
+The current request had too many tokens for the selected model's limit.`;
+    } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+      userMessage = `⏳ Rate Limited
+
+You've made too many requests. Please wait a moment and try again.`;
+    } else if (errorMessage.includes('invalid_api_key') || errorMessage.includes('401')) {
+      userMessage = `🔑 Invalid API Key
+
+Your API key appears to be invalid or expired. Please check your API key in Settings → AI Providers.`;
+    } else if (errorMessage.includes('insufficient_quota') || errorMessage.includes('402')) {
+      userMessage = `💳 Insufficient Credits
+
+Your API account has run out of credits. Please add more credits to your provider account.`;
+    }
+
+    const errorStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(userMessage));
+        controller.close();
+      }
+    });
+
+    return new Response(errorStream, {
+      status: 200, // Return 200 so the message displays in chat
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Error-Type': 'AI_ERROR',
+      },
     });
   }
 }

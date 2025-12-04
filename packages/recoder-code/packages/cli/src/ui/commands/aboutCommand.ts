@@ -9,7 +9,7 @@ import type { SlashCommand } from './types.js';
 import { CommandKind } from './types.js';
 import process from 'node:process';
 import { MessageType, type HistoryItemAbout } from '../types.js';
-import { AuthType } from '@qwen-code/qwen-code-core';
+import { AuthType } from 'recoder-code-core';
 
 /**
  * Convert raw auth type value to user-friendly display name

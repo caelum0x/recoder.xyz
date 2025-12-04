@@ -1,6 +1,9 @@
 import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
 
+// Docker backend - hardcoded for development
+const DOCKER_URL = 'http://localhost:3100';
+
 export interface PreviewInfo {
   port: number;
   ready: boolean;
@@ -11,18 +14,64 @@ export class PreviewsStore {
   #availablePreviews = new Map<number, PreviewInfo>();
   #webcontainer: Promise<WebContainer>;
   #heartbeatInterval?: NodeJS.Timeout;
+  #useDocker: boolean = false;
+  #projectId: string | null = null;
 
   previews = atom<PreviewInfo[]>([]);
 
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;
-
     this.#init();
+  }
+
+  setProjectId(projectId: string) {
+    this.#projectId = projectId;
+    // Reinitialize Docker preview with new projectId
+    if (this.#useDocker && DOCKER_URL) {
+      this.#initDockerPreview();
+    }
   }
 
   async #init() {
     console.log('📺 [PreviewsStore] Initializing preview store...');
-    
+
+    // Check if Docker is available
+    if (DOCKER_URL) {
+      try {
+        const res = await fetch(`${DOCKER_URL}/health`, { signal: AbortSignal.timeout(2000) });
+        if (res.ok) {
+          this.#useDocker = true;
+          console.log('🐳 [PreviewsStore] Docker backend available for previews');
+        }
+      } catch {
+        this.#useDocker = false;
+      }
+    }
+
+    if (this.#useDocker) {
+      // Docker preview - add default preview
+      this.#initDockerPreview();
+    } else {
+      // WebContainer preview
+      this.#initWebContainerPreview();
+    }
+  }
+
+  #initDockerPreview() {
+    // For Docker, we create a preview that points to the Docker proxy
+    const previewInfo: PreviewInfo = {
+      port: 3000,
+      ready: true,
+      baseUrl: `${DOCKER_URL}/preview/${this.#projectId || 'default'}`,
+    };
+
+    this.#availablePreviews.set(3000, previewInfo);
+    this.previews.set([previewInfo]);
+
+    console.log('🐳 [PreviewsStore] Docker preview initialized:', previewInfo.baseUrl);
+  }
+
+  async #initWebContainerPreview() {
     try {
       console.log('📺 [PreviewsStore] Waiting for WebContainer...');
       const webcontainer = await this.#webcontainer;
@@ -30,7 +79,7 @@ export class PreviewsStore {
 
       webcontainer.on('port', (port, type, url) => {
         console.log('📺 [PreviewsStore] Port event:', { port, type, url });
-        
+
         let previewInfo = this.#availablePreviews.get(port);
 
         if (type === 'close' && previewInfo) {
@@ -47,8 +96,6 @@ export class PreviewsStore {
           previewInfo = { port, ready: type === 'open', baseUrl: url };
           this.#availablePreviews.set(port, previewInfo);
           previews.push(previewInfo);
-        } else {
-          console.log('📺 [PreviewsStore] Updating existing preview for port:', port);
         }
 
         previewInfo.ready = type === 'open';
@@ -65,49 +112,55 @@ export class PreviewsStore {
       });
 
       console.log('✅ [PreviewsStore] Preview store initialized successfully');
-
-      // Start heartbeat to keep previews alive
       this.#startHeartbeat();
     } catch (error) {
       console.error('❌ [PreviewsStore] Failed to initialize preview store:', error);
     }
   }
 
+  // Update Docker preview URL when project changes
+  updateDockerPreview(projectId: string, port: number = 3000) {
+    if (!this.#useDocker || !DOCKER_URL) return;
+
+    this.#projectId = projectId;
+    const previewInfo: PreviewInfo = {
+      port,
+      ready: true,
+      baseUrl: `${DOCKER_URL}/preview/${projectId}`,
+    };
+
+    this.#availablePreviews.set(port, previewInfo);
+    this.previews.set([previewInfo]);
+
+    console.log('🐳 [PreviewsStore] Docker preview updated:', previewInfo.baseUrl);
+  }
+
   #startHeartbeat() {
-    // Clear any existing heartbeat
     if (this.#heartbeatInterval) {
       clearInterval(this.#heartbeatInterval);
     }
 
-    // Ping previews every 60 seconds to keep them alive
     this.#heartbeatInterval = setInterval(async () => {
       const previews = this.previews.get();
 
-      if (previews.length === 0) {
-        return;
-      }
+      if (previews.length === 0) return;
 
       console.log('💓 [PreviewsStore] Heartbeat - checking', previews.length, 'previews');
 
       for (const preview of previews) {
         if (preview.ready && preview.baseUrl) {
           try {
-            // Send a lightweight HEAD request to keep connection alive
-            await fetch(preview.baseUrl, {
-              method: 'HEAD',
-              cache: 'no-cache'
-            }).catch(() => {
-              // Ignore errors, just trying to keep connection alive
-              console.log('💓 [PreviewsStore] Heartbeat ping for port', preview.port);
-            });
-          } catch (error) {
-            // Silently ignore errors
-          }
+            await fetch(preview.baseUrl, { method: 'HEAD', cache: 'no-cache' }).catch(() => {});
+          } catch {}
         }
       }
-    }, 60000); // Every 60 seconds
+    }, 60000);
 
     console.log('💓 [PreviewsStore] Heartbeat started');
+  }
+
+  isUsingDocker(): boolean {
+    return this.#useDocker;
   }
 
   destroy() {

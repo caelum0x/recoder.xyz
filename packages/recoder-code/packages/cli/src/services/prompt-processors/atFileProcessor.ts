@@ -7,7 +7,7 @@
 import {
   flatMapTextParts,
   readPathFromWorkspace,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import type { CommandContext } from '../../ui/commands/types.js';
 import { MessageType } from '../../ui/types.js';
 import {

@@ -8,7 +8,7 @@ import {
   getErrorMessage,
   loadServerHierarchicalMemory,
   RECODER_DIR,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import path from 'node:path';
 import os from 'os';
 import fs from 'fs/promises';

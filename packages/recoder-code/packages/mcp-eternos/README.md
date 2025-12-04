@@ -4,7 +4,50 @@
 
 Eternos is a powerful Model Context Protocol (MCP) server that provides AI assistants with advanced capabilities for web scraping, web crawling, file operations, data processing, security tools, system utilities, and comprehensive developer info gathering. Built for developers who want their AI to do more.
 
-**✨ NEW in v2.2:** 17 new tools including web crawling, PyPI, Crates.io, Docker Hub, OpenRouter, Hugging Face, Dev.to, Maven, Packagist, Go packages, and more! **68 total tools** - all without requiring API keys!
+**✨ NEW in v2.4:** 11 new tools including DynamoDB, Redis, MySQL, AWS EC2/SQS, GCP Storage/BigQuery, and AI model integrations (OpenAI, Anthropic, Groq)! **81 total tools** - most without requiring API keys!
+
+## 🚀 Quick Install
+
+```bash
+# Install globally
+npm install -g recoder-mcp-eternos
+
+# Or run directly with npx
+npx recoder-mcp-eternos
+```
+
+## 🔗 Integration with Recoder
+
+### recoder-code CLI
+Eternos is automatically available in recoder-code CLI. The MCP client in core connects to Eternos for tool calling.
+
+```bash
+# Install recoder-code CLI
+npm install -g recoder-code-cli
+
+# Eternos tools are available automatically
+recoder-code
+```
+
+### recoder-web
+Add Eternos to your MCP servers in Settings → MCP Servers:
+- **Name**: Eternos
+- **Command**: npx
+- **Args**: -y recoder-mcp-eternos
+
+### Claude Desktop
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "eternos": {
+      "command": "npx",
+      "args": ["-y", "recoder-mcp-eternos"]
+    }
+  }
+}
+```
 
 ## 📑 Table of Contents
 

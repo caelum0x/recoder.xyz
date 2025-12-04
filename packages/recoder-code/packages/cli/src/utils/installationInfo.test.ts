@@ -9,9 +9,9 @@ import { getInstallationInfo, PackageManager } from './installationInfo.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as childProcess from 'node:child_process';
-import { isGitRepository } from '@qwen-code/qwen-code-core';
+import { isGitRepository } from 'recoder-code-core';
 
-vi.mock('@qwen-code/qwen-code-core', () => ({
+vi.mock('recoder-code-core', () => ({
   isGitRepository: vi.fn(),
 }));
 

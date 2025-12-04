@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Config } from '@qwen-code/qwen-code-core';
+import type { Config } from 'recoder-code-core';
 import {
   AuthType,
   FatalConfigError,
@@ -14,7 +14,7 @@ import {
   logIdeConnection,
   logUserPrompt,
   sessionId,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import { render } from 'ink';
 import { spawn } from 'node:child_process';
 import dns from 'node:dns';

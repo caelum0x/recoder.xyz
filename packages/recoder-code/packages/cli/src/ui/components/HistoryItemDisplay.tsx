@@ -22,7 +22,7 @@ import { StatsDisplay } from './StatsDisplay.js';
 import { ModelStatsDisplay } from './ModelStatsDisplay.js';
 import { ToolStatsDisplay } from './ToolStatsDisplay.js';
 import { SessionSummaryDisplay } from './SessionSummaryDisplay.js';
-import type { Config } from '@qwen-code/qwen-code-core';
+import type { Config } from 'recoder-code-core';
 import { Help } from './Help.js';
 import type { SlashCommand } from '../commands/types.js';
 

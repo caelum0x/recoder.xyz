@@ -13,7 +13,7 @@ import { CommandKind } from './types.js';
 import { 
   OpenRouterImageGenerator,
   type ImageGenerationOptions 
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';

@@ -9,6 +9,7 @@ import { useKeyboardShortcuts, COMMON_SHORTCUTS } from '~/lib/hooks/useKeyboardS
 import { useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { getToolsForAI, initCustomTools } from '~/lib/stores/custom-tools';
 import { fileModificationsToHTML } from '~/utils/diff';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
@@ -29,11 +30,11 @@ export function Chat() {
   renderLogger.trace('Chat');
 
   const { ready, initialMessages, storeMessageHistory } = useChatHistory();
-  const { id: chatId } = useLoaderData<{ id?: string }>();
+  const { id: chatId, projectId, projectName } = useLoaderData<{ id?: string; projectId?: string; projectName?: string }>();
 
   return (
     <>
-      {ready && <ChatImpl key={chatId || 'new'} chatId={chatId} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
+      {ready && <ChatImpl key={chatId || 'new'} chatId={chatId} projectId={projectId} projectName={projectName} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
       <ToastContainer
         closeButton={({ closeToast }) => {
           return (
@@ -67,11 +68,13 @@ export function Chat() {
 
 interface ChatProps {
   chatId?: string;
+  projectId?: string;
+  projectName?: string;
   initialMessages: Message[];
   storeMessageHistory: (messages: Message[]) => Promise<void>;
 }
 
-export const ChatImpl = memo(({ chatId, initialMessages, storeMessageHistory }: ChatProps) => {
+export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages, storeMessageHistory }: ChatProps) => {
   useShortcuts();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -151,6 +154,48 @@ export const ChatImpl = memo(({ chatId, initialMessages, storeMessageHistory }: 
 
   const [animationScope, animate] = useAnimate();
 
+  // Set project ID for Docker backend and initialize project state
+  useEffect(() => {
+    if (chatId) {
+      workbenchStore.setProjectId(chatId);
+      
+      // Initialize project state for context tracking
+      import('~/lib/stores/project-state').then(({ initProject }) => {
+        initProject({ projectId: chatId });
+      });
+    }
+  }, [chatId]);
+
+  // Get project context for AI
+  const [projectContext, setProjectContext] = useState<string>('');
+  const [customTools, setCustomTools] = useState<string>('');
+  const [mcpTools, setMcpTools] = useState<string>('');
+  
+  useEffect(() => {
+    // Initialize custom tools
+    initCustomTools();
+    setCustomTools(getToolsForAI());
+  }, []);
+  
+  useEffect(() => {
+    // Update project context periodically
+    const updateContext = () => {
+      import('~/lib/stores/project-state').then(({ getContextSummary }) => {
+        setProjectContext(getContextSummary());
+      }).catch(() => {});
+      // Update custom tools
+      setCustomTools(getToolsForAI());
+      // Update MCP tools
+      import('~/lib/mcp/client').then(({ mcpClient }) => {
+        setMcpTools(mcpClient.getToolsPrompt());
+      }).catch(() => {});
+    };
+    
+    updateContext();
+    const interval = setInterval(updateContext, 5000); // Update every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
+
   const { messages, isLoading, input, handleInputChange, setInput, stop, append } = useSimpleChat({
     api: '/api/chat',
     body: {
@@ -158,6 +203,9 @@ export const ChatImpl = memo(({ chatId, initialMessages, storeMessageHistory }: 
       model: selectedModel,
       lightningMode,
       taskCategory,
+      projectContext, // Pass project context to server
+      customTools, // Pass custom tools to server
+      mcpTools, // Pass MCP tools to server
     },
     onError: (error) => {
       logger.error('Request failed\n\n', error);
@@ -522,6 +570,8 @@ export const ChatImpl = memo(({ chatId, initialMessages, storeMessageHistory }: 
       <BaseChat
         ref={animationScope}
         chatId={chatId}
+        projectId={projectId}
+        projectName={projectName}
         textareaRef={textareaRef}
         input={input}
         showChat={showChat}

@@ -5,16 +5,22 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
-    const anonymousId = url.searchParams.get('anonymousId');
 
-    // Check if DATABASE_URL is available
-    if (!process.env.DATABASE_URL) {
+    // Get DATABASE_URL from context or env
+    const env = context.cloudflare?.env;
+    const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
+
+    if (!databaseUrl) {
       console.warn('DATABASE_URL not available');
       return json({ projects: [], error: 'Database not configured' });
     }
 
-    const projectsDB = new ProjectsDB();
-    const projects = await projectsDB.getUserProjects(userId || undefined, anonymousId || undefined);
+    if (!userId) {
+      return json({ projects: [], error: null }); // Return empty for no user
+    }
+
+    const projectsDB = new ProjectsDB(databaseUrl);
+    const projects = await projectsDB.getUserProjects(userId);
 
     return json({ projects, error: null });
   } catch (error) {
@@ -25,51 +31,67 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   try {
-    // Check if DATABASE_URL is available
-    if (!process.env.DATABASE_URL) {
+    const env = context.cloudflare?.env;
+    const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
+
+    if (!databaseUrl) {
+      console.error('❌ Database not configured');
       return json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    const projectsDB = new ProjectsDB();
-
-    // Handle both FormData and JSON (frontend sends FormData)
+    const projectsDB = new ProjectsDB(databaseUrl);
     const contentType = request.headers.get('content-type');
-    let data: any;
+    let data: Record<string, unknown>;
 
-    if (contentType?.includes('multipart/form-data') || contentType?.includes('application/x-www-form-urlencoded')) {
-      // Frontend sends FormData
-      const formData = await request.formData();
-      data = {
-        name: formData.get('name') as string,
-        description: formData.get('description') as string,
-        icon: formData.get('icon') as string,
-        color: formData.get('color') as string,
-        userId: formData.get('userId') as string,
-        anonymousId: formData.get('anonymousId') as string,
-      };
-    } else {
-      // Fallback to JSON
+    if (contentType?.includes('application/json')) {
       data = await request.json();
+    } else {
+      const formData = await request.formData();
+      data = Object.fromEntries(formData);
     }
 
+    console.log('📝 Projects API action:', request.method, data);
+
     if (request.method === 'POST') {
-      const { name, description, icon, color, userId, anonymousId } = data;
+      const { name, description, type, framework, language, isPrivate, userId } = data as {
+        name: string;
+        description?: string;
+        type?: string;
+        framework?: string;
+        language?: string;
+        isPrivate?: boolean;
+        userId: string;
+      };
+
+      if (!userId) {
+        console.error('❌ User ID missing in request');
+        return json({ error: 'User ID required' }, { status: 400 });
+      }
+
+      if (!name) {
+        console.error('❌ Project name missing in request');
+        return json({ error: 'Project name required' }, { status: 400 });
+      }
+
+      console.log('✅ Creating project:', { name, userId, type });
 
       const project = await projectsDB.createProject({
         name,
         description,
-        icon,
-        color,
+        type,
+        framework,
+        language,
+        isPrivate,
         userId,
-        anonymousId
       });
 
+      console.log('✅ Project created:', project.id);
       return json({ success: true, project });
     }
 
     return json({ error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('Projects API action error:', error);
+    console.error('❌ Projects API action error:', error);
     return json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
   }
 }

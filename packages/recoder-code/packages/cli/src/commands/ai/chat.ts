@@ -7,6 +7,7 @@
 import type { CommandModule } from 'yargs';
 import { RecoderAIService } from '../../services/RecoderAIService.js';
 import { RecoderAuthService } from '../../services/RecoderAuthService.js';
+import { detectFilePaths, formatPathsForDisplay } from '../../utils/filePathDetector.js';
 
 export const chatCommand: CommandModule = {
   command: 'chat',
@@ -53,6 +54,11 @@ export const chatCommand: CommandModule = {
         output: process.stdout,
       });
 
+      // Enable paste mode for file paths
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false);
+      }
+
       const chat = async () => {
         rl.question('You: ', async (input) => {
           const message = input.trim();
@@ -67,6 +73,12 @@ export const chatCommand: CommandModule = {
             rl.close();
             process.exit(0);
             return;
+          }
+
+          // Detect file paths from paste/drag
+          const paths = detectFilePaths(message);
+          if (paths.length > 0) {
+            console.log(formatPathsForDisplay(paths));
           }
 
           // Add user message

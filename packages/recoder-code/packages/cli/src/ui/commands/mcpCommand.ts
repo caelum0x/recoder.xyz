@@ -11,7 +11,7 @@ import type {
   MessageActionReturn,
 } from './types.js';
 import { CommandKind } from './types.js';
-import type { DiscoveredMCPPrompt } from '@qwen-code/qwen-code-core';
+import type { DiscoveredMCPPrompt } from 'recoder-code-core';
 import {
   DiscoveredMCPTool,
   getMCPDiscoveryState,
@@ -20,7 +20,7 @@ import {
   MCPServerStatus,
   mcpServerRequiresOAuth,
   getErrorMessage,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 
 const COLOR_GREEN = '\u001b[32m';
 const COLOR_YELLOW = '\u001b[33m';
@@ -140,7 +140,7 @@ const getMcpStatus = async (
       needsAuthHint = true;
       try {
         const { MCPOAuthTokenStorage } = await import(
-          '@qwen-code/qwen-code-core'
+          'recoder-code-core'
         );
         const hasToken = await MCPOAuthTokenStorage.getToken(serverName);
         if (hasToken) {
@@ -377,7 +377,7 @@ const authCommand: SlashCommand = {
       );
 
       // Import dynamically to avoid circular dependencies
-      const { MCPOAuthProvider } = await import('@qwen-code/qwen-code-core');
+      const { MCPOAuthProvider } = await import('recoder-code-core');
 
       let oauthConfig = server.oauth;
       if (!oauthConfig) {

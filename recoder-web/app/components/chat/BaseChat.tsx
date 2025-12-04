@@ -9,7 +9,6 @@ import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import { ExamplePrompts } from './ExamplePrompts';
 import { ModelSelector } from './ModelSelector';
-import { GitHubBar } from './GitHubBar';
 import MCPButton from './MCPButton';
 import { ProjectGallery } from '~/components/gallery/ProjectGallery';
 import type { TemplateRepo } from '~/lib/.server/github/types';
@@ -98,12 +97,30 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow min-w-[var(--chat-min-width)] h-full')}>
             {!chatStarted && (
               <div id="intro" className="mt-[26vh] max-w-chat mx-auto">
-                <h1 className="text-5xl text-center font-bold text-bolt-elements-textPrimary mb-2">
-                  Where ideas begin
-                </h1>
-                <p className="mb-4 text-center text-bolt-elements-textSecondary">
-                  Bring ideas to life in seconds or get help on existing projects.
-                </p>
+                {projectName ? (
+                  <>
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                      <span className="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm font-medium">
+                        📁 {projectName}
+                      </span>
+                    </div>
+                    <h1 className="text-5xl text-center font-bold text-bolt-elements-textPrimary mb-2">
+                      Continue building
+                    </h1>
+                    <p className="mb-4 text-center text-bolt-elements-textSecondary">
+                      What would you like to add to this project?
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-5xl text-center font-bold text-bolt-elements-textPrimary mb-2">
+                      Where ideas begin
+                    </h1>
+                    <p className="mb-4 text-center text-bolt-elements-textSecondary">
+                      Bring ideas to life in seconds or get help on existing projects.
+                    </p>
+                  </>
+                )}
               </div>
             )}
             <div
@@ -148,18 +165,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     )}
                   </ClientOnly>
 
-                  {/* GitHub Integration */}
-                  {chatId && (
-                    <ClientOnly>
-                      {() => (
-                        <GitHubBar 
-                          chatId={chatId} 
-                          projectId={projectId}
-                          projectName={projectName}
-                        />
-                      )}
-                    </ClientOnly>
-                  )}
+
 
                   <div className="relative">
                     {/* Larger Chat Input Textarea - Wider */}

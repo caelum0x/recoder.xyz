@@ -208,7 +208,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
         {!showRepoSelector ? (
           <button
             onClick={() => setShowRepoSelector(true)}
-            className="flex items-center gap-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+            className="flex items-center gap-2 text-sm text-black dark:text-white hover:text-orange-500 transition-colors font-medium"
           >
             <Github size={16} />
             Connect GitHub Repository
