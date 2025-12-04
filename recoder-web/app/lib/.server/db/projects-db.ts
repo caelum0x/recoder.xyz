@@ -6,74 +6,70 @@
 import { neon } from '@neondatabase/serverless';
 
 export interface Project {
-  id: number;
+  id: string;
   name: string;
+  type: string;
   description?: string;
-  icon: string;
-  color: string;
-  user_id?: string;
-  anonymous_id?: string;
-  chat_count: number;
-  file_count: number;
-  created_at: Date;
-  updated_at: Date;
+  status: string;
+  config: Record<string, unknown>;
+  structure?: Record<string, unknown>;
+  framework?: string;
+  language?: string;
+  isPrivate: boolean;
+  metadata: Record<string, unknown>;
+  projectPath?: string;
+  userId: string;
+  templateId?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface CreateProjectData {
   name: string;
+  type?: string;
   description?: string;
-  icon?: string;
-  color?: string;
-  userId?: string;
-  anonymousId?: string;
+  framework?: string;
+  language?: string;
+  isPrivate?: boolean;
+  userId: string;
+  templateId?: string;
+  config?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export class ProjectsDB {
   private sql: ReturnType<typeof neon>;
 
-  constructor() {
-    const databaseUrl = process.env.DATABASE_URL;
+  constructor(databaseUrl?: string) {
+    const url = databaseUrl || process.env.DATABASE_URL;
     
-    if (!databaseUrl) {
-      throw new Error('DATABASE_URL environment variable is required');
+    if (!url) {
+      throw new Error('DATABASE_URL is required');
     }
 
-    this.sql = neon(databaseUrl);
+    this.sql = neon(url);
   }
 
   /**
-   * Get all projects for a user or anonymous session
+   * Get all projects for a user
    */
-  async getUserProjects(userId?: string, anonymousId?: string): Promise<Project[]> {
+  async getUserProjects(userId?: string): Promise<Project[]> {
     try {
-      let query: string;
-      let params: any[];
-
-      if (userId) {
-        query = `
-          SELECT * FROM projects 
-          WHERE user_id = $1 
-          ORDER BY updated_at DESC
-        `;
-        params = [userId];
-      } else if (anonymousId) {
-        query = `
-          SELECT * FROM projects 
-          WHERE anonymous_id = $1 
-          ORDER BY updated_at DESC
-        `;
-        params = [anonymousId];
-      } else {
-        // Return empty array if no user or anonymous ID
+      if (!userId) {
         return [];
       }
 
-      const result = await this.sql(query, params);
+      const result = await this.sql`
+        SELECT * FROM projects 
+        WHERE "userId" = ${userId}
+        ORDER BY "updatedAt" DESC
+      `;
+      
       return result as Project[];
-
-    } catch (error) {
-      console.error('❌ [ProjectsDB.getUserProjects] Database error:', error);
-      throw new Error(`Failed to get user projects: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.getUserProjects] Database error:', message);
+      throw new Error(`Failed to get user projects: ${message}`);
     }
   }
 
@@ -82,189 +78,202 @@ export class ProjectsDB {
    */
   async createProject(data: CreateProjectData): Promise<Project> {
     try {
-      const query = `
-        INSERT INTO projects (name, description, icon, color, user_id, anonymous_id, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      const id = crypto.randomUUID();
+      const now = new Date();
+      
+      console.log('📝 Creating project in DB:', { 
+        id, 
+        name: data.name, 
+        userId: data.userId,
+        type: data.type || 'web'
+      });
+      
+      const result = await this.sql`
+        INSERT INTO projects (
+          id, name, type, description, status, config, framework, language,
+          "isPrivate", metadata, "userId", "templateId", "createdAt", "updatedAt"
+        )
+        VALUES (
+          ${id},
+          ${data.name},
+          ${data.type || 'web'},
+          ${data.description || ''},
+          'active',
+          ${JSON.stringify(data.config || {})}::jsonb,
+          ${data.framework || null},
+          ${data.language || null},
+          ${data.isPrivate || false},
+          ${JSON.stringify(data.metadata || {})}::jsonb,
+          ${data.userId},
+          ${data.templateId || null},
+          ${now},
+          ${now}
+        )
         RETURNING *
       `;
-
-      const params = [
-        data.name,
-        data.description || '',
-        data.icon || '📁',
-        data.color || '#3b82f6',
-        data.userId || null,
-        data.anonymousId || null
-      ];
-
-      const result = await this.sql(query, params);
       
       if (!result || result.length === 0) {
         throw new Error('No project returned from database');
       }
 
+      console.log('✅ Project created in DB:', result[0].id);
       return result[0] as Project;
-
-    } catch (error) {
-      console.error('❌ [ProjectsDB.createProject] Database error:', error);
-      throw new Error(`Failed to create project: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.createProject] Database error:', message);
+      console.error('❌ [ProjectsDB.createProject] Data:', data);
+      throw new Error(`Failed to create project: ${message}`);
     }
   }
 
   /**
    * Update project details
    */
-  async updateProject(projectId: number, data: Partial<CreateProjectData>, userId?: string, anonymousId?: string): Promise<Project | null> {
+  async updateProject(projectId: string, data: Partial<CreateProjectData>, userId: string): Promise<Project | null> {
     try {
-      // First verify ownership
-      const ownership = userId 
-        ? 'user_id = $2' 
-        : 'anonymous_id = $2';
-      
-      const ownershipId = userId || anonymousId;
-      
-      if (!ownershipId) {
-        throw new Error('No user ID or anonymous ID provided');
-      }
-
-      const updateFields = [];
-      const params = [projectId, ownershipId];
-      let paramIndex = 3;
-
-      if (data.name !== undefined) {
-        updateFields.push(`name = $${paramIndex}`);
-        params.push(data.name);
-        paramIndex++;
-      }
-
-      if (data.description !== undefined) {
-        updateFields.push(`description = $${paramIndex}`);
-        params.push(data.description);
-        paramIndex++;
-      }
-
-      if (data.icon !== undefined) {
-        updateFields.push(`icon = $${paramIndex}`);
-        params.push(data.icon);
-        paramIndex++;
-      }
-
-      if (data.color !== undefined) {
-        updateFields.push(`color = $${paramIndex}`);
-        params.push(data.color);
-        paramIndex++;
-      }
-
-      if (updateFields.length === 0) {
-        throw new Error('No fields to update');
-      }
-
-      updateFields.push('updated_at = NOW()');
-
-      const query = `
+      const result = await this.sql`
         UPDATE projects 
-        SET ${updateFields.join(', ')}
-        WHERE id = $1 AND ${ownership}
+        SET 
+          name = COALESCE(${data.name || null}, name),
+          description = COALESCE(${data.description || null}, description),
+          framework = COALESCE(${data.framework || null}, framework),
+          language = COALESCE(${data.language || null}, language),
+          "isPrivate" = COALESCE(${data.isPrivate ?? null}, "isPrivate"),
+          "updatedAt" = NOW()
+        WHERE id = ${projectId} AND "userId" = ${userId}
         RETURNING *
       `;
-
-      const result = await this.sql(query, params);
       
       if (!result || result.length === 0) {
         return null;
       }
 
       return result[0] as Project;
-
-    } catch (error) {
-      console.error('❌ [ProjectsDB.updateProject] Database error:', error);
-      throw new Error(`Failed to update project: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.updateProject] Database error:', message);
+      throw new Error(`Failed to update project: ${message}`);
     }
   }
 
   /**
    * Delete a project
    */
-  async deleteProject(projectId: number, userId?: string, anonymousId?: string): Promise<boolean> {
+  async deleteProject(projectId: string, userId: string): Promise<boolean> {
     try {
-      const ownership = userId 
-        ? 'user_id = $2' 
-        : 'anonymous_id = $2';
-      
-      const ownershipId = userId || anonymousId;
-      
-      if (!ownershipId) {
-        throw new Error('No user ID or anonymous ID provided');
-      }
-
-      const query = `
+      const result = await this.sql`
         DELETE FROM projects 
-        WHERE id = $1 AND ${ownership}
+        WHERE id = ${projectId} AND "userId" = ${userId}
         RETURNING id
       `;
-
-      const result = await this.sql(query, [projectId, ownershipId]);
       
       return result && result.length > 0;
-
-    } catch (error) {
-      console.error('❌ [ProjectsDB.deleteProject] Database error:', error);
-      throw new Error(`Failed to delete project: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.deleteProject] Database error:', message);
+      throw new Error(`Failed to delete project: ${message}`);
     }
   }
 
   /**
    * Get a single project by ID
    */
-  async getProject(projectId: number, userId?: string, anonymousId?: string): Promise<Project | null> {
+  async getProject(projectId: string, userId?: string): Promise<Project | null> {
     try {
-      const ownership = userId 
-        ? 'user_id = $2' 
-        : 'anonymous_id = $2';
+      let result;
       
-      const ownershipId = userId || anonymousId;
-      
-      if (!ownershipId) {
-        throw new Error('No user ID or anonymous ID provided');
+      if (userId) {
+        result = await this.sql`
+          SELECT * FROM projects 
+          WHERE id = ${projectId} AND "userId" = ${userId}
+        `;
+      } else {
+        result = await this.sql`
+          SELECT * FROM projects 
+          WHERE id = ${projectId}
+        `;
       }
-
-      const query = `
-        SELECT * FROM projects 
-        WHERE id = $1 AND ${ownership}
-      `;
-
-      const result = await this.sql(query, [projectId, ownershipId]);
       
       if (!result || result.length === 0) {
         return null;
       }
 
       return result[0] as Project;
-
-    } catch (error) {
-      console.error('❌ [ProjectsDB.getProject] Database error:', error);
-      throw new Error(`Failed to get project: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.getProject] Database error:', message);
+      throw new Error(`Failed to get project: ${message}`);
     }
   }
 
   /**
-   * Update project stats (chat count, file count)
+   * Get public projects (for community/explore page)
    */
-  async updateProjectStats(projectId: number): Promise<void> {
+  async getPublicProjects(limit: number = 20, offset: number = 0): Promise<Project[]> {
     try {
-      // This would need to be implemented based on how chats and files are linked to projects
-      // For now, just update the timestamp
-      const query = `
-        UPDATE projects 
-        SET updated_at = NOW()
-        WHERE id = $1
+      const result = await this.sql`
+        SELECT * FROM projects 
+        WHERE "isPrivate" = false
+        ORDER BY "updatedAt" DESC
+        LIMIT ${limit} OFFSET ${offset}
       `;
+      
+      return result as Project[];
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.getPublicProjects] Database error:', message);
+      throw new Error(`Failed to get public projects: ${message}`);
+    }
+  }
 
-      await this.sql(query, [projectId]);
+  /**
+   * Update project timestamp
+   */
+  async touchProject(projectId: string): Promise<void> {
+    try {
+      await this.sql`
+        UPDATE projects 
+        SET "updatedAt" = NOW()
+        WHERE id = ${projectId}
+      `;
+    } catch (error: unknown) {
+      console.error('❌ [ProjectsDB.touchProject] Database error:', error);
+    }
+  }
 
-    } catch (error) {
-      console.error('❌ [ProjectsDB.updateProjectStats] Database error:', error);
-      // Don't throw error for stats update to avoid breaking other operations
+  /**
+   * Link chat session to project
+   */
+  async linkChatToProject(projectId: string, chatSessionId: string): Promise<void> {
+    try {
+      await this.sql`
+        UPDATE chat_sessions 
+        SET "projectId" = ${projectId}
+        WHERE id = ${chatSessionId}
+      `;
+      
+      // Update project timestamp
+      await this.touchProject(projectId);
+    } catch (error: unknown) {
+      console.error('❌ [ProjectsDB.linkChatToProject] Database error:', error);
+    }
+  }
+
+  /**
+   * Get project chats
+   */
+  async getProjectChats(projectId: string): Promise<unknown[]> {
+    try {
+      const result = await this.sql`
+        SELECT * FROM chat_sessions 
+        WHERE "projectId" = ${projectId}
+        ORDER BY "updatedAt" DESC
+      `;
+      
+      return result;
+    } catch (error: unknown) {
+      console.error('❌ [ProjectsDB.getProjectChats] Database error:', error);
+      return [];
     }
   }
 }

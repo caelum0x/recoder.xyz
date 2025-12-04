@@ -17,8 +17,8 @@ const STARTER_KEYWORDS = {
     confidence: 0.9,
   },
   'react-native': {
-    keywords: ['react native', 'mobile app', 'expo', 'ios app', 'android app', 'mobile application'],
-    starterId: 'bolt-expo',
+    keywords: ['react native', 'mobile app', 'expo app', 'ios app', 'android app', 'mobile application', 'cross-platform mobile'],
+    starterId: 'recoder-expo',
     confidence: 0.85,
   },
   'blog': {

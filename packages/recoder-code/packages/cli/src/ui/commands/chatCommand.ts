@@ -15,7 +15,7 @@ import type {
   SlashCommandActionReturn,
 } from './types.js';
 import { CommandKind } from './types.js';
-import { decodeTagName } from '@qwen-code/qwen-code-core';
+import { decodeTagName } from 'recoder-code-core';
 import path from 'node:path';
 import type { HistoryItemWithoutId } from '../types.js';
 import { MessageType } from '../types.js';

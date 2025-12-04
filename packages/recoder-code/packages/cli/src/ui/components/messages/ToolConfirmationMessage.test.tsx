@@ -10,7 +10,7 @@ import { ToolConfirmationMessage } from './ToolConfirmationMessage.js';
 import type {
   ToolCallConfirmationDetails,
   Config,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import { renderWithProviders } from '../../../test-utils/render.js';
 
 describe('ToolConfirmationMessage', () => {

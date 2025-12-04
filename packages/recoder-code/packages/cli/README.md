@@ -1,391 +1,285 @@
-# 🤖 Recoder Code CLI
+# Recoder Code CLI
 
-**AI-Powered Coding Assistant for Your Terminal**
+> AI-powered coding assistant that generates production-ready code
 
-Recoder Code CLI is an intelligent coding assistant that helps you write, debug, and understand code directly from your terminal. Powered by advanced AI models, it provides contextual assistance while you code.
+[![npm version](https://img.shields.io/npm/v/recoder-code-cli.svg)](https://www.npmjs.com/package/recoder-code-cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[![Version](https://img.shields.io/npm/v/recoder-code-cli)](https://www.npmjs.com/package/recoder-code-cli)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+## Installation
 
-## ✨ Features
+### Quick Install (Recommended)
 
-- 🎯 **Interactive AI Assistant** - Natural language conversations about your code
-- 📁 **File Context Awareness** - Understands your project structure and files
-- 🔄 **Multi-Turn Conversations** - Maintains context across multiple interactions
-- 💻 **Multiple AI Providers** - Supports OpenAI, Anthropic, Google GenAI, and more
-- 🎨 **Syntax Highlighting** - Beautiful code formatting in terminal
-- 🔧 **IDE Integration** - Works seamlessly with VS Code extension
-- 🚀 **Fast & Efficient** - Optimized for quick responses
-- 🔒 **Privacy Focused** - Your code stays on your machine
+```bash
+# One-line installer (macOS/Linux)
+curl -fsSL https://recoder.xyz/api/install | bash
+```
 
-## 📦 Installation
+### Package Managers
 
-### Global Installation (Recommended)
-
+#### npm (All platforms)
 ```bash
 npm install -g recoder-code-cli
 ```
 
-### Local Installation
-
+#### Homebrew (macOS/Linux)
 ```bash
-npm install recoder-code-cli
+brew install https://recoder.xyz/api/brew/recoder-code.rb
 ```
 
-### From Source
+#### pnpm
+```bash
+pnpm add -g recoder-code-cli
+```
+
+#### yarn
+```bash
+yarn global add recoder-code-cli
+```
+
+### Manual Installation
 
 ```bash
-git clone https://github.com/caelum0x/recoder-code.git
-cd recoder-code/packages/cli
+# Clone repository
+git clone https://github.com/recoder-team/recoder.git
+cd recoder/packages/recoder-code/packages/cli
+
+# Install dependencies and build
 npm install
 npm run build
+
+# Link globally
 npm link
 ```
 
-## 🚀 Quick Start
-
-### 1. Run Recoder Code
+### Docker
 
 ```bash
-recoder-code
+docker run -it --rm -v $(pwd):/workspace ghcr.io/recoder-team/recoder-code:latest
 ```
 
-Or use the short alias:
+## Requirements
+
+- Node.js 20+
+- npm, pnpm, or yarn
+
+## Quick Start
 
 ```bash
+# Start interactive mode
 recoder
+
+# Initialize project configuration
+recoder init
+
+# Create a project plan
+recoder plan create "My App" -t web-app
+
+# Get help
+recoder --help
 ```
 
-### 2. Start Asking Questions
+## Commands
 
-```
-You: How do I read a file in Node.js?
+### Core Commands
 
-Recoder: Here's how to read a file in Node.js...
-```
+| Command | Description |
+|---------|-------------|
+| `recoder` | Start interactive AI chat |
+| `recoder init` | Initialize `.recoder` folder |
+| `recoder plan` | Project planning module |
 
-### 3. Get Help with Your Code
-
-```
-You: Can you review the code in main.js?
-
-Recoder: I'll analyze main.js for you...
-```
-
-## 🎯 Usage Examples
-
-### Basic Conversation
+### Planning Commands
 
 ```bash
-$ recoder-code
-
-🤖 Recoder Code - AI Coding Assistant
-Type your question or 'exit' to quit
-
-You: Write a function to calculate fibonacci numbers
-
-Recoder: Here's an efficient fibonacci function...
-[Code example provided]
-
-You: Can you optimize it?
-
-Recoder: Sure! Here's an optimized version using memoization...
+recoder plan create <name>           # Create new plan
+recoder plan create <name> -t web-app # Use template
+recoder plan create <name> -i        # Interactive mode
+recoder plan list                    # List all plans
+recoder plan show <id>               # View plan
+recoder plan scaffold <id>           # Generate folder structure
 ```
 
-### Working with Files
+**Templates:** `web-app`, `api`, `cli`
+
+### MCP Server Management
 
 ```bash
-You: Read the package.json file and explain the dependencies
-
-Recoder: I'll analyze package.json...
-[Detailed explanation of dependencies]
-
-You: How can I update outdated packages?
-
-Recoder: Here are the steps...
+recoder mcp list                     # List configured servers
+recoder mcp add <name> <cmd>         # Add server
+recoder mcp remove <name>            # Remove server
+recoder mcp detect                   # Auto-detect from other tools
+recoder mcp detect --add             # Detect and add servers
 ```
 
-### Code Review
+### Web IDE Integration
 
 ```bash
-You: Review the code in src/index.ts for potential issues
-
-Recoder: I'll review src/index.ts...
-[Code review with suggestions]
+recoder web launch                   # Open recoder.xyz
+recoder web launch -n                # Create new project
+recoder web list                     # List your projects
+recoder web open <id>                # Open project in browser
+recoder web sync <id>                # Sync local ↔ web
+recoder web push <id>                # Push local to web
+recoder web download <id>            # Download from web
 ```
 
-### Debugging Help
+### Authentication
 
 ```bash
-You: I'm getting an error: "Cannot find module 'express'"
-
-Recoder: This error means...
-[Troubleshooting steps provided]
+recoder auth login                   # Login to recoder.xyz
+recoder auth logout                  # Logout
+recoder auth status                  # Check auth status
+recoder auth whoami                  # Show current user
 ```
 
-## ⚙️ Configuration
-
-### Environment Variables
-
-Create a `.env` file or set environment variables:
+### AI Commands
 
 ```bash
-# AI Provider API Keys (at least one required)
-OPENAI_API_KEY=your_openai_key
-ANTHROPIC_API_KEY=your_anthropic_key
-GOOGLE_API_KEY=your_google_key
-
-# Model Selection (optional)
-RECODER_MODEL=gpt-4  # or claude-3-opus, gemini-pro, etc.
-
-# Custom API Endpoints (optional)
-RECODER_API_URL=https://custom-endpoint.com
-
-# Logging
-RECODER_LOG_LEVEL=info  # debug, info, warn, error
+recoder ai chat                      # Start AI chat
+recoder ai models                    # List available models
+recoder ai usage                     # Show usage stats
 ```
 
-### Configuration File
+## Configuration
 
-Create `~/.recoder/config.json`:
+### `.recoder` Folder
+
+Initialize with `recoder init`:
+
+```
+.recoder/
+├── config.json    # Project configuration
+├── plans/         # Project plans
+├── context/       # Context files (rules, instructions)
+└── cache/         # Temporary cache
+```
+
+### Settings File
+
+Create `settings.json` in `.recoder/` or `~/.recoder/`:
 
 ```json
 {
-  "model": "gpt-4",
-  "maxTokens": 4000,
-  "temperature": 0.7,
-  "provider": "openai",
-  "logLevel": "info"
+  "defaultModel": "claude-3-sonnet",
+  "theme": "dark",
+  "mcpServers": {
+    "my-server": {
+      "command": "node",
+      "args": ["server.js"]
+    }
+  }
 }
 ```
 
-## 🎨 Commands
+## Project Planning
 
-### Interactive Mode
-
-```bash
-recoder-code
-```
-
-Start interactive conversation mode.
-
-### Direct Query
+Create comprehensive AI-executable plans:
 
 ```bash
-recoder-code "How do I sort an array in JavaScript?"
+# Create plan with template
+recoder plan create "My SaaS" -t web-app -d "A SaaS with auth and billing"
+
+# Generated files:
+# .recoder/plans/plan-xxx.json   - Full plan data
+# .recoder/plans/plan-xxx.md     - Human-readable
+# .recoder/plans/plan-xxx.ai.md  - AI-executable instructions
 ```
 
-Get a direct answer without entering interactive mode.
+Plans include:
+- Technical architecture with diagrams
+- Technology stack with versions
+- Folder/file structure
+- Implementation phases with tasks
+- API design and database schema
+- Dependencies and environment variables
+- Step-by-step AI execution instructions
 
-### File Analysis
+## Environment Variables
 
 ```bash
-recoder-code analyze src/**/*.ts
+# API Keys (optional - for direct API access)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
+
+# Configuration
+RECODER_MODEL=claude-3-sonnet
+RECODER_THEME=dark
 ```
 
-Analyze TypeScript files in the src directory.
+## Examples
 
-### Debug Mode
+### Interactive Development
 
 ```bash
-recoder-code --debug
+$ recoder
+> Build a REST API with Express and PostgreSQL
+
+🤖 I'll create a production-ready REST API...
 ```
 
-Run with detailed debug logging.
-
-### Help
+### Project Planning
 
 ```bash
-recoder-code --help
+$ recoder plan create "E-commerce API" -t api
+✅ Created plan: E-commerce API
+   Files: .recoder/plans/plan-xxx.md
+
+$ recoder plan scaffold plan-xxx
+🏗️ Created 12 directories and files
 ```
 
-Show all available commands and options.
-
-## 🔧 Advanced Features
-
-### Multi-Model Support
-
-Switch between different AI models:
+### MCP Server Detection
 
 ```bash
-# Use GPT-4
-export RECODER_MODEL=gpt-4
+$ recoder mcp detect
+🔍 Found 3 MCP servers:
+  📦 claude-server (Claude Desktop)
+  📦 cursor-mcp (Cursor)
+  📦 custom-tools (Project)
 
-# Use Claude
-export RECODER_MODEL=claude-3-opus
-
-# Use Gemini
-export RECODER_MODEL=gemini-pro
+💡 Use --add to add all servers
 ```
 
-### Context Management
+## Troubleshooting
 
-Recoder Code automatically tracks:
-- Open files in your editor
-- Recent conversations
-- Project structure
-- Git status
-
-### IDE Integration
-
-Works with the VSCode extension for enhanced features:
-- Inline code suggestions
-- Diff view for changes
-- File context synchronization
-
-## 📚 API Keys
-
-You'll need at least one AI provider API key:
-
-### OpenAI
-
-Get your key: https://platform.openai.com/api-keys
+### Command not found
 
 ```bash
-export OPENAI_API_KEY=sk-...
+# Ensure npm global bin is in PATH
+export PATH="$PATH:$(npm config get prefix)/bin"
+
+# Or reinstall
+npm install -g recoder-code-cli
 ```
 
-### Anthropic (Claude)
-
-Get your key: https://console.anthropic.com/
+### Node.js version
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+# Check version (requires 20+)
+node --version
+
+# Install with fnm
+curl -fsSL https://fnm.vercel.app/install | bash
+fnm install 20
+fnm use 20
 ```
 
-### Google (Gemini)
-
-Get your key: https://makersuite.google.com/app/apikey
+### Permission errors
 
 ```bash
-export GOOGLE_API_KEY=AIza...
+# Fix npm permissions
+sudo chown -R $(whoami) ~/.npm
+npm install -g recoder-code-cli
 ```
 
-## 🐛 Troubleshooting
+## Links
 
-### "No API key found"
-
-Make sure you've set at least one API key:
-
-```bash
-export OPENAI_API_KEY=your_key_here
-```
-
-### "Command not found: recoder-code"
-
-If installed globally, make sure npm global bin is in your PATH:
-
-```bash
-npm config get prefix
-export PATH=$(npm config get prefix)/bin:$PATH
-```
-
-### "Module not found" errors
-
-Reinstall dependencies:
-
-```bash
-cd /path/to/recoder-code-cli
-npm install
-npm run build
-```
-
-### Slow Responses
-
-Try a faster model or reduce max_tokens:
-
-```bash
-export RECODER_MODEL=gpt-3.5-turbo
-```
-
-### Debug Logs
-
-Enable debug mode:
-
-```bash
-recoder-code --debug
-```
-
-Logs are saved to `~/.recoder/logs/`
-
-## 🔒 Privacy & Security
-
-- Your code never leaves your machine unless sent to AI provider
-- API keys are stored locally and never transmitted except to respective AI services
-- No telemetry or usage tracking
-- Open source - audit the code yourself
-
-## 📊 System Requirements
-
-- **Node.js:** >= 18.0.0
-- **npm:** >= 9.0.0  
-- **OS:** macOS, Linux, Windows
-- **Memory:** 512MB+ recommended
-- **Disk:** 100MB for installation
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details
-
-## 🔗 Links
-
-- **GitHub:** https://github.com/caelum0x/recoder-code
 - **Website:** https://recoder.xyz
-- **Issues:** https://github.com/caelum0x/recoder-code/issues
-- **VSCode Extension:** [Recoder Code Companion](https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion)
-
-## 📞 Support
-
 - **Documentation:** https://recoder.xyz/docs
-- **Discord:** https://discord.gg/recoder (if available)
-- **Email:** support@recoder.xyz
-- **Issues:** https://github.com/caelum0x/recoder-code/issues
+- **GitHub:** https://github.com/recoder-team/recoder
+- **npm:** https://www.npmjs.com/package/recoder-code-cli
 
-## 🎓 Examples
+## License
 
-### Example 1: Quick Code Generation
-
-```bash
-$ recoder "Create a REST API endpoint for user login"
-```
-
-### Example 2: Code Review
-
-```bash
-$ recoder "Review src/auth.ts for security issues"
-```
-
-### Example 3: Debugging
-
-```bash
-$ recoder "Why is my React component not re-rendering?"
-```
-
-### Example 4: Learning
-
-```bash
-$ recoder "Explain async/await in JavaScript"
-```
-
-## 🗺️ Roadmap
-
-- [ ] Plugin system for custom tools
-- [ ] Code refactoring suggestions
-- [ ] Automated testing generation
-- [ ] Multi-language support
-- [ ] Team collaboration features
-- [ ] Custom model fine-tuning
-
-## ⭐ Show Your Support
-
-If you find Recoder Code helpful, please give it a star on [GitHub](https://github.com/caelum0x/recoder-code)!
-
----
-
-**Built with ❤️ by the Recoder Code Team**
-
-*Making coding with AI accessible to everyone*
+MIT © Recoder Team

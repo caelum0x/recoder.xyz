@@ -25,20 +25,20 @@ import type {
   ToolInvocation,
   AnyDeclarativeTool,
   AnyToolInvocation,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import {
   ToolConfirmationOutcome,
   ApprovalMode,
   Kind,
   BaseDeclarativeTool,
   BaseToolInvocation,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import type { HistoryItemWithoutId, HistoryItemToolGroup } from '../types.js';
 import { ToolCallStatus } from '../types.js';
 
 // Mocks
-vi.mock('@qwen-code/qwen-code-core', async () => {
-  const actual = await vi.importActual('@qwen-code/qwen-code-core');
+vi.mock('recoder-code-core', async () => {
+  const actual = await vi.importActual('recoder-code-core');
   return {
     ...actual,
     ToolRegistry: vi.fn(),

@@ -6,11 +6,11 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { LoadedSettings, SettingScope } from '../../config/settings.js';
-import { AuthType, type Config } from '@qwen-code/qwen-code-core';
+import { AuthType, type Config } from 'recoder-code-core';
 import {
   clearCachedCredentialFile,
   getErrorMessage,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import { runExitCleanup } from '../../utils/cleanup.js';
 
 export const useAuthCommand = (

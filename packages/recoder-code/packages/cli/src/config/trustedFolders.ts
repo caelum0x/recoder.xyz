@@ -7,7 +7,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homedir } from 'node:os';
-import { getErrorMessage, isWithinRoot } from '@qwen-code/qwen-code-core';
+import { getErrorMessage, isWithinRoot } from 'recoder-code-core';
 import type { Settings } from './settings.js';
 import stripJsonComments from 'strip-json-comments';
 

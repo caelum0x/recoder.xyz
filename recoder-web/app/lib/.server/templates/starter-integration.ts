@@ -350,9 +350,26 @@ export function matchUserRequestToTemplate(
   let bestMatch: { template: StarterTemplate; confidence: number; reasoning: string } | null = null;
   let highestScore = 0;
 
+  // Detect web vs mobile intent to avoid false matches
+  const webIndicators = /\b(web|website|webapp|dashboard|admin|trading|ecommerce|shop|store|landing|portfolio|blog|seo|browser)\b/i;
+  const mobileIndicators = /\b(mobile|ios|android|react\s+native|expo|cross-platform|smartphone|tablet)\b/i;
+
+  const isWebRequest = webIndicators.test(message);
+  const isMobileRequest = mobileIndicators.test(message);
+
   for (const template of templates) {
     let score = 0;
     const matchedKeywords: string[] = [];
+
+    // Skip mobile templates if request is clearly for web
+    if (template.category === 'mobile' && isWebRequest && !isMobileRequest) {
+      continue;
+    }
+
+    // Skip web templates if request is clearly for mobile
+    if (template.category !== 'mobile' && isMobileRequest && !isWebRequest) {
+      continue;
+    }
 
     // Keyword matching
     for (const keyword of template.keywords) {
@@ -379,7 +396,7 @@ export function matchUserRequestToTemplate(
       'recoder-vite-react-ts': [/simple.*react/, /quick.*react/, /basic.*spa/],
       'express-simple': [/rest.*api/, /backend/, /api.*server/],
       'static': [/landing.*page/, /portfolio/, /simple.*site/],
-      'bolt-expo': [/mobile/, /ios.*android/, /react.*native/],
+      'recoder-expo': [/\b(mobile|ios|android)\s+(app|application)\b/, /\bios\b.*\bandroid\b/, /\breact\s+native\b/],
       'gsap': [/animation/, /animated/, /motion/],
       'sveltekit': [/svelte/, /full.*stack.*svelte/]
     };

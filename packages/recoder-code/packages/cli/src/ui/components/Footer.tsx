@@ -7,7 +7,7 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
-import { shortenPath, tildeifyPath } from '@qwen-code/qwen-code-core';
+import { shortenPath, tildeifyPath } from 'recoder-code-core';
 import { ConsoleSummaryDisplay } from './ConsoleSummaryDisplay.js';
 import process from 'node:process';
 import path from 'node:path';

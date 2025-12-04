@@ -60,7 +60,7 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive rounded transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-black text-white hover:bg-gray-900 rounded-lg transition-colors"
         title="Save to project"
       >
         {saved ? <Check size={16} className="text-green-500" /> : <FolderPlus size={16} />}

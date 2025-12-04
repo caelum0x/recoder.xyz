@@ -10,7 +10,7 @@ import type {
   MessageActionReturn,
 } from './types.js';
 import { CommandKind } from './types.js';
-import { ApprovalMode, APPROVAL_MODES } from '@qwen-code/qwen-code-core';
+import { ApprovalMode, APPROVAL_MODES } from 'recoder-code-core';
 import { SettingScope } from '../../config/settings.js';
 
 const USAGE_MESSAGE =

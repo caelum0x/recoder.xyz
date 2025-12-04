@@ -6,7 +6,7 @@
 
 import type { SlashCommand, CommandContext, MessageActionReturn } from './types.js';
 import { CommandKind } from './types.js';
-import { getBYOKManager, OAuthPKCEClient } from '@qwen-code/qwen-code-core';
+import { getBYOKManager, OAuthPKCEClient } from 'recoder-code-core';
 
 export const byokCommand: SlashCommand = {
   name: 'byok',

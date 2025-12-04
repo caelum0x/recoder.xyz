@@ -2369,6 +2369,469 @@ async function getApiInfo(args: any) {
 }
 
 // ============================================================================
+// DATABASE TOOLS - PostgreSQL, MongoDB
+// ============================================================================
+
+async function queryPostgres(args: any) {
+  const { connectionString, query, params } = args;
+  
+  try {
+    // Dynamic import to avoid requiring pg if not used
+    const pg = await import('pg' as any).catch(() => null) as any;
+    if (!pg) {
+      return { error: 'PostgreSQL client (pg) not installed. Run: npm install pg' };
+    }
+    
+    const client = new pg.default.Client({ connectionString });
+    await client.connect();
+    
+    const result = await client.query(query, params || []);
+    await client.end();
+    
+    return {
+      rowCount: result.rowCount,
+      rows: result.rows.slice(0, 100), // Limit to 100 rows
+      fields: result.fields?.map((f: any) => ({ name: f.name, dataType: f.dataTypeID })),
+    };
+  } catch (error: any) {
+    return { error: `PostgreSQL query failed: ${error.message}` };
+  }
+}
+
+async function queryMongodb(args: any) {
+  const { connectionString, database, collection, operation, query, options } = args;
+  
+  try {
+    // Dynamic import
+    const mongodb = await import('mongodb' as any).catch(() => null) as any;
+    if (!mongodb) {
+      return { error: 'MongoDB client not installed. Run: npm install mongodb' };
+    }
+    
+    const client = new mongodb.MongoClient(connectionString);
+    await client.connect();
+    
+    const db = client.db(database);
+    const coll = db.collection(collection);
+    
+    let result;
+    switch (operation) {
+      case 'find':
+        result = await coll.find(query || {}, options || {}).limit(100).toArray();
+        break;
+      case 'findOne':
+        result = await coll.findOne(query || {});
+        break;
+      case 'count':
+        result = await coll.countDocuments(query || {});
+        break;
+      case 'aggregate':
+        result = await coll.aggregate(query || []).limit(100).toArray();
+        break;
+      default:
+        result = { error: 'Unknown operation' };
+    }
+    
+    await client.close();
+    return result;
+  } catch (error: any) {
+    return { error: `MongoDB query failed: ${error.message}` };
+  }
+}
+
+// ============================================================================
+// AWS TOOLS - S3, Lambda
+// ============================================================================
+
+async function awsS3List(args: any) {
+  const { bucket, prefix, maxKeys } = args;
+  
+  try {
+    const aws = await import('@aws-sdk/client-s3' as any).catch(() => null) as any;
+    if (!aws) {
+      return { error: 'AWS SDK not installed. Run: npm install @aws-sdk/client-s3' };
+    }
+    
+    const client = new aws.S3Client({});
+    const command = new aws.ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      MaxKeys: maxKeys || 100,
+    });
+    
+    const response = await client.send(command);
+    return {
+      bucket,
+      prefix,
+      count: response.KeyCount,
+      objects: response.Contents?.map((obj: any) => ({
+        key: obj.Key,
+        size: obj.Size,
+        lastModified: obj.LastModified,
+      })),
+    };
+  } catch (error: any) {
+    return { error: `S3 list failed: ${error.message}` };
+  }
+}
+
+async function awsLambdaInvoke(args: any) {
+  const { functionName, payload, region } = args;
+  
+  try {
+    const aws = await import('@aws-sdk/client-lambda' as any).catch(() => null) as any;
+    if (!aws) {
+      return { error: 'AWS SDK not installed. Run: npm install @aws-sdk/client-lambda' };
+    }
+    
+    const client = new aws.LambdaClient({ region: region || 'us-east-1' });
+    const command = new aws.InvokeCommand({
+      FunctionName: functionName,
+      Payload: JSON.stringify(payload || {}),
+    });
+    
+    const response = await client.send(command);
+    const responsePayload = response.Payload 
+      ? JSON.parse(new TextDecoder().decode(response.Payload))
+      : null;
+    
+    return {
+      statusCode: response.StatusCode,
+      functionError: response.FunctionError,
+      payload: responsePayload,
+    };
+  } catch (error: any) {
+    return { error: `Lambda invoke failed: ${error.message}` };
+  }
+}
+
+// ============================================================================
+// MORE DATABASE TOOLS - DynamoDB, Redis, MySQL
+// ============================================================================
+
+async function queryDynamodb(args: any) {
+  const { tableName, operation, key, item, filterExpression, expressionValues, region } = args;
+  
+  try {
+    const aws = await import('@aws-sdk/client-dynamodb' as any).catch(() => null) as any;
+    const util = await import('@aws-sdk/util-dynamodb' as any).catch(() => null) as any;
+    if (!aws || !util) {
+      return { error: 'AWS SDK not installed. Run: npm install @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb' };
+    }
+    
+    const client = new aws.DynamoDBClient({ region: region || 'us-east-1' });
+    let result;
+    
+    switch (operation) {
+      case 'get':
+        const getCmd = new aws.GetItemCommand({ TableName: tableName, Key: util.marshall(key) });
+        const getRes = await client.send(getCmd);
+        result = getRes.Item ? util.unmarshall(getRes.Item) : null;
+        break;
+      case 'put':
+        const putCmd = new aws.PutItemCommand({ TableName: tableName, Item: util.marshall(item) });
+        await client.send(putCmd);
+        result = { success: true };
+        break;
+      case 'scan':
+        const scanCmd = new aws.ScanCommand({
+          TableName: tableName,
+          FilterExpression: filterExpression,
+          ExpressionAttributeValues: expressionValues ? util.marshall(expressionValues) : undefined,
+          Limit: 100,
+        });
+        const scanRes = await client.send(scanCmd);
+        result = scanRes.Items?.map((i: any) => util.unmarshall(i)) || [];
+        break;
+      case 'query':
+        const queryCmd = new aws.QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: filterExpression,
+          ExpressionAttributeValues: expressionValues ? util.marshall(expressionValues) : undefined,
+          Limit: 100,
+        });
+        const queryRes = await client.send(queryCmd);
+        result = queryRes.Items?.map((i: any) => util.unmarshall(i)) || [];
+        break;
+      default:
+        result = { error: 'Unknown operation. Use: get, put, scan, query' };
+    }
+    
+    return result;
+  } catch (error: any) {
+    return { error: `DynamoDB operation failed: ${error.message}` };
+  }
+}
+
+async function queryRedis(args: any) {
+  const { url, command, key, value, field, ttl } = args;
+  
+  try {
+    const redis = await import('redis' as any).catch(() => null) as any;
+    if (!redis) {
+      return { error: 'Redis client not installed. Run: npm install redis' };
+    }
+    
+    const client = redis.createClient({ url: url || 'redis://localhost:6379' });
+    await client.connect();
+    
+    let result;
+    switch (command) {
+      case 'get': result = await client.get(key); break;
+      case 'set': result = ttl ? await client.setEx(key, ttl, value) : await client.set(key, value); break;
+      case 'del': result = await client.del(key); break;
+      case 'hget': result = await client.hGet(key, field); break;
+      case 'hset': result = await client.hSet(key, field, value); break;
+      case 'hgetall': result = await client.hGetAll(key); break;
+      case 'lpush': result = await client.lPush(key, value); break;
+      case 'lrange': result = await client.lRange(key, 0, -1); break;
+      case 'keys': result = await client.keys(key || '*'); break;
+      case 'ttl': result = await client.ttl(key); break;
+      default: result = { error: 'Unknown command' };
+    }
+    
+    await client.quit();
+    return result;
+  } catch (error: any) {
+    return { error: `Redis operation failed: ${error.message}` };
+  }
+}
+
+async function queryMysql(args: any) {
+  const { host, user, password, database, query, params } = args;
+  
+  try {
+    const mysql = await import('mysql2/promise' as any).catch(() => null) as any;
+    if (!mysql) {
+      return { error: 'MySQL client not installed. Run: npm install mysql2' };
+    }
+    
+    const connection = await mysql.createConnection({ host, user, password, database });
+    const [rows, fields] = await connection.execute(query, params || []);
+    await connection.end();
+    
+    return {
+      rows: Array.isArray(rows) ? rows.slice(0, 100) : rows,
+      fields: fields?.map((f: any) => ({ name: f.name, type: f.type })),
+    };
+  } catch (error: any) {
+    return { error: `MySQL query failed: ${error.message}` };
+  }
+}
+
+// ============================================================================
+// MORE AWS TOOLS - EC2, SQS, SNS
+// ============================================================================
+
+async function awsEc2Describe(args: any) {
+  const { instanceIds, filters, region } = args;
+  
+  try {
+    const aws = await import('@aws-sdk/client-ec2' as any).catch(() => null) as any;
+    if (!aws) {
+      return { error: 'AWS SDK not installed. Run: npm install @aws-sdk/client-ec2' };
+    }
+    
+    const client = new aws.EC2Client({ region: region || 'us-east-1' });
+    const command = new aws.DescribeInstancesCommand({
+      InstanceIds: instanceIds,
+      Filters: filters,
+    });
+    
+    const response = await client.send(command);
+    const instances = response.Reservations?.flatMap((r: any) => r.Instances) || [];
+    
+    return instances.map((i: any) => ({
+      instanceId: i.InstanceId,
+      state: i.State?.Name,
+      type: i.InstanceType,
+      publicIp: i.PublicIpAddress,
+      privateIp: i.PrivateIpAddress,
+      launchTime: i.LaunchTime,
+      tags: i.Tags,
+    }));
+  } catch (error: any) {
+    return { error: `EC2 describe failed: ${error.message}` };
+  }
+}
+
+async function awsSqsSend(args: any) {
+  const { queueUrl, messageBody, delaySeconds, messageAttributes, region } = args;
+  
+  try {
+    const aws = await import('@aws-sdk/client-sqs' as any).catch(() => null) as any;
+    if (!aws) {
+      return { error: 'AWS SDK not installed. Run: npm install @aws-sdk/client-sqs' };
+    }
+    
+    const client = new aws.SQSClient({ region: region || 'us-east-1' });
+    const command = new aws.SendMessageCommand({
+      QueueUrl: queueUrl,
+      MessageBody: typeof messageBody === 'string' ? messageBody : JSON.stringify(messageBody),
+      DelaySeconds: delaySeconds,
+      MessageAttributes: messageAttributes,
+    });
+    
+    const response = await client.send(command);
+    return { messageId: response.MessageId, sequenceNumber: response.SequenceNumber };
+  } catch (error: any) {
+    return { error: `SQS send failed: ${error.message}` };
+  }
+}
+
+async function awsSqsReceive(args: any) {
+  const { queueUrl, maxMessages, waitTimeSeconds, region } = args;
+  
+  try {
+    const aws = await import('@aws-sdk/client-sqs' as any).catch(() => null) as any;
+    if (!aws) {
+      return { error: 'AWS SDK not installed. Run: npm install @aws-sdk/client-sqs' };
+    }
+    
+    const client = new aws.SQSClient({ region: region || 'us-east-1' });
+    const command = new aws.ReceiveMessageCommand({
+      QueueUrl: queueUrl,
+      MaxNumberOfMessages: maxMessages || 10,
+      WaitTimeSeconds: waitTimeSeconds || 0,
+    });
+    
+    const response = await client.send(command);
+    return response.Messages?.map((m: any) => ({
+      messageId: m.MessageId,
+      body: m.Body,
+      receiptHandle: m.ReceiptHandle,
+    })) || [];
+  } catch (error: any) {
+    return { error: `SQS receive failed: ${error.message}` };
+  }
+}
+
+// ============================================================================
+// GCP TOOLS - Storage, BigQuery
+// ============================================================================
+
+async function gcpStorageList(args: any) {
+  const { bucket, prefix, maxResults } = args;
+  
+  try {
+    const { Storage } = await import('@google-cloud/storage' as any).catch(() => ({ Storage: null })) as any;
+    if (!Storage) {
+      return { error: 'GCP SDK not installed. Run: npm install @google-cloud/storage' };
+    }
+    
+    const storage = new Storage();
+    const [files] = await storage.bucket(bucket).getFiles({ prefix, maxResults: maxResults || 100 });
+    
+    return files.map((f: any) => ({
+      name: f.name,
+      size: f.metadata.size,
+      updated: f.metadata.updated,
+      contentType: f.metadata.contentType,
+    }));
+  } catch (error: any) {
+    return { error: `GCP Storage list failed: ${error.message}` };
+  }
+}
+
+async function gcpBigQuery(args: any) {
+  const { query, projectId, location } = args;
+  
+  try {
+    const { BigQuery } = await import('@google-cloud/bigquery' as any).catch(() => ({ BigQuery: null })) as any;
+    if (!BigQuery) {
+      return { error: 'GCP SDK not installed. Run: npm install @google-cloud/bigquery' };
+    }
+    
+    const bigquery = new BigQuery({ projectId, location });
+    const [rows] = await bigquery.query({ query, location });
+    
+    return { rows: rows.slice(0, 100), count: rows.length };
+  } catch (error: any) {
+    return { error: `BigQuery failed: ${error.message}` };
+  }
+}
+
+// ============================================================================
+// AI MODEL TOOLS - OpenAI, Anthropic, Groq
+// ============================================================================
+
+async function aiComplete(args: any) {
+  const { provider, model, prompt, systemPrompt, maxTokens, temperature } = args;
+  
+  try {
+    const apiKey = process.env[`${provider.toUpperCase()}_API_KEY`];
+    if (!apiKey) {
+      return { error: `${provider.toUpperCase()}_API_KEY not set in environment` };
+    }
+    
+    let response;
+    
+    if (provider === 'openai') {
+      response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: model || 'gpt-4o-mini',
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: maxTokens || 1000,
+        temperature: temperature || 0.7,
+      }, { headers: { Authorization: `Bearer ${apiKey}` } });
+      return { content: response.data.choices[0].message.content, usage: response.data.usage };
+    }
+    
+    if (provider === 'anthropic') {
+      response = await axios.post('https://api.anthropic.com/v1/messages', {
+        model: model || 'claude-3-haiku-20240307',
+        max_tokens: maxTokens || 1000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: prompt }],
+      }, { headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' } });
+      return { content: response.data.content[0].text, usage: response.data.usage };
+    }
+    
+    if (provider === 'groq') {
+      response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: model || 'llama-3.1-8b-instant',
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: maxTokens || 1000,
+        temperature: temperature || 0.7,
+      }, { headers: { Authorization: `Bearer ${apiKey}` } });
+      return { content: response.data.choices[0].message.content, usage: response.data.usage };
+    }
+    
+    return { error: 'Unknown provider. Use: openai, anthropic, groq' };
+  } catch (error: any) {
+    return { error: `AI completion failed: ${error.response?.data?.error?.message || error.message}` };
+  }
+}
+
+async function aiEmbed(args: any) {
+  const { provider, model, text } = args;
+  
+  try {
+    const apiKey = process.env[`${provider.toUpperCase()}_API_KEY`];
+    if (!apiKey) {
+      return { error: `${provider.toUpperCase()}_API_KEY not set in environment` };
+    }
+    
+    if (provider === 'openai') {
+      const response = await axios.post('https://api.openai.com/v1/embeddings', {
+        model: model || 'text-embedding-3-small',
+        input: text,
+      }, { headers: { Authorization: `Bearer ${apiKey}` } });
+      return { embedding: response.data.data[0].embedding, dimensions: response.data.data[0].embedding.length };
+    }
+    
+    return { error: 'Unknown provider. Use: openai' };
+  } catch (error: any) {
+    return { error: `Embedding failed: ${error.response?.data?.error?.message || error.message}` };
+  }
+}
+
+// ============================================================================
 // ADVANCED FEATURES - Image Processing
 // ============================================================================
 
@@ -3200,12 +3663,215 @@ const tools: any[] = [
     description: "Get information about public APIs from various sources.",
     inputSchema: GetApiInfoInputSchema,
   },
+  {
+    name: "query_postgres",
+    description: "Execute a query on a PostgreSQL database. Requires connection string.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        connectionString: { type: "string", description: "PostgreSQL connection string (postgres://user:pass@host:port/db)" },
+        query: { type: "string", description: "SQL query to execute" },
+        params: { type: "array", items: { type: "string" }, description: "Query parameters" },
+      },
+      required: ["connectionString", "query"],
+    },
+  },
+  {
+    name: "query_mongodb",
+    description: "Execute a query on a MongoDB database. Requires connection string.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        connectionString: { type: "string", description: "MongoDB connection string (mongodb://...)" },
+        database: { type: "string", description: "Database name" },
+        collection: { type: "string", description: "Collection name" },
+        operation: { type: "string", enum: ["find", "findOne", "count", "aggregate"], description: "Operation type" },
+        query: { type: "object", description: "Query filter object" },
+        options: { type: "object", description: "Query options (limit, sort, etc.)" },
+      },
+      required: ["connectionString", "database", "collection", "operation"],
+    },
+  },
+  {
+    name: "aws_s3_list",
+    description: "List objects in an AWS S3 bucket. Requires AWS credentials in environment.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bucket: { type: "string", description: "S3 bucket name" },
+        prefix: { type: "string", description: "Object key prefix filter" },
+        maxKeys: { type: "number", description: "Maximum number of keys to return" },
+      },
+      required: ["bucket"],
+    },
+  },
+  {
+    name: "aws_lambda_invoke",
+    description: "Invoke an AWS Lambda function. Requires AWS credentials in environment.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        functionName: { type: "string", description: "Lambda function name or ARN" },
+        payload: { type: "object", description: "JSON payload to send to the function" },
+        region: { type: "string", description: "AWS region (default: us-east-1)" },
+      },
+      required: ["functionName"],
+    },
+  },
+  // New Database Tools
+  {
+    name: "query_dynamodb",
+    description: "Query AWS DynamoDB table. Operations: get, put, scan, query.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tableName: { type: "string", description: "DynamoDB table name" },
+        operation: { type: "string", enum: ["get", "put", "scan", "query"], description: "Operation type" },
+        key: { type: "object", description: "Primary key for get operation" },
+        item: { type: "object", description: "Item to put" },
+        filterExpression: { type: "string", description: "Filter/KeyCondition expression" },
+        expressionValues: { type: "object", description: "Expression attribute values" },
+        region: { type: "string", description: "AWS region" },
+      },
+      required: ["tableName", "operation"],
+    },
+  },
+  {
+    name: "query_redis",
+    description: "Execute Redis commands. Commands: get, set, del, hget, hset, hgetall, lpush, lrange, keys, ttl.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Redis connection URL (default: redis://localhost:6379)" },
+        command: { type: "string", enum: ["get", "set", "del", "hget", "hset", "hgetall", "lpush", "lrange", "keys", "ttl"] },
+        key: { type: "string", description: "Redis key" },
+        value: { type: "string", description: "Value for set operations" },
+        field: { type: "string", description: "Hash field for hget/hset" },
+        ttl: { type: "number", description: "TTL in seconds for setEx" },
+      },
+      required: ["command", "key"],
+    },
+  },
+  {
+    name: "query_mysql",
+    description: "Execute MySQL queries.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        host: { type: "string", description: "MySQL host" },
+        user: { type: "string", description: "MySQL user" },
+        password: { type: "string", description: "MySQL password" },
+        database: { type: "string", description: "Database name" },
+        query: { type: "string", description: "SQL query to execute" },
+        params: { type: "array", description: "Query parameters" },
+      },
+      required: ["host", "user", "database", "query"],
+    },
+  },
+  // More AWS Tools
+  {
+    name: "aws_ec2_describe",
+    description: "Describe EC2 instances.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        instanceIds: { type: "array", items: { type: "string" }, description: "Instance IDs to describe" },
+        filters: { type: "array", description: "Filters for the query" },
+        region: { type: "string", description: "AWS region" },
+      },
+    },
+  },
+  {
+    name: "aws_sqs_send",
+    description: "Send a message to an SQS queue.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        queueUrl: { type: "string", description: "SQS queue URL" },
+        messageBody: { type: "string", description: "Message body" },
+        delaySeconds: { type: "number", description: "Delay in seconds" },
+        region: { type: "string", description: "AWS region" },
+      },
+      required: ["queueUrl", "messageBody"],
+    },
+  },
+  {
+    name: "aws_sqs_receive",
+    description: "Receive messages from an SQS queue.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        queueUrl: { type: "string", description: "SQS queue URL" },
+        maxMessages: { type: "number", description: "Max messages to receive (1-10)" },
+        waitTimeSeconds: { type: "number", description: "Long polling wait time" },
+        region: { type: "string", description: "AWS region" },
+      },
+      required: ["queueUrl"],
+    },
+  },
+  // GCP Tools
+  {
+    name: "gcp_storage_list",
+    description: "List objects in a GCP Cloud Storage bucket.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bucket: { type: "string", description: "GCS bucket name" },
+        prefix: { type: "string", description: "Object prefix filter" },
+        maxResults: { type: "number", description: "Max results to return" },
+      },
+      required: ["bucket"],
+    },
+  },
+  {
+    name: "gcp_bigquery",
+    description: "Execute a BigQuery SQL query.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "SQL query to execute" },
+        projectId: { type: "string", description: "GCP project ID" },
+        location: { type: "string", description: "BigQuery location (e.g., US, EU)" },
+      },
+      required: ["query"],
+    },
+  },
+  // AI Model Tools
+  {
+    name: "ai_complete",
+    description: "Generate text completion using AI models (OpenAI, Anthropic, Groq).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        provider: { type: "string", enum: ["openai", "anthropic", "groq"], description: "AI provider" },
+        model: { type: "string", description: "Model name (optional, uses default)" },
+        prompt: { type: "string", description: "User prompt" },
+        systemPrompt: { type: "string", description: "System prompt (optional)" },
+        maxTokens: { type: "number", description: "Max tokens to generate" },
+        temperature: { type: "number", description: "Temperature (0-2)" },
+      },
+      required: ["provider", "prompt"],
+    },
+  },
+  {
+    name: "ai_embed",
+    description: "Generate text embeddings using AI models.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        provider: { type: "string", enum: ["openai"], description: "AI provider" },
+        model: { type: "string", description: "Embedding model name" },
+        text: { type: "string", description: "Text to embed" },
+      },
+      required: ["provider", "text"],
+    },
+  },
 ];
 
 const server = new Server(
   {
     name: "eternos",
-    version: "2.2.0",
+    version: "2.4.0",
   },
   {
     capabilities: {
@@ -3429,6 +4095,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_api_info":
         result = await getApiInfo(args);
         break;
+      case "query_postgres":
+        result = await queryPostgres(args);
+        break;
+      case "query_mongodb":
+        result = await queryMongodb(args);
+        break;
+      case "aws_s3_list":
+        result = await awsS3List(args);
+        break;
+      case "aws_lambda_invoke":
+        result = await awsLambdaInvoke(args);
+        break;
+      case "query_dynamodb":
+        result = await queryDynamodb(args);
+        break;
+      case "query_redis":
+        result = await queryRedis(args);
+        break;
+      case "query_mysql":
+        result = await queryMysql(args);
+        break;
+      case "aws_ec2_describe":
+        result = await awsEc2Describe(args);
+        break;
+      case "aws_sqs_send":
+        result = await awsSqsSend(args);
+        break;
+      case "aws_sqs_receive":
+        result = await awsSqsReceive(args);
+        break;
+      case "gcp_storage_list":
+        result = await gcpStorageList(args);
+        break;
+      case "gcp_bigquery":
+        result = await gcpBigQuery(args);
+        break;
+      case "ai_complete":
+        result = await aiComplete(args);
+        break;
+      case "ai_embed":
+        result = await aiEmbed(args);
+        break;
 
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -3460,8 +4168,8 @@ async function main() {
   await server.connect(transport);
   
   console.error("╔════════════════════════════════════════════════════════════╗");
-  console.error("║   🚀 Eternos MCP Server v2.2 - Advanced Developer Tools   ║");
-  console.error("║   📦 68 Powerful Tools for AI Assistants                  ║");
+  console.error("║   🚀 Eternos MCP Server v2.4 - Advanced Developer Tools   ║");
+  console.error("║   📦 81 Powerful Tools for AI Assistants                  ║");
   console.error("║   🌟 By Recoder - https://recoder.xyz                     ║");
   console.error("╚════════════════════════════════════════════════════════════╝");
   console.error("📡 Connected via stdio transport");

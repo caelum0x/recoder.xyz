@@ -1,3 +1,4 @@
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { Compartment, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { vscodeDark, vscodeLight } from '@uiw/codemirror-theme-vscode';
@@ -10,6 +11,7 @@ export const themeSelection = new Compartment();
 export function getTheme(theme: Theme, settings: EditorSettings = {}): Extension {
   return [
     getEditorTheme(settings),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     theme === 'dark' ? themeSelection.of([getDarkTheme()]) : themeSelection.of([getLightTheme()]),
   ];
 }

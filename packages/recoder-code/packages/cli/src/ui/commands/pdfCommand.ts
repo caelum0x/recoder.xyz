@@ -6,7 +6,7 @@
 
 import type { SlashCommand, CommandContext, MessageActionReturn } from './types.js';
 import { CommandKind } from './types.js';
-import { OpenRouterPDFProcessor } from '@qwen-code/qwen-code-core';
+import { OpenRouterPDFProcessor } from 'recoder-code-core';
 
 export const pdfCommand: SlashCommand = {
   name: 'pdf',

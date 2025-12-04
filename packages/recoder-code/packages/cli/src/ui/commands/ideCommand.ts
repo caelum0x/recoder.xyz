@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Config, IdeClient, File } from '@qwen-code/qwen-code-core';
+import type { Config, IdeClient, File } from 'recoder-code-core';
 import {
   QWEN_CODE_COMPANION_EXTENSION_NAME,
   getIdeInstaller,
   IDEConnectionStatus,
   ideContext,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import path from 'node:path';
 import type {
   CommandContext,

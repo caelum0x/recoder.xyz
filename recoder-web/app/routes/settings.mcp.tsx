@@ -1,72 +1,169 @@
 /**
  * MCP Settings Page
- * Shows MCP server status and configuration
+ * Manage MCP servers and tools
  */
 
-import { IntegrationStatus } from '~/components/ui/IntegrationStatus';
+import { useState } from 'react';
+import { useMCP } from '~/lib/hooks/useMCP';
 
 export default function MCPSettings() {
+  const { 
+    servers, tools, loading, error,
+    connect, disconnect, addServer, updateServer, removeServer, toggleServer,
+    connectedServers 
+  } = useMCP();
+  
+  const [showAdd, setShowAdd] = useState(false);
+  const [newServer, setNewServer] = useState({ name: '', command: '', args: '' });
+
+  const handleAdd = () => {
+    if (!newServer.name || !newServer.command) return;
+    addServer({
+      name: newServer.name,
+      command: newServer.command,
+      args: newServer.args.split(' ').filter(Boolean),
+      enabled: false,
+    });
+    setNewServer({ name: '', command: '', args: '' });
+    setShowAdd(false);
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">MCP Servers</h2>
-        <p className="text-bolt-elements-textSecondary">
-          Model Context Protocol servers run in recoder-web and provide AI with access to external tools.
-        </p>
-      </div>
-
-      {/* Status Indicator */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Server Status</h3>
-        <IntegrationStatus type="mcp" />
-      </div>
-
-      {/* Info Section */}
-      <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor">
-        <h4 className="font-semibold mb-2">What is MCP?</h4>
-        <p className="text-sm text-bolt-elements-textSecondary mb-3">
-          MCP is a standardized protocol that lets AI models access external tools. All MCP servers run directly in recoder-web (no external processes needed):
-        </p>
-        <ul className="text-sm text-bolt-elements-textSecondary space-y-1 ml-4">
-          <li>• <strong>GitHub Server</strong> - Clone repos, create PRs, read files, search code</li>
-          <li>• <strong>Filesystem Server</strong> - Read/write files, search directories</li>
-          <li>• <strong>Database Server</strong> - Query and manage databases</li>
-          <li>• <strong>API Server</strong> - Make HTTP requests to external APIs</li>
-        </ul>
-      </div>
-
-      {/* Built-in Servers */}
-      <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor">
-        <h4 className="font-semibold mb-2">Built-in MCP Servers</h4>
-        <p className="text-sm text-bolt-elements-textSecondary mb-3">
-          These servers are built into recoder-web and available to AI:
-        </p>
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="font-medium">GitHub</span>
-            <span className="text-bolt-elements-textSecondary">- Repository operations, PRs, issues</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="font-medium">Filesystem</span>
-            <span className="text-bolt-elements-textSecondary">- File operations in WebContainer</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="font-medium">Database</span>
-            <span className="text-bolt-elements-textSecondary">- PostgreSQL, SQLite operations</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="font-medium">API</span>
-            <span className="text-bolt-elements-textSecondary">- HTTP requests to external services</span>
-          </div>
+    <div className="p-6 space-y-6 max-w-3xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">MCP Servers</h2>
+          <p className="text-sm text-bolt-elements-textSecondary">
+            Connect to MCP servers to give AI access to external tools
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            className="px-3 py-1.5 text-sm bg-bolt-elements-background-depth-3 rounded-md hover:bg-bolt-elements-item-backgroundHover"
+          >
+            {showAdd ? 'Cancel' : '+ Add Server'}
+          </button>
+          <button
+            onClick={connectedServers.length > 0 ? disconnect : connect}
+            disabled={loading}
+            className="px-3 py-1.5 text-sm bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-md disabled:opacity-50"
+          >
+            {loading ? 'Connecting...' : connectedServers.length > 0 ? 'Disconnect All' : 'Connect'}
+          </button>
         </div>
       </div>
 
-      {/* Configuration Link */}
-      <div className="pt-4">
+      {error && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Add Server Form */}
+      {showAdd && (
+        <div className="p-4 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-bolt-elements-textSecondary mb-1">Name</label>
+              <input
+                value={newServer.name}
+                onChange={e => setNewServer(p => ({ ...p, name: e.target.value }))}
+                placeholder="My Server"
+                className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-bolt-elements-textSecondary mb-1">Command</label>
+              <input
+                value={newServer.command}
+                onChange={e => setNewServer(p => ({ ...p, command: e.target.value }))}
+                placeholder="npx"
+                className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-bolt-elements-textSecondary mb-1">Arguments (space-separated)</label>
+            <input
+              value={newServer.args}
+              onChange={e => setNewServer(p => ({ ...p, args: e.target.value }))}
+              placeholder="-y @modelcontextprotocol/server-filesystem /workspace"
+              className="w-full px-3 py-2 text-sm font-mono bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md"
+            />
+          </div>
+          <button
+            onClick={handleAdd}
+            disabled={!newServer.name || !newServer.command}
+            className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+          >
+            Add Server
+          </button>
+        </div>
+      )}
+
+      {/* Servers List */}
+      <div className="space-y-2">
+        {servers.map(server => {
+          const isConnected = connectedServers.includes(server.id);
+          const serverTools = tools.filter(t => t.serverId === server.id);
+          
+          return (
+            <div key={server.id} className={`p-4 rounded-lg border ${server.enabled ? 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor' : 'bg-bolt-elements-background-depth-1 border-transparent opacity-60'}`}>
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={server.enabled}
+                  onChange={() => toggleServer(server.id)}
+                  className="w-4 h-4"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{server.name}</span>
+                    {isConnected && (
+                      <span className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">Connected</span>
+                    )}
+                    {serverTools.length > 0 && (
+                      <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">{serverTools.length} tools</span>
+                    )}
+                  </div>
+                  <code className="text-xs text-bolt-elements-textTertiary">{server.command} {server.args.join(' ')}</code>
+                </div>
+                <button
+                  onClick={() => removeServer(server.id)}
+                  className="p-1.5 text-xs text-red-400 hover:bg-red-500/10 rounded"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* Show tools when connected */}
+              {serverTools.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-bolt-elements-borderColor">
+                  <div className="text-xs text-bolt-elements-textSecondary mb-2">Available Tools:</div>
+                  <div className="flex flex-wrap gap-1">
+                    {serverTools.map(tool => (
+                      <span key={tool.name} className="px-2 py-0.5 text-xs bg-bolt-elements-background-depth-3 rounded" title={tool.description}>
+                        {tool.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Info */}
+      <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+        <div className="text-sm text-blue-400 font-medium">💡 How MCP Works</div>
+        <p className="text-xs text-bolt-elements-textSecondary mt-1">
+          MCP servers provide tools that AI can use. Enable servers, click Connect, and the AI will automatically have access to their tools.
+        </p>
+      </div>
+
+      <div className="pt-2">
         <a
           href="https://modelcontextprotocol.io/docs"
           target="_blank"

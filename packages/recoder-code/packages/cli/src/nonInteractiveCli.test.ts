@@ -12,16 +12,16 @@ import {
   shutdownTelemetry,
   GeminiEventType,
   type ServerGeminiStreamEvent,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import { type Part } from '@google/genai';
 import { runNonInteractive } from './nonInteractiveCli.js';
 import { vi } from 'vitest';
 
 // Mock core modules
 vi.mock('./ui/hooks/atCommandProcessor.js');
-vi.mock('@qwen-code/qwen-code-core', async (importOriginal) => {
+vi.mock('recoder-code-core', async (importOriginal) => {
   const original =
-    await importOriginal<typeof import('@qwen-code/qwen-code-core')>();
+    await importOriginal<typeof import('recoder-code-core')>();
   return {
     ...original,
     executeToolCall: vi.fn(),

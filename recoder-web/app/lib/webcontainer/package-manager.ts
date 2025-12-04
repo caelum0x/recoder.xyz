@@ -170,12 +170,10 @@ export function getTerminalWelcomeMessage(): string {
 ║               Welcome to Recoder.xyz Terminal              ║
 ╚════════════════════════════════════════════════════════════╝\x1b[0m
 
-\x1b[1;33m⏳ Installing recoder-code CLI...\x1b[0m (this may take a moment)
-
 \x1b[1;33m💡 Quick Commands:\x1b[0m
    \x1b[32mnpm install\x1b[0m            - Install project dependencies
    \x1b[32mnpm run dev\x1b[0m            - Start development server
-   \x1b[32mrecoder-code --help\x1b[0m    - Recoder CLI (after install completes)
+   \x1b[32mnpm run build\x1b[0m          - Build for production
 
 \x1b[90m─────────────────────────────────────────────────────────────\x1b[0m
 `;
