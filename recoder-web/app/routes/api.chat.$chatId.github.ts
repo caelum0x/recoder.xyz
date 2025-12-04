@@ -2,9 +2,13 @@ import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-r
 import { verifySession } from '~/lib/auth/session.server';
 import { neon } from '@neondatabase/serverless';
 
-const sql = neon(process.env.DATABASE_URL!);
+function getDb(context: any) {
+  const dbUrl = context?.cloudflare?.env?.DATABASE_URL || process.env.DATABASE_URL;
+  if (!dbUrl) throw new Error('DATABASE_URL not configured');
+  return neon(dbUrl);
+}
 
-export async function loader({ params, request }: LoaderFunctionArgs) {
+export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const session = await verifySession(request);
   if (!session) return json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -13,6 +17,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const action = url.searchParams.get('action');
 
   if (action === 'status' || !action) {
+    const sql = getDb(context);
     const [connection] = await sql`
       SELECT repo, branch, auto_sync, last_sync
       FROM chat_github_connections
@@ -35,10 +40,11 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   return json({ error: 'Invalid action' }, { status: 400 });
 }
 
-export async function action({ params, request }: ActionFunctionArgs) {
+export async function action({ params, request, context }: ActionFunctionArgs) {
   const session = await verifySession(request);
   if (!session) return json({ error: 'Unauthorized' }, { status: 401 });
 
+  const sql = getDb(context);
   const chatId = params.chatId;
   const body = await request.json();
   const { action } = body;

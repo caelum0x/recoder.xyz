@@ -313,11 +313,11 @@ export const STARTER_TEMPLATES: TemplateInfo[] = [
     features: ['Bootstrap 5', 'Responsive design']
   },
   {
-    id: 'bolt-expo',
+    id: 'recoder-expo',
     name: 'React Native Expo',
-    path: '/starters/bolt-expo',
+    path: '/starters/recoder-expo',
     description: 'React Native mobile app with Expo',
-    keywords: ['react native', 'expo', 'mobile', 'ios', 'android'],
+    keywords: ['react native', 'expo', 'mobile app', 'mobile application', 'ios', 'android', 'cross-platform'],
     framework: 'react-native',
     category: 'frontend',
     complexity: 'advanced',
@@ -515,10 +515,12 @@ export function matchTemplate(userMessage: string): TemplateMatch | null {
         /animation.*heavy/i,
         /interactive.*experience/i
       ],
-      'bolt-expo': [
-        /mobile.*app/i,
-        /ios.*android/i,
-        /react native/i
+      'recoder-expo': [
+        /\b(mobile|ios|android)\s+(app|application)\b/i,
+        /\bios\b.*\bandroid\b/i,
+        /\breact\s+native\b/i,
+        /\bexpo\s+app\b/i,
+        /\bcross-platform\s+mobile\b/i
       ]
     };
 

@@ -9,8 +9,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useAtCompletion } from './useAtCompletion.js';
-import type { Config, FileSearch } from '@qwen-code/qwen-code-core';
-import { FileSearchFactory } from '@qwen-code/qwen-code-core';
+import type { Config, FileSearch } from 'recoder-code-core';
+import { FileSearchFactory } from 'recoder-code-core';
 import type { FileSystemStructure } from '@qwen-code/qwen-code-test-utils';
 import { createTmpDir, cleanupTmpDir } from '@qwen-code/qwen-code-test-utils';
 import { useState } from 'react';

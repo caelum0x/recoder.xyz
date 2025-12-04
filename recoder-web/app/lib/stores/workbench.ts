@@ -43,6 +43,7 @@ export class WorkbenchStore {
   unsavedFiles: WritableAtom<Set<string>> = import.meta.hot?.data.unsavedFiles ?? atom(new Set<string>());
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
+  #currentProjectId: string | null = null;
 
   // ✅ P1: Build progress feedback
   buildStatus: WritableAtom<BuildStatus> = import.meta.hot?.data.buildStatus ?? atom({
@@ -97,6 +98,13 @@ export class WorkbenchStore {
     return {
       get: () => this.#terminalStore
     };
+  }
+
+  // Set project ID for Docker backend
+  setProjectId(projectId: string) {
+    this.#currentProjectId = projectId;
+    this.#terminalStore.setProjectId(projectId);
+    this.#previewsStore.setProjectId(projectId);
   }
 
   toggleTerminal(value?: boolean) {
@@ -258,7 +266,7 @@ export class WorkbenchStore {
       id,
       title,
       closed: false,
-      runner: new ActionRunner(webcontainer),
+      runner: new ActionRunner(webcontainer, this.#currentProjectId || undefined),
     });
   }
 
@@ -286,13 +294,16 @@ export class WorkbenchStore {
 
   async runAction(data: ActionCallbackData) {
     const { messageId } = data;
+    console.log('🔧 workbench.runAction called:', data.action?.type, data.action);
 
     const artifact = this.#getArtifact(messageId);
 
     if (!artifact) {
+      console.error('🔧 Artifact not found for messageId:', messageId);
       unreachable('Artifact not found');
     }
 
+    console.log('🔧 Calling artifact.runner.runAction');
     artifact.runner.runAction(data);
   }
 

@@ -16,7 +16,7 @@ import type {
   ToolCallRequestInfo,
   EditorType,
   ThoughtSummary,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import {
   GeminiEventType as ServerGeminiEventType,
   getErrorMessage,
@@ -31,7 +31,7 @@ import {
   ConversationFinishedEvent,
   ApprovalMode,
   parseAndFormatApiError,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import { type Part, type PartListUnion, FinishReason } from '@google/genai';
 import type {
   HistoryItem,

@@ -15,12 +15,24 @@ export function ProjectsList() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProjects();
+    // In dev mode, use the dev user ID that exists in database
+    const devUserId = 'dev-user-123';
+    let id = localStorage.getItem('recoder_userId');
+    
+    if (!id || id !== devUserId) {
+      id = devUserId;
+      localStorage.setItem('recoder_userId', id);
+    }
+    setUserId(id);
   }, []);
 
-  // Emit modal events when modal state changes
+  useEffect(() => {
+    if (userId) loadProjects();
+  }, [userId]);
+
   useEffect(() => {
     if (showCreateModal) {
       window.dispatchEvent(new CustomEvent('modal-opened'));
@@ -30,10 +42,11 @@ export function ProjectsList() {
   }, [showCreateModal]);
 
   async function loadProjects() {
+    if (!userId) return;
     try {
-      const response = await fetch('/api/projects');
+      const response = await fetch(`/api/projects?userId=${userId}`);
       const data = await response.json();
-      if (data.success) {
+      if (data.projects) {
         setProjects(data.projects);
       }
     } catch (error) {

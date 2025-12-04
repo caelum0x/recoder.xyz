@@ -10,7 +10,7 @@ import { HistoryItemDisplay } from './HistoryItemDisplay.js';
 import type { HistoryItem } from '../types.js';
 import { MessageType } from '../types.js';
 import { SessionStatsProvider } from '../contexts/SessionContext.js';
-import type { Config } from '@qwen-code/qwen-code-core';
+import type { Config } from 'recoder-code-core';
 
 // Mock child components
 vi.mock('./messages/ToolGroupMessage.js', () => ({

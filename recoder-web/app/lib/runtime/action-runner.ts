@@ -7,6 +7,30 @@ import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { clearNpmCache } from '~/lib/webcontainer/package-manager';
 
+// Docker backend configuration - hardcoded for development
+const DOCKER_URL = 'http://localhost:3100';
+
+// Global Docker availability flag - set once at startup
+let dockerAvailable: boolean | null = null;
+
+async function checkDockerAvailable(): Promise<boolean> {
+  if (dockerAvailable !== null) return dockerAvailable;
+  try {
+    console.log('🐳🐳🐳 CHECKING DOCKER AT:', DOCKER_URL);
+    const res = await fetch(`${DOCKER_URL}/health`, { signal: AbortSignal.timeout(2000) });
+    dockerAvailable = res.ok;
+    console.log('🐳🐳🐳 Docker backend:', dockerAvailable ? '✅ AVAILABLE' : '❌ NOT AVAILABLE');
+  } catch (e) {
+    console.log('🐳🐳🐳 Docker check FAILED:', e);
+    dockerAvailable = false;
+  }
+  return dockerAvailable;
+}
+
+// Check Docker on module load
+console.log('🐳🐳🐳 ACTION-RUNNER LOADED - DOCKER_URL:', DOCKER_URL);
+checkDockerAvailable();
+
 // Browser-compatible path utilities
 const nodePath = {
   dirname: (path: string | undefined) => {
@@ -78,11 +102,77 @@ export class ActionRunner {
   #autoInstallTriggered: boolean = false;
   #filesBeingCreated: Set<string> = new Set();
 
+  // Docker backend support
+  #useDocker: boolean = false;
+  #projectId: string | null = null;
+
   actions: ActionsMap = map({});
 
   constructor(webcontainerPromise: Promise<WebContainer>, chatId?: string) {
     this.#webcontainer = webcontainerPromise;
     this.#chatId = chatId || null;
+    this.#projectId = chatId || `project-${Date.now()}`;
+    
+    // Docker will be initialized on first file operation
+  }
+
+  async #ensureDockerReady(): Promise<boolean> {
+    if (this.#useDocker) return true;
+    
+    const available = await checkDockerAvailable();
+    console.log('🐳🐳🐳 ensureDockerReady - available:', available, 'projectId:', this.#projectId);
+    if (!available) return false;
+    
+    try {
+      // Create container for this project
+      console.log('🐳🐳🐳 Creating container for project:', this.#projectId);
+      const res = await fetch(`${DOCKER_URL}/api/container`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: this.#projectId }),
+      });
+      console.log('🐳🐳🐳 Container creation response:', res.status, res.ok);
+      if (res.ok) {
+        this.#useDocker = true;
+        logger.info(`🐳 Docker container ready for project: ${this.#projectId}`);
+        return true;
+      } else {
+        const errText = await res.text();
+        console.log('🐳🐳🐳 Container creation failed:', errText);
+      }
+    } catch (e) {
+      console.log('🐳🐳🐳 Container creation error:', e);
+      logger.error('Failed to create Docker container:', e);
+    }
+    return false;
+  }
+
+  // Docker file operations
+  async #dockerWriteFile(path: string, content: string): Promise<void> {
+    const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: `/workspace${path}`, content }),
+    });
+    if (!res.ok) {
+      const errData = await res.json() as { error?: string };
+      throw new Error(errData.error || 'Docker write failed');
+    }
+  }
+
+  async #dockerExec(command: string, cwd: string = '/'): Promise<string> {
+    const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, cwd: `/workspace${cwd}` }),
+    });
+    const data = await res.json() as { output?: string; error?: string };
+    if (!res.ok) throw new Error(data.error || 'Docker exec failed');
+    return data.output || '';
+  }
+
+  async #dockerMkdir(path: string): Promise<void> {
+    await this.#dockerExec(`mkdir -p "${path}"`);
   }
 
   addAction(data: ActionCallbackData) {
@@ -192,24 +282,17 @@ export class ActionRunner {
       unreachable('Expected shell action');
     }
 
-    const webcontainer = await this.#webcontainer;
-
     logger.info(`🔨 Executing shell command: ${action.content.substring(0, 100)}${action.content.length > 100 ? '...' : ''}`);
 
     // ✅ FIX #4: Auto-show terminal when shell commands execute
-    // Import terminal store dynamically to avoid circular dependencies
     if (typeof window !== 'undefined') {
       try {
         const { workbenchStore } = await import('~/lib/stores/workbench');
         const terminalStore = workbenchStore.terminalStore.get();
 
         if (terminalStore) {
-          // Show terminal if it's hidden
           terminalStore.toggleTerminal(true);
-
-          // Flash highlight to draw attention
           terminalStore.flashTerminalHighlight();
-
           logger.info('✅ Terminal auto-shown and highlighted for shell command execution');
         }
       } catch (error) {
@@ -217,15 +300,25 @@ export class ActionRunner {
       }
     }
 
-    // Normalize content for multiline command detection (replace newlines with spaces)
-    // This fixes the bug where multiline commands like "npm install\nnpm run dev" weren't detected
     const normalizedContent = action.content.replace(/\n/g, ' ').toLowerCase();
-
-    // Check if this is a long-running dev server command
     const isDevServer = /npm (run )?dev|yarn dev|pnpm dev|vite|next dev|remix dev|npm start|yarn start|pnpm start/.test(normalizedContent);
-
-    // Check if this is an install command (needed for progress tracking)
     const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
+
+    // Use Docker if available
+    if (this.#useDocker && DOCKER_URL) {
+      logger.info('🐳 Executing command via Docker backend');
+      try {
+        const output = await this.#dockerExec(action.content);
+        logger.info(`✅ Docker command completed:\n${output.substring(0, 500)}`);
+        return;
+      } catch (error: any) {
+        logger.error('Docker command failed:', error.message);
+        throw error;
+      }
+    }
+
+    // WebContainer execution
+    const webcontainer = await this.#webcontainer;
 
     // Handle dev server commands specially - run in background
     if (isDevServer) {
@@ -409,7 +502,15 @@ export class ActionRunner {
       }
     }
 
-    const webcontainer = await this.#webcontainer;
+    // Ensure Docker is ready before file operations
+    const dockerReady = await this.#ensureDockerReady();
+    console.log('🐳🐳🐳 File write - dockerReady:', dockerReady, 'useDocker:', this.#useDocker, 'file:', action.filePath);
+    
+    // Only get webcontainer if we're not using Docker (avoid blocking on WebContainer init)
+    let webcontainer: WebContainer | null = null;
+    if (!this.#useDocker) {
+      webcontainer = await this.#webcontainer;
+    }
 
     let folder = nodePath.dirname(action.filePath);
 
@@ -421,7 +522,11 @@ export class ActionRunner {
       let retries = 2;
       while (retries >= 0) {
         try {
-          await webcontainer.fs.mkdir(folder, { recursive: true });
+          if (this.#useDocker && DOCKER_URL) {
+            await this.#dockerMkdir(folder);
+          } else if (webcontainer) {
+            await webcontainer.fs.mkdir(folder, { recursive: true });
+          }
           logger.debug('Created folder', folder);
           break;
         } catch (error) {
@@ -439,8 +544,21 @@ export class ActionRunner {
     let retries = 2;
     while (retries >= 0) {
       try {
-        await webcontainer.fs.writeFile(action.filePath, action.content);
+        if (this.#useDocker && DOCKER_URL) {
+          await this.#dockerWriteFile(action.filePath, action.content);
+        } else if (webcontainer) {
+          await webcontainer.fs.writeFile(action.filePath, action.content);
+        } else {
+          throw new Error('No runtime available (Docker failed and WebContainer not initialized)');
+        }
         logger.info(`✅ File created successfully: ${action.filePath} (${action.content.length} bytes)`);
+        
+        // Track file for project context
+        if (typeof window !== 'undefined') {
+          import('~/lib/stores/project-state').then(({ trackFileCreated }) => {
+            trackFileCreated(action.filePath);
+          }).catch(() => {});
+        }
         
         // Track modified file for GitHub sync
         this.#modifiedFiles.push({ path: action.filePath, content: action.content });
@@ -1029,9 +1147,23 @@ export class ActionRunner {
       unreachable('Expected readFile action');
     }
 
+    if (!action.filePath) {
+      logger.warn('readFile action missing filePath, skipping');
+      return;
+    }
+
     logger.info(`📖 Reading file: ${action.filePath}`);
 
     try {
+      // Try Docker first if available
+      if (this.#useDocker && DOCKER_URL) {
+        const content = await this.#dockerReadFile(action.filePath);
+        action.content = content;
+        logger.info(`✅ Read ${content.length} characters from ${action.filePath} (Docker)`);
+        return;
+      }
+
+      // Fall back to WebContainer
       const webcontainer = await this.#webcontainer;
       const content = await webcontainer.fs.readFile(action.filePath, 'utf-8');
       
@@ -1043,6 +1175,19 @@ export class ActionRunner {
       logger.error(`❌ Failed to read file ${action.filePath}:`, error);
       throw new Error(`Could not read file: ${action.filePath}`);
     }
+  }
+
+  async #dockerReadFile(path: string): Promise<string> {
+    const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: `cat "/workspace${path}"` }),
+    });
+    if (!res.ok) {
+      throw new Error('Docker read failed');
+    }
+    const data = await res.json() as { output?: string };
+    return data.output || '';
   }
 
   async #runListFilesAction(action: ActionState) {

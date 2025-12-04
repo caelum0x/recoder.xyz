@@ -80,7 +80,7 @@ import { HistoryItemDisplay } from './components/HistoryItemDisplay.js';
 import { ContextSummaryDisplay } from './components/ContextSummaryDisplay.js';
 import { useHistory } from './hooks/useHistoryManager.js';
 import process from 'node:process';
-import type { EditorType, Config, IdeContext } from '@qwen-code/qwen-code-core';
+import type { EditorType, Config, IdeContext } from 'recoder-code-core';
 import {
   ApprovalMode,
   getAllGeminiMdFilenames,
@@ -93,7 +93,7 @@ import {
   isProQuotaExceededError,
   isGenericQuotaExceededError,
   UserTierId,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import type { IdeIntegrationNudgeResult } from './IdeIntegrationNudge.js';
 import { IdeIntegrationNudge } from './IdeIntegrationNudge.js';
 import { validateAuthMethod } from '../config/auth.js';

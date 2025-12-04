@@ -1,150 +1,147 @@
-import React, { useState, useMemo } from 'react';
-import { ProjectCard } from './ProjectCard';
-import { ProjectModal } from './ProjectModal';
-import { SearchAndFilter } from './SearchAndFilter';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { Project } from '~/lib/.server/db/projects-db';
 
 interface ProjectsPageProps {
   initialProjects: Project[];
   error: string | null;
+  databaseConfigured?: boolean;
 }
 
-export function ProjectsPage({ initialProjects, error }: ProjectsPageProps) {
+export function ProjectsPage({ initialProjects, error, databaseConfigured = true }: ProjectsPageProps) {
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'name'>('updated');
-  const [showArchived, setShowArchived] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Filter and sort projects
+  // Get or create user ID and load projects
+  useEffect(() => {
+    // In dev mode, use the dev user ID that exists in database
+    const devUserId = 'dev-user-123';
+    let id = localStorage.getItem('recoder_userId');
+    
+    // For development, always use dev user to avoid FK constraint errors
+    if (!id || id !== devUserId) {
+      id = devUserId;
+      localStorage.setItem('recoder_userId', id);
+    }
+    setUserId(id);
+    
+    if (databaseConfigured && initialProjects.length === 0) {
+      refreshProjects(id);
+    }
+  }, [databaseConfigured, initialProjects.length]);
+
   const filteredProjects = useMemo(() => {
     let filtered = projects.filter(project => {
-      const matchesSearch = !searchQuery || 
+      return !searchQuery || 
         project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      
-      // For now, we'll treat projects as non-archived unless we add an archived field
-      const matchesArchived = !showArchived; // Show non-archived by default
-      
-      return matchesSearch && matchesArchived;
     });
 
-    // Sort projects
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
         case 'created':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         case 'updated':
         default:
-          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       }
     });
 
     return filtered;
-  }, [projects, searchQuery, sortBy, showArchived]);
+  }, [projects, searchQuery, sortBy]);
 
-  const handleCreateProject = async (projectData: { name: string; description: string; icon: string; color: string }) => {
+  const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!userId) return;
+
+    setIsLoading(true);
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get('name') as string;
+    const description = formData.get('description') as string;
+    const type = formData.get('type') as string;
+
     try {
-      // Get user/anonymous ID (in a real app, this would come from auth context)
-      const anonymousId = localStorage.getItem('anonymousId') || crypto.randomUUID();
-      localStorage.setItem('anonymousId', anonymousId);
-
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...projectData,
-          anonymousId,
-        }),
+        body: JSON.stringify({ name, description, type, userId }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to create project');
-      }
 
       const result = await response.json();
       
-      // Refresh projects list
-      await refreshProjects();
-      setIsCreateModalOpen(false);
-    } catch (error) {
-      console.error('Error creating project:', error);
-      // TODO: Show error toast
-    }
-  };
-
-  const handleEditProject = async (projectData: { name: string; description: string; icon: string; color: string }) => {
-    if (!editingProject) return;
-
-    try {
-      const anonymousId = localStorage.getItem('anonymousId');
-      
-      const response = await fetch(`/api/projects/${editingProject.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...projectData,
-          anonymousId,
-        }),
-      });
-
       if (!response.ok) {
-        throw new Error('Failed to update project');
+        throw new Error(result.error || 'Failed to create project');
       }
 
-      // Refresh projects list
-      await refreshProjects();
-      setEditingProject(null);
-    } catch (error) {
-      console.error('Error updating project:', error);
-      // TODO: Show error toast
+      await refreshProjects(userId);
+      setIsCreateModalOpen(false);
+    } catch (err) {
+      console.error('Error creating project:', err);
+      alert(err instanceof Error ? err.message : 'Failed to create project');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleDeleteProject = async (projectId: number) => {
+  const handleDeleteProject = async (projectId: string) => {
+    if (!userId || !confirm('Are you sure you want to delete this project?')) return;
+
     try {
-      const anonymousId = localStorage.getItem('anonymousId');
-      
       const response = await fetch(`/api/projects/${projectId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ anonymousId }),
+        body: JSON.stringify({ userId }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete project');
+        const result = await response.json();
+        throw new Error(result.error || 'Failed to delete project');
       }
-
-      // Remove project from local state
+      
       setProjects(prev => prev.filter(p => p.id !== projectId));
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      // TODO: Show error toast
+    } catch (err) {
+      console.error('Error deleting project:', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete project');
     }
   };
 
-  const refreshProjects = async () => {
+  const refreshProjects = async (uid: string) => {
+    setIsLoading(true);
     try {
-      const anonymousId = localStorage.getItem('anonymousId');
-      const url = new URL('/projects', window.location.origin);
-      if (anonymousId) {
-        url.searchParams.set('anonymousId', anonymousId);
+      const response = await fetch(`/api/projects?userId=${uid}`);
+      const data = await response.json();
+      
+      if (response.ok && data.projects) {
+        setProjects(data.projects);
       }
-
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.projects) {
-          setProjects(data.projects);
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing projects:', error);
+    } catch (err) {
+      console.error('Error refreshing projects:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  const openProject = (project: Project) => {
+    window.location.href = `/?projectId=${project.id}`;
+  };
+
+  if (!databaseConfigured) {
+    return (
+      <div className="flex-1 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-yellow-400">
+            <h2 className="font-semibold mb-2">Database Not Configured</h2>
+            <p>Projects feature requires database configuration. Please set DATABASE_URL environment variable.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -160,77 +157,170 @@ export function ProjectsPage({ initialProjects, error }: ProjectsPageProps) {
   }
 
   return (
-    <div className="flex-1 p-8 bg-bolt-elements-background-depth-1">
+    <div className="flex-1 p-8 bg-bolt-elements-background-depth-1 overflow-auto">
       <div className="max-w-7xl mx-auto">
-        {/* Header with title and new project button */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-bolt-elements-textPrimary">Projects</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-bolt-elements-textPrimary">Projects</h1>
+            <p className="text-bolt-elements-textSecondary mt-1">Manage your AI development projects</p>
+          </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text rounded-lg transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-all"
           >
-            <div className="i-ph:plus text-lg" />
+            <span className="text-lg">+</span>
             New Project
           </button>
         </div>
 
-        {/* Search and filter controls */}
-        <SearchAndFilter
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-          showArchived={showArchived}
-          onArchivedToggle={setShowArchived}
-        />
+        {/* Search & Filter */}
+        <div className="mb-6 flex gap-4">
+          <input
+            type="text"
+            placeholder="Search projects..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textSecondary"
+          />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'updated' | 'created' | 'name')}
+            className="px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary"
+          >
+            <option value="updated">Last Updated</option>
+            <option value="created">Created</option>
+            <option value="name">Name</option>
+          </select>
+          <button
+            onClick={() => userId && refreshProjects(userId)}
+            disabled={isLoading}
+            className="px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 disabled:opacity-50"
+          >
+            {isLoading ? '...' : '↻'}
+          </button>
+        </div>
 
-        {/* Projects grid */}
-        {filteredProjects.length === 0 ? (
+        {/* Projects Grid */}
+        {isLoading && projects.length === 0 ? (
+          <div className="text-center py-12 text-bolt-elements-textSecondary">
+            Loading projects...
+          </div>
+        ) : filteredProjects.length === 0 ? (
           <div className="text-center py-12">
-            {projects.length === 0 ? (
-              <div className="text-bolt-elements-textSecondary">
-                <div className="i-ph:folder-plus text-6xl mb-4 opacity-30" />
-                <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
-                <p className="mb-6">Create your first project to get started</p>
-                <button
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="px-6 py-3 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text rounded-lg transition-all"
-                >
-                  Create Project
-                </button>
-              </div>
-            ) : (
-              <div className="text-bolt-elements-textSecondary">
-                <div className="i-ph:magnifying-glass text-4xl mb-4 opacity-30" />
-                <h3 className="text-xl font-semibold mb-2">No projects found</h3>
-                <p>Try adjusting your search or filters</p>
-              </div>
-            )}
+            <div className="text-6xl mb-4 opacity-30">📁</div>
+            <h3 className="text-xl font-semibold mb-2 text-bolt-elements-textPrimary">No projects yet</h3>
+            <p className="text-bolt-elements-textSecondary mb-6">Create your first project to get started</p>
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
+            >
+              Create Project
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map(project => (
-              <ProjectCard
+              <div
                 key={project.id}
-                project={project}
-                onEdit={setEditingProject}
-                onDelete={handleDeleteProject}
-              />
+                className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4 hover:border-orange-500 transition-all cursor-pointer group"
+                onClick={() => openProject(project)}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="text-3xl">
+                    {project.type === 'web' ? '🌐' : project.type === 'api' ? '⚡' : project.type === 'mobile' ? '📱' : '📁'}
+                  </div>
+                  <div className="flex gap-1">
+                    {project.isPrivate && (
+                      <span className="text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">Private</span>
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-300 transition-all"
+                      title="Delete project"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+                <h3 className="font-semibold text-bolt-elements-textPrimary mb-1">{project.name}</h3>
+                <p className="text-sm text-bolt-elements-textSecondary mb-3 line-clamp-2">
+                  {project.description || 'No description'}
+                </p>
+                <div className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary flex-wrap">
+                  <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.type || 'web'}</span>
+                  {project.framework && <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.framework}</span>}
+                  {project.language && <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.language}</span>}
+                  <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.status}</span>
+                </div>
+                <div className="mt-3 text-xs text-bolt-elements-textSecondary">
+                  Updated {new Date(project.updatedAt).toLocaleDateString()}
+                </div>
+              </div>
             ))}
           </div>
         )}
 
-        {/* Create/Edit Project Modal */}
-        <ProjectModal
-          isOpen={isCreateModalOpen || !!editingProject}
-          onClose={() => {
-            setIsCreateModalOpen(false);
-            setEditingProject(null);
-          }}
-          onSubmit={editingProject ? handleEditProject : handleCreateProject}
-          initialData={editingProject || undefined}
-          mode={editingProject ? 'edit' : 'create'}
-        />
+        {/* Create Modal */}
+        {isCreateModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setIsCreateModalOpen(false)}>
+            <div className="bg-bolt-elements-background-depth-1 rounded-lg p-6 w-full max-w-md border border-bolt-elements-borderColor" onClick={e => e.stopPropagation()}>
+              <h2 className="text-xl font-bold text-bolt-elements-textPrimary mb-4">Create New Project</h2>
+              <form onSubmit={handleCreateProject}>
+                <div className="mb-4">
+                  <label className="block text-sm text-bolt-elements-textSecondary mb-1">Project Name *</label>
+                  <input
+                    name="name"
+                    required
+                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary"
+                    placeholder="My Awesome Project"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm text-bolt-elements-textSecondary mb-1">Description</label>
+                  <textarea
+                    name="description"
+                    rows={3}
+                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary"
+                    placeholder="What are you building?"
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm text-bolt-elements-textSecondary mb-1">Project Type</label>
+                  <select
+                    name="type"
+                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary"
+                  >
+                    <option value="web">🌐 Web App</option>
+                    <option value="api">⚡ API / Backend</option>
+                    <option value="mobile">📱 Mobile App</option>
+                    <option value="blockchain">🔗 Blockchain / Web3</option>
+                    <option value="ai">🤖 AI / ML</option>
+                    <option value="game">🎮 Game</option>
+                    <option value="other">📁 Other</option>
+                  </select>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateModalOpen(false)}
+                    className="flex-1 px-4 py-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg disabled:opacity-50"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Creating...' : 'Create'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

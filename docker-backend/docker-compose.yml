@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  recoder-backend:
+    build: .
+    ports:
+      - "3100:3100"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PORT=3100
+      - ALLOWED_ORIGINS=http://localhost:5173,https://recoder.xyz
+    restart: unless-stopped
+
+  # Build the base image first
+  recoder-base:
+    build: ./docker
+    image: recoder-universal:latest

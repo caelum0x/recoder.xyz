@@ -1,4 +1,4 @@
-import { json, type MetaFunction } from '@remix-run/cloudflare';
+import { json, redirect, type LoaderFunctionArgs, type MetaFunction } from '@remix-run/cloudflare';
 import { ClientOnly } from 'remix-utils/client-only';
 import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
@@ -8,7 +8,58 @@ export const meta: MetaFunction = () => {
   return [{ title: 'Recoder.xyz - AI Full-Stack Development' }, { name: 'description', content: 'Build complete full-stack applications with AI assistance - from frontend to backend, APIs to databases' }];
 };
 
-export const loader = () => json({});
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const projectId = url.searchParams.get('projectId');
+  
+  if (projectId) {
+    const env = context.cloudflare?.env;
+    const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
+    
+    if (databaseUrl) {
+      try {
+        const { neon } = await import('@neondatabase/serverless');
+        const sql = neon(databaseUrl);
+        
+        // Get project details
+        const projects = await sql`
+          SELECT id, name, type, description FROM projects WHERE id = ${projectId}
+        `;
+        const project = projects[0];
+        
+        if (!project) {
+          return json({ error: 'Project not found' });
+        }
+        
+        // Find most recent chat for this project
+        const chats = await sql`
+          SELECT id, "urlId" FROM chat_sessions 
+          WHERE "projectId" = ${projectId}
+          ORDER BY "updatedAt" DESC
+          LIMIT 1
+        `;
+        
+        if (chats.length > 0) {
+          // Redirect to existing chat
+          return redirect(`/chat/${chats[0].urlId || chats[0].id}`);
+        }
+        
+        // No existing chat - return project info for display
+        return json({ 
+          projectId, 
+          projectName: project.name,
+          projectType: project.type 
+        });
+      } catch (e) {
+        console.error('Error loading project:', e);
+      }
+    }
+    
+    return json({ projectId });
+  }
+  
+  return json({});
+}
 
 export default function Index() {
   return (

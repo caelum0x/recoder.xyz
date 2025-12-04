@@ -93,7 +93,8 @@ async function saveChatToDatabase(
   messages: Message[],
   desc?: string,
   artifactId?: string,
-  fileSnapshot?: Record<string, string>
+  fileSnapshot?: Record<string, string>,
+  projectId?: string
 ): Promise<boolean> {
   if (!USE_DATABASE) {
     console.log('⚠️ [saveChatToDatabase] Database saving disabled (USE_DATABASE=false)');
@@ -128,7 +129,8 @@ async function saveChatToDatabase(
         description: desc,
         messages,
         artifactId,
-        fileSnapshot: fileSnapshot || {}, // Include file snapshot in metadata
+        fileSnapshot: fileSnapshot || {},
+        projectId,
       };
 
       console.log(`📤 [saveChatToDatabase] Sending request to /api/chat-history (attempt ${attempt})`);
@@ -230,11 +232,12 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
 export function useChatHistory() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { id: mixedId } = useLoaderData<{ id?: string }>();
+  const { id: mixedId, projectId } = useLoaderData<{ id?: string; projectId?: string }>();
 
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState<boolean>(false);
   const [urlId, setUrlId] = useState<string | undefined>();
+  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId);
   const previousPathRef = useRef<string>(location.pathname);
 
   // Clear session state when navigating to home page (new conversation)
@@ -531,7 +534,8 @@ export function useChatHistory() {
         enhancedMessages,
         finalDescription,
         firstArtifact?.id,
-        fileSnapshot
+        fileSnapshot,
+        currentProjectId
       );
 
       if (dbSaved) {

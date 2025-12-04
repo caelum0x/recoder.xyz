@@ -14,7 +14,7 @@ import {
   OpenRouterAudioGenerator,
   type TranscriptionOptions,
   type TextToSpeechOptions,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
