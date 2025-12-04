@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { MCPServerConfig } from '@qwen-code/qwen-code-core';
+import type { MCPServerConfig } from 'recoder-code-core';
 
 /**
  * Default MCP servers that come pre-configured with Recoder Code.

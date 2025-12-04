@@ -9,7 +9,7 @@ import { Box, Text, useInput } from 'ink';
 import { TextInput } from './shared/TextInput.js';
 import { Colors } from '../colors.js';
 import { setOpenAIApiKey, setOpenAIBaseUrl, setOpenAIModel } from '../../config/auth.js';
-import { Storage } from '@qwen-code/qwen-code-core';
+import { Storage } from 'recoder-code-core';
 
 interface ApiKeySetupDialogProps {
   onClose: () => void;

@@ -36,7 +36,7 @@ const CATEGORY_MAPPING: Record<string, string> = {
   'static': 'vanilla',
   'web-platform': 'vanilla',
   'bootstrap-5': 'vanilla',
-  'bolt-expo': 'mobile',
+  'recoder-expo': 'mobile',
   'bolt-remotion': 'video',
   'slidev': 'presentation',
   'tutorialkit': 'education',

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { type DetectedIde, getIdeInfo } from '@qwen-code/qwen-code-core';
+import { type DetectedIde, getIdeInfo } from 'recoder-code-core';
 import { Box, Text } from 'ink';
 import type { RadioSelectItem } from './components/shared/RadioButtonSelect.js';
 import { RadioButtonSelect } from './components/shared/RadioButtonSelect.js';

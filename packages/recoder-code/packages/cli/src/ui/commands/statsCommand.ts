@@ -12,7 +12,7 @@ import {
   type SlashCommand,
   CommandKind,
 } from './types.js';
-import { getCostTracker } from '@qwen-code/qwen-code-core';
+import { getCostTracker } from 'recoder-code-core';
 
 export const statsCommand: SlashCommand = {
   name: 'stats',

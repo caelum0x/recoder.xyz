@@ -6,6 +6,7 @@ import { classNames } from '~/utils/classNames';
 import { GitHubIntegration } from '~/components/github/GitHubIntegration';
 import { DeployButton } from '~/components/deployment/DeployButton';
 import { SaveToProject } from '~/components/chat/SaveToProject';
+import { clearGitHubSyncCache } from '~/lib/runtime/github-auto-sync';
 import type { TemplateRepo } from '~/lib/.server/github/types';
 
 interface HeaderActionButtonsProps {}
@@ -36,6 +37,25 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
       isLocal: isLocalStarter,
       files: Object.keys(data.files).slice(0, 10)
     });
+
+    // Connect to GitHub for auto-sync (only for non-local repos with full_name)
+    if (chatId && repoInfo.full_name && !isLocalStarter) {
+      try {
+        await fetch(`/api/chat/${chatId}/github`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            action: 'connect', 
+            repo: repoInfo.full_name,
+            branch: repoInfo.default_branch || 'main'
+          })
+        });
+        console.log('🔗 Connected to GitHub for auto-sync:', repoInfo.full_name);
+        clearGitHubSyncCache(); // Clear cache so new connection is picked up
+      } catch (e) {
+        console.warn('Failed to connect GitHub for auto-sync:', e);
+      }
+    }
 
     // For LOCAL starters: NO AI prompt, files are directly imported
     // For GitHub templates: Use AI prompt to set up and customize

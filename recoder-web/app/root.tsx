@@ -22,10 +22,15 @@ import 'virtual:uno.css';
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
 
-  // Allow public routes (if any exist in the future)
-  const publicPaths = ['/api/', '/health'];
+  // Allow public routes
+  const publicPaths = ['/api/', '/health', '/projects'];
   if (publicPaths.some(path => url.pathname.startsWith(path))) {
     return json({ user: null });
+  }
+  
+  // Skip auth in development if SKIP_AUTH is set
+  if (process.env.NODE_ENV === 'development' && process.env.SKIP_AUTH === 'true') {
+    return json({ user: { id: 'dev-user', email: 'dev@local', name: 'Dev User' } });
   }
 
   // Verify session with main site

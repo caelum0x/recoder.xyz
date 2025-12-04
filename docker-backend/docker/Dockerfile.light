@@ -1,0 +1,23 @@
+# Recoder Light Container
+# Node.js + Python only (faster build, smaller image)
+
+FROM node:20-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Base tools + Python
+RUN apt-get update && apt-get install -y \
+    curl git bash python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# pnpm + yarn
+RUN npm install -g pnpm yarn
+
+# recoder-code
+RUN npm install -g recoder-code
+
+# Workspace
+RUN mkdir -p /workspace && chmod 777 /workspace
+WORKDIR /workspace
+
+CMD ["tail", "-f", "/dev/null"]

@@ -1,7 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal as XTerm } from '@xterm/xterm';
-import { forwardRef, memo, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Theme } from '~/lib/stores/theme';
 import { createScopedLogger } from '~/utils/logger';
 import { getTerminalTheme } from './theme';
@@ -20,10 +20,18 @@ export interface TerminalProps {
   onTerminalResize?: (cols: number, rows: number) => void;
 }
 
+interface ContextMenu {
+  x: number;
+  y: number;
+  show: boolean;
+}
+
 export const Terminal = memo(
   forwardRef<TerminalRef, TerminalProps>(({ className, theme, readonly, onTerminalReady, onTerminalResize }, ref) => {
     const terminalElementRef = useRef<HTMLDivElement>(null);
     const terminalRef = useRef<XTerm>();
+    const [isDragging, setIsDragging] = useState(false);
+    const [contextMenu, setContextMenu] = useState<ContextMenu>({ x: 0, y: 0, show: false });
 
     useEffect(() => {
       const element = terminalElementRef.current!;
@@ -38,9 +46,8 @@ export const Terminal = memo(
         theme: getTerminalTheme(readonly ? { cursor: '#00000000' } : {}),
         fontSize: 12,
         fontFamily: 'Menlo, courier-new, courier, monospace',
-        // FIXED: Enable scrolling with proper scrollback buffer
-        scrollback: 10000, // Allow scrolling through 10,000 lines of history
-        allowProposedApi: true, // Enable proposed APIs for better scrolling support
+        scrollback: 10000,
+        allowProposedApi: true,
       });
 
       terminalRef.current = terminal;
@@ -68,10 +75,7 @@ export const Terminal = memo(
 
     useEffect(() => {
       const terminal = terminalRef.current!;
-
-      // we render a transparent cursor in case the terminal is readonly
       terminal.options.theme = getTerminalTheme(readonly ? { cursor: '#00000000' } : {});
-
       terminal.options.disableStdin = readonly;
     }, [theme, readonly]);
 
@@ -84,6 +88,127 @@ export const Terminal = memo(
       };
     }, []);
 
-    return <div className={className} ref={terminalElementRef} />;
+    // Context menu handlers
+    const handleContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, show: true });
+    };
+
+    const closeContextMenu = () => setContextMenu(prev => ({ ...prev, show: false }));
+
+    const handleCopy = async () => {
+      const selection = terminalRef.current?.getSelection();
+      if (selection) await navigator.clipboard.writeText(selection);
+      closeContextMenu();
+    };
+
+    const handlePaste = async () => {
+      const text = await navigator.clipboard.readText();
+      terminalRef.current?.paste(text);
+      closeContextMenu();
+    };
+
+    const handleClear = () => {
+      terminalRef.current?.clear();
+      closeContextMenu();
+    };
+
+    const handleSelectAll = () => {
+      terminalRef.current?.selectAll();
+      closeContextMenu();
+    };
+
+    // Close context menu on click outside
+    useEffect(() => {
+      if (contextMenu.show) {
+        const handler = () => closeContextMenu();
+        document.addEventListener('click', handler);
+        return () => document.removeEventListener('click', handler);
+      }
+    }, [contextMenu.show]);
+
+    // Handle drag & drop of files/folders
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      const terminal = terminalRef.current;
+      if (!terminal || readonly) return;
+
+      const paths: string[] = [];
+      
+      const uriList = e.dataTransfer.getData('text/uri-list');
+      if (uriList) {
+        uriList.split('\n').filter(uri => uri.trim()).forEach(uri => {
+          if (uri.startsWith('file://')) {
+            paths.push(decodeURIComponent(uri.replace('file://', '')));
+          }
+        });
+      }
+
+      if (paths.length === 0) {
+        const text = e.dataTransfer.getData('text/plain');
+        if (text && text.startsWith('/')) paths.push(text);
+      }
+
+      if (paths.length === 0 && e.dataTransfer.files.length > 0) {
+        for (let i = 0; i < e.dataTransfer.files.length; i++) {
+          const file = e.dataTransfer.files[i];
+          paths.push((file as any).path || file.name);
+        }
+      }
+
+      if (paths.length > 0) {
+        const pathString = paths.map(p => p.includes(' ') ? `"${p}"` : p).join(' ');
+        terminal.paste(pathString);
+        logger.info('Dropped paths:', pathString);
+      }
+    };
+
+    return (
+      <div className="relative">
+        <div 
+          className={`${className} ${isDragging ? 'ring-2 ring-blue-500 ring-inset' : ''}`} 
+          ref={terminalElementRef}
+          onContextMenu={handleContextMenu}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        />
+        {contextMenu.show && (
+          <div 
+            className="fixed z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md shadow-lg py-1 min-w-[140px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button onClick={handleCopy} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
+              <span className="text-xs text-bolt-elements-textTertiary">⌘C</span> Copy
+            </button>
+            <button onClick={handlePaste} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
+              <span className="text-xs text-bolt-elements-textTertiary">⌘V</span> Paste
+            </button>
+            <div className="border-t border-bolt-elements-borderColor my-1" />
+            <button onClick={handleSelectAll} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
+              <span className="text-xs text-bolt-elements-textTertiary">⌘A</span> Select All
+            </button>
+            <button onClick={handleClear} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3">
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }),
 );

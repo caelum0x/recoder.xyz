@@ -24,7 +24,7 @@ import {
 import {
   type GeminiCLIExtension,
   type MCPServerConfig,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import { execSync } from 'node:child_process';
 import { SettingScope, loadSettings } from './settings.js';
 import { type SimpleGit, simpleGit } from 'simple-git';

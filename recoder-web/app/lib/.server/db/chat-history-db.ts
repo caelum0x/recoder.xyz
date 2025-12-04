@@ -65,6 +65,7 @@ export class ChatHistoryDB {
     title?: string;
     description?: string;
     artifactId?: string;
+    projectId?: string;
   }): Promise<ChatSession> {
     const result = await this.sql`
       INSERT INTO chat_sessions (
@@ -75,6 +76,7 @@ export class ChatHistoryDB {
         title,
         description,
         "artifactId",
+        "projectId",
         "createdAt",
         "updatedAt"
       ) VALUES (
@@ -85,6 +87,7 @@ export class ChatHistoryDB {
         ${data.title || null},
         ${data.description || null},
         ${data.artifactId || null},
+        ${data.projectId || null},
         NOW(),
         NOW()
       )
@@ -92,6 +95,7 @@ export class ChatHistoryDB {
         title = EXCLUDED.title,
         description = EXCLUDED.description,
         "artifactId" = EXCLUDED."artifactId",
+        "projectId" = COALESCE(EXCLUDED."projectId", chat_sessions."projectId"),
         "updatedAt" = NOW()
       RETURNING *
     ` as unknown as ChatSession[];
@@ -300,6 +304,7 @@ export class ChatHistoryDB {
     messages: Message[];
     artifactId?: string;
     fileSnapshot?: Record<string, string>;
+    projectId?: string;
   }): Promise<ChatSession> {
     // Check if session exists
     let session = await this.getSessionByUrlId(data.urlId);
@@ -327,6 +332,7 @@ export class ChatHistoryDB {
         title: data.title,
         description: data.description,
         artifactId: data.artifactId,
+        projectId: data.projectId,
       });
 
       // Update with metadata
@@ -334,7 +340,7 @@ export class ChatHistoryDB {
         metadata: sessionMetadata,
       });
     } else {
-      // Update existing session with new metadata
+      // Update existing session with new metadata (and projectId if provided)
       await this.updateSession(session.id, {
         title: data.title,
         description: data.description,

@@ -12,7 +12,7 @@ import {
   type MessageActionReturn,
 } from './types.js';
 import { createMockCommandContext } from '../../test-utils/mockCommandContext.js';
-import { ApprovalMode } from '@qwen-code/qwen-code-core';
+import { ApprovalMode } from 'recoder-code-core';
 import { SettingScope, type LoadedSettings } from '../../config/settings.js';
 
 describe('approvalModeCommand', () => {

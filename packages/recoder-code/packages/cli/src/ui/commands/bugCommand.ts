@@ -15,7 +15,7 @@ import { MessageType } from '../types.js';
 import { GIT_COMMIT } from '../../generated/git-commit.js';
 import { formatMemoryUsage } from '../utils/formatters.js';
 import { getCliVersion } from '../../utils/version.js';
-import { sessionId } from '@qwen-code/qwen-code-core';
+import { sessionId } from 'recoder-code-core';
 
 export const bugCommand: SlashCommand = {
   name: 'bug',

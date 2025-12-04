@@ -136,7 +136,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // POST - Save chat
     const data = await request.json();
 
-    const { userId, anonymousId, urlId, title, description, messages, artifactId, fileSnapshot } = data;
+    const { userId, anonymousId, urlId, title, description, messages, artifactId, fileSnapshot, projectId } = data;
 
     console.log('💾 [api.chat-history.action] Save request received:', {
       userId,
@@ -146,6 +146,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       hasDescription: !!description,
       messageCount: messages?.length || 0,
       artifactId,
+      projectId,
       fileCount: fileSnapshot ? Object.keys(fileSnapshot).length : 0,
     });
 
@@ -174,6 +175,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       messages,
       artifactId,
       fileSnapshot,
+      projectId,
     });
 
     console.log('✅ [api.chat-history.action] Save successful:', {

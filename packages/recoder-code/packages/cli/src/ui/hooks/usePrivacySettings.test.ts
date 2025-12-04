@@ -10,17 +10,17 @@ import type {
   Config,
   GeminiClient,
   ContentGenerator,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import {
   CodeAssistServer,
   LoggingContentGenerator,
   UserTierId,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import type { OAuth2Client } from 'google-auth-library';
 import { usePrivacySettings } from './usePrivacySettings.js';
 
 // Mock the dependencies
-vi.mock('@qwen-code/qwen-code-core', () => {
+vi.mock('recoder-code-core', () => {
   // Mock classes for instanceof checks
   class MockCodeAssistServer {
     projectId = 'test-project-id';

@@ -9,7 +9,7 @@ import type {
   FileFilteringOptions,
   MCPServerConfig,
   TelemetryTarget,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import {
   ApprovalMode,
   Config,
@@ -23,7 +23,7 @@ import {
   setGeminiMdFilename as setServerGeminiMdFilename,
   ShellTool,
   WriteFileTool,
-} from '@qwen-code/qwen-code-core';
+} from 'recoder-code-core';
 import * as fs from 'node:fs';
 import { homedir } from 'node:os';
 import * as path from 'node:path';
@@ -35,6 +35,8 @@ import { authCommand } from '../commands/auth.js';
 import { extensionsCommand } from '../commands/extensions.js';
 import { mcpCommand } from '../commands/mcp.js';
 import { webCommand } from '../commands/web.js';
+import { initCommand } from '../commands/init.js';
+import { planCommand } from '../commands/plan.js';
 import type { Settings } from './settings.js';
 
 import { resolvePath } from '../utils/resolvePath.js';
@@ -354,7 +356,11 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     // Register AI subcommands
     .command(aiCommand)
     // Register web project management commands
-    .command(webCommand);
+    .command(webCommand)
+    // Register init command for .recoder folder
+    .command(initCommand)
+    // Register plan command for project planning
+    .command(planCommand);
 
   if (settings?.experimental?.extensionManagement ?? false) {
     yargsInstance.command(extensionsCommand);
@@ -375,9 +381,9 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
   // and not return to main CLI logic
   if (
     result._.length > 0 &&
-    (result._[0] === 'mcp' || result._[0] === 'extensions' || result._[0] === 'auth' || result._[0] === 'ai')
+    (result._[0] === 'mcp' || result._[0] === 'extensions' || result._[0] === 'auth' || result._[0] === 'ai' || result._[0] === 'web' || result._[0] === 'init' || result._[0] === 'plan')
   ) {
-    // MCP commands handle their own execution and process exit
+    // Subcommands handle their own execution and process exit
     process.exit(0);
   }
 

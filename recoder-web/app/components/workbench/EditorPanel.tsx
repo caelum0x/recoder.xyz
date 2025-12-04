@@ -134,20 +134,22 @@ export const EditorPanel = memo(
               maxSize={40}      // ✅ P2: Added max size to prevent over-expansion
               collapsible
             >
-              <div className="flex flex-col border-r border-bolt-elements-borderColor h-full">
+              <div className="flex flex-col border-r border-bolt-elements-borderColor h-full overflow-hidden">
                 <PanelHeader>
                   <div className="i-ph:tree-structure-duotone shrink-0" />
                   Files
                 </PanelHeader>
-                <FileTree
-                  className="h-full"
-                  files={files}
-                  hideRoot
-                  unsavedFiles={unsavedFiles}
-                  rootFolder={WORK_DIR}
-                  selectedFile={selectedFile}
-                  onFileSelect={onFileSelect}
-                />
+                <div className="flex-1 overflow-auto">
+                  <FileTree
+                    className="h-full"
+                    files={files}
+                    hideRoot
+                    unsavedFiles={unsavedFiles}
+                    rootFolder={WORK_DIR}
+                    selectedFile={selectedFile}
+                    onFileSelect={onFileSelect}
+                  />
+                </div>
               </div>
             </Panel>
             <PanelResizeHandle />

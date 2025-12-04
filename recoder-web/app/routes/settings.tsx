@@ -15,6 +15,7 @@ export default function SettingsLayout() {
       title: 'Project',
       items: [
         { name: 'Project Context', path: '/settings/context', icon: '📝' },
+        { name: 'Custom Tools', path: '/settings/tools', icon: '🛠️' },
       ],
     },
     {
