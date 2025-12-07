@@ -64,10 +64,17 @@ export function getRecoderWebUrlClient(): string {
     return process.env.NEXT_PUBLIC_RECODER_WEB_URL;
   }
 
-  // Client-side: check hostname
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  // Client-side: check hostname - if it's recoder.xyz, use production URL
+  const hostname = window.location.hostname;
+  if (hostname === 'recoder.xyz' || hostname === 'www.recoder.xyz') {
+    return 'https://web.recoder.xyz';
+  }
+
+  // Local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:5173';
   }
 
+  // Default to production
   return 'https://web.recoder.xyz';
 }

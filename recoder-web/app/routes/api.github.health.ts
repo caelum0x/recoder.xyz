@@ -2,10 +2,18 @@ import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
 import { neon } from '@neondatabase/serverless';
 
-const sql = neon(process.env.DATABASE_URL!);
-
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
+    const env = context.cloudflare?.env as Env;
+    if (!env?.DATABASE_URL) {
+      return json({
+        status: 'error',
+        connected: false,
+        message: 'Database not configured',
+      }, { status: 500 });
+    }
+
+    const sql = neon(env.DATABASE_URL);
     const session = await verifySession(request);
     
     if (!session) {

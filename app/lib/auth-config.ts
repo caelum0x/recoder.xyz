@@ -1,10 +1,23 @@
 import { betterAuth } from "better-auth";
-import { customPrismaAdapter } from "./custom-prisma-adapter";
+import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
 
+// Determine baseURL based on environment
+const getBaseURL = () => {
+  // In production, always use the production URL
+  if (process.env.NODE_ENV === 'production') {
+    return "https://recoder.xyz";
+  }
+  // In development, use NEXT_PUBLIC_APP_URL or localhost
+  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+};
+
 export const auth = betterAuth({
-  database: customPrismaAdapter(prisma),
+  baseURL: getBaseURL(),
+  database: prismaAdapter(prisma, {
+    provider: "postgresql",
+  }),
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true, // ✅ Enable email verification for security
@@ -50,20 +63,28 @@ export const auth = betterAuth({
     cookiePrefix: "recoder",
     crossSubDomainCookies: {
       enabled: true,
+      domain: process.env.NODE_ENV === 'production' ? '.recoder.xyz' : undefined, // Leading dot for subdomain sharing
     },
     useSecureCookies: process.env.NODE_ENV === 'production',
     generateId: () => crypto.randomUUID(),
   },
-  trustedOrigins: [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:5173", // recoder-web local dev (Vite)
-    "http://localhost:8788", // recoder-web local dev (Wrangler)
-    "https://recoder.xyz",
-    "https://www.recoder.xyz",
-    "https://web.recoder.xyz", // recoder-web production
-  ],
+  trustedOrigins: process.env.NODE_ENV === 'production'
+    ? [
+        process.env.NEXT_PUBLIC_APP_URL || "https://recoder.xyz",
+        "https://recoder.xyz",
+        "https://www.recoder.xyz",
+        "https://web.recoder.xyz",
+      ]
+    : [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:5173",
+        "http://localhost:8788",
+        "https://recoder.xyz",
+        "https://www.recoder.xyz",
+        "https://web.recoder.xyz",
+      ],
   pages: {
     signIn: "/auth/signin",
     error: "/auth/signin",
