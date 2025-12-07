@@ -4,17 +4,20 @@ import { nanoid } from 'nanoid';
 import jwt from 'jsonwebtoken';
 
 export async function GET(request: NextRequest) {
+  // Use production URL directly since NEXT_PUBLIC_ vars are build-time only
+  const origin = 'https://recoder.xyz';
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const error = searchParams.get('error');
 
     if (error) {
-      return NextResponse.redirect(new URL('/auth/signin?error=oauth_error', request.url));
+      return NextResponse.redirect(new URL('/auth/signin?error=oauth_error', origin));
     }
 
     if (!code) {
-      return NextResponse.redirect(new URL('/auth/signin?error=no_code', request.url));
+      return NextResponse.redirect(new URL('/auth/signin?error=no_code', origin));
     }
 
     // Exchange code for tokens
@@ -34,6 +37,7 @@ export async function GET(request: NextRequest) {
     const tokens = await tokenResponse.json();
 
     if (!tokens.access_token) {
+      console.error('Token error:', tokens);
       throw new Error('No access token received');
     }
 
@@ -64,7 +68,6 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
-      // Create new user
       user = await prisma.users.create({
         data: {
           id: nanoid(),
@@ -95,12 +98,12 @@ export async function GET(request: NextRequest) {
     });
 
     // Redirect to dashboard with cookie
-    const response = NextResponse.redirect(`${request.nextUrl.origin}/dashboard`);
+    const response = NextResponse.redirect(`${origin}/dashboard`);
     response.cookies.set('auth-token', jwtToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+      maxAge: 30 * 24 * 60 * 60,
       path: '/',
     });
 
@@ -108,6 +111,6 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('GitHub OAuth callback error:', error);
-    return NextResponse.redirect(`${request.nextUrl.origin}/auth/signin?error=oauth_error`);
+    return NextResponse.redirect(`${origin}/auth/signin?error=oauth_error`);
   }
 }

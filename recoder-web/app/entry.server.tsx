@@ -1,4 +1,4 @@
-import type { AppLoadContext, EntryContext } from '@remix-run/cloudflare';
+import type { EntryContext } from '@remix-run/node';
 import { RemixServer } from '@remix-run/react';
 import { isbot } from 'isbot';
 import { renderToReadableStream } from 'react-dom/server';
@@ -11,7 +11,6 @@ export default async function handleRequest(
   responseStatusCode: number,
   responseHeaders: Headers,
   remixContext: EntryContext,
-  _loadContext: AppLoadContext, 
 ) {
   const readable = await renderToReadableStream(<RemixServer context={remixContext} url={request.url} />, {
     signal: request.signal,
@@ -42,10 +41,8 @@ export default async function handleRequest(
             if (done) {
               controller.enqueue(new Uint8Array(new TextEncoder().encode(`</div></body></html>`)));
               controller.close();
-
               return;
             }
-
             controller.enqueue(value);
             read();
           })
@@ -56,7 +53,6 @@ export default async function handleRequest(
       }
       read();
     },
-
     cancel() {
       readable.cancel();
     },
@@ -67,8 +63,6 @@ export default async function handleRequest(
   }
 
   responseHeaders.set('Content-Type', 'text/html');
-
-  // Use credentialless - allows cross-origin iframes while still enabling SharedArrayBuffer
   responseHeaders.set('Cross-Origin-Embedder-Policy', 'credentialless');
   responseHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
 

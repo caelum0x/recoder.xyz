@@ -10,6 +10,32 @@ export const meta: MetaFunction = () => {
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  const token = url.searchParams.get('token');
+  const from = url.searchParams.get('from');
+  
+  // Handle auth token from main app
+  if (token && from === 'main-site') {
+    try {
+      const verifyResponse = await fetch('https://recoder.xyz/api/auth/verify-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+
+      if (verifyResponse.ok) {
+        const userData = await verifyResponse.json();
+        // Redirect to clean URL with session cookie
+        return redirect('/', {
+          headers: {
+            'Set-Cookie': `recoder_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Auth token verification failed:', error);
+    }
+  }
+  
   const projectId = url.searchParams.get('projectId');
   
   if (projectId) {

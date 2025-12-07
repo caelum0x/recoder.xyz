@@ -1,4 +1,4 @@
-import { cloudflareDevProxyVitePlugin as remixCloudflareDevProxy, vitePlugin as remixVitePlugin } from '@remix-run/dev';
+import { vitePlugin as remixVitePlugin } from '@remix-run/dev';
 import UnoCSS from 'unocss/vite';
 import { defineConfig, type ViteDevServer } from 'vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
@@ -14,15 +14,27 @@ const __dirname = dirname(__filename);
 
 export default defineConfig((config) => {
   const isDev = config.mode === 'development';
+  const isProduction = config.mode === 'production';
 
   return {
+    json: {
+      stringify: true,
+    },
     resolve: {
       alias: {
         'remix-island': resolve(__dirname, 'node_modules/.pnpm/remix-island@0.2.0_@remix-run+react@2.17.1_react-dom@18.3.1_react@18.3.1__react@18.3.1_typesc_765fcejahjdq6wbeh2gedzhktu/node_modules/remix-island/dist/index.mjs'),
+        // Skip ajv JSON schema files that cause build issues
+        'ajv/dist/refs/json-schema-draft-07.json': resolve(__dirname, 'app/lib/empty-json.js'),
       },
     },
     build: {
       target: 'esnext',
+      rollupOptions: {
+        external: [
+          /ajv.*\.json$/,
+          /@modelcontextprotocol\/sdk/,
+        ],
+      },
     },
     assetsInclude: ['**/*.json'],
     // Add cache busting in development
@@ -112,6 +124,7 @@ export default defineConfig((config) => {
         '@neondatabase/serverless',
         'pg',
         'better-sqlite3',
+        'ajv',
       ],
     },
     server: {
@@ -138,12 +151,16 @@ export default defineConfig((config) => {
       },
     },
     ssr: {
+      target: 'node',
       // Externalize only backend-specific packages
       external: [
         'knex',
         '@neondatabase/serverless',
         'pg',
         'better-sqlite3',
+        'ajv',
+        'ajv-formats',
+        '@modelcontextprotocol/sdk',
       ],
       // Don't externalize these in SSR - they need to be bundled
       noExternal: [
@@ -159,6 +176,7 @@ export default defineConfig((config) => {
         'rehype-sanitize',
         'remark-gfm',
         'unist-util-visit',
+        'react-dom',
       ],
       resolve: {
         conditions: ['node'],
@@ -179,7 +197,7 @@ export default defineConfig((config) => {
         },
         protocolImports: false,
       }),
-      config.mode !== 'test' && remixCloudflareDevProxy(),
+      // Cloudflare proxy removed for Node.js deployment
       remixVitePlugin({
         future: {
           v3_fetcherPersist: true,
@@ -210,12 +228,19 @@ function largeJsonPlugin() {
     resolveId(source: string, importer: string | undefined) {
       // Intercept imports of starters-bundle.json
       if (source.includes('starters-bundle.json') || source.endsWith('starters-bundle.json')) {
-        // Return a virtual module ID (prefixed with \0) to completely bypass other plugins including vite:json
         return '\0virtual:starters-bundle';
+      }
+      // Skip ajv JSON schema files
+      if (source.includes('ajv') && source.endsWith('.json')) {
+        return '\0virtual:empty-json';
       }
       return null;
     },
     load(id: string) {
+      // Return empty object for ajv JSON files
+      if (id === '\0virtual:empty-json') {
+        return { code: 'export default {};', map: null };
+      }
       // Load large JSON files directly, bypassing vite:json plugin
       if (id === '\0virtual:starters-bundle') {
         try {

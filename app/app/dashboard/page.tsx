@@ -426,37 +426,34 @@ function DashboardContent() {
             </div>
 
             {/* AI Chat */}
-            <Link
-              href={getRecoderChatUrl()}
-              target="_blank"
-              className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all"
-            >
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <div className="group p-6 rounded-2xl border border-white/10 bg-white/5 opacity-60 cursor-not-allowed relative">
+              <div className="absolute top-3 right-3 px-2 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs text-purple-400 font-medium">
+                Coming Soon
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center mb-4">
                 <MessageSquare className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-bold text-lg mb-2">AI Chat</h3>
+              <h3 className="font-bold text-lg mb-2">Recoder Chat</h3>
               <p className="text-sm text-gray-400 mb-4">Conversational interface</p>
-              <div className="flex items-center text-sm text-orange-500 group-hover:text-orange-400">
-                <span>Launch</span>
-                <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+              <div className="flex items-center text-sm text-gray-500">
+                <span>Coming Soon</span>
               </div>
-            </Link>
+            </div>
 
             {/* VS Code */}
-            <Link
-              href="/docs/extension"
-              className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all"
-            >
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <div className="group p-6 rounded-2xl border border-white/10 bg-white/5 opacity-60 cursor-not-allowed relative">
+              <div className="absolute top-3 right-3 px-2 py-1 bg-green-500/20 border border-green-500/30 rounded-full text-xs text-green-400 font-medium">
+                Coming Soon
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mb-4">
                 <Code2 className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-bold text-lg mb-2">VS Code</h3>
+              <h3 className="font-bold text-lg mb-2">VS Code Extension</h3>
               <p className="text-sm text-gray-400 mb-4">IDE extension</p>
-              <div className="flex items-center text-sm text-orange-500 group-hover:text-orange-400">
-                <span>Launch</span>
-                <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+              <div className="flex items-center text-sm text-gray-500">
+                <span>Coming Soon</span>
               </div>
-            </Link>
+            </div>
           </div>
         </div>
 
