@@ -22,8 +22,10 @@ export interface Session {
  * Get the main site URL based on environment
  */
 function getMainSiteUrl(): string {
-  if (typeof process !== 'undefined' && process.env.MAIN_SITE_URL) {
-    return process.env.MAIN_SITE_URL;
+  const mainSiteUrl = process.env.MAIN_SITE_URL;
+  console.log('[Auth] MAIN_SITE_URL env:', mainSiteUrl, 'NODE_ENV:', process.env.NODE_ENV);
+  if (mainSiteUrl) {
+    return mainSiteUrl;
   }
   // Default to production or development
   return process.env.NODE_ENV === 'production'
@@ -139,9 +141,9 @@ export function getLoginUrl(currentUrl?: string): string {
   let redirectUrl = currentUrl;
   if (currentUrl && !currentUrl.startsWith('http')) {
     // currentUrl is just a pathname, construct full Web IDE URL
-    const webIdeUrl = typeof process !== 'undefined' && process.env.RECODER_WEB_URL
-      ? process.env.RECODER_WEB_URL
-      : (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
+    const webIdeUrl = process.env.RECODER_WEB_URL
+      
+      || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
     redirectUrl = `${webIdeUrl}${currentUrl}`;
   }
 
@@ -161,9 +163,9 @@ export function getSignupUrl(currentUrl?: string): string {
   let redirectUrl = currentUrl;
   if (currentUrl && !currentUrl.startsWith('http')) {
     // currentUrl is just a pathname, construct full Web IDE URL
-    const webIdeUrl = typeof process !== 'undefined' && process.env.RECODER_WEB_URL
-      ? process.env.RECODER_WEB_URL
-      : (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
+    const webIdeUrl = process.env.RECODER_WEB_URL
+      
+      || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
     redirectUrl = `${webIdeUrl}${currentUrl}`;
   }
 
