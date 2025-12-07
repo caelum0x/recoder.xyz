@@ -19,8 +19,13 @@ import 'virtual:uno.css';
 /**
  * Root loader - Verify authentication before loading the app
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  const env = (context as any)?.cloudflare?.env || {};
+  
+  // Set env vars for session.server.ts
+  if (env.MAIN_SITE_URL) process.env.MAIN_SITE_URL = env.MAIN_SITE_URL;
+  if (env.RECODER_WEB_URL) process.env.RECODER_WEB_URL = env.RECODER_WEB_URL;
 
   // Allow public routes
   const publicPaths = ['/api/', '/health', '/projects'];

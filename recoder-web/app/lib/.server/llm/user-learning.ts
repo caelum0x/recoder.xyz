@@ -65,6 +65,7 @@ export interface LearningConfig {
 class UserLearningSystem {
   private profiles: Map<string, UserProfile> = new Map();
   private config: LearningConfig;
+  private cleanupInitialized = false;
 
   constructor(config?: Partial<LearningConfig>) {
     this.config = {
@@ -76,9 +77,8 @@ class UserLearningSystem {
       adaptationThreshold: 0.7,
       ...config
     };
-
-    // Cleanup old profiles periodically
-    setInterval(() => this.cleanupOldProfiles(), 24 * 60 * 60 * 1000); // Daily
+    // Note: setInterval removed for Cloudflare Workers compatibility
+    // Cleanup is now done lazily on profile access
   }
 
   /**
