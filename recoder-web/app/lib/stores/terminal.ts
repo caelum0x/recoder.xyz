@@ -5,8 +5,8 @@ import { newShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
 import { getTerminalWelcomeMessage } from '~/lib/webcontainer/package-manager';
 
-// Docker backend - hardcoded for development
-const DOCKER_URL = 'http://localhost:3100';
+// Docker backend URL from environment
+const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
 export class TerminalStore {
   #webcontainer: Promise<WebContainer>;

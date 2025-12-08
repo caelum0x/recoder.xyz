@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session-provider';
 import Link from 'next/link';
 import { 
   Terminal,

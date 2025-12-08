@@ -25,34 +25,32 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === 'signup') {
-        const result = await signUp(
-          formData.email,
-          formData.password,
-          formData.name
-        );
-
-        if (!result.ok) {
-          const errorData = await result.json();
-          setError(errorData.message || 'Signup failed');
-          return;
-        }
-
-        // Redirect to dashboard on success
-        router.push('/dashboard');
+        await signUp.email({
+          email: formData.email,
+          password: formData.password,
+          name: formData.name,
+        }, {
+          onSuccess: () => {
+            router.push('/dashboard');
+          },
+          onError: (ctx) => {
+            setError(ctx.error.message || 'Signup failed');
+            setIsLoading(false);
+          }
+        });
       } else {
-        const result = await signIn(
-          formData.email,
-          formData.password
-        );
-
-        if (!result.ok) {
-          const errorData = await result.json();
-          setError(errorData.message || 'Login failed');
-          return;
-        }
-
-        // Redirect to dashboard on success
-        router.push('/dashboard');
+        await signIn.email({
+          email: formData.email,
+          password: formData.password,
+        }, {
+          onSuccess: () => {
+            router.push('/dashboard');
+          },
+          onError: (ctx) => {
+            setError(ctx.error.message || 'Login failed');
+            setIsLoading(false);
+          }
+        });
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred');
