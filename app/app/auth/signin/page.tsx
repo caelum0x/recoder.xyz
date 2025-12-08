@@ -31,7 +31,6 @@ function SignInForm() {
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const searchParams = useSearchParams();
   const router = useRouter();
-  // Support both 'return' and 'redirect' params for cross-platform compatibility
   const returnUrl = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -40,102 +39,23 @@ function SignInForm() {
     setError('');
 
     try {
-      // First, check if user has 2FA enabled
-      if (!requires2FA) {
-        // Try to get user ID first to check 2FA status
-        const checkResponse = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-
-        const checkData = await checkResponse.json();
-
-        if (checkData.requires2FA) {
-          // User has 2FA enabled, show 2FA input
-          setRequires2FA(true);
+      await signIn.email({
+        email,
+        password,
+      }, {
+        onSuccess: () => {
+          setSuccess(true);
+          setTimeout(() => {
+            router.push(returnUrl);
+          }, 1000);
+        },
+        onError: (ctx) => {
+          setError(ctx.error.message || 'Authentication failed. Please try again.');
           setLoading(false);
-          return;
         }
-      }
-
-      // If no 2FA or 2FA already provided, proceed with sign-in
-      const result = await signIn(email, password);
-
-      if (!result.ok) {
-        const errorData = await result.json();
-        setError(errorData.message || 'Authentication failed. Please try again.');
-      } else {
-        setSuccess(true);
-        setTimeout(() => {
-          // Check if returnUrl is an external URL (starts with http)
-          if (returnUrl.startsWith('http')) {
-            // Use window.location for cross-domain redirects
-            window.location.href = returnUrl;
-          } else {
-            // Use router.push for same-domain navigation
-            router.push(returnUrl);
-          }
-        }, 1000);
-      }
+      });
     } catch (err: any) {
       setError(err?.message || 'Network error. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerify2FA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      // First get userId from login check
-      const loginResponse = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const loginData = await loginResponse.json();
-
-      if (!loginData.userId) {
-        setError('Authentication failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Verify 2FA code using the verify-login endpoint
-      const verifyResponse = await fetch('/api/auth/2fa/verify-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: loginData.userId,
-          code: twoFactorCode,
-          email,
-          password
-        })
-      });
-
-      const verifyData = await verifyResponse.json();
-
-      if (verifyData.success) {
-        // 2FA verified and session created!
-        setSuccess(true);
-        setTimeout(() => {
-          if (returnUrl.startsWith('http')) {
-            window.location.href = returnUrl;
-          } else {
-            router.push(returnUrl);
-          }
-        }, 1000);
-      } else {
-        setError(verifyData.error || 'Invalid 2FA code. Please try again.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Network error. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -162,6 +82,31 @@ function SignInForm() {
       });
     } catch (err: any) {
       setError(err?.message || 'Google authentication failed');
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    
+    try {
+      const response = await fetch('/api/auth/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: twoFactorCode }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Invalid 2FA code');
+      }
+      
+      setSuccess(true);
+      router.push(returnUrl);
+    } catch (err: any) {
+      setError(err.message || 'Failed to verify 2FA code');
       setLoading(false);
     }
   };

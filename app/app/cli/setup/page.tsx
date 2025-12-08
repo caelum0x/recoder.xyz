@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session-provider';
 import Link from 'next/link';
 
 export default function CLISetupPage() {

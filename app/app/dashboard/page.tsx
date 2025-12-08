@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useSession, signOut } from '@/lib/auth-client';
+import { useSession, signOut } from '@/lib/session-provider';
 import { getRecoderWebUrlClient, getRecoderChatUrl } from '@/lib/config/platforms';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {

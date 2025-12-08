@@ -1,10 +1,5 @@
-/**
- * Platform Access API Route
- * Handles cross-platform authentication and redirects
- */
-
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
+import { auth } from '@/lib/auth-config';
 
 interface PlatformAccessRequest {
   platform: 'web' | 'chat' | 'cli' | 'extension';
@@ -21,23 +16,12 @@ const PLATFORM_URLS = {
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Get session from Better-auth
+    const session = await auth.api.getSession({ headers: request.headers });
+
+    if (!session) {
       return NextResponse.json(
         { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.substring(7);
-    let decoded: any;
-    
-    try {
-      decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || 'development-secret');
-    } catch (error) {
-      return NextResponse.json(
-        { error: 'Invalid token' },
         { status: 401 }
       );
     }
@@ -52,24 +36,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create platform-specific access token
-    const platformToken = jwt.sign({
-      userId: decoded.userId,
-      email: decoded.email,
-      platform: platform,
-      accessGranted: true,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
-    }, process.env.NEXTAUTH_SECRET || 'development-secret');
+    // Get the session token from cookies (using correct prefix)
+    const cookies = request.headers.get('cookie') || '';
+    const tokenMatch = cookies.match(/recoder\.session_token=([^;]+)/);
+    const sessionToken = tokenMatch ? tokenMatch[1] : '';
 
-    // Return platform access info
+    if (!sessionToken) {
+      return NextResponse.json(
+        { error: 'No session token found' },
+        { status: 401 }
+      );
+    }
+
+    // Return platform access info with Better-auth session token
     return NextResponse.json({
       success: true,
       platform: platform,
       accessUrl: PLATFORM_URLS[platform],
-      token: platformToken,
+      token: sessionToken,
       redirectUrl: body.redirect || PLATFORM_URLS[platform],
-      message: `Access granted to Recoder ${platform.toUpperCase()}`
+      message: `Access granted to Recoder ${platform.toUpperCase()}`,
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name
+      }
     });
 
   } catch (error) {

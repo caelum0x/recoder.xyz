@@ -6,17 +6,27 @@ export async function POST(request: NextRequest) {
     const { token } = await request.json();
 
     if (!token) {
-      return NextResponse.json({ error: 'Token required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Token is required' },
+        { status: 400 }
+      );
     }
 
+    // Verify the token is a valid session token
     const session = await auth.api.getSession({
-      headers: { authorization: `Bearer ${token}` }
+      headers: new Headers({
+        cookie: `recoder.session_token=${token}`
+      })
     });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Invalid or expired token' },
+        { status: 401 }
+      );
     }
 
+    // Return user data
     return NextResponse.json({
       success: true,
       user: {
@@ -28,6 +38,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Token verification error:', error);
-    return NextResponse.json({ error: 'Verification failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Token verification failed' },
+      { status: 500 }
+    );
   }
 }

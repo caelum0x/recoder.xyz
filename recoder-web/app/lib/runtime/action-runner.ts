@@ -7,8 +7,8 @@ import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { clearNpmCache } from '~/lib/webcontainer/package-manager';
 
-// Docker backend configuration - hardcoded for development
-const DOCKER_URL = 'http://localhost:3100';
+// Docker backend configuration from environment
+const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
 // Global Docker availability flag - set once at startup
 let dockerAvailable: boolean | null = null;

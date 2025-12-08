@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Terminal, Globe, ArrowRight, Github, Sparkles, Copy, Check, Code, Zap, Shield, Cpu } from 'lucide-react';
 import { useState } from 'react';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session-provider';
 import { getRecoderWebUrlClient } from '@/lib/config/platforms';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 

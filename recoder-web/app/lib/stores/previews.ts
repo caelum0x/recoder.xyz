@@ -1,8 +1,8 @@
 import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
 
-// Docker backend - hardcoded for development
-const DOCKER_URL = 'http://localhost:3100';
+// Docker backend URL from environment
+const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
 export interface PreviewInfo {
   port: number;
