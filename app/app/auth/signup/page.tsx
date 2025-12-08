@@ -103,30 +103,29 @@ function SignUpForm() {
     }
 
     try {
-      const result = await signUp(
-        formData.email,
-        formData.password,
-        formData.name
-      );
-
-      if (!result.ok) {
-        const errorData = await result.json();
-        setError(errorData.message || 'Registration failed. Please try again.');
-      } else {
-        setSuccess(true);
-        setTimeout(() => {
-          // Check if returnUrl is an external URL (starts with http)
-          if (returnUrl.startsWith('http')) {
-            // Use window.location for cross-domain redirects
-            window.location.href = returnUrl;
-          } else {
-            // Use router.push for same-domain navigation
-            router.push(returnUrl);
-          }
-        }, 1000);
-      }
+      await signUp.email({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+      }, {
+        onSuccess: () => {
+          setSuccess(true);
+          setTimeout(() => {
+            if (returnUrl.startsWith('http')) {
+              window.location.href = returnUrl;
+            } else {
+              router.push(returnUrl);
+            }
+          }, 1000);
+        },
+        onError: (ctx) => {
+          setError(ctx.error.message || 'Registration failed. Please try again.');
+          setLoading(false);
+        }
+      });
     } catch (err: any) {
       setError(err?.message || 'Network error. Please try again.');
+      setLoading(false);
     } finally {
       setLoading(false);
     }

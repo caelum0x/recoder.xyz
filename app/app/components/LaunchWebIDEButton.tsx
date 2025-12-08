@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Globe, Key, AlertCircle, X } from 'lucide-react';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session-provider';
 import { getRecoderWebUrlClient } from '@/lib/config/platforms';
 
 interface LaunchWebIDEButtonProps {
@@ -58,14 +58,14 @@ export function LaunchWebIDEButton({
       setLoading(true);
       // Wait a bit for API key check to complete, then re-check
       setTimeout(() => {
-        // Just launch directly after timeout
-        window.location.href = getRecoderWebUrlClient();
+        // Redirect to platform/web for authentication
+        router.push('/platform/web');
       }, 1000);
       return;
     }
 
-    // All checks passed - launch Web IDE
-    window.location.href = getRecoderWebUrlClient();
+    // All checks passed - redirect to platform/web for authentication
+    router.push('/platform/web');
   };
 
   return (

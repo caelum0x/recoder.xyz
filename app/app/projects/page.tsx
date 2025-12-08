@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session-provider';
 import {
   Terminal, Globe, Settings, LogOut, ArrowRight, Search,
   Calendar, MessageSquare, FileText, ExternalLink, Copy,
