@@ -1,2 +1,7 @@
-// Custom auth client that works with the existing backend
-export { useSession, signIn, signUp, signOut } from './session-provider';
+import { createAuthClient } from "better-auth/react"
+
+export const authClient = createAuthClient({
+  baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+})
+
+export const { useSession, signIn, signUp, signOut } = authClient

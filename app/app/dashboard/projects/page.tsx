@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session-provider';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 

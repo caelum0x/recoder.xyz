@@ -10,30 +10,22 @@ export const meta: MetaFunction = () => {
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const token = url.searchParams.get('token');
-  const from = url.searchParams.get('from');
+  const mainSiteUrl = process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000';
   
-  // Handle auth token from main app
-  if (token && from === 'main-site') {
-    try {
-      const verifyResponse = await fetch('https://recoder.xyz/api/auth/verify-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      });
-
-      if (verifyResponse.ok) {
-        const userData = await verifyResponse.json();
-        // Redirect to clean URL with session cookie
-        return redirect('/', {
-          headers: {
-            'Set-Cookie': `recoder_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Auth token verification failed:', error);
-    }
+  // Check for Better Auth session cookie (shared via crossSubDomainCookies)
+  const cookies = request.headers.get('Cookie') || '';
+  
+  // Better Auth uses "recoder.session_token" as cookie name with prefix "recoder"
+  // Check for various possible cookie formats
+  const hasSessionToken = cookies.includes('recoder.session_token') || 
+                          cookies.includes('recoder.session') ||
+                          cookies.includes('session_token');
+  
+  console.log('Cookies received:', cookies);
+  console.log('Has session token:', hasSessionToken);
+  
+  if (!hasSessionToken) {
+    return redirect(`${mainSiteUrl}/auth/signin?redirect=${encodeURIComponent(url.toString())}`);
   }
   
   const projectId = url.searchParams.get('projectId');

@@ -238,16 +238,12 @@ export default function AboutPage() {
                 <CardContent>
                   <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">{member.bio}</p>
                   <div className="flex justify-center gap-3">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`https://github.com/${member.social.github}`} target="_blank">
-                        <Github className="w-4 h-4" />
-                      </Link>
-                    </Button>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`https://twitter.com/${member.social.twitter}`} target="_blank">
-                        <Twitter className="w-4 h-4" />
-                      </Link>
-                    </Button>
+                    <Link href={`https://github.com/${member.social.github}`} target="_blank" className="p-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                      <Github className="w-4 h-4" />
+                    </Link>
+                    <Link href={`https://twitter.com/${member.social.twitter}`} target="_blank" className="p-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                      <Twitter className="w-4 h-4" />
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
@@ -264,17 +260,13 @@ export default function AboutPage() {
             Join thousands of developers who are building faster and smarter with AI-powered tools.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" asChild>
-              <Link href="/auth/signin" className="flex items-center gap-2">
-                <span>Get Started Free</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/docs" className="flex items-center gap-2">
-                <span>Read Documentation</span>
-              </Link>
-            </Button>
+            <Link href="/auth/signin" className="px-6 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 flex items-center gap-2">
+              <span>Get Started Free</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link href="/docs" className="px-6 py-3 border border-gray-300 rounded-md font-medium hover:bg-gray-50 flex items-center gap-2">
+              <span>Read Documentation</span>
+            </Link>
           </div>
         </div>
       </section>

@@ -16,17 +16,75 @@ import { cookies } from 'next/headers';
 export async function getSession(request?: NextRequest) {
   try {
     let token: string | undefined;
+    let betterAuthToken: string | undefined;
     
     if (request) {
       // Get token from request cookies or Authorization header
       token = request.cookies.get('auth-token')?.value || 
               request.headers.get('authorization')?.replace('Bearer ', '');
+      
+      // Also check for Better Auth session token
+      betterAuthToken = request.cookies.get('__Secure-recoder.session_token')?.value ||
+                       request.cookies.get('recoder.session_token')?.value;
     } else {
       // Get token from server-side cookies
       const cookieStore = await cookies();
       token = cookieStore.get('auth-token')?.value;
+      betterAuthToken = cookieStore.get('__Secure-recoder.session_token')?.value ||
+                       cookieStore.get('recoder.session_token')?.value;
     }
 
+    // Try Better Auth first
+    if (betterAuthToken) {
+      try {
+        // Query Better Auth session
+        const session = await prisma.session.findFirst({
+          where: {
+            token: betterAuthToken,
+            expiresAt: {
+              gt: new Date()
+            }
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                image: true,
+              }
+            }
+          }
+        });
+
+        if (session?.user) {
+          // Check if user has any API keys
+          const hasApiKey = await prisma.user_api_keys.count({
+            where: {
+              userId: session.user.id,
+              isActive: true
+            }
+          }) > 0;
+
+          return {
+            user: {
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.name,
+              image: session.user.image,
+              hasApiKey,
+              subscription: 'free',
+              role: 'user',
+            },
+            expires: session.expiresAt.toISOString()
+          };
+        }
+      } catch (error) {
+        console.error('Better Auth session check failed:', error);
+      }
+    }
+
+    // Fallback to JWT auth
     if (!token) {
       return null;
     }
@@ -42,10 +100,6 @@ export async function getSession(request?: NextRequest) {
         email: true,
         name: true,
         image: true,
-        hasOwnApiKey: true,
-        apiKey: true,
-        subscription: true,
-        role: true,
       }
     });
 
@@ -53,15 +107,23 @@ export async function getSession(request?: NextRequest) {
       return null;
     }
 
+    // Check if user has any API keys
+    const hasApiKey = await prisma.user_api_keys.count({
+      where: {
+        userId: user.id,
+        isActive: true
+      }
+    }) > 0;
+
     return {
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         image: user.image,
-        hasApiKey: !!(user.hasOwnApiKey || user.apiKey),
-        subscription: user.subscription,
-        role: user.role,
+        hasApiKey,
+        subscription: 'free',
+        role: 'user',
       },
       expires: new Date(decoded.exp * 1000).toISOString()
     };
