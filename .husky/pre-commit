@@ -1,2 +1,41 @@
-# npm test  # Disabled temporarily due to failing e2e tests
-echo "Pre-commit tests disabled - commit allowed"
+#!/usr/bin/env sh
+
+# CRITICAL: Scan for secrets before committing
+echo "🔍 Scanning for secrets..."
+
+# Check for common secret patterns in staged files
+SECRETS_FOUND=0
+
+# Check file contents for secret patterns
+if git diff --cached --name-only | xargs grep -E "(password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key|ssh[_-]?key|database[_-]?url|connection[_-]?string|postgresql://)" --ignore-case 2>/dev/null; then
+  echo "❌ ERROR: Potential secrets detected in staged files!"
+  echo "Please remove secrets and use environment variables instead."
+  SECRETS_FOUND=1
+fi
+
+# Check for .env files (except examples)
+if git diff --cached --name-only | grep -E "\.env$|\.env\.local$|\.env\.production$" | grep -v "\.env\.example$" | grep -v "\.env\..*\.template$"; then
+  echo "❌ ERROR: .env file detected in staged files!"
+  echo "Never commit .env files. Use .env.example instead."
+  SECRETS_FOUND=1
+fi
+
+# Check for SSH keys and PEM files
+if git diff --cached --name-only | grep -E "\.(pem|key|pub)$|id_rsa|id_dsa|id_ecdsa|id_ed25519|private-key"; then
+  echo "❌ ERROR: SSH key or private key detected in staged files!"
+  echo "Never commit SSH keys or private keys."
+  SECRETS_FOUND=1
+fi
+
+if [ $SECRETS_FOUND -eq 1 ]; then
+  echo ""
+  echo "🚨 COMMIT BLOCKED: Secrets detected!"
+  echo "To fix:"
+  echo "  1. Remove secrets from files"
+  echo "  2. Add files to .gitignore"
+  echo "  3. Use environment variables"
+  exit 1
+fi
+
+echo "✅ No secrets detected - commit allowed"
+

@@ -27,6 +27,50 @@ out/
 .env.test.local
 .env.production.local
 
+# SSH keys and credentials (CRITICAL - NEVER COMMIT)
+*.pem
+*.key
+*.pub
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.ppk
+authorized_keys
+known_hosts
+*.private-key.pem
+
+# Database credentials and URIs (CRITICAL - NEVER COMMIT)
+database.yml
+database.json
+*.sql.gz
+*.dump
+*.backup
+*connection-string*
+*database-url*
+
+# API keys and tokens (CRITICAL - NEVER COMMIT)
+*secret*
+*token*
+*apikey*
+*api-key*
+*api_key*
+credentials.json
+service-account*.json
+*password*
+*passwd*
+
+# AWS credentials
+.aws/
+aws-credentials*
+
+# SSL certificates
+*.crt
+*.cer
+*.der
+*.p12
+*.pfx
+
 # Claude Code settings with secrets
 .claude/settings.local.json
 

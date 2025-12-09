@@ -1,309 +1,312 @@
-- The CLI commands we created (recoder init, recoder plan, recoder mcp detect, recoder web
-)
-- The .recoder folder configuration system
-- Installation methods (curl, npm, brew, pnpm, yarn)
-- The planning module with AI-executable .ai.md files
-- recoder-web improvements (planning panel, file tree)##   
-
-> Connection timed out - the firewall is blocking SSH. You need to open port 22 in Oracle 
-Cloud:
-
-### Open Firewall in Oracle Console:
-
-1. Go to Networking → Virtual Cloud Networks
-2. Click your VCN (probably named like vcn-2024...)
-3. Click Security Lists → Default Security List
-4. Click Add Ingress Rules
-5. Add these rules:
-
-| Source CIDR | Protocol | Dest Port | Description |
-|-------------|----------|-----------|-------------|
-| 0.0.0.0/0 | TCP | 22 | SSH |
-| 0.0.0.0/0 | TCP | 80 | HTTP |
-| 0.0.0.0/0 | TCP | 443 | HTTPS |
-| 0.0.0.0/0 | TCP | 3100 | Backend API |
-
-Let me know when done and I'll try connecting again.
- ▸ Credits: 1.03 • Time: 24s
-
-> is this Attached VNICs
-instance-20251204-1921
-Available
-VNIC
-Security attributes
-Add security attributes
-Security attribute namespace
-Security attribute key
-Security attribute value
-Add a security attribute
-
-
-> No, that's the VNIC details. Go back to the main navigation:
-
-1. Click the ☰ hamburger menu (top left)
-2. Go to Networking → Virtual Cloud Networks
-3. Click on your VCN name
-4. In the left sidebar under Resources, click Security Lists
-5. Click Default Security List for [your-vcn]
-6. Click Add Ingress Rules button
-7. Add the rules (Source CIDR: 0.0.0.0/0, Protocol: TCP, Port: 22)
-
-Let me know when you're on the Security Lists page.
- ▸ Credits: 0.37 • Time: 6s
-
-> networking page has these can not find what you asked
-
-
-
-
-> instance-20251204-1921
-Running
-Instance details
-
-Actions
-Start
-Primary VNIC
-Public IPv4 address
-130.162.228.194
-Private IPv4 address
-10.0.0.211
-Route table
-Default Route Table for vcn-20251204-1921
-Network security groups
-ig-quick-action-NSG
-This instance's traffic is controlled by its firewall rules in addition to the associated subnet's security lists and the VNIC's network security groups.
-Edit
-Subnet
-subnet-20251204-1921
-Private DNS record
-Enable
-Hostname
-instance-20251204-1921
-Internal FQDN
-instance-20251204-1921.subnet12041922.vcn12041922.oraclevcn.com
-Copy
-Attached VNICs
-A virtual network interface card (VNIC) attaches an instance to a subnet within a VCN and is required for connectivity with other endpoints.
-Search and Filter
-Search
-Create VNIC
-
-Name
-Subnet or VLAN
-Subnet/VLAN link
-State
-Route table
-FQDN
-VLAN tag
-MAC address
-instance-20251204-1921 Primary VNIC
-Subnet
-subnet-20251204-1921
-Attached
-Default Route Table for vcn-20251204-1921
-...clevcn.com
-2084
-02:00:17:13:5F:B6
-
-
-
-Page 1 of 1 (1 - 1 of 1 total items)
-Items per page
-25
-Quick actions
-Quick actions enable you to easily configure one or more networking resources that your instance needs for connectivity.
-
-Connect public subnet to internet
-Configures an internet gateway, a network security group, and a route table. Instances in a public subnet need these resources to be reachable from the internet.
-
-Connect
-
-> I see it - your instance uses a Network Security Group (ig-quick-action-NSG). Click on 
-that:
-
-1. Click ig-quick-action-NSG (the blue link in your instance details)
-2. Click Add Rules 
-3. Add Ingress Rules:
-
-| Direction | Source Type | Source CIDR | Protocol | Dest Port |
-|-----------|-------------|-------------|----------|-----------|
-| Ingress | CIDR | 0.0.0.0/0 | TCP | 22 |
-| Ingress | CIDR | 0.0.0.0/0 | TCP | 80 |
-| Ingress | CIDR | 0.0.0.0/0 | TCP | 443 |
-| Ingress | CIDR | 0.0.0.0/0 | TCP | 3100 |
-
-Let me know when added!
- ▸ Credits: 0.40 • Time: 7s
-
-> okey so direction is ingress source type ?CIDR
-Service
-Network Security Group (NSG)
-Use "CIDR" to allow traffic from a specific IP address or range of addresses (add /32 for a single IP address). Use "Network Security Group" to allow traffic from a network security group in the same VCN. Use "Service" to allow traffic from an Oracle service through a service gateway.
-
-> Yes! Select CIDR, then fill in:
-
-- **Source CIDR**: 0.0.0.0/0
-- **IP Protocol**: TCP
-- **Destination Port Range**: 22
-
-Click Add (or +), then repeat for ports 80, 443, and 3100.
-
-Or if there's an option to add multiple ports at once, you can do: 22,80,443,3100
-
-Let me know when done!
- ▸ Credits: 0.37 • Time: 6s
-
-> source cidr
-
-> Enter: 0.0.0.0/0
-
-This means "allow from any IP address".
- ▸ Credits: 0.34 • Time: 4s
-
-> Direction
-Stateless
-Source Type
-Source
-Destination Type
-Destination
-Protocol
-
-Source Port Range
-Destination Port Range
-Type and Code
-Allow
-Description
-Egress
-No
-CIDR
-0.0.0.0/0
-All Protocols
-All traffic for all portsAll tra...
-
-Ingress
-No
-CIDR
-0.0.0.0/0
-All Protocols
-All traffic for all portsAll tra...
-
-
-
-> You already have All Protocols allowed for ingress from 0.0.0.0/0 - that means all ports 
-are open. Let me try connecting again:
-I will run the following command: ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@130.162.228.194 "echo 'Connected!'" 2>&1 (using tool: shell)
-Purpose: Test SSH connection to Oracle Cloud instance
-
-Warning: Permanently added '130.162.228.194' (ED25519) to the list of known hosts.
-ubuntu@130.162.228.194: Permission denied (publickey,gssapi-keyex,gssapi-with-mic).
- - Completed in 0.519s
-
-> Firewall is open now. The issue is SSH key authentication - the server doesn't have your
-public key.
-
-When you created the instance, did you upload an SSH key? If not:
-
-Option 1: Check if you have an SSH key
-bash
-cat ~/.ssh/id_rsa.pub
-
-
-Option 2: Use Oracle Cloud Shell (easiest)
-1. In Oracle Console, click the Cloud Shell icon (top right, looks like >_)
-2. Once it opens, run:
-bash
-ssh ubuntu@130.162.228.194
-
-
-Cloud Shell already has access to your instances.
-
-Which option do you want to try?
- ▸ Credits: 0.75 • Time: 12s
-
-> ssh key public or private'/Users/arhansubasi/Downloads/ssh-key-2025-12-04.key.pub''/User
-s/arhansubasi/Downloads/ssh-key-2025-12-04.key'
-
-> You have the private key. Let's use it to connect:
-I will run the following command: ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "/Users/arhansubasi/Downloads/ssh-key-2025-12-04.key" ubuntu@130.162.228.194 "echo 'Connected!'" 2>&1 (using tool: shell)
-Purpose: SSH to Oracle instance using the downloaded private key
-
-ubuntu@130.162.228.194: Permission denied (publickey,gssapi-keyex,gssapi-with-mic).
- - Completed in 0.578s
-
-I will run the following command: chmod 600 "/Users/arhansubasi/Downloads/ssh-key-2025-12-04.key" && ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "/Users/arhansubasi/Downloads/ssh-key-2025-12-04.key" opc@130.162.228.194 "echo 'Connected!'" 2>&1 (using tool: shell)
-Purpose: Check key permissions and try with opc user (Oracle default)
-
-Connected!
- - Completed in 1.538s
-
-> Connected! Oracle uses opc user, not ubuntu. Now let's set up the server:
-I will run the following command: scp -i "/Users/arhansubasi/Downloads/ssh-key-2025-12-04.key" /Users/arhansubasi/recoder.xyz/docker-backend/server-setup.sh opc@130.162.228.194:/home/opc/ (using tool: shell)
-Purpose: Copy server setup script to Oracle instance
-
- - Completed in 1.459s
-
-I will run the following command: ssh -i "/Users/arhansubasi/Downloads/ssh-key-2025-12-04.key" opc@130.162.228.194 "sudo bash /home/opc/server-setup.sh" 2>&1 (using tool: shell)
-Purpose: Run server setup script on Oracle instance
-
-🔧 Setting up Recoder Docker Backend Server
-/home/opc/server-setup.sh: line 7: apt-get: command not found
-# Executing docker install script, commit: 7d96bd3c5235ab2121bcb855dd7b3f3f37128ed4
-
-ERROR: Unsupported distribution 'ol'
-
- - Completed in 1.716s
-
-> Oracle Linux uses dnf/yum, not apt. Let me create a compatible setup script:
-I will run the following command: ssh -i "/Users/arhansubasi/Downloads/ssh-key-2025-12-04.key" opc@130.162.228.194 << 'EOF'
-sudo dnf install -y dnf-utils
-sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-sudo systemctl enable docker
-sudo systemctl start docker
-sudo usermod -aG docker opc
-echo "Docker installed!"
-docker --version
-EOF
- (using tool: shell)
-Purpose: Install Docker on Oracle Linux
-
-Pseudo-terminal will not be allocated because stdin is not a terminal.
-Ksplice for Oracle Linux 9 (x86_64)              20 MB/s |  14 MB     00:00    
-Oracle Linux 9 OCI Included Packages (x86_64)    25 MB/s | 198 MB     00:07    While Docker is installing, let me prepare the deployment steps. Once Docker is
-  installed, we'll need to:
-
-  1. Upload the docker-backend code to the server
-  2. Build the recoder-universal image on the server
-  3. Set up environment variables
-  4. Start the docker-backend service.  Oracle Free Tier's x86 micro instances (1GB RAM) are very limited. The ARM instances (
-A1.Flex) are much better but often unavailable due to high demand.
-
-Options:
-
-1. Keep trying ARM on Oracle - Use a script to auto-retry creating A1.Flex instance (they 
-become available randomly)
-
-2. Railway.app - Free tier, supports Docker, easy deploy
-  
-bash
-   npm install -g @railway/cli
-   railway login
-   cd docker-backend && railway up
-   
-
-
-3. Fly.io - Free tier includes 3 shared VMs
-  bash
-   brew install flyctl
-   flyctl launch
-   
-
-4. Render.com - Free tier for web services (you already have render.yaml)
-
-5. Just deploy recoder-web to Vercel for now - Skip backend deployment until you have 
-budget for DO/Hetzner
-
-Which do you prefer? Render might be easiest since you already have config for it.
- ▸ Credits: 0.71 • Time: 11s
-
-> 
+# RECODER.XYZ - SYSTEM STATUS & ISSUES
+
+## 📋 PLATFORM OVERVIEW
+
+### Mission
+AI-powered full-stack development platform competing with **Replit**, **Bolt.new**, **Loveable.dev**, and **Cursor**.
+
+
+
+### System Architecture
+
+#### recoder.xyz (Main Site)
+- **Port**: 3000
+- **Tech**: Next.js 15, Better Auth, PostgreSQL
+- **Purpose**: Marketing, authentication, user management
+- **Status**: ✅ Running (intermittent 504 timeouts)
+
+#### web.recoder.xyz (IDE)
+- **Port**: 5173
+- **Tech**: Remix, React, WebContainer API, Monaco Editor
+- **Purpose**: Development interface, AI chat, code editor, live preview
+- **Features**: AI chat, file tree, code editor, template selection, project management
+- **Status**: ⚠️ Unstable (service crashes frequently)
+
+#### docker.recoder.xyz (Execution Backend)
+- **Port**: 3100
+- **Tech**: Node.js, Express, Docker API
+- **Purpose**: Container management, code execution, package installation
+- **Features**: Docker containers, code execution, npm/pip/cargo, terminal access
+- **Status**: 🔴 DOWN (ERR_BLOCKED_BY_RESPONSE)
+
+#### Database (PostgreSQL)
+- **Tables**: users, sessions, projects, chat_sessions, messages, ai_generated_projects
+- **Status**: ✅ Running (query timeouts during SSR)
+
+---
+
+## 🚨 CRITICAL SECURITY INCIDENT
+
+### Secrets Leaked to GitHub (Commit a104474)
+**Compromised**:
+- SSH passwords (2 occurrences)
+- PostgreSQL URI (1 occurrence)
+- Total: 9 secret exposures
+
+**Actions Taken**:
+- ✅ Files deleted from repo
+- ✅ Enhanced .gitignore (SSH keys, DB URIs, API keys)
+- ✅ Pre-commit hook installed (blocks secrets)
+
+**REQUIRED IMMEDIATELY**:
+- ⚠️ Rotate SSH password on all servers
+- ⚠️ Rotate PostgreSQL password
+- ⚠️ Update all services with new credentials
+- ⚠️ Check logs for unauthorized access
+- ⚠️ Clean git history if secrets in old commits
+
+---
+
+## 🔴 CRITICAL BUGS
+
+### 1. Chat History Not Saving
+**Diagnosis**: Save logic not executing - 0 rows in `ai_generated_projects` table
+**Impact**: Users lose all chat history
+**Root Cause**: Chat save function not being called in API
+**Symptoms**:
+- API endpoint works correctly
+- Frontend hook correct
+- Database queries successful
+- But NO chats saved
+
+**Fix Required**:
+- Locate chat save function in API
+- Add logging to track save calls
+- Test manual save
+- Verify save triggers on chat creation
+
+---
+
+### 2. 504 Gateway Timeout (web.recoder.xyz)
+**Diagnosis**: Service crashes + heavy SSR database queries
+**Impact**: Homepage inaccessible, appears/disappears on refresh
+**Root Cause**: 
+- recoder-web service crashes repeatedly (SIGKILL)
+- Homepage loader does database queries during SSR
+- Queries timeout causing 504
+- Service restarts then crashes again
+
+**Symptoms**:
+```typescript
+// In app/routes/_index.tsx loader:
+- Queries projects table
+- Queries chat_sessions table
+- Blocks page render waiting for DB
+```
+
+**Fix Required**:
+- Move database queries from SSR to client-side
+- Add caching layer (Redis)
+- Increase nginx proxy timeout
+- Investigate why service crashes (memory/database)
+- Add health checks and proper restart logic
+
+---
+
+### 3. docker.recoder.xyz Down (Live Preview Broken)
+**Diagnosis**: docker-backend service not running
+**Impact**: ENTIRE LIVE PREVIEW SYSTEM DOWN - users cannot run code
+**Symptoms**:
+- `ERR_BLOCKED_BY_RESPONSE`
+- All `/api/container` requests return 500
+- npm install fails
+- Terminal shows "docker.recoder.xyz bağlanmayı reddetti" (connection refused)
+- WebContainer errors
+
+**Fix Required**:
+- Check if docker-backend service running
+- Verify port 3100 accessible
+- Check CORS configuration
+- Review nginx proxy settings for docker.recoder.xyz
+- Test container creation endpoint
+
+---
+
+## 🟡 HIGH PRIORITY BUGS
+
+### 4. Wrong Starter Template Selection
+**Diagnosis**: Template search/scoring algorithm broken
+**Impact**: User asks for "todo app", gets "recoder-expo" instead
+**Root Cause**: Search index or scoring logic not working
+**Symptoms**:
+- Logging enabled but not captured
+- Always returns expo template regardless of prompt
+- Scoring algorithm not evaluating correctly
+
+**Fix Required**:
+- Add console.log to template scoring function
+- Test with various prompts ("todo app", "react app", "api")
+- Debug scoring algorithm
+- Verify search index integrity
+
+---
+
+### 5. npm install Fails in Live Preview
+**Diagnosis**: Blocked by docker.recoder.xyz being down
+**Symptoms**:
+- Shows green checkmark but errors in console
+- fetch.worker.js preload warnings
+- WebContainer warnings: `[Contextify] [WARNING] running source code in new context`
+- Multiple 404 and 500 errors
+
+**Fix Required**: Blocked by fixing docker.recoder.xyz (#3)
+
+---
+
+### 6. recoder-code CLI Not Pre-installed
+**Diagnosis**: False advertising - package not in Docker images
+**Impact**: Terminal claims "✅ recoder-code pre-installed" but command not found
+**Symptoms**:
+```bash
+~/project ❯ recoder-code
+jsh: command not found: recoder-code
+```
+
+**Fix Required**:
+- Add recoder-code package to Docker image
+- Update container initialization script
+- OR remove claim from terminal banner
+
+---
+
+## 🟢 INFRASTRUCTURE ISSUES
+
+### Service Management
+**Problems**:
+- Services crash without monitoring
+- No auto-restart with backoff
+- No alerting on failures
+- No log aggregation
+
+**Needed**:
+- Health checks for all services
+- PM2 or systemd with proper restart policies
+- Monitoring (Prometheus/Grafana)
+- Centralized logging (ELK/Loki)
+
+### Database Performance
+**Problems**:
+- SSR queries causing timeouts
+- No connection pooling
+- No caching layer
+
+**Needed**:
+- Query optimization
+- Connection pooling (PgBouncer)
+- Redis caching layer
+- Move heavy queries to client-side
+
+### nginx Configuration
+**Problems**:
+- Timeouts too aggressive (60s)
+- CORS issues
+- No request logging
+
+**Needed**:
+- Increase proxy timeouts (120s+)
+- Standardize CORS headers
+- Add access logging
+- Rate limiting
+
+---
+
+## 🔵 FUTURE WORK
+
+### Phase 1: Stability (Post-Critical Fixes)
+- [ ] Service monitoring and alerting
+- [ ] Database query optimization
+- [ ] Caching layer implementation
+- [ ] Error tracking (Sentry)
+- [ ] Performance monitoring
+
+### Phase 2: Feature Completion
+- [ ] GitHub integration (clone, push, pull)
+- [ ] Real-time collaboration
+- [ ] Terminal improvements
+- [ ] File upload/download
+- [ ] Project templates expansion
+
+### Phase 3: Advanced Features
+- [ ] Multi-language support (Python, Go, Rust)
+- [ ] Database management UI
+- [ ] API testing tools
+- [ ] Deployment automation
+- [ ] Team workspaces
+
+### Phase 4: Enterprise
+- [ ] SSO integration
+- [ ] Private deployments
+- [ ] Custom AI models
+- [ ] Audit logging
+- [ ] SLA guarantees
+
+### CLI Features (Completed - Needs Testing)
+- ✅ `recoder init` - Initialize projects
+- ✅ `recoder plan` - AI planning
+- ✅ `recoder mcp detect` - MCP detection
+- ✅ `recoder web` - Launch web interface
+- ✅ `.recoder` folder configuration
+- ✅ AI-executable `.ai.md` files
+
+### Installation Methods (Completed)needs testing and checking
+- ✅ curl install script
+- ✅ npm/pnpm/yarn packages
+- ✅ Homebrew formula
+
+---
+
+## 📊 PRIORITY MATRIX
+
+| Issue | Priority | Impact | Status |
+|-------|----------|--------|--------|
+| Security: Secrets leaked | P0 | Critical | Partially fixed |
+| Chat history not saving | P0 | Critical | Diagnosed |
+| 504 Gateway timeout | P0 | Critical | Diagnosed |
+| docker.recoder.xyz down | P0 | Critical | Not started |
+| Wrong template selection | P1 | High | Diagnosed |
+| npm install issues | P1 | High | Blocked by #3 |
+| recoder-code not installed | P1 | High | Not started |
+
+---
+
+## 🎯 IMMEDIATE ACTION PLAN
+
+### Security (URGENT)
+1. Rotate all compromised credentials
+2. Check access logs for breaches
+3. Clean git history
+
+### Critical Bugs (IN ORDER)
+1. Fix docker-backend service
+2. Fix chat history saving
+3. Stabilize recoder-web service
+4. Fix template selection
+
+### Infrastructure
+1. Add service monitoring
+2. Implement caching
+3. Optimize database queries
+4. Configure proper timeouts
+
+---
+
+## 📝 NOTES FOR AI ASSISTANTS
+
+### When Debugging
+- Check service status: `systemctl status recoder-app recoder-web`
+- Check logs: `journalctl -u <service> -n 100`
+- Check ports: `netstat -tlnp | grep <port>`
+- Check processes: `ps aux | grep <process>`
+
+### Common Issues
+- 504 errors = service down or timeout
+- 500 errors = backend error, check logs
+- CORS errors = nginx or Express config
+- Database errors = connection or query timeout
+
+### File Locations
+- Main site: `/home/recoder/recoder.xyz/app`
+- IDE: `/home/recoder/recoder.xyz/recoder-web`
+- Docker backend: `/home/recoder/recoder.xyz/docker-backend`
+- nginx config: `/etc/nginx/sites-available/`
+- systemd services: `/etc/systemd/system/`
