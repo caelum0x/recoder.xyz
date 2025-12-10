@@ -232,50 +232,27 @@ That's it. Nothing else. Just the clone action.`,
   console.log('🔍 Checking if user request matches a starter template...');
   const starterInjection = await detectAndPrepareStarter(lastUserMessage);
   
-  // If we found a matching starter template, handle it appropriately
+  // If we found a matching starter template, inject it as context for AI
   if (starterInjection.shouldInject && createDirectStarterResponse) {
     console.log(`✅ Starter detected: ${starterInjection.starterId} (confidence: ${starterInjection.confidence?.toFixed(2)})`);
     
-    // Always return the starter - either directly or for AI to customize
     const directResponse = createDirectStarterResponse(starterInjection, lastUserMessage);
     
     if (directResponse) {
-      console.log('🚀 Returning pre-loaded starter (with or without AI customization)');
+      console.log('🚀 Injecting starter as base, AI will build on top');
       
-      // Check if we need AI customization
-      const needsCustomization = checkIfNeedsCustomization(lastUserMessage);
-      
-      if (!needsCustomization) {
-        // Return directly without AI - saves 100% of AI costs!
-        console.log('   → Direct return (no customization needed)');
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(directResponse));
-            controller.close();
-          }
-        });
-
-        return new Response(stream, {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-          },
-        });
-      } else {
-        // AI will add customizations on top of the starter
-        console.log('   → AI will customize the loaded starter');
-        // Prepend the starter to the conversation
-        messages.push({
-          role: 'assistant',
-          content: directResponse,
-        });
-        // Add a follow-up user message for customization
-        messages.push({
-          role: 'user',
-          content: `The base starter is loaded above. Now please add the customizations I requested: ${lastUserMessage}`,
-        });
-      }
+      // ALWAYS have AI generate code based on user's request
+      // The starter is just a foundation - AI must implement what user asked for
+      messages.push({
+        role: 'assistant',
+        content: directResponse,
+      });
+      messages.push({
+        role: 'user', 
+        content: `Great, the starter template is loaded. Now please implement what I originally asked for: "${lastUserMessage}". 
+        
+Create the actual application with all the features, components, and functionality needed. Don't just acknowledge the template - write the real code!`,
+      });
     }
   } else {
     console.log('   → No starter match found, proceeding with normal AI generation');
