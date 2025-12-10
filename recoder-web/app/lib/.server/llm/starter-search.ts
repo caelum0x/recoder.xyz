@@ -286,6 +286,23 @@ function levenshteinDistance(a: string, b: string): number {
 }
 
 /**
+ * Check if user explicitly wants mobile/native app
+ */
+function wantsMobileApp(query: string): boolean {
+  const mobilePatterns = [
+    /\bmobile\s*app\b/i,
+    /\bios\s*app\b/i,
+    /\bandroid\s*app\b/i,
+    /\breact\s*native\b/i,
+    /\bexpo\b/i,
+    /\bnative\s*app\b/i,
+    /\bphone\s*app\b/i,
+    /\bsmartphone\b/i,
+  ];
+  return mobilePatterns.some(p => p.test(query));
+}
+
+/**
  * Detect primary intent from query (what is the MAIN thing they want)
  */
 function detectPrimaryIntent(query: string): string | null {
@@ -412,10 +429,24 @@ export function searchStarters(
   }
 
   const results: SearchResult[] = [];
+  const userWantsMobile = wantsMobileApp(query);
 
     for (const template of index.templates) {
     let score = 0;
     const matches: string[] = [];
+    
+    // PENALTY for mobile/expo templates when user doesn't explicitly want mobile
+    const isMobileTemplate = 
+      template.id.toLowerCase().includes('expo') ||
+      template.id.toLowerCase().includes('native') ||
+      template.category.toLowerCase() === 'mobile' ||
+      template.keywords.some(k => k.toLowerCase().includes('mobile') || k.toLowerCase().includes('expo'));
+    
+    if (isMobileTemplate && !userWantsMobile) {
+      score -= 5.0; // Heavy penalty - user didn't ask for mobile
+      matches.push('mobile-penalty');
+      logVerbose(`   ⚠️ Mobile penalty for ${template.id} (user didn't request mobile)`);
+    }
 
     // MASSIVE boost if template matches primary intent
     if (primaryIntent) {
