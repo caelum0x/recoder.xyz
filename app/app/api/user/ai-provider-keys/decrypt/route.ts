@@ -16,7 +16,20 @@ export async function GET(request: NextRequest) {
     if (authResult.error) return authResult.response;
     const { user } = authResult;
 
-    const userId = user.id;
+    // Look up the user in the users table (Better Auth uses 'user' table, app uses 'users' table)
+    const appUser = await prisma.users.findUnique({
+      where: { email: user.email },
+      select: { id: true }
+    });
+
+    if (!appUser) {
+      return NextResponse.json(
+        { error: 'User not found in application database' },
+        { status: 404 }
+      );
+    }
+
+    const userId = appUser.id;
     const { searchParams } = new URL(request.url);
     const provider = searchParams.get('provider');
 

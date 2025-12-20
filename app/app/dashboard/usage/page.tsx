@@ -56,6 +56,12 @@ interface UsageData {
         percentage: number;
       };
     };
+    platformBreakdown?: Array<{
+      platform: string;
+      requests: number;
+      cost: number;
+      percentage: number;
+    }>;
   };
   projections?: {
     projectedMonthlyCost: number;
@@ -90,7 +96,7 @@ export default function UsageDashboardPage() {
         apiClient.getUsageHistory({ limit: 10, offset: 0 })
       ]);
 
-      setUsageData(analytics);
+      setUsageData(analytics as UsageData);
       setCostBreakdown(breakdown);
       setRecentActivity(history.history || []);
     } catch (err) {
@@ -382,6 +388,26 @@ export default function UsageDashboardPage() {
               )}
             </div>
           </div>
+
+          {/* Advanced Analytics Section */}
+          {usageData?.detailed?.platformBreakdown && (
+            <div className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl mb-8">
+              <h3 className="text-lg font-bold mb-4">Platform Insights</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {usageData.detailed.platformBreakdown.map((platform: any, index: number) => (
+                  <div key={index} className="p-4 rounded-lg bg-white/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium capitalize">{platform.platform}</span>
+                      <span className="text-sm text-gray-400">{platform.percentage.toFixed(1)}%</span>
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {platform.requests} requests • ${platform.cost.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Model Breakdown */}
           {modelBreakdown.length > 0 && (

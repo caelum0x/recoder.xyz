@@ -24,8 +24,35 @@ export async function getSession(request?: NextRequest) {
               request.headers.get('authorization')?.replace('Bearer ', '');
       
       // Also check for Better Auth session token
-      betterAuthToken = request.cookies.get('__Secure-recoder.session_token')?.value ||
+      let rawBetterAuthToken = request.cookies.get('__Secure-recoder.session_token')?.value ||
                        request.cookies.get('recoder.session_token')?.value;
+      
+      console.error('[auth-helpers] Raw cookie value:', rawBetterAuthToken?.substring(0, 50));
+      console.error('[auth-helpers] Cookie header:', request.headers.get('cookie')?.substring(0, 100));
+      
+      // Better Auth signs cookies with .signature - extract just the token
+      if (rawBetterAuthToken && rawBetterAuthToken.includes('.')) {
+        betterAuthToken = rawBetterAuthToken.split('.')[0];
+        console.error('[auth-helpers] Extracted token from signed cookie:', betterAuthToken?.substring(0, 20));
+      } else {
+        betterAuthToken = rawBetterAuthToken;
+      }
+      
+      // Fallback: parse raw Cookie header (for cross-service calls)
+      if (!betterAuthToken) {
+        const cookieHeader = request.headers.get('cookie');
+        console.log('[auth-helpers] Fallback parsing, cookie header exists:', !!cookieHeader);
+        if (cookieHeader) {
+          const match = cookieHeader.match(/__Secure-recoder\.session_token=([^;]+)/);
+          console.log('[auth-helpers] Regex match:', !!match);
+          if (match) {
+            // URL decode and extract token (before the signature)
+            const decoded = decodeURIComponent(match[1]);
+            betterAuthToken = decoded.split('.')[0];
+            console.log('[auth-helpers] Extracted token:', betterAuthToken?.substring(0, 10) + '...');
+          }
+        }
+      }
     } else {
       // Get token from server-side cookies
       const cookieStore = await cookies();
@@ -58,10 +85,19 @@ export async function getSession(request?: NextRequest) {
         });
 
         if (session?.user) {
+          // Look up corresponding user in 'users' table (API keys are stored with this ID)
+          const appUser = await prisma.users.findUnique({
+            where: { email: session.user.email },
+            select: { id: true }
+          });
+          
+          // Use app user ID for API key lookup, fall back to Better Auth ID
+          const userIdForKeys = appUser?.id || session.user.id;
+          
           // Check if user has any API keys
           const hasApiKey = await prisma.user_api_keys.count({
             where: {
-              userId: session.user.id,
+              userId: userIdForKeys,
               isActive: true
             }
           }) > 0;

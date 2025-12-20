@@ -65,9 +65,9 @@ export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   
   if (!session?.user?.email) {
-    // Redirect to sign in page with callback
+    // Redirect to main signin page with callback
     const callbackUrl = `/api/auth/cli?${searchParams.toString()}`;
-    const signInUrl = `/api/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+    const signInUrl = `/auth/signin?redirect=${encodeURIComponent(callbackUrl)}`;
     return NextResponse.redirect(new URL(signInUrl, request.url));
   }
 
@@ -101,14 +101,9 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  // Redirect back to CLI with code
-  const redirectUrl = new URL(redirectUri!);
-  redirectUrl.searchParams.set('code', code);
-  if (state) {
-    redirectUrl.searchParams.set('state', state);
-  }
-
-  return NextResponse.redirect(redirectUrl.toString());
+  // Redirect to CLI callback page instead of localhost
+  const callbackUrl = `/auth/cli-callback?code=${code}${state ? `&state=${state}` : ''}`;
+  return NextResponse.redirect(new URL(callbackUrl, request.url));
 }
 
 /**
@@ -243,17 +238,26 @@ async function handleDeviceFlowInit(body: any) {
   const userCode = generateUserCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-  await prisma.deviceCode.create({
-    data: {
-      id: nanoid(),
-      deviceCode,
-      userCode,
-      clientId: client_id,
-      scope,
-      status: 'pending',
-      expiresAt
-    }
-  });
+  try {
+    const created = await prisma.deviceCode.create({
+      data: {
+        id: nanoid(),
+        deviceCode,
+        userCode,
+        clientId: client_id,
+        scope,
+        status: 'pending',
+        expiresAt
+      }
+    });
+    console.log('✅ Device code created:', created.id);
+  } catch (error) {
+    console.error('❌ Failed to create device code:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to create device code' },
+      { status: 500 }
+    );
+  }
 
   const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://recoder.xyz';
 
