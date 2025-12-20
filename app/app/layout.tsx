@@ -11,6 +11,18 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Recoder.xyz - FREE AI Coding Platform | Web IDE + CLI with 40+ Models',
   description: 'The only platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK (Bring Your Own Key). Access Claude, GPT-4, Gemini & 40+ AI models. Start in browser, continue in terminal.',
+  icons: {
+    icon: [
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' }
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/favicon.png',
+    other: [
+      { rel: 'android-chrome', url: '/android-chrome-192x192.png', sizes: '192x192' }
+    ]
+  },
   keywords: [
     'AI coding platform',
     'free AI development',

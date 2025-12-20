@@ -1,13 +1,14 @@
 /**
  * CLI Authentication API - Main recoder.xyz project
  * Handles web-based authentication flows for CLI users
- * Supports OAuth redirect, device flow, and API key validation
+ * Integrates with Better Auth system for real user authentication
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-import { db } from '../../../../lib/database';
+import { auth } from '@/lib/auth-config';
+import { prisma } from '@/lib/prisma';
 
 const deviceFlowSchema = z.object({
   client_id: z.string(),
@@ -83,18 +84,12 @@ export async function GET(request: NextRequest) {
         created_at: new Date()
       });
 
-      // Return HTML page for user authentication
-      const authPageHtml = generateAuthPage({
-        authCode,
-        redirectUri,
-        state,
-        scope,
-        clientId
-      });
-
-      return new NextResponse(authPageHtml, {
-        headers: { 'Content-Type': 'text/html' }
-      });
+      // Redirect to existing signin page with CLI callback
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const callbackUrl = encodeURIComponent(`/auth/cli-callback?code=${authCode}&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`);
+      const loginUrl = `${baseUrl}/auth/signin?redirect=${callbackUrl}`;
+      
+      return NextResponse.redirect(loginUrl);
     }
 
     // Default: Return auth status
@@ -220,8 +215,13 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
   try {
     // Check if it's an API key
     if (token.startsWith('rck_')) {
-      const apiKeyData = await db.getAPIKey(token);
-      if (!apiKeyData || (apiKeyData.expires_at && new Date() > apiKeyData.expires_at) || !apiKeyData.is_active) {
+      const apiKeyData = await prisma.api_keys.findFirst({
+        where: { 
+          keyHash: token,
+          isActive: true
+        }
+      });
+      if (!apiKeyData || (apiKeyData.expiresAt && new Date() > apiKeyData.expiresAt)) {
         return NextResponse.json({
           success: false,
           error: 'invalid_token'
@@ -229,13 +229,18 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
       }
 
       // Update usage count and last used
-      await db.updateAPIKey(token, { 
-        usage_count: apiKeyData.usage_count + 1,
-        last_used: new Date()
+      await prisma.api_keys.update({
+        where: { id: apiKeyData.id },
+        data: {
+          usageCount: apiKeyData.usageCount + 1,
+          lastUsedAt: new Date()
+        }
       });
 
       // Get user data
-      const user = await db.getUserById(apiKeyData.user_id);
+      const user = await prisma.users.findUnique({
+        where: { id: apiKeyData.userId }
+      });
       if (!user) {
         return NextResponse.json({
           success: false,
@@ -249,15 +254,17 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
           id: user.id,
           email: user.email,
           name: user.name,
-          subscription_plan: user.subscription_plan,
-          quota: user.quota
+          subscription_plan: user.subscription,
+          quota: null
         }
       });
     }
 
     // Check if it's an access token
-    const sessionData = await db.getCLISessionByToken(token);
-    if (!sessionData || new Date() > sessionData.expires_at || !sessionData.is_active) {
+    const sessionData = await prisma.cli_sessions.findFirst({
+      where: { accessToken: token }
+    });
+    if (!sessionData || new Date() > sessionData.expiresAt || !sessionData.isActive) {
       return NextResponse.json({
         success: false,
         error: 'invalid_token'
@@ -265,10 +272,15 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
     }
 
     // Update last used
-    await db.updateCLISession(token, { last_used: new Date() });
+    await prisma.cli_sessions.update({
+      where: { id: sessionData.id },
+      data: { lastUsedAt: new Date() }
+    });
 
     // Get user data
-    const user = await db.getUserById(sessionData.user_id);
+    const user = await prisma.users.findUnique({
+      where: { id: sessionData.userId }
+    });
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -282,8 +294,8 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
         id: user.id,
         email: user.email,
         name: user.name,
-        subscription_plan: user.subscription_plan,
-        quota: user.quota
+        subscription_plan: user.subscription,
+        quota: null
       }
     });
 
@@ -304,8 +316,10 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
   try {
     // API Key authentication
     if (api_key) {
-      const apiKeyData = await db.getAPIKey(api_key);
-      if (!apiKeyData || (apiKeyData.expires_at && new Date() > apiKeyData.expires_at) || !apiKeyData.is_active) {
+      const apiKeyData = await prisma.api_keys.findFirst({
+        where: { keyHash: api_key, isActive: true }
+      });
+      if (!apiKeyData || (apiKeyData.expiresAt && new Date() > apiKeyData.expiresAt)) {
         return NextResponse.json({
           success: false,
           error: 'invalid_api_key'
@@ -313,7 +327,9 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
       }
 
       // Get user data
-      const user = await db.getUserById(apiKeyData.user_id);
+      const user = await prisma.users.findUnique({
+        where: { id: apiKeyData.userId }
+      });
       if (!user) {
         return NextResponse.json({
           success: false,
@@ -322,9 +338,12 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
       }
 
       // Update API key usage
-      await db.updateAPIKey(api_key, { 
-        usage_count: apiKeyData.usage_count + 1,
-        last_used: new Date()
+      await prisma.api_keys.update({
+        where: { id: apiKeyData.id },
+        data: {
+          usageCount: apiKeyData.usageCount + 1,
+          lastUsedAt: new Date()
+        }
       });
 
       return NextResponse.json({
@@ -333,12 +352,12 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
           id: user.id,
           email: user.email,
           name: user.name,
-          subscription_plan: user.subscription_plan,
-          quota: user.quota
+          subscription_plan: user.subscription,
+          quota: null
         },
         session: {
           access_token: api_key,
-          expires_at: apiKeyData.expires_at?.toISOString() || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          expires_at: apiKeyData.expiresAt?.toISOString() || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
         }
       });
     }
@@ -346,35 +365,22 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
     // Email/Password authentication
     if (email && password) {
       // Check if user exists
-      let user = await db.getUserByEmail(email);
+      let user = await prisma.users.findUnique({
+        where: { email }
+      });
       
       // If user doesn't exist, create a new one (for demo purposes)
       if (!user) {
-        user = await db.createUser({
-          email: email,
-          name: email.split('@')[0],
-          subscription_plan: 'free',
-          subscription_status: 'active',
-          quota: {
-            requests_remaining: 1000,
-            requests_limit: 1000,
-            reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          },
-          email_verified: true,
-          onboarding_completed: false
-        });
-
-        // Create default subscription
-        await db.createSubscription({
-          user_id: user.id,
-          plan: 'free',
-          status: 'active',
-          current_period_start: new Date(),
-          current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          quota_limit: 1000,
-          features: ['cli_access'],
-          billing_amount: 0,
-          billing_currency: 'USD'
+        user = await prisma.users.create({
+          data: {
+            id: nanoid(),
+            email: email,
+            name: email.split('@')[0],
+            subscription: 'free',
+            isActive: true,
+            emailVerified: true,
+            updatedAt: new Date()
+          }
         });
       }
 
@@ -384,18 +390,24 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
       // Create CLI session
-      const session = await db.createCLISession({
-        user_id: user.id,
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: expiresAt,
-        is_active: true,
-        device_name: 'CLI',
-        device_type: 'cli'
+      await prisma.cli_sessions.create({
+        data: {
+          id: nanoid(),
+          userId: user.id,
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          expiresAt: expiresAt,
+          isActive: true,
+          deviceName: 'CLI',
+          deviceType: 'cli'
+        }
       });
 
       // Update user last login
-      await db.updateUser(user.id, { last_login: new Date() });
+      await prisma.users.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() }
+      });
 
       return NextResponse.json({
         success: true,
@@ -403,8 +415,8 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
           id: user.id,
           email: user.email,
           name: user.name,
-          subscription_plan: user.subscription_plan,
-          quota: user.quota
+          subscription_plan: user.subscription,
+          quota: null
         },
         session: {
           access_token: accessToken,
@@ -428,7 +440,7 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
 }
 
 /**
- * Handle authorization code exchange
+ * Handle authorization code exchange - use Better Auth session
  */
 async function handleCodeExchange(body: any): Promise<NextResponse> {
   const { grant_type, client_id, code, redirect_uri } = body;
@@ -456,50 +468,79 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
     // Remove used code
     authRequests.delete(code);
 
-    // Mock user data
-    const mockUser = {
-      id: 'user_' + nanoid(8),
-      email: 'demo@recoder.xyz',
-      name: 'CLI User',
-      subscription_plan: 'pro',
-      quota: {
-        requests_remaining: 5000,
-        requests_limit: 5000,
-        reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    };
+    // Get real user info from internal storage
+    const userInfoResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/cli-internal/set-user?code=${code}`);
+    
+    if (!userInfoResponse.ok) {
+      return NextResponse.json({
+        success: false,
+        error: 'user_not_authenticated'
+      }, { status: 401 });
+    }
+
+    const userInfoResult = await userInfoResponse.json();
+    
+    if (!userInfoResult.success || !userInfoResult.user) {
+      return NextResponse.json({
+        success: false,
+        error: 'invalid_user_session'
+      }, { status: 401 });
+    }
+
+    // Get user from database
+    const user = await prisma.users.findUnique({
+      where: { id: userInfoResult.user.user_id }
+    });
+    
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        error: 'user_not_found'
+      }, { status: 404 });
+    }
+
+    // Update last login
+    await prisma.users.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
 
     // Generate tokens
     const accessToken = `rct_${nanoid(32)}`;
     const refreshToken = `rcr_${nanoid(32)}`;
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const session: CLISession = {
-      user_id: mockUser.id,
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_at: expiresAt.toISOString(),
-      user: mockUser
-    };
-
-    // Store CLI session in database
-    await db.createCLISession({
-      user_id: mockUser.id,
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      device_name: 'CLI Device',
-      device_type: 'cli',
-      expires_at: expiresAt,
-      is_active: true
+    // Create CLI session
+    await prisma.cli_sessions.create({
+      data: {
+        id: nanoid(),
+        userId: user.id,
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        deviceName: 'CLI Device',
+        deviceType: 'cli',
+        expiresAt: expiresAt,
+        isActive: true
+      }
     });
 
     return NextResponse.json({
       success: true,
-      user_id: mockUser.id,
+      user_id: user.id,
       access_token: accessToken,
       refresh_token: refreshToken,
       expires_at: expiresAt.toISOString(),
-      user: mockUser
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        subscription_plan: user.subscription || 'free',
+        quota: {
+          requests_remaining: 1000,
+          requests_limit: 1000,
+          reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        }
+      }
     });
 
   } catch (error: any) {
@@ -526,7 +567,9 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
 
   try {
     // Find session by refresh token in database
-    const foundSession = await db.getCLISessionByToken(refresh_token);
+    const foundSession = await prisma.cli_sessions.findFirst({
+      where: { refreshToken: refresh_token }
+    });
 
     if (!foundSession) {
       return NextResponse.json({
@@ -540,13 +583,18 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
     const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     // Update session in database
-    await db.updateCLISession(foundSession.access_token, {
-      access_token: newAccessToken,
-      expires_at: newExpiresAt
+    await prisma.cli_sessions.update({
+      where: { id: foundSession.id },
+      data: {
+        accessToken: newAccessToken,
+        expiresAt: newExpiresAt
+      }
     });
     
     // Get updated user data
-    const user = await db.getUserById(foundSession.user_id);
+    const user = await prisma.users.findUnique({
+      where: { id: foundSession.userId }
+    });
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -562,8 +610,8 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
         id: user.id,
         email: user.email,
         name: user.name,
-        subscription_plan: user.subscription_plan,
-        quota: user.quota
+        subscription_plan: user.subscription,
+        quota: null
       }
     });
 
@@ -577,27 +625,30 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
 }
 
 /**
- * Generate HTML page for CLI authentication
+ * Generate HTML page that redirects to real login
  */
-function generateAuthPage(params: {
+function generateLoginRedirectPage(params: {
   authCode: string;
   redirectUri: string;
   state: string;
   scope: string;
   clientId: string;
 }): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const loginUrl = `${baseUrl}/auth/signin?redirect=${encodeURIComponent(`/auth/cli-callback?code=${params.authCode}&state=${params.state}&redirect_uri=${encodeURIComponent(params.redirectUri)}`)}`;
+  
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authorize CLI - Recoder.xyz</title>
+    <title>CLI Authentication - Recoder.xyz</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -620,7 +671,7 @@ function generateAuthPage(params: {
         .logo { 
             font-size: 28px; 
             font-weight: 800; 
-            color: #667eea; 
+            color: #3b82f6; 
             margin-bottom: 8px;
         }
         .subtitle {
@@ -640,96 +691,27 @@ function generateAuthPage(params: {
             line-height: 1.6;
             margin-bottom: 32px;
         }
-        .permissions { 
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 24px;
-            margin: 32px 0;
-            text-align: left;
-        }
-        .permissions-title {
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .permission { 
-            display: flex;
-            align-items: center;
-            margin: 12px 0;
-            color: #4b5563;
-            font-size: 14px;
-        }
-        .permission::before {
-            content: "✓";
-            color: #10b981;
-            font-weight: bold;
-            font-size: 16px;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-        .buttons {
-            display: flex;
-            gap: 16px;
-            margin-top: 32px;
-        }
         .btn {
-            flex: 1;
-            padding: 14px 24px;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-decoration: none;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
-        }
-        .btn-primary {
-            background: #667eea;
+            padding: 14px 32px;
+            background: #3b82f6;
             color: white;
-        }
-        .btn-primary:hover { 
-            background: #5a67d8; 
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-        .btn-secondary {
-            background: #f3f4f6;
-            color: #6b7280;
-            border: 1px solid #d1d5db;
-        }
-        .btn-secondary:hover { 
-            background: #e5e7eb; 
-            color: #374151;
-        }
-        .security-notice {
-            background: #fef3cd;
-            border: 1px solid #f59e0b;
-            color: #92400e;
-            padding: 16px;
+            text-decoration: none;
             border-radius: 10px;
-            margin: 24px 0;
-            font-size: 14px;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            margin: 16px 0;
         }
-        .footer {
-            margin-top: 32px;
-            padding-top: 24px;
-            border-top: 1px solid #e5e7eb;
-            font-size: 13px;
-            color: #9ca3af;
+        .btn:hover { 
+            background: #2563eb; 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
         .loader {
-            display: none;
             width: 20px;
             height: 20px;
             border: 2px solid transparent;
@@ -740,6 +722,13 @@ function generateAuthPage(params: {
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            font-size: 13px;
+            color: #9ca3af;
+        }
     </style>
 </head>
 <body>
@@ -747,102 +736,27 @@ function generateAuthPage(params: {
         <div class="logo">🚀 Recoder</div>
         <div class="subtitle">AI-Powered Development Platform</div>
         
-        <h1>Authorize CLI Access</h1>
+        <h1>CLI Authentication Required</h1>
         <p class="description">
-            The Recoder CLI is requesting access to your account to provide seamless 
-            code generation and project management.
+            To authorize the Recoder CLI, please sign in to your account.
+            You'll be redirected back to your CLI after authentication.
         </p>
         
-        <div class="permissions">
-            <div class="permissions-title">
-                🔐 Requested Permissions
-            </div>
-            <div class="permission">Generate and manage code projects</div>
-            <div class="permission">Access your account and subscription info</div>
-            <div class="permission">Sync usage quota and analytics</div>
-            <div class="permission">Enable cross-platform session management</div>
-        </div>
-
-        <div class="security-notice">
-            <span>⚠️</span>
-            <div>
-                <strong>Security Notice:</strong> Only authorize this request if you initiated it 
-                from your CLI application. This will redirect you back to your CLI.
-            </div>
-        </div>
-
-        <div class="buttons">
-            <button class="btn btn-primary" onclick="authorize()" id="authorizeBtn">
-                <span>Authorize CLI</span>
-                <div class="loader" id="loader"></div>
-            </button>
-            <button class="btn btn-secondary" onclick="deny()">
-                Cancel
-            </button>
-        </div>
+        <a href="${loginUrl}" class="btn" id="loginBtn">
+            <span>Sign In to Continue</span>
+        </a>
 
         <div class="footer">
-            This authorization connects your CLI to the recoder.xyz platform.<br>
-            You can revoke access anytime from your dashboard.
+            Redirecting to secure login page...<br>
+            Your CLI will be authorized after successful authentication.
         </div>
     </div>
 
     <script>
-        function showLoader(show) {
-            const btn = document.getElementById('authorizeBtn');
-            const loader = document.getElementById('loader');
-            const text = btn.querySelector('span');
-            
-            if (show) {
-                loader.style.display = 'block';
-                text.textContent = 'Authorizing...';
-                btn.disabled = true;
-                btn.style.opacity = '0.7';
-            } else {
-                loader.style.display = 'none';
-                text.textContent = 'Authorize CLI';
-                btn.disabled = false;
-                btn.style.opacity = '1';
-            }
-        }
-
-        function authorize() {
-            showLoader(true);
-            
-            // Simulate authentication process
-            setTimeout(() => {
-                const params = new URLSearchParams({
-                    code: '${params.authCode}',
-                    state: '${params.state}'
-                });
-                
-                // Set user ID in auth request for code exchange
-                fetch('/api/auth/cli-internal/set-user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        code: '${params.authCode}',
-                        user_id: 'demo-user-' + Math.random().toString(36).substr(2, 9)
-                    })
-                }).finally(() => {
-                    window.location.href = '${params.redirectUri}?' + params.toString();
-                });
-            }, 1500);
-        }
-
-        function deny() {
-            const params = new URLSearchParams({
-                error: 'access_denied',
-                error_description: 'User denied access',
-                state: '${params.state}'
-            });
-            window.location.href = '${params.redirectUri}?' + params.toString();
-        }
-
-        // Auto-focus for better UX
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('authorizeBtn').focus();
-        });
+        // Auto-redirect after 2 seconds if user doesn't click
+        setTimeout(() => {
+            window.location.href = '${loginUrl}';
+        }, 2000);
     </script>
 </body>
 </html>`;
