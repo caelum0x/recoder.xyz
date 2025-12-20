@@ -305,21 +305,25 @@ export class ChatHistoryDB {
     artifactId?: string;
     fileSnapshot?: Record<string, string>;
     projectId?: string;
+    source?: 'web' | 'cli';
+    cliVersion?: string;
   }): Promise<ChatSession> {
     // Check if session exists
     let session = await this.getSessionByUrlId(data.urlId);
 
     // Calculate file snapshot stats
     const fileCount = data.fileSnapshot ? Object.keys(data.fileSnapshot).length : 0;
-    const totalFileSize = data.fileSnapshot 
+    const totalFileSize = data.fileSnapshot
       ? Object.values(data.fileSnapshot).reduce((sum, content) => sum + content.length, 0)
       : 0;
 
-    // Prepare metadata with file snapshot
+    // Prepare metadata with file snapshot and source tracking
     const sessionMetadata = {
       fileSnapshot: data.fileSnapshot || {},
       fileCount,
       totalFileSize,
+      source: data.source || 'web', // Track source: 'web' or 'cli'
+      cliVersion: data.cliVersion, // Track CLI version if from CLI
       lastUpdated: new Date().toISOString(),
     };
 
@@ -451,6 +455,7 @@ export class ChatHistoryDB {
 
   /**
    * Get chat history list (backwards compatible with IndexedDB format)
+   * Enhanced to return full session data including metadata for source tracking
    */
   async getChatHistory(
     userId?: string,
@@ -459,9 +464,17 @@ export class ChatHistoryDB {
   ): Promise<Array<{
     id: string;
     urlId: string;
+    title?: string;
     description: string;
     timestamp: string;
     messageCount: number;
+    totalMessages: number;
+    lastMessageAt?: string;
+    createdAt: string;
+    updatedAt: string;
+    projectId?: string;
+    artifactId?: string;
+    metadata?: Record<string, any>;
   }>> {
     let sessions: ChatSession[];
 
@@ -476,9 +489,17 @@ export class ChatHistoryDB {
     return sessions.map((session) => ({
       id: session.id,
       urlId: session.urlId,
+      title: session.title,
       description: session.description || session.title || 'Untitled Chat',
       timestamp: session.updatedAt.toISOString(),
       messageCount: session.totalMessages,
+      totalMessages: session.totalMessages,
+      lastMessageAt: session.lastMessageAt?.toISOString(),
+      createdAt: session.createdAt.toISOString(),
+      updatedAt: session.updatedAt.toISOString(),
+      projectId: session.projectId,
+      artifactId: session.artifactId,
+      metadata: session.metadata,
     }));
   }
 }

@@ -94,7 +94,8 @@ async function saveChatToDatabase(
   desc?: string,
   artifactId?: string,
   fileSnapshot?: Record<string, string>,
-  projectId?: string
+  projectId?: string,
+  source?: 'web' | 'cli'
 ): Promise<boolean> {
   if (!USE_DATABASE) {
     console.log('⚠️ [saveChatToDatabase] Database saving disabled (USE_DATABASE=false)');
@@ -119,6 +120,7 @@ async function saveChatToDatabase(
         fileCount,
         descLength: desc?.length || 0,
         hasArtifact: !!artifactId,
+        source: source || 'web',
       });
 
       const payload = {
@@ -131,6 +133,7 @@ async function saveChatToDatabase(
         artifactId,
         fileSnapshot: fileSnapshot || {},
         projectId,
+        source: source || 'web',
       };
 
       console.log(`📤 [saveChatToDatabase] Sending request to /api/chat-history (attempt ${attempt})`);
@@ -529,13 +532,15 @@ export function useChatHistory() {
       const enhancedMessages = messages;
 
       // Try database first with file snapshot
+      // Always mark chats from recoder-web as 'web' source
       const dbSaved = await saveChatToDatabase(
         finalUrlId,
         enhancedMessages,
         finalDescription,
         firstArtifact?.id,
         fileSnapshot,
-        currentProjectId
+        currentProjectId,
+        'web' // Mark as web source
       );
 
       if (dbSaved) {
