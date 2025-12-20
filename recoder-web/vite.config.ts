@@ -57,7 +57,7 @@ export default defineConfig((config) => {
         // React - must be included to prevent runtime discovery
         'react-dom',
         'react-dom/client',
-        'react-dom/server',
+        // Note: react-dom/server is server-only, NOT a client dependency
         // Remix utilities
         'remix-utils/client-only',
         'remix-island',
@@ -152,8 +152,11 @@ export default defineConfig((config) => {
     },
     ssr: {
       target: 'node',
-      // Externalize only backend-specific packages
+      // Externalize backend-specific packages AND react-dom (for SSR)
+      // react-dom/server is a Node.js CJS module - must be external, not bundled
       external: [
+        'react-dom',
+        'react-dom/server',
         'knex',
         '@neondatabase/serverless',
         'pg',
@@ -163,6 +166,8 @@ export default defineConfig((config) => {
         '@modelcontextprotocol/sdk',
       ],
       // Don't externalize these in SSR - they need to be bundled
+      // NOTE: react-dom is intentionally NOT here - it must be external for SSR
+      // because react-dom/server is a Node.js CJS module that can't be bundled in ESM mode
       noExternal: [
         'remix-island',
         'set-cookie-parser',
@@ -176,7 +181,6 @@ export default defineConfig((config) => {
         'rehype-sanitize',
         'remark-gfm',
         'unist-util-visit',
-        'react-dom',
       ],
       resolve: {
         conditions: ['node'],
