@@ -12,23 +12,47 @@ dotenv.config();
 const docker = new Docker();
 const { app } = expressWs(express());
 
-// CORS and COEP headers for iframe embedding
-app.use(cors({ origin: '*', credentials: true }));
+// CORS headers - no restrictive COEP/COOP that block cross-origin
+app.use(cors({ 
+  origin: ['https://recoder.xyz', 'https://www.recoder.xyz', 'https://web.recoder.xyz', 'http://localhost:3000', 'http://localhost:5173'],
+  credentials: true 
+}));
 app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   next();
 });
 app.use(express.json({ limit: '50mb' }));
 
-// Container registry: projectId -> containerId
-const containers = new Map<string, { id: string; lastActive: number }>();
+// Container registry: projectId -> containerId + port
+const containers = new Map<string, { id: string; lastActive: number; port: number }>();
 
 const IMAGE_NAME = 'recoder-universal:latest';
-const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min
+const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 min
 const MEMORY_LIMIT = 1024 * 1024 * 1024; // 1GB
 const CPU_QUOTA = 100000; // 100% of 1 CPU
+
+// Port allocation - find free port by checking Docker
+async function allocatePort(): Promise<number> {
+  const containers = await docker.listContainers({ all: true });
+  const usedPorts = new Set<number>();
+  
+  for (const c of containers) {
+    for (const p of c.Ports || []) {
+      if (p.PublicPort) usedPorts.add(p.PublicPort);
+    }
+  }
+  
+  // Find first free port in range 10000-20000
+  for (let port = 10000; port < 20000; port++) {
+    if (!usedPorts.has(port) && !usedPorts.has(port + 1) && !usedPorts.has(port + 2)) {
+      return port;
+    }
+  }
+  throw new Error('No free ports available');
+}
 
 // Health check
 app.get('/health', (_, res) => {
@@ -45,20 +69,29 @@ app.post('/api/container', async (req, res) => {
     const existing = containers.get(projectId);
     if (existing) {
       existing.lastActive = Date.now();
-      return res.json({ containerId: existing.id, reused: true });
+      return res.json({ containerId: existing.id, reused: true, port: existing.port });
     }
 
-    // Create new container with security sandbox
+    // Allocate host port for preview
+    const hostPort = await allocatePort();
+
+    // Create new container with security sandbox and port mapping
     const container = await docker.createContainer({
       Image: IMAGE_NAME,
       Tty: true,
       OpenStdin: true,
       WorkingDir: '/workspace',
+      ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {} },
       HostConfig: {
         Memory: MEMORY_LIMIT,
         CpuPeriod: 100000,
         CpuQuota: CPU_QUOTA,
         NetworkMode: 'bridge',
+        PortBindings: {
+          '3000/tcp': [{ HostPort: String(hostPort) }],
+          '5173/tcp': [{ HostPort: String(hostPort + 1) }],
+          '8080/tcp': [{ HostPort: String(hostPort + 2) }],
+        },
         // Security sandbox
         ReadonlyRootfs: false,
         SecurityOpt: ['no-new-privileges'],
@@ -70,14 +103,14 @@ app.post('/api/container', async (req, res) => {
           { Name: 'nproc', Soft: 128, Hard: 256 }
         ],
       },
-      Labels: { projectId, createdAt: Date.now().toString() },
+      Labels: { projectId, createdAt: Date.now().toString(), hostPort: String(hostPort) },
     });
 
     await container.start();
-    containers.set(projectId, { id: container.id, lastActive: Date.now() });
+    containers.set(projectId, { id: container.id, lastActive: Date.now(), port: hostPort });
 
-    console.log(`✅ Container created: ${container.id.slice(0, 12)} for ${projectId}`);
-    res.json({ containerId: container.id, reused: false });
+    console.log(`✅ Container created: ${container.id.slice(0, 12)} for ${projectId} (port ${hostPort})`);
+    res.json({ containerId: container.id, reused: false, port: hostPort });
   } catch (err: any) {
     console.error('❌ Container create error:', err.message);
     res.status(500).json({ error: err.message });
@@ -119,6 +152,7 @@ app.post('/api/mount/:projectId', async (req, res) => {
 
 // Write file to container
 app.post('/api/file/:projectId', async (req, res) => {
+  console.log('📝 File write request:', req.params.projectId, req.body?.path);
   try {
     const { path, content } = req.body;
     const entry = containers.get(req.params.projectId);
@@ -138,6 +172,46 @@ app.post('/api/file/:projectId', async (req, res) => {
     await execCommand(container, `echo "${b64}" | base64 -d > "${path}"`);
 
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch write multiple files at once (much faster than individual writes)
+app.post('/api/files/:projectId/batch', async (req, res) => {
+  try {
+    const { files } = req.body; // Array of { path, content }
+    const entry = containers.get(req.params.projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+
+    // Create a tar archive with all files and extract in one command
+    const tarData: string[] = [];
+    const dirs = new Set<string>();
+    
+    for (const file of files) {
+      const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+      if (dir) dirs.add(dir);
+    }
+    
+    // Create all directories first in one command
+    if (dirs.size > 0) {
+      await execCommand(container, `mkdir -p ${Array.from(dirs).map(d => `"${d}"`).join(' ')}`);
+    }
+    
+    // Write files in parallel batches of 10
+    const batchSize = 10;
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (file: { path: string; content: string }) => {
+        const b64 = Buffer.from(file.content).toString('base64');
+        await execCommand(container, `echo "${b64}" | base64 -d > "${file.path}"`);
+      }));
+    }
+
+    res.json({ success: true, count: files.length });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -180,14 +254,21 @@ app.get('/api/files/:projectId', async (req, res) => {
 // Execute command in container
 app.post('/api/exec/:projectId', async (req, res) => {
   try {
-    const { command, cwd = '/workspace' } = req.body;
+    const { command, cwd = '/workspace', background = false } = req.body;
     const entry = containers.get(req.params.projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
     const container = docker.getContainer(entry.id);
+    
+    // For background commands (like dev servers), start and return immediately
+    if (background) {
+      // Use nohup to keep process running
+      execCommand(container, `cd "${cwd}" && nohup ${command} > /tmp/dev.log 2>&1 &`).catch(() => {});
+      return res.json({ output: 'Started in background', background: true });
+    }
+    
     const output = await execCommand(container, `cd "${cwd}" && ${command}`);
-
     res.json({ output });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -196,7 +277,9 @@ app.post('/api/exec/:projectId', async (req, res) => {
 
 // Terminal WebSocket
 app.ws('/terminal/:projectId', async (ws, req) => {
-  const entry = containers.get(req.params.projectId);
+  const { projectId } = req.params;
+  
+  const entry = containers.get(projectId);
   if (!entry) {
     ws.close(1008, 'Container not found');
     return;
@@ -207,28 +290,49 @@ app.ws('/terminal/:projectId', async (ws, req) => {
 
   try {
     const exec = await container.exec({
-      Cmd: ['/bin/bash'],
+      Cmd: ['/bin/bash', '--rcfile', '/dev/null', '-i'],
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
       Tty: true,
+      WorkingDir: '/workspace',
+      Env: ['PS1=$ ', 'TERM=xterm-256color', 'BASH_ENV='],
     });
 
-    const stream = await exec.start({ hijack: true, stdin: true }) as Duplex;
+    const stream = await exec.start({ hijack: true, stdin: true, Tty: true }) as Duplex;
 
+    // With TTY=true, Docker sends raw data without multiplexing headers
     stream.on('data', (chunk: Buffer) => {
       if (ws.readyState === ws.OPEN) {
-        ws.send(chunk.toString());
+        ws.send(chunk);
       }
     });
 
-    ws.on('message', (data) => {
+    ws.on('message', (data: Buffer | string) => {
       entry.lastActive = Date.now();
-      stream.write(data.toString());
+      // Data from browser WebSocket comes as Buffer
+      if (Buffer.isBuffer(data)) {
+        stream.write(data);
+      } else if (typeof data === 'string') {
+        stream.write(data);
+      } else {
+        stream.write(Buffer.from(data as any));
+      }
     });
 
-    ws.on('close', () => stream.end());
-    stream.on('end', () => ws.close());
+    ws.on('close', () => {
+      stream.end();
+    });
+    
+    stream.on('end', () => {
+      if (ws.readyState === ws.OPEN) {
+        ws.close(1000, 'Stream ended');
+      }
+    });
+    
+    stream.on('error', (err) => {
+      console.error('Terminal stream error:', err.message);
+    });
   } catch (err: any) {
     console.error('Terminal error:', err.message);
     ws.close(1011, err.message);
@@ -313,6 +417,25 @@ setInterval(async () => {
     }
   }
 }, 60000); // Check every minute
+
+// Startup cleanup - remove old recoder containers
+(async () => {
+  try {
+    const allContainers = await docker.listContainers({ all: true });
+    for (const c of allContainers) {
+      if (c.Image === IMAGE_NAME) {
+        try {
+          const container = docker.getContainer(c.Id);
+          await container.stop().catch(() => {});
+          await container.remove().catch(() => {});
+          console.log(`🧹 Startup cleanup: removed ${c.Id.slice(0, 12)}`);
+        } catch {}
+      }
+    }
+  } catch (e) {
+    console.error('Startup cleanup failed:', e);
+  }
+})();
 
 // Import and setup preview proxy
 import { setupPreviewProxy } from './preview';
