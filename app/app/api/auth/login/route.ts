@@ -133,12 +133,14 @@ export async function POST(request: NextRequest) {
     });
 
     // Set JWT token as HTTP-only cookie
+    // IMPORTANT: domain must be .recoder.xyz for cross-subdomain sharing with web.recoder.xyz
     response.cookies.set('auth-token', jwtToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60, // 30 days
       path: '/',
+      domain: process.env.NODE_ENV === 'production' ? '.recoder.xyz' : undefined,
     });
 
     return response;

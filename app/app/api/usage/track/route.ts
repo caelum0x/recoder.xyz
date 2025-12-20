@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
       tokensUsed, 
       cost,
       duration,
+      platform = 'web', // Default to web, CLI should explicitly set 'cli'
       success = true,
       errorMessage 
     } = await request.json();
@@ -19,11 +20,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Detect platform from headers if not explicitly provided
+    let detectedPlatform = platform;
+    if (!platform || platform === 'web') {
+      const userAgent = request.headers.get('user-agent') || '';
+      const referer = request.headers.get('referer') || '';
+      
+      // Check if request is from CLI
+      if (userAgent.includes('recoder-cli') || userAgent.includes('recoder-code')) {
+        detectedPlatform = 'cli';
+      } else if (referer.includes('web.recoder.xyz') || referer.includes('localhost:5173')) {
+        detectedPlatform = 'web';
+      }
+    }
+
     const updatedQuota = await trackUsage(userId, sessionId, requestType, {
       modelUsed,
       tokensUsed,
       cost,
       duration,
+      platform: detectedPlatform,
       success,
       errorMessage,
     });
@@ -31,6 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       quota: updatedQuota,
+      platform: detectedPlatform, // Return detected platform for confirmation
     });
   } catch (error: any) {
     console.error('Track usage error:', error);
