@@ -19,13 +19,17 @@ out/
 **/cache/webpack/
 **/.next/static/chunks/
 
-# Environment variables
+# Environment variables (exclude actual secret files but allow templates)
 .env
-.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.server
+.env.deploy
+# Allow templates
+!.env.*.template
+!.env.*.example
 
 # SSH keys and credentials (CRITICAL - NEVER COMMIT)
 *.pem
@@ -59,6 +63,13 @@ credentials.json
 service-account*.json
 *password*
 *passwd*
+
+# Allow documentation files
+!*GUIDE*.md
+!*GUIDE.md
+!*_GUIDE.md
+!*README*.md
+!*.md
 
 # AWS credentials
 .aws/

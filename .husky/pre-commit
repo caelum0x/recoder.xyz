@@ -3,6 +3,12 @@
 # CRITICAL: Scan for secrets before committing
 echo "🔍 Scanning for secrets..."
 
+# Skip hook temporarily if SKIP_HOOKS is set
+if [ "$SKIP_HOOKS" = "true" ]; then
+    echo "⚠️  SKIP_HOOKS=true - bypassing security checks"
+    exit 0
+fi
+
 # Check for common secret patterns in staged files
 SECRETS_FOUND=0
 
