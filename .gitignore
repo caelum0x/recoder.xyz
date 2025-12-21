@@ -291,7 +291,22 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
+
 # Local Netlify folder
 .netlify
-*.pem
-*.private-key.pem
+
+# Server configuration files with secrets
+.env.server
+.env.deploy
+*deploy-secrets*
+
+# Scripts with embedded passwords/secrets (use templates instead)
+deploy-fix.sh
+fresh-start.sh
+cleanup-restart.sh
+cleanup-and-start.sh
+hetzner-deploy.sh
+hetzner-setup.sh
+diagnose.sh
+deploy-all.sh
+check-errors.sh
