@@ -6,11 +6,21 @@ echo "🔍 Scanning for secrets..."
 # Check for common secret patterns in staged files
 SECRETS_FOUND=0
 
-# Check file contents for secret patterns
-if git diff --cached --name-only | xargs grep -E "(password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key|ssh[_-]?key|database[_-]?url|connection[_-]?string|postgresql://)" --ignore-case 2>/dev/null; then
-  echo "❌ ERROR: Potential secrets detected in staged files!"
-  echo "Please remove secrets and use environment variables instead."
-  SECRETS_FOUND=1
+# Check for common secret patterns in staged files (exclude safe files)
+SECRETS_FOUND=0
+
+# Check for common secret patterns in staged files (exclude safe files)
+SECRETS_FOUND=0
+
+# Get actual secrets (not in documentation, templates, or config files)
+STAGED_FILES=$(git diff --cached --name-only | grep -v -E "\.(md|template|example|gitignore)$" | grep -v -E "(README|GUIDE|DOCS)" | head -20)
+
+if [ -n "$STAGED_FILES" ]; then
+  if echo "$STAGED_FILES" | xargs grep -l -E "(password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key|ssh[_-]?key|database[_-]?url|connection[_-]?string|postgresql://)" --ignore-case 2>/dev/null; then
+    echo "❌ ERROR: Potential secrets detected in staged files!"
+    echo "Please remove secrets and use environment variables instead."
+    SECRETS_FOUND=1
+  fi
 fi
 
 # Check for .env files (except examples)

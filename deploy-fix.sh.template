@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Deploy Fix Script Template
+# Instructions:
+# 1. Copy this to deploy-fix.sh
+# 2. Source your environment variables: source .env.server
+# 3. Make sure SERVER_IP, SERVER_PASS are set
+
+if [ -z "$SERVER_IP" ] || [ -z "$SERVER_PASS" ]; then
+    echo "❌ Error: SERVER_IP and SERVER_PASS environment variables must be set"
+    echo "💡 Create .env.server from .env.server.template and run:"
+    echo "   source .env.server"
+    exit 1
+fi
+
+echo "🚀 Deploying to server: $SERVER_IP"
+
+# Copy ecosystem config
+sshpass -p "$SERVER_PASS" scp -o StrictHostKeyChecking=no ecosystem.config.js root@$SERVER_IP:/home/recoder/recoder.xyz/
+
+# Deploy
+sshpass -p "$SERVER_PASS" ssh -o StrictHostKeyChecking=no root@$SERVER_IP << 'EOF'
+cd /home/recoder/recoder.xyz
+pm2 stop all
+pm2 delete all
+pm2 start ecosystem.config.js
+EOF
+
+echo "✅ Deploy completed"
