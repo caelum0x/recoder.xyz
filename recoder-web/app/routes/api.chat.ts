@@ -44,6 +44,9 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
+  // Support both Cloudflare and Node.js environments
+  const env = (context as any)?.cloudflare?.env || process.env;
+
   // Import required modules
   const { detectAndPrepareStarter } = await import('~/lib/.server/llm/starter-injector');
   const { createDirectStarterResponse } = await import('~/lib/.server/llm/starter-injector');
@@ -274,7 +277,7 @@ Create the actual application with all the features, components, and functionali
     // Load MCP tools
     console.log('🔧 Loading MCP tools...');
     const { loadMCPTools } = await import('~/lib/.server/mcp/tools-loader');
-    const mcpToolsPrompt = await loadMCPTools(context.cloudflare.env.DB);
+    const mcpToolsPrompt = await loadMCPTools((env as any).DB);
     
     if (mcpToolsPrompt) {
       console.log('   ✅ MCP tools loaded');
@@ -298,7 +301,7 @@ Create the actual application with all the features, components, and functionali
 
     // Get API key (User's BYOK > Environment variable)
     const { getAPIKey } = await import('~/lib/.server/llm/api-key');
-    const apiKey = await getAPIKey(context.cloudflare.env, request, provider);
+    const apiKey = await getAPIKey(env, request, provider);
 
     if (!apiKey) {
       // User hasn't configured API key - return helpful error

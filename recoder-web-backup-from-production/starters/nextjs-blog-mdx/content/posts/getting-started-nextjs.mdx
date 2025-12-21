@@ -1,0 +1,88 @@
+---
+title: "Getting Started with Next.js 14"
+date: "2025-01-20"
+category: "tutorial"
+tags: ["nextjs", "react", "tutorial"]
+excerpt: "Learn the basics of Next.js 14 and build your first application with the App Router."
+author: "Your Name"
+---
+
+# Getting Started with Next.js 14
+
+Next.js is a powerful React framework that makes building web applications easier and faster. In this tutorial, we'll explore the basics of Next.js 14.
+
+## What is Next.js?
+
+Next.js is a React framework that provides:
+
+- **Server-Side Rendering (SSR)**: Render pages on the server
+- **Static Site Generation (SSG)**: Pre-render pages at build time
+- **API Routes**: Build API endpoints within your app
+- **File-based Routing**: Pages based on file structure
+- **Automatic Code Splitting**: Optimized bundle sizes
+
+## Installation
+
+Create a new Next.js app:
+
+```bash
+npx create-next-app@latest my-app
+cd my-app
+npm run dev
+```
+
+## App Router
+
+Next.js 14 uses the App Router located in the `app/` directory:
+
+```
+app/
+├── layout.tsx      # Root layout
+├── page.tsx        # Home page
+└── blog/
+    └── page.tsx    # Blog page
+```
+
+## Creating a Page
+
+Create `app/about/page.tsx`:
+
+```tsx
+export default function About() {
+  return (
+    <div>
+      <h1>About Us</h1>
+      <p>Welcome to our site!</p>
+    </div>
+  )
+}
+```
+
+## Data Fetching
+
+Fetch data in server components:
+
+```tsx
+async function getData() {
+  const res = await fetch('https://api.example.com/posts')
+  return res.json()
+}
+
+export default async function Blog() {
+  const posts = await getData()
+
+  return (
+    <div>
+      {posts.map(post => (
+        <div key={post.id}>
+          <h2>{post.title}</h2>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+## Conclusion
+
+Next.js 14 makes building React applications easier with its powerful features and excellent developer experience. Start building today!

@@ -1,0 +1,98 @@
+---
+title: "Understanding React Hooks"
+date: "2025-01-25"
+category: "tutorial"
+tags: ["react", "hooks", "javascript"]
+excerpt: "A comprehensive guide to React Hooks including useState, useEffect, and custom hooks."
+author: "Your Name"
+---
+
+# Understanding React Hooks
+
+React Hooks revolutionized how we write React components. Let's explore the most important hooks and how to use them effectively.
+
+## What are Hooks?
+
+Hooks are functions that let you "hook into" React features from function components. They let you use state and other React features without writing a class.
+
+## useState
+
+The most basic hook for managing state:
+
+```jsx
+import { useState } from 'react'
+
+function Counter() {
+  const [count, setCount] = useState(0)
+
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </div>
+  )
+}
+```
+
+## useEffect
+
+Perform side effects in your components:
+
+```jsx
+import { useEffect, useState } from 'react'
+
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    fetch(`/api/users/${userId}`)
+      .then(res => res.json())
+      .then(data => setUser(data))
+  }, [userId]) // Run when userId changes
+
+  return <div>{user?.name}</div>
+}
+```
+
+## Custom Hooks
+
+Create reusable logic:
+
+```jsx
+function useLocalStorage(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    const item = localStorage.getItem(key)
+    return item ? JSON.parse(item) : initialValue
+  })
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value))
+  }, [key, value])
+
+  return [value, setValue]
+}
+
+// Usage
+function App() {
+  const [name, setName] = useLocalStorage('name', '')
+
+  return (
+    <input
+      value={name}
+      onChange={e => setName(e.target.value)}
+    />
+  )
+}
+```
+
+## Rules of Hooks
+
+1. Only call hooks at the top level
+2. Only call hooks from React functions
+3. Use the ESLint plugin to enforce rules
+
+## Conclusion
+
+React Hooks provide a powerful way to build components with less code and better reusability. Start using them in your projects today!
