@@ -21,6 +21,8 @@ export default defineConfig((config) => {
       stringify: true,
     },
     resolve: {
+      // Force single React instance to prevent "Invalid hook call" errors
+      dedupe: ['react', 'react-dom'],
       alias: {
         'remix-island': resolve(__dirname, '../node_modules/.pnpm/remix-island@0.2.0_@remix-run+react@2.17.2_react-dom@18.3.1_react@18.3.1__react@18.3.1__1de70fbddf8fc2777d4dadc638f2e70d/node_modules/remix-island/dist/index.mjs'),
         // Skip ajv JSON schema files that cause build issues
@@ -45,7 +47,7 @@ export default defineConfig((config) => {
     },
     optimizeDeps: {
       // Force optimization on startup to prevent runtime discovery
-      force: isDev ? false : false,
+      force: isDev ? true : false,
       // Increase the optimization timeout
       esbuildOptions: {
         // Keep names for better debugging
@@ -54,10 +56,10 @@ export default defineConfig((config) => {
       // Explicitly include ALL problematic dependencies that cause 504 errors
       // We must include everything to prevent runtime discovery and re-optimization
       include: [
-        // React - must be included to prevent runtime discovery
+        // React - optimize but dedupe to ensure single instance
+        'react',
         'react-dom',
         'react-dom/client',
-        // Note: react-dom/server is server-only, NOT a client dependency
         // Remix utilities
         'remix-utils/client-only',
         'remix-island',
@@ -152,9 +154,10 @@ export default defineConfig((config) => {
     },
     ssr: {
       target: 'node',
-      // Externalize backend-specific packages AND react-dom (for SSR)
-      // react-dom/server is a Node.js CJS module - must be external, not bundled
+      // Externalize React and backend-specific packages for SSR
+      // React must be external in SSR to use Node.js CJS modules properly
       external: [
+        'react',
         'react-dom',
         'react-dom/server',
         'knex',
@@ -166,8 +169,6 @@ export default defineConfig((config) => {
         '@modelcontextprotocol/sdk',
       ],
       // Don't externalize these in SSR - they need to be bundled
-      // NOTE: react-dom is intentionally NOT here - it must be external for SSR
-      // because react-dom/server is a Node.js CJS module that can't be bundled in ESM mode
       noExternal: [
         'remix-island',
         'set-cookie-parser',
@@ -212,6 +213,9 @@ export default defineConfig((config) => {
         buildEnd: async () => {
           // Build completed
         },
+        // Provide context for dev mode
+        buildDirectory: 'build',
+        serverBuildFile: 'index.js',
       }),
       UnoCSS(),
       tsconfigPaths({
@@ -320,7 +324,7 @@ function fix504ErrorsPlugin() {
         optimizationComplete = false;
 
         // Wait for Vite's optimizer to finish
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Try to trigger optimization by pre-loading modules
         try {
@@ -330,7 +334,7 @@ function fix504ErrorsPlugin() {
         }
 
         // Wait additional time for all optimizations to settle
-        await new Promise(resolve => setTimeout(resolve, 7000));
+        await new Promise(resolve => setTimeout(resolve, 15000));
 
         optimizationComplete = true;
         isReoptimizing = false;
@@ -412,6 +416,10 @@ function chrome129IssuePlugin() {
     name: 'chrome129IssuePlugin',
     configureServer(server: ViteDevServer) {
       server.middlewares.use((req, res, next) => {
+        // Add cross-origin isolation headers for WebContainer support
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+
         const raw = req.headers['user-agent']?.match(/Chrom(e|ium)\/([0-9]+)\./);
 
         if (raw) {
@@ -426,7 +434,7 @@ function chrome129IssuePlugin() {
             return;
           }
         }
-        
+
         // Add cache control headers for development to prevent 504 errors
         if (req.url?.includes('/@vite/') || req.url?.includes('/node_modules/')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

@@ -8,7 +8,7 @@ import { getDodoPayClient } from '~/lib/.server/payment/dodopay';
 import { getDatabase } from '~/lib/.server/db/client';
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = context.cloudflare.env as Env;
+  const env = (context as any)?.cloudflare?.env || process.env as Env;
   
   try {
     // Get raw body and signature

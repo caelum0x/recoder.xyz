@@ -13,6 +13,13 @@ console.log('🔧 ENV - DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT 
 const BUILD_DIR = join(__dirnameLocal, 'build');
 const app = express();
 
+// Add cross-origin isolation headers for WebContainer support
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  next();
+});
+
 app.use(express.static(join(BUILD_DIR, 'client'), {
   immutable: true,
   maxAge: '1y',

@@ -10,7 +10,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     return json({ error: 'Project ID required' }, { status: 400 });
   }
 
-  const db = getDatabase(context.cloudflare.env);
+  const db = getDatabase((context as any)?.cloudflare?.env || process.env);
 
   try {
     // Get project files from database

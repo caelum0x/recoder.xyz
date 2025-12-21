@@ -8,7 +8,7 @@ import { getDatabase } from '~/lib/.server/db/client';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
-    const env = context.cloudflare.env as Env;
+    const env = (context as any)?.cloudflare?.env || process.env as Env;
     const userId = request.headers.get('x-user-id');
     
     if (!userId) {
@@ -30,7 +30,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   try {
-    const env = context.cloudflare.env as Env;
+    const env = (context as any)?.cloudflare?.env || process.env as Env;
     const userId = request.headers.get('x-user-id');
     const url = new URL(request.url);
     const action = url.searchParams.get('action');

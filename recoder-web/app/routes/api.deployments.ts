@@ -9,7 +9,7 @@ import { createDeploymentManager } from '~/lib/.server/deployment/deployment-man
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   try {
-    const manager = createDeploymentManager(context.cloudflare.env);
+    const manager = createDeploymentManager((context as any)?.cloudflare?.env || process.env);
     
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
@@ -51,12 +51,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Create environment with user-provided tokens
     const envWithTokens = {
-      ...context.cloudflare.env,
+      ...(context as any)?.cloudflare?.env || process.env,
       // Add user tokens to environment
-      VERCEL_TOKEN: platform === 'vercel' ? apiToken : context.cloudflare.env.VERCEL_TOKEN,
-      NETLIFY_TOKEN: platform === 'netlify' ? apiToken : context.cloudflare.env.NETLIFY_TOKEN,
-      CLOUDFLARE_API_TOKEN: platform === 'cloudflare' && apiToken?.token ? apiToken.token : context.cloudflare.env.CLOUDFLARE_API_TOKEN,
-      CLOUDFLARE_ACCOUNT_ID: platform === 'cloudflare' && apiToken?.accountId ? apiToken.accountId : context.cloudflare.env.CLOUDFLARE_ACCOUNT_ID,
+      VERCEL_TOKEN: platform === 'vercel' ? apiToken : (context as any)?.cloudflare?.env || process.env.VERCEL_TOKEN,
+      NETLIFY_TOKEN: platform === 'netlify' ? apiToken : (context as any)?.cloudflare?.env || process.env.NETLIFY_TOKEN,
+      CLOUDFLARE_API_TOKEN: platform === 'cloudflare' && apiToken?.token ? apiToken.token : (context as any)?.cloudflare?.env || process.env.CLOUDFLARE_API_TOKEN,
+      CLOUDFLARE_ACCOUNT_ID: platform === 'cloudflare' && apiToken?.accountId ? apiToken.accountId : (context as any)?.cloudflare?.env || process.env.CLOUDFLARE_ACCOUNT_ID,
     };
 
     const manager = createDeploymentManager(envWithTokens);

@@ -15,7 +15,8 @@ import { createChatHistoryDB } from '~/lib/.server/db/chat-history-db';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
-    const env = context.cloudflare.env;
+    // Support both Cloudflare and Node.js environments
+    const env = (context as any)?.cloudflare?.env || process.env;
     const url = new URL(request.url);
 
     const userId = url.searchParams.get('userId');
@@ -96,7 +97,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   try {
-    const env = context.cloudflare.env;
+    // Support both Cloudflare and Node.js environments
+    const env = (context as any)?.cloudflare?.env || process.env;
     const chatDB = createChatHistoryDB(env);
     const url = new URL(request.url);
 
