@@ -64,7 +64,7 @@ importers:
         version: 0.446.0(react@19.1.1)
       next-auth:
         specifier: ^4.24.11
-        version: 4.24.11(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        version: 4.24.11(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       ora:
         specifier: ^5.4.1
         version: 5.4.1
@@ -146,22 +146,22 @@ importers:
         version: 1.0.2
       '@next-auth/prisma-adapter':
         specifier: ^1.0.7
-        version: 1.0.7(@prisma/client@6.19.0(prisma@6.17.1(typescript@5.9.2))(typescript@5.9.2))(next-auth@4.24.11(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@19.1.2(react@19.1.2))(react@19.1.2))
+        version: 1.0.7(@prisma/client@6.19.0(prisma@6.17.1(typescript@5.9.2))(typescript@5.9.2))(next-auth@4.24.11(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       '@prisma/client':
         specifier: ^6.18.0
         version: 6.19.0(prisma@6.17.1(typescript@5.9.2))(typescript@5.9.2)
       '@radix-ui/react-label':
         specifier: ^2.1.7
-        version: 2.1.7(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+        version: 2.1.7(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@radix-ui/react-slot':
         specifier: ^1.2.3
-        version: 1.2.3(@types/react@19.2.7)(react@19.1.2)
+        version: 1.2.3(@types/react@19.2.7)(react@18.3.1)
       '@sendgrid/mail':
         specifier: ^8.1.6
         version: 8.1.6
       '@sentry/nextjs':
         specifier: ^10.27.0
-        version: 10.27.0(@opentelemetry/context-async-hooks@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(encoding@0.1.13)(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(react@19.1.2)(webpack@5.102.1(esbuild@0.25.9))
+        version: 10.27.0(@opentelemetry/context-async-hooks@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(encoding@0.1.13)(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(react@18.3.1)(webpack@5.102.1(esbuild@0.25.9))
       '@sentry/node':
         specifier: ^10.27.0
         version: 10.27.0
@@ -185,7 +185,7 @@ importers:
         version: 3.0.2
       better-auth:
         specifier: ^1.3.28
-        version: 1.3.34(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+        version: 1.3.34(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -195,12 +195,15 @@ importers:
       dodopayments:
         specifier: ^2.6.0
         version: 2.6.1
+      ioredis:
+        specifier: ^5.8.2
+        version: 5.8.2
       jsonwebtoken:
         specifier: ^9.0.0
         version: 9.0.2
       lucide-react:
         specifier: ^0.400.0
-        version: 0.400.0(react@19.1.2)
+        version: 0.400.0(react@18.3.1)
       mjml:
         specifier: ^4.16.1
         version: 4.16.1(encoding@0.1.13)
@@ -208,11 +211,11 @@ importers:
         specifier: ^5.1.6
         version: 5.1.6
       next:
-        specifier: 15.5.7
-        version: 15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3)
+        specifier: ^15.5.9
+        version: 15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3)
       next-auth:
         specifier: ^4.24.11
-        version: 4.24.11(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+        version: 4.24.11(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       nodemailer:
         specifier: ^7.0.9
         version: 7.0.9
@@ -230,13 +233,13 @@ importers:
         version: 1.5.4
       qrcode.react:
         specifier: ^4.2.0
-        version: 4.2.0(react@19.1.2)
+        version: 4.2.0(react@18.3.1)
       react:
-        specifier: ^19.1.2
-        version: 19.1.2
+        specifier: ^18.3.1
+        version: 18.3.1
       react-dom:
-        specifier: ^19.1.2
-        version: 19.1.2(react@19.1.2)
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
       standardwebhooks:
         specifier: ^1.0.0
         version: 1.0.0
@@ -258,7 +261,7 @@ importers:
         version: 6.9.1
       '@testing-library/react':
         specifier: ^16.3.0
-        version: 16.3.0(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+        version: 16.3.0(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -3969,6 +3972,9 @@ packages:
   '@ioredis/commands@1.3.1':
     resolution: {integrity: sha512-bYtU8avhGIcje3IhvF9aSjsa5URMZBHnwKtOvXsT4sfYy9gppW11gLPT/9oNqlJZD47yPKveQFTAFWpHjKvUoQ==}
 
+  '@ioredis/commands@1.4.0':
+    resolution: {integrity: sha512-aFT2yemJJo+TZCmieA7qnYGQooOS7QfNmYrzGtsYd3g9j5iDP8AimYYAesf79ohjbLG12XxC4nG5DyEnC88AsQ==}
+
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
     engines: {node: '>=12'}
@@ -4517,8 +4523,8 @@ packages:
       '@prisma/client': '>=2.26.0 || >=3'
       next-auth: ^4
 
-  '@next/env@15.5.7':
-    resolution: {integrity: sha512-4h6Y2NyEkIEN7Z8YxkA27pq6zTkS09bUSYC0xjd0NpwFxjnIKeZEeH591o5WECSmjpUhLn3H2QLJcDye3Uzcvg==}
+  '@next/env@15.5.9':
+    resolution: {integrity: sha512-4GlTZ+EJM7WaW2HEZcyU317tIQDjkQIyENDLxYJfSWlfqguN+dHkZgyQTV/7ykvobU7yEH5gKvreNrH4B6QgIg==}
 
   '@next/eslint-plugin-next@16.1.0':
     resolution: {integrity: sha512-sooC/k0LCF4/jLXYHpgfzJot04lZQqsttn8XJpTguP8N3GhqXN3wSkh68no2OcZzS/qeGwKDFTqhZ8WofdXmmQ==}
@@ -9357,12 +9363,6 @@ packages:
   caniuse-lite@1.0.30001741:
     resolution: {integrity: sha512-QGUGitqsc8ARjLdgAfxETDhRbJ0REsP6O3I96TAth/mVjh2cYzN2u+3AzPP3aVSm2FehEItaJw1xd+IGBXWeSw==}
 
-  caniuse-lite@1.0.30001757:
-    resolution: {integrity: sha512-r0nnL/I28Zi/yjk1el6ilj27tKcdjLsNqAOZr0yVjWPrSQyHgKI2INaEWw21bAQSv2LXRt1XuCS/GomNpWOxsQ==}
-
-  caniuse-lite@1.0.30001759:
-    resolution: {integrity: sha512-Pzfx9fOKoKvevQf8oCXoyNRQ5QyxJj+3O0Rqx2V5oxT61KGx8+n6hV/IUyJeifUci2clnmmKVpvtiqRzgiWjSw==}
-
   caniuse-lite@1.0.30001761:
     resolution: {integrity: sha512-JF9ptu1vP2coz98+5051jZ4PwQgd2ni8A+gYSN7EA7dPKIMf0pDlSUxhdmVOaV3/fYK5uWBkgSXJaRLr4+3A6g==}
 
@@ -12351,6 +12351,10 @@ packages:
     resolution: {integrity: sha512-NUcA93i1lukyXU+riqEyPtSEkyFq8tX90uL659J+qpCZ3rEdViB/APC58oAhIh3+bJln2hzdlZbBZsGNrlsR8g==}
     engines: {node: '>=12.22.0'}
 
+  ioredis@5.8.2:
+    resolution: {integrity: sha512-C6uC+kleiIMmjViJINWk80sOQw5lEzse1ZmvD+S/s8p8CWapftSaC+kocGTx6xrbrJ4WmYQGC08ffHLr6ToR6Q==}
+    engines: {node: '>=12.22.0'}
+
   ip-address@10.0.1:
     resolution: {integrity: sha512-NWv9YLW4PoW2B7xtzaS3NCot75m6nK7Icdv0o3lfMceJVRfSoQwqD4wEH5rLwoKJwUiZ/rfpiVBhnaF0FK4HoA==}
     engines: {node: '>= 12'}
@@ -14567,10 +14571,9 @@ packages:
       nodemailer:
         optional: true
 
-  next@15.5.7:
-    resolution: {integrity: sha512-+t2/0jIJ48kUpGKkdlhgkv+zPTEOoXyr60qXe68eB/pl3CMJaLeIGjzp5D6Oqt25hCBiBTt8wEeeAzfJvUKnPQ==}
+  next@15.5.9:
+    resolution: {integrity: sha512-agNLK89seZEtC5zUHwtut0+tNrc0Xw4FT/Dg+B/VLEo9pAcS9rtTKpek3V6kVcVwsB2YlqMaHdfZL4eLEVYuCg==}
     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
-    deprecated: This version has a security vulnerability. Please upgrade to a patched version. See https://nextjs.org/blog/security-update-2025-12-11 for more details.
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.1.0
@@ -15909,11 +15912,6 @@ packages:
     peerDependencies:
       react: ^19.1.1
 
-  react-dom@19.1.2:
-    resolution: {integrity: sha512-dEoydsCp50i7kS1xHOmPXq4zQYoGWedUsvqv9H6zdif2r7yLHygyfP9qou71TulRN0d6ng9EbRVsQhSqfUc19g==}
-    peerDependencies:
-      react: ^19.1.2
-
   react-hot-toast@2.6.0:
     resolution: {integrity: sha512-bH+2EBMZ4sdyou/DPrfgIouFpcRLCJ+HoCA32UoAYHn6T3Ur5yfcDCeSr5mwldl6pFOsiocmrXMuoCJ1vV8bWg==}
     engines: {node: '>=10'}
@@ -16013,10 +16011,6 @@ packages:
 
   react@19.1.1:
     resolution: {integrity: sha512-w8nqGImo45dmMIfljjMwOGtbmC/mk4CMYhWIicdSflH91J9TyCyczcPFXJzrZ/ZXcgGRFeP6BU0BEJTw6tZdfQ==}
-    engines: {node: '>=0.10.0'}
-
-  react@19.1.2:
-    resolution: {integrity: sha512-MdWVitvLbQULD+4DP8GYjZUrepGW7d+GQkNVqJEzNxE+e9WIa4egVFE/RDfVb1u9u/Jw7dNMmPB4IqxzbFYJ0w==}
     engines: {node: '>=0.10.0'}
 
   read-cache@1.0.0:
@@ -21139,7 +21133,7 @@ snapshots:
       '@babel/types': 7.28.4
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
-      debug: 4.4.1(supports-color@5.5.0)
+      debug: 4.4.3(supports-color@8.1.1)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -21520,7 +21514,7 @@ snapshots:
       '@babel/parser': 7.28.4
       '@babel/template': 7.27.2
       '@babel/types': 7.28.4
-      debug: 4.4.1(supports-color@5.5.0)
+      debug: 4.4.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -23118,6 +23112,8 @@ snapshots:
 
   '@ioredis/commands@1.3.1': {}
 
+  '@ioredis/commands@1.4.0': {}
+
   '@isaacs/cliui@8.0.2':
     dependencies:
       string-width: 5.1.2
@@ -24208,12 +24204,12 @@ snapshots:
       - rollup
       - supports-color
 
-  '@next-auth/prisma-adapter@1.0.7(@prisma/client@6.19.0(prisma@6.17.1(typescript@5.9.2))(typescript@5.9.2))(next-auth@4.24.11(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@19.1.2(react@19.1.2))(react@19.1.2))':
+  '@next-auth/prisma-adapter@1.0.7(@prisma/client@6.19.0(prisma@6.17.1(typescript@5.9.2))(typescript@5.9.2))(next-auth@4.24.11(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
       '@prisma/client': 6.19.0(prisma@6.17.1(typescript@5.9.2))(typescript@5.9.2)
-      next-auth: 4.24.11(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+      next-auth: 4.24.11(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  '@next/env@15.5.7': {}
+  '@next/env@15.5.9': {}
 
   '@next/eslint-plugin-next@16.1.0':
     dependencies:
@@ -25715,9 +25711,9 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.12
 
-  '@radix-ui/react-compose-refs@1.1.2(@types/react@19.2.7)(react@19.1.2)':
+  '@radix-ui/react-compose-refs@1.1.2(@types/react@19.2.7)(react@18.3.1)':
     dependencies:
-      react: 19.1.2
+      react: 18.3.1
     optionalDependencies:
       '@types/react': 19.2.7
 
@@ -25819,11 +25815,11 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.24
 
-  '@radix-ui/react-label@2.1.7(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
+  '@radix-ui/react-label@2.1.7(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@radix-ui/react-primitive': 2.1.3(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
-      react: 19.1.2
-      react-dom: 19.1.2(react@19.1.2)
+      '@radix-ui/react-primitive': 2.1.3(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
     optionalDependencies:
       '@types/react': 19.2.7
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
@@ -25910,11 +25906,11 @@ snapshots:
       '@types/react': 19.1.12
       '@types/react-dom': 19.2.3(@types/react@19.1.12)
 
-  '@radix-ui/react-primitive@2.1.3(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
+  '@radix-ui/react-primitive@2.1.3(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@radix-ui/react-slot': 1.2.3(@types/react@19.2.7)(react@19.1.2)
-      react: 19.1.2
-      react-dom: 19.1.2(react@19.1.2)
+      '@radix-ui/react-slot': 1.2.3(@types/react@19.2.7)(react@18.3.1)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
     optionalDependencies:
       '@types/react': 19.2.7
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
@@ -25979,10 +25975,10 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.12
 
-  '@radix-ui/react-slot@1.2.3(@types/react@19.2.7)(react@19.1.2)':
+  '@radix-ui/react-slot@1.2.3(@types/react@19.2.7)(react@18.3.1)':
     dependencies:
-      '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.2.7)(react@19.1.2)
-      react: 19.1.2
+      '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.2.7)(react@18.3.1)
+      react: 18.3.1
     optionalDependencies:
       '@types/react': 19.2.7
 
@@ -26624,7 +26620,7 @@ snapshots:
       '@sentry/types': 5.30.0
       tslib: 1.14.1
 
-  '@sentry/nextjs@10.27.0(@opentelemetry/context-async-hooks@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(encoding@0.1.13)(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(react@19.1.2)(webpack@5.102.1(esbuild@0.25.9))':
+  '@sentry/nextjs@10.27.0(@opentelemetry/context-async-hooks@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(encoding@0.1.13)(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(react@18.3.1)(webpack@5.102.1(esbuild@0.25.9))':
     dependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/semantic-conventions': 1.37.0
@@ -26634,10 +26630,10 @@ snapshots:
       '@sentry/core': 10.27.0
       '@sentry/node': 10.27.0
       '@sentry/opentelemetry': 10.27.0(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.37.0)
-      '@sentry/react': 10.27.0(react@19.1.2)
+      '@sentry/react': 10.27.0(react@18.3.1)
       '@sentry/vercel-edge': 10.27.0
       '@sentry/webpack-plugin': 4.4.0(encoding@0.1.13)(webpack@5.102.1(esbuild@0.25.9))
-      next: 15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3)
+      next: 15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3)
       resolve: 1.22.8
       rollup: 4.50.1
       stacktrace-parser: 0.1.11
@@ -26729,12 +26725,12 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.37.0
       '@sentry/core': 10.27.0
 
-  '@sentry/react@10.27.0(react@19.1.2)':
+  '@sentry/react@10.27.0(react@18.3.1)':
     dependencies:
       '@sentry/browser': 10.27.0
       '@sentry/core': 10.27.0
       hoist-non-react-statics: 3.3.2
-      react: 19.1.2
+      react: 18.3.1
 
   '@sentry/tracing@5.30.0':
     dependencies:
@@ -27877,12 +27873,12 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
 
-  '@testing-library/react@16.3.0(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
+  '@testing-library/react@16.3.0(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.28.4
       '@testing-library/dom': 10.4.1
-      react: 19.1.2
-      react-dom: 19.1.2(react@19.1.2)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
     optionalDependencies:
       '@types/react': 19.2.7
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
@@ -28678,7 +28674,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 5.62.0
       '@typescript-eslint/visitor-keys': 5.62.0
-      debug: 4.4.1(supports-color@5.5.0)
+      debug: 4.4.3(supports-color@8.1.1)
       globby: 11.1.0
       is-glob: 4.0.3
       semver: 7.7.3
@@ -30332,7 +30328,7 @@ snapshots:
       jsonpointer: 5.0.1
       leven: 3.1.0
 
-  better-auth@1.3.34(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(react-dom@19.1.2(react@19.1.2))(react@19.1.2):
+  better-auth@1.3.34(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@better-auth/core': 1.3.34(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
       '@better-auth/telemetry': 1.3.34(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
@@ -30349,9 +30345,9 @@ snapshots:
       nanostores: 1.0.1
       zod: 4.1.13
     optionalDependencies:
-      next: 15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3)
-      react: 19.1.2
-      react-dom: 19.1.2(react@19.1.2)
+      next: 15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
 
   better-call@1.0.19:
     dependencies:
@@ -30565,7 +30561,7 @@ snapshots:
 
   browserslist@4.25.4:
     dependencies:
-      caniuse-lite: 1.0.30001757
+      caniuse-lite: 1.0.30001761
       electron-to-chromium: 1.5.214
       node-releases: 2.0.20
       update-browserslist-db: 1.1.3(browserslist@4.25.4)
@@ -30573,7 +30569,7 @@ snapshots:
   browserslist@4.26.3:
     dependencies:
       baseline-browser-mapping: 2.8.17
-      caniuse-lite: 1.0.30001759
+      caniuse-lite: 1.0.30001761
       electron-to-chromium: 1.5.237
       node-releases: 2.0.25
       update-browserslist-db: 1.1.3(browserslist@4.26.3)
@@ -30679,7 +30675,7 @@ snapshots:
     dependencies:
       cron-parser: 4.9.0
       get-port: 5.1.1
-      ioredis: 5.7.0
+      ioredis: 5.8.2
       lodash: 4.17.21
       msgpackr: 1.11.5
       semver: 7.7.2
@@ -30799,10 +30795,6 @@ snapshots:
   camelcase@8.0.0: {}
 
   caniuse-lite@1.0.30001741: {}
-
-  caniuse-lite@1.0.30001757: {}
-
-  caniuse-lite@1.0.30001759: {}
 
   caniuse-lite@1.0.30001761: {}
 
@@ -33883,7 +33875,7 @@ snapshots:
     dependencies:
       basic-ftp: 5.0.5
       data-uri-to-buffer: 6.0.2
-      debug: 4.3.4
+      debug: 4.4.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -34494,7 +34486,7 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.3.4
+      debug: 4.4.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -34817,6 +34809,20 @@ snapshots:
       '@ioredis/commands': 1.3.1
       cluster-key-slot: 1.1.2
       debug: 4.4.1(supports-color@5.5.0)
+      denque: 2.1.0
+      lodash.defaults: 4.2.0
+      lodash.isarguments: 3.1.0
+      redis-errors: 1.2.0
+      redis-parser: 3.0.0
+      standard-as-callback: 2.1.0
+    transitivePeerDependencies:
+      - supports-color
+
+  ioredis@5.8.2:
+    dependencies:
+      '@ioredis/commands': 1.4.0
+      cluster-key-slot: 1.1.2
+      debug: 4.4.3(supports-color@8.1.1)
       denque: 2.1.0
       lodash.defaults: 4.2.0
       lodash.isarguments: 3.1.0
@@ -36563,9 +36569,9 @@ snapshots:
 
   lru_map@0.3.3: {}
 
-  lucide-react@0.400.0(react@19.1.2):
+  lucide-react@0.400.0(react@18.3.1):
     dependencies:
-      react: 19.1.2
+      react: 18.3.1
 
   lucide-react@0.446.0(react@19.1.1):
     dependencies:
@@ -38126,47 +38132,47 @@ snapshots:
 
   netmask@2.0.2: {}
 
-  next-auth@4.24.11(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  next-auth@4.24.11(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@babel/runtime': 7.28.4
       '@panva/hkdf': 1.2.1
       cookie: 0.7.2
       jose: 4.15.9
-      next: 15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3)
+      next: 15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3)
       oauth: 0.9.15
       openid-client: 5.7.1
       preact: 10.27.1
       preact-render-to-string: 5.2.6(preact@10.27.1)
-      react: 19.1.1
-      react-dom: 19.1.1(react@19.1.1)
-      uuid: 8.3.2
-
-  next-auth@4.24.11(next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3))(nodemailer@7.0.9)(react-dom@19.1.2(react@19.1.2))(react@19.1.2):
-    dependencies:
-      '@babel/runtime': 7.28.4
-      '@panva/hkdf': 1.2.1
-      cookie: 0.7.2
-      jose: 4.15.9
-      next: 15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3)
-      oauth: 0.9.15
-      openid-client: 5.7.1
-      preact: 10.27.1
-      preact-render-to-string: 5.2.6(preact@10.27.1)
-      react: 19.1.2
-      react-dom: 19.1.2(react@19.1.2)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
       uuid: 8.3.2
     optionalDependencies:
       nodemailer: 7.0.9
 
-  next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3):
+  next-auth@4.24.11(next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
-      '@next/env': 15.5.7
-      '@swc/helpers': 0.5.15
-      caniuse-lite: 1.0.30001759
-      postcss: 8.4.31
+      '@babel/runtime': 7.28.4
+      '@panva/hkdf': 1.2.1
+      cookie: 0.7.2
+      jose: 4.15.9
+      next: 15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3)
+      oauth: 0.9.15
+      openid-client: 5.7.1
+      preact: 10.27.1
+      preact-render-to-string: 5.2.6(preact@10.27.1)
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
-      styled-jsx: 5.1.6(@babel/core@7.28.5)(react@19.1.1)
+      uuid: 8.3.2
+
+  next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3):
+    dependencies:
+      '@next/env': 15.5.9
+      '@swc/helpers': 0.5.15
+      caniuse-lite: 1.0.30001761
+      postcss: 8.4.31
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      styled-jsx: 5.1.6(@babel/core@7.28.5)(react@18.3.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.7
       '@next/swc-darwin-x64': 15.5.7
@@ -38184,15 +38190,15 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.5.7(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(sass@1.93.3):
+  next@15.5.9(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.3):
     dependencies:
-      '@next/env': 15.5.7
+      '@next/env': 15.5.9
       '@swc/helpers': 0.5.15
-      caniuse-lite: 1.0.30001759
+      caniuse-lite: 1.0.30001761
       postcss: 8.4.31
-      react: 19.1.2
-      react-dom: 19.1.2(react@19.1.2)
-      styled-jsx: 5.1.6(@babel/core@7.28.5)(react@19.1.2)
+      react: 19.1.1
+      react-dom: 19.1.1(react@19.1.1)
+      styled-jsx: 5.1.6(@babel/core@7.28.5)(react@19.1.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.7
       '@next/swc-darwin-x64': 15.5.7
@@ -38746,7 +38752,7 @@ snapshots:
     dependencies:
       '@tootallnate/quickjs-emscripten': 0.23.0
       agent-base: 7.1.4
-      debug: 4.3.4
+      debug: 4.4.3(supports-color@8.1.1)
       get-uri: 6.0.5
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
@@ -39487,7 +39493,7 @@ snapshots:
   proxy-agent@6.3.1:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.3.4
+      debug: 4.4.3(supports-color@8.1.1)
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
       lru-cache: 7.18.3
@@ -39581,9 +39587,9 @@ snapshots:
 
   qrcode-terminal@0.12.0: {}
 
-  qrcode.react@4.2.0(react@19.1.2):
+  qrcode.react@4.2.0(react@18.3.1):
     dependencies:
-      react: 19.1.2
+      react: 18.3.1
 
   qrcode@1.5.4:
     dependencies:
@@ -39679,11 +39685,6 @@ snapshots:
   react-dom@19.1.1(react@19.1.1):
     dependencies:
       react: 19.1.1
-      scheduler: 0.26.0
-
-  react-dom@19.1.2(react@19.1.2):
-    dependencies:
-      react: 19.1.2
       scheduler: 0.26.0
 
   react-hot-toast@2.6.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
@@ -39784,8 +39785,6 @@ snapshots:
       loose-envify: 1.4.0
 
   react@19.1.1: {}
-
-  react@19.1.2: {}
 
   read-cache@1.0.0:
     dependencies:
@@ -39897,7 +39896,7 @@ snapshots:
       axios: 1.11.0(debug@4.4.1)
       chalk: 4.1.2
       fs-extra: 11.3.1
-      ioredis: 5.7.0
+      ioredis: 5.8.2
       joi: 17.13.3
       lodash: 4.17.21
       roo-code-types: 1.0.1
@@ -40780,7 +40779,7 @@ snapshots:
   socks-proxy-agent@8.0.5:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.3.4
+      debug: 4.4.3(supports-color@8.1.1)
       socks: 2.8.7
     transitivePeerDependencies:
       - supports-color
@@ -41157,17 +41156,17 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.4
 
+  styled-jsx@5.1.6(@babel/core@7.28.5)(react@18.3.1):
+    dependencies:
+      client-only: 0.0.1
+      react: 18.3.1
+    optionalDependencies:
+      '@babel/core': 7.28.5
+
   styled-jsx@5.1.6(@babel/core@7.28.5)(react@19.1.1):
     dependencies:
       client-only: 0.0.1
       react: 19.1.1
-    optionalDependencies:
-      '@babel/core': 7.28.5
-
-  styled-jsx@5.1.6(@babel/core@7.28.5)(react@19.1.2):
-    dependencies:
-      client-only: 0.0.1
-      react: 19.1.2
     optionalDependencies:
       '@babel/core': 7.28.5
 
@@ -42390,7 +42389,7 @@ snapshots:
   vite-node@3.2.4(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.1(supports-color@5.5.0)
+      debug: 4.4.3(supports-color@8.1.1)
       es-module-lexer: 1.7.0
       pathe: 2.0.3
       vite: 5.4.21(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1)

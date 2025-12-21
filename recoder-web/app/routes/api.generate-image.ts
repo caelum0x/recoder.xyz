@@ -18,7 +18,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Get user's API key
     const { getAPIKey } = await import('~/lib/.server/llm/api-key');
-    const apiKey = await getAPIKey(context.cloudflare.env, request, 'openrouter');
+    const apiKey = await getAPIKey((context as any)?.cloudflare?.env || process.env, request, 'openrouter');
 
     if (!apiKey) {
       return json({ error: 'No OpenRouter API key configured' }, { status: 401 });

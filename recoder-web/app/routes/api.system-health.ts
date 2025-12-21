@@ -9,7 +9,7 @@ import { llmAnalytics } from '~/lib/.server/llm/analytics';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
-    const env = context.cloudflare.env as Env;
+    const env = (context as any)?.cloudflare?.env || process.env as Env;
     const health = await getSystemHealth(env);
     
     return json({

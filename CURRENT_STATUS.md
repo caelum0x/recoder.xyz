@@ -101,54 +101,16 @@ AI-powered full-stack development platform for building REAL production applicat
 ---
 
 ## 🔴 CRITICAL ERRORS
+1. API Routes Failing - Cannot read properties of undefined (reading 'env')
+  - /api/chat-history → 500 error
+  - /api/mcp/servers → 500 error
 
-### 1. recoder-web (Port 5173)
-**Error**: `require is not defined` in react-dom/server.node.js
-**Location**: `/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/server.node.js:9:3`
-**Impact**: SSR failing, routes not loading
-**Cause**: Vite ESM/CJS mismatch
+  2. Google Profile Image Blocked - COEP blocking external images
+  net::ERR_BLOCKED_BY_RESPONSE.NotSameOriginAfterDefaultedToSameOriginByCoep
 
-**Error**: Missing `ChatHistoryList` component
-**Location**: `recoder-web/app/routes/history.tsx`
-**Impact**: history.tsx route broken
-**TODO**: Create ChatHistoryList component or remove import
+  3. Browser extension errors (not critical, can ignore)
 
-### 2. app (Next.js - Port 3000)
-**Status**: Prisma client generated ✅
-**Previous Error**: Missing `.prisma/client/default` - FIXED
-**TODO**: Test if /api/auth/session works now
-
-### 3. docker-backend (Port 3100)
-**Status**: NOT TESTED
-**TODO**: Check if service is running
-**TODO**: Test container creation endpoint
-
----
-
-## ⚠️ WARNINGS
-
-### recoder-web
-- Vite CJS deprecation warning (react-dom SSR)
-- Remix v7 migration flags needed:
-  - `v3_lazyRouteDiscovery`
-  - `v3_singleFetch`
-- Missing starters submodule (marked as modified)
-
-### app
-- 4 zombie Next.js worker processes from Dec 10 (PIDs: 77015-77018)
-- Each consuming 96% CPU
-- Prisma v7 migration needed (package.json#prisma deprecated)
-
----
-
-## 📋 TODO
-
-### IMMEDIATE (Fix to test locally)
-- [ ] Fix recoder-web SSR `require is not defined` error
-- [ ] Create ChatHistoryList component for history.tsx
-- [ ] Kill zombie Next.js processes (77015, 77016, 77017, 77018)
-- [ ] Test app folder on port 3000
-- [ ] Test recoder-web on port 5173 (orange button)
+  Let me fix these:
 
 ### HIGH PRIORITY
 - [ ] Deal with Hetzner server security lockdown
@@ -165,35 +127,6 @@ AI-powered full-stack development platform for building REAL production applicat
 
 ## 📊 PROJECTS OVERVIEW
 
-### app/ (Main Website - Next.js)
-- **Port**: 3000
-- **Status**: ⚠️ Running but with zombie processes
-- **Database**: Neon PostgreSQL (connected)
-- **Auth**: Better Auth configured
-- **Errors**: None (after Prisma generate)
-
-### recoder-web/ (IDE - Remix)
-- **Port**: 5173
-- **Status**: 🔴 Running but SSR broken
-- **Tech**: Remix 2.17.1, Vite 5.4.21, React 18.3.1
-
-**Core Features Status**:
-- ✅ **File Creation**: Workbench with Monaco editor fully integrated
-- ✅ **File Tree**: Complete file management in workbench
-- ✅ **Project Creation**: Template system with starters templates no always necesaary if user promtp wants specicifc stack tempalte canbe used
-- ⚠️ **Terminal**: xterm.js integrated (needs testing)
-- ⚠️ **Live Preview**: docker-backend (port 3100) - needs testing
-- ✅ **AI Chat**: Claude/Groq/OpenAI integration working
-
-**Code Execution**:
-- ❌ WebContainer API - CANNOT USE (StackBlitz blocks live usage)
-- ✅ docker-backend service - our solution for code execution
-- 🔴 Status: Needs testing and verification
-
-**Errors**:
-  - require is not defined (react-dom SSR)
-  - Missing ChatHistoryList component
-
 ### docker-backend/ (Execution Backend)
 - **Port**: 3100
 - **Status**: ❓ Unknown (not tested)
@@ -206,15 +139,49 @@ AI-powered full-stack development platform for building REAL production applicat
   - Test package installation (npm, pip, cargo)
   - Test terminal execution
 
+  🎯 Docker Backend Architecture
+
+  What We Need:
+
+  1. Multi-Language Containers:
+    - Node.js/TypeScript
+    - Python
+    - Go
+    - Rust
+    - PHP
+    - Java
+  2. Features:
+    - WebSocket terminal access
+    - Live preview with port forwarding
+    - Package installation (npm, pip, cargo, etc.)
+    - File system management
+
+  I'll create a minimal backend that:
+  - ✅ Runs on port 3100 (as your config expects)
+  - ✅ Creates Docker containers per project
+  - ✅ WebSocket terminal access
+  - ✅ Port forwarding for live preview
+  - ✅ Supports: Node, Python, Go, Rust, PHP, Java
+
+  Option A: Quick Start with Existing Solution (Recommended)
+
+  Use code-server (VS Code backend) with custom wrapper:
+  - Free & Open Source
+  - Multi-language support
+  - Built-in terminal
+  - Port forwarding
+
+  Option B: Build Custom Backend (More control)
+
+  Create minimal Express + Dockerode backend:
+  - Full control over everything
+  - Simpler architecture
+  - Easier to customize
 ---
 
 ## 🚀 NEW FEATURES ADDED (Dec 10-16)
 
-From production backup:
-1. ✅ **admin.tsx** - Admin panel (2.8 KB)
-2. ✅ **api.generate-image.ts** - AI image generation API (2.1 KB)
-3. ✅ **api.web-search.ts** - Web search API (2.2 KB)
-4. ⚠️ **history.tsx** - Chat history page (1.3 KB) - BROKEN (missing ChatHistoryList)
+
 
 ---
 
@@ -233,10 +200,4 @@ From production backup:
 
 ---
 
-## 📈 NEXT STEPS
 
-1. Fix recoder-web SSR error to test locally
-2. Verify orange deploy button works
-3. Push working branch to GitHub
-4. Plan new server deployment
-5. Address Hetzner security issue
