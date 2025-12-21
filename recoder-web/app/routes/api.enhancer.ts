@@ -42,7 +42,7 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
         `,
         },
       ],
-      context.cloudflare.env,
+      (context as any)?.cloudflare?.env || process.env,
     );
 
     // Use textStream from native implementation

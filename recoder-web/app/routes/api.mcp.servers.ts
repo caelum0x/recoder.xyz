@@ -8,10 +8,16 @@ const DEFAULT_SERVERS = [
 ];
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const { cloudflare } = context;
-  const db = cloudflare.env.DB;
+  // Support both Cloudflare and Node.js environments
+  const env = (context as any)?.cloudflare?.env || process.env;
+  const db = (env as any).DB;
 
   try {
+    // If DB is not available (Node.js env), return defaults only
+    if (!db) {
+      return json({ servers: [], defaults: DEFAULT_SERVERS });
+    }
+
     const servers = await db
       .prepare('SELECT * FROM mcp_servers WHERE enabled = 1')
       .all();

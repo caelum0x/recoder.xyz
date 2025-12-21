@@ -23,8 +23,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   
   console.log('Cookies received:', cookies);
   console.log('Has session token:', hasSessionToken);
-  
-  if (!hasSessionToken) {
+
+  // Skip auth check in local development for docker-backend testing
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+
+  if (!hasSessionToken && !isDevelopment) {
     return redirect(`${mainSiteUrl}/auth/signin?redirect=${encodeURIComponent(url.toString())}`);
   }
   

@@ -2,7 +2,7 @@ import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 
 export async function loader({ context }: LoaderFunctionArgs) {
   try {
-    const db = context.cloudflare.env.DB;
+    const db = (context as any)?.cloudflare?.env || process.env.DB;
     
     // Check if MCP servers table exists and has enabled servers
     const servers = await db
