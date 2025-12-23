@@ -121,7 +121,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
           {result.message}
           {result.syncResult.conflicts.length > 0 && (
             <div className="text-xs mt-1">
-              ⚠️ {result.syncResult.conflicts.length} conflicts (local changes kept)
+              <span className="i-ph:warning" /> {result.syncResult.conflicts.length} conflicts (local changes kept)
             </div>
           )}
         </div>
@@ -290,7 +290,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
               <div className="flex gap-4 text-sm">
                 <span>⭐ {repoInfo.repository.stars}</span>
                 <span>🍴 {repoInfo.repository.forks}</span>
-                <span>📁 {repoInfo.branches.length} branches</span>
+                <span><span className="i-ph:git-branch" /> {repoInfo.branches.length} branches</span>
               </div>
               <div className="text-xs text-bolt-elements-textSecondary">
                 Last updated: {new Date(repoInfo.repository.updatedAt).toLocaleDateString()}

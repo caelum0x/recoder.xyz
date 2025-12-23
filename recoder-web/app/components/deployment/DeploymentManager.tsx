@@ -21,21 +21,21 @@ const PLATFORMS = [
   {
     id: 'vercel',
     name: 'Vercel',
-    icon: '▲',
+    iconClass: 'i-simple-icons:vercel',
     description: 'Deploy to Vercel with zero configuration',
     color: 'from-black to-gray-800',
   },
   {
     id: 'netlify',
     name: 'Netlify',
-    icon: '◇',
+    iconClass: 'i-simple-icons:netlify',
     description: 'Deploy to Netlify with continuous deployment',
     color: 'from-teal-500 to-cyan-600',
   },
   {
     id: 'cloudflare',
     name: 'Cloudflare Pages',
-    icon: '☁',
+    iconClass: 'i-simple-icons:cloudflare',
     description: 'Deploy to Cloudflare Pages edge network',
     color: 'from-orange-500 to-yellow-600',
   },
@@ -340,7 +340,7 @@ export default function DeploymentManager() {
                     <div className="absolute top-2 right-2 w-3 h-3 bg-green-500 rounded-full" title="Token configured" />
                   )}
                   <div className={`w-12 h-12 bg-gradient-to-br ${platform.color} rounded-lg flex items-center justify-center text-white text-2xl mb-4 group-hover:scale-110 transition-transform`}>
-                    {platform.icon}
+                    <div className={platform.iconClass} />
                   </div>
                   <h3 className="font-semibold text-bolt-elements-textPrimary mb-2">
                     {platform.name}

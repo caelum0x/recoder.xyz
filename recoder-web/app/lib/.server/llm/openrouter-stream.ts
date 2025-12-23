@@ -15,7 +15,7 @@ export async function streamOpenRouterResponse(
   apiKey: string,
   options: StreamOptions = {}
 ): Promise<ReadableStream<Uint8Array>> {
-  const model = options.model || 'x-ai/grok-code-fast-1'; // Fast coding model
+  const model = options.model || 'google/gemini-2.0-flash-exp:free'; // Free model (no credits needed)
 
   console.log('🚀 [OpenRouter] Starting request to OpenRouter API');
   console.log('📝 [OpenRouter] Model:', model);

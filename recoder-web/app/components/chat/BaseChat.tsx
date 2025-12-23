@@ -15,6 +15,7 @@ import type { TemplateRepo } from '~/lib/.server/github/types';
 
 import { LightningMode } from './LightningMode';
 import { TaskCategories, type TaskCategory } from './TaskCategories';
+import { TokenControl } from './TokenControl';
 
 import styles from './BaseChat.module.scss';
 
@@ -36,10 +37,12 @@ interface BaseChatProps {
   selectedModel?: string;
   lightningMode?: boolean;
   taskCategory?: TaskCategory;
+  maxTokens?: number;
   onProviderChange?: (provider: string) => void;
   onModelChange?: (model: string) => void;
   onLightningModeChange?: (enabled: boolean) => void;
   onTaskCategoryChange?: (category: TaskCategory) => void;
+  onMaxTokensChange?: (tokens: number) => void;
   onSettingsClick?: () => void;
   handleStop?: () => void;
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
@@ -69,10 +72,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       selectedModel = 'x-ai/grok-code-fast-1',
       lightningMode = false,
       taskCategory = 'general',
+      maxTokens = 4000,
       onProviderChange = () => {},
       onModelChange = () => {},
       onLightningModeChange = () => {},
       onTaskCategoryChange = () => {},
+      onMaxTokensChange = () => {},
       onSettingsClick = () => {},
       sendMessage,
       handleInputChange,
@@ -101,7 +106,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <>
                     <div className="flex items-center justify-center gap-2 mb-4">
                       <span className="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm font-medium">
-                        📁 {projectName}
+                        <span className="i-ph:folder mr-1" /> {projectName}
                       </span>
                     </div>
                     <h1 className="text-5xl text-center font-bold text-bolt-elements-textPrimary mb-2">
@@ -154,13 +159,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <ClientOnly>
                     {() => (
                       <div className="p-3 border-b border-bolt-elements-borderColor">
-                        <ModelSelector
-                          selectedProvider={selectedProvider}
-                          selectedModel={selectedModel}
-                          onProviderChange={onProviderChange}
-                          onModelChange={onModelChange}
-                          onSettingsClick={onSettingsClick}
-                        />
+                        <div className="flex items-center justify-between gap-4">
+                          <ModelSelector
+                            selectedProvider={selectedProvider}
+                            selectedModel={selectedModel}
+                            onProviderChange={onProviderChange}
+                            onModelChange={onModelChange}
+                            onSettingsClick={onSettingsClick}
+                          />
+                          <TokenControl value={maxTokens} onChange={onMaxTokensChange} />
+                        </div>
                       </div>
                     )}
                   </ClientOnly>
@@ -170,6 +178,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   <div className="relative">
                     {/* Larger Chat Input Textarea - Wider */}
                     <textarea
+                      id="chat-input"
+                      name="chat-input"
                       ref={textareaRef}
                       className={`w-full pl-4 pt-4 pr-20 pb-4 focus:outline-none resize-none text-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}
                     onKeyDown={(event) => {

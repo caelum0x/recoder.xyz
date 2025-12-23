@@ -142,10 +142,10 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
       <Dialog onClose={handleClose}>
         <div className="flex items-center justify-between mb-4">
           <DialogTitle>
-            {step === 'platform' && '🚀 Deploy Your Project'}
-            {step === 'config' && '⚙️ Configure Deployment'}
-            {step === 'deploying' && '🔨 Deploying...'}
-            {step === 'complete' && '✅ Deployment Complete!'}
+            {step === 'platform' && 'Deploy Your Project'}
+            {step === 'config' && 'Configure Deployment'}
+            {step === 'deploying' && 'Deploying...'}
+            {step === 'complete' && 'Deployment Complete!'}
           </DialogTitle>
         </div>
 

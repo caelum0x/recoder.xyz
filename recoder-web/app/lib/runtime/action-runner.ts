@@ -7,29 +7,56 @@ import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { clearNpmCache } from '~/lib/webcontainer/package-manager';
 
+// Cached workbench store for performance
+let _workbenchStore: any = null;
+const getWorkbenchStore = async () => {
+  if (!_workbenchStore) {
+    const mod = await import('~/lib/stores/workbench');
+    _workbenchStore = mod.workbenchStore;
+  }
+  return _workbenchStore;
+};
+
 // Docker backend configuration from environment
 const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
-// Global Docker availability flag - set once at startup
+// Global Docker availability flag - retries on failure
 let dockerAvailable: boolean | null = null;
+let lastDockerCheck = 0;
+const DOCKER_CHECK_INTERVAL = 60000; // Retry every 60s if failed (reduce console spam)
 
-async function checkDockerAvailable(): Promise<boolean> {
-  if (dockerAvailable !== null) return dockerAvailable;
+async function checkDockerAvailable(forceCheck = false): Promise<boolean> {
+  // Return cached result if available and recent (unless forcing)
+  const now = Date.now();
+  if (!forceCheck && dockerAvailable === true) return true;
+  if (!forceCheck && dockerAvailable === false && (now - lastDockerCheck) < DOCKER_CHECK_INTERVAL) {
+    return false;
+  }
+  
+  if (!DOCKER_URL) {
+    console.log('🐳🐳🐳 No DOCKER_URL configured');
+    return false;
+  }
+  
   try {
     console.log('🐳🐳🐳 CHECKING DOCKER AT:', DOCKER_URL);
-    const res = await fetch(`${DOCKER_URL}/health`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${DOCKER_URL}/health`, { signal: AbortSignal.timeout(3000) });
     dockerAvailable = res.ok;
+    lastDockerCheck = now;
     console.log('🐳🐳🐳 Docker backend:', dockerAvailable ? '✅ AVAILABLE' : '❌ NOT AVAILABLE');
   } catch (e) {
     console.log('🐳🐳🐳 Docker check FAILED:', e);
     dockerAvailable = false;
+    lastDockerCheck = now;
   }
   return dockerAvailable;
 }
 
 // Check Docker on module load
 console.log('🐳🐳🐳 ACTION-RUNNER LOADED - DOCKER_URL:', DOCKER_URL);
-checkDockerAvailable();
+if (typeof window !== 'undefined') {
+  checkDockerAvailable();
+}
 
 // Browser-compatible path utilities
 const nodePath = {
@@ -119,7 +146,8 @@ export class ActionRunner {
   async #ensureDockerReady(): Promise<boolean> {
     if (this.#useDocker) return true;
     
-    const available = await checkDockerAvailable();
+    // Force check if we haven't connected yet
+    const available = await checkDockerAvailable(!this.#useDocker);
     console.log('🐳🐳🐳 ensureDockerReady - available:', available, 'projectId:', this.#projectId);
     if (!available) return false;
     
@@ -130,6 +158,7 @@ export class ActionRunner {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: this.#projectId }),
+        signal: AbortSignal.timeout(10000),
       });
       console.log('🐳🐳🐳 Container creation response:', res.status, res.ok);
       if (res.ok) {
@@ -149,10 +178,12 @@ export class ActionRunner {
 
   // Docker file operations
   async #dockerWriteFile(path: string, content: string): Promise<void> {
+    // Ensure path starts with / for proper concatenation
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: `/workspace${path}`, content }),
+      body: JSON.stringify({ path: `/workspace${normalizedPath}`, content }),
     });
     if (!res.ok) {
       const errData = await res.json() as { error?: string };
@@ -160,11 +191,13 @@ export class ActionRunner {
     }
   }
 
-  async #dockerExec(command: string, cwd: string = '/'): Promise<string> {
+  async #dockerExec(command: string, cwd: string = ''): Promise<string> {
+    // Default to /workspace, normalize cwd path
+    const workDir = cwd ? `/workspace${cwd.startsWith('/') ? cwd : `/${cwd}`}` : '/workspace';
     const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command, cwd: `/workspace${cwd}` }),
+      body: JSON.stringify({ command, cwd: workDir }),
     });
     const data = await res.json() as { output?: string; error?: string };
     if (!res.ok) throw new Error(data.error || 'Docker exec failed');
@@ -172,7 +205,8 @@ export class ActionRunner {
   }
 
   async #dockerMkdir(path: string): Promise<void> {
-    await this.#dockerExec(`mkdir -p "${path}"`);
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    await this.#dockerExec(`mkdir -p "/workspace${normalizedPath}"`);
   }
 
   addAction(data: ActionCallbackData) {
@@ -304,20 +338,21 @@ export class ActionRunner {
     const isDevServer = /npm (run )?dev|yarn dev|pnpm dev|vite|next dev|remix dev|npm start|yarn start|pnpm start/.test(normalizedContent);
     const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
 
-    // Use Docker if available
-    if (this.#useDocker && DOCKER_URL) {
+    // Try Docker first - ensure it's ready
+    const dockerReady = await this.#ensureDockerReady();
+    if (dockerReady && DOCKER_URL) {
       logger.info('🐳 Executing command via Docker backend');
       try {
         const output = await this.#dockerExec(action.content);
         logger.info(`✅ Docker command completed:\n${output.substring(0, 500)}`);
         return;
       } catch (error: any) {
-        logger.error('Docker command failed:', error.message);
-        throw error;
+        logger.error('Docker command failed, falling back to WebContainer:', error.message);
+        // Fall through to WebContainer
       }
     }
 
-    // WebContainer execution
+    // WebContainer execution (fallback)
     const webcontainer = await this.#webcontainer;
 
     // Handle dev server commands specially - run in background
@@ -546,6 +581,18 @@ export class ActionRunner {
       try {
         if (this.#useDocker && DOCKER_URL) {
           await this.#dockerWriteFile(action.filePath, action.content);
+          // Update local file store so UI shows the file
+          const store = await getWorkbenchStore();
+          const fullPath = action.filePath.startsWith('/') ? action.filePath : `/home/project/${action.filePath}`;
+          // Create parent folder entries
+          const parts = fullPath.split('/').filter(Boolean);
+          for (let i = 1; i < parts.length; i++) {
+            const folderPath = '/' + parts.slice(0, i).join('/');
+            if (!store.files.get()[folderPath]) {
+              store.files.setKey(folderPath, { type: 'folder' });
+            }
+          }
+          store.files.setKey(fullPath, { type: 'file', content: action.content, isBinary: false });
         } else if (webcontainer) {
           await webcontainer.fs.writeFile(action.filePath, action.content);
         } else {

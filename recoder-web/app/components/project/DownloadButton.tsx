@@ -5,9 +5,7 @@
 import { useState } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
 import { Button } from '~/components/ui/button';
-import type { ApiResponse } from "~/types/api-responses";
 import { Loader2, Download, FileArchive } from 'lucide-react';
-import type { ApiResponse } from "~/types/api-responses";
 
 interface DownloadButtonProps {
   projectId: string;

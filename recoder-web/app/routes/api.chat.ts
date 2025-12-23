@@ -155,12 +155,14 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   let provider: string = 'openrouter'; // Default provider
   let model: string | undefined;
   let requestBody: any;
+  let maxTokens: number = 8000;
 
   try {
     requestBody = await request.json<{
       messages: Messages;
       provider?: string;
       model?: string;
+      maxTokens?: number;
       recoderContext?: string;
       projectContext?: string;
     }>();
@@ -173,7 +175,9 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
       model = requestBody.model;
     }
 
-    console.log(`[Chat API] Provider: ${provider}, Model: ${model || 'default'}`);
+    maxTokens = requestBody.maxTokens || 8000;
+
+    console.log(`[Chat API] Provider: ${provider}, Model: ${model || 'default'}, MaxTokens: ${maxTokens}`);
 
     // Validate messages
     const { validateChatMessages, createValidationErrorResponse } = await import('~/lib/.server/middleware/request-validator');
@@ -351,7 +355,7 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
     const streamOptions = {
       model,
       temperature: 0.7,
-      max_tokens: 8000,
+      max_tokens: maxTokens,
     };
 
     switch (provider.toLowerCase()) {
@@ -377,7 +381,7 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
           apiKey,
           {
             ...streamOptions,
-            model: model || 'claude-3-5-sonnet-20241022', // Default to Claude 3.5 Sonnet
+            model: model || 'claude-sonnet-4-5-20250929', // Default to Claude Sonnet 4.5
           }
         );
         break;
@@ -431,7 +435,7 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
     let userMessage = '❌ An error occurred while processing your request.';
     
     // Check for common error types
-    if (errorMessage.includes('maximum prompt length') || errorMessage.includes('tokens')) {
+    if (errorMessage.includes('maximum prompt length') || (errorMessage.includes('tokens') && !errorMessage.includes('credits'))) {
       userMessage = `⚠️ Context Too Large
 
 The conversation has grown too large for the AI model to process. 
@@ -442,6 +446,15 @@ The conversation has grown too large for the AI model to process.
 3. Remove some earlier messages from the conversation
 
 The current request had too many tokens for the selected model's limit.`;
+    } else if (errorMessage.includes('credits') || errorMessage.includes('can only afford')) {
+      userMessage = `💳 Insufficient Credits
+
+Your OpenRouter account doesn't have enough credits for this request.
+
+**Solutions:**
+1. Add more credits at https://openrouter.ai/settings/credits
+2. Try a cheaper model
+3. Use a different AI provider`;
     } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
       userMessage = `⏳ Rate Limited
 

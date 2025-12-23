@@ -99,6 +99,14 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     return 'general';
   });
 
+  // Max tokens control
+  const [maxTokens, setMaxTokens] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return parseInt(localStorage.getItem('maxTokens') || '4000', 10);
+    }
+    return 4000;
+  });
+
   // Provider and Model Selection
   const [selectedProvider, setSelectedProvider] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -120,8 +128,9 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       localStorage.setItem('selectedModel', selectedModel);
       localStorage.setItem('lightningMode', String(lightningMode));
       localStorage.setItem('taskCategory', taskCategory);
+      localStorage.setItem('maxTokens', String(maxTokens));
     }
-  }, [selectedProvider, selectedModel, lightningMode, taskCategory]);
+  }, [selectedProvider, selectedModel, lightningMode, taskCategory, maxTokens]);
 
   // Auto-switch model when Lightning Mode changes
   useEffect(() => {
@@ -154,17 +163,19 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
 
   const [animationScope, animate] = useAnimate();
 
+  // Generate stable project ID for Docker backend
+  const [projectIdForDocker] = useState(() => chatId || `project-${Date.now()}`);
+
   // Set project ID for Docker backend and initialize project state
   useEffect(() => {
-    if (chatId) {
-      workbenchStore.setProjectId(chatId);
-      
-      // Initialize project state for context tracking
-      import('~/lib/stores/project-state').then(({ initProject }) => {
-        initProject({ projectId: chatId });
-      });
-    }
-  }, [chatId]);
+    // Always set project ID (use chatId if available, otherwise generated ID)
+    workbenchStore.setProjectId(projectIdForDocker).catch(console.error);
+    
+    // Initialize project state for context tracking
+    import('~/lib/stores/project-state').then(({ initProject }) => {
+      initProject({ projectId: projectIdForDocker });
+    });
+  }, [projectIdForDocker]);
 
   // Get project context for AI
   const [projectContext, setProjectContext] = useState<string>('');
@@ -203,6 +214,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       model: selectedModel,
       lightningMode,
       taskCategory,
+      maxTokens,
       projectContext, // Pass project context to server
       customTools, // Pass custom tools to server
       mcpTools, // Pass MCP tools to server
@@ -583,10 +595,12 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         selectedModel={selectedModel}
         lightningMode={lightningMode}
         taskCategory={taskCategory}
+        maxTokens={maxTokens}
         onProviderChange={setSelectedProvider}
         onModelChange={setSelectedModel}
         onLightningModeChange={setLightningMode}
         onTaskCategoryChange={setTaskCategory}
+        onMaxTokensChange={setMaxTokens}
         onSettingsClick={() => {
           // Navigate to API key management page
           if (typeof window !== 'undefined') {

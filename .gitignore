@@ -44,6 +44,12 @@ authorized_keys
 known_hosts
 *.private-key.pem
 
+# AI conversation history and cache files
+.aitimemachine/
+*.aitimemachine*
+*conversation*
+*scan-cache*
+
 # Database credentials and URIs (CRITICAL - NEVER COMMIT)
 database.yml
 database.json

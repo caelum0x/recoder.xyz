@@ -121,7 +121,7 @@ export function ProjectsList() {
 function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [icon, setIcon] = useState('📁');
+  const [icon, setIcon] = useState('i-ph:folder');
   const [submitting, setSubmitting] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
@@ -163,7 +163,7 @@ function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCre
               value={icon}
               onChange={e => setIcon(e.target.value)}
               className="w-full px-3 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
-              placeholder="📁"
+              placeholder="i-ph:folder"
             />
           </div>
           <div>

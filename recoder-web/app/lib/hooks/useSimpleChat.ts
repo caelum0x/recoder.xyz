@@ -14,6 +14,7 @@ export interface Message {
 
 interface UseChatOptions {
   api: string;
+  body?: Record<string, unknown>;
   onError?: (error: Error) => void;
   onFinish?: () => void;
   onResponse?: (response: Response) => void;
@@ -21,7 +22,7 @@ interface UseChatOptions {
 }
 
 export function useSimpleChat(options: UseChatOptions) {
-  const { api, onError, onFinish, onResponse, initialMessages = [] } = options;
+  const { api, body: extraBody, onError, onFinish, onResponse, initialMessages = [] } = options;
   
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
@@ -65,7 +66,7 @@ export function useSimpleChat(options: UseChatOptions) {
       const response = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
+        body: JSON.stringify({ messages: [...messages, userMessage], ...extraBody }),
         signal: abortControllerRef.current.signal,
       });
 
