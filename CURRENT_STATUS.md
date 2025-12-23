@@ -1,6 +1,62 @@
 # RECODER.XYZ - CURRENT STATUS
-**Updated**: 2025-12-20 20:15
+2- terminal not working its empty and not wroteable  3-live preview not working its blocked 
+4- all build and run commands fail to execute
 
+### Issue 2: Terminal stuck on "initializing"
+- No terminal-related errors in log
+- Terminal likely waiting for projectId or WebSocket connection
+- **Root cause**: Terminal tries to connect but projectId timing or WebSocket fails silently
+
+### Issue 3: Live preview blocked (ERR_BLOCKED_BY_RESPONSE)
+- Preview URL: http://localhost:3100/preview/default
+- Browser blocks due to COEP/CORS headers
+- **Root cause**: Cross-origin policy blocking iframe/fetch from preview endpoint
+### Issue 1: Terminal Empty/Not Writable
+
+Root Cause: The Docker backend's terminal WebSocket connects, but the shell output isn't being 
+properly streamed back.
+
+Looking at server.ts line 232-260:
+typescript
+// With TTY=true, Docker sends raw data without multiplexing headers
+stream.on('data', (chunk: Buffer) => {
+  console.log('Terminal data:', chunk.length, 'bytes');
+  if (ws.readyState === ws.OPEN) {
+    ws.send(chunk);
+  }
+});
+
+
+The issue is that Docker exec with Tty: true should work, but the shell might not be outputting 
+anything because:
+1. The bash --rcfile /dev/null might suppress the prompt
+2. The PS1=$  env var might not be taking effect
+3. The initial stream.write('\n') might not trigger output
+
+### Issue 2: Preview 404 / ERR_BLOCKED_BY_RESPONSE
+
+Root Cause: The preview proxy tries to connect to container ports, but:
+1. No dev server is running in the container (returns 404)
+2. When it does run, CORS/COEP headers may still block iframe embedding
+
+The preview code checks ports entry.port + 1, entry.port, entry.port + 2 but if no server is 
+listening, it returns a 502 error page.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+## Recommendation: Consider Alternatives
+
+Given you've been struggling with this for a while, here are options:
+
+### Option A: Fix Current Docker Backend (Quick)
+- Fix terminal shell initialization
+- Add proper error handling for preview
+
+### Option B: Use Existing Open-Source Solutions
+1. code-server (VS Code in browser) - Has working terminal, preview, file management
+2. Gitpod's workspace-images - Production-ready container runtime
+3. Theia IDE - Eclipse's browser IDE with terminal support
 ---
 
 ## ⚠️ AI ASSISTANT RULES
@@ -28,25 +84,14 @@
   too much not neecearfy logs on console 
   ⚠ Next.js 15.5.3 has a critical vulnerability (CVE-2025-66478) that could allow attackers to 
    execute arbitrary code on your server. Run `pnpm update next` to update.
-**What we already have**:
-- ✅ Monaco editor (fully integrated in workbench)
-- ✅ File tree and file management
-- ✅ Workbench system
-- ✅ Terminal (xterm.js)
-- ⚠️ Live preview (docker-backend at port 3100)
-- ✅ AI chat integration
+
 
 **CRITICAL CONSTRAINTS**:
 - ❌ **WebContainer API is BLOCKED** - StackBlitz doesn't allow live usage
 - ✅ **Use docker-backend** (port 3100) for code execution
 - ✅ **Or find open-source alternatives** for container management
 
-**What we need**:
-- 🔧 Fix existing bugs (SSR errors, missing components)
-- 🔧 Test docker-backend service (port 3100)
-- 🔧 Remove/replace WebContainer API dependencies
-- 🔧 Add multi-language support
-- 🔧 Deploy working version
+
 
 ---
 
@@ -82,62 +127,6 @@ AI-powered full-stack development platform for building REAL production applicat
 
 ---
 
-## 📊 PROJECT STATUS
-
-### ✅ COMPLETED TODAY
-- [x] Restored working version from Dec 10 (commit a9144dc)
-- [x] Added 4 new features from production backup (Dec 10-16 work)
-- [x] Fixed remix-island dependency issue
-- [x] Created branch: `working-dec10-with-new-features`
-- [x] Committed all changes (commit 6e590ec)
-- [x] Generated Prisma client for app folder
-
-### 📦 WORKING VERSION CONFIRMED
-- **Commit**: a9144dc (Dec 10, 2025)
-- **Files**: 7,874 total files intact
-- **UI**: Orange deploy button (working)
-- **Code**: All November/December work preserved
-
----
-
-## 🔴 CRITICAL ERRORS
-1. API Routes Failing - Cannot read properties of undefined (reading 'env')
-  - /api/chat-history → 500 error
-  - /api/mcp/servers → 500 error
-
-  2. Google Profile Image Blocked - COEP blocking external images
-  net::ERR_BLOCKED_BY_RESPONSE.NotSameOriginAfterDefaultedToSameOriginByCoep
-
-  3. Browser extension errors (not critical, can ignore)
-
-  Let me fix these:
-
-### HIGH PRIORITY
-- [ ] Deal with Hetzner server security lockdown
-- [ ] Plan deployment to new/clean server
-- [ ] Push working branch to GitHub as backup
-
-### MEDIUM PRIORITY
-- [ ] Migrate to Remix v7 future flags
-- [ ] Fix Vite SSR react-dom issue
-- [ ] Update Prisma config (prisma.config.ts)
-- [ ] Test docker-backend service
-
----
-
-## 📊 PROJECTS OVERVIEW
-
-### docker-backend/ (Execution Backend)
-- **Port**: 3100
-- **Status**: ❓ Unknown (not tested)
-- **Purpose**: Docker container management, code execution
-- **Why**: WebContainer API blocked by StackBlitz, we use docker-backend instead
-- **Features**: Container creation, npm/pip/cargo install, terminal access, code execution
-- **TODO**:
-  - Test health endpoint
-  - Verify container creation works
-  - Test package installation (npm, pip, cargo)
-  - Test terminal execution
 
   🎯 Docker Backend Architecture
 
@@ -178,26 +167,7 @@ AI-powered full-stack development platform for building REAL production applicat
   - Simpler architecture
   - Easier to customize
 ---
+localhost engellendi
+localhost bağlanmayı reddetti.
 
-## 🚀 NEW FEATURES ADDED (Dec 10-16)
-
-
-
----
-
-## 🔐 SECURITY
-
-### Hetzner Server Lockdown
-- **IP**: 77.42.23.19
-- **Date**: Dec 16-17, 2025
-- **Reason**: Port scanning detected (SSH 22, MySQL 3306, RDP 3389, FTP 21)
-- **Status**: Server inaccessible
-- **Action Required**: Contact Hetzner support OR deploy to new server
-
-### Git Security
-- Pre-commit hook active (blocks secrets)
-- Production backup downloaded: `recoder-web-backup-from-production/`
-
----
-
-
+ERR_BLOCKED_BY_RESPONSE

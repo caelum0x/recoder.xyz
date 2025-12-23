@@ -289,17 +289,20 @@ app.ws('/terminal/:projectId', async (ws, req) => {
   const container = docker.getContainer(entry.id);
 
   try {
+    // Use sh -c to spawn bash with proper prompt setup
     const exec = await container.exec({
-      Cmd: ['/bin/bash', '--rcfile', '/dev/null', '-i'],
+      Cmd: ['/bin/sh', '-c', 'export PS1="\\w $ " && exec /bin/bash -i 2>/dev/null || exec /bin/sh -i'],
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
       Tty: true,
       WorkingDir: '/workspace',
-      Env: ['PS1=$ ', 'TERM=xterm-256color', 'BASH_ENV='],
+      Env: ['TERM=xterm-256color', 'HOME=/root', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
     });
 
     const stream = await exec.start({ hijack: true, stdin: true, Tty: true }) as Duplex;
+    
+    console.log('✅ Terminal stream created for', projectId);
 
     // With TTY=true, Docker sends raw data without multiplexing headers
     stream.on('data', (chunk: Buffer) => {
@@ -310,7 +313,6 @@ app.ws('/terminal/:projectId', async (ws, req) => {
 
     ws.on('message', (data: Buffer | string) => {
       entry.lastActive = Date.now();
-      // Data from browser WebSocket comes as Buffer
       if (Buffer.isBuffer(data)) {
         stream.write(data);
       } else if (typeof data === 'string') {

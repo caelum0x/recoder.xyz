@@ -302,3 +302,11 @@ cd production-engine && npm install jest && npm run build
 - Security tests for AI prompt handling
 
 This codebase prioritizes real functionality over mock implementations, with a focus on production-ready code generation through intelligent AI orchestration.
+
+# AITimeMachine Integration
+
+## Before file changes
+Call: `before_action({ action: "description" })`
+
+## After changes  
+Call: `after_action({ action: "what was done", success: true })`

@@ -20,7 +20,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
     return (
       <div className={classNames('p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg', className)}>
         <div className="flex items-start gap-3">
-          <div className="text-2xl">❌</div>
+          <div className="text-2xl"><div className="i-ph:x-circle text-red-500" /></div>
           <div className="flex-1">
             <p className="text-sm text-red-800 dark:text-red-200">{error.message}</p>
           </div>
@@ -57,7 +57,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
     >
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
-        <div className="text-2xl flex-shrink-0">{severityIcon}</div>
+        <div className={classNames('text-2xl flex-shrink-0', severityIcon)} />
         <div className="flex-1 min-w-0">
           <h3 className={classNames('font-semibold text-sm mb-1', severityColor)}>
             {solution.title}
@@ -145,7 +145,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
           {/* Tips */}
           <div className="mt-3 p-2 bg-bolt-elements-background-depth-1 rounded border border-bolt-elements-borderColor">
             <p className="text-xs text-bolt-elements-textSecondary">
-              <strong>💡 Tip:</strong> {getTipForErrorType(error.type)}
+              <strong>Tip:</strong> {getTipForErrorType(error.type)}
             </p>
           </div>
         </div>
@@ -157,7 +157,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
 // Compact inline error for small spaces
 export function InlineError({ error, onDismiss }: { error: ParsedError; onDismiss?: () => void }) {
   const solution = error.solution;
-  const icon = solution ? getSeverityIcon(solution.severity) : '❌';
+  const icon = solution ? getSeverityIcon(solution.severity) : 'i-ph:x-circle';
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">

@@ -112,7 +112,7 @@ export function CustomTools() {
 
       {/* AI Integration Info */}
       <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-        <div className="text-sm text-blue-400 font-medium">💡 AI Integration</div>
+        <div className="text-sm text-blue-400 font-medium">AI Integration</div>
         <p className="text-xs text-bolt-elements-textSecondary mt-1">
           Enabled tools are automatically available to AI. Ask it to "run format" or "execute the lint tool" and it will use your custom commands.
         </p>

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
 import { IconButton } from '~/components/ui/IconButton';
-import type { ApiResponse } from "~/types/api-responses";
 
 interface DownloadButtonProps {
   projectId?: string;

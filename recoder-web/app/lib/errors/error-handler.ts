@@ -302,12 +302,12 @@ export function getSeverityColor(severity: ErrorSolution['severity']): string {
 export function getSeverityIcon(severity: ErrorSolution['severity']): string {
   switch (severity) {
     case 'critical':
-      return '🚨';
+      return 'i-ph:warning-octagon';
     case 'high':
-      return '⚠️';
+      return 'i-ph:warning';
     case 'medium':
-      return '⚡';
+      return 'i-ph:lightning';
     case 'low':
-      return 'ℹ️';
+      return 'i-ph:info';
   }
 }

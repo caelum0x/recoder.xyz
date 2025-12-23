@@ -241,7 +241,7 @@ export const EditorPanel = memo(
                       Terminal {terminalCount > 1 && index + 1}
                       {highlightTerminal && isActive && (
                         <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-semibold animate-bounce">
-                          New Output ⚡
+                          New Output
                         </span>
                       )}
                     </button>

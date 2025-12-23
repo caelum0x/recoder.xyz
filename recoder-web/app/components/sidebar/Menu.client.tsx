@@ -315,9 +315,6 @@ export function Menu() {
             Start new chat
           </a>
         </div>
-        <div className="px-4 mb-2">
-          <ProjectsList />
-        </div>
         <div className="text-bolt-elements-textPrimary font-medium pl-6 pr-5 my-2">Your Chats</div>
         <div className="flex-1 overflow-scroll pl-4 pr-5 pb-5">
           {loadingFromDb && (

@@ -31,6 +31,9 @@ export async function getUserApiKey(
     const url = `${MAIN_APP_URL}/api/user/ai-provider-keys/decrypt?provider=${provider}`;
 
     console.log(`[getUserApiKey] Fetching API key for provider: ${provider}`);
+    console.log(`[getUserApiKey] Main app URL: ${MAIN_APP_URL}`);
+    console.log(`[getUserApiKey] Cookie present: ${sessionCookie.length} chars`);
+    console.log(`[getUserApiKey] Cookie preview: ${sessionCookie.substring(0, 100)}...`);
 
     const response = await fetch(url, {
       method: 'GET',
@@ -41,7 +44,12 @@ export async function getUserApiKey(
       credentials: 'include',
     });
 
+    console.log(`[getUserApiKey] Response status: ${response.status}`);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[getUserApiKey] Error response: ${errorText}`);
+      
       if (response.status === 404) {
         console.warn(`[getUserApiKey] No API key found for provider: ${provider}`);
         return null;
@@ -58,6 +66,7 @@ export async function getUserApiKey(
       return data.apiKey;
     }
 
+    console.warn(`[getUserApiKey] Response success but no apiKey:`, data);
     return null;
   } catch (error) {
     console.error('[getUserApiKey] Error fetching user API key:', error);

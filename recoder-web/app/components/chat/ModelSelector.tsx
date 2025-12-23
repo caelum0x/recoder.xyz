@@ -243,9 +243,9 @@ export function ModelSelector({
               return (
                 <div key={category}>
                   <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase sticky top-0" style={{ backgroundColor: '#000000' }}>
-                    {category === 'popular' && '🔥 Popular Models'}
-                    {category === 'budget' && '💰 Budget Models'}
-                    {category === 'advanced' && '🧠 Advanced Models'}
+                    {category === 'popular' && 'Popular Models'}
+                    {category === 'budget' && 'Budget Models'}
+                    {category === 'advanced' && 'Advanced Models'}
                   </div>
                   {categoryModels.map((model) => (
                     <button

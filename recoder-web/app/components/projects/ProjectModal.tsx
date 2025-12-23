@@ -10,8 +10,8 @@ interface ProjectModalProps {
 }
 
 const PRESET_ICONS = [
-  '📁', '🚀', '💡', '⚡', '🔥', '💻', '🎯', '🌟', 
-  '📊', '🔧', '🎨', '📱', '🌐', '⚙️', '🔬', '📈'
+  'i-ph:folder', 'i-ph:rocket', 'i-ph:lightbulb', 'i-ph:lightning', 'i-ph:fire', 'i-ph:desktop', 'i-ph:target', 'i-ph:star', 
+  'i-ph:chart-bar', 'i-ph:wrench', 'i-ph:palette', 'i-ph:device-mobile', 'i-ph:globe', 'i-ph:gear', 'i-ph:flask', 'i-ph:trend-up'
 ];
 
 const PRESET_COLORS = [
@@ -23,7 +23,7 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    icon: '📁',
+    icon: 'i-ph:folder',
     color: '#3b82f6'
   });
 
@@ -43,7 +43,7 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
         setFormData({
           name: '',
           description: '',
-          icon: '📁',
+          icon: 'i-ph:folder',
           color: '#3b82f6'
         });
       }
@@ -141,13 +141,13 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
                   key={icon}
                   type="button"
                   onClick={() => handleInputChange('icon', icon)}
-                  className={`w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center text-xl ${
+                  className={`w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center ${
                     formData.icon === icon
                       ? 'border-bolt-elements-focus bg-bolt-elements-focus/10'
                       : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorHover'
                   }`}
                 >
-                  {icon}
+                  <div className={`${icon} text-xl`} />
                 </button>
               ))}
             </div>
@@ -180,10 +180,10 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
             <div className="text-sm text-bolt-elements-textSecondary mb-2">Preview:</div>
             <div className="flex items-center gap-3">
               <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-white"
                 style={{ backgroundColor: formData.color }}
               >
-                {formData.icon}
+                <div className={`${formData.icon} text-xl`} />
               </div>
               <div>
                 <div className="font-medium text-bolt-elements-textPrimary">

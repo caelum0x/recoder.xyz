@@ -26,7 +26,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
   async function loadGitHubStatus() {
     try {
       const response = await fetch(`/api/chat/${chatId}/github?action=status`);
-      const data: any = await response.json();
+      const data: any = await response.json() as { error?: string; [key: string]: any };
       if (data.connected) {
         setConnected(true);
         setRepo(data.repo);
@@ -47,7 +47,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
         body: JSON.stringify({ action: 'pull' })
       });
 
-      const pullData = await pullResponse.json();
+      const pullData = await pullResponse.json() as { error?: string; files?: any[] };
       
       if (!pullResponse.ok) {
         throw new Error(pullData.error || 'Failed to pull changes');
@@ -72,7 +72,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
             })
           });
 
-          const pushData = await pushResponse.json();
+          const pushData = await pushResponse.json() as { error?: string };
           
           if (!pushResponse.ok) {
             throw new Error(pushData.error || 'Failed to push changes');
@@ -111,7 +111,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
         body: JSON.stringify({ action: 'clone', repo: repoPath, branch })
       });
 
-      const data = await response.json();
+      const data = await response.json() as { error?: string; [key: string]: any };
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to clone repository');
@@ -143,7 +143,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
         body: JSON.stringify({ action: 'pull' })
       });
 
-      const data = await response.json();
+      const data = await response.json() as { error?: string; [key: string]: any };
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to pull changes');
@@ -171,7 +171,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
         body: JSON.stringify({ action: 'push', files, message, branch })
       });
 
-      const data = await response.json();
+      const data = await response.json() as { error?: string; [key: string]: any };
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to push changes');
