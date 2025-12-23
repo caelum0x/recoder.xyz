@@ -101,9 +101,9 @@ export class WorkbenchStore {
   }
 
   // Set project ID for Docker backend
-  setProjectId(projectId: string) {
+  async setProjectId(projectId: string) {
     this.#currentProjectId = projectId;
-    this.#terminalStore.setProjectId(projectId);
+    await this.#terminalStore.setProjectId(projectId);
     this.#previewsStore.setProjectId(projectId);
   }
 

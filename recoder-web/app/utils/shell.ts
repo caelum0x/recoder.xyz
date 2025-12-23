@@ -70,28 +70,36 @@ async function newWebContainerShellProcess(webcontainer: WebContainer, terminal:
  */
 async function newDockerShellProcess(terminal: ITerminal, projectId: string) {
   const wsUrl = DOCKER_URL!.replace('http', 'ws');
-  const ws = new WebSocket(`${wsUrl}/terminal/${projectId}`);
+  const wsEndpoint = `${wsUrl}/terminal/${projectId}`;
+  console.log('🐳 [Shell] Connecting to Docker terminal:', wsEndpoint);
+  
+  const ws = new WebSocket(wsEndpoint);
+  ws.binaryType = 'arraybuffer'; // Receive binary data as ArrayBuffer
 
   const ready = withResolvers<void>();
 
   ws.onopen = () => {
-    console.log('🐳 Docker terminal connected');
-    // Send initial newline to trigger prompt
-    ws.send('\n');
+    console.log('🐳 [Shell] Docker terminal WebSocket connected');
     ready.resolve();
   };
 
   ws.onmessage = (event) => {
-    terminal.write(event.data);
+    // Handle both string and binary data
+    if (event.data instanceof ArrayBuffer) {
+      const text = new TextDecoder().decode(event.data);
+      terminal.write(text);
+    } else {
+      terminal.write(event.data);
+    }
   };
 
   ws.onerror = (error) => {
-    console.error('Docker terminal error:', error);
+    console.error('🐳 [Shell] Docker terminal WebSocket error:', error);
     terminal.write('\r\n\x1b[31mTerminal connection error\x1b[0m\r\n');
   };
 
-  ws.onclose = () => {
-    console.log('Docker terminal disconnected');
+  ws.onclose = (event) => {
+    console.log('🐳 [Shell] Docker terminal WebSocket closed:', event.code, event.reason);
     terminal.write('\r\n\x1b[33mTerminal disconnected\x1b[0m\r\n');
   };
 

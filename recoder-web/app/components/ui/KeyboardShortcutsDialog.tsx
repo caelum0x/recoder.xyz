@@ -51,7 +51,7 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
       <Dialog onClose={onClose} className="max-w-2xl">
         <DialogTitle>
           <div className="flex items-center gap-2">
-            <span className="text-2xl">⌨️</span>
+            <span className="text-2xl"><div className="i-ph:keyboard" /></span>
             <span>Keyboard Shortcuts</span>
           </div>
         </DialogTitle>
@@ -103,7 +103,7 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
           {/* Tips */}
           <div className="mt-6 p-4 bg-bolt-elements-background-depth-3 rounded-lg border border-bolt-elements-borderColor">
             <div className="flex items-start gap-2">
-              <div className="text-lg flex-shrink-0">💡</div>
+              <div className="text-lg flex-shrink-0"><div className="i-ph:lightbulb" /></div>
               <div className="text-sm text-bolt-elements-textSecondary">
                 <strong className="text-bolt-elements-textPrimary">Pro tip:</strong> Most shortcuts work with both Cmd (Mac) and Ctrl (Windows/Linux). 
                 Press <kbd className="kdb">Cmd/Ctrl</kbd> + <kbd className="kdb">K</kbd> anytime to open quick actions!

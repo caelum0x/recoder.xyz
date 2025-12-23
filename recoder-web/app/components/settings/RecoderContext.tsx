@@ -7,15 +7,15 @@ interface RecoderContextProps {
 }
 
 const RECODER_FILES = [
-  { path: 'context.md', label: 'Project Context', icon: '📝' },
-  { path: 'spec.md', label: 'Specification', icon: '📋' },
-  { path: 'prd.md', label: 'Product Requirements', icon: '🎯' },
-  { path: 'architecture.md', label: 'Architecture', icon: '🏗️' },
-  { path: 'style-guide.md', label: 'Style Guide', icon: '🎨' },
-  { path: 'api-docs.md', label: 'API Documentation', icon: '🔌' },
-  { path: 'prompts/component.md', label: 'Component Prompt', icon: '⚛️' },
-  { path: 'prompts/api.md', label: 'API Prompt', icon: '🌐' },
-  { path: 'prompts/test.md', label: 'Test Prompt', icon: '🧪' },
+  { path: 'context.md', label: 'Project Context', iconClass: 'i-ph:file-text' },
+  { path: 'spec.md', label: 'Specification', iconClass: 'i-ph:list-checks' },
+  { path: 'prd.md', label: 'Product Requirements', iconClass: 'i-ph:target' },
+  { path: 'architecture.md', label: 'Architecture', iconClass: 'i-ph:buildings' },
+  { path: 'style-guide.md', label: 'Style Guide', iconClass: 'i-ph:palette' },
+  { path: 'api-docs.md', label: 'API Documentation', iconClass: 'i-ph:plugs-connected' },
+  { path: 'prompts/component.md', label: 'Component Prompt', iconClass: 'i-ph:atom' },
+  { path: 'prompts/api.md', label: 'API Prompt', iconClass: 'i-ph:globe' },
+  { path: 'prompts/test.md', label: 'Test Prompt', iconClass: 'i-ph:test-tube' },
 ];
 
 export function RecoderContext({ onSave, onLoad }: RecoderContextProps) {
@@ -109,7 +109,7 @@ export function RecoderContext({ onSave, onLoad }: RecoderContextProps) {
                     : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
                 }`}
               >
-                <span className="mr-2">{file.icon}</span>
+                <span className={`mr-2 ${file.iconClass}`} />
                 {file.label}
               </button>
             ))}
@@ -140,7 +140,7 @@ export function RecoderContext({ onSave, onLoad }: RecoderContextProps) {
 
           <div className="p-4 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
             <p className="text-xs text-bolt-elements-textSecondary">
-              💡 Tip: This content will be automatically included in AI prompts to provide project-specific context.
+              Tip: This content will be automatically included in AI prompts to provide project-specific context.
             </p>
           </div>
         </div>

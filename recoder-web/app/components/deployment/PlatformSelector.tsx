@@ -17,7 +17,7 @@ const platforms = [
     id: 'vercel' as DeploymentPlatform,
     name: 'Vercel',
     description: 'Perfect for Next.js, React, Vue, and Svelte',
-    icon: '▲',
+    iconClass: 'i-simple-icons:vercel',
     color: 'from-black to-gray-800',
     supported: true,
   },
@@ -25,7 +25,7 @@ const platforms = [
     id: 'netlify' as DeploymentPlatform,
     name: 'Netlify',
     description: 'Great for static sites and JAMstack apps',
-    icon: '◆',
+    iconClass: 'i-simple-icons:netlify',
     color: 'from-teal-500 to-cyan-600',
     supported: true,
   },
@@ -33,7 +33,7 @@ const platforms = [
     id: 'railway' as DeploymentPlatform,
     name: 'Railway',
     description: 'Full-stack apps with Docker and databases',
-    icon: '🚂',
+    iconClass: 'i-ph:train',
     color: 'from-purple-500 to-pink-600',
     supported: false,
   },
@@ -62,7 +62,7 @@ export function PlatformSelector({ selected, recommended, onSelect }: PlatformSe
               'bg-gradient-to-br',
               platform.color
             )}>
-              {platform.icon}
+              <div className={platform.iconClass} />
             </div>
 
             <div className="flex-1">

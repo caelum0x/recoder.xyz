@@ -6,13 +6,13 @@ interface LoadingIndicatorProps {
 }
 
 const LOADING_MESSAGES = [
-  { icon: '🔍', text: 'Analyzing your request...', duration: 2000 },
-  { icon: '🧠', text: 'Selecting optimal AI model...', duration: 1500 },
-  { icon: '📁', text: 'Planning project structure...', duration: 2000 },
-  { icon: '⚡', text: 'Generating code with AI...', duration: 3000 },
-  { icon: '🎨', text: 'Creating components...', duration: 2500 },
-  { icon: '🔧', text: 'Setting up configuration...', duration: 2000 },
-  { icon: '✅', text: 'Almost done...', duration: 1500 },
+  { text: 'Analyzing your request...', duration: 2000 },
+  { text: 'Selecting optimal AI model...', duration: 1500 },
+  { text: 'Planning project structure...', duration: 2000 },
+  { text: 'Generating code...', duration: 3000 },
+  { text: 'Creating components...', duration: 2500 },
+  { text: 'Setting up configuration...', duration: 2000 },
+  { text: 'Almost done...', duration: 1500 },
 ];
 
 export function LoadingIndicator({ className }: LoadingIndicatorProps) {
@@ -36,23 +36,14 @@ export function LoadingIndicator({ className }: LoadingIndicatorProps) {
 
   return (
     <div className={classNames('flex flex-col items-center justify-center gap-4 p-6', className)}>
-      {/* Animated icon */}
-      <div className="relative">
-        <div className="text-6xl animate-bounce">{currentMessage.icon}</div>
-        {/* Pulse effect */}
-        <div className="absolute inset-0 text-6xl animate-ping opacity-20">{currentMessage.icon}</div>
-      </div>
+      {/* Spinning indicator */}
+      <div className="i-svg-spinners:90-ring-with-bg text-4xl text-bolt-elements-loader-progress"></div>
 
       {/* Loading message */}
       <div className="text-center">
-        <p className="text-lg font-medium text-bolt-elements-textPrimary mb-2 animate-fade-in">
+        <p className="text-lg font-medium text-bolt-elements-textPrimary mb-2">
           {currentMessage.text}
         </p>
-        
-        {/* Spinning dots indicator */}
-        <div className="flex items-center justify-center gap-2 mt-2">
-          <div className="i-svg-spinners:3-dots-fade text-2xl text-bolt-elements-textSecondary"></div>
-        </div>
       </div>
 
       {/* Progress bar */}
@@ -67,15 +58,6 @@ export function LoadingIndicator({ className }: LoadingIndicatorProps) {
       <div className="text-xs text-bolt-elements-textTertiary">
         Step {messageIndex + 1} of {LOADING_MESSAGES.length}
       </div>
-
-      {/* Model badge (optional - shows which model is being used) */}
-      {messageIndex >= 2 && (
-        <div className="mt-2 px-3 py-1.5 bg-bolt-elements-background-depth-2 rounded-full border border-bolt-elements-borderColor animate-fade-in">
-          <span className="text-xs font-medium text-bolt-elements-textSecondary">
-            Powered by Claude Sonnet 4
-          </span>
-        </div>
-      )}
     </div>
   );
 }

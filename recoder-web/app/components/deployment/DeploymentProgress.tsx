@@ -11,10 +11,10 @@ interface DeploymentProgressProps {
 }
 
 const steps = [
-  { id: 'prepare', label: 'Preparing files', icon: '📦' },
-  { id: 'upload', label: 'Uploading to cloud', icon: '☁️' },
-  { id: 'build', label: 'Building application', icon: '🔨' },
-  { id: 'deploy', label: 'Deploying', icon: '🚀' },
+  { id: 'prepare', label: 'Preparing files', iconClass: 'i-ph:package' },
+  { id: 'upload', label: 'Uploading to cloud', iconClass: 'i-ph:cloud-arrow-up' },
+  { id: 'build', label: 'Building application', iconClass: 'i-ph:hammer' },
+  { id: 'deploy', label: 'Deploying', iconClass: 'i-ph:rocket-launch' },
 ];
 
 export function DeploymentProgress({ platform }: DeploymentProgressProps) {
@@ -60,7 +60,7 @@ export function DeploymentProgress({ platform }: DeploymentProgressProps) {
                 : 'bg-bolt-elements-background-depth-3 scale-90 opacity-50'
               }
             `}>
-              {index < currentStep ? '✓' : step.icon}
+              {index < currentStep ? <div className="i-ph:check" /> : <div className={step.iconClass} />}
             </div>
 
             {/* Label */}

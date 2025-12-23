@@ -139,7 +139,7 @@ export const Preview = memo(() => {
         {previewError ? (
           <div className="flex w-full h-full justify-center items-center bg-white">
             <div className="text-center p-6">
-              <div className="text-red-500 text-lg mb-2">⚠️ Preview Error</div>
+              <div className="text-red-500 text-lg mb-2"><span className="i-ph:warning" /> Preview Error</div>
               <div className="text-gray-600">{previewError}</div>
             </div>
           </div>

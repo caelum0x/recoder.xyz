@@ -9,7 +9,7 @@ interface QuickActionsProps {
 const QUICK_ACTIONS = [
   {
     id: 'database',
-    icon: '🗄️',
+    iconClass: 'i-ph:database',
     label: 'Add Database',
     prompt: 'Add a SQLite database to this project with schema, migrations, and connection setup. Include TypeScript types for the models.',
     description: 'Set up database with schema',
@@ -17,7 +17,7 @@ const QUICK_ACTIONS = [
   },
   {
     id: 'auth',
-    icon: '🔐',
+    iconClass: 'i-ph:lock-key',
     label: 'Add Auth',
     prompt: 'Implement user authentication with JWT tokens, including registration, login, logout, and password hashing. Add middleware for protected routes.',
     description: 'User authentication system',
@@ -25,7 +25,7 @@ const QUICK_ACTIONS = [
   },
   {
     id: 'api',
-    icon: '📡',
+    iconClass: 'i-ph:plugs-connected',
     label: 'Create API',
     prompt: 'Create a RESTful API endpoint with CRUD operations, input validation, error handling, and proper HTTP status codes. Include TypeScript types.',
     description: 'REST API with CRUD',
@@ -33,7 +33,7 @@ const QUICK_ACTIONS = [
   },
   {
     id: 'component',
-    icon: '🧩',
+    iconClass: 'i-ph:puzzle-piece',
     label: 'Add Component',
     prompt: 'Create a new React component with TypeScript, props interface, and styling. Make it reusable and well-documented.',
     description: 'React component with props',
@@ -41,7 +41,7 @@ const QUICK_ACTIONS = [
   },
   {
     id: 'tests',
-    icon: '🧪',
+    iconClass: 'i-ph:test-tube',
     label: 'Add Tests',
     prompt: 'Add unit tests for the main functionality using a testing framework. Include test cases for success and error scenarios.',
     description: 'Unit tests for code',
@@ -49,7 +49,7 @@ const QUICK_ACTIONS = [
   },
   {
     id: 'deploy',
-    icon: '🚀',
+    iconClass: 'i-ph:rocket-launch',
     label: 'Deploy Setup',
     prompt: 'Set up deployment configuration for Vercel or Netlify. Include environment variables, build commands, and deployment scripts.',
     description: 'Deployment configuration',
@@ -94,11 +94,11 @@ export function QuickActions({ onSelectAction, disabled }: QuickActionsProps) {
               <div
                 className={classNames(
                   'flex items-center justify-center w-10 h-10 rounded-lg',
-                  'bg-gradient-to-br text-white text-xl font-semibold',
+                  'bg-gradient-to-br text-white',
                   action.color
                 )}
               >
-                {action.icon}
+                <div className={classNames(action.iconClass, 'text-xl')} />
               </div>
 
               {/* Label and description */}
@@ -147,13 +147,6 @@ export function QuickActions({ onSelectAction, disabled }: QuickActionsProps) {
           <div className="i-ph:lightning-fill text-2xl" />
         )}
       </button>
-
-      {/* Keyboard shortcut hint */}
-      {!isOpen && !disabled && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor text-xs text-bolt-elements-textSecondary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-          Press <kbd className="kdb">Cmd+K</kbd>
-        </div>
-      )}
     </div>
   );
 }
@@ -176,7 +169,7 @@ export function InlineQuickActions({ onSelectAction }: QuickActionsProps) {
             'text-sm transition-all duration-200'
           )}
         >
-          <span className="text-lg">{action.icon}</span>
+          <div className={classNames(action.iconClass, 'text-lg')} />
           <span className="text-bolt-elements-textPrimary">{action.label}</span>
         </button>
       ))}

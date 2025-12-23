@@ -15,7 +15,7 @@ export async function streamAnthropicResponse(
   apiKey: string,
   options: StreamOptions = {}
 ): Promise<ReadableStream<Uint8Array>> {
-  const model = options.model || 'claude-3-5-sonnet-20241022';
+  const model = options.model || 'claude-sonnet-4-5-20250929';
 
   console.log('🚀 [Anthropic] Starting request to Anthropic API');
   console.log('📝 [Anthropic] Model:', model);

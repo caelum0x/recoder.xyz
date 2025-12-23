@@ -208,7 +208,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
           </div>
         ) : filteredProjects.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4 opacity-30">📁</div>
+            <div className="text-6xl mb-4 opacity-30"><div className="i-ph:folder-open" /></div>
             <h3 className="text-xl font-semibold mb-2 text-bolt-elements-textPrimary">No projects yet</h3>
             <p className="text-bolt-elements-textSecondary mb-6">Create your first project to get started</p>
             <button
@@ -228,7 +228,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="text-3xl">
-                    {project.type === 'web' ? '🌐' : project.type === 'api' ? '⚡' : project.type === 'mobile' ? '📱' : '📁'}
+                    <div className={`${project.type === 'web' ? 'i-ph:globe' : project.type === 'api' ? 'i-ph:lightning' : project.type === 'mobile' ? 'i-ph:device-mobile' : 'i-ph:folder'}`} />
                   </div>
                   <div className="flex gap-1">
                     {project.isPrivate && (
@@ -239,7 +239,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
                       className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-300 transition-all"
                       title="Delete project"
                     >
-                      🗑️
+                      <span className="i-ph:trash" />
                     </button>
                   </div>
                 </div>
@@ -291,13 +291,13 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
                     name="type"
                     className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary"
                   >
-                    <option value="web">🌐 Web App</option>
-                    <option value="api">⚡ API / Backend</option>
+                    <option value="web">Web App</option>
+                    <option value="api">API / Backend</option>
                     <option value="mobile">📱 Mobile App</option>
                     <option value="blockchain">🔗 Blockchain / Web3</option>
                     <option value="ai">🤖 AI / ML</option>
                     <option value="game">🎮 Game</option>
-                    <option value="other">📁 Other</option>
+                    <option value="other">Other</option>
                   </select>
                 </div>
                 <div className="flex gap-3">
