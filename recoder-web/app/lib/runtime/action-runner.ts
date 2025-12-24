@@ -1,13 +1,11 @@
-import { WebContainer } from '@webcontainer/api';
 import { map, type MapStore } from 'nanostores';
 import type { RecoderAction } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
-import { clearNpmCache } from '~/lib/webcontainer/package-manager';
+import { WORK_DIR } from '~/utils/constants';
 
-// Cached workbench store for performance
 let _workbenchStore: any = null;
 const getWorkbenchStore = async () => {
   if (!_workbenchStore) {
@@ -17,43 +15,32 @@ const getWorkbenchStore = async () => {
   return _workbenchStore;
 };
 
-// Docker backend configuration from environment
 const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
-// Global Docker availability flag - retries on failure
 let dockerAvailable: boolean | null = null;
 let lastDockerCheck = 0;
-const DOCKER_CHECK_INTERVAL = 60000; // Retry every 60s if failed (reduce console spam)
+const DOCKER_CHECK_INTERVAL = 60000;
 
 async function checkDockerAvailable(forceCheck = false): Promise<boolean> {
-  // Return cached result if available and recent (unless forcing)
   const now = Date.now();
   if (!forceCheck && dockerAvailable === true) return true;
   if (!forceCheck && dockerAvailable === false && (now - lastDockerCheck) < DOCKER_CHECK_INTERVAL) {
     return false;
   }
   
-  if (!DOCKER_URL) {
-    console.log('🐳🐳🐳 No DOCKER_URL configured');
-    return false;
-  }
+  if (!DOCKER_URL) return false;
   
   try {
-    console.log('🐳🐳🐳 CHECKING DOCKER AT:', DOCKER_URL);
     const res = await fetch(`${DOCKER_URL}/health`, { signal: AbortSignal.timeout(3000) });
     dockerAvailable = res.ok;
     lastDockerCheck = now;
-    console.log('🐳🐳🐳 Docker backend:', dockerAvailable ? '✅ AVAILABLE' : '❌ NOT AVAILABLE');
-  } catch (e) {
-    console.log('🐳🐳🐳 Docker check FAILED:', e);
+  } catch {
     dockerAvailable = false;
     lastDockerCheck = now;
   }
   return dockerAvailable;
 }
 
-// Check Docker on module load
-console.log('🐳🐳🐳 ACTION-RUNNER LOADED - DOCKER_URL:', DOCKER_URL);
 if (typeof window !== 'undefined') {
   checkDockerAvailable();
 }
@@ -111,69 +98,53 @@ export type ActionStateUpdate =
 type ActionsMap = MapStore<Record<string, ActionState>>;
 
 export class ActionRunner {
-  #webcontainer: Promise<WebContainer>;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
   #chatId: string | null = null;
   #modifiedFiles: Array<{ path: string; content: string }> = [];
-
-  // FIX #3: Track if repository was cloned to prevent additional file generation
   #repositoryCloned: boolean = false;
   #clonedRepoUrl: string | null = null;
-
-  // Track background dev server processes
   #devServerProcess: any = null;
-
-  // ✅ P1: Auto-run npm commands after build
   #packageJsonCreated: boolean = false;
   #autoInstallTimer: NodeJS.Timeout | null = null;
   #autoInstallTriggered: boolean = false;
   #filesBeingCreated: Set<string> = new Set();
-
-  // Docker backend support
-  #useDocker: boolean = false;
   #projectId: string | null = null;
+  #dockerReady: boolean = false;
 
   actions: ActionsMap = map({});
 
-  constructor(webcontainerPromise: Promise<WebContainer>, chatId?: string) {
-    this.#webcontainer = webcontainerPromise;
+  constructor(chatId?: string) {
     this.#chatId = chatId || null;
     this.#projectId = chatId || `project-${Date.now()}`;
-    
-    // Docker will be initialized on first file operation
   }
 
   async #ensureDockerReady(): Promise<boolean> {
-    if (this.#useDocker) return true;
+    if (this.#dockerReady) return true;
     
-    // Force check if we haven't connected yet
-    const available = await checkDockerAvailable(!this.#useDocker);
-    console.log('🐳🐳🐳 ensureDockerReady - available:', available, 'projectId:', this.#projectId);
-    if (!available) return false;
+    if (!DOCKER_URL) {
+      throw new Error('Docker backend not configured');
+    }
     
     try {
-      // Create container for this project
-      console.log('🐳🐳🐳 Creating container for project:', this.#projectId);
       const res = await fetch(`${DOCKER_URL}/api/container`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: this.#projectId }),
         signal: AbortSignal.timeout(10000),
       });
-      console.log('🐳🐳🐳 Container creation response:', res.status, res.ok);
+      
       if (res.ok) {
-        this.#useDocker = true;
-        logger.info(`🐳 Docker container ready for project: ${this.#projectId}`);
+        this.#dockerReady = true;
+        logger.info(`Docker container ready for project: ${this.#projectId}`);
         return true;
       } else {
         const errText = await res.text();
-        console.log('🐳🐳🐳 Container creation failed:', errText);
+        throw new Error(`Container creation failed: ${errText}`);
       }
     } catch (e) {
-      console.log('🐳🐳🐳 Container creation error:', e);
       logger.error('Failed to create Docker container:', e);
+      throw e;
     }
-    return false;
   }
 
   // Docker file operations
@@ -338,168 +309,18 @@ export class ActionRunner {
     const isDevServer = /npm (run )?dev|yarn dev|pnpm dev|vite|next dev|remix dev|npm start|yarn start|pnpm start/.test(normalizedContent);
     const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
 
-    // Try Docker first - ensure it's ready
-    const dockerReady = await this.#ensureDockerReady();
-    if (dockerReady && DOCKER_URL) {
-      logger.info('🐳 Executing command via Docker backend');
-      try {
-        const output = await this.#dockerExec(action.content);
-        logger.info(`✅ Docker command completed:\n${output.substring(0, 500)}`);
-        return;
-      } catch (error: any) {
-        logger.error('Docker command failed, falling back to WebContainer:', error.message);
-        // Fall through to WebContainer
-      }
-    }
-
-    // WebContainer execution (fallback)
-    const webcontainer = await this.#webcontainer;
-
-    // Handle dev server commands specially - run in background
-    if (isDevServer) {
-      logger.info(`🚀 Starting dev server in background: ${action.content.substring(0, 100)}`);
-
-      // Kill existing dev server if running
-      if (this.#devServerProcess) {
-        logger.info('⚠️ Killing existing dev server process');
-        try {
-          this.#devServerProcess.kill();
-        } catch (e) {
-          logger.warn('Failed to kill existing dev server:', e);
-        }
-      }
-
-      return this.#runDevServerInBackground(webcontainer, action);
-    }
-
-    // Regular commands execute normally
-    logger.info(`✅ Executing command: ${action.content.substring(0, 100)}`);
-
-    let process;
+    // Execute via Docker backend only
+    await this.#ensureDockerReady();
+    
+    logger.info('Executing command via Docker backend');
     try {
-      process = await webcontainer.spawn('jsh', ['-c', action.content], {
-        env: {
-          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
-          npm_config_yes: 'true',
-        },
-      });
-      logger.info('📦 Process spawned successfully, waiting for completion...');
-    } catch (error) {
-      logger.error('Failed to spawn shell process:', error);
+      const output = await this.#dockerExec(action.content);
+      logger.info('Command completed successfully');
+      return;
+    } catch (error: any) {
+      logger.error('Docker command failed:', error.message);
       throw error;
     }
-
-    action.abortSignal.addEventListener('abort', () => {
-      logger.warn('⚠️ Shell command aborted by user');
-      process.kill();
-    });
-
-    const outputChunks: string[] = [];
-    let lastProgressUpdate = Date.now();
-    let packageCount = 0;
-    let currentPackage = '';
-
-    // ✅ P1: Enhanced output writer with real-time progress feedback
-    const outputWriter = new WritableStream({
-      write(data) {
-        const text = data.toString();
-        // Only push to chunks, don't spam console with every character
-        outputChunks.push(data);
-
-        // Parse npm install output for progress information (logging only)
-        if (isInstallCommand && Date.now() - lastProgressUpdate > 1000) {
-          // Extract package count: "added 247 packages"
-          const packageMatch = text.match(/added (\d+) packages?/i);
-          if (packageMatch) {
-            packageCount = parseInt(packageMatch[1]);
-            logger.info(`✅ Installed ${packageCount} packages`);
-            lastProgressUpdate = Date.now();
-          }
-
-          // Extract current package being installed: "npm WARN deprecated package@version"
-          const deprecatedMatch = text.match(/npm (?:WARN|info) (?:deprecated|installing) ([\w-]+)@/i);
-          if (deprecatedMatch && deprecatedMatch[1] !== currentPackage) {
-            currentPackage = deprecatedMatch[1];
-            logger.info(`📦 Installing ${currentPackage}...`);
-            lastProgressUpdate = Date.now();
-          }
-
-          // Detect resolving dependencies phase
-          if (/reify|resolve|idealTree/i.test(text)) {
-            logger.info(`🔍 Resolving dependencies...`);
-            lastProgressUpdate = Date.now();
-          }
-
-          // Detect downloading phase
-          if (/fetch|download/i.test(text)) {
-            logger.info(`⬇️ Downloading packages...`);
-            lastProgressUpdate = Date.now();
-          }
-
-          // Detect auditing phase
-          if (/audit/i.test(text)) {
-            logger.info(`🔒 Auditing packages...`);
-            lastProgressUpdate = Date.now();
-          }
-        }
-      },
-      abort(err) {
-        // Stream was aborted - this is normal when process exits
-        logger.info('Command output stream closed');
-      },
-      close() {
-        // Stream closed normally
-        logger.info('Command output stream completed');
-      },
-    });
-
-    // Start piping output with error handling for stream closure
-    process.output.pipeTo(outputWriter).catch((err) => {
-      // Ignore "enqueue into closed stream" errors - they happen when process exits
-      if (!err.message?.includes('closed readable stream')) {
-        logger.warn('Output pipe error:', err);
-      }
-    });
-
-    // For regular commands, wait for completion with timeout
-    // WebContainer npm installs can be slow, especially for large packages
-    // Increased timeout for npm install: 5 minutes to handle large dependencies
-    const timeoutDuration = isInstallCommand ? 300000 : 90000; // 5 min for install, 90s for others
-
-    logger.info(`⏱️ Timeout set to ${timeoutDuration / 1000}s (install command: ${isInstallCommand})`);
-
-    // Log initial progress message for install commands
-    if (isInstallCommand) {
-      logger.info(`📦 Starting package installation...`);
-    }
-
-    const exitPromise = process.exit;
-    const timeoutPromise = new Promise<number>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Command timed out after ${timeoutDuration / 1000} seconds. This may be due to slow network or large package size.`));
-      }, timeoutDuration);
-    });
-
-    let exitCode: number;
-    try {
-      exitCode = await Promise.race([exitPromise, timeoutPromise]);
-    } catch (error) {
-      // Timeout occurred - kill the process
-      logger.error(`⚠️ Command timed out after ${timeoutDuration / 1000} seconds - killing process`);
-      process.kill();
-      throw error;
-    }
-
-    if (exitCode === 0) {
-      logger.info(`✅ Shell command completed successfully (exit code: 0)`);
-    } else {
-      const output = outputChunks.join('');
-      logger.error(`❌ Shell command failed (exit code: ${exitCode})`);
-      logger.error(`Command output: ${output.substring(0, 500)}`);
-      throw new Error(`Shell command failed with exit code ${exitCode}`);
-    }
-
-    logger.debug(`Process terminated with code ${exitCode}`);
   }
 
   async #runFileAction(action: ActionState) {
@@ -538,14 +359,7 @@ export class ActionRunner {
     }
 
     // Ensure Docker is ready before file operations
-    const dockerReady = await this.#ensureDockerReady();
-    console.log('🐳🐳🐳 File write - dockerReady:', dockerReady, 'useDocker:', this.#useDocker, 'file:', action.filePath);
-    
-    // Only get webcontainer if we're not using Docker (avoid blocking on WebContainer init)
-    let webcontainer: WebContainer | null = null;
-    if (!this.#useDocker) {
-      webcontainer = await this.#webcontainer;
-    }
+    await this.#ensureDockerReady();
 
     let folder = nodePath.dirname(action.filePath);
 
@@ -557,11 +371,7 @@ export class ActionRunner {
       let retries = 2;
       while (retries >= 0) {
         try {
-          if (this.#useDocker && DOCKER_URL) {
-            await this.#dockerMkdir(folder);
-          } else if (webcontainer) {
-            await webcontainer.fs.mkdir(folder, { recursive: true });
-          }
+          await this.#dockerMkdir(folder);
           logger.debug('Created folder', folder);
           break;
         } catch (error) {
@@ -579,38 +389,28 @@ export class ActionRunner {
     let retries = 2;
     while (retries >= 0) {
       try {
-        if (this.#useDocker && DOCKER_URL) {
-          await this.#dockerWriteFile(action.filePath, action.content);
-          // Update local file store so UI shows the file
-          const store = await getWorkbenchStore();
-          const fullPath = action.filePath.startsWith('/') ? action.filePath : `/home/project/${action.filePath}`;
-          // Create parent folder entries
-          const parts = fullPath.split('/').filter(Boolean);
-          for (let i = 1; i < parts.length; i++) {
-            const folderPath = '/' + parts.slice(0, i).join('/');
-            if (!store.files.get()[folderPath]) {
-              store.files.setKey(folderPath, { type: 'folder' });
-            }
+        await this.#dockerWriteFile(action.filePath, action.content);
+
+        // Update local file store so UI shows the file
+        const store = await getWorkbenchStore();
+        // Normalize path to include WORK_DIR so files appear in the file tree
+        const relativePath = action.filePath.startsWith('/') ? action.filePath.substring(1) : action.filePath;
+        const fullPath = `${WORK_DIR}/${relativePath}`;
+        const parts = fullPath.split('/').filter(Boolean);
+        // Create all parent folders in the file tree
+        for (let i = 1; i < parts.length; i++) {
+          const folderPath = '/' + parts.slice(0, i).join('/');
+          if (!store.files.get()[folderPath]) {
+            store.files.setKey(folderPath, { type: 'folder' });
           }
-          store.files.setKey(fullPath, { type: 'file', content: action.content, isBinary: false });
-        } else if (webcontainer) {
-          await webcontainer.fs.writeFile(action.filePath, action.content);
-        } else {
-          throw new Error('No runtime available (Docker failed and WebContainer not initialized)');
         }
-        logger.info(`✅ File created successfully: ${action.filePath} (${action.content.length} bytes)`);
+        store.files.setKey(fullPath, { type: 'file', content: action.content, isBinary: false });
         
-        // Track file for project context
-        if (typeof window !== 'undefined') {
-          import('~/lib/stores/project-state').then(({ trackFileCreated }) => {
-            trackFileCreated(action.filePath);
-          }).catch(() => {});
-        }
+        logger.info(`File created successfully: ${action.filePath} (${action.content.length} bytes)`);
         
         // Track modified file for GitHub sync
         this.#modifiedFiles.push({ path: action.filePath, content: action.content });
         
-        // Trigger GitHub sync after a short delay (batch multiple files)
         if (this.#chatId) {
           setTimeout(() => {
             if (this.#modifiedFiles.length > 0) {
@@ -624,11 +424,10 @@ export class ActionRunner {
         break;
       } catch (error) {
         if (retries === 0) {
-          logger.error(`❌ Failed to write file ${action.filePath} after retries:`, error);
+          logger.error(`Failed to write file ${action.filePath}:`, error);
           throw error;
         }
         retries--;
-        logger.warn(`⚠️ File write failed, retrying... (${retries} left)`);
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
@@ -683,9 +482,10 @@ export class ActionRunner {
       const fileCount = Object.keys(result.data.files).length;
       logger.info(`✅ Starter template loaded: ${fileCount} files`);
 
-      // Write all files from the starter template using WebContainer
-      const webcontainer = await this.#webcontainer;
+      // Write all files from the starter template using Docker
+      await this.#ensureDockerReady();
       const files = result.data.files;
+      const store = await getWorkbenchStore();
 
       // Files are in format: { "path/to/file.js": "content", ... }
       for (const [filePath, content] of Object.entries(files)) {
@@ -694,15 +494,28 @@ export class ActionRunner {
         // Create folder if needed
         if (folder !== '.') {
           try {
-            await webcontainer.fs.mkdir(folder, { recursive: true });
+            await this.#dockerMkdir(folder);
           } catch (error) {
             // Folder might already exist, continue
           }
         }
 
         // Write file
-        await webcontainer.fs.writeFile(filePath, content as string);
-        logger.debug(`  ✅ Created: ${filePath}`);
+        await this.#dockerWriteFile(filePath, content as string);
+
+        // Update local file store so UI shows the file
+        const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+        const fullPath = `${WORK_DIR}/${relativePath}`;
+        const parts = fullPath.split('/').filter(Boolean);
+        // Create all parent folders in the file tree
+        for (let i = 1; i < parts.length; i++) {
+          const folderPath = '/' + parts.slice(0, i).join('/');
+          if (!store.files.get()[folderPath]) {
+            store.files.setKey(folderPath, { type: 'folder' });
+          }
+        }
+        store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
+        logger.debug(`Created: ${filePath}`);
       }
 
       logger.info(`✅ Starter template imported successfully: ${action.templateId}`);
@@ -746,9 +559,10 @@ export class ActionRunner {
       const fileCount = Object.keys(result.files).length;
       logger.info(`✅ Repository cloned: ${fileCount} files`);
 
-      // Write all files from the repository using WebContainer
-      const webcontainer = await this.#webcontainer;
+      // Write all files from the repository using Docker
+      await this.#ensureDockerReady();
       const files = result.files;
+      const store = await getWorkbenchStore();
 
       // Files are in format: { "path/to/file.js": "content", ... }
       for (const [filePath, content] of Object.entries(files)) {
@@ -757,15 +571,28 @@ export class ActionRunner {
         // Create folder if needed
         if (folder !== '.') {
           try {
-            await webcontainer.fs.mkdir(folder, { recursive: true });
+            await this.#dockerMkdir(folder);
           } catch (error) {
             // Folder might already exist, continue
           }
         }
 
         // Write file
-        await webcontainer.fs.writeFile(filePath, content as string);
-        logger.debug(`  ✅ Created: ${filePath}`);
+        await this.#dockerWriteFile(filePath, content as string);
+
+        // Update local file store so UI shows the file
+        const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+        const fullPath = `${WORK_DIR}/${relativePath}`;
+        const parts = fullPath.split('/').filter(Boolean);
+        // Create all parent folders in the file tree
+        for (let i = 1; i < parts.length; i++) {
+          const folderPath = '/' + parts.slice(0, i).join('/');
+          if (!store.files.get()[folderPath]) {
+            store.files.setKey(folderPath, { type: 'folder' });
+          }
+        }
+        store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
+        logger.debug(`Created: ${filePath}`);
       }
 
       logger.info(`✅ Repository cloned successfully: ${action.repoUrl}`);
@@ -780,406 +607,41 @@ export class ActionRunner {
     }
   }
 
-  async #runDevServerInBackground(webcontainer: WebContainer, action: ActionState) {
-    logger.info(`🚀 Starting dev server in background mode`);
-
-    let process;
-    try {
-      process = await webcontainer.spawn('jsh', ['-c', action.content], {
-        env: {
-          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
-          npm_config_yes: 'true',
-        },
-      });
-      this.#devServerProcess = process;
-      logger.info('✅ Dev server process spawned successfully');
-    } catch (error) {
-      logger.error('❌ Failed to spawn dev server process:', error);
-      throw error;
-    }
-
-    // Handle abort signal
-    action.abortSignal.addEventListener('abort', () => {
-      logger.warn('⚠️ Dev server aborted by user');
-      process.kill();
-      this.#devServerProcess = null;
-    });
-
-    const outputChunks: string[] = [];
-    let serverStarted = false;
-
-    // Patterns that indicate the server has started successfully
-    const startupPatterns = [
-      /server (?:running|listening|started) (?:on|at)/i,
-      /local:\s+https?:\/\//i,
-      /ready in \d+/i,
-      /compiled (?:successfully|client and server)/i,
-      /vite.*ready in/i,
-      /started server on/i,
-      /\bavailable on\b/i,
-      /localhost:\d+/i,
-    ];
-
-    // Monitor output for startup indicators
-    const outputReader = process.output.getReader();
-
-    // Create a promise that resolves when server starts (or times out)
-    const startupPromise = new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        if (!serverStarted) {
-          logger.warn('⚠️ Dev server startup timeout (30s) - assuming it started');
-          serverStarted = true;
-          resolve();
-        }
-      }, 30000); // 30 second timeout
-
-      // Read output in the background
-      const readOutput = async () => {
-        try {
-          while (true) {
-            const { done, value } = await outputReader.read();
-
-            if (done) {
-              logger.info('📝 Dev server output stream ended');
-              break;
-            }
-
-            const text = new TextDecoder().decode(value);
-            outputChunks.push(text);
-            console.log('[Dev Server]', text);
-
-            // Check if server has started
-            if (!serverStarted) {
-              for (const pattern of startupPatterns) {
-                if (pattern.test(text)) {
-                  logger.info(`✅ Dev server started - detected pattern: ${pattern}`);
-                  serverStarted = true;
-                  clearTimeout(timeout);
-                  resolve();
-                  // Continue reading output but don't wait for more
-                  break;
-                }
-              }
-            }
-          }
-        } catch (error) {
-          logger.error('❌ Error reading dev server output:', error);
-          reject(error);
-        }
-      };
-
-      readOutput();
-    });
-
-    try {
-      // Wait for server to start (or timeout)
-      await startupPromise;
-      logger.info('🎉 Dev server is ready! Process continues in background.');
-    } catch (error) {
-      logger.error('❌ Dev server startup failed:', error);
-      throw error;
-    }
-
-    // Log that the server is running in background
-    logger.info('✅ Dev server running in background - action marked complete');
-    logger.info('💡 Use the preview pane to view your application');
-  }
-
-  /**
-   * ✅ P1: Schedule auto-install with debouncing
-   * Waits 2 seconds after the last file is created before triggering install
-   */
   #scheduleAutoInstall() {
-    // Clear existing timer
     if (this.#autoInstallTimer) {
       clearTimeout(this.#autoInstallTimer);
     }
 
-    logger.info('⏱️ Scheduling auto-install (debounced, 2s delay)...');
+    logger.info('Scheduling auto-install (debounced, 2s delay)...');
 
-    // Wait 2 seconds after last file action
     this.#autoInstallTimer = setTimeout(() => {
       this.#runAutoInstall();
     }, 2000);
   }
 
-  /**
-   * ✅ P1: Automatically install dependencies and start dev server
-   * This runs after all files are created and package.json exists
-   */
   async #runAutoInstall() {
-    // Only run once
-    if (this.#autoInstallTriggered) {
-      return;
-    }
-
-    // Wait for all file creations to complete
+    if (this.#autoInstallTriggered) return;
     if (this.#filesBeingCreated.size > 0) {
-      logger.info(`⏳ Waiting for ${this.#filesBeingCreated.size} files to finish before auto-install...`);
-      // Reschedule
       this.#scheduleAutoInstall();
       return;
     }
 
     this.#autoInstallTriggered = true;
-    logger.info('🚀 Starting auto-install and dev server...');
+    logger.info('Starting auto-install and dev server...');
 
     try {
-      const webcontainer = await this.#webcontainer;
-
-      // ✅ P1: Update build status - Installing phase
-      if (typeof window !== 'undefined') {
-        try {
-          const { workbenchStore } = await import('~/lib/stores/workbench');
-          workbenchStore.buildStatus.set({
-            phase: 'installing',
-            message: 'Installing dependencies...',
-            progress: 10,
-          });
-        } catch (error) {
-          logger.warn('Could not update build status:', error);
-        }
-      }
-
-      // Show terminal automatically
-      if (typeof window !== 'undefined') {
-        try {
-          const { workbenchStore } = await import('~/lib/stores/workbench');
-          const terminalStore = workbenchStore.terminalStore.get();
-
-          if (terminalStore) {
-            terminalStore.toggleTerminal(true);
-            terminalStore.flashTerminalHighlight();
-            logger.info('✅ Terminal auto-shown for installation');
-          }
-        } catch (error) {
-          logger.warn('Could not auto-show terminal:', error);
-        }
-      }
-
-      // Check package.json for the dev script
-      let devCommand = 'npm run dev';
-      try {
-        const packageJsonContent = await webcontainer.fs.readFile('package.json', 'utf-8');
-        const packageJson = JSON.parse(packageJsonContent);
-
-        // Detect the appropriate dev command
-        if (packageJson.scripts) {
-          if (packageJson.scripts.dev) {
-            devCommand = 'npm run dev';
-          } else if (packageJson.scripts.start) {
-            devCommand = 'npm start';
-          } else if (packageJson.scripts['dev:server']) {
-            devCommand = 'npm run dev:server';
-          }
-        }
-
-        logger.info(`📋 Detected dev command: ${devCommand}`);
-      } catch (error) {
-        logger.warn('Could not read package.json, using default: npm run dev');
-      }
-
-      // Step 1: Install dependencies
-      logger.info('📦 Step 1/2: Installing dependencies...');
-
-      // Clear npm cache first to prevent EEXIST errors
-      logger.info('🧹 Clearing npm cache before install...');
-      await clearNpmCache(webcontainer);
-
-      const installProcess = await webcontainer.spawn('jsh', ['-c', 'npm install'], {
-        env: {
-          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
-          npm_config_yes: 'true',
-        },
-      });
-
-      // Collect install output for error diagnosis
-      let installOutput = '';
-      const installOutputWriter = new WritableStream({
-        write(data) {
-          const text = data.toString();
-          installOutput += text;
-          // Log only errors and warnings
-          if (text.includes('npm error') || text.includes('npm ERR!')) {
-            logger.error('[npm install]', text.trim());
-          } else if (text.includes('npm WARN')) {
-            logger.warn('[npm install]', text.trim());
-          }
-        },
-        abort(err) {
-          // Stream was aborted - this is normal when process exits
-          logger.info('Install output stream closed');
-        },
-        close() {
-          // Stream closed normally
-          logger.info('Install output stream completed');
-        },
-      });
-
-      // Pipe with error handling for stream closure
-      installProcess.output.pipeTo(installOutputWriter).catch((err) => {
-        // Ignore "enqueue into closed stream" errors - they happen when process exits
-        if (!err.message?.includes('closed readable stream')) {
-          logger.warn('Install output pipe error:', err);
-        }
-      });
-
-      // Wait for install to complete (5 minute timeout)
-      const installExitCode = await Promise.race([
-        installProcess.exit,
-        new Promise<number>((_, reject) => {
-          setTimeout(() => reject(new Error('Install timed out after 5 minutes')), 300000);
-        }),
-      ]);
-
-      if (installExitCode !== 0) {
-        // Extract error message from npm output
-        const errorLines = installOutput.split('\n').filter(line =>
-          line.includes('npm error') || line.includes('npm ERR!')
-        ).slice(0, 5); // Show first 5 error lines
-        const errorDetail = errorLines.length > 0 ? `\n${errorLines.join('\n')}` : '';
-        throw new Error(`npm install failed with exit code ${installExitCode}${errorDetail}`);
-      }
-
-      logger.info('✅ Step 1/2: Dependencies installed successfully!');
-
-      // ✅ P1: Update build status - Starting phase
-      if (typeof window !== 'undefined') {
-        try {
-          const { workbenchStore } = await import('~/lib/stores/workbench');
-          workbenchStore.buildStatus.set({
-            phase: 'starting',
-            message: 'Starting development server...',
-            progress: 70,
-          });
-        } catch (error) {
-          logger.warn('Could not update build status:', error);
-        }
-      }
-
-      // Step 2: Start dev server in background
-      logger.info(`🚀 Step 2/2: Starting dev server (${devCommand})...`);
-
-      // Kill existing dev server if running
-      if (this.#devServerProcess) {
-        logger.info('⚠️ Killing existing dev server');
-        try {
-          this.#devServerProcess.kill();
-        } catch (e) {
-          logger.warn('Failed to kill existing dev server:', e);
-        }
-      }
-
-      const devProcess = await webcontainer.spawn('jsh', ['-c', devCommand], {
-        env: {
-          PATH: '/home/project/bin:/usr/local/bin:/usr/bin:/bin',
-          npm_config_yes: 'true',
-        },
-      });
-
-      this.#devServerProcess = devProcess;
-
-      // Monitor dev server output for startup
-      const devOutputReader = devProcess.output.getReader();
-      let serverStarted = false;
-
-      const startupPatterns = [
-        /server (?:running|listening|started) (?:on|at)/i,
-        /local:\s+https?:\/\//i,
-        /ready in \d+/i,
-        /compiled (?:successfully|client and server)/i,
-        /vite.*ready in/i,
-        /started server on/i,
-        /\bavailable on\b/i,
-        /localhost:\d+/i,
-      ];
-
-      // Wait for server to start (30 second timeout)
-      const startupPromise = new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          if (!serverStarted) {
-            logger.info('✅ Step 2/2: Dev server started (timeout assumed success)');
-            serverStarted = true;
-            resolve();
-          }
-        }, 30000);
-
-        const readOutput = async () => {
-          try {
-            while (true) {
-              const { done, value } = await devOutputReader.read();
-
-              if (done) break;
-
-              const text = new TextDecoder().decode(value);
-              console.log('[Dev Server]', text);
-
-              if (!serverStarted) {
-                for (const pattern of startupPatterns) {
-                  if (pattern.test(text)) {
-                    logger.info(`✅ Step 2/2: Dev server started! Detected: ${pattern}`);
-                    serverStarted = true;
-                    clearTimeout(timeout);
-                    resolve();
-                    break;
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            logger.error('Error reading dev server output:', error);
-            resolve(); // Resolve anyway to not block
-          }
-        };
-
-        readOutput();
-      });
-
-      await startupPromise;
-
-      // ✅ P1: Update build status - Ready!
-      if (typeof window !== 'undefined') {
-        try {
-          const { workbenchStore } = await import('~/lib/stores/workbench');
-          workbenchStore.buildStatus.set({
-            phase: 'ready',
-            message: 'Your app is ready! ✨',
-            progress: 100,
-          });
-
-          // Auto-reset after 5 seconds
-          setTimeout(() => {
-            workbenchStore.buildStatus.set({
-              phase: 'idle',
-              message: '',
-              progress: 0,
-            });
-          }, 5000);
-        } catch (error) {
-          logger.warn('Could not update build status:', error);
-        }
-      }
-
-      logger.info('🎉 Auto-install and dev server complete! Your app is ready.');
-      logger.info('💡 Check the preview pane to see your application running.');
-
-    } catch (error) {
-      logger.error('❌ Auto-install failed:', error);
-      logger.info('💡 You can manually run: npm install && npm run dev');
-
-      // ✅ P1: Reset build status on error
-      if (typeof window !== 'undefined') {
-        try {
-          const { workbenchStore } = await import('~/lib/stores/workbench');
-          workbenchStore.buildStatus.set({
-            phase: 'idle',
-            message: '',
-            progress: 0,
-          });
-        } catch (e) {
-          // Ignore
-        }
-      }
+      await this.#ensureDockerReady();
+      
+      // Run npm install
+      await this.#dockerExec('npm install');
+      logger.info('Dependencies installed');
+      
+      // Start dev server in background
+      await this.#dockerExec('npm run dev &', '/workspace');
+      logger.info('Dev server started');
+    } catch (error: any) {
+      logger.error('Auto-install failed:', error.message);
+      logger.info('You can manually run: npm install && npm run dev');
     }
   }
 
@@ -1199,36 +661,25 @@ export class ActionRunner {
       return;
     }
 
-    logger.info(`📖 Reading file: ${action.filePath}`);
+    logger.info(`Reading file: ${action.filePath}`);
 
     try {
-      // Try Docker first if available
-      if (this.#useDocker && DOCKER_URL) {
-        const content = await this.#dockerReadFile(action.filePath);
-        action.content = content;
-        logger.info(`✅ Read ${content.length} characters from ${action.filePath} (Docker)`);
-        return;
-      }
-
-      // Fall back to WebContainer
-      const webcontainer = await this.#webcontainer;
-      const content = await webcontainer.fs.readFile(action.filePath, 'utf-8');
-      
-      // Update action content with file contents
+      await this.#ensureDockerReady();
+      const content = await this.#dockerReadFile(action.filePath);
       action.content = content;
-      
-      logger.info(`✅ Read ${content.length} characters from ${action.filePath}`);
+      logger.info(`Read ${content.length} characters from ${action.filePath}`);
     } catch (error) {
-      logger.error(`❌ Failed to read file ${action.filePath}:`, error);
+      logger.error(`Failed to read file ${action.filePath}:`, error);
       throw new Error(`Could not read file: ${action.filePath}`);
     }
   }
 
   async #dockerReadFile(path: string): Promise<string> {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: `cat "/workspace${path}"` }),
+      body: JSON.stringify({ command: `cat "/workspace${normalizedPath}"` }),
     });
     if (!res.ok) {
       throw new Error('Docker read failed');
@@ -1243,23 +694,15 @@ export class ActionRunner {
     }
 
     const path = action.path || '.';
-    logger.info(`📁 Listing files in: ${path}`);
+    logger.info(`Listing files in: ${path}`);
 
     try {
-      const webcontainer = await this.#webcontainer;
-      const files = await webcontainer.fs.readdir(path, { withFileTypes: true });
-      
-      const fileList = files.map(file => ({
-        name: file.name,
-        isDirectory: file.isDirectory(),
-      }));
-
-      // Update action content with file list
-      action.content = JSON.stringify(fileList, null, 2);
-      
-      logger.info(`✅ Found ${fileList.length} items in ${path}`);
+      await this.#ensureDockerReady();
+      const output = await this.#dockerExec(`ls -la "${path}"`);
+      action.content = output;
+      logger.info(`Listed files in ${path}`);
     } catch (error) {
-      logger.error(`❌ Failed to list files in ${path}:`, error);
+      logger.error(`Failed to list files in ${path}:`, error);
       throw new Error(`Could not list files in: ${path}`);
     }
   }
@@ -1269,50 +712,16 @@ export class ActionRunner {
       unreachable('Expected searchFiles action');
     }
 
-    logger.info(`🔍 Searching for: "${action.query}"`);
+    logger.info(`Searching for: "${action.query}"`);
 
     try {
-      const webcontainer = await this.#webcontainer;
-      
-      // Use grep to search files
-      const grepProcess = await webcontainer.spawn('grep', [
-        '-r',           // recursive
-        '-n',           // line numbers
-        '-i',           // case insensitive
-        action.query,
-        '.',
-      ]);
-
-      const outputChunks: string[] = [];
-
-      grepProcess.output.pipeTo(
-        new WritableStream({
-          write(data) {
-            outputChunks.push(data);
-          },
-          abort(err) {
-            logger.info('Grep output stream closed');
-          },
-          close() {
-            logger.info('Grep output stream completed');
-          },
-        })
-      ).catch((err) => {
-        // Ignore "enqueue into closed stream" errors
-        if (!err.message?.includes('closed readable stream')) {
-          logger.warn('Grep pipe error:', err);
-        }
-      });
-
-      await grepProcess.exit;
-
-      const results = outputChunks.join('');
-      action.content = results || 'No matches found';
-      
-      logger.info(`✅ Search complete: ${results.split('\n').length} matches`);
+      await this.#ensureDockerReady();
+      const output = await this.#dockerExec(`grep -rni "${action.query}" . 2>/dev/null | head -100`);
+      action.content = output;
+      logger.info(`Search completed`);
     } catch (error) {
-      logger.error(`❌ Search failed:`, error);
-      action.content = 'No matches found';
+      logger.error(`Search failed:`, error);
+      action.content = '';
     }
   }
 }

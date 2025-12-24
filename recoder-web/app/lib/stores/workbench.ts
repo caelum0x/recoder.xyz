@@ -34,7 +34,7 @@ export class WorkbenchStore {
   #previewsStore = new PreviewsStore(webcontainer);
   #filesStore = new FilesStore(webcontainer);
   #editorStore = new EditorStore(this.#filesStore);
-  #terminalStore = new TerminalStore(webcontainer);
+  #terminalStore = new TerminalStore();
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
@@ -266,7 +266,7 @@ export class WorkbenchStore {
       id,
       title,
       closed: false,
-      runner: new ActionRunner(webcontainer, this.#currentProjectId || undefined),
+      runner: new ActionRunner(this.#currentProjectId || undefined),
     });
   }
 
@@ -294,7 +294,7 @@ export class WorkbenchStore {
 
   async runAction(data: ActionCallbackData) {
     const { messageId } = data;
-    console.log('🔧 workbench.runAction called:', data.action?.type, data.action);
+    // console.log('🔧 workbench.runAction called:', data.action?.type, data.action);
 
     const artifact = this.#getArtifact(messageId);
 
@@ -303,7 +303,7 @@ export class WorkbenchStore {
       unreachable('Artifact not found');
     }
 
-    console.log('🔧 Calling artifact.runner.runAction');
+    // console.log('🔧 Calling artifact.runner.runAction');
     artifact.runner.runAction(data);
   }
 

@@ -225,17 +225,17 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       // Use smart error handler instead of generic toast
       showSmartError(error, {
         onAction: (action) => {
-          console.log('Error action:', action);
+          // console.log('Error action:', action);
           // Handle action execution here if needed
         }
       });
     },
     onFinish: () => {
       logger.debug('Finished streaming');
-      console.log('✅ Streaming finished');
+      // console.log('✅ Streaming finished');
     },
     onResponse: (response) => {
-      console.log('📥 Response received:', response.status, response.statusText);
+      // console.log('📥 Response received:', response.status, response.statusText);
     },
     initialMessages,
   });
@@ -324,7 +324,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     const hasMessages = initialMessages.length > 0;
     chatStore.setKey('started', hasMessages);
     setChatStarted(hasMessages);
-    console.log('🔄 [ChatImpl] Chat started state updated:', hasMessages, 'messages:', initialMessages.length);
+    // console.log('🔄 [ChatImpl] Chat started state updated:', hasMessages, 'messages:', initialMessages.length);
   }, [initialMessages]);
 
   // Store the previous isLoading state to detect when streaming completes
@@ -346,28 +346,18 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       prevIsLoading.current = isLoading;
 
       // FIX: Add delay after streaming finishes to allow ActionRunner to write files
-      // Save after 3 seconds when streaming finishes (to allow file writes), or after 5 seconds during streaming
       const saveDelay = streamingJustFinished ? 3000 : (!isLoading ? 3000 : 5000);
 
       saveTimeoutRef.current = setTimeout(() => {
-        console.log('💾 Saving chat history (after allowing time for file writes):', {
-          messageCount: messages.length,
-          isStreaming: isLoading,
-          streamingJustFinished,
-          delayUsed: saveDelay,
-        });
-
         setIsSaving(true);
         storeMessageHistory(messages)
           .then(() => {
             setIsSaving(false);
             setLastSaved(new Date());
-            console.log('✅ Chat history saved successfully');
           })
           .catch((error) => {
             setIsSaving(false);
-            console.error('❌ Failed to save chat history:', error);
-            // Use smart error handler for storage errors
+            console.error('Failed to save chat history:', error);
             showSmartError(error, {
               onAction: (action) => {
                 if (action.type === 'command' && action.action === 'retry') {
@@ -432,7 +422,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
   const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
     const _input = messageInput || input;
 
-    console.log('📤 Sending message:', _input.substring(0, 100));
+    // console.log('📤 Sending message:', _input.substring(0, 100));
 
     if (_input.length === 0 || isLoading) {
       console.warn('⚠️ Message not sent - empty input or already loading');
@@ -464,7 +454,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
        * manually reset the input and we'd have to manually pass in file attachments. However, those
        * aren't relevant here.
        */
-      console.log('📤 Sending with file modifications');
+      // console.log('📤 Sending with file modifications');
       append({ role: 'user', content: `${diff}\n\n${_input}` });
 
       /**
@@ -473,7 +463,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
        */
       workbenchStore.resetAllFileModifications();
     } else {
-      console.log('📤 Sending without file modifications');
+      // console.log('📤 Sending without file modifications');
       append({ role: 'user', content: _input });
     }
 
@@ -489,18 +479,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     const handleImport = async (event: CustomEvent) => {
       const { prompt, files, repository, template, isLocal } = event.detail;
 
-      console.log('🎯 Received bolt:import event:', {
-        isLocal: isLocal || false,
-        hasPrompt: !!prompt,
-        prompt: prompt ? prompt.substring(0, 100) : 'No prompt (local starter)',
-        fileCount: Object.keys(files).length,
-        repository: repository.name,
-        template: template?.name
-      });
-
       // DIRECTLY create files in workbench using actions
-      console.log('📝 Creating files directly in workbench...');
-
       const fileEntries = Object.entries(files);
       let createdCount = 0;
 
@@ -511,7 +490,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       // Open the artifact first
       workbenchStore.showWorkbench.set(true);
       workbenchStore.addArtifact({
-        messageId,  // This is the key for the artifacts map
+        messageId,
         id: artifactId,
         title: repository.name || 'Imported Files',
       });
@@ -549,7 +528,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         }));
 
         // Log progress after each batch
-        console.log(`   ✅ Created ${createdCount}/${fileEntries.length} files (${Math.round((createdCount/fileEntries.length) * 100)}%)`);
+        // console.log(`   ✅ Created ${createdCount}/${fileEntries.length} files (${Math.round((createdCount/fileEntries.length) * 100)}%)`);
 
         // Small delay between batches to avoid overwhelming system
         if (i + batchSize < fileEntries.length) {
@@ -557,12 +536,12 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         }
       }
 
-      console.log(`✅ Import complete: ${createdCount}/${fileEntries.length} files created`);
+      // console.log(`✅ Import complete: ${createdCount}/${fileEntries.length} files created`);
 
       // After files are created, optionally send AI message about the import
       if (prompt && !isLoading) {
         setTimeout(() => {
-          console.log('✨ Notifying AI about imported files');
+          // console.log('✨ Notifying AI about imported files');
           sendMessage({} as React.UIEvent, prompt);
         }, 500);
       }
@@ -632,22 +611,6 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
           });
         }}
       />
-
-      {/* Quick Actions Floating Button */}
-      {chatStarted && (
-        <QuickActions
-          onSelectAction={(prompt) => {
-            setInput(prompt);
-            textareaRef.current?.focus();
-            // Auto-send the quick action prompt
-            setTimeout(() => {
-              const event = new Event('submit') as any;
-              sendMessage(event, prompt);
-            }, 100);
-          }}
-          disabled={isLoading}
-        />
-      )}
 
       {/* Keyboard Shortcuts Dialog */}
       <KeyboardShortcutsDialog

@@ -64,25 +64,20 @@ const USE_DATABASE = persistenceEnabled;
  * This prevents session contamination between chats
  */
 export function clearSessionState() {
-  console.log('🧹 [clearSessionState] Clearing all session state atoms');
+  // console.log('🧹 [clearSessionState] Clearing all session state atoms');
   chatId.set(undefined);
   description.set(undefined);
   // Clear workbench artifact list to prevent artifact ID contamination
   // firstArtifact is a getter that returns artifactIdList[0], so clear the array
   if (workbenchStore.artifactIdList.length > 0) {
     workbenchStore.artifactIdList = [];
-    console.log('🧹 [clearSessionState] Cleared artifact ID list');
+    // console.log('🧹 [clearSessionState] Cleared artifact ID list');
   }
 }
 
 // Initialize database on first import (but don't await - lazy load)
 getDatabase().then(() => {
-  console.log('🔧 [Persistence] Configuration:', {
-    VITE_DISABLE_PERSISTENCE: import.meta.env.VITE_DISABLE_PERSISTENCE,
-    persistenceEnabled,
-    USE_DATABASE,
-    dbInitialized: !!db,
-  });
+  // Database initialized
 });
 
 /**
@@ -98,7 +93,7 @@ async function saveChatToDatabase(
   source?: 'web' | 'cli'
 ): Promise<boolean> {
   if (!USE_DATABASE) {
-    console.log('⚠️ [saveChatToDatabase] Database saving disabled (USE_DATABASE=false)');
+    // console.log('⚠️ [saveChatToDatabase] Database saving disabled (USE_DATABASE=false)');
     return false;
   }
 
@@ -111,17 +106,6 @@ async function saveChatToDatabase(
       const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
       const fileCount = fileSnapshot ? Object.keys(fileSnapshot).length : 0;
-
-      console.log(`💾 [saveChatToDatabase] Attempt ${attempt}/${maxRetries} - Preparing to save:`, {
-        userId: user?.id,
-        anonymousId,
-        urlId,
-        messageCount: messages.length,
-        fileCount,
-        descLength: desc?.length || 0,
-        hasArtifact: !!artifactId,
-        source: source || 'web',
-      });
 
       const payload = {
         userId: user?.id,
@@ -136,7 +120,7 @@ async function saveChatToDatabase(
         source: source || 'web',
       };
 
-      console.log(`📤 [saveChatToDatabase] Sending request to /api/chat-history (attempt ${attempt})`);
+      // console.log(`📤 [saveChatToDatabase] Sending request to /api/chat-history (attempt ${attempt})`);
 
       const response = await fetch('/api/chat-history', {
         method: 'POST',
@@ -144,7 +128,7 @@ async function saveChatToDatabase(
         body: JSON.stringify(payload),
       });
 
-      console.log('📥 [saveChatToDatabase] Response status:', response.status, response.statusText);
+      // console.log('📥 [saveChatToDatabase] Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         const error = await response.json() as { error?: string };
@@ -153,13 +137,6 @@ async function saveChatToDatabase(
       }
 
       const result = await response.json() as { success: boolean; data?: { sessionId: string; urlId: string } };
-      console.log('✅ [saveChatToDatabase] Chat saved to database successfully!', {
-        success: result.success,
-        sessionId: result.data?.sessionId,
-        urlId: result.data?.urlId,
-        fileCount,
-        attempt,
-      });
       return true;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -168,7 +145,7 @@ async function saveChatToDatabase(
       // If not the last attempt, wait before retrying (exponential backoff)
       if (attempt < maxRetries) {
         const delayMs = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s...
-        console.log(`⏳ [saveChatToDatabase] Waiting ${delayMs}ms before retry...`);
+        // console.log(`⏳ [saveChatToDatabase] Waiting ${delayMs}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
@@ -199,7 +176,7 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
     if (anonymousId) params.set('anonymousId', anonymousId);
     params.set('urlId', mixedId);
 
-    console.log('📂 [loadChatFromDatabase] Loading chat:', mixedId);
+    // console.log('📂 [loadChatFromDatabase] Loading chat:', mixedId);
 
     const response = await fetch(`/api/chat-history?${params}`);
 
@@ -250,13 +227,13 @@ export function useChatHistory() {
 
     // Detect navigation from chat to home or between different chats
     if (currentPath === '/' && previousPath !== '/') {
-      console.log('🏠 [useChatHistory] Navigated to home - clearing session state');
+      // console.log('🏠 [useChatHistory] Navigated to home - clearing session state');
       clearSessionState();
       setUrlId(undefined);
       setInitialMessages([]);
       setReady(false); // ← Force re-mount to ensure clean state
     } else if (currentPath.startsWith('/chat/') && previousPath.startsWith('/chat/') && currentPath !== previousPath) {
-      console.log('🔄 [useChatHistory] Navigated between chats - clearing for fresh load');
+      // console.log('🔄 [useChatHistory] Navigated between chats - clearing for fresh load');
       clearSessionState();
       setUrlId(undefined);
       // DON'T clear initialMessages or ready - the React key prop will force remount
@@ -291,7 +268,7 @@ export function useChatHistory() {
       loadChatFromDatabase(mixedId)
         .then((dbChat) => {
           if (dbChat && dbChat.messages.length > 0) {
-            console.log('✅ Loaded chat from database:', dbChat.id);
+            // console.log('✅ Loaded chat from database:', dbChat.id);
             
             // Set state first
             setInitialMessages(dbChat.messages);
@@ -302,12 +279,7 @@ export function useChatHistory() {
             // Restore fileSnapshot to workbench AFTER state is set
             // Use setTimeout to ensure component is fully mounted AND WebContainer is ready
             if (dbChat.fileSnapshot && Object.keys(dbChat.fileSnapshot).length > 0) {
-              console.log('📂 [useChatHistory] Scheduling workbench restoration:',
-                Object.keys(dbChat.fileSnapshot).length, 'files');
-
               setTimeout(() => {
-                console.log('🔄 [useChatHistory] Restoring files to workbench...');
-
                 try {
                   // Update files store directly with the file snapshot
                   const currentFiles = workbenchStore.files.get();
@@ -324,7 +296,7 @@ export function useChatHistory() {
                   workbenchStore.files.set(updatedFiles);
                   workbenchStore.setDocuments(updatedFiles);
                   workbenchStore.showWorkbench.set(true);
-                  console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
+                  // console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
                 } catch (error) {
                   console.error('❌ [useChatHistory] Failed to restore workbench files:', error);
                   toast.error('Failed to restore project files');
@@ -346,12 +318,12 @@ export function useChatHistory() {
         .then((storedMessages) => {
           // Skip if database already loaded successfully
           if (storedMessages && typeof storedMessages === 'object' && 'success' in storedMessages) {
-            console.log('✅ Database load already handled, skipping IndexedDB fallback');
+            // console.log('✅ Database load already handled, skipping IndexedDB fallback');
             return; // ← Don't navigate to home!
           }
 
           if (storedMessages && storedMessages.messages && storedMessages.messages.length > 0) {
-            console.log('✅ Loaded chat from IndexedDB:', storedMessages.id);
+            // console.log('✅ Loaded chat from IndexedDB:', storedMessages.id);
             setInitialMessages(storedMessages.messages);
             setUrlId(storedMessages.urlId);
             description.set(storedMessages.description);
@@ -381,7 +353,7 @@ export function useChatHistory() {
     initialMessages,
     storeMessageHistory: async (messages: Message[]) => {
       if (messages.length === 0) {
-        console.log('⚠️ Not storing history: no messages');
+        // console.log('⚠️ Not storing history: no messages');
         return;
       }
 
@@ -389,23 +361,12 @@ export function useChatHistory() {
       const currentPath = window.location.pathname;
       if (currentPath === '/' && urlId) {
         console.warn('⚠️ [useChatHistory] Session contamination detected! urlId exists on home page:', urlId);
-        console.log('🧹 [useChatHistory] Force clearing contaminated state');
+        // console.log('🧹 [useChatHistory] Force clearing contaminated state');
         setUrlId(undefined);
         clearSessionState();
         // Don't save - this is contaminated data from a previous session
         return;
       }
-
-      console.log('💾 [useChatHistory] Storing chat history:', messages.length, 'messages');
-      console.log('📊 [useChatHistory] Current state:', {
-        chatId: chatId.get(),
-        urlId,
-        description: description.get(),
-        hasFirstArtifact: !!workbenchStore.firstArtifact,
-        persistenceEnabled,
-        USE_DATABASE,
-        currentPath,
-      });
 
       const { firstArtifact } = workbenchStore;
 
@@ -419,11 +380,11 @@ export function useChatHistory() {
           if (db) {
             const nextId = await getNextId(db);
             chatId.set(nextId);
-            console.log('🆔 [useChatHistory] Created new chat ID from DB:', nextId);
+            // console.log('🆔 [useChatHistory] Created new chat ID from DB:', nextId);
           } else {
             const newId = Date.now().toString();
             chatId.set(newId);
-            console.log('🆔 [useChatHistory] Created timestamp-based chat ID:', newId);
+            // console.log('🆔 [useChatHistory] Created timestamp-based chat ID:', newId);
           }
         } catch (error) {
           // CRITICAL FIX: Ensure chatId is ALWAYS set even if DB fails
@@ -432,7 +393,7 @@ export function useChatHistory() {
           console.warn('⚠️ [useChatHistory] DB error, using fallback chat ID:', fallbackId, error);
         }
       } else {
-        console.log('🆔 [useChatHistory] Using existing chat ID:', chatId.get());
+        // console.log('🆔 [useChatHistory] Using existing chat ID:', chatId.get());
       }
 
       // Set URL ID from artifact or chat ID
@@ -445,7 +406,7 @@ export function useChatHistory() {
           navigateChat(newUrlId);
           setUrlId(newUrlId);
           currentUrlId = newUrlId; // ← Store locally to avoid race condition
-          console.log('🔗 [useChatHistory] Set URL ID from artifact:', newUrlId);
+          // console.log('🔗 [useChatHistory] Set URL ID from artifact:', newUrlId);
         } catch (error) {
           // Fallback: use artifact ID directly if getUrlId fails
           console.warn('⚠️ [useChatHistory] getUrlId failed, using artifact ID directly:', error);
@@ -459,7 +420,7 @@ export function useChatHistory() {
         navigateChat(chatIdValue);
         setUrlId(chatIdValue);
         currentUrlId = chatIdValue; // ← Store locally to avoid race condition
-        console.log('🔗 [useChatHistory] Set URL ID from chat ID:', chatIdValue);
+        // console.log('🔗 [useChatHistory] Set URL ID from chat ID:', chatIdValue);
       }
 
       // CRITICAL FIX: Final safety net - if STILL no urlId, use chatId as absolute fallback
@@ -477,14 +438,14 @@ export function useChatHistory() {
       if (!description.get()) {
         if (firstArtifact?.title) {
           description.set(firstArtifact.title);
-          console.log('📝 [useChatHistory] Set description from artifact:', firstArtifact.title);
+          // console.log('📝 [useChatHistory] Set description from artifact:', firstArtifact.title);
         } else if (messages.length > 0) {
           // Use first user message as description
           const firstUserMsg = messages.find(m => m.role === 'user');
           if (firstUserMsg) {
             const desc = firstUserMsg.content.substring(0, 60) + (firstUserMsg.content.length > 60 ? '...' : '');
             description.set(desc);
-            console.log('📝 [useChatHistory] Set description from first message:', desc);
+            // console.log('📝 [useChatHistory] Set description from first message:', desc);
           }
         }
       }
@@ -516,18 +477,6 @@ export function useChatHistory() {
         }
       }
 
-      console.log('💾 [useChatHistory] Saving to storage:', {
-        chatId: finalChatId,
-        urlId: finalUrlId,
-        description: finalDescription,
-        messageCount: messages.length,
-        fileCount,
-        totalFileSize: `${(totalSize / 1024).toFixed(2)} KB`,
-        hasArtifact: !!firstArtifact,
-        willTryDatabase: USE_DATABASE,
-        files: Object.keys(fileSnapshot).slice(0, 5).join(', ') + (fileCount > 5 ? '...' : ''),
-      });
-
       // Don't modify the messages - save them as-is
       const enhancedMessages = messages;
 
@@ -544,21 +493,21 @@ export function useChatHistory() {
       );
 
       if (dbSaved) {
-        console.log('✅ [useChatHistory] Chat history saved to database successfully!');
+        // console.log('✅ [useChatHistory] Chat history saved to database successfully!');
       }
 
       // Fallback to IndexedDB if database fails or not available
       if (!dbSaved && db) {
         try {
           await setMessages(db, finalChatId as string, messages, finalUrlId, finalDescription);
-          console.log('✅ [useChatHistory] Chat history saved to IndexedDB (fallback)');
+          // console.log('✅ [useChatHistory] Chat history saved to IndexedDB (fallback)');
         } catch (error) {
           console.error('❌ [useChatHistory] Failed to save chat history to IndexedDB:', error);
           throw error;
         }
       }
 
-      console.log('📊 [useChatHistory] Save complete. Database:', dbSaved ? 'YES' : 'NO', 'IndexedDB:', (!dbSaved && db) ? 'YES' : 'NO');
+      // console.log('📊 [useChatHistory] Save complete. Database:', dbSaved ? 'YES' : 'NO', 'IndexedDB:', (!dbSaved && db) ? 'YES' : 'NO');
     },
   };
 }

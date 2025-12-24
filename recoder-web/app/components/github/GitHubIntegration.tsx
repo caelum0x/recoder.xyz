@@ -70,14 +70,6 @@ export function GitHubIntegration({ onImportComplete }: GitHubIntegrationProps) 
     <>
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => setShowStarters(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
-        >
-          <div className="i-ph:folder-open text-lg" />
-          <span>Browse Local Starters</span>
-          <div className="text-xs opacity-80 ml-1">(45+ templates)</div>
-        </button>
-        <button
           onClick={() => setShowImporter(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-bolt-elements-button-secondary-background text-bolt-elements-button-secondary-text rounded-lg hover:bg-bolt-elements-button-secondary-backgroundHover transition-all duration-200"
         >

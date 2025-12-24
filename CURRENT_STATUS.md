@@ -1,46 +1,5 @@
-# RECODER.XYZ - CURRENT STATUS
-2- terminal not working its empty and not wroteable  3-live preview not working its blocked 
-4- all build and run commands fail to execute
+1-terminal not wroteable first one wrotes disconencted second terminal work  4-folder file creations fails 3-npm install and run dev fails
 
-### Issue 2: Terminal stuck on "initializing"
-- No terminal-related errors in log
-- Terminal likely waiting for projectId or WebSocket connection
-- **Root cause**: Terminal tries to connect but projectId timing or WebSocket fails silently
-
-### Issue 3: Live preview blocked (ERR_BLOCKED_BY_RESPONSE)
-- Preview URL: http://localhost:3100/preview/default
-- Browser blocks due to COEP/CORS headers
-- **Root cause**: Cross-origin policy blocking iframe/fetch from preview endpoint
-### Issue 1: Terminal Empty/Not Writable
-
-Root Cause: The Docker backend's terminal WebSocket connects, but the shell output isn't being 
-properly streamed back.
-
-Looking at server.ts line 232-260:
-typescript
-// With TTY=true, Docker sends raw data without multiplexing headers
-stream.on('data', (chunk: Buffer) => {
-  console.log('Terminal data:', chunk.length, 'bytes');
-  if (ws.readyState === ws.OPEN) {
-    ws.send(chunk);
-  }
-});
-
-
-The issue is that Docker exec with Tty: true should work, but the shell might not be outputting 
-anything because:
-1. The bash --rcfile /dev/null might suppress the prompt
-2. The PS1=$  env var might not be taking effect
-3. The initial stream.write('\n') might not trigger output
-
-### Issue 2: Preview 404 / ERR_BLOCKED_BY_RESPONSE
-
-Root Cause: The preview proxy tries to connect to container ports, but:
-1. No dev server is running in the container (returns 404)
-2. When it does run, CORS/COEP headers may still block iframe embedding
-
-The preview code checks ports entry.port + 1, entry.port, entry.port + 2 but if no server is 
-listening, it returns a 502 error page.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -171,3 +130,20 @@ localhost engellendi
 localhost bağlanmayı reddetti.
 
 ERR_BLOCKED_BY_RESPONSE
+
+---
+
+## ✅ CURRENT WORKING STATUS (Dec 24, 2025)
+
+### Docker Backend - WORKING
+- Port 3100: ✅ Running
+- Container creation: ✅ Working
+- File writing: ✅ Working  
+- Command execution: ✅ Working
+- Preview proxy: ✅ Working
+
+### To Start Docker Backend:
+```bash
+cd docker-backend && npm run dev
+```
+

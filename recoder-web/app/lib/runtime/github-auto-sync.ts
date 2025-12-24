@@ -69,7 +69,7 @@ async function flushPendingFiles(chatId: string) {
     });
 
     if (response.ok) {
-      console.log(`✅ Auto-synced ${files.length} files to GitHub`);
+      // console.log(`✅ Auto-synced ${files.length} files to GitHub`);
     }
   } catch (error) {
     console.error('Failed to auto-sync to GitHub:', error);
