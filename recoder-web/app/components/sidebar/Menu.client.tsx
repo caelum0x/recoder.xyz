@@ -50,19 +50,8 @@ async function loadHistoryFromDatabase(): Promise<ChatHistoryItem[]> {
     if (anonymousId) params.set('anonymousId', anonymousId);
     params.set('limit', '50');
 
-    console.log('📋 [loadHistoryFromDatabase] Loading chat history...', { 
-      userId: user?.id, 
-      anonymousId,
-      hasUser: !!user,
-      hasAnonymousId: !!anonymousId,
-    });
-
     const url = `/api/chat-history?${params}`;
-    console.log('📋 [loadHistoryFromDatabase] Fetching:', url);
-
     const response = await fetch(url);
-
-    console.log('📋 [loadHistoryFromDatabase] Response:', response.status, response.statusText);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -72,19 +61,10 @@ async function loadHistoryFromDatabase(): Promise<ChatHistoryItem[]> {
 
     const result = await response.json();
     const { data, success } = result;
-    
-    console.log('📋 [loadHistoryFromDatabase] Result:', {
-      success,
-      itemCount: data?.length || 0,
-      hasData: !!data,
-    });
 
     if (!success || !data) {
-      console.warn('⚠️ [loadHistoryFromDatabase] No data in response');
       return [];
     }
-
-    console.log(`✅ [loadHistoryFromDatabase] Loaded ${data.length} chats from database`);
 
     // Convert database format to ChatHistoryItem format
     return data.map((item: any) => ({
@@ -112,62 +92,48 @@ export function Menu() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const loadEntries = useCallback(async () => {
-    console.log('📋 [Menu.loadEntries] Starting to load chat history...');
     setLoadingFromDb(true);
 
     try {
       // Try loading from database first
-      console.log('📋 [Menu.loadEntries] Attempting database load...');
       const dbChats = await loadHistoryFromDatabase();
-
-      console.log('📋 [Menu.loadEntries] Database returned:', dbChats.length, 'chats');
 
       if (dbChats.length > 0) {
         const filtered = dbChats.filter((item) => item.urlId && item.description);
-        console.log('📋 [Menu.loadEntries] After filtering:', filtered.length, 'chats');
         setList(filtered);
         setLoadingFromDb(false);
         return;
       }
 
       // Fallback to IndexedDB if database has no data
-      console.log('📋 [Menu.loadEntries] No database chats, trying IndexedDB fallback...');
       const db = getDB();
       if (db) {
-        console.log('📋 [Menu.loadEntries] IndexedDB available, loading...');
         const indexedDBChats = await getAll(db);
-        console.log('📋 [Menu.loadEntries] IndexedDB returned:', indexedDBChats.length, 'chats');
         const filtered = indexedDBChats.filter((item) => item.urlId && item.description);
-        console.log('📋 [Menu.loadEntries] After filtering:', filtered.length, 'chats');
         setList(filtered);
       } else {
-        console.log('📋 [Menu.loadEntries] No IndexedDB available, setting empty list');
         setList([]);
       }
     } catch (error) {
-      console.error('❌ [Menu.loadEntries] Failed to load chat history:', error);
+      console.error('Failed to load chat history:', error);
       showSmartError(error);
-      
+
       // Final fallback to IndexedDB
-      console.log('📋 [Menu.loadEntries] Error occurred, final IndexedDB fallback...');
       const db = getDB();
       if (db) {
         try {
           const indexedDBChats = await getAll(db);
-          console.log('📋 [Menu.loadEntries] Final fallback got:', indexedDBChats.length, 'chats');
           const filtered = indexedDBChats.filter((item) => item.urlId && item.description);
           setList(filtered);
         } catch (e) {
-          console.error('❌ [Menu.loadEntries] Final fallback failed:', e);
+          console.error('Final fallback failed:', e);
           setList([]);
         }
       } else {
-        console.log('📋 [Menu.loadEntries] No IndexedDB for fallback');
         setList([]);
       }
     } finally {
       setLoadingFromDb(false);
-      console.log('📋 [Menu.loadEntries] Load complete');
     }
   }, []);
 
@@ -176,15 +142,11 @@ export function Menu() {
 
     try {
       // Try deleting from database first
-      const response = await fetch('/api/chat-history', {
+      await fetch('/api/chat-history', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: item.id }),
       });
-
-      if (response.ok) {
-        console.log('✅ Deleted chat from database');
-      }
     } catch (error) {
       console.error('Failed to delete from database:', error);
     }
@@ -194,7 +156,6 @@ export function Menu() {
     if (db) {
       try {
         await deleteById(db, item.id);
-        console.log('✅ Deleted chat from IndexedDB');
       } catch (error) {
         console.error('Failed to delete from IndexedDB:', error);
       }

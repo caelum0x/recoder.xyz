@@ -1,16 +1,34 @@
 import express from 'express';
 import expressWs from 'express-ws';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { v4 as uuid } from 'uuid';
 import Docker from 'dockerode';
 import { Duplex } from 'stream';
 import dotenv from 'dotenv';
+import WebSocket from 'ws';
 import { mountFiles } from './fileMount.js';
+import * as pty from 'node-pty';
 
 dotenv.config();
 
 const docker = new Docker();
 const { app } = expressWs(express());
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute
+  message: { error: 'Too many requests, slow down' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const containerLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10, // 10 container creates per minute
+  message: { error: 'Container creation rate limited' },
+});
 
 // CORS headers - no restrictive COEP/COOP that block cross-origin
 app.use(cors({ 
@@ -25,33 +43,62 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '50mb' }));
+app.use('/api/', apiLimiter);
 
-// Container registry: projectId -> containerId + port
-const containers = new Map<string, { id: string; lastActive: number; port: number }>();
+// Container registry: projectId -> containerId + port + ptyPort
+const containers = new Map<string, { id: string; lastActive: number; port: number; ptyPort: number }>();
 
 const IMAGE_NAME = 'recoder-universal:latest';
 const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 min
 const MEMORY_LIMIT = 1024 * 1024 * 1024; // 1GB
 const CPU_QUOTA = 100000; // 100% of 1 CPU
 
-// Port allocation - find free port by checking Docker
-async function allocatePort(): Promise<number> {
-  const containers = await docker.listContainers({ all: true });
-  const usedPorts = new Set<number>();
+// Track allocated ports to prevent race conditions
+const allocatedPorts = new Set<number>();
+
+// Port allocation - find free port by checking Docker + our tracking
+async function allocatePort(): Promise<{ preview: number; pty: number }> {
+  const dockerContainers = await docker.listContainers({ all: true });
+  const usedPorts = new Set<number>(allocatedPorts);
   
-  for (const c of containers) {
+  for (const c of dockerContainers) {
     for (const p of c.Ports || []) {
-      if (p.PublicPort) usedPorts.add(p.PublicPort);
+      if (p.PublicPort) {
+        usedPorts.add(p.PublicPort);
+        usedPorts.add(p.PublicPort + 1);
+        usedPorts.add(p.PublicPort + 2);
+        usedPorts.add(p.PublicPort + 3);
+      }
     }
+  }
+  
+  // Also add ports from our container registry
+  for (const entry of containers.values()) {
+    usedPorts.add(entry.port);
+    usedPorts.add(entry.port + 1);
+    usedPorts.add(entry.port + 2);
+    usedPorts.add(entry.ptyPort);
   }
   
   // Find first free port in range 10000-20000
-  for (let port = 10000; port < 20000; port++) {
-    if (!usedPorts.has(port) && !usedPorts.has(port + 1) && !usedPorts.has(port + 2)) {
-      return port;
+  for (let port = 10000; port < 20000; port += 4) {
+    if (!usedPorts.has(port) && !usedPorts.has(port + 1) && !usedPorts.has(port + 2) && !usedPorts.has(port + 3)) {
+      allocatedPorts.add(port);
+      allocatedPorts.add(port + 1);
+      allocatedPorts.add(port + 2);
+      allocatedPorts.add(port + 3);
+      return { preview: port, pty: port + 3 };
     }
   }
   throw new Error('No free ports available');
+}
+
+// Release ports when container is removed
+function releasePorts(port: number, ptyPort: number) {
+  allocatedPorts.delete(port);
+  allocatedPorts.delete(port + 1);
+  allocatedPorts.delete(port + 2);
+  allocatedPorts.delete(ptyPort);
 }
 
 // Health check
@@ -60,7 +107,7 @@ app.get('/health', (_, res) => {
 });
 
 // Create or get container for project
-app.post('/api/container', async (req, res) => {
+app.post('/api/container', containerLimiter, async (req, res) => {
   try {
     const { projectId } = req.body;
     if (!projectId) return res.status(400).json({ error: 'projectId required' });
@@ -69,11 +116,11 @@ app.post('/api/container', async (req, res) => {
     const existing = containers.get(projectId);
     if (existing) {
       existing.lastActive = Date.now();
-      return res.json({ containerId: existing.id, reused: true, port: existing.port });
+      return res.json({ containerId: existing.id, reused: true, port: existing.port, ptyPort: existing.ptyPort });
     }
 
-    // Allocate host port for preview
-    const hostPort = await allocatePort();
+    // Allocate host ports for preview and PTY
+    const { preview: hostPort, pty: ptyPort } = await allocatePort();
 
     // Create new container with security sandbox and port mapping
     const container = await docker.createContainer({
@@ -81,7 +128,8 @@ app.post('/api/container', async (req, res) => {
       Tty: true,
       OpenStdin: true,
       WorkingDir: '/workspace',
-      ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {} },
+      Env: [`PTY_PORT=9999`],
+      ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {}, '9999/tcp': {} },
       HostConfig: {
         Memory: MEMORY_LIMIT,
         CpuPeriod: 100000,
@@ -91,28 +139,18 @@ app.post('/api/container', async (req, res) => {
           '3000/tcp': [{ HostPort: String(hostPort) }],
           '5173/tcp': [{ HostPort: String(hostPort + 1) }],
           '8080/tcp': [{ HostPort: String(hostPort + 2) }],
+          '9999/tcp': [{ HostPort: String(ptyPort) }],
         },
-        // Security sandbox
-        ReadonlyRootfs: false,
-        SecurityOpt: ['no-new-privileges'],
-        CapDrop: ['ALL'],
-        CapAdd: ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER'],
-        PidsLimit: 256,
-        Ulimits: [
-          { Name: 'nofile', Soft: 1024, Hard: 2048 },
-          { Name: 'nproc', Soft: 128, Hard: 256 }
-        ],
       },
-      Labels: { projectId, createdAt: Date.now().toString(), hostPort: String(hostPort) },
     });
 
     await container.start();
-    containers.set(projectId, { id: container.id, lastActive: Date.now(), port: hostPort });
+    containers.set(projectId, { id: container.id, lastActive: Date.now(), port: hostPort, ptyPort });
 
-    console.log(`✅ Container created: ${container.id.slice(0, 12)} for ${projectId} (port ${hostPort})`);
-    res.json({ containerId: container.id, reused: false, port: hostPort });
+    console.log(`Container created: ${container.id.slice(0, 12)} for ${projectId} (preview: ${hostPort}, pty: ${ptyPort})`);
+    res.json({ containerId: container.id, reused: false, port: hostPort, ptyPort });
   } catch (err: any) {
-    console.error('❌ Container create error:', err.message);
+    console.error('Container create error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -126,6 +164,7 @@ app.delete('/api/container/:projectId', async (req, res) => {
     const container = docker.getContainer(entry.id);
     await container.stop().catch(() => {});
     await container.remove().catch(() => {});
+    releasePorts(entry.port, entry.ptyPort);
     containers.delete(req.params.projectId);
 
     res.json({ success: true });
@@ -275,10 +314,34 @@ app.post('/api/exec/:projectId', async (req, res) => {
   }
 });
 
-// Terminal WebSocket
+// Helper: Wait for PTY server to be ready (with retries)
+async function waitForPtyServer(port: number, maxRetries = 10, delayMs = 500): Promise<boolean> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Try to establish a test connection
+      const testWs = new WebSocket(`ws://127.0.0.1:${port}`);
+      await new Promise((resolve, reject) => {
+        testWs.on('open', () => {
+          testWs.close();
+          resolve(true);
+        });
+        testWs.on('error', reject);
+        setTimeout(() => reject(new Error('Timeout')), 1000);
+      });
+      return true; // PTY server is ready
+    } catch {
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  return false;
+}
+
+// Terminal WebSocket - Proxy to container's PTY server
 app.ws('/terminal/:projectId', async (ws, req) => {
   const { projectId } = req.params;
-  
+
   const entry = containers.get(projectId);
   if (!entry) {
     ws.close(1008, 'Container not found');
@@ -286,59 +349,49 @@ app.ws('/terminal/:projectId', async (ws, req) => {
   }
 
   entry.lastActive = Date.now();
-  const container = docker.getContainer(entry.id);
 
-  try {
-    // Use sh -c to spawn bash with proper prompt setup
-    const exec = await container.exec({
-      Cmd: ['/bin/sh', '-c', 'export PS1="\\w $ " && exec /bin/bash -i 2>/dev/null || exec /bin/sh -i'],
-      AttachStdin: true,
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: true,
-      WorkingDir: '/workspace',
-      Env: ['TERM=xterm-256color', 'HOME=/root', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-    });
-
-    const stream = await exec.start({ hijack: true, stdin: true, Tty: true }) as Duplex;
-    
-    console.log('✅ Terminal stream created for', projectId);
-
-    // With TTY=true, Docker sends raw data without multiplexing headers
-    stream.on('data', (chunk: Buffer) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(chunk);
-      }
-    });
-
-    ws.on('message', (data: Buffer | string) => {
-      entry.lastActive = Date.now();
-      if (Buffer.isBuffer(data)) {
-        stream.write(data);
-      } else if (typeof data === 'string') {
-        stream.write(data);
-      } else {
-        stream.write(Buffer.from(data as any));
-      }
-    });
-
-    ws.on('close', () => {
-      stream.end();
-    });
-    
-    stream.on('end', () => {
-      if (ws.readyState === ws.OPEN) {
-        ws.close(1000, 'Stream ended');
-      }
-    });
-    
-    stream.on('error', (err) => {
-      console.error('Terminal stream error:', err.message);
-    });
-  } catch (err: any) {
-    console.error('Terminal error:', err.message);
-    ws.close(1011, err.message);
+  // Wait for PTY server to be ready
+  const ptyReady = await waitForPtyServer(entry.ptyPort);
+  if (!ptyReady) {
+    console.error('PTY server not ready for project:', projectId);
+    ws.close(1011, 'PTY server not ready');
+    return;
   }
+
+  // Connect to container's PTY server
+  const ptyWs = new WebSocket(`ws://127.0.0.1:${entry.ptyPort}`);
+
+  ptyWs.on('open', () => {
+    console.log('Terminal connected:', projectId);
+  });
+
+  ptyWs.on('message', (data: Buffer) => {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(data);
+    }
+  });
+
+  ptyWs.on('error', (err: Error) => {
+    console.error('PTY connection error:', err.message);
+    ws.close(1011, 'PTY connection failed');
+  });
+
+  ptyWs.on('close', () => {
+    if (ws.readyState === ws.OPEN) {
+      ws.close(1000);
+    }
+  });
+
+  ws.on('message', (data: Buffer | string) => {
+    entry.lastActive = Date.now();
+    if (ptyWs.readyState === WebSocket.OPEN) {
+      ptyWs.send(data);
+    }
+  });
+
+  ws.on('close', () => {
+    ptyWs.close();
+  });
 });
 
 // File sync WebSocket (real-time)
@@ -413,8 +466,9 @@ setInterval(async () => {
         const container = docker.getContainer(entry.id);
         await container.stop().catch(() => {});
         await container.remove().catch(() => {});
+        releasePorts(entry.port, entry.ptyPort);
         containers.delete(projectId);
-        console.log(`🧹 Cleaned up idle container: ${projectId}`);
+        console.log(`Cleaned up idle container: ${projectId}`);
       } catch {}
     }
   }

@@ -416,10 +416,12 @@ function chrome129IssuePlugin() {
     name: 'chrome129IssuePlugin',
     configureServer(server: ViteDevServer) {
       server.middlewares.use((req, res, next) => {
-        // Add cross-origin isolation headers
-        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-        // Use 'credentialless' to allow cross-origin iframes (Docker preview)
-        res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+        // Only add COOP/COEP if NOT using Docker runtime (WebContainer needs them)
+        const useDocker = process.env.VITE_RUNTIME_MODE === 'docker';
+        if (!useDocker) {
+          res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+          res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+        }
 
         const raw = req.headers['user-agent']?.match(/Chrom(e|ium)\/([0-9]+)\./);
 
