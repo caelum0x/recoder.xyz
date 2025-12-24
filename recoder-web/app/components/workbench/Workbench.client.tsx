@@ -66,26 +66,17 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   const selectedView = useStore(workbenchStore.currentView);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  console.log('🔧 Workbench render:', { 
-    chatStarted, 
-    showWorkbench, 
-    filesCount: Object.keys(files).length,
-    hasPreview 
-  });
-
   const setSelectedView = (view: WorkbenchViewType) => {
     workbenchStore.currentView.set(view);
   };
 
   useEffect(() => {
     if (hasPreview) {
-      console.log('📺 Preview detected, switching to preview view');
       setSelectedView('preview');
     }
   }, [hasPreview]);
 
   useEffect(() => {
-    console.log('📂 Files updated, setting documents. Files count:', Object.keys(files).length);
     workbenchStore.setDocuments(files);
   }, [files]);
 
@@ -118,7 +109,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   const handleDownloadCode = useCallback(async () => {
     setIsDownloading(true);
     try {
-      console.log('📥 Downloading code...');
+      // console.log('📥 Downloading code...');
 
       // Convert files to plain object
       const filesToDownload: Record<string, string> = {};
@@ -197,7 +188,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
         return;
       }
 
-      console.log('📤 Pushing to GitHub...');
+      // console.log('📤 Pushing to GitHub...');
       toast.info('Pushing to GitHub...');
 
       const response = await fetch('/api/github/push', {
@@ -238,7 +229,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   }, [files]);
 
   const handleFilesUpdate = useCallback((newFiles: Record<string, string>) => {
-    console.log('📥 Updating files from GitHub:', Object.keys(newFiles).length, 'files');
+    // console.log('📥 Updating files from GitHub:', Object.keys(newFiles).length, 'files');
 
     // Convert plain object to workbench format
     const updatedFiles: Record<string, any> = {};

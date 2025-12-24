@@ -39,7 +39,7 @@ interface EditorPanelProps {
 }
 
 const MAX_TERMINALS = 3;
-const DEFAULT_TERMINAL_SIZE = 35; // ✅ P2: Increased from 25% to 35% for better visibility
+const DEFAULT_TERMINAL_SIZE = 25; // Smaller default for more editor space
 const DEFAULT_EDITOR_SIZE = 100 - DEFAULT_TERMINAL_SIZE;
 
 const editorSettings: EditorSettings = { tabSize: 2 };
@@ -196,8 +196,8 @@ export const EditorPanel = memo(
         <Panel
           ref={terminalPanelRef}
           defaultSize={showTerminal ? DEFAULT_TERMINAL_SIZE : 0}
-          minSize={15}      // ✅ P2: Increased from 10% to 15% for better terminal visibility
-          maxSize={60}      // ✅ P2: Added max size to prevent terminal taking over screen
+          minSize={10}      // Reduced to allow more collapse
+          maxSize={70}      // Allow terminal to expand more if needed
           collapsible
           onExpand={() => {
             if (!terminalToggledByShortcut.current) {
@@ -240,9 +240,7 @@ export const EditorPanel = memo(
                       <div className="i-ph:terminal-window-duotone text-lg" />
                       Terminal {terminalCount > 1 && index + 1}
                       {highlightTerminal && isActive && (
-                        <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-semibold animate-bounce">
-                          New Output
-                        </span>
+                        <span className="ml-2 w-2 h-2 bg-green-500 rounded-full" />
                       )}
                     </button>
                   );

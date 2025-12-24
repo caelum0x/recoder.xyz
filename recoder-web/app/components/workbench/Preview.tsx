@@ -28,11 +28,7 @@ export const Preview = memo(() => {
 
     const { baseUrl } = activePreview;
 
-    console.log('📺 [Preview] Active preview changed:', {
-      baseUrl,
-      port: activePreview.port,
-      ready: activePreview.ready,
-    });
+    // Preview changed - baseUrl set
 
     setUrl(baseUrl);
     setIframeUrl(baseUrl);
@@ -49,7 +45,7 @@ export const Preview = memo(() => {
       console.warn('  3. Port has not been exposed');
       console.warn('  Check workbench store for preview state');
     } else {
-      console.log('✅ [Preview] Preview URL is valid:', baseUrl);
+      // console.log('✅ [Preview] Preview URL is valid:', baseUrl);
     }
   }, [activePreview, iframeUrl]);
 
@@ -144,7 +140,13 @@ export const Preview = memo(() => {
             </div>
           </div>
         ) : activePreview ? (
-          <iframe ref={iframeRef} className="border-none w-full h-full bg-white" src={iframeUrl} />
+          <iframe 
+            ref={iframeRef} 
+            className="border-none w-full h-full bg-white" 
+            src={iframeUrl}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+            allow="cross-origin-isolated"
+          />
         ) : (
           <div className="flex w-full h-full justify-center items-center bg-white">
             <div className="text-center p-6">

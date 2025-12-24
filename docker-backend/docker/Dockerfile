@@ -1,21 +1,25 @@
 # Recoder Universal Dev Container
-# Multi-language support with recoder-code CLI
+# Multi-language support with real PTY terminal
 
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/.local/bin:/root/.cargo/bin:/root/.bun/bin:$PATH"
 
-# Base tools
+# Base tools + build deps for node-pty
 RUN apt-get update && apt-get install -y \
     curl wget git bash build-essential unzip \
     software-properties-common ca-certificates \
+    python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g pnpm yarn
+
+# Install node-pty and ws for PTY server in /opt/pty
+RUN mkdir -p /opt/pty && cd /opt/pty && npm init -y && npm install node-pty ws
 
 # Python 3.11
 RUN add-apt-repository ppa:deadsnakes/ppa -y \
@@ -48,12 +52,12 @@ RUN apt-get update && apt-get install -y ruby-full \
 RUN apt-get update && apt-get install -y php php-cli php-mbstring \
     && rm -rf /var/lib/apt/lists/*
 
-# Note: recoder-code CLI has internal dependency issues
-# For now, use node/npm directly for code execution
-# TODO: Fix recoder-code package dependencies
+# PTY Server
+COPY pty-server.js /opt/pty/pty-server.js
 
 # Workspace
 RUN mkdir -p /workspace && chmod 777 /workspace
 WORKDIR /workspace
 
-CMD ["tail", "-f", "/dev/null"]
+# Start PTY server
+CMD ["node", "/opt/pty/pty-server.js"]

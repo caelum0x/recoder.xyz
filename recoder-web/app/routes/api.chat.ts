@@ -149,7 +149,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     });
   }
 
-  console.log(`[Chat API] Authenticated user: ${session.user.email}`);
+  // console.log(`[Chat API] Authenticated user: ${session.user.email}`);
 
   let messages: Messages;
   let provider: string = 'openrouter'; // Default provider
@@ -177,7 +177,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
 
     maxTokens = requestBody.maxTokens || 8000;
 
-    console.log(`[Chat API] Provider: ${provider}, Model: ${model || 'default'}, MaxTokens: ${maxTokens}`);
+    // console.log(`[Chat API] Provider: ${provider}, Model: ${model || 'default'}, MaxTokens: ${maxTokens}`);
 
     // Validate messages
     const { validateChatMessages, createValidationErrorResponse } = await import('~/lib/.server/middleware/request-validator');
@@ -203,7 +203,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   // FIX #2: Detect GitHub URL BEFORE AI processing
   const githubUrl = detectGitHubUrl(lastUserMessage);
   if (githubUrl) {
-    console.log(`🔀 GitHub URL detected: ${githubUrl}`);
+    // console.log(`🔀 GitHub URL detected: ${githubUrl}`);
     // Add ULTRA-EXPLICIT instruction to AI to ONLY use cloneGitHub
     messages.push({
       role: 'system',
@@ -236,17 +236,17 @@ That's it. Nothing else. Just the clone action.`,
   }
   
   // CRITICAL FIX: Detect and prepare starter template BEFORE AI processing
-  console.log('🔍 Checking if user request matches a starter template...');
+  // console.log('🔍 Checking if user request matches a starter template...');
   const starterInjection = await detectAndPrepareStarter(lastUserMessage);
   
   // If we found a matching starter template, inject it as context for AI
   if (starterInjection.shouldInject && createDirectStarterResponse) {
-    console.log(`✅ Starter detected: ${starterInjection.starterId} (confidence: ${starterInjection.confidence?.toFixed(2)})`);
+    // console.log(`✅ Starter detected: ${starterInjection.starterId} (confidence: ${starterInjection.confidence?.toFixed(2)})`);
     
     const directResponse = createDirectStarterResponse(starterInjection, lastUserMessage);
     
     if (directResponse) {
-      console.log('🚀 Injecting starter as base, AI will build on top');
+      // console.log('🚀 Injecting starter as base, AI will build on top');
       
       // ALWAYS have AI generate code based on user's request
       // The starter is just a foundation - AI must implement what user asked for
@@ -262,35 +262,35 @@ Create the actual application with all the features, components, and functionali
       });
     }
   } else {
-    console.log('   → No starter match found, proceeding with normal AI generation');
+    // console.log('   → No starter match found, proceeding with normal AI generation');
   }
 
   const stream = new SwitchableStream();
 
   try {
     // Get .recoder/ context from request body (already parsed)
-    console.log('📖 Loading .recoder/ project context...');
+    // console.log('📖 Loading .recoder/ project context...');
     const recoderContextPrompt = requestBody.recoderContext || '';
     
     if (recoderContextPrompt) {
-      console.log(`   ✅ Loaded .recoder/ context (${recoderContextPrompt.length} chars)`);
+      // console.log(`   ✅ Loaded .recoder/ context (${recoderContextPrompt.length} chars)`);
     } else {
-      console.log('   → No .recoder/ context provided');
+      // console.log('   → No .recoder/ context provided');
     }
 
     // Load MCP tools
-    console.log('🔧 Loading MCP tools...');
+    // console.log('🔧 Loading MCP tools...');
     const { loadMCPTools } = await import('~/lib/.server/mcp/tools-loader');
     const mcpToolsPrompt = await loadMCPTools((env as any).DB);
     
     if (mcpToolsPrompt) {
-      console.log('   ✅ MCP tools loaded');
+      // console.log('   ✅ MCP tools loaded');
     }
 
     // Get project context from request (tracks what project is being built)
     const projectContext = requestBody.projectContext || '';
     if (projectContext) {
-      console.log('   ✅ Project context loaded');
+      // console.log('   ✅ Project context loaded');
     }
 
     // Get custom tools from request

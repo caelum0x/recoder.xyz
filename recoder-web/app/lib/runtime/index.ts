@@ -48,13 +48,13 @@ export async function initRuntime(projectId: string): Promise<void> {
       throw new Error(errData.error || 'Docker init failed');
     }
     runtimeContext.ready = true;
-    console.log('🐳 Docker runtime initialized');
+    // console.log('🐳 Docker runtime initialized');
   } else {
     // Initialize WebContainer
     runtimeContext.mode = 'webcontainer';
     await getWebContainer();
     runtimeContext.ready = true;
-    console.log('📦 WebContainer runtime initialized');
+    // console.log('📦 WebContainer runtime initialized');
   }
 }
 
@@ -307,7 +307,7 @@ export async function setRuntimeMode(mode: RuntimeMode): Promise<void> {
     }
   }
   runtimeContext.mode = mode;
-  console.log(`🔄 Runtime mode switched to: ${mode}`);
+  // console.log(`🔄 Runtime mode switched to: ${mode}`);
 }
 
 // Export for backward compatibility
