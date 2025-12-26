@@ -32,11 +32,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (publicPaths.some(path => url.pathname.startsWith(path))) {
     return json({ user: null });
   }
-  
-  // Skip auth in development if SKIP_AUTH is set
-  if (process.env.NODE_ENV === 'development' && process.env.SKIP_AUTH === 'true') {
-    return json({ user: { id: 'dev-user', email: 'dev@local', name: 'Dev User' } });
-  }
 
   // Verify session with main site
   const session = await verifySession(request);
@@ -61,8 +56,32 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 export const links: LinksFunction = () => [
   {
     rel: 'icon',
-    href: '/favicon.svg',
-    type: 'image/svg+xml',
+    href: '/favicon-16x16.png',
+    type: 'image/png',
+    sizes: '16x16',
+  },
+  {
+    rel: 'icon',
+    href: '/favicon-32x32.png',
+    type: 'image/png',
+    sizes: '32x32',
+  },
+  {
+    rel: 'icon',
+    href: '/favicon-192x192.png',
+    type: 'image/png',
+    sizes: '192x192',
+  },
+  {
+    rel: 'icon',
+    href: '/favicon-512x512.png',
+    type: 'image/png',
+    sizes: '512x512',
+  },
+  {
+    rel: 'apple-touch-icon',
+    href: '/apple-touch-icon.png',
+    sizes: '180x180',
   },
   { rel: 'stylesheet', href: reactToastifyStyles },
   { rel: 'stylesheet', href: tailwindReset },
