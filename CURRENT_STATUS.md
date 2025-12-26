@@ -1,4 +1,4 @@
-1-terminal not wroteable first one wrotes disconencted second terminal work  4-folder file creations fails 3-npm install and run dev fails
+
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

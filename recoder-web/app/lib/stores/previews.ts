@@ -42,21 +42,28 @@ export class PreviewsStore {
       }
     }
 
+    // Don't init Docker preview yet - wait for projectId to be set
     if (this.#useDocker) {
-      this.#initDockerPreview();
+      // Docker preview will be initialized when setProjectId is called
     } else {
       this.#initWebContainerPreview();
     }
   }
 
   #initDockerPreview() {
+    if (!this.#projectId) {
+      console.warn('⚠️ [PreviewsStore] Cannot init Docker preview without projectId');
+      return;
+    }
+
     const previewInfo: PreviewInfo = {
       port: 3000,
       ready: true,
-      baseUrl: `${DOCKER_URL}/preview/${this.#projectId || 'default'}`,
+      baseUrl: `${DOCKER_URL}/preview/${this.#projectId}`,
     };
     this.#availablePreviews.set(3000, previewInfo);
     this.previews.set([previewInfo]);
+    console.log('✅ [PreviewsStore] Docker preview initialized:', previewInfo.baseUrl);
   }
 
   async #initWebContainerPreview() {

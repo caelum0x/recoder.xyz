@@ -149,12 +149,12 @@ export class ActionRunner {
 
   // Docker file operations
   async #dockerWriteFile(path: string, content: string): Promise<void> {
-    // Ensure path starts with / for proper concatenation
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    // If path is absolute, use as-is; otherwise prepend /workspace/
+    const fullPath = path.startsWith('/') ? path : `/workspace/${path}`;
     const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: `/workspace${normalizedPath}`, content }),
+      body: JSON.stringify({ path: fullPath, content }),
     });
     if (!res.ok) {
       const errData = await res.json() as { error?: string };
@@ -162,22 +162,33 @@ export class ActionRunner {
     }
   }
 
-  async #dockerExec(command: string, cwd: string = ''): Promise<string> {
-    // Default to /workspace, normalize cwd path
-    const workDir = cwd ? `/workspace${cwd.startsWith('/') ? cwd : `/${cwd}`}` : '/workspace';
+  async #dockerExec(command: string, cwd: string = '', background: boolean = false): Promise<string> {
+    // Normalize cwd path - if it starts with /, use as-is, otherwise prepend /workspace/
+    const workDir = cwd ? (cwd.startsWith('/') ? cwd : `/workspace/${cwd}`) : '/workspace';
     const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command, cwd: workDir }),
+      body: JSON.stringify({ command, cwd: workDir, background }),
     });
-    const data = await res.json() as { output?: string; error?: string };
+    const data = await res.json() as { output?: string; error?: string; ready?: boolean; port?: number; background?: boolean };
     if (!res.ok) throw new Error(data.error || 'Docker exec failed');
+
+    // For background processes, log the ready status
+    if (background && data.background) {
+      if (data.ready) {
+        logger.info(`✅ Dev server verified ready on port ${data.port}`);
+      } else {
+        logger.warn(`⚠️ Dev server started but not ready yet (may still be building)`);
+      }
+    }
+
     return data.output || '';
   }
 
   async #dockerMkdir(path: string): Promise<void> {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    await this.#dockerExec(`mkdir -p "/workspace${normalizedPath}"`);
+    // If path is absolute, use as-is; otherwise prepend /workspace/
+    const fullPath = path.startsWith('/') ? path : `/workspace/${path}`;
+    await this.#dockerExec(`mkdir -p "${fullPath}"`);
   }
 
   addAction(data: ActionCallbackData) {
@@ -308,17 +319,133 @@ export class ActionRunner {
     const normalizedContent = action.content.replace(/\n/g, ' ').toLowerCase();
     const isDevServer = /npm (run )?dev|yarn dev|pnpm dev|vite|next dev|remix dev|npm start|yarn start|pnpm start/.test(normalizedContent);
     const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
+    const isNpmCommand = /npm|yarn|pnpm/.test(normalizedContent);
+
+    // Skip duplicate npm install/dev if auto-install already ran
+    if (this.#autoInstallTriggered) {
+      if (isInstallCommand || (isDevServer && normalizedContent.includes('npm install'))) {
+        logger.info('⏭️ Skipping npm command - auto-install already handled this');
+        return;
+      }
+    }
 
     // Execute via Docker backend only
     await this.#ensureDockerReady();
-    
+
+    // Check if package.json exists before running npm commands
+    if (isNpmCommand && !this.#packageJsonCreated) {
+      logger.warn('⚠️ No package.json detected. npm commands may fail.');
+      logger.info('💡 Tip: Ask AI to generate package.json first, or create one manually.');
+      // Still try to run the command, but warn the user
+    }
+
     logger.info('Executing command via Docker backend');
+
+    // 🔧 FIX: Detect if this command includes install AND dev server combo
+    const hasInstallAndDev = /\b(npm|yarn|pnpm)\s+(install|i\b)[^&]*&&.*\b(npm|yarn|pnpm)\s+(run\s+)?dev\b/.test(normalizedContent);
+
+    if (hasInstallAndDev) {
+      logger.info('🔀 Detected install+dev combo, splitting into separate commands');
+
+      // 🔒 CRITICAL: Mark auto-install as triggered to prevent duplicate execution
+      this.#autoInstallTriggered = true;
+
+      // Cancel any pending auto-install timer
+      if (this.#autoInstallTimer) {
+        clearTimeout(this.#autoInstallTimer);
+        this.#autoInstallTimer = null;
+        logger.info('⏹️ Cancelled auto-install (shell action is handling it)');
+      }
+
+      try {
+        // Extract and run install part first (synchronous)
+        const installMatch = action.content.match(/\b(npm|yarn|pnpm)\s+(install|i\b)(\s+[^&]*)?/);
+        if (installMatch) {
+          const installCmd = installMatch[0].trim();
+          logger.info('📦 Running install first:', installCmd);
+          let installOutput = await this.#dockerExec(installCmd);
+
+          // Check for esbuild architecture mismatch
+          if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError'))) {
+            logger.warn('🔧 Detected esbuild architecture mismatch - fixing...');
+            await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild');
+            installOutput = await this.#dockerExec('npm install --force');
+
+            // If still failing, try clean install
+            if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
+              logger.warn('🔄 Retrying with clean install...');
+              await this.#dockerExec('rm -rf node_modules package-lock.json');
+              installOutput = await this.#dockerExec('npm install');
+            }
+
+            logger.info('✅ esbuild reinstalled with correct architecture');
+          } else if (installOutput && !installOutput.includes('npm error')) {
+            logger.info('Install output:', installOutput.substring(0, 200));
+          }
+        }
+
+        // Extract and run dev part in background
+        const devMatch = action.content.match(/\b(npm|yarn|pnpm)\s+(run\s+)?dev\b/);
+        if (devMatch) {
+          let devCmd = devMatch[0].trim();
+
+          // 🔧 FIX: Force Vite to use port 5173 (mapped to host)
+          if (devCmd.includes('npm') && !devCmd.includes('--port')) {
+            devCmd = `${devCmd} -- --port 5173 --host 0.0.0.0`;
+            logger.info('🔧 Forcing dev server to use port 5173');
+          }
+
+          logger.info('🚀 Starting dev server in background:', devCmd);
+          await this.#dockerExec(devCmd, '/workspace', true); // ✅ Background mode!
+          logger.info('✅ Dev server started in background');
+
+          // Wait a moment then check health
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          await this.#checkDevServerHealth();
+        }
+
+        return;
+      } catch (error: any) {
+        logger.error('❌ Install+dev command failed:', error.message);
+        throw error;
+      }
+    }
+
+    // 🔧 FIX: If just a dev server command alone, run in background
+    if (isDevServer && !action.content.includes('&&')) {
+      logger.info('🚀 Running dev server command in background mode');
+      try {
+        await this.#dockerExec(action.content, '/workspace', true);
+        logger.info('✅ Dev server started in background');
+
+        // Wait a moment then check health
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await this.#checkDevServerHealth();
+
+        return;
+      } catch (error: any) {
+        logger.error('❌ Dev server command failed:', error.message);
+        throw error;
+      }
+    }
+
+    // Otherwise run normally (synchronous)
     try {
       const output = await this.#dockerExec(action.content);
+      if (output) {
+        logger.info('Command output:', output.substring(0, 200));
+      }
       logger.info('Command completed successfully');
       return;
     } catch (error: any) {
-      logger.error('Docker command failed:', error.message);
+      logger.error('❌ Docker command failed:', error.message);
+
+      // Show specific error for missing package.json
+      if (error.message.includes('missing script') || error.message.includes('ENOENT')) {
+        logger.error('💡 This usually means package.json is missing or incomplete.');
+        logger.error('📝 Ask the AI: "Please create a complete package.json file with dependencies"');
+      }
+
       throw error;
     }
   }
@@ -437,6 +564,12 @@ export class ActionRunner {
     if (isPackageJson) {
       logger.info('📦 package.json detected! Will auto-install dependencies after all files are created.');
       this.#packageJsonCreated = true;
+    }
+
+    // ✅ Auto-fix tsconfig.json to include path aliases for Next.js/React projects
+    const isTsconfig = action.filePath === 'tsconfig.json' || action.filePath.endsWith('/tsconfig.json');
+    if (isTsconfig) {
+      await this.#fixTsconfigPaths(action.filePath, action.content);
     }
 
     // ✅ P1: Remove from tracking
@@ -631,17 +764,221 @@ export class ActionRunner {
 
     try {
       await this.#ensureDockerReady();
-      
+
       // Run npm install
-      await this.#dockerExec('npm install');
-      logger.info('Dependencies installed');
-      
-      // Start dev server in background
-      await this.#dockerExec('npm run dev &', '/workspace');
-      logger.info('Dev server started');
+      logger.info('📦 Installing dependencies...');
+      let installOutput = await this.#dockerExec('npm install');
+
+      // Check if install actually succeeded
+      if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
+        logger.error('❌ npm install failed!');
+        logger.error('Error output:', installOutput.slice(0, 500));
+
+        // Check if it's an esbuild architecture mismatch
+        if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError'))) {
+          logger.warn('🔧 Detected esbuild architecture mismatch - fixing...');
+
+          // Remove esbuild and reinstall with correct platform
+          await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild');
+          installOutput = await this.#dockerExec('npm install --force');
+
+          // Check if it worked
+          if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
+            logger.error('❌ Still failing after esbuild fix. Trying clean install...');
+            await this.#dockerExec('rm -rf node_modules package-lock.json');
+            installOutput = await this.#dockerExec('npm install');
+          }
+
+          logger.info('✅ esbuild reinstalled with correct architecture');
+        } else {
+          logger.info('💡 Trying with --legacy-peer-deps...');
+          // Retry with legacy peer deps
+          installOutput = await this.#dockerExec('npm install --legacy-peer-deps');
+        }
+
+        // Final check
+        if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
+          logger.error('❌ npm install failed even after retries');
+          logger.error('Final error:', installOutput.slice(0, 500));
+          throw new Error('npm install failed - see logs for details');
+        }
+      }
+
+      logger.info('✅ Dependencies installed successfully');
+
+      // Verify node_modules exists
+      const checkModules = await this.#dockerExec('test -d /workspace/node_modules && echo "exists" || echo "missing"');
+      if (checkModules.includes('missing')) {
+        logger.error('❌ node_modules directory not created! Installation failed.');
+        logger.info('💡 Please check package.json and try manually: npm install');
+        return;
+      }
+
+      // Start dev server in background (background=true is critical!)
+      logger.info('🚀 Starting dev server...');
+      // Force Vite to use port 5173 (mapped to host 10001)
+      await this.#dockerExec('npm run dev -- --port 5173 --host 0.0.0.0', '/workspace', true);
+      logger.info('Dev server started in background');
+
+      // Wait a moment then check logs for errors
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await this.#checkDevServerHealth();
     } catch (error: any) {
-      logger.error('Auto-install failed:', error.message);
-      logger.info('You can manually run: npm install && npm run dev');
+      logger.error('❌ Auto-install failed:', error.message);
+
+      // Show the actual error from Docker
+      if (error.message.includes('exit code')) {
+        logger.error('Command failed in container. Check the error above for details.');
+      }
+
+      logger.info('💡 You can manually fix this:');
+      logger.info('  1. Check package.json is valid');
+      logger.info('  2. Run: npm install --legacy-peer-deps');
+      logger.info('  3. Run: npm run dev');
+    }
+  }
+
+  async #checkDevServerHealth() {
+    try {
+      // Check preview health endpoint
+      const healthRes = await fetch(`${DOCKER_URL}/api/preview/${this.#projectId}/health`);
+      if (healthRes.ok) {
+        const healthData = await healthRes.json() as { ports: Array<{ port: number; responding: boolean; type: string }> };
+        const respondingPort = healthData.ports.find(p => p.responding);
+
+        if (respondingPort) {
+          logger.info(`✅ Dev server verified responding on port ${respondingPort.port} (${respondingPort.type})`);
+        } else {
+          logger.warn(`⚠️ Dev server not responding yet on any port`);
+          logger.info(`Checked ports: ${healthData.ports.map(p => `${p.port} (${p.type})`).join(', ')}`);
+        }
+      }
+
+      // Also check logs for errors
+      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`);
+      if (!res.ok) {
+        logger.warn('⚠️ Could not read dev server logs');
+        return;
+      }
+
+      const data = await res.json() as { logs: string };
+      const logs = data.logs;
+
+      // If no logs, check if process is even running
+      if (!logs || logs.includes('No logs found')) {
+        logger.warn('📋 Dev server output: No logs found');
+        logger.info('🔍 Checking if dev server process is running...');
+
+        try {
+          const psOutput = await this.#dockerExec('ps aux | grep -E "vite|next|node" | grep -v grep || echo "No dev server process found"');
+          logger.info(`Process check:\n${psOutput}`);
+
+          // If no dev server process, this is a critical issue
+          if (psOutput.includes('No dev server process found') || psOutput.trim().split('\n').length === 1) {
+            logger.error('🚨 CRITICAL: Dev server process not running!');
+            logger.error('The background process died immediately after starting.');
+            logger.error('');
+            logger.error('💡 This usually means:');
+            logger.error('  1. package.json is missing "dev" script');
+            logger.error('  2. node_modules directory is missing or incomplete');
+            logger.error('  3. npm command failed with an error');
+            logger.error('');
+            logger.error('📝 Try manually running in terminal:');
+            logger.error('   cd /workspace');
+            logger.error('   cat package.json  # Check if "dev" script exists');
+            logger.error('   npm run dev       # See the actual error');
+          }
+        } catch {}
+      }
+
+      // Check for common error patterns
+      if (logs.includes('EADDRINUSE') || logs.includes('address already in use')) {
+        logger.warn('⚠️ Dev server port conflict detected. Restarting...');
+        await this.#dockerExec('npm run dev', '/workspace', true);
+        return;
+      }
+
+      if (logs.includes('ERROR') || logs.includes('Error:') || logs.includes('ENOENT')) {
+        logger.error('❌ Dev server errors detected:');
+        const errorLines = logs.split('\n').filter(line =>
+          line.includes('ERROR') || line.includes('Error:') || line.includes('ENOENT')
+        );
+        errorLines.slice(0, 5).forEach(line => logger.error(`  ${line.trim()}`));
+        return;
+      }
+
+      // Check for success indicators
+      if (logs.includes('ready') || logs.includes('Local:') || logs.includes('http://')) {
+        logger.info('✅ Dev server is running successfully');
+
+        // Extract and log the URL
+        const urlMatch = logs.match(/(https?:\/\/[^\s]+)/);
+        if (urlMatch) {
+          logger.info(`🌐 Dev server URL: ${urlMatch[1]}`);
+        }
+      } else if (logs.length > 10) {
+        logger.info(`📋 Dev server output: ${logs.split('\n').slice(-3).join(' | ')}`);
+      }
+    } catch (error) {
+      logger.warn('Could not check dev server health:', error);
+    }
+  }
+
+  async #fixTsconfigPaths(filePath: string, content: string) {
+    try {
+      const tsconfig = JSON.parse(content);
+
+      // Check if paths are already configured
+      if (tsconfig.compilerOptions?.paths) {
+        logger.info('✅ tsconfig.json already has path aliases configured');
+        return;
+      }
+
+      // Add path aliases for @/* imports
+      if (!tsconfig.compilerOptions) {
+        tsconfig.compilerOptions = {};
+      }
+
+      tsconfig.compilerOptions.paths = {
+        "@/*": ["./*"]
+      };
+
+      // Also set moduleResolution to bundler for Next.js 13+
+      if (!tsconfig.compilerOptions.moduleResolution) {
+        tsconfig.compilerOptions.moduleResolution = "bundler";
+      }
+
+      const fixedContent = JSON.stringify(tsconfig, null, 2);
+
+      // Write the fixed tsconfig back
+      await this.#dockerWriteFile(filePath, fixedContent);
+
+      logger.info('🔧 Auto-fixed tsconfig.json: Added path aliases for @/* imports');
+
+      // Update the file store with fixed content
+      const store = await getWorkbenchStore();
+      const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+      const fullPath = `${WORK_DIR}/${relativePath}`;
+      store.files.setKey(fullPath, { type: 'file', content: fixedContent, isBinary: false });
+
+      // Restart dev server if it's running (tsconfig changes require restart)
+      if (this.#autoInstallTriggered) {
+        logger.info('🔄 Restarting dev server to apply tsconfig changes...');
+        try {
+          // Kill existing dev server
+          await this.#dockerExec('pkill -f "npm run dev" || true');
+          // Wait a moment
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Start new one
+          await this.#dockerExec('npm run dev', '/workspace', true);
+          logger.info('✅ Dev server restarted with new tsconfig');
+        } catch (error) {
+          logger.warn('Failed to restart dev server:', error);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to auto-fix tsconfig.json:', error);
+      // Don't throw - just log the warning
     }
   }
 
