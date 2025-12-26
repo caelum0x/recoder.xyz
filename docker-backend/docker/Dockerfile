@@ -6,17 +6,20 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/.local/bin:/root/.cargo/bin:/root/.bun/bin:$PATH"
 
-# Base tools + build deps for node-pty
+# Base tools + build deps for node-pty and esbuild
 RUN apt-get update && apt-get install -y \
     curl wget git bash build-essential unzip \
     software-properties-common ca-certificates \
-    python3 make g++ \
+    python3 make g++ pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && npm install -g pnpm yarn
+    && npm install -g pnpm yarn \
+    && npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000
 
 # Install node-pty and ws for PTY server in /opt/pty
 RUN mkdir -p /opt/pty && cd /opt/pty && npm init -y && npm install node-pty ws
