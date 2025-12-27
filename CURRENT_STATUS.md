@@ -74,7 +74,9 @@ Users need to be able to use industry-standard terminal CLIs directly within our
 - Image generation, PDF analysis, audio support
 - Cost optimization with prompt caching
 
-**What We Need to Add** (platform integration):
+**What We Need to Add**:
+
+Platform Integration:
 - WebSocket connection to recoder-web backend
 - Bidirectional file sync with web editor
 - Project association between CLI and web
@@ -82,6 +84,14 @@ Users need to be able to use industry-standard terminal CLIs directly within our
 - Live preview URL display when running in platform
 - Container detection (running local vs in our Docker containers)
 - Session persistence across platforms
+
+Ollama Integration (Local AI):
+- Add Ollama provider support for privacy-focused development
+- Local model execution without API costs
+- Support popular models (Llama, Mistral, CodeLlama, etc.)
+- Automatic model download and management
+- Fallback to cloud models when local unavailable
+- Cost savings for development and testing
 
 **User Flow**:
 1. User installs via "npm install -g recoder-code" (already available)
@@ -194,6 +204,8 @@ Build WebSocket client for platform communication. Connect to recoder-web backen
 Implement bidirectional file sync protocol. Watch local file changes and push to platform. Pull remote changes from web editor. Handle conflict resolution with user prompts. Maintain sync state and history. Queue changes during offline mode.
 
 Add project association and management. Link CLI sessions to web projects. Create projects from CLI. List and switch between projects. Display live preview URLs. Sync chat history across platforms.
+
+Implement Ollama integration for local AI. Add Ollama provider to recoder-code. Support model download and management. Detect available local models. Enable offline AI development. Fallback to cloud when local models unavailable. Show model source (local vs cloud) in UI.
 
 **Phase 3 - Platform Integration**:
 
@@ -347,6 +359,7 @@ Build refactoring suggestions. Detect code smells and anti-patterns. Show refact
 | Claude Code Support | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Standalone CLI (recoder-code) | ❌ | ❌ | ❌ | ✅ | ✅ |
 | CLI + Web Sync | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Local AI (Ollama) | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Multi-file editing | ✅ | ✅ | ✅ | ❌ | ✅ |
 | File tree (folders) | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Live preview | ✅ | ✅ | ❌ | ✅ | ✅ |
@@ -376,6 +389,7 @@ Build refactoring suggestions. Detect code smells and anti-patterns. Show refact
 - recoder-code platform authentication
 - recoder-code WebSocket sync with platform
 - Bidirectional file sync (CLI ↔ web)
+- Ollama integration for local AI models
 - Terminal multiplexing support
 - Usage metering for CLI operations
 
@@ -469,6 +483,8 @@ Build refactoring suggestions. Detect code smells and anti-patterns. Show refact
 
 **Multi-AI Provider Support**: Unlike Claude Code (Anthropic only) or Cursor (proprietary), we support 40+ models including Claude, GPT-4, Groq, Gemini, DeepSeek, and Qwen. Users aren't locked into one AI provider.
 
+**Local AI with Ollama**: We'll be the only platform supporting local AI models via Ollama. Privacy-focused developers can run Llama, Mistral, or CodeLlama locally without sending code to cloud APIs. Zero API costs for development. Offline AI capability.
+
 **Live Preview + Terminal Sync**: When AI makes changes via terminal, users immediately see results in browser. No other platform connects terminal AI output to live preview.
 
 **Open Source Potential**: Our terminal CLI (recoder-code) can be open sourced to build community while keeping platform closed source. This builds trust and ecosystem.
@@ -486,6 +502,8 @@ Build refactoring suggestions. Detect code smells and anti-patterns. Show refact
 - Bidirectional sync working (CLI ↔ web) with <200ms latency
 - Live preview updates reflect CLI changes instantly
 - Terminal session persistence across platforms
+- Ollama integration working with local models (Llama, Mistral, CodeLlama)
+- Zero-cost local AI development enabled
 
 ### Phase 2 (Weeks 4-6 - Core Editor)
 - Multi-file editing with tabs functioning
