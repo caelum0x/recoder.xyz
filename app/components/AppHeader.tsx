@@ -6,7 +6,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Terminal } from 'lucide-react';
+import Image from 'next/image';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from './NotificationCenter';
 
@@ -34,9 +34,11 @@ export function AppHeader({ showBackButton = false, backHref = '/dashboard', bac
 
         {/* Center - Logo */}
         <Link href="/" className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-            <Terminal className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Recoder"
+            className="w-8 h-8 rounded-lg"
+          />
           <span className="text-xl font-bold">recoder</span>
         </Link>
 

@@ -13,6 +13,9 @@ interface Logger {
 
 let currentLevel: DebugLevel = import.meta.env.VITE_LOG_LEVEL ?? import.meta.env.DEV ? 'debug' : 'info';
 
+// Scopes to suppress from console output
+const suppressedScopes = new Set(['ChatHistory']);
+
 const isWorker = 'HTMLRewriter' in globalThis;
 const supportsColor = !isWorker;
 
@@ -48,6 +51,11 @@ function log(level: DebugLevel, scope: string | undefined, messages: any[]) {
   const levelOrder: DebugLevel[] = ['trace', 'debug', 'info', 'warn', 'error'];
 
   if (levelOrder.indexOf(level) < levelOrder.indexOf(currentLevel)) {
+    return;
+  }
+
+  // Suppress logs from specific scopes
+  if (scope && suppressedScopes.has(scope)) {
     return;
   }
 

@@ -48,7 +48,21 @@ export function UserMenu() {
   }
 
   function getMainSiteUrl() {
-    return import.meta.env.MAIN_SITE_URL || 'http://localhost:3000';
+    // Check environment variable first
+    if (import.meta.env.MAIN_SITE_URL) {
+      return import.meta.env.MAIN_SITE_URL;
+    }
+
+    // Client-side: detect production from hostname
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname === 'web.recoder.xyz' || hostname === 'recoder.xyz') {
+        return 'https://recoder.xyz';
+      }
+    }
+
+    // Development fallback
+    return 'http://localhost:3000';
   }
 
   function handleSignOut() {

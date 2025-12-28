@@ -169,7 +169,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
   // Set project ID for Docker backend and initialize project state
   useEffect(() => {
     // Always set project ID (use chatId if available, otherwise generated ID)
-    workbenchStore.setProjectId(projectIdForDocker).catch(console.error);
+    workbenchStore.setProjectId(projectIdForDocker).catch(() => {});
     
     // Initialize project state for context tracking
     import('~/lib/stores/project-state').then(({ initProject }) => {

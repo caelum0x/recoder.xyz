@@ -29,7 +29,7 @@ export class MCPServerManager {
 
   constructor(env: any) {
     this.env = env;
-    this.loadServersFromKV().catch(console.error);
+    this.loadServersFromKV().catch(() => {});
   }
 
   private async loadServersFromKV() {
