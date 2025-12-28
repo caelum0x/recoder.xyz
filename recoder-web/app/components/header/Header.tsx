@@ -36,7 +36,8 @@ export function Header() {
           <div className="i-ph:clock-clockwise text-xl text-white" />
         </button>
         
-        <a href="/" className="text-2xl font-semibold text-accent flex items-center cursor-pointer hover:opacity-80 transition-opacity">
+        <a href="/" className="text-2xl font-semibold text-accent flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+          <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded" />
           <span className="font-bold">Recoder</span>
         </a>
         

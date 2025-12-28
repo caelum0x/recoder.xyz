@@ -15,12 +15,14 @@ export const metadata: Metadata = {
     icon: [
       { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
       { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon.ico', sizes: 'any' }
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/logo.png', sizes: '512x512', type: 'image/png' }
     ],
     shortcut: '/favicon.ico',
-    apple: '/favicon.png',
+    apple: '/logo.png',
     other: [
-      { rel: 'android-chrome', url: '/android-chrome-192x192.png', sizes: '192x192' }
+      { rel: 'android-chrome-192x192', url: '/android-chrome-192x192.png', sizes: '192x192' },
+      { rel: 'android-chrome-512x512', url: '/logo.png', sizes: '512x512' }
     ]
   },
   keywords: [

@@ -7,47 +7,35 @@ const logger = createScopedLogger('ChatHistory');
 // this is used at the top level and never rejects
 export async function openDatabase(): Promise<IDBDatabase | undefined> {
   return new Promise((resolve) => {
-    console.log('🗄️ Opening IndexedDB: boltHistory');
-    const request = indexedDB.open('boltHistory', 2); // Increment version to trigger upgrade
+    const request = indexedDB.open('recoderHistory', 2);
 
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
-      console.log('🔧 IndexedDB upgrade needed - creating/updating chats store');
       const db = (event.target as IDBOpenDBRequest).result;
       const oldVersion = event.oldVersion;
 
       if (!db.objectStoreNames.contains('chats')) {
-        // Fresh install - create store with correct schema
         const store = db.createObjectStore('chats', { keyPath: 'id' });
         store.createIndex('id', 'id', { unique: true });
-        store.createIndex('urlId', 'urlId', { unique: false }); // ✅ FIXED: urlId should not be unique
-        console.log('✅ Created chats object store with non-unique urlId index');
+        store.createIndex('urlId', 'urlId', { unique: false });
       } else if (oldVersion < 2) {
-        // Upgrade from v1 to v2 - fix urlId index
-        console.log('🔄 Migrating from v1 to v2 - fixing urlId unique constraint');
         const transaction = (event.target as IDBOpenDBRequest).transaction!;
         const store = transaction.objectStore('chats');
 
-        // Delete old unique urlId index
         if (store.indexNames.contains('urlId')) {
           store.deleteIndex('urlId');
-          console.log('🗑️ Deleted old unique urlId index');
         }
 
-        // Create new non-unique urlId index
         store.createIndex('urlId', 'urlId', { unique: false });
-        console.log('✅ Created new non-unique urlId index');
       }
     };
 
     request.onsuccess = (event: Event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      console.log('✅ IndexedDB opened successfully:', db.name, 'version:', db.version);
       resolve(db);
     };
 
     request.onerror = (event: Event) => {
       const error = (event.target as IDBOpenDBRequest).error;
-      console.error('❌ Failed to open IndexedDB:', error);
       logger.error(error);
       resolve(undefined);
     };
@@ -56,28 +44,16 @@ export async function openDatabase(): Promise<IDBDatabase | undefined> {
 
 export async function getAll(db: IDBDatabase): Promise<ChatHistoryItem[]> {
   return new Promise((resolve, reject) => {
-    console.log('📋 Fetching all chats from IndexedDB');
     const transaction = db.transaction('chats', 'readonly');
     const store = transaction.objectStore('chats');
     const request = store.getAll();
 
     request.onsuccess = () => {
       const results = request.result as ChatHistoryItem[];
-      console.log(`✅ Retrieved ${results.length} chats from IndexedDB`);
-      results.forEach((chat, index) => {
-        console.log(`  Chat ${index + 1}:`, {
-          id: chat.id,
-          urlId: chat.urlId,
-          description: chat.description,
-          messageCount: chat.messages?.length || 0,
-          timestamp: chat.timestamp
-        });
-      });
       resolve(results);
     };
-    
+
     request.onerror = () => {
-      console.error('❌ Failed to fetch chats from IndexedDB:', request.error);
       reject(request.error);
     };
   });
@@ -103,21 +79,13 @@ export async function setMessages(
     });
 
     request.onsuccess = () => {
-      console.log('✅ IndexedDB: Chat saved successfully', { id, urlId });
       resolve();
     };
 
     request.onerror = () => {
-      const error = request.error;
-      console.error('❌ IndexedDB: Failed to save chat', {
-        id,
-        urlId,
-        error: error?.message,
-        name: error?.name
-      });
-      // Log but don't reject - we don't want to break the UI for IndexedDB errors
+      // Don't reject - we don't want to break the UI for IndexedDB errors
       // since database is the primary storage
-      resolve(); // Resolve anyway to prevent UI breaks
+      resolve();
     };
   });
 }

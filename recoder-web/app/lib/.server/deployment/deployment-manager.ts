@@ -30,7 +30,7 @@ export class DeploymentManager {
 
   constructor(env: any) {
     this.env = env;
-    this.loadDeploymentsFromKV().catch(console.error);
+    this.loadDeploymentsFromKV().catch(() => {});
   }
 
   private async loadDeploymentsFromKV() {

@@ -4,13 +4,12 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession, signOut } from '@/lib/session-provider';
-import { getRecoderWebUrlClient, getRecoderChatUrl } from '@/lib/config/platforms';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
-  Terminal, Globe, MessageSquare, Code2, Settings, LogOut,
-  ArrowRight, CheckCircle, Zap, Sparkles, TrendingUp, Crown,
-  Clock, Activity, BarChart3, FolderOpen, X, Key, AlertCircle,
-  MessageCircle, User, ChevronDown
+  Globe, Settings, LogOut,
+  ArrowRight, CheckCircle, Sparkles, TrendingUp,
+  BarChart3, FolderOpen, X, Key, AlertCircle,
+  MessageCircle, User, ChevronDown, Terminal, Zap
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -18,15 +17,9 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const { data: session, isPending } = useSession();
   const [showWelcome, setShowWelcome] = useState(false);
-  const [quota, setQuota] = useState<any>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-
-  // Sessions usage data from API
-  const sessionsUsed = quota?.sessionsUsedToday || 0;
-  const sessionsTotal = quota?.sessionsPerDay || 5;
-  const sessionsPercent = sessionsTotal > 0 ? (sessionsUsed / sessionsTotal) * 100 : 0;
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -53,20 +46,6 @@ function DashboardContent() {
     }
   }, [session]);
 
-  // Fetch quota/usage data
-  useEffect(() => {
-    if (session) {
-      fetch('/api/user/quota')
-        .then(r => r.json())
-        .then(data => {
-          if (data.success && data.quota) {
-            setQuota(data.quota);
-          }
-        })
-        .catch(err => console.error('Failed to fetch quota:', err));
-    }
-  }, [session]);
-
   const handleSignOut = async () => {
     await signOut();
     router.push('/');
@@ -87,8 +66,6 @@ function DashboardContent() {
       </div>
     );
   }
-
-  const plan = (session?.user as any)?.subscriptionPlan || 'free';
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -239,10 +216,8 @@ function DashboardContent() {
       <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl sticky top-0 z-40">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Terminal className="w-5 h-5" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
+            <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded" />
+            <span className="text-xl font-bold">Recoder</span>
           </Link>
           <div className="flex items-center space-x-4">
             {/* Quick Access - Settings */}
@@ -342,7 +317,7 @@ function DashboardContent() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid md:grid-cols-3 gap-6 mb-12">
+        <div className="grid md:grid-cols-1 gap-6 mb-12 max-w-md">
           <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-400">Beta Status</h3>
@@ -356,52 +331,29 @@ function DashboardContent() {
             </div>
             <div className="text-sm text-green-400">100% Free Forever</div>
           </div>
-
-          <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-400">Daily Sessions</h3>
-              <Activity className="w-5 h-5 text-blue-500" />
-            </div>
-            <div className="text-3xl font-bold mb-2">{sessionsUsed} / {sessionsTotal}</div>
-            <div className="w-full bg-white/10 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all"
-                style={{ width: `${Math.min(sessionsPercent, 100)}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-400">Tokens/Session</h3>
-              <Zap className="w-5 h-5 text-yellow-500" />
-            </div>
-            <div className="text-3xl font-bold mb-2">
-              {quota?.tokensPerSession ? `${(quota.tokensPerSession / 1000).toFixed(0)}k` : '10k'}
-            </div>
-            <div className="text-sm text-gray-400">Premium models only</div>
-          </div>
         </div>
 
         {/* Platforms */}
         <div className="mb-12">
           <h2 className="text-2xl font-bold mb-6">Your Platforms</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 gap-6 max-w-2xl">
             {/* CLI */}
-            <Link
-              href="/cli"
+            <a
+              href="https://www.npmjs.com/package/recoder-code"
+              target="_blank"
+              rel="noopener noreferrer"
               className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all"
             >
               <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Terminal className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-bold text-lg mb-2">CLI</h3>
+              <h3 className="font-bold text-lg mb-2">recoder-code CLI</h3>
               <p className="text-sm text-gray-400 mb-4">Terminal-based development</p>
               <div className="flex items-center text-sm text-orange-500 group-hover:text-orange-400">
                 <span>Launch</span>
                 <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
               </div>
-            </Link>
+            </a>
 
             {/* Web IDE - with API key check */}
             <div className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all cursor-pointer">
@@ -423,36 +375,6 @@ function DashboardContent() {
                   <span>API key required</span>
                 </div>
               )}
-            </div>
-
-            {/* AI Chat */}
-            <div className="group p-6 rounded-2xl border border-white/10 bg-white/5 opacity-60 cursor-not-allowed relative">
-              <div className="absolute top-3 right-3 px-2 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs text-purple-400 font-medium">
-                Coming Soon
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center mb-4">
-                <MessageSquare className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">Recoder Chat</h3>
-              <p className="text-sm text-gray-400 mb-4">Conversational interface</p>
-              <div className="flex items-center text-sm text-gray-500">
-                <span>Coming Soon</span>
-              </div>
-            </div>
-
-            {/* VS Code */}
-            <div className="group p-6 rounded-2xl border border-white/10 bg-white/5 opacity-60 cursor-not-allowed relative">
-              <div className="absolute top-3 right-3 px-2 py-1 bg-green-500/20 border border-green-500/30 rounded-full text-xs text-green-400 font-medium">
-                Coming Soon
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mb-4">
-                <Code2 className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">VS Code Extension</h3>
-              <p className="text-sm text-gray-400 mb-4">IDE extension</p>
-              <div className="flex items-center text-sm text-gray-500">
-                <span>Coming Soon</span>
-              </div>
             </div>
           </div>
         </div>
