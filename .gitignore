@@ -19,17 +19,25 @@ out/
 **/cache/webpack/
 **/.next/static/chunks/
 
-# Environment variables (exclude actual secret files but allow templates)
+# Environment variables (NEVER commit actual secrets)
 .env
 .env.local
+.env.production
+.env.development
 .env.development.local
 .env.test.local
 .env.production.local
 .env.server
 .env.deploy
-# Allow templates
+**/.env
+**/.env.local
+**/.env.production
+**/.env.development
+
+# Allow only templates and examples
 !.env.*.template
 !.env.*.example
+!.env.example
 
 # SSH keys and credentials (CRITICAL - NEVER COMMIT)
 *.pem
