@@ -67,7 +67,7 @@ export default function SchemaGenerator() {
     fetch('/api/schema')
       .then(res => res.json())
       .then(data => setExamples(data.examples || []))
-      .catch(console.error);
+      .catch(() => {});
   }, []);
 
   const handleGenerate = async () => {

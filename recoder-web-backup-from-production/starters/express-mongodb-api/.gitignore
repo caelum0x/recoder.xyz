@@ -1,6 +1,0 @@
-node_modules
-public
-.env
-*.log
-.DS_Store
-storage/public

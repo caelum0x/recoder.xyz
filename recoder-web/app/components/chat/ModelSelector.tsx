@@ -1,6 +1,31 @@
-import { useEffect, useState } from 'react';
-import { getAllProviders, getModelsByProvider, getSpeedIndicator, type ModelInfo, type ProviderConfig } from '~/lib/models';
+import { useEffect, useState, useCallback } from 'react';
+import { getAllProviders, getModelsByProvider, type ModelInfo, type ProviderConfig } from '~/lib/models';
 import { classNames } from '~/utils/classNames';
+
+const CUSTOM_MODELS_KEY = 'recoder_custom_models';
+
+interface CustomModelsStorage {
+  [providerId: string]: ModelInfo[];
+}
+
+function getStoredCustomModels(): CustomModelsStorage {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem(CUSTOM_MODELS_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCustomModels(models: CustomModelsStorage): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CUSTOM_MODELS_KEY, JSON.stringify(models));
+  } catch (e) {
+    console.error('Failed to save custom models:', e);
+  }
+}
 
 interface ModelSelectorProps {
   selectedProvider: string;
@@ -20,19 +45,25 @@ export function ModelSelector({
   const [showProviderMenu, setShowProviderMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showAddModelForm, setShowAddModelForm] = useState(false);
+  const [customModels, setCustomModels] = useState<CustomModelsStorage>({});
   const [newModelForm, setNewModelForm] = useState({
     name: '',
     id: '',
-    description: '',
-    cost: 0,
-    speed: 2,
-    contextLength: 8000,
-    category: 'budget' as 'popular' | 'budget' | 'advanced'
   });
+
+  // Load custom models from localStorage on mount
+  useEffect(() => {
+    setCustomModels(getStoredCustomModels());
+  }, []);
 
   const providers = getAllProviders();
   const currentProvider = providers.find((p) => p.id === selectedProvider);
-  const models = getModelsByProvider(selectedProvider);
+
+  // Combine default models with custom models for current provider
+  const defaultModels = getModelsByProvider(selectedProvider);
+  const userCustomModels = customModels[selectedProvider] || [];
+  const models = [...defaultModels, ...userCustomModels];
+
   const currentModel = models.find((m) => m.id === selectedModel);
 
   // Close menus when clicking outside
@@ -72,9 +103,32 @@ export function ModelSelector({
   };
 
   const handleSaveNewModel = async () => {
+    if (!newModelForm.name || !newModelForm.id) return;
+
+    // Add model to localStorage for immediate availability
+    const updatedModels = { ...customModels };
+    if (!updatedModels[selectedProvider]) {
+      updatedModels[selectedProvider] = [];
+    }
+
+    // Check if model already exists
+    const exists = updatedModels[selectedProvider].some(m => m.id === newModelForm.id);
+    if (exists) {
+      return;
+    }
+
+    updatedModels[selectedProvider].push({
+      id: newModelForm.id,
+      name: newModelForm.name,
+    });
+
+    // Save to localStorage and update state
+    saveCustomModels(updatedModels);
+    setCustomModels(updatedModels);
+
+    // Also save to server API for persistence
     try {
-      // Add the new model to the current provider
-      const response = await fetch('/api/models/add', {
+      await fetch('/api/models/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,26 +136,18 @@ export function ModelSelector({
           model: newModelForm
         })
       });
-
-      if (response.ok) {
-        // Reset form
-        setNewModelForm({
-          name: '',
-          id: '',
-          description: '',
-          cost: 0,
-          speed: 2,
-          contextLength: 8000,
-          category: 'budget'
-        });
-        setShowAddModelForm(false);
-        
-        // Auto-select the new model
-        onModelChange(newModelForm.id);
-      }
     } catch (error) {
-      console.error('Failed to add model:', error);
+      console.error('Failed to save model to server:', error);
+      // Continue anyway - localStorage has the model
     }
+
+    // Reset form and close modal
+    const modelId = newModelForm.id;
+    setNewModelForm({ name: '', id: '' });
+    setShowAddModelForm(false);
+
+    // Auto-select the new model
+    onModelChange(modelId);
   };
 
   const handleCancelAddModel = () => {
@@ -109,12 +155,30 @@ export function ModelSelector({
     setNewModelForm({
       name: '',
       id: '',
-      description: '',
-      cost: 0,
-      speed: 2,
-      contextLength: 8000,
-      category: 'budget'
     });
+  };
+
+  const handleDeleteCustomModel = (e: React.MouseEvent, modelId: string) => {
+    e.stopPropagation();
+
+    const updatedModels = { ...customModels };
+    if (updatedModels[selectedProvider]) {
+      updatedModels[selectedProvider] = updatedModels[selectedProvider].filter(m => m.id !== modelId);
+      saveCustomModels(updatedModels);
+      setCustomModels(updatedModels);
+
+      // If deleted model was selected, select first available model
+      if (selectedModel === modelId && models.length > 1) {
+        const nextModel = models.find(m => m.id !== modelId);
+        if (nextModel) {
+          onModelChange(nextModel.id);
+        }
+      }
+    }
+  };
+
+  const isCustomModel = (modelId: string): boolean => {
+    return (customModels[selectedProvider] || []).some(m => m.id === modelId);
   };
 
   return (
@@ -134,11 +198,7 @@ export function ModelSelector({
             'text-bolt-elements-textPrimary font-medium whitespace-nowrap'
           )}
         >
-          <span>{currentProvider?.icon}</span>
           <span>{currentProvider?.name || 'Select Provider'}</span>
-          {currentProvider?.recommended && (
-            <span className="text-xs text-orange-400">★</span>
-          )}
           <div className="i-ph:caret-down text-xs" />
         </button>
 
@@ -159,20 +219,9 @@ export function ModelSelector({
                 )}
                 style={{ backgroundColor: provider.id === selectedProvider ? '#333333' : '#000000' }}
               >
-                <span className="text-xl">{provider.icon}</span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">
-                      {provider.name}
-                    </span>
-                    {provider.recommended && (
-                      <span className="text-xs text-orange-400">★ Recommended</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {provider.models.length} models available
-                  </div>
-                </div>
+                <span className="text-sm font-medium text-white flex-1">
+                  {provider.name}
+                </span>
                 {provider.id === selectedProvider && (
                   <div className="i-ph:check text-green-500" />
                 )}
@@ -213,19 +262,7 @@ export function ModelSelector({
           )}
         >
           <span className="truncate">{currentModel?.name || 'Select Model'}</span>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {currentModel && (
-              <>
-                <span className="text-xs text-bolt-elements-textSecondary">
-                  {getSpeedIndicator(currentModel.speed)}
-                </span>
-                <span className="text-xs text-bolt-elements-textTertiary">
-                  ${currentModel.cost.toFixed(4)}/1K
-                </span>
-              </>
-            )}
-            <div className="i-ph:caret-down text-xs" />
-          </div>
+          <div className="i-ph:caret-down text-xs flex-shrink-0" />
         </button>
 
         {/* Model Menu */}
@@ -234,59 +271,48 @@ export function ModelSelector({
             <div className="fixed inset-0 z-[999]" onClick={() => setShowModelMenu(false)} />
             <div className="absolute bottom-full left-0 mb-1 w-full max-w-lg rounded-lg shadow-xl z-[1000] max-h-96 overflow-y-auto"
               style={{ zIndex: 1000, backgroundColor: '#000000', borderColor: '#000000', border: '1px solid #000000' }}>
-            {/* Group by category */}
-            {['popular', 'budget', 'advanced'].map((category) => {
-              const categoryModels = models.filter((m) => m.category === category);
+            {/* Provider Name Header */}
+            <div className="px-4 py-2 text-xs font-semibold text-gray-400 sticky top-0" style={{ backgroundColor: '#000000' }}>
+              {currentProvider?.name}
+            </div>
 
-              if (categoryModels.length === 0) return null;
-
-              return (
-                <div key={category}>
-                  <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase sticky top-0" style={{ backgroundColor: '#000000' }}>
-                    {category === 'popular' && 'Popular Models'}
-                    {category === 'budget' && 'Budget Models'}
-                    {category === 'advanced' && 'Advanced Models'}
-                  </div>
-                  {categoryModels.map((model) => (
-                    <button
-                      key={model.id}
-                      onClick={(e) => handleModelClick(e, model.id)}
-                      className={classNames(
-                        'w-full px-4 py-3 text-left transition-colors text-white bg-black',
-                        'hover:bg-gray-900',
-                        model.id === selectedModel ? 'bg-gray-900' : 'bg-black'
-                      )}
-                      style={{ backgroundColor: model.id === selectedModel ? '#333333' : '#000000' }}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-white truncate">
-                            {model.name}
-                          </div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            {model.description}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0 text-xs">
-                          <span className="text-gray-400">
-                            {getSpeedIndicator(model.speed)}
-                          </span>
-                          <span className="text-gray-400">
-                            ${model.cost.toFixed(4)}/1K
-                          </span>
-                          {model.id === selectedModel && (
-                            <div className="i-ph:check text-green-500" />
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-xs text-bolt-elements-textTertiary mt-1">
-                        Context: {(model.contextLength / 1000).toFixed(0)}K tokens
-                      </div>
-                    </button>
-                  ))}
+            {/* Model List */}
+            {models.map((model) => (
+              <button
+                key={model.id}
+                onClick={(e) => handleModelClick(e, model.id)}
+                className={classNames(
+                  'w-full px-4 py-2 text-left transition-colors flex items-center justify-between group',
+                  model.id === selectedModel
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-black text-gray-300 hover:bg-gray-900 hover:text-white'
+                )}
+                style={{ backgroundColor: model.id === selectedModel ? '#333333' : '#000000' }}
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-sm truncate">{model.name}</span>
+                  {isCustomModel(model.id) && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded text-gray-400" style={{ backgroundColor: '#1a1a1a' }}>
+                      Custom
+                    </span>
+                  )}
                 </div>
-              );
-            })}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {isCustomModel(model.id) && (
+                    <button
+                      onClick={(e) => handleDeleteCustomModel(e, model.id)}
+                      className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove custom model"
+                    >
+                      <div className="i-ph:trash text-sm" />
+                    </button>
+                  )}
+                  {model.id === selectedModel && (
+                    <div className="i-ph:check text-green-500" />
+                  )}
+                </div>
+              </button>
+            ))}
             
             {/* Add Model Button */}
             <div className="border-t" style={{ borderColor: '#333333' }}>
@@ -307,15 +333,15 @@ export function ModelSelector({
       {/* Add Model Form Modal */}
       {showAddModelForm && (
         <>
-          <div className="fixed inset-0 z-[1001] bg-black bg-opacity-50" onClick={handleCancelAddModel} />
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 rounded-lg shadow-xl z-[1002]"
-            style={{ backgroundColor: '#000000', borderColor: '#333333', border: '1px solid #333333' }}>
+          <div className="fixed inset-0 z-[1001] bg-black/70" onClick={handleCancelAddModel} />
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 rounded-xl shadow-2xl z-[1002]"
+            style={{ backgroundColor: '#0a0a0a', border: '1px solid #1a1a1a' }}>
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-semibold text-white">Add Custom Model</h3>
                 <button
                   onClick={handleCancelAddModel}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-500 hover:text-gray-300 transition-colors"
                 >
                   <div className="i-ph:x text-xl" />
                 </button>
@@ -323,101 +349,42 @@ export function ModelSelector({
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-white mb-1">Model Name</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Model Name</label>
                   <input
                     type="text"
                     value={newModelForm.name}
                     onChange={(e) => setNewModelForm({...newModelForm, name: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-2.5 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                    style={{ backgroundColor: '#141414', border: '1px solid #262626' }}
                     placeholder="e.g., GPT-4 Turbo"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-white mb-1">Model ID</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Model ID</label>
                   <input
                     type="text"
                     value={newModelForm.id}
                     onChange={(e) => setNewModelForm({...newModelForm, id: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-2.5 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                    style={{ backgroundColor: '#141414', border: '1px solid #262626' }}
                     placeholder="e.g., gpt-4-turbo"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white mb-1">Description</label>
-                  <input
-                    type="text"
-                    value={newModelForm.description}
-                    onChange={(e) => setNewModelForm({...newModelForm, description: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
-                    placeholder="Brief description of the model"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-1">Cost ($/1K)</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      value={newModelForm.cost}
-                      onChange={(e) => setNewModelForm({...newModelForm, cost: parseFloat(e.target.value) || 0})}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-1">Context Length</label>
-                    <input
-                      type="number"
-                      value={newModelForm.contextLength}
-                      onChange={(e) => setNewModelForm({...newModelForm, contextLength: parseInt(e.target.value) || 8000})}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-1">Speed</label>
-                    <select
-                      value={newModelForm.speed}
-                      onChange={(e) => setNewModelForm({...newModelForm, speed: parseInt(e.target.value)})}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value={1}>Slow</option>
-                      <option value={2}>Medium</option>
-                      <option value={3}>Fast</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-1">Category</label>
-                    <select
-                      value={newModelForm.category}
-                      onChange={(e) => setNewModelForm({...newModelForm, category: e.target.value as 'popular' | 'budget' | 'advanced'})}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="budget">Budget</option>
-                      <option value="popular">Popular</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                  </div>
+                  <p className="text-xs text-gray-500 mt-1.5">Use the exact model ID from the provider</p>
                 </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   onClick={handleCancelAddModel}
-                  className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors"
+                  className="px-4 py-2.5 text-gray-300 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveNewModel}
                   disabled={!newModelForm.name || !newModelForm.id}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2.5 bg-amber-500 text-black font-medium rounded-lg hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Add Model
                 </button>

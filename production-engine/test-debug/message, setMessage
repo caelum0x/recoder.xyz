@@ -1,7 +1,0 @@
-useState(''); // State to hold the message received from API call or default value if not fetched yet
-  
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Real logic for making an HTTP request (using axios as example) and handling response/error cases.
-        const apiResponse = await fetch(endpoints
