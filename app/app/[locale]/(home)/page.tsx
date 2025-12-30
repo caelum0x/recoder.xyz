@@ -6,10 +6,13 @@ import { useState } from 'react';
 import { useSession } from '@/lib/session-provider';
 import { getRecoderWebUrlClient } from '@/lib/config/platforms';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useTranslations } from 'next-intl';
 
 export default function HomePage() {
   const [copied, setCopied] = useState(false);
   const { data: session } = useSession();
+  const t = useTranslations();
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText('npm install -g recoder-code');
@@ -31,17 +34,17 @@ export default function HomePage() {
             <span className="text-xl font-bold">recoder</span>
           </Link>
 
-          <nav className="flex items-center space-x-8">
+          <nav className="flex items-center space-x-6">
             <Link href="/docs/getting-started" className="text-sm text-gray-400 hover:text-white transition-colors">
-              Getting Started
+              {t('common.gettingStarted')}
             </Link>
             <Link href="/docs/faq" className="text-sm text-gray-400 hover:text-white transition-colors">
-              FAQ
+              {t('common.faq')}
             </Link>
             {session?.user ? (
               <>
                 <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Dashboard
+                  {t('common.dashboard')}
                 </Link>
                 <LaunchWebIDEButton className="px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2" />
               </>
@@ -50,9 +53,10 @@ export default function HomePage() {
                 href="/auth/signin"
                 className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
               >
-                Sign In
+                {t('common.signIn')}
               </Link>
             )}
+            <LanguageSwitcher />
           </nav>
         </div>
       </header>
@@ -64,14 +68,14 @@ export default function HomePage() {
             {/* FREE BETA Badge */}
             <div className="inline-flex items-center space-x-2 px-6 py-3 rounded-full border-2 border-green-500/30 bg-green-500/10 animate-pulse-slow">
               <Sparkles className="w-5 h-5 text-green-400" />
-              <span className="text-sm font-bold text-green-400">🎉 FREE BETA - No Credit Card Required</span>
+              <span className="text-sm font-bold text-green-400">🎉 {t('home.freeBeta')}</span>
             </div>
 
             <h1 className="text-6xl md:text-8xl font-bold tracking-tight">
-              Build with AI
+              {t('home.title')}
               <br />
               <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
-                Bring Your Own Key
+                {t('home.byok')}
               </span>
             </h1>
 
