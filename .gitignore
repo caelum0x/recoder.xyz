@@ -34,6 +34,11 @@ out/
 **/.env.production
 **/.env.development
 
+# Recoder extension environment files
+recoder-extension/.env*
+recoder-extension/apps/**/.env*
+recoder-extension/src/.env*
+
 # Allow only templates and examples
 !.env.*.template
 !.env.*.example

@@ -2,11 +2,9 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
+import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 
 const inter = Inter({ subsets: ['latin'] });
-
-// Force all pages to be rendered dynamically
-export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Recoder.xyz - FREE AI Coding Platform | Web IDE + CLI with 40+ Models',
@@ -88,14 +86,17 @@ export const metadata: Metadata = {
   },
 };
 
+interface RootLayoutProps {
+  children: React.ReactNode;
+}
+
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: RootLayoutProps) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <GoogleAnalytics />
         <Providers>{children}</Providers>
       </body>
     </html>
