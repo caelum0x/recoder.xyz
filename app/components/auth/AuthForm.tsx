@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn, signUp } from '@/lib/auth-client';
+import { analytics } from '@/lib/analytics';
 
 interface AuthFormProps {
   mode: 'signin' | 'signup';
@@ -31,6 +32,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           name: formData.name,
         }, {
           onSuccess: () => {
+            analytics.signUp('email');
             router.push('/dashboard');
           },
           onError: (ctx) => {
@@ -44,6 +46,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           password: formData.password,
         }, {
           onSuccess: () => {
+            analytics.signIn('email');
             router.push('/dashboard');
           },
           onError: (ctx) => {
@@ -62,6 +65,13 @@ export function AuthForm({ mode }: AuthFormProps) {
   const handleOAuthSignIn = async (provider: 'github' | 'google') => {
     setIsLoading(true);
     setError(null);
+
+    // Track OAuth attempt (will redirect, so track now)
+    if (mode === 'signup') {
+      analytics.signUp(provider);
+    } else {
+      analytics.signIn(provider);
+    }
 
     try {
       await signIn.social({
