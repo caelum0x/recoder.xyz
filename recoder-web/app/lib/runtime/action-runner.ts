@@ -5,6 +5,7 @@ import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { WORK_DIR } from '~/utils/constants';
+import { getCurrentUserId } from '~/lib/stores/user';
 
 let _workbenchStore: any = null;
 const getWorkbenchStore = async () => {
@@ -126,10 +127,12 @@ export class ActionRunner {
     }
     
     try {
+      // Include userId for Claude Code token injection
+      const userId = getCurrentUserId();
       const res = await fetch(`${DOCKER_URL}/api/container`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: this.#projectId }),
+        body: JSON.stringify({ projectId: this.#projectId, userId }),
         signal: AbortSignal.timeout(10000),
       });
       

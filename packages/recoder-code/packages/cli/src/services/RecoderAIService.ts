@@ -5,7 +5,7 @@
 
 import { RecoderAuthService } from './RecoderAuthService.js';
 
-const RECODER_API_BASE = process.env['RECODER_API_URL'] || 'https://api.recoder.xyz';
+const RECODER_API_BASE = process.env['RECODER_API_URL'] || 'https://recoder.xyz';
 
 export interface AIGenerateOptions {
   prompt: string;

@@ -55,6 +55,11 @@ RUN apt-get update && apt-get install -y ruby-full \
 RUN apt-get update && apt-get install -y php php-cli php-mbstring \
     && rm -rf /var/lib/apt/lists/*
 
+# Claude Code CLI - Anthropic's AI coding assistant
+# Users can connect their Claude Pro/Max subscription via recoder.xyz settings
+# Token is injected as CLAUDE_CODE_OAUTH_TOKEN environment variable
+RUN npm install -g @anthropic-ai/claude-code
+
 # PTY Server
 COPY pty-server.js /opt/pty/pty-server.js
 

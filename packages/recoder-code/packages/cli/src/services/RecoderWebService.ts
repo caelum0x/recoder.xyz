@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { RecoderAuthService } from './RecoderAuthService.js';
 
-const RECODER_WEB_URL = process.env['RECODER_WEB_URL'] || 'http://localhost:5173';
+const RECODER_WEB_URL = process.env['RECODER_WEB_URL'] || 'https://web.recoder.xyz';
 
 export interface WebProject {
   id: string;

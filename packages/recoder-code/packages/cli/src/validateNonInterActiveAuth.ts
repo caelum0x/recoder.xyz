@@ -9,6 +9,10 @@ import { USER_SETTINGS_PATH } from './config/settings.js';
 import { validateAuthMethod } from './config/auth.js';
 
 function getAuthTypeFromEnv(): AuthType | undefined {
+  // OpenRouter is the PRIMARY default - check first
+  if (process.env['OPENROUTER_API_KEY']) {
+    return AuthType.USE_OPENAI;
+  }
   if (process.env['GOOGLE_GENAI_USE_GCA'] === 'true') {
     return AuthType.LOGIN_WITH_GOOGLE;
   }
@@ -33,7 +37,9 @@ export async function validateNonInteractiveAuth(
 
   if (!effectiveAuthType) {
     console.error(
-      `Please set an Auth method in your ${USER_SETTINGS_PATH} or specify one of the following environment variables before running: GEMINI_API_KEY, OPENAI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_GENAI_USE_GCA`,
+      `Please set OPENROUTER_API_KEY (recommended) or configure auth in ${USER_SETTINGS_PATH}.\n` +
+      `Get your free API key at: https://openrouter.ai/keys\n\n` +
+      `Other options: OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY`,
     );
     process.exit(1);
   }

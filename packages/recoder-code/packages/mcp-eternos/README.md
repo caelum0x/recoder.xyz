@@ -23,7 +23,7 @@ Eternos is automatically available in recoder-code CLI. The MCP client in core c
 
 ```bash
 # Install recoder-code CLI
-npm install -g recoder-code-cli
+npm install -g recoder-code
 
 # Eternos tools are available automatically
 recoder-code

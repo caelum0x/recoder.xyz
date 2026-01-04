@@ -2,6 +2,7 @@ import { atom, type WritableAtom } from 'nanostores';
 import type { ITerminal } from '~/types/terminal';
 import { newShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
+import { getCurrentUserId } from './user';
 
 const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
 
@@ -56,14 +57,15 @@ export class TerminalStore {
   }
 
   async #attachDockerTerminal(terminal: ITerminal) {
-    // Ensure container exists
+    // Ensure container exists (include userId for Claude Code token injection)
     try {
+      const userId = getCurrentUserId();
       const res = await fetch(`${DOCKER_URL}/api/container`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: this.#projectId }),
+        body: JSON.stringify({ projectId: this.#projectId, userId }),
       });
-      
+
       if (!res.ok) {
         throw new Error('Failed to create container: ' + await res.text());
       }

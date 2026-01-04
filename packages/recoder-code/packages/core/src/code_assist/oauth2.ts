@@ -28,15 +28,12 @@ const userAccountManager = new UserAccountManager();
 
 //  OAuth Client ID used to initiate OAuth2Client class.
 const OAUTH_CLIENT_ID =
-  '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
+  process.env.GOOGLE_OAUTH_CLIENT_ID || 'your-google-oauth-client-id';
 
 // OAuth Secret value used to initiate OAuth2Client class.
-// Note: It's ok to save this in git because this is an installed application
-// as described here: https://developers.google.com/identity/protocols/oauth2#installed
-// "The process results in a client ID and, in some cases, a client secret,
-// which you embed in the source code of your application. (In this context,
-// the client secret is obviously not treated as a secret.)"
-const OAUTH_CLIENT_SECRET = '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';
+// Note: For production use, set GOOGLE_OAUTH_CLIENT_SECRET environment variable
+// For development, you can obtain these from Google Cloud Console
+const OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || 'your-google-oauth-client-secret';
 
 // OAuth Scopes for Cloud Code authorization.
 const OAUTH_SCOPE = [

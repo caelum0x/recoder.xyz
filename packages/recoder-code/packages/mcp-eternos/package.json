@@ -1,6 +1,6 @@
 {
   "name": "recoder-mcp-eternos",
-  "version": "2.4.0",
+  "version": "2.4.2",
   "description": "Eternos - A powerful MCP (Model Context Protocol) server with 81 tools for AI assistants by Recoder",
   "main": "dist/index.js",
   "type": "module",

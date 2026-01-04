@@ -78,7 +78,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://openrouter.ai; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:3000 http://localhost:3001 http://localhost:3002 http://localhost:5173 https://openrouter.ai https://api.openai.com https://api.anthropic.com https://recoder.xyz https://web.recoder.xyz https://api.recoder.xyz; frame-ancestors 'self';"
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://openrouter.ai https://www.googletagmanager.com https://www.google-analytics.com https://tagmanager.google.com; script-src-elem 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://tagmanager.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:3000 http://localhost:3001 http://localhost:3002 http://localhost:5173 https://openrouter.ai https://api.openai.com https://api.anthropic.com https://recoder.xyz https://web.recoder.xyz https://api.recoder.xyz https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; frame-ancestors 'self';"
           },
         ],
       },

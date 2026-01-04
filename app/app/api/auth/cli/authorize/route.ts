@@ -25,7 +25,7 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
     if (!authUser?.email) {
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user } = authResult;
     if (!user?.email) {

@@ -29,6 +29,9 @@ function SignInForm() {
   const [success, setSuccess] = useState(false);
   const [requires2FA, setRequires2FA] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const returnUrl = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
@@ -50,13 +53,50 @@ function SignInForm() {
           }, 1000);
         },
         onError: (ctx) => {
-          setError(ctx.error.message || 'Authentication failed. Please try again.');
+          const errorMsg = ctx.error.message || 'Authentication failed. Please try again.';
+          setError(errorMsg);
+          // Check if error is about email verification
+          if (errorMsg.toLowerCase().includes('email') &&
+              (errorMsg.toLowerCase().includes('verif') || errorMsg.toLowerCase().includes('not verified'))) {
+            setEmailNotVerified(true);
+          }
           setLoading(false);
         }
       });
     } catch (err: any) {
       setError(err?.message || 'Network error. Please try again.');
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setError('Please enter your email address first');
+      return;
+    }
+
+    setResendingEmail(true);
+    setResendSuccess(false);
+
+    try {
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResendSuccess(true);
+        setError('');
+      } else {
+        setError(data.error || 'Failed to send verification email');
+      }
+    } catch (err: any) {
+      setError('Failed to send verification email. Please try again.');
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -172,11 +212,26 @@ function SignInForm() {
                   {error && (
                     <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
                       {error}
+                      {emailNotVerified && (
+                        <button
+                          type="button"
+                          onClick={handleResendVerification}
+                          disabled={resendingEmail}
+                          className="mt-2 block w-full text-center text-orange-400 hover:text-orange-300 underline"
+                        >
+                          {resendingEmail ? 'Sending...' : 'Resend verification email'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {resendSuccess && (
+                    <div className="p-4 text-sm text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      Verification email sent! Please check your inbox and spam folder.
                     </div>
                   )}
                   {success && (
                     <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      ✓ Authentication successful! Redirecting...
+                      Authentication successful! Redirecting...
                     </div>
                   )}
                   <div className="space-y-2">

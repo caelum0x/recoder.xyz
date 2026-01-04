@@ -60,6 +60,11 @@ import { webCommand } from '../ui/commands/webCommand.js';
 import { modelRecommendCommand } from '../ui/commands/modelRecommendCommand.js';
 import { recentModelsCommand } from '../ui/commands/recentModelsCommand.js';
 import { compareModelsCommand } from '../ui/commands/compareModelsCommand.js';
+import { ollamaCommand } from '../ui/commands/ollamaCommand.js';
+import { providersCommand } from '../ui/commands/providersCommand.js';
+import { connectCommand } from '../ui/commands/connectCommand.js';
+import { modelsCommand } from '../ui/commands/modelsCommand.js';
+import { agentCommand } from '../ui/commands/agentCommand.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -130,6 +135,11 @@ export class BuiltinCommandLoader implements ICommandLoader {
       setupApiKeyCommand,
       terminalSetupCommand,
       webCommand,
+      ollamaCommand,
+      providersCommand,
+      connectCommand,
+      modelsCommand,
+      agentCommand,
     ];
 
     return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);
