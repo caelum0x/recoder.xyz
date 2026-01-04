@@ -4,6 +4,7 @@
 
 import { WebContainer } from '@webcontainer/api';
 import { WORK_DIR_NAME } from '~/utils/constants';
+import { getCurrentUserId } from '~/lib/stores/user';
 
 export type RuntimeMode = 'webcontainer' | 'docker';
 
@@ -37,11 +38,12 @@ export async function initRuntime(projectId: string): Promise<void> {
   runtimeContext.projectId = projectId;
 
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
-    // Initialize Docker container
+    // Initialize Docker container (include userId for Claude Code token injection)
+    const userId = getCurrentUserId();
     const res = await fetch(`${runtimeContext.dockerUrl}/api/container`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId }),
+      body: JSON.stringify({ projectId, userId }),
     });
     if (!res.ok) {
       const errData = await res.json() as { error?: string };

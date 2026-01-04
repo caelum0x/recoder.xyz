@@ -3,9 +3,10 @@
  * Provides user session data throughout the app
  */
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../auth/session.server';
+import { setCurrentUserId } from '../stores/user';
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +24,12 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ user, children }: AuthProviderProps) {
+  // Set the user ID in the global store for runtime components
+  // This enables Claude Code token injection when creating containers
+  useEffect(() => {
+    setCurrentUserId(user?.id ?? null);
+  }, [user?.id]);
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,

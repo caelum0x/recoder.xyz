@@ -20,13 +20,11 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true, // ✅ Enable email verification for security
+    requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
-      // Send password reset email with token link
       await sendPasswordResetEmail(user.email, url);
     },
     sendVerificationEmail: async ({ user, url }) => {
-      // Send email verification link
       await sendVerificationEmail(user.email, url);
     },
   },

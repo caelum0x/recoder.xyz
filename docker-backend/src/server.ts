@@ -14,6 +14,49 @@ import * as pty from 'node-pty';
 dotenv.config();
 
 const docker = new Docker();
+
+// App API URL for fetching user tokens
+const APP_API_URL = process.env.APP_API_URL || 'https://recoder.xyz';
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+
+// Fetch user's Claude Code OAuth token from app API
+async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
+  if (!userId || !INTERNAL_SERVICE_KEY) {
+    console.log(`[Claude Code] Missing userId or serviceKey - userId: ${!!userId}, key: ${!!INTERNAL_SERVICE_KEY}`);
+    return null;
+  }
+
+  try {
+    console.log(`[Claude Code] Fetching token for user ${userId} from ${APP_API_URL}`);
+    const response = await fetch(`${APP_API_URL}/api/user/claude-code`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        serviceKey: INTERNAL_SERVICE_KEY,
+      }),
+    });
+
+    if (!response.ok) {
+      console.log(`[Claude Code] Failed to fetch token for user ${userId}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json() as { hasToken: boolean; token?: string };
+    if (data.hasToken && data.token) {
+      console.log(`[Claude Code] Token retrieved for user ${userId}`);
+      return data.token;
+    }
+
+    console.log(`[Claude Code] No token found for user ${userId}`);
+    return null;
+  } catch (error: any) {
+    console.error(`[Claude Code] Error fetching token: ${error.message}`);
+    return null;
+  }
+}
 const { app } = expressWs(express());
 
 // Rate limiting
@@ -113,8 +156,11 @@ app.get('/health', (_, res) => {
 // Create or get container for project
 app.post('/api/container', containerLimiter, async (req, res) => {
   try {
-    const { projectId } = req.body;
+    const { projectId, userId } = req.body;
     if (!projectId) return res.status(400).json({ error: 'projectId required' });
+
+    // Fetch user's Claude Code token if userId provided
+    const claudeCodeToken = userId ? await fetchClaudeCodeToken(userId) : null;
 
     // Return existing container
     const existing = containers.get(projectId);
@@ -150,13 +196,22 @@ app.post('/api/container', containerLimiter, async (req, res) => {
         hostPort = ports.preview;
         ptyPort = ports.pty;
 
+        // Build environment variables for container
+        const containerEnv = ['PTY_PORT=9999'];
+
+        // Inject Claude Code OAuth token if user has one configured
+        if (claudeCodeToken) {
+          containerEnv.push(`CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
+          console.log(`[Claude Code] Injecting OAuth token into container for project ${projectId}`);
+        }
+
         // Create new container with security sandbox and port mapping
         const container = await docker.createContainer({
           Image: IMAGE_NAME,
           Tty: true,
           OpenStdin: true,
           WorkingDir: '/workspace',
-          Env: [`PTY_PORT=9999`],
+          Env: containerEnv,
           ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {}, '9999/tcp': {} },
           HostConfig: {
             Memory: MEMORY_LIMIT,
@@ -169,16 +224,15 @@ app.post('/api/container', containerLimiter, async (req, res) => {
               '8080/tcp': [{ HostPort: String(hostPort + 2) }],
               '9999/tcp': [{ HostPort: String(ptyPort) }],
             },
-            // 🔧 FIX: Force platform to match host architecture
-            Platform: process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64',
           },
         });
 
-        await container.start();
-        containers.set(projectId, { id: container.id, lastActive: Date.now(), port: hostPort, ptyPort });
+        const containerInstance = await container;
+        await containerInstance.start();
+        containers.set(projectId, { id: containerInstance.id, lastActive: Date.now(), port: hostPort, ptyPort });
 
-        console.log(`✅ Container created: ${container.id.slice(0, 12)} for ${projectId} (preview: ${hostPort}, pty: ${ptyPort})`);
-        return { containerId: container.id, port: hostPort, ptyPort };
+        console.log(`✅ Container created: ${containerInstance.id.slice(0, 12)} for ${projectId} (preview: ${hostPort}, pty: ${ptyPort})`);
+        return { containerId: containerInstance.id, port: hostPort, ptyPort };
       } catch (err) {
         // Cleanup allocated ports on failure
         if (hostPort !== undefined && ptyPort !== undefined) {

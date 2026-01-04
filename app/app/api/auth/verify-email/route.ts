@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
     // Extract email from identifier
     const email = verification.identifier.replace('email-verify:', '');
 
-    // Update user email verified status
-    await prisma.users.update({
+    // Update user email verified status in Better Auth's user table
+    await prisma.user.update({
       where: { email },
       data: {
         emailVerified: true,
@@ -78,20 +78,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await prisma.users.findUnique({
+    // Check Better Auth user table (web sign-ups)
+    const user = await prisma.user.findUnique({
       where: { email }
     });
 
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
+        { success: false, error: 'User not found. Please sign up first.' },
         { status: 404 }
       );
     }
 
     if (user.emailVerified) {
       return NextResponse.json(
-        { success: false, error: 'Email already verified' },
+        { success: false, error: 'Email already verified. You can sign in.' },
         { status: 400 }
       );
     }
@@ -113,10 +114,14 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Send verification email
-    await sendVerificationEmail(email, verificationToken);
+    // Build full verification URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+    const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
 
-    console.log(`✅ Verification email sent to ${email}`);
+    // Send verification email with full URL
+    await sendVerificationEmail(email, verificationUrl);
+
+    console.log(`Verification email sent to ${email}`);
 
     return NextResponse.json({
       success: true,

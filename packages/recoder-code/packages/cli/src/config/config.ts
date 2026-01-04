@@ -37,6 +37,12 @@ import { mcpCommand } from '../commands/mcp.js';
 import { webCommand } from '../commands/web.js';
 import { initCommand } from '../commands/init.js';
 import { planCommand } from '../commands/plan.js';
+import { providersCommand } from '../commands/providers.js';
+import { agentsCommand } from '../commands/agents.js';
+import { hintsCommand } from '../commands/hints.js';
+import { modelsCommand } from '../commands/models-cmd.js';
+import { configureCommand } from '../commands/configure.js';
+import { connectCommand } from '../commands/connect-cmd.js';
 import type { Settings } from './settings.js';
 
 import { resolvePath } from '../utils/resolvePath.js';
@@ -360,7 +366,19 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     // Register init command for .recoder folder
     .command(initCommand)
     // Register plan command for project planning
-    .command(planCommand);
+    .command(planCommand)
+    // Register providers command for AI provider management
+    .command(providersCommand)
+    // Register agents command for AI agent management
+    .command(agentsCommand)
+    // Register hints command for project context
+    .command(hintsCommand)
+    // Register models command for model management
+    .command(modelsCommand)
+    // Register configure command for interactive setup
+    .command(configureCommand)
+    // Register connect command for custom providers
+    .command(connectCommand);
 
   if (settings?.experimental?.extensionManagement ?? false) {
     yargsInstance.command(extensionsCommand);

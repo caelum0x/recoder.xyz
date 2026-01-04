@@ -2329,6 +2329,7 @@ model user {
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now())
+  claudeCodeToken String?
   account       account[]
   session       session[]
 }
@@ -2450,6 +2451,7 @@ model users {
   hasOwnApiKey                                       Boolean                   @default(false)
   openRouterApiKey                                   String?
   apiKeyEncrypted                                    String?
+  claudeCodeToken                                    String?                   // Encrypted Claude Code OAuth token (from `claude setup-token`)
   lastPaymentDate                                    DateTime?
   lastPaymentAmount                                  Float?
   paymentStatus                                      String?
@@ -2701,22 +2703,22 @@ model MCPToolCall {
 }
 
 model chat_sessions {
-  id            String                    @id @default(cuid())
-  userId        String?
-  anonymousId   String?
-  urlId         String                    @unique
-  title         String?
-  description   String?
-  artifactId    String?
-  metadata      Json                      @default("{}")
-  totalMessages Int                       @default(0)
-  lastMessageAt DateTime?
-  projectId     String?
-  createdAt     DateTime                  @default(now())
-  updatedAt     DateTime                  @default(now())
-  chat_messages chat_messages[]
-  projects      projects?                 @relation(fields: [projectId], references: [id])
-  users         users?                    @relation("UserChatSessions", fields: [userId], references: [id], onDelete: Cascade)
+  id               String                   @id @default(cuid())
+  userId           String?
+  anonymousId      String?
+  urlId            String                   @unique
+  title            String?
+  description      String?
+  artifactId       String?
+  metadata         Json                     @default("{}")
+  totalMessages    Int                      @default(0)
+  lastMessageAt    DateTime?
+  projectId        String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @default(now())
+  chat_messages    chat_messages[]
+  projects         projects?                @relation(fields: [projectId], references: [id])
+  users            users?                   @relation("UserChatSessions", fields: [userId], references: [id], onDelete: Cascade)
   githubConnection chat_github_connections?
 
   @@index([userId])
@@ -2740,19 +2742,38 @@ model chat_messages {
 }
 
 model chat_github_connections {
-  id         String         @id @default(cuid())
-  chatId     String         @unique @map("chat_id")
-  userId     String         @map("user_id")
-  repo       String
-  branch     String         @default("main")
-  autoSync   Boolean        @default(true) @map("auto_sync")
-  lastSync   DateTime?      @map("last_sync")
-  createdAt  DateTime       @default(now()) @map("created_at")
-  
+  id        String    @id @default(cuid())
+  chatId    String    @unique @map("chat_id")
+  userId    String    @map("user_id")
+  repo      String
+  branch    String    @default("main")
+  autoSync  Boolean   @default(true) @map("auto_sync")
+  lastSync  DateTime? @map("last_sync")
+  createdAt DateTime  @default(now()) @map("created_at")
+
   // Relations
   chatSession chat_sessions @relation(fields: [chatId], references: [id], onDelete: Cascade)
   user        users         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([chatId])
+}
+
+model marketplace_agents {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  author      String
+  content     String   @db.Text
+  version     String   @default("1.0.0")
+  template    String   @default("custom")
+  published   Boolean  @default(true)
+  downloads   Int      @default(0)
+  rating      Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  @@index([published])
+  @@index([downloads])
+  @@index([createdAt])
 }
