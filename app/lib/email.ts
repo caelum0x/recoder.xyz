@@ -27,20 +27,19 @@ interface EmailOptions {
 }
 
 async function sendEmail({ to, subject, html, text }: EmailOptions) {
-  // Development: Just log emails if no service configured
-  if (process.env.NODE_ENV === 'development' && !process.env.RESEND_API_KEY && !process.env.SMTP_USER) {
-    console.log('\n📧 ==================== EMAIL ====================');
-    console.log(`To: ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`From: ${FROM_NAME} <${FROM_EMAIL}>`);
-    console.log('HTML content length:', html.length);
-    console.log('================================================\n');
-    return { success: true, messageId: 'dev-' + Date.now() };
+  // Check if no email service is configured
+  if (!process.env.RESEND_API_KEY && !process.env.SMTP_USER) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📧 [DEV] Email to ${to}: ${subject}`);
+      return { success: true, messageId: 'dev-' + Date.now() };
+    }
+    return { success: false, error: new Error('No email service configured') };
   }
 
-  // Option 1: Use Resend (recommended for production)
+  // Use Resend
   if (process.env.RESEND_API_KEY) {
     try {
+
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -56,21 +55,21 @@ async function sendEmail({ to, subject, html, text }: EmailOptions) {
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Resend API error: ${JSON.stringify(error)}`);
+        console.error('Resend error:', response.status, responseData);
+        throw new Error(responseData.message || responseData.error || 'Resend API error');
       }
 
-      const data = await response.json();
-      console.log('✅ Email sent via Resend:', data.id);
-      return { success: true, messageId: data.id };
-    } catch (error) {
-      console.error('❌ Resend email error:', error);
+      return { success: true, messageId: responseData.id };
+    } catch (error: any) {
+      console.error('Email error:', error.message);
       return { success: false, error };
     }
   }
 
-  // Option 2: Use SMTP (fallback or if explicitly configured)
+  // SMTP fallback
   try {
     const info = await transporter.sendMail({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
@@ -79,11 +78,9 @@ async function sendEmail({ to, subject, html, text }: EmailOptions) {
       html,
       text: text || html.replace(/<[^>]*>/g, ''),
     });
-
-    console.log('✅ Email sent via SMTP:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ SMTP email error:', error);
+    console.error('SMTP error:', error);
     return { success: false, error };
   }
 }
@@ -140,75 +137,120 @@ export async function sendWelcomeEmail(email: string, name: string) {
   return sendEmail({ to: email, subject, html });
 }
 
-export async function sendVerificationEmail(email: string, verificationToken: string) {
-  const verificationUrl = `${process.env.NEXTAUTH_URL || 'https://recoder.xyz'}/api/auth/verify?token=${verificationToken}`;
-  const subject = 'Verify Your Email Address';
+export async function sendVerificationEmail(email: string, verificationUrl: string) {
+  // Note: better-auth passes the full verification URL, not just the token
+  const subject = 'Verify Your Email - Recoder.xyz';
   const html = `
     <!DOCTYPE html>
     <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #ffffff; background: #000000; margin: 0; padding: 0; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #667eea; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-          .code { background: #e0e0e0; padding: 10px; font-family: monospace; font-size: 16px; letter-spacing: 2px; text-align: center; margin: 20px 0; }
+          .header { background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white; padding: 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .header h1 { margin: 0; font-size: 28px; }
+          .content { background: #111111; padding: 40px 30px; border-radius: 0 0 16px 16px; border: 1px solid #333; border-top: none; }
+          .button { display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white !important; text-decoration: none; border-radius: 8px; margin: 24px 0; font-weight: 600; font-size: 16px; }
+          .link-box { background: #1a1a1a; padding: 16px; border-radius: 8px; margin: 20px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: #f97316; border: 1px solid #333; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          p { color: #cccccc; margin: 16px 0; }
         </style>
       </head>
-      <body>
+      <body style="background: #000000;">
         <div class="container">
           <div class="header">
-            <h1>Verify Your Email</h1>
+            <h1>🚀 Verify Your Email</h1>
           </div>
           <div class="content">
-            <p>Please verify your email address by clicking the button below:</p>
-            <a href="${verificationUrl}" class="button">Verify Email</a>
-            <p>Or copy and paste this link into your browser:</p>
-            <div class="code">${verificationUrl}</div>
-            <p>This link will expire in 24 hours.</p>
-            <p>If you didn't create an account with Recoder.xyz, please ignore this email.</p>
+            <p style="font-size: 18px; color: #ffffff;">Welcome to Recoder.xyz!</p>
+            <p>Please verify your email address to complete your registration and access all features.</p>
+
+            <div style="text-align: center;">
+              <a href="${verificationUrl}" class="button">Verify Email Address</a>
+            </div>
+
+            <p style="color: #888; font-size: 14px;">Or copy and paste this link into your browser:</p>
+            <div class="link-box">${verificationUrl}</div>
+
+            <p style="color: #888; font-size: 14px;">This link will expire in 24 hours for security reasons.</p>
+            <p style="color: #666; font-size: 12px;">If you didn't create an account with Recoder.xyz, please ignore this email.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Recoder.xyz - AI-Powered Development Platform</p>
           </div>
         </div>
       </body>
     </html>
   `;
 
-  return sendEmail({ to: email, subject, html });
+
+  const result = await sendEmail({ to: email, subject, html });
+
+  if (!result.success) {
+    console.error(`Failed to send verification email to ${email}:`, result.error);
+  }
+
+  return result;
 }
 
-export async function sendPasswordResetEmail(email: string, resetToken: string) {
-  const resetUrl = `${process.env.NEXTAUTH_URL || 'https://recoder.xyz'}/auth/reset-password?token=${resetToken}`;
-  const subject = 'Reset Your Password';
+export async function sendPasswordResetEmail(email: string, resetUrl: string) {
+  // Note: better-auth passes the full reset URL, not just the token
+  const subject = 'Reset Your Password - Recoder.xyz';
   const html = `
     <!DOCTYPE html>
     <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #ffffff; background: #000000; margin: 0; padding: 0; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #667eea; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .button { display: inline-block; padding: 12px 30px; background: #dc2626; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+          .header { background: linear-gradient(135deg, #dc2626 0%, #9333ea 100%); color: white; padding: 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .header h1 { margin: 0; font-size: 28px; }
+          .content { background: #111111; padding: 40px 30px; border-radius: 0 0 16px 16px; border: 1px solid #333; border-top: none; }
+          .button { display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #dc2626 0%, #9333ea 100%); color: white !important; text-decoration: none; border-radius: 8px; margin: 24px 0; font-weight: 600; font-size: 16px; }
+          .link-box { background: #1a1a1a; padding: 16px; border-radius: 8px; margin: 20px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: #dc2626; border: 1px solid #333; }
+          .warning { background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 8px; padding: 16px; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          p { color: #cccccc; margin: 16px 0; }
         </style>
       </head>
-      <body>
+      <body style="background: #000000;">
         <div class="container">
           <div class="header">
-            <h1>Reset Your Password</h1>
+            <h1>🔐 Reset Your Password</h1>
           </div>
           <div class="content">
-            <p>We received a request to reset your password. Click the button below to create a new password:</p>
-            <a href="${resetUrl}" class="button">Reset Password</a>
-            <p>This link will expire in 1 hour.</p>
-            <p>If you didn't request a password reset, please ignore this email and your password will remain unchanged.</p>
+            <p style="font-size: 18px; color: #ffffff;">Password Reset Request</p>
+            <p>We received a request to reset your password for your Recoder.xyz account. Click the button below to create a new password:</p>
+
+            <div style="text-align: center;">
+              <a href="${resetUrl}" class="button">Reset Password</a>
+            </div>
+
+            <p style="color: #888; font-size: 14px;">Or copy and paste this link into your browser:</p>
+            <div class="link-box">${resetUrl}</div>
+
+            <div class="warning">
+              <p style="color: #dc2626; margin: 0; font-size: 14px;">⚠️ This link will expire in 1 hour for security reasons.</p>
+            </div>
+
+            <p style="color: #666; font-size: 12px;">If you didn't request a password reset, please ignore this email and your password will remain unchanged.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Recoder.xyz - AI-Powered Development Platform</p>
           </div>
         </div>
       </body>
     </html>
   `;
 
-  return sendEmail({ to: email, subject, html });
+
+  const result = await sendEmail({ to: email, subject, html });
+
+  if (!result.success) {
+    console.error(`Failed to send password reset email to ${email}:`, result.error);
+  }
+
+  return result;
 }
 
 export async function sendSubscriptionConfirmationEmail(

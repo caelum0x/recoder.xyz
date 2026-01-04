@@ -1,7 +1,5 @@
 /**
- * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Recoder CLI ASCII Art
  */
 
 export const shortAsciiLogo = `
@@ -36,3 +34,8 @@ export const tinyAsciiLogo = `
 ██║  ██║███████╗╚██████╗╚██████╔╝██████╔╝███████╗██║  ██║
 ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝
 `;
+
+export const RECODER_LINKS = {
+  website: 'https://recoder.xyz',
+  twitter: 'https://x.com/recoderxyz',
+};

@@ -464,15 +464,15 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## 🔗 Links
 
-- **GitHub:** https://github.com/caelum0x/recoder-code
-- **CLI Package:** [recoder-code-cli](https://www.npmjs.com/package/recoder-code-cli)
+- **GitHub:** https://github.com/recoderxyz/recoder-code
+- **CLI Package:** [recoder-code](https://www.npmjs.com/package/recoder-code)
 - **VSCode Extension:** [Recoder Code Companion](https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion)
 - **Website:** https://recoder.xyz
 - **Documentation:** https://recoder.xyz/docs
 
 ## 📞 Support
 
-- **Issues:** https://github.com/caelum0x/recoder-code/issues
+- **Issues:** https://github.com/recoderxyz/recoder-code/issues
 - **Email:** support@recoder.xyz
 - **Website:** https://recoder.xyz
 

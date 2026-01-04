@@ -34,6 +34,16 @@ const PROVIDERS = [
     features: ['Claude 3.5 Sonnet', 'Claude 3 Opus', 'Long context (200K tokens)']
   },
   {
+    id: 'claude-code',
+    name: 'Claude Code',
+    description: 'Use your Claude Pro/Max subscription in containers',
+    getKeyUrl: '/settings/claude-code',
+    docs: 'https://code.claude.com/docs',
+    keyFormat: 'sk-ant-oat01-...',
+    features: ['No API costs', 'Uses your subscription', 'Available in all containers'],
+    isSpecial: true
+  },
+  {
     id: 'openai',
     name: 'OpenAI',
     description: 'GPT-4, GPT-3.5, and DALL-E',

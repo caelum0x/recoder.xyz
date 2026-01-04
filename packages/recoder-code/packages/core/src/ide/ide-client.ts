@@ -424,9 +424,10 @@ export class IdeClient {
       return;
     }
 
-    this.client.setNotificationHandler(
+    // Type assertion to avoid excessive type instantiation depth
+    (this.client.setNotificationHandler as any)(
       IdeContextNotificationSchema,
-      (notification) => {
+      (notification: { params: any }) => {
         ideContext.setIdeContext(notification.params);
       },
     );
@@ -444,9 +445,10 @@ export class IdeClient {
         true,
       );
     };
-    this.client.setNotificationHandler(
+    // Type assertion to avoid excessive type instantiation depth
+    (this.client.setNotificationHandler as any)(
       IdeDiffAcceptedNotificationSchema,
-      (notification) => {
+      (notification: { params: { filePath: string; content: string } }) => {
         const { filePath, content } = notification.params;
         const resolver = this.diffResponses.get(filePath);
         if (resolver) {
@@ -458,9 +460,10 @@ export class IdeClient {
       },
     );
 
-    this.client.setNotificationHandler(
+    // Type assertion to avoid excessive type instantiation depth
+    (this.client.setNotificationHandler as any)(
       IdeDiffClosedNotificationSchema,
-      (notification) => {
+      (notification: { params: { filePath: string; content?: string } }) => {
         const { filePath } = notification.params;
         const resolver = this.diffResponses.get(filePath);
         if (resolver) {

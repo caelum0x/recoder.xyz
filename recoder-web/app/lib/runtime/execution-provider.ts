@@ -25,18 +25,23 @@ export interface ExecutionProvider {
 export class DockerProvider implements ExecutionProvider {
   private baseUrl: string;
   private projectId: string;
+  private userId?: string;
   private terminalWs: WebSocket | null = null;
 
-  constructor(baseUrl: string, projectId: string) {
+  constructor(baseUrl: string, projectId: string, userId?: string) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.projectId = projectId;
+    this.userId = userId;
   }
 
   async init(): Promise<void> {
     const res = await fetch(`${this.baseUrl}/api/container`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: this.projectId }),
+      body: JSON.stringify({
+        projectId: this.projectId,
+        userId: this.userId, // Pass userId for Claude Code token injection
+      }),
     });
     if (!res.ok) {
       const errData = await res.json() as { error?: string };
@@ -177,11 +182,11 @@ export class WebContainerProvider implements ExecutionProvider {
 export function createExecutionProvider(
   mode: 'docker' | 'webcontainer',
   projectId: string,
-  options: { dockerUrl?: string; getWebContainer?: () => Promise<any> }
+  options: { dockerUrl?: string; getWebContainer?: () => Promise<any>; userId?: string }
 ): ExecutionProvider {
   if (mode === 'docker') {
     const url = options.dockerUrl || import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
-    return new DockerProvider(url, projectId);
+    return new DockerProvider(url, projectId, options.userId);
   }
   
   if (!options.getWebContainer) {

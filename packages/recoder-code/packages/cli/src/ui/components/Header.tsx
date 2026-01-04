@@ -1,19 +1,17 @@
 /**
- * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Recoder CLI Header Component
  */
 
 import type React from 'react';
 import { Box, Text } from 'ink';
 import Gradient from 'ink-gradient';
 import { Colors } from '../colors.js';
-import { shortAsciiLogo, longAsciiLogo, tinyAsciiLogo } from './AsciiArt.js';
+import { shortAsciiLogo, longAsciiLogo, tinyAsciiLogo, RECODER_LINKS } from './AsciiArt.js';
 import { getAsciiArtWidth } from '../utils/textUtils.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 
 interface HeaderProps {
-  customAsciiArt?: string; // For user-defined ASCII art
+  customAsciiArt?: string;
   version: string;
   nightly: boolean;
 }
@@ -54,6 +52,13 @@ export const Header: React.FC<HeaderProps> = ({
       ) : (
         <Text>{displayTitle}</Text>
       )}
+      <Box flexDirection="row" justifyContent="center" width="100%" marginTop={1}>
+        <Text color="#f97316">🌐 </Text>
+        <Text color="#a855f7">{RECODER_LINKS.website}</Text>
+        <Text color="gray">  •  </Text>
+        <Text color="#f97316">𝕏 </Text>
+        <Text color="#a855f7">{RECODER_LINKS.twitter}</Text>
+      </Box>
       {nightly && (
         <Box width="100%" flexDirection="row" justifyContent="flex-end">
           {Colors.GradientColors ? (

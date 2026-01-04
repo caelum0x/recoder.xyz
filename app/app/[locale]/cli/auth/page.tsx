@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSession } from '@/lib/session-provider';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { QRCodeSVG } from 'qrcode.react';
 
 function CLIAuthContent() {
   const { data: session, isPending } = useSession();
@@ -17,20 +16,28 @@ function CLIAuthContent() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [needsAuth, setNeedsAuth] = useState(false);
 
-  // Redirect to login if not authenticated
+  // Check auth status
   useEffect(() => {
-    if (!session && !isPending) {
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent('/cli/auth' + (codeFromUrl ? `?code=${codeFromUrl}` : ''))}`);
+    if (!isPending && !session) {
+      setNeedsAuth(true);
+    } else {
+      setNeedsAuth(false);
     }
-  }, [session, isPending, router, codeFromUrl]);
+  }, [session, isPending]);
 
-  // Load device code info when user code is provided
+  // Load device code info when user code is provided and authenticated
   useEffect(() => {
-    if (userCode && session) {
+    if (userCode && session && !isPending) {
       loadDeviceCodeInfo();
     }
-  }, [userCode, session]);
+  }, [userCode, session, isPending]);
+
+  const handleSignIn = () => {
+    const callbackUrl = `/cli/auth${codeFromUrl ? `?code=${codeFromUrl}` : ''}`;
+    router.push(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+  };
 
   // Countdown timer
   useEffect(() => {
@@ -112,6 +119,39 @@ function CLIAuthContent() {
         <div className="text-white">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
           <p className="mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated - show sign in prompt
+  if (needsAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+          <div className="text-center">
+            <div className="inline-block bg-gradient-to-r from-orange-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-xl mb-6">
+              recoder.xyz
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-4">
+              Sign In Required
+            </h1>
+            <p className="text-gray-400 mb-6">
+              Please sign in to authorize your CLI device.
+            </p>
+            {userCode && (
+              <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-6">
+                <p className="text-sm text-gray-400 mb-2">Device Code:</p>
+                <p className="text-2xl font-mono font-bold text-orange-500">{userCode}</p>
+              </div>
+            )}
+            <button
+              onClick={handleSignIn}
+              className="w-full bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-all"
+            >
+              Sign In to Continue
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -261,16 +301,6 @@ function CLIAuthContent() {
               </div>
             </div>
 
-            {/* QR Code */}
-            <div className="mb-8 flex justify-center">
-              <div className="bg-white p-4 rounded-lg">
-                <QRCodeSVG
-                  value={`${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/cli/auth?code=${userCode}`}
-                  size={160}
-                />
-              </div>
-            </div>
-
             {/* Warning */}
             <div className="mb-6 bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4">
               <div className="flex gap-3">
@@ -313,7 +343,6 @@ function CLIAuthContent() {
           <div className="space-y-2 text-sm text-gray-500">
             <p>• Make sure you've run <code className="bg-gray-900 px-2 py-1 rounded text-orange-500">recoder auth login</code> in your terminal</p>
             <p>• The code expires after 10 minutes</p>
-            <p>• You can scan the QR code with your phone if this page is open on another device</p>
           </div>
         </div>
       </div>

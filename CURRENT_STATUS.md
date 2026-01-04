@@ -24,18 +24,9 @@
 - HTTP proxy system for live preview
 
 ---
-###### refinetments
-add our logo recoder.xyz website it has different sort of icon 
 
 
-4- fix select model component it has unnecesary explanations just wrote model names and proivders and lets poeple add any model they want 
-
-remove boltHistory console log
-######## web ide needs more
-it need to have all vscode like features like multi file editing folder file creation manuel coding errors tab fodler fie moving draggin etc etc
-###### recoder-code
-recoder code needs local ai usability from ollama and other locla ai providers
-
+![alt text](image-2.png)
 ## 🖥️ Terminal CLI Integration (Critical Priority)
 
 ### Overview
@@ -480,59 +471,11 @@ Build refactoring suggestions. Detect code smells and anti-patterns. Show refact
 
 ---
 
-## 📈 Success Metrics
-
-### Phase 1 (Weeks 1-3 - CLI Integration)
-- Claude Code integration working end-to-end in containers
-- At least 100 users connecting Anthropic accounts
-- recoder-code v2.4.5+ authenticated with platform
-- Bidirectional sync working (CLI ↔ web) with <200ms latency
-- Live preview updates reflect CLI changes instantly
-- Terminal session persistence across platforms
-- Ollama integration working with local models (Llama, Mistral, CodeLlama)
-- Zero-cost local AI development enabled
-
-### Phase 2 (Weeks 4-6 - Core Editor)
-- Multi-file editing with tabs functioning
-- Advanced file tree with all operations
-- Container cleanup reducing costs by 40%
-- Zero resource exhaustion incidents
-
-### Phase 3 (Weeks 7-10 - AI & Collaboration)
-- Full-stack app generation from description
-- Real-time collaboration with multiple users
-- Less than 100ms latency for cursor updates
-- Share links working with access controls
-
-### Phase 4 (Weeks 11-13 - Deployment)
-- One-click deployment to all three platforms
-- Visual package manager adoption over manual editing
-- Successful deployments with zero downtime
-
-### Phase 5 (Weeks 14-17 - Git & Intelligence)
-- Git operations working from UI
-- Inline AI suggestions with high acceptance rate
-- Code review and fix features functioning
-- Feature parity achieved with Cursor and Replit
-
----
-
 **Focus**: Build features in strict priority order starting with terminal CLI integration. Don't skip ahead. Each feature must work 100% before moving to the next. Terminal CLI integration is the differentiator that sets us apart from all competitors.
 
 ---
 
-## Sources
 
-- [Claude Code GitHub Repository](https://github.com/anthropics/claude-code)
-- [Anthropic Claude Code Official Site](https://www.anthropic.com/claude-code)
-- [Claude Code Documentation](https://code.claude.com/docs/en/overview)
-- [Cursor AI Features](https://cursor.com/features)
-- [Cursor CLI Guide 2025](https://zoer.ai/posts/zoer/cursor-cli-features-guide)
-- [Replit Ghostwriter Features](https://blog.replit.com/ai)
-- [Replit vs Cursor Comparison](https://replit.com/discover/replit-vs-cursor)
-- [Bolt.new GitHub](https://github.com/stackblitz/bolt.new)
-- [Bolt.new Introduction](https://support.bolt.new/building/intro-bolt)
-- [Bolt.new Review 2025](https://www.designmonks.co/case-study/bolt-ai-app-builder-case-study)
 
 🔍 Deep Project Analysis: Recoder.xyz
 

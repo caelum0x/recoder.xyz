@@ -1,8 +1,0 @@
-{
-  "openRouterApiKey": "dummy-key",
-  "openRouterModel": "gpt-3.5-turbo",
-  "openRouterProxyUrl": "http://proxy.example.com",
-  "analyticsOptIn": false,
-  "encryptionKey": "dummy-encryption-key",
-  "iv": "dummy-iv"
-}

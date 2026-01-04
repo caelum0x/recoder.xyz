@@ -42,11 +42,7 @@ interface CLISession {
   };
 }
 
-// In-memory storage for OAuth flows (will be replaced with Redis in production)
-const authRequests = new Map();
-
-// Import device flow storage from internal endpoint
-import { initializeDeviceFlowRequest } from '@/lib/device-flow-storage';
+// Note: Using database for auth code storage instead of in-memory for serverless compatibility
 
 /**
  * GET - Initiate CLI authentication flow
@@ -72,17 +68,9 @@ export async function GET(request: NextRequest) {
 
       // Generate authorization code
       const authCode = nanoid(32);
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-      // Store authorization request
-      authRequests.set(authCode, {
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        state: state,
-        scope: scope,
-        expires_at: expiresAt,
-        created_at: new Date()
-      });
+      // Note: Auth code is stored in database when user completes sign-in
+      // via the cli-callback page which calls /api/auth/cli-internal/set-user
 
       // Redirect to existing signin page with CLI callback
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -174,14 +162,15 @@ async function handleDeviceFlow(body: any): Promise<NextResponse> {
   const verificationUriComplete = `${baseUrl}/auth/device?user_code=${userCode}`;
 
   // Store device flow request in database
-  await initializeDeviceFlowRequest(deviceCode, {
-    device_code: deviceCode,
-    user_code: userCode,
-    client_id: client_id,
-    scope: scope,
-    expires_at: new Date(Date.now() + expiresIn * 1000),
-    status: 'pending',
-    created_at: new Date()
+  await prisma.deviceCode.create({
+    data: {
+      deviceCode: deviceCode,
+      userCode: userCode,
+      clientId: client_id,
+      scope: scope,
+      expiresAt: new Date(Date.now() + expiresIn * 1000),
+      status: 'pending',
+    }
   });
 
   const deviceFlowData: DeviceFlowData = {
@@ -237,7 +226,7 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
         }
       });
 
-      // Get user data
+      // Get user data from users table (CLI users)
       const user = await prisma.users.findUnique({
         where: { id: apiKeyData.userId }
       });
@@ -277,7 +266,7 @@ async function handleTokenValidation(body: any): Promise<NextResponse> {
       data: { lastUsedAt: new Date() }
     });
 
-    // Get user data
+    // Get user data from users table (CLI users)
     const user = await prisma.users.findUnique({
       where: { id: sessionData.userId }
     });
@@ -326,7 +315,7 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
         }, { status: 401 });
       }
 
-      // Get user data
+      // Get user data from users table (CLI users)
       const user = await prisma.users.findUnique({
         where: { id: apiKeyData.userId }
       });
@@ -362,26 +351,40 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
       });
     }
 
-    // Email/Password authentication
+    // Email/Password authentication - check users table, sync from Better Auth if needed
     if (email && password) {
-      // Check if user exists
+      // First check if user exists in users table (CLI users)
       let user = await prisma.users.findUnique({
         where: { email }
       });
-      
-      // If user doesn't exist, create a new one (for demo purposes)
+
+      // If not in users table, check Better Auth user table and sync
       if (!user) {
-        user = await prisma.users.create({
-          data: {
-            id: nanoid(),
-            email: email,
-            name: email.split('@')[0],
-            subscription: 'free',
-            isActive: true,
-            emailVerified: true,
-            updatedAt: new Date()
-          }
+        const betterAuthUser = await prisma.user.findUnique({
+          where: { email }
         });
+
+        if (betterAuthUser) {
+          // Sync user from Better Auth to users table
+          user = await prisma.users.create({
+            data: {
+              id: betterAuthUser.id,
+              email: betterAuthUser.email,
+              name: betterAuthUser.name,
+              subscription: 'free',
+              isActive: true,
+              emailVerified: betterAuthUser.emailVerified,
+              updatedAt: new Date()
+            }
+          });
+        } else {
+          // User doesn't exist anywhere - must sign up on web first
+          return NextResponse.json({
+            success: false,
+            error: 'user_not_found',
+            message: 'Please sign up at recoder.xyz first'
+          }, { status: 404 });
+        }
       }
 
       // Generate session tokens
@@ -440,12 +443,12 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
 }
 
 /**
- * Handle authorization code exchange - use Better Auth session
+ * Handle authorization code exchange - use database for auth codes
  */
 async function handleCodeExchange(body: any): Promise<NextResponse> {
   const { grant_type, client_id, code, redirect_uri } = body;
 
-  if (grant_type !== 'authorization_code' || !client_id || !code || !redirect_uri) {
+  if (grant_type !== 'authorization_code' || !client_id || !code) {
     return NextResponse.json({
       success: false,
       error: 'invalid_request'
@@ -453,45 +456,45 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
   }
 
   try {
-    // Find auth request
-    const authRequest = authRequests.get(code);
-    if (!authRequest || 
-        authRequest.client_id !== client_id ||
-        authRequest.redirect_uri !== redirect_uri ||
-        new Date() > authRequest.expires_at) {
+    // Find auth code in database
+    const authCode = await prisma.authCode.findUnique({
+      where: { code },
+      include: { user: true }
+    });
+
+    if (!authCode) {
       return NextResponse.json({
         success: false,
-        error: 'invalid_grant'
+        error: 'invalid_grant',
+        error_description: 'Auth code not found'
       }, { status: 400 });
     }
 
-    // Remove used code
-    authRequests.delete(code);
-
-    // Get real user info from internal storage
-    const userInfoResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/cli-internal/set-user?code=${code}`);
-    
-    if (!userInfoResponse.ok) {
+    if (authCode.used) {
       return NextResponse.json({
         success: false,
-        error: 'user_not_authenticated'
-      }, { status: 401 });
+        error: 'invalid_grant',
+        error_description: 'Auth code already used'
+      }, { status: 400 });
     }
 
-    const userInfoResult = await userInfoResponse.json();
-    
-    if (!userInfoResult.success || !userInfoResult.user) {
+    if (new Date() > authCode.expiresAt) {
       return NextResponse.json({
         success: false,
-        error: 'invalid_user_session'
-      }, { status: 401 });
+        error: 'invalid_grant',
+        error_description: 'Auth code expired'
+      }, { status: 400 });
     }
+
+    // Mark code as used
+    await prisma.authCode.update({
+      where: { code },
+      data: { used: true }
+    });
 
     // Get user from database
-    const user = await prisma.users.findUnique({
-      where: { id: userInfoResult.user.user_id }
-    });
-    
+    const user = authCode.user;
+
     if (!user) {
       return NextResponse.json({
         success: false,

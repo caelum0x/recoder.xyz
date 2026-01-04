@@ -1,293 +1,162 @@
-# 🎨 Recoder Code Companion for VS Code
+# Recoder Code for VS Code
 
-**Seamless AI-Powered Coding Assistant Integration for Visual Studio Code**
+**AI-Powered Coding Assistant with 12+ Providers**
 
-The official VS Code extension for Recoder Code - brings AI assistance directly into your editor with native diff viewing, file context tracking, and intelligent code suggestions.
+The official VS Code extension for Recoder Code - brings AI assistance directly into your editor with support for OpenRouter, OpenAI, Anthropic, Ollama, and 9+ more providers.
 
 [![Version](https://img.shields.io/visual-studio-marketplace/v/recoder.recoder-code-vscode-companion)](https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/recoder.recoder-code-vscode-companion)](https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion)
-[![Rating](https://img.shields.io/visual-studio-marketplace/r/recoder.recoder-code-vscode-companion)](https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion)
+[![GitHub stars](https://img.shields.io/github/stars/recoderxyz/recoder-code?style=social)](https://github.com/recoderxyz/recoder-code)
 
-## ✨ Features
+## Supported Providers
 
-### 📂 Smart File Context
-Recoder Code automatically tracks:
-- All open files in your editor
-- Currently selected text
-- Cursor position and active file
-- Your project structure
+### Cloud Providers
+| Provider | Models | Free Tier |
+|----------|--------|-----------|
+| **OpenRouter** | 200+ models | Yes |
+| **OpenAI** | GPT-4, GPT-4o, o1 | No |
+| **Anthropic** | Claude 3.5, Claude 4 | No |
+| **Groq** | Llama, Mixtral (fast) | Yes |
+| **DeepSeek** | DeepSeek V3, Coder | Yes |
+| **Mistral** | Mistral, Codestral | Yes |
+| **Together AI** | Open-source models | Yes |
+| **Fireworks AI** | Fast inference | Yes |
+| **Google Gemini** | Gemini Pro, Flash | Yes |
 
-This gives the AI rich context about what you're working on.
+### Local Providers (Free, Private)
+| Provider | Description |
+|----------|-------------|
+| **Ollama** | Run open-source models locally |
+| **LM Studio** | Desktop app for local LLMs |
+| **llama.cpp** | High-performance C++ inference |
 
-### ✏️ Native Diff Viewing
-- View AI-suggested code changes side-by-side
-- Accept or reject changes with one click
+## Features
+
+### 🎛️ **Easy Configuration**
+- **Settings UI**: Modern web interface for all configuration
+- **One-Click Setup**: Test API keys and connections instantly
+- **Local AI Detection**: Automatically find Ollama/LM Studio servers
+- **Secure Storage**: API keys encrypted in VS Code's secret storage
+
+### Smart File Context
+- All open files tracked automatically
+- Selected text sent as context
+- Project structure awareness
+
+### Native Diff Viewing
+- Side-by-side code changes
+- Accept/reject with one click
 - Edit suggestions before accepting
-- Keyboard shortcuts for quick actions (Ctrl+S / Cmd+S)
+- Keyboard shortcuts (Cmd+S / Ctrl+S)
 
-### 🚀 Quick Launch
-- Start Recoder Code directly from Command Palette
-- Automatic terminal integration
-- Seamless workflow integration
+### Provider Management
+- Quick switch between providers
+- Auto-detect local AI servers
+- Configure API keys in VS Code
 
-### 🔄 Real-Time Synchronization
-- File changes sync automatically
-- Selection tracking
-- Context updates in real-time
+### Code Actions
+- Explain selected code
+- Refactor code
+- Add comments
+- Generate tests
 
-## 📦 Installation
+## Quick Start
 
-### From VS Code Marketplace
-
-1. Open VS Code
-2. Go to Extensions (Cmd+Shift+X / Ctrl+Shift+X)
-3. Search for "Recoder Code Companion"
-4. Click **Install**
-
-### From Command Line
-
+### 1. Install Extension
+Search "Recoder Code" in VS Code Extensions or:
 ```bash
 code --install-extension recoder.recoder-code-vscode-companion
 ```
 
-### From VSIX File
-
+### 2. Install CLI
 ```bash
-code --install-extension recoder-code-vscode-companion-1.0.0.vsix
+npm install -g recoder-code
 ```
 
-## 🚀 Quick Start
+### 3. Configure Provider
 
-### 1. Install the Extension
-Follow the installation steps above.
+**Easy Setup with Settings UI:**
+1. Press `Cmd+,` (macOS) or `Ctrl+,` (Windows/Linux)
+2. Choose your preferred AI provider
+3. Enter API key and test connection
+4. Select your default model
 
-### 2. Install Recoder Code CLI
+**Option A: Use OpenRouter (Recommended)**
+- Get free API key at [openrouter.ai/keys](https://openrouter.ai/keys)
+- 200+ models available, generous free tier
 
-```bash
-npm install -g recoder-code-cli
-```
+**Option B: Use Local AI (Free, Private)**
+- Install [Ollama](https://ollama.ai) or [LM Studio](https://lmstudio.ai)
+- Auto-detection will find running servers
 
-### 3. Open Your Project in VS Code
-
-```bash
-code /path/to/your/project
-```
-
-### 4. Start Recoder Code
-
-**Option A:** From Command Palette
-- Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+### 4. Start Coding
+- Press `Cmd+Shift+P` / `Ctrl+Shift+P`
 - Type "Recoder Code: Run"
-- Press Enter
+- Ask the AI to help with your code
 
-**Option B:** From Terminal
-- Open integrated terminal (Ctrl+`)
-- Run `recoder-code`
+## Commands
 
-### 5. Start Coding!
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `Recoder Code: Open Settings` | `Cmd+,` / `Ctrl+,` | **Configure all settings with UI** |
+| `Recoder Code: Run` | - | Start AI session |
+| `Recoder Code: List All Providers` | - | View all 12+ providers |
+| `Recoder Code: Detect Local AI` | - | Find Ollama, LM Studio |
+| `Recoder Code: Configure Provider` | - | Set API keys (command line) |
+| `Recoder Code: Login` | Login to recoder.xyz |
+| `Recoder Code: Browse Models` | Explore available models |
+| `Recoder Code: Explain This` | Explain selected code |
+| `Recoder Code: Refactor This` | Refactor selected code |
+| `Recoder Code: Generate Tests` | Generate tests for code |
 
-The extension will automatically:
-- Track your open files
-- Monitor your selections
-- Provide context to the AI
-- Show diff views for suggested changes
-
-## ⌨️ Commands
-
-Access commands via Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`):
-
-### `Recoder Code: Run`
-Start a new Recoder Code session in the integrated terminal.
-
-### `Recoder Code: Accept Current Diff`
-Accept the AI-suggested code changes shown in the diff view.
-- **Keyboard Shortcut:** `Ctrl+S` / `Cmd+S` (when diff is visible)
-
-### `Recoder Code: Close Diff Editor`
-Close the diff view without accepting changes.
-
-### `Recoder Code: View Third-Party Notices`
-View open source licenses and attributions.
-
-## 🎯 Usage Examples
-
-### Example 1: Code Review
-
-1. Open a file you want reviewed
-2. Run Recoder Code from Command Palette
-3. Ask: "Review this file for potential issues"
-4. View suggested changes in diff view
-5. Accept or reject changes
-
-### Example 2: Refactoring
-
-1. Select code you want to refactor
-2. Start Recoder Code
-3. Ask: "Refactor this to use modern JavaScript"
-4. Review changes in diff view
-5. Press `Cmd+S` to accept
-
-### Example 3: Adding Features
-
-1. Have relevant files open
-2. Start Recoder Code
-3. Ask: "Add error handling to the API functions"
-4. Review and accept changes
-
-### Example 4: Bug Fixing
-
-1. Open the file with the bug
-2. Select the problematic code
-3. Ask: "Fix the bug in this code"
-4. Review the fix in diff view
-5. Accept if correct
-
-## ⚙️ Configuration
-
-### Settings
-
-Currently, the extension works without configuration. Future versions will add:
-- Custom keyboard shortcuts
-- Diff view preferences
-- Context tracking options
-
-## 🎨 Diff View
-
-### Features
-
-- **Side-by-Side Comparison:** See original and suggested code
-- **Syntax Highlighting:** Full language support
-- **Inline Editing:** Edit suggestions before accepting
-- **Quick Actions:** Accept/Reject buttons in editor toolbar
-
-### Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Action | Mac | Windows/Linux |
 |--------|-----|---------------|
-| Accept Changes | `Cmd+S` | `Ctrl+S` |
+| Accept Diff | `Cmd+S` | `Ctrl+S` |
 | Close Diff | `Esc` | `Esc` |
 
-## 🔧 Requirements
+## Requirements
 
-- **VS Code:** Version 1.99.0 or newer
-- **Recoder Code CLI:** Installed and configured
-- **Node.js:** 18.0.0 or newer (for CLI)
+- VS Code 1.99.0+
+- Node.js 18.0.0+
+- Recoder Code CLI
 
-## 🐛 Troubleshooting
-
-### Extension Not Working
-
-1. **Check VS Code Version**
-   - Ensure you're running VS Code 1.99.0 or newer
-   - Help → About
-
-2. **Verify CLI Installation**
-   ```bash
-   which recoder-code
-   recoder-code --version
-   ```
-
-3. **Restart VS Code**
-   - Quit VS Code completely
-   - Reopen your project
-
-### Diff View Not Showing
-
-1. Make sure you started Recoder Code from the terminal
-2. Check that the integrated terminal is active
-3. Try closing and reopening the diff editor
-
-### Context Not Syncing
-
-1. Check that files are saved
-2. Verify the extension is active (check status bar)
-3. Try reloading the window (Cmd+R / Ctrl+R)
-
-### Performance Issues
-
-1. Close unnecessary files
-2. Reduce the number of open editors
-3. Check CPU usage in Activity Monitor
-
-## 📊 Features Comparison
-
-| Feature | With Extension | Without Extension |
-|---------|----------------|-------------------|
-| AI Assistance | ✅ | ✅ |
-| File Context | ✅ Auto | ⚠️ Manual |
-| Diff View | ✅ Native | ❌ Terminal only |
-| Selection Tracking | ✅ | ❌ |
-| Quick Launch | ✅ | ❌ |
-| Real-time Sync | ✅ | ❌ |
-
-## 🔒 Privacy & Security
+## Privacy & Security
 
 - **Local Processing:** Extension runs entirely locally
 - **No Data Collection:** No telemetry or tracking
-- **Secure Communication:** Local server only
-- **Open Source:** Code is public and auditable
+- **Local AI Option:** Use Ollama for 100% private coding
+- **Open Source:** [View source code](https://github.com/recoderxyz/recoder-code)
 
-## 🤝 Contributing
+## Links
 
-We welcome contributions! See [development.md](development.md) for setup instructions.
+- **Website:** [recoder.xyz](https://recoder.xyz)
+- **GitHub:** [github.com/recoderxyz/recoder-code](https://github.com/recoderxyz/recoder-code)
+- **X (Twitter):** [@recoderxyz](https://x.com/recoderxyz)
+- **CLI Package:** [npm/recoder-code](https://www.npmjs.com/package/recoder-code)
+- **Issues:** [Report a bug](https://github.com/recoderxyz/recoder-code/issues)
+- **Discussions:** [Ask questions](https://github.com/recoderxyz/recoder-code/discussions)
 
-## 📄 License
+## Support
 
-MIT License - see [LICENSE](LICENSE) for details
-
-## 🔗 Links
-
-- **GitHub:** https://github.com/caelum0x/recoder-code
-- **CLI Package:** [recoder-code-cli](https://www.npmjs.com/package/recoder-code-cli)
-- **Core Library:** [recoder-code-core](https://www.npmjs.com/package/recoder-code-core)
-- **Website:** https://recoder.xyz
-- **Issues:** https://github.com/caelum0x/recoder-code/issues
-
-## 📞 Support
-
-- **Documentation:** https://recoder.xyz/docs
-- **GitHub Issues:** https://github.com/caelum0x/recoder-code/issues
+- **Documentation:** [recoder.xyz/docs](https://recoder.xyz/docs)
 - **Email:** support@recoder.xyz
+- **Discord:** Coming soon
 
-## 🎓 Learn More
+## Show Your Support
 
-- [CLI Documentation](../cli/README.md)
-- [Core Library API](../core/README.md)
-- [Publishing Guide](PUBLISHING_GUIDE.md)
-- [Development Guide](development.md)
+If you find this extension helpful:
+- [Star on GitHub](https://github.com/recoderxyz/recoder-code)
+- [Review on Marketplace](https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion)
+- [Follow on X](https://x.com/recoderxyz)
 
-## 🗺️ Roadmap
+## License
 
-- [ ] Inline suggestions
-- [ ] Multi-file refactoring
-- [ ] Code lens integration
-- [ ] Sidebar panel
-- [ ] Settings UI
-- [ ] Custom themes for diff view
-- [ ] Workspace-wide analysis
-
-## ⭐ Show Your Support
-
-If you find this extension helpful, please:
-- ⭐ Star the [GitHub repository](https://github.com/caelum0x/recoder-code)
-- ✍️ Leave a review on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion)
-- 🐦 Share with your friends and colleagues
-
-## 📸 Screenshots
-
-*Coming soon - will include:*
-- Extension in action
-- Diff view examples
-- Command palette integration
-- File context tracking
-
-## 🎬 Demo
-
-*Coming soon - video demonstration of all features*
+Apache 2.0 - see [LICENSE](LICENSE)
 
 ---
 
-**Built with ❤️ by the Recoder Code Team**
+**Built by [Recoder](https://recoder.xyz)**
 
-*Making AI-assisted coding seamless in VS Code*
-
+*AI-powered coding for everyone*

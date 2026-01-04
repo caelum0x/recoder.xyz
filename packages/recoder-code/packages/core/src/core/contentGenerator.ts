@@ -50,6 +50,7 @@ export enum AuthType {
   USE_OPENAI = 'openai',
   QWEN_OAUTH = 'qwen-oauth',
   RECODER_AUTH = 'recoder-auth',
+  USE_OLLAMA = 'ollama',
 }
 
 export type ContentGeneratorConfig = {
@@ -87,19 +88,35 @@ export function createContentGeneratorConfig(
   const googleCloudProject = process.env['GOOGLE_CLOUD_PROJECT'] || undefined;
   const googleCloudLocation = process.env['GOOGLE_CLOUD_LOCATION'] || undefined;
 
-  // openai auth
+  // OpenRouter - PRIMARY default
+  const openrouterApiKey = process.env['OPENROUTER_API_KEY'] || undefined;
+  const openrouterBaseUrl = 'https://openrouter.ai/api/v1';
+  const openrouterModel = process.env['OPENROUTER_MODEL'] || 'anthropic/claude-sonnet-4';
+
+  // OpenAI auth (fallback)
   const openaiApiKey = process.env['OPENAI_API_KEY'] || undefined;
   const openaiBaseUrl = process.env['OPENAI_BASE_URL'] || undefined;
   const openaiModel = process.env['OPENAI_MODEL'] || undefined;
 
-  // OpenRouter detection - if OPENAI_BASE_URL contains openrouter, force USE_OPENAI auth
-  if (openaiBaseUrl && openaiBaseUrl.includes('openrouter') && openaiApiKey) {
+  // Ollama detection
+  const ollamaBaseUrl = process.env['OLLAMA_BASE_URL'] || 'http://localhost:11434';
+
+  // Use runtime model from config if available
+  const effectiveModel = config.getModel() || (openrouterApiKey ? openrouterModel : DEFAULT_GEMINI_MODEL);
+
+  // Auto-detect provider from model ID (e.g., ollama/llama3.1:8b)
+  if (effectiveModel.startsWith('ollama/')) {
+    authType = AuthType.USE_OLLAMA;
+  } else if (effectiveModel.startsWith('openrouter/') || openrouterApiKey) {
     authType = AuthType.USE_OPENAI;
-    console.log('ℹ️  Detected OpenRouter API configuration. Make sure you have a valid API key from https://openrouter.ai');
   }
 
-  // Use runtime model from config if available; otherwise, fall back to parameter or default
-  const effectiveModel = config.getModel() || DEFAULT_GEMINI_MODEL;
+  // OpenRouter is PRIMARY - auto-configure if key exists
+  if (openrouterApiKey && !openaiApiKey) {
+    // Set OpenRouter as the OpenAI-compatible endpoint
+    process.env['OPENAI_API_KEY'] = openrouterApiKey;
+    process.env['OPENAI_BASE_URL'] = openrouterBaseUrl;
+  }
 
   const contentGeneratorConfig: ContentGeneratorConfig = {
     model: effectiveModel,
@@ -111,6 +128,12 @@ export function createContentGeneratorConfig(
     disableCacheControl: config.getContentGeneratorDisableCacheControl(),
     samplingParams: config.getContentGeneratorSamplingParams(),
   };
+
+  // Ollama - local AI
+  if (authType === AuthType.USE_OLLAMA) {
+    contentGeneratorConfig.baseUrl = ollamaBaseUrl;
+    return contentGeneratorConfig;
+  }
 
   // If we are using Google auth or we are in Cloud Shell, there is nothing else to validate for now
   if (
@@ -137,12 +160,18 @@ export function createContentGeneratorConfig(
     return contentGeneratorConfig;
   }
 
-  if (authType === AuthType.USE_OPENAI && openaiApiKey) {
-    contentGeneratorConfig.apiKey = openaiApiKey;
-    contentGeneratorConfig.baseUrl = openaiBaseUrl;
-    contentGeneratorConfig.model = openaiModel || effectiveModel || DEFAULT_QWEN_MODEL;
+  if (authType === AuthType.USE_OPENAI) {
+    // OpenRouter takes priority, then OpenAI
+    const apiKey = openrouterApiKey || openaiApiKey;
+    const baseUrl = openrouterApiKey ? openrouterBaseUrl : openaiBaseUrl;
+    const model = openrouterApiKey ? openrouterModel : (openaiModel || effectiveModel);
 
-    return contentGeneratorConfig;
+    if (apiKey) {
+      contentGeneratorConfig.apiKey = apiKey;
+      contentGeneratorConfig.baseUrl = baseUrl;
+      contentGeneratorConfig.model = model;
+      return contentGeneratorConfig;
+    }
   }
 
   if (authType === AuthType.QWEN_OAUTH || authType === AuthType.RECODER_AUTH) {
@@ -191,6 +220,12 @@ export async function createContentGenerator(
       ),
       gcConfig,
     );
+  }
+
+  if (config.authType === AuthType.USE_OLLAMA) {
+    // Import OllamaContentGenerator dynamically
+    const { createOllamaContentGenerator } = await import('./ollamaContentGenerator.js');
+    return new LoggingContentGenerator(createOllamaContentGenerator(config), gcConfig);
   }
 
   if (

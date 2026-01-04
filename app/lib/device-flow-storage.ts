@@ -1,9 +1,9 @@
 /**
  * Device Flow Storage
- * Production database integration for device flow requests
+ * Production database integration for device flow requests using Prisma
  */
 
-import { db } from './database';
+import { prisma } from './prisma';
 
 export interface DeviceFlowRequest {
   device_code: string;
@@ -22,15 +22,28 @@ export interface DeviceFlowRequest {
 // Initialize device flow request in database
 export async function initializeDeviceFlowRequest(deviceCode: string, data: DeviceFlowRequest) {
   try {
-    const deviceFlow = await db.createDeviceFlow({
-      device_code: deviceCode,
-      user_code: data.user_code,
-      client_id: data.client_id,
-      scope: data.scope,
-      status: 'pending',
-      expires_at: data.expires_at
+    const deviceFlow = await prisma.deviceCode.create({
+      data: {
+        deviceCode: deviceCode,
+        userCode: data.user_code,
+        clientId: data.client_id,
+        scope: data.scope,
+        status: 'pending',
+        expiresAt: data.expires_at
+      }
     });
-    return deviceFlow;
+
+    // Return in expected format
+    return {
+      device_code: deviceFlow.deviceCode,
+      user_code: deviceFlow.userCode,
+      client_id: deviceFlow.clientId,
+      scope: deviceFlow.scope || '',
+      status: deviceFlow.status as DeviceFlowRequest['status'],
+      expires_at: deviceFlow.expiresAt,
+      created_at: deviceFlow.createdAt,
+      user_id: deviceFlow.userId || undefined
+    };
   } catch (error) {
     console.error('Failed to initialize device flow request:', error);
     throw error;
@@ -38,9 +51,31 @@ export async function initializeDeviceFlowRequest(deviceCode: string, data: Devi
 }
 
 // Get device flow request from database
-export async function getDeviceFlowRequest(deviceCode: string) {
+export async function getDeviceFlowRequest(deviceCode: string): Promise<DeviceFlowRequest | null> {
   try {
-    return await db.getDeviceFlow(deviceCode);
+    const flow = await prisma.deviceCode.findUnique({
+      where: { deviceCode },
+      include: { user: true }
+    });
+
+    if (!flow) return null;
+
+    return {
+      device_code: flow.deviceCode,
+      user_code: flow.userCode,
+      client_id: flow.clientId,
+      scope: flow.scope || '',
+      status: flow.status as DeviceFlowRequest['status'],
+      expires_at: flow.expiresAt,
+      created_at: flow.createdAt,
+      user_id: flow.userId || undefined,
+      user_data: flow.user ? {
+        id: flow.user.id,
+        email: flow.user.email,
+        name: flow.user.name,
+        subscription_plan: flow.user.subscriptionPlan || 'free'
+      } : undefined
+    };
   } catch (error) {
     console.error('Failed to get device flow request:', error);
     return null;
@@ -50,7 +85,34 @@ export async function getDeviceFlowRequest(deviceCode: string) {
 // Update device flow request status
 export async function updateDeviceFlowRequest(deviceCode: string, updates: Partial<DeviceFlowRequest>) {
   try {
-    return await db.updateDeviceFlow(deviceCode, updates);
+    const data: any = {};
+
+    if (updates.status) data.status = updates.status;
+    if (updates.user_id) data.userId = updates.user_id;
+    if (updates.authorized_at) data.createdAt = updates.authorized_at; // No dedicated field, use createdAt
+
+    const flow = await prisma.deviceCode.update({
+      where: { deviceCode },
+      data,
+      include: { user: true }
+    });
+
+    return {
+      device_code: flow.deviceCode,
+      user_code: flow.userCode,
+      client_id: flow.clientId,
+      scope: flow.scope || '',
+      status: flow.status as DeviceFlowRequest['status'],
+      expires_at: flow.expiresAt,
+      created_at: flow.createdAt,
+      user_id: flow.userId || undefined,
+      user_data: flow.user ? {
+        id: flow.user.id,
+        email: flow.user.email,
+        name: flow.user.name,
+        subscription_plan: flow.user.subscriptionPlan || 'free'
+      } : undefined
+    };
   } catch (error) {
     console.error('Failed to update device flow request:', error);
     throw error;
@@ -58,9 +120,40 @@ export async function updateDeviceFlowRequest(deviceCode: string, updates: Parti
 }
 
 // Get device flow request by user code
-export async function getDeviceFlowRequestByUserCode(userCode: string) {
+export async function getDeviceFlowRequestByUserCode(userCode: string): Promise<DeviceFlowRequest | null> {
   try {
-    return await db.getDeviceFlowByUserCode(userCode);
+    // Handle both formats: with or without hyphen
+    const normalizedCode = userCode.replace('-', '');
+
+    const flow = await prisma.deviceCode.findFirst({
+      where: {
+        OR: [
+          { userCode: userCode },
+          { userCode: normalizedCode },
+          { userCode: { contains: normalizedCode } }
+        ]
+      },
+      include: { user: true }
+    });
+
+    if (!flow) return null;
+
+    return {
+      device_code: flow.deviceCode,
+      user_code: flow.userCode,
+      client_id: flow.clientId,
+      scope: flow.scope || '',
+      status: flow.status as DeviceFlowRequest['status'],
+      expires_at: flow.expiresAt,
+      created_at: flow.createdAt,
+      user_id: flow.userId || undefined,
+      user_data: flow.user ? {
+        id: flow.user.id,
+        email: flow.user.email,
+        name: flow.user.name,
+        subscription_plan: flow.user.subscriptionPlan || 'free'
+      } : undefined
+    };
   } catch (error) {
     console.error('Failed to get device flow request by user code:', error);
     return null;
@@ -70,11 +163,17 @@ export async function getDeviceFlowRequestByUserCode(userCode: string) {
 // Delete expired device flow requests
 export async function cleanupExpiredDeviceFlows() {
   try {
-    const now = new Date();
-    // Implementation would depend on your database schema
-    console.log('Cleaning up expired device flows older than:', now);
-    // This should be implemented as a background job
+    const result = await prisma.deviceCode.deleteMany({
+      where: {
+        expiresAt: {
+          lt: new Date()
+        }
+      }
+    });
+    console.log(`Cleaned up ${result.count} expired device flows`);
+    return result.count;
   } catch (error) {
     console.error('Failed to cleanup expired device flows:', error);
+    return 0;
   }
 }

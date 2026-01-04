@@ -195,6 +195,31 @@ export async function main() {
     process.exit(0);
   }
 
+  // ===== RECODER.XYZ AUTHENTICATION GUARD =====
+  // Require users to sign up/login before using recoder-code
+  const { RecoderAuthService } = await import('./services/RecoderAuthService.js');
+  const authService = new RecoderAuthService();
+
+  // Skip auth check for auth commands themselves
+  const isAuthCommand = process.argv.some(arg => arg === 'auth');
+
+  if (!isAuthCommand) {
+    const isAuthenticated = await authService.isAuthenticated();
+
+    if (!isAuthenticated) {
+      console.log('\n🚀 Welcome to Recoder Code!\n');
+      console.log('Please sign up to continue. It\'s free - no credit card required.');
+      console.log('Just bring your own API key (OpenRouter, OpenAI, Anthropic, etc.)\n');
+      console.log('🌐 https://recoder.xyz');
+      console.log('🐦 https://x.com/recoderxyz\n');
+      console.log('To authenticate, run:\n');
+      console.log('  recoder auth login\n');
+
+      process.exit(1);
+    }
+  }
+  // ===== END AUTH GUARD =====
+
   // Check if API key is configured before proceeding
   const { isApiKeyConfigured, checkAndSetupApiKey } = await import('./setup/apiKeySetup.js');
   if (!isApiKeyConfigured()) {

@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { webcontainer } from '~/lib/webcontainer';
 import type { WebContainer } from '@webcontainer/api';
+import { getCurrentUserId } from '~/lib/stores/user';
 
 export type RuntimeMode = 'webcontainer' | 'docker';
 
@@ -45,10 +46,12 @@ export function useRuntime(projectId: string) {
           }).catch(() => null);
 
           if (health?.ok) {
+            // Include userId for Claude Code token injection
+            const userId = getCurrentUserId();
             const res = await fetch(`${DOCKER_URL}/api/container`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ projectId }),
+              body: JSON.stringify({ projectId, userId }),
             });
 
             if (res.ok && !cancelled) {
