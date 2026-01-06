@@ -132,10 +132,14 @@ export default defineConfig((config) => {
     server: {
       port: 5173,
       strictPort: true,
+      host: true,
+      allowedHosts: ['web.recoder.xyz', 'localhost'],
       // Improve HMR reliability
       hmr: {
+        protocol: 'wss',
+        host: 'web.recoder.xyz',
+        port: 443,
         overlay: true,
-        port: 5173,
       },
       // Watch options to prevent issues
       watch: {

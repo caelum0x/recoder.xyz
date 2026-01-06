@@ -293,6 +293,7 @@ export const Preview = memo(() => {
               </div>
             )}
             <iframe
+              credentialless
               key={retryCount} // Force re-render on retry
               ref={iframeRef}
               className="border-none w-full h-full bg-white"
