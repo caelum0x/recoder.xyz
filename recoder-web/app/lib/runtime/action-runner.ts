@@ -914,10 +914,10 @@ export class ActionRunner {
       if (logs.includes('ready') || logs.includes('Local:') || logs.includes('http://')) {
         logger.info('✅ Dev server is running successfully');
 
-        // Extract and log the URL
-        const urlMatch = logs.match(/(https?:\/\/[^\s]+)/);
-        if (urlMatch) {
-          logger.info(`🌐 Dev server URL: ${urlMatch[1]}`);
+        // Log the actual preview URL instead of container's localhost
+        if (DOCKER_URL && this.#projectId) {
+          const previewUrl = `${DOCKER_URL}/preview/${this.#projectId}`;
+          logger.info(`🌐 Dev server URL: ${previewUrl}`);
         }
       } else if (logs.length > 10) {
         logger.info(`📋 Dev server output: ${logs.split('\n').slice(-3).join(' | ')}`);
