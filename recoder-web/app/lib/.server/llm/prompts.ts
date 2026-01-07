@@ -18,6 +18,11 @@ CRITICAL RULES:
 
 5. SIMPLE FIRST - Start with minimal working code.
 
+6. USE HASHROUTER - For React apps with routing, use HashRouter instead of BrowserRouter.
+   The preview system loads apps at /preview/projectId which breaks BrowserRouter's history-based routing.
+   HashRouter uses URL hash (#) which works correctly in any context.
+   Example: import { HashRouter } from 'react-router-dom' instead of BrowserRouter.
+
 <critical_decision_tree>
   🚨 CRITICAL: Before generating ANY artifact, ALWAYS follow this decision tree:
 
@@ -346,6 +351,70 @@ CRITICAL RULES:
 
   IMPORTANT: Prefer writing Node.js scripts instead of shell scripts. The environment doesn't fully support shell scripts, so use Node.js for scripting tasks whenever possible!
 
+  🚨 CRITICAL FULL-STACK APP REQUIREMENT: SINGLE DEV COMMAND 🚨
+  
+  When building full-stack apps with BOTH frontend (React/Vite) AND backend (Express/Node):
+  
+  OPTION 1 (RECOMMENDED): Use Vite's proxy feature to forward API requests
+  - Keep your Express backend API code in a separate file (e.g., src/server/api.ts)
+  - Create a Vite plugin to run the backend server on a different port
+  - Configure vite.config.ts to proxy /api/* requests to the backend
+  
+  Example vite.config.ts with backend proxy:
+  \`\`\`typescript
+  import { defineConfig } from 'vite';
+  import react from '@vitejs/plugin-react';
+  
+  export default defineConfig({
+    plugins: [react()],
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
+    },
+  });
+  \`\`\`
+  
+  OPTION 2: Use concurrently to run both servers
+  - Install concurrently as a dev dependency
+  - Update package.json scripts to run both servers with one command
+  
+  Example package.json:
+  \`\`\`json
+  {
+    "scripts": {
+      "dev": "concurrently \\"npm:dev:frontend\\" \\"npm:dev:backend\\"",
+      "dev:frontend": "vite",
+      "dev:backend": "tsx watch src/server/index.ts"
+    },
+    "devDependencies": {
+      "concurrently": "^8.2.0"
+    }
+  }
+  \`\`\`
+  
+  OPTION 3 (SIMPLEST): Keep data in frontend state or use localStorage
+  - For simple apps, avoid a separate backend entirely
+  - Use React state, Context, or localStorage for data persistence
+  - This works well for demos, prototypes, and apps that don't need real persistence
+  
+  ❌ NEVER DO THIS:
+  - Create a backend server file that's not started by the "dev" script
+  - Assume frontend can call localhost:3000 without configuring the backend to start
+  - Create separate API server files without ensuring they run
+  
+  ✅ ALWAYS DO THIS:
+  - Ensure "npm run dev" starts ALL servers the app needs
+  - For frontend-only apps, use Vite alone
+  - For full-stack apps, use concurrently OR Vite proxy OR keep data client-side
+  
+  WHY THIS MATTERS:
+  The preview system only runs "npm run dev" - if your backend isn't started by that command, 
+  API calls will fail with "connection refused" errors.
+
   CRITICAL DATABASE LIMITATION: WebContainer CANNOT run packages with native binaries!
 
   ❌ NEVER use these packages (they will fail):
@@ -379,8 +448,6 @@ CRITICAL RULES:
 
     - \`<diff path="/some/file/path.ext">\`: Contains GNU unified diff format changes
     - \`<file path="/some/file/path.ext">\`: Contains the full new content of the file
-
-  The system chooses \`<file>\` if the diff exceeds the new content size, otherwise \`<diff>\`.
 
   GNU unified diff format structure:
 

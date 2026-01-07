@@ -496,31 +496,13 @@ export class ActionRunner {
       }
       
       if (!packageJsonExists) {
-        logger.warn('⚠️ No package.json detected. Auto-creating minimal package.json...');
+        logger.warn('⚠️ No package.json detected. Auto-detecting framework...');
         
-        // Auto-create minimal package.json
-        const minimalPackageJson = {
-          name: "project",
-          version: "1.0.0",
-          type: "module",
-          scripts: {
-            dev: "vite",
-            build: "vite build",
-            preview: "vite preview",
-            start: "vite"
-          },
-          dependencies: {
-            react: "^18.3.1",
-            "react-dom": "^18.3.1"
-          },
-          devDependencies: {
-            "@types/react": "^18.3.0",
-            "@types/react-dom": "^18.3.0",
-            "@vitejs/plugin-react": "^4.3.0",
-            typescript: "^5.5.0",
-            vite: "^5.4.0"
-          }
-        };
+        // Detect framework based on file structure
+        const framework = await this.#detectFramework();
+        logger.info(`🔍 Detected framework: ${framework}`);
+        
+        const minimalPackageJson = this.#generatePackageJson(framework);
         
         // Write package.json directly (don't use #executeAction which expects actionId string)
         const packageJsonContent = JSON.stringify(minimalPackageJson, null, 2);
@@ -536,7 +518,7 @@ export class ActionRunner {
         }
         
         this.#packageJsonCreated = true;
-        logger.info('✅ Created minimal package.json with Vite + React');
+        logger.info(`✅ Created package.json for ${framework}`);
       }
     }
 
@@ -1047,6 +1029,97 @@ export class ActionRunner {
       return { valid: true, missingFiles: [] };
     }
   }
+
+  /**
+   * Auto-detect and start backend servers if the AI created one but didn't configure concurrently.
+   * This is a fallback for full-stack apps where the AI creates a separate Express/Node backend.
+   */
+  async #autoStartBackendIfNeeded(): Promise<void> {
+    try {
+      // Look for common backend server entry points
+      const serverPaths = [
+        'src/server/index.ts',
+        'src/server/index.js',
+        'server/index.ts',
+        'server/index.js',
+        'src/api/server.ts',
+        'src/api/server.js',
+        'backend/index.ts',
+        'backend/index.js',
+        'server.ts',
+        'server.js',
+      ];
+
+      let backendFile: string | null = null;
+      
+      for (const path of serverPaths) {
+        const exists = await this.#dockerExec(`test -f "/workspace/${path}" && echo "exists" || echo "missing"`);
+        if (exists.includes('exists')) {
+          backendFile = path;
+          break;
+        }
+      }
+
+      if (!backendFile) {
+        // No backend file found, that's fine - frontend-only app
+        return;
+      }
+
+      logger.info(`🔍 Found potential backend server: ${backendFile}`);
+
+      // Check if package.json already runs the backend (via concurrently or similar)
+      const packageJson = await this.#dockerExec('cat /workspace/package.json 2>/dev/null');
+      
+      if (packageJson.includes('concurrently') || 
+          packageJson.includes('dev:backend') || 
+          packageJson.includes('server') && packageJson.includes('"dev"')) {
+        logger.info('✅ Backend appears to be started by npm run dev (concurrently or similar detected)');
+        return;
+      }
+
+      // Check the backend file to determine how to run it
+      const backendContent = await this.#dockerExec(`cat "/workspace/${backendFile}" 2>/dev/null`);
+      
+      // Skip if it's just exporting functions (not a standalone server)
+      if (!backendContent.includes('.listen(') && !backendContent.includes('createServer')) {
+        logger.info('📦 Backend file exports API but does not start a server - skipping');
+        return;
+      }
+
+      // Determine the command to run the backend
+      const isTsx = backendFile.endsWith('.ts');
+      const hasTsx = packageJson.includes('"tsx"');
+      const hasTsNode = packageJson.includes('"ts-node"');
+      
+      let backendCommand: string;
+      
+      if (isTsx && hasTsx) {
+        backendCommand = `npx tsx /workspace/${backendFile}`;
+      } else if (isTsx && hasTsNode) {
+        backendCommand = `npx ts-node /workspace/${backendFile}`;
+      } else if (isTsx) {
+        // No TypeScript runner, try to install tsx and run
+        logger.info('📦 Installing tsx to run TypeScript backend...');
+        await this.#dockerExec('npm install --save-dev tsx --no-audit --no-fund');
+        backendCommand = `npx tsx /workspace/${backendFile}`;
+      } else {
+        // JavaScript file
+        backendCommand = `node /workspace/${backendFile}`;
+      }
+
+      logger.info(`🚀 Auto-starting backend server: ${backendCommand}`);
+      
+      // Run backend in background (don't block)
+      await this.#dockerExec(backendCommand, '/workspace', true);
+      
+      logger.info(`✅ Backend server started on port 3000 (if configured)`);
+      logger.info(`💡 Frontend API calls to /api/* should now work`);
+      
+    } catch (error) {
+      // Don't fail if backend auto-start fails - it's a best-effort feature
+      logger.warn('⚠️ Could not auto-start backend server:', error);
+    }
+  }
   
   #scheduleAutoInstall() {
     if (this.#autoInstallTimer) {
@@ -1167,6 +1240,10 @@ export class ActionRunner {
       // Force Vite to use port 5173 (mapped to host 10001) and bind to all interfaces
       await this.#dockerExec('npm run dev -- --port 5173 --host 0.0.0.0', '/workspace', true);
       logger.info('✅ Dev server started in background');
+
+      // 🔧 AUTO-DETECT BACKEND: Check if there's a separate backend server that needs to be started
+      // This handles cases where the AI creates a backend but doesn't use concurrently
+      await this.#autoStartBackendIfNeeded();
 
       // Check health in background (non-blocking)
       setTimeout(() => this.#checkDevServerHealth(), 2000);
@@ -1402,6 +1479,212 @@ export class ActionRunner {
     } catch (error) {
       logger.error(`Search failed:`, error);
       action.content = '';
+    }
+  }
+
+  async #detectFramework(): Promise<string> {
+    try {
+      const files = await this.#dockerExec('find . -maxdepth 3 -type f -o -type d 2>/dev/null');
+      const fileList = files.toLowerCase();
+
+      // Next.js detection
+      if (fileList.includes('app/page.') || fileList.includes('app/layout.') || fileList.includes('next.config')) {
+        return 'nextjs';
+      }
+
+      // Remix detection
+      if (fileList.includes('remix.config')) {
+        return 'remix';
+      }
+
+      // Astro detection
+      if (fileList.includes('astro.config')) {
+        return 'astro';
+      }
+
+      // SvelteKit detection
+      if (fileList.includes('svelte.config')) {
+        return 'sveltekit';
+      }
+
+      // Vue detection (Nuxt or plain Vue)
+      if (fileList.includes('nuxt.config')) {
+        return 'nuxt';
+      }
+
+      // Angular detection
+      if (fileList.includes('angular.json')) {
+        return 'angular';
+      }
+
+      // Python/Flask/Django detection
+      if (fileList.includes('requirements.txt') || fileList.includes('pyproject.toml')) {
+        if (fileList.includes('manage.py')) return 'django';
+        if (fileList.includes('app.py') || fileList.includes('wsgi.py')) return 'flask';
+        return 'python';
+      }
+
+      // Go detection
+      if (fileList.includes('go.mod')) {
+        return 'go';
+      }
+
+      // Rust detection
+      if (fileList.includes('cargo.toml')) {
+        return 'rust';
+      }
+
+      // Default to Vite for React/Vue/Svelte
+      return 'vite';
+    } catch (e) {
+      return 'vite';
+    }
+  }
+
+  #generatePackageJson(framework: string): any {
+    const base = {
+      name: "project",
+      version: "1.0.0"
+    };
+
+    switch (framework) {
+      case 'nextjs':
+        return {
+          ...base,
+          scripts: {
+            dev: "next dev",
+            build: "next build",
+            start: "next start"
+          },
+          dependencies: {
+            next: "^14.2.0",
+            react: "^18.3.1",
+            "react-dom": "^18.3.1"
+          },
+          devDependencies: {
+            "@types/node": "^20.0.0",
+            "@types/react": "^18.3.0",
+            "@types/react-dom": "^18.3.0",
+            typescript: "^5.5.0"
+          }
+        };
+
+      case 'remix':
+        return {
+          ...base,
+          scripts: {
+            dev: "remix dev",
+            build: "remix build",
+            start: "remix-serve build"
+          },
+          dependencies: {
+            "@remix-run/node": "^2.0.0",
+            "@remix-run/react": "^2.0.0",
+            "@remix-run/serve": "^2.0.0",
+            react: "^18.3.1",
+            "react-dom": "^18.3.1"
+          },
+          devDependencies: {
+            "@remix-run/dev": "^2.0.0",
+            typescript: "^5.5.0"
+          }
+        };
+
+      case 'astro':
+        return {
+          ...base,
+          type: "module",
+          scripts: {
+            dev: "astro dev",
+            build: "astro build",
+            preview: "astro preview"
+          },
+          dependencies: {
+            astro: "^4.0.0"
+          }
+        };
+
+      case 'sveltekit':
+        return {
+          ...base,
+          type: "module",
+          scripts: {
+            dev: "vite dev",
+            build: "vite build",
+            preview: "vite preview"
+          },
+          dependencies: {
+            "@sveltejs/kit": "^2.0.0"
+          },
+          devDependencies: {
+            "@sveltejs/adapter-auto": "^3.0.0",
+            "@sveltejs/vite-plugin-svelte": "^3.0.0",
+            svelte: "^4.0.0",
+            vite: "^5.4.0"
+          }
+        };
+
+      case 'nuxt':
+        return {
+          ...base,
+          type: "module",
+          scripts: {
+            dev: "nuxt dev",
+            build: "nuxt build",
+            preview: "nuxt preview"
+          },
+          dependencies: {
+            nuxt: "^3.0.0",
+            vue: "^3.4.0"
+          }
+        };
+
+      case 'angular':
+        return {
+          ...base,
+          scripts: {
+            dev: "ng serve",
+            build: "ng build",
+            start: "ng serve"
+          },
+          dependencies: {
+            "@angular/animations": "^17.0.0",
+            "@angular/common": "^17.0.0",
+            "@angular/compiler": "^17.0.0",
+            "@angular/core": "^17.0.0",
+            "@angular/platform-browser": "^17.0.0",
+            "@angular/platform-browser-dynamic": "^17.0.0"
+          },
+          devDependencies: {
+            "@angular-devkit/build-angular": "^17.0.0",
+            "@angular/cli": "^17.0.0",
+            "@angular/compiler-cli": "^17.0.0",
+            typescript: "^5.2.0"
+          }
+        };
+
+      case 'vite':
+      default:
+        return {
+          ...base,
+          type: "module",
+          scripts: {
+            dev: "vite",
+            build: "vite build",
+            preview: "vite preview"
+          },
+          dependencies: {
+            react: "^18.3.1",
+            "react-dom": "^18.3.1"
+          },
+          devDependencies: {
+            "@types/react": "^18.3.0",
+            "@types/react-dom": "^18.3.0",
+            "@vitejs/plugin-react": "^4.3.0",
+            typescript: "^5.5.0",
+            vite: "^5.4.0"
+          }
+        };
     }
   }
 }
