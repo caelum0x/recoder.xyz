@@ -63,7 +63,8 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as { success: boolean; error?: string; data?: any };
+
       if (result.success) {
         setDetection(result.data);
         setSelectedPlatform(result.data.recommendedPlatform);
@@ -111,7 +112,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as { success: boolean; error?: string; data?: any };
 
       if (result.success) {
         setDeploymentResult(result.data);

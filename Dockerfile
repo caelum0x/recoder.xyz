@@ -22,9 +22,11 @@ COPY packages/cli/package*.json ./packages/cli/
 COPY packages/web/package*.json ./packages/web/
 COPY packages/shared/package*.json ./packages/shared/
 COPY backend/package*.json ./backend/
+COPY pnpm-lock.yaml ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies using pnpm (cached via /pnpm-store)
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN pnpm install --frozen-lockfile --prod --store=/pnpm-store
 
 #====================================
 # Stage 2: Build CLI
@@ -169,8 +171,10 @@ CMD ["node", "dist/server.js"]
 #====================================
 FROM base AS development
 
-# Install dev dependencies
-RUN npm ci
+# Install dev dependencies via pnpm (use pnpm store for caching)
+COPY pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN pnpm install --frozen-lockfile --store=/pnpm-store
 
 # Copy all source code
 COPY . .
@@ -183,5 +187,8 @@ RUN cd backend && npm run build || true
 
 EXPOSE 3000 3001 8080
 
-# Development startup script
-CMD ["npm", "run", "dev:all"]
+# Development entrypoint: ensure deps are present, then run dev tasks
+COPY scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
+RUN chmod +x ./scripts/docker-entrypoint.sh || true
+ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
+CMD ["pnpm", "run", "dev:all"]

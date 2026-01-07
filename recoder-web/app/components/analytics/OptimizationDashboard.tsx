@@ -44,7 +44,7 @@ export function OptimizationDashboard() {
   const fetchAnalytics = async () => {
     try {
       const response = await fetch(`/api/analytics?range=${timeRange}`);
-      const data = await response.json();
+      const data = await response.json() as { stats: typeof stats; metrics: typeof metrics };
       setStats(data.stats);
       setMetrics(data.metrics);
       setLoading(false);

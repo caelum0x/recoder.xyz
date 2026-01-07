@@ -20,6 +20,13 @@ export interface UseChatHistoryOptions {
   limit?: number;
 }
 
+interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  claimedCount?: number;
+}
+
 export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHistoryOptions = {}) {
   const [history, setHistory] = useState<ChatHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,10 +51,10 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
       params.append('limit', limit.toString());
 
       const response = await fetch(`/api/chat-history?${params.toString()}`);
-      const data = await response.json();
+      const data = await response.json() as ApiResponse<ChatHistoryItem[]>;
 
       if (data.success) {
-        setHistory(data.data);
+        setHistory(data.data || []);
       } else {
         throw new Error(data.error || 'Failed to load history');
       }
@@ -80,7 +87,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as ApiResponse;
 
       if (result.success) {
         // Reload history to get updated list
@@ -106,7 +113,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         body: JSON.stringify({ sessionId }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as ApiResponse;
 
       if (result.success) {
         // Reload history to get updated list
@@ -134,7 +141,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as ApiResponse;
 
       if (result.success) {
         console.log(`Claimed ${result.claimedCount} sessions`);

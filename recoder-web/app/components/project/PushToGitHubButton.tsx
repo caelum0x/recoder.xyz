@@ -10,7 +10,6 @@ import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Textarea } from '~/components/ui/textarea';
-import { Loader2, Github, ExternalLink } from 'lucide-react';
 
 interface PushToGitHubButtonProps {
   projectId: string;
@@ -100,7 +99,7 @@ export function PushToGitHubButton({
         className={className}
         title="Push project to GitHub repository"
       >
-        <Github size={iconSize} />
+        <span className="i-ph:github-logo" style={{ width: iconSize, height: iconSize }} />
         {showText && <span className="ml-1.5">Push to GitHub</span>}
       </Button>
 
@@ -108,7 +107,7 @@ export function PushToGitHubButton({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Github size={20} />
+              <span className="i-ph:github-logo" style={{ width: 20, height: 20 }} />
               Push to GitHub
             </DialogTitle>
           </DialogHeader>
@@ -161,12 +160,12 @@ export function PushToGitHubButton({
                 >
                   {isPushing ? (
                     <>
-                      <Loader2 size={16} className="animate-spin mr-2" />
+                      <span className="i-ph:spinner w-4 h-4 animate-spin mr-2" />
                       Creating...
                     </>
                   ) : (
                     <>
-                      <Github size={16} className="mr-2" />
+                      <span className="i-ph:github-logo w-4 h-4 mr-2" />
                       Create & Push
                     </>
                   )}
@@ -186,7 +185,7 @@ export function PushToGitHubButton({
                   className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 underline inline-flex items-center gap-1"
                 >
                   View Repository
-                  <ExternalLink size={14} />
+                  <span className="i-ph:arrow-square-out w-3.5 h-3.5" />
                 </a>
               </div>
               

@@ -32,7 +32,7 @@ export async function newShellProcess(terminal: ITerminal, projectId: string) {
     terminal.write('\r\n\x1b[33mTerminal disconnected\x1b[0m\r\n');
   };
 
-  terminal.onData((data) => {
+  const dataDisposable = terminal.onData((data) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(data);
     }
@@ -41,6 +41,9 @@ export async function newShellProcess(terminal: ITerminal, projectId: string) {
   await ready.promise;
 
   return {
-    kill: () => ws.close(),
+    kill: () => {
+      dataDisposable.dispose();
+      ws.close();
+    },
   };
 }

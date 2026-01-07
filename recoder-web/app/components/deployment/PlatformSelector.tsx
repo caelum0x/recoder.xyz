@@ -53,7 +53,7 @@ export function PlatformSelector({ selected, recommended, onSelect }: PlatformSe
             selected === platform.id
               ? 'border-green-500 bg-green-500/10'
               : 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2',
-            !platform.supported && 'opacity-50 cursor-not-allowed'
+            !platform.supported ? 'opacity-50 cursor-not-allowed' : undefined
           )}
         >
           <div className="flex items-start gap-3">

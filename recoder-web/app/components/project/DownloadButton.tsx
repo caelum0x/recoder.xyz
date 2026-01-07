@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
 import { Button } from '~/components/ui/button';
-import { Loader2, Download, FileArchive } from 'lucide-react';
 
 interface DownloadButtonProps {
   projectId: string;
@@ -89,9 +88,9 @@ export function DownloadButton({
       title="Download project as ZIP file"
     >
       {isDownloading ? (
-        <Loader2 size={iconSize} className="animate-spin" />
+        <span className={`i-ph:spinner animate-spin`} style={{ width: iconSize, height: iconSize }} />
       ) : (
-        <Download size={iconSize} />
+        <span className="i-ph:download-simple" style={{ width: iconSize, height: iconSize }} />
       )}
       {showText && (
         <span className="ml-1.5">

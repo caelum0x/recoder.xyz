@@ -51,14 +51,14 @@ export function PushToGitHubButton({ projectId, className }: PushToGitHubButtonP
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as { error?: string };
         throw new Error(error.error || 'Push failed');
       }
 
-      const { repoUrl, repoName: fullRepoName } = await response.json();
+      const result = await response.json() as { repoUrl: string; repoName: string };
       
-      alert(`Successfully pushed to ${fullRepoName}!`);
-      window.open(repoUrl, '_blank');
+      alert(`Successfully pushed to ${result.repoName}!`);
+      window.open(result.repoUrl, '_blank');
       
       setIsOpen(false);
       setRepoName('');
@@ -74,13 +74,15 @@ export function PushToGitHubButton({ projectId, className }: PushToGitHubButtonP
   return (
     <>
       <IconButton
-        icon="i-ph:git-branch"
         title="Push to GitHub"
         onClick={() => setIsOpen(true)}
         disabled={!projectId}
         className={className}
       >
-        Push to GitHub
+        <span className="flex items-center gap-1">
+          <span className="i-ph:git-branch" />
+          Push to GitHub
+        </span>
       </IconButton>
 
       {isOpen && (

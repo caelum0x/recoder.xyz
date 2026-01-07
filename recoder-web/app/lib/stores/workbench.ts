@@ -44,6 +44,7 @@ export class WorkbenchStore {
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #currentProjectId: string | null = null;
+  #isRestoredChat: boolean = false;  // Track if this is a restored past chat
 
   // ✅ P1: Build progress feedback
   buildStatus: WritableAtom<BuildStatus> = import.meta.hot?.data.buildStatus ?? atom({
@@ -60,6 +61,28 @@ export class WorkbenchStore {
       import.meta.hot.data.currentView = this.currentView;
       import.meta.hot.data.buildStatus = this.buildStatus;
     }
+  }
+
+  /**
+   * Mark this session as a restored past chat.
+   * This tells ActionRunner to not auto-install since we handle it separately.
+   */
+  markAsRestoredChat() {
+    this.#isRestoredChat = true;
+  }
+
+  /**
+   * Reset restored chat flag - call this when starting a new conversation
+   */
+  resetRestoredChatFlag() {
+    this.#isRestoredChat = false;
+  }
+
+  /**
+   * Check if this session is a restored past chat.
+   */
+  isRestoredChat(): boolean {
+    return this.#isRestoredChat;
   }
 
   get previews() {
@@ -104,7 +127,7 @@ export class WorkbenchStore {
   async setProjectId(projectId: string) {
     this.#currentProjectId = projectId;
     await this.#terminalStore.setProjectId(projectId);
-    this.#previewsStore.setProjectId(projectId);
+    await this.#previewsStore.setProjectId(projectId);
   }
 
   toggleTerminal(value?: boolean) {
@@ -262,11 +285,18 @@ export class WorkbenchStore {
       this.artifactIdList.push(messageId);
     }
 
+    const runner = new ActionRunner(this.#currentProjectId || undefined);
+    
+    // If this is a restored past chat, mark the runner to disable auto-install
+    if (this.#isRestoredChat) {
+      runner.markAsRestoredChat();
+    }
+
     this.artifacts.setKey(messageId, {
       id,
       title,
       closed: false,
-      runner: new ActionRunner(this.#currentProjectId || undefined),
+      runner,
     });
   }
 

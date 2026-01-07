@@ -50,7 +50,7 @@ export function ChatHistoryList() {
         throw new Error('Failed to load chat history');
       }
 
-      const result = await response.json();
+      const result = await response.json() as { success: boolean; data?: any[] };
 
       if (result.success && result.data) {
         // Infer source from metadata or projectId

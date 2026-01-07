@@ -18,8 +18,14 @@ export const Preview = memo(() => {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logs, setLogs] = useState<string>('');
+  const [isFetchingLogs, setIsFetchingLogs] = useState(false);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const healthTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const healthPollInterval = 5000; // ms
   const maxRetries = 10; // 10 retries total
   const firstLoadTimeout = 45000; // First attempt: 45 seconds (matches backend health check)
   const retryLoadTimeout = 10000; // Subsequent attempts: 10 seconds
@@ -33,6 +39,9 @@ export const Preview = memo(() => {
       if (loadTimeoutRef.current) {
         clearTimeout(loadTimeoutRef.current);
       }
+      if (healthTimerRef.current) {
+        clearTimeout(healthTimerRef.current);
+      }
     };
   }, []);
 
@@ -45,6 +54,12 @@ export const Preview = memo(() => {
       clearTimeout(loadTimeoutRef.current);
       loadTimeoutRef.current = null;
     }
+    // Clear health polling when iframe successfully loads
+    if (healthTimerRef.current) {
+      clearTimeout(healthTimerRef.current);
+      healthTimerRef.current = null;
+    }
+    setIsCheckingHealth(false);
 
     setIsLoading(false);
     setPreviewError(null);
@@ -52,8 +67,8 @@ export const Preview = memo(() => {
   }, []);
 
   // Handle iframe error or timeout with retry logic
-  const handleIframeError = useCallback((reason = 'error') => {
-    console.warn(`⚠️ [Preview] Iframe load ${reason} (attempt ${retryCount + 1}/${maxRetries})`);
+  const handleIframeError = useCallback((reason: any = 'error') => {
+    console.warn(`⚠️ [Preview] Iframe load ${typeof reason === 'string' ? reason : 'error'} (attempt ${retryCount + 1}/${maxRetries})`);
 
     // Clear load timeout
     if (loadTimeoutRef.current) {
@@ -216,6 +231,133 @@ export const Preview = memo(() => {
     }
   };
 
+  // Resolve projectId helper (shared by logs and health checks)
+  const resolveProjectId = useCallback((): string | undefined => {
+    if (!activePreview) return undefined;
+    let pid: string | undefined = (activePreview as any).projectId;
+    if (!pid && activePreview.baseUrl) {
+      try {
+        const u = new URL(activePreview.baseUrl);
+        const parts = u.pathname.split('/').filter(Boolean);
+        const previewIndex = parts.indexOf('preview');
+        if (previewIndex >= 0 && parts.length > previewIndex + 1) {
+          pid = parts[previewIndex + 1];
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (!pid || pid === 'undefined' || pid === 'null') return undefined;
+    return pid;
+  }, [activePreview]);
+
+  const fetchPreviewHealth = useCallback(async () => {
+    const pid = resolveProjectId();
+    if (!pid) return false;
+
+    try {
+      const resp = await fetch(`/api/preview/${encodeURIComponent(pid)}/health`);
+      if (!resp.ok) return false;
+      const json = await resp.json().catch(() => ({}));
+      // If any port is responding, consider healthy
+      if (Array.isArray(json.ports)) {
+        return json.ports.some((p: any) => p.responding === true);
+      }
+      return false;
+    } catch (err) {
+      return false;
+    }
+  }, [resolveProjectId]);
+
+  // Poll health endpoint when previewError is present to perform heartbeat/reconnect
+  useEffect(() => {
+    let cancelled = false;
+    const startPolling = async () => {
+      if (!activePreview || !previewError) return;
+      setIsCheckingHealth(true);
+
+      const healthy = await fetchPreviewHealth();
+      if (cancelled) return;
+
+      if (healthy) {
+        console.log('💓 [Preview] Healthy again; reloading iframe');
+        setPreviewError(null);
+        setRetryCount(0);
+        setIsLoading(true);
+        if (iframeRef.current && activePreview) {
+          iframeRef.current.src = activePreview.baseUrl;
+        }
+        setIsCheckingHealth(false);
+        if (healthTimerRef.current) {
+          clearTimeout(healthTimerRef.current);
+          healthTimerRef.current = null;
+        }
+        return;
+      }
+
+      // schedule next poll
+      if (!cancelled) {
+        healthTimerRef.current = setTimeout(() => startPolling(), healthPollInterval);
+      }
+    };
+
+    if (previewError && activePreview) {
+      // start initial poll immediately
+      startPolling();
+    }
+
+    return () => {
+      cancelled = true;
+      if (healthTimerRef.current) {
+        clearTimeout(healthTimerRef.current);
+        healthTimerRef.current = null;
+      }
+      setIsCheckingHealth(false);
+    };
+  }, [previewError, activePreview, fetchPreviewHealth]);
+
+  const fetchLogs = useCallback(async (tail = 200) => {
+    if (!activePreview) return;
+    setIsFetchingLogs(true);
+    try {
+      // Resolve projectId robustly: prefer explicit projectId, fall back to parsing from baseUrl
+      let pid: string | undefined = (activePreview as any).projectId;
+      if (!pid && activePreview.baseUrl) {
+        try {
+          const u = new URL(activePreview.baseUrl);
+          const parts = u.pathname.split('/').filter(Boolean);
+          // expecting /preview/:projectId
+          const previewIndex = parts.indexOf('preview');
+          if (previewIndex >= 0 && parts.length > previewIndex + 1) {
+            pid = parts[previewIndex + 1];
+          }
+        } catch (e) {
+          // ignore URL parse errors
+        }
+      }
+
+      // Treat literal 'undefined' or 'null' as invalid
+      if (!pid || pid === 'undefined' || pid === 'null') {
+        setLogs('Failed to determine project id for logs');
+        setIsFetchingLogs(false);
+        return;
+      }
+
+      const resp = await fetch(`/api/preview/${encodeURIComponent(pid)}/logs?tail=${tail}`);
+      if (!resp.ok) {
+        const json = await resp.json().catch(() => ({}));
+        setLogs(`Failed to fetch logs: ${resp.status} ${resp.statusText}\n${JSON.stringify(json)}`);
+      } else {
+        const json = await resp.json();
+        setLogs(json.logs || '');
+      }
+    } catch (err) {
+      setLogs(`Error fetching logs: ${String(err)}`);
+    } finally {
+      setIsFetchingLogs(false);
+    }
+  }, [activePreview]);
+
   return (
     <div className="w-full h-full flex flex-col">
       {isPortDropdownOpen && (
@@ -263,19 +405,30 @@ export const Preview = memo(() => {
             <div className="text-center p-6">
               <div className="text-red-500 text-lg mb-2"><span className="i-ph:warning" /> Preview Error</div>
               <div className="text-gray-600">{previewError}</div>
-              <button
-                onClick={() => {
-                  setRetryCount(0);
-                  setPreviewError(null);
-                  setIsLoading(true);
-                  if (iframeRef.current && activePreview) {
-                    iframeRef.current.src = activePreview.baseUrl;
-                  }
-                }}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Retry
-              </button>
+              <div className="flex gap-2 justify-center mt-4">
+                <button
+                  onClick={() => {
+                    setRetryCount(0);
+                    setPreviewError(null);
+                    setIsLoading(true);
+                    if (iframeRef.current && activePreview) {
+                      iframeRef.current.src = activePreview.baseUrl;
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLogsModal(true);
+                    fetchLogs();
+                  }}
+                  className="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                >
+                  Tail logs
+                </button>
+              </div>
             </div>
           </div>
         ) : activePreview ? (
@@ -289,6 +442,17 @@ export const Preview = memo(() => {
                     {retryCount > 0 ? `Retry ${retryCount}/${maxRetries}` : 'Building your project...'}
                   </div>
                   <div className="text-gray-400 text-xs mt-2">This usually takes 10-30 seconds</div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        setShowLogsModal(true);
+                        fetchLogs();
+                      }}
+                      className="px-3 py-1 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                    >
+                      Tail logs
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -313,6 +477,25 @@ export const Preview = memo(() => {
           </div>
         )}
       </div>
+
+      {/* Logs modal */}
+      {showLogsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-lg w-3/4 max-h-3/4 overflow-auto p-4">
+            <div className="flex justify-between items-center mb-2">
+              <div className="font-semibold">Preview Logs</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => fetchLogs(200)}
+                  className="px-2 py-1 bg-gray-100 rounded"
+                >Refresh</button>
+                <button onClick={() => setShowLogsModal(false)} className="px-2 py-1 bg-red-100 rounded">Close</button>
+              </div>
+            </div>
+            <pre className="text-xs whitespace-pre-wrap bg-gray-100 p-2 rounded">{isFetchingLogs ? 'Loading logs...' : logs}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
