@@ -4,7 +4,11 @@
   "description": "Recoder Code - AI-powered coding assistant CLI",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/caelum0x/recoder-code.git"
+    "url": "git+https://github.com/recoderxyz/recoder-code.git"
+  },
+  "homepage": "https://github.com/recoderxyz/recoder-code#readme",
+  "bugs": {
+    "url": "https://github.com/recoderxyz/recoder-code/issues"
   },
   "type": "module",
   "main": "dist/index.js",
@@ -29,7 +33,7 @@
     "src/postinstall.cjs"
   ],
   "config": {
-    "sandboxImageUri": "ghcr.io/caelum0x/recoder-code:2.4.1"
+    "sandboxImageUri": "ghcr.io/recoderxyz/recoder-code:2.4.1"
   },
   "dependencies": {
     "@google/genai": "1.9.0",
