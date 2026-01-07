@@ -1,7 +1,67 @@
 # 🎯 Recoder.xyz - Technical Status & Competitor Analysis
 
-**Last Updated**: January 6 2026
+**Last Updated**: January 8, 2026
 **Goal**: Feature parity with Replit, Cursor, and Bolt.new + Terminal CLI Integration
+
+---
+
+## 🚨 CRITICAL PRIORITIES (This Week)
+
+### 1. Terminal System Broken
+**Problem**: Terminals are stuck/unusable - can't open fresh terminal sessions.
+
+**Current Issues**:
+- Terminal 1 shows "Waiting for project initialization..." then disconnects repeatedly
+- Terminal 2 shows dev server logs (Vite output) - should be in background
+- Terminal 3 opens same as Terminal 2 - not a fresh shell
+- Users can't get clean terminal to run commands
+- Dev server output clutters terminal instead of running in background
+
+**Required Fixes**:
+- Each new terminal should open fresh bash/zsh shell
+- Dev server should run in background (detached process)
+- Terminal tabs should be independent sessions
+- Fix WebSocket reconnection loop causing disconnects
+- Add "Clear Terminal" and "Kill Process" buttons
+- Show dev server logs in separate "Logs" panel, not terminal
+
+### 2. Error Detection & Auto-Fix Loop
+**Problem**: When AI generates code with errors that block `npm run dev`, users see blank preview with no clear way to fix.
+
+**Required Features**:
+- Detect build/runtime errors from dev server logs
+- Show errors prominently in UI (error panel at top of preview)
+- "Fix Errors" button that sends errors + code context back to AI
+- AI automatically fixes and regenerates problematic files
+- Retry dev server after fixes applied
+- Loop until errors resolved or max retries reached
+
+**Implementation**:
+- Parse stderr/stdout from dev server for error patterns
+- Extract file paths, line numbers, error messages
+- Create error panel component above preview iframe
+- Add "Fix with AI" button that triggers error fix flow
+- Send error context to AI with instruction to fix
+- Apply fixes and restart dev server automatically
+
+### 3. File-Level Error Indicators
+**Problem**: Users don't see which files have errors - no red underlines or error markers in file tree.
+
+**Required Features**:
+- Show error count badge on files with problems
+- Red underline/highlight in Monaco editor for errors
+- Error list panel showing all errors across files
+- Click error to jump to file + line
+- Real-time error detection as user types
+- TypeScript/ESLint integration for static analysis
+
+**Implementation**:
+- Integrate Monaco's built-in diagnostics system
+- Add TypeScript language server for type checking
+- Parse build errors and map to file paths
+- Update file tree to show error badges
+- Create error list panel component
+- Add click handlers to navigate to errors
 
 ---
 
@@ -15,7 +75,8 @@
 - Project creation from starter templates
 - Chat history stored in PostgreSQL
 - Authentication via Better Auth
-- claude code works as with claude command and npm installation
+- **Claude Code CLI works** - users can run `claude` command in terminal
+- **Need to add**: recoder-code CLI integration in terminal
 
 ### Infrastructure
 - Docker backend running on port 3100 for container orchestration
