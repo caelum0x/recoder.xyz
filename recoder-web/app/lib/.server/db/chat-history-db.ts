@@ -431,7 +431,7 @@ export class ChatHistoryDB {
       id: msg.id,
       role: msg.role,
       content: msg.content,
-      createdAt: msg.created_at,
+      createdAt: (msg as any).createdAt || (msg as any).created_at,
     }));
 
     // Extract file snapshot from metadata

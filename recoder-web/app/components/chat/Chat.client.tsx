@@ -207,6 +207,11 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     return () => clearInterval(interval);
   }, []);
 
+  // 🔧 FIX: Track pending save to ensure AI responses are captured
+  const pendingSaveRef = useRef<NodeJS.Timeout | null>(null);
+  // 🔧 FIX: Use ref to track latest messages for the onFinish callback
+  const messagesRef = useRef<Message[]>([]);
+  
   const { messages, isLoading, input, handleInputChange, setInput, stop, append } = useSimpleChat({
     api: '/api/chat',
     body: {
@@ -230,15 +235,45 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         }
       });
     },
-    onFinish: () => {
+    onFinish: (assistantMessage) => {
       logger.debug('Finished streaming');
-      // console.log('✅ Streaming finished');
+      // 🔧 FIX: Immediately trigger save after AI response completes
+      // Use messagesRef to get the latest messages including the completed assistant message
+      if (pendingSaveRef.current) {
+        clearTimeout(pendingSaveRef.current);
+      }
+      // Small delay to let React state settle, but save quickly
+      pendingSaveRef.current = setTimeout(() => {
+        logger.info('💾 Saving chat after AI response completed');
+        // Use the ref to get the latest messages (not stale closure)
+        const currentMessages = messagesRef.current;
+        if (currentMessages.length === 0) {
+          logger.warn('⚠️ No messages to save');
+          return;
+        }
+        setIsSaving(true);
+        storeMessageHistory(currentMessages)
+          .then(() => {
+            setIsSaving(false);
+            setLastSaved(new Date());
+            logger.info('✅ Chat saved successfully after AI response');
+          })
+          .catch((error) => {
+            setIsSaving(false);
+            console.error('Failed to save after AI response:', error);
+          });
+      }, 500);
     },
     onResponse: (response) => {
       // console.log('📥 Response received:', response.status, response.statusText);
     },
     initialMessages,
   });
+  
+  // 🔧 FIX: Keep messagesRef in sync with messages state
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
   const { parsedMessages, parseMessages } = useMessageParser();
@@ -335,7 +370,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     parseMessages(messages, isLoading);
 
     // Save chat history whenever messages change
-    // Use debouncing during streaming to avoid excessive saves
+    // 🚀 OPTIMIZATION: Use debouncing but with shorter delays since onFinish handles immediate saves
     if (messages.length > 0) {
       // Clear any pending save
       if (saveTimeoutRef.current) {
@@ -345,8 +380,17 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       const streamingJustFinished = prevIsLoading.current && !isLoading;
       prevIsLoading.current = isLoading;
 
-      // FIX: Add delay after streaming finishes to allow ActionRunner to write files
-      const saveDelay = streamingJustFinished ? 3000 : (!isLoading ? 3000 : 5000);
+      // 🚀 OPTIMIZATION: Reduced delays since onFinish now handles immediate saves
+      // This save is a backup/periodic save during long conversations
+      // streamingJustFinished: 2s (to allow files to be written)
+      // not loading: 2s (normal periodic save)
+      // loading (streaming): skip - let onFinish handle it
+      if (isLoading) {
+        // Don't save during streaming - wait for onFinish
+        return;
+      }
+      
+      const saveDelay = streamingJustFinished ? 2000 : 2000;
 
       saveTimeoutRef.current = setTimeout(() => {
         setIsSaving(true);
@@ -599,9 +643,11 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
             return message;
           }
 
+          // For assistant messages, use parsed content if available, otherwise use original content
+          // This ensures loaded historical messages display correctly
           return {
             ...message,
-            content: parsedMessages[i] || '',
+            content: parsedMessages[i] || message.content || '',
           };
         })}
         enhancePrompt={() => {

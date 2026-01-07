@@ -22,7 +22,7 @@ export function DownloadButton({ projectId, className }: DownloadButtonProps) {
       const response = await fetch(`/api/project/${projectId}/download`);
       
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as { error?: string };
         throw new Error(error.error || 'Download failed');
       }
 
@@ -45,13 +45,15 @@ export function DownloadButton({ projectId, className }: DownloadButtonProps) {
 
   return (
     <IconButton
-      icon="i-ph:download-simple"
       title="Download Project"
       onClick={handleDownload}
       disabled={!projectId || isDownloading}
       className={className}
     >
-      {isDownloading ? 'Downloading...' : 'Download'}
+      <span className="flex items-center gap-1">
+        <span className="i-ph:download-simple" />
+        {isDownloading ? 'Downloading...' : 'Download'}
+      </span>
     </IconButton>
   );
 }

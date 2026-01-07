@@ -1,6 +1,5 @@
 # Recoder.xyz Production Docker Compose Configuration
 # Enterprise-grade multi-service orchestration
-version: '3.8'
 
 services:
   # PostgreSQL Database - Primary data store
@@ -142,34 +141,6 @@ services:
         delay: 5s
         max_attempts: 3
 
-  # Production Engine
-  production-engine:
-    build:
-      context: ./production-engine
-      dockerfile: Dockerfile
-    container_name: codecraft-production-engine
-    ports:
-      - "3002:3002"
-    environment:
-      - NODE_ENV=production
-      - PORT=3002
-      - BACKEND_URL=http://backend:3001
-    depends_on:
-      - backend
-    volumes:
-      - ./production-engine/src:/app/src
-      - ./production-engine/generated:/app/generated
-    networks:
-      - recoder-backend
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-
-
   # Web Dashboard (Optional)
   web:
     build:
@@ -189,6 +160,11 @@ services:
     restart: unless-stopped
     profiles:
       - web
+    # Development-friendly volumes (enabled via 'dev' profile)
+    volumes:
+      - ./:/app:cached
+      - web_node_modules:/app/packages/web/node_modules
+      - pnpm_store:/pnpm-store
 
 
   # Monitoring with Prometheus
@@ -361,3 +337,9 @@ volumes:
   solana_data:
     driver: local
     name: recoder-solana-data
+  web_node_modules:
+    driver: local
+    name: recoder-web-node-modules
+  pnpm_store:
+    driver: local
+    name: recoder-pnpm-store

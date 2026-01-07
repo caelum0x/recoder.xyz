@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Download, Database, FileCode, Table, Loader2, Sparkles, Copy, Check, X } from 'lucide-react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from 'react-toastify';
 
@@ -66,7 +65,7 @@ export default function SchemaGenerator() {
   useEffect(() => {
     fetch('/api/schema')
       .then(res => res.json())
-      .then(data => setExamples(data.examples || []))
+      .then((data: { examples?: Example[] }) => setExamples(data.examples || []))
       .catch(() => {});
   }, []);
 
@@ -91,13 +90,13 @@ export default function SchemaGenerator() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as { error?: string; data?: SchemaResult };
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to generate schema');
       }
 
-      setResult(data.data);
+      setResult(data.data || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -244,7 +243,7 @@ Please create all these files in the project and set up the database configurati
           className="absolute top-4 right-4 z-50 p-2.5 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 border-2 border-bolt-elements-borderColor hover:border-red-500 rounded-lg transition-all shadow-xl group"
           title="Close schema view"
         >
-          <X className="w-5 h-5 text-bolt-elements-textPrimary group-hover:text-red-500" />
+          <span className="i-ph:x w-5 h-5 text-bolt-elements-textPrimary group-hover:text-red-500" />
         </button>
       )}
 
@@ -252,7 +251,7 @@ Please create all these files in the project and set up the database configurati
       <div className="border-b border-bolt-elements-borderColor p-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg">
-            <Database className="w-6 h-6 text-white" />
+            <span className="i-ph:database w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-bolt-elements-textPrimary">
@@ -305,12 +304,12 @@ Please create all these files in the project and set up the database configurati
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="i-ph:spinner w-4 h-4 animate-spin" />
                       Generating...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4" />
+                      <span className="i-ph:sparkle w-4 h-4" />
                       Generate Schema
                     </>
                   )}
@@ -385,7 +384,7 @@ Please create all these files in the project and set up the database configurati
               {/* Entities List */}
               <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6">
                 <h2 className="text-lg font-semibold text-bolt-elements-textPrimary mb-4 flex items-center gap-2">
-                  <Table className="w-5 h-5" />
+                  <span className="i-ph:table w-5 h-5" />
                   Generated Entities
                 </h2>
                 <div className="space-y-4">
@@ -452,7 +451,7 @@ Please create all these files in the project and set up the database configurati
                         : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
                     }`}
                   >
-                    <FileCode className="w-4 h-4 inline mr-2" />
+                    <span className="i-ph:file-code w-4 h-4 inline mr-2" />
                     SQL Schema
                   </button>
                   <button
@@ -463,7 +462,7 @@ Please create all these files in the project and set up the database configurati
                         : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
                     }`}
                   >
-                    <FileCode className="w-4 h-4 inline mr-2" />
+                    <span className="i-ph:file-code w-4 h-4 inline mr-2" />
                     TypeScript
                   </button>
                   {result.schema.prisma && (
@@ -475,7 +474,7 @@ Please create all these files in the project and set up the database configurati
                           : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
                       }`}
                     >
-                      <FileCode className="w-4 h-4 inline mr-2" />
+                      <span className="i-ph:file-code w-4 h-4 inline mr-2" />
                       Prisma
                     </button>
                   )}
@@ -487,7 +486,7 @@ Please create all these files in the project and set up the database configurati
                         : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
                     }`}
                   >
-                    <Database className="w-4 h-4 inline mr-2" />
+                    <span className="i-ph:database w-4 h-4 inline mr-2" />
                     Seed Data
                   </button>
 
@@ -497,9 +496,9 @@ Please create all these files in the project and set up the database configurati
                       className="px-3 py-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
                     >
                       {copied ? (
-                        <Check className="w-4 h-4" />
+                        <span className="i-ph:check w-4 h-4" />
                       ) : (
-                        <Copy className="w-4 h-4" />
+                        <span className="i-ph:copy w-4 h-4" />
                       )}
                     </button>
                     <button
@@ -507,14 +506,14 @@ Please create all these files in the project and set up the database configurati
                       className="px-3 py-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
                       title="Download file"
                     >
-                      <Download className="w-4 h-4" />
+                      <span className="i-ph:download-simple w-4 h-4" />
                     </button>
                     <button
                       onClick={handleImportToProject}
                       className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors shadow-lg"
                       title="Import all schema files to your project"
                     >
-                      <FileCode className="w-4 h-4" />
+                      <span className="i-ph:file-code w-4 h-4" />
                       Import to Project
                     </button>
                   </div>

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
-import { FolderPlus, Check } from 'lucide-react';
 
 interface SaveToProjectProps {
   chatId: string;
@@ -21,9 +20,9 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
   async function loadProjects() {
     try {
       const response = await fetch('/api/projects');
-      const data = await response.json();
+      const data = await response.json() as { success: boolean; projects?: any[] };
       if (data.success) {
-        setProjects(data.projects);
+        setProjects(data.projects || []);
       }
     } catch (error) {
       console.error('Failed to load projects:', error);
@@ -62,7 +61,7 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
         className="flex items-center gap-2 px-3 py-1.5 text-sm bg-black text-white hover:bg-gray-900 rounded-lg transition-colors"
         title="Save to project"
       >
-        {saved ? <Check size={16} className="text-green-500" /> : <FolderPlus size={16} />}
+        {saved ? <span className="i-ph:check text-green-500" /> : <span className="i-ph:folder-plus" />}
         {saved ? 'Saved' : 'Save to Project'}
       </button>
 

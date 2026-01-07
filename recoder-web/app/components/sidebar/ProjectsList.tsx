@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, Plus, ChevronRight, ChevronDown, MoreVertical } from 'lucide-react';
 
 interface Project {
   id: string;
@@ -9,6 +8,11 @@ interface Project {
   color: string;
   chat_count: number;
   file_count: number;
+}
+
+interface ProjectsApiResponse {
+  projects?: Project[];
+  error?: string;
 }
 
 export function ProjectsList() {
@@ -45,7 +49,7 @@ export function ProjectsList() {
     if (!userId) return;
     try {
       const response = await fetch(`/api/projects?userId=${userId}`);
-      const data = await response.json();
+      const data = await response.json() as ProjectsApiResponse;
       if (data.projects) {
         setProjects(data.projects);
       }
@@ -75,7 +79,7 @@ export function ProjectsList() {
           className="p-1 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors"
           title="Create project"
         >
-          <Plus size={16} className="text-bolt-elements-textSecondary" />
+          <span className="i-ph:plus text-bolt-elements-textSecondary text-base" />
         </button>
       </div>
 
@@ -86,7 +90,7 @@ export function ProjectsList() {
               onClick={() => toggleProject(project.id)}
               className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors text-left"
             >
-              <span className="text-sm">{expandedProjects.has(project.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
+              <span className={`text-sm ${expandedProjects.has(project.id) ? 'i-ph:caret-down' : 'i-ph:caret-right'}`} />
               <span className="text-base">{project.icon}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">{project.name}</div>

@@ -52,7 +52,7 @@ export function SystemMonitor() {
   const fetchSystemHealth = async () => {
     try {
       const response = await fetch('/api/system-health');
-      const data = await response.json();
+      const data = await response.json() as { health: SystemHealth };
       setHealth(data.health);
 
       // Add log entry

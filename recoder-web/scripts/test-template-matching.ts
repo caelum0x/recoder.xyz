@@ -15,7 +15,7 @@ const testCases = [
   },
   {
     request: 'Build a dashboard with React and Vite',
-    expectedTemplate: 'bolt-vite-react-ts',
+    expectedTemplate: 'recoder-vite-react-ts',
     description: 'Vite + React TypeScript'
   },
   {
@@ -40,7 +40,7 @@ const testCases = [
   },
   {
     request: 'Create a React Native mobile app with Expo',
-    expectedTemplate: 'bolt-expo',
+    expectedTemplate: 'recoder-expo',
     description: 'Expo React Native'
   },
   {

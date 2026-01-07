@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { GitBranch, Github, Settings, Loader2, X, Download, Upload, RefreshCw } from 'lucide-react';
 import { ProjectActions } from '~/components/project/ProjectActions';
 import { toast } from 'react-hot-toast';
 
@@ -210,7 +209,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
             onClick={() => setShowRepoSelector(true)}
             className="flex items-center gap-2 text-sm text-black dark:text-white hover:text-orange-500 transition-colors font-medium"
           >
-            <Github size={16} />
+            <span className="i-ph:github-logo text-base" />
             Connect GitHub Repository
           </button>
         ) : (
@@ -228,13 +227,13 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
               disabled={syncing}
               className="px-3 py-1.5 text-sm bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded hover:bg-bolt-elements-button-primary-backgroundHover disabled:opacity-50"
             >
-              {syncing ? <Loader2 size={14} className="animate-spin" /> : 'Clone'}
+              {syncing ? <span className="i-ph:spinner text-sm animate-spin" /> : 'Clone'}
             </button>
             <button
               onClick={() => setShowRepoSelector(false)}
               className="p-1.5 hover:bg-bolt-elements-item-backgroundActive rounded"
             >
-              <X size={14} />
+              <span className="i-ph:x text-sm" />
             </button>
           </div>
         )}
@@ -246,12 +245,12 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
     <div className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-4 py-2">
       <div className="flex items-center gap-3 text-sm">
         <div className="flex items-center gap-2 text-bolt-elements-textPrimary">
-          <Github size={16} />
+          <span className="i-ph:github-logo text-base" />
           <span className="font-medium">{repo}</span>
         </div>
 
         <div className="flex items-center gap-1 text-bolt-elements-textSecondary">
-          <GitBranch size={14} />
+          <span className="i-ph:git-branch text-sm" />
           <span>{branch}</span>
         </div>
 
@@ -262,7 +261,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
             className="flex items-center gap-1 px-2 py-1 text-xs bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover rounded disabled:opacity-50"
             title="Sync (pull + push)"
           >
-            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+            <span className={`i-ph:arrows-clockwise text-xs ${syncing ? 'animate-spin' : ''}`} />
             Sync
           </button>
 
@@ -272,7 +271,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
             className="flex items-center gap-1 px-2 py-1 text-xs bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover rounded disabled:opacity-50"
             title="Pull latest changes"
           >
-            <Download size={12} />
+            <span className="i-ph:download-simple text-xs" />
             Pull
           </button>
 
@@ -281,7 +280,7 @@ export function GitHubBar({ chatId, projectId, projectName, onFilesLoaded, getCu
             className="p-1 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors"
             title="Disconnect"
           >
-            <X size={14} className="text-bolt-elements-textSecondary" />
+            <span className="i-ph:x text-sm text-bolt-elements-textSecondary" />
           </button>
         </div>
       </div>

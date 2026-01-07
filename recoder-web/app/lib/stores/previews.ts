@@ -7,6 +7,7 @@ export interface PreviewInfo {
   port: number;
   ready: boolean;
   baseUrl: string;
+  projectId?: string;
 }
 
 export class PreviewsStore {
@@ -15,16 +16,21 @@ export class PreviewsStore {
   #heartbeatInterval?: NodeJS.Timeout;
   #useDocker: boolean = false;
   #projectId: string | null = null;
+  #initPromise: Promise<void>;
 
   previews = atom<PreviewInfo[]>([]);
 
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;
-    this.#init();
+    this.#initPromise = this.#init();
   }
 
-  setProjectId(projectId: string) {
+  async setProjectId(projectId: string) {
     this.#projectId = projectId;
+    
+    // Wait for init to complete first
+    await this.#initPromise;
+    
     if (this.#useDocker && DOCKER_URL) {
       this.#initDockerPreview();
     }
@@ -60,6 +66,7 @@ export class PreviewsStore {
       port: 3000,
       ready: true,
       baseUrl: `${DOCKER_URL}/preview/${this.#projectId}`,
+      projectId: this.#projectId,
     };
     this.#availablePreviews.set(3000, previewInfo);
     this.previews.set([previewInfo]);

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Rocket, ExternalLink, Loader2, CheckCircle, XCircle, Globe, X } from 'lucide-react';
 
 interface DeployButtonProps {
   files: Record<string, string>;
@@ -53,7 +52,7 @@ export function DeployButton({ files, projectName, disabled }: DeployButtonProps
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json() as { url?: string; error?: string };
 
       if (!res.ok) {
         throw new Error(data.error || 'Deployment failed');
@@ -108,7 +107,7 @@ export function DeployButton({ files, projectName, disabled }: DeployButtonProps
         disabled={disabled || fileCount === 0}
         className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        <Rocket className="w-4 h-4" />
+        <span className="i-ph:rocket-launch w-4 h-4" />
         <span>Deploy</span>
       </button>
 
@@ -120,12 +119,12 @@ export function DeployButton({ files, projectName, disabled }: DeployButtonProps
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
-                  <Rocket className="w-5 h-5 text-purple-500" />
+                  <span className="i-ph:rocket-launch w-5 h-5 text-purple-500" />
                   Deploy Project
                 </h3>
                 {!isDeploying && (
                   <button onClick={resetAndClose} className="p-1 hover:bg-bolt-elements-background-depth-2 rounded">
-                    <X className="w-5 h-5 text-bolt-elements-textSecondary" />
+                    <span className="i-ph:x w-5 h-5 text-bolt-elements-textSecondary" />
                   </button>
                 )}
               </div>
@@ -144,7 +143,7 @@ export function DeployButton({ files, projectName, disabled }: DeployButtonProps
                 <div className="space-y-4">
                   <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
                     <div className="flex items-center gap-2 text-green-500 mb-2">
-                      <CheckCircle className="w-5 h-5" />
+                      <span className="i-ph:check-circle w-5 h-5" />
                       <span className="font-medium">Deployed Successfully!</span>
                     </div>
                     <a
@@ -153,9 +152,9 @@ export function DeployButton({ files, projectName, disabled }: DeployButtonProps
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 break-all"
                     >
-                      <Globe className="w-4 h-4 flex-shrink-0" />
+                      <span className="i-ph:globe w-4 h-4 flex-shrink-0" />
                       {deployState.url}
-                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                      <span className="i-ph:arrow-square-out w-3 h-3 flex-shrink-0" />
                     </a>
                   </div>
                   <button
@@ -172,7 +171,7 @@ export function DeployButton({ files, projectName, disabled }: DeployButtonProps
                 <div className="space-y-4">
                   <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                     <div className="flex items-center gap-2 text-red-500 mb-2">
-                      <XCircle className="w-5 h-5" />
+                      <span className="i-ph:x-circle w-5 h-5" />
                       <span className="font-medium">Deployment Failed</span>
                     </div>
                     <p className="text-sm text-bolt-elements-textSecondary">{deployState.error}</p>
@@ -198,7 +197,7 @@ export function DeployButton({ files, projectName, disabled }: DeployButtonProps
               {isDeploying && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-center gap-3 py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+                    <span className="i-ph:spinner w-6 h-6 animate-spin text-purple-500" />
                     <span className="text-bolt-elements-textPrimary">{deployState.message}</span>
                   </div>
                   <div className="flex gap-1">
