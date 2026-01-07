@@ -97,7 +97,7 @@ recoder /agent create --name "security-reviewer" --prompt "Focus on security vul
 ### Setup
 ```bash
 # Clone the repository
-git clone https://github.com/caelum0x/recoder-code.git
+git clone https://github.com/recoderxyz/recoder-code.git
 cd recoder-code
 
 # Install dependencies
