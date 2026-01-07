@@ -59,6 +59,9 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
 }
 const { app } = expressWs(express());
 
+// Trust proxy for rate limiting behind nginx
+app.set('trust proxy', true);
+
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -90,13 +93,14 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/api/', apiLimiter);
 
 // Container registry: projectId -> containerId + port + ptyPort
-const containers = new Map<string, { id: string; lastActive: number; port: number; ptyPort: number }>();
+// Added backgroundDev flag so we can auto-tail dev server logs into the PTY when users attach
+const containers = new Map<string, { id: string; lastActive: number; port: number; ptyPort: number; backgroundDev?: boolean }>();
 
 // Track containers being created to prevent race conditions
 const creatingContainers = new Map<string, Promise<{ containerId: string; port: number; ptyPort: number }>>();
 
-const IMAGE_NAME = 'recoder-universal:latest';
-const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 min
+const IMAGE_NAME = 'recoder-workspace:latest';
+const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min
 const MEMORY_LIMIT = 1024 * 1024 * 1024; // 1GB
 const CPU_QUOTA = 100000; // 100% of 1 CPU
 
@@ -224,12 +228,18 @@ app.post('/api/container', containerLimiter, async (req, res) => {
               '8080/tcp': [{ HostPort: String(hostPort + 2) }],
               '9999/tcp': [{ HostPort: String(ptyPort) }],
             },
+            // Named volume for node_modules persistence
+            Binds: [
+              `recoder-${projectId}-node_modules:/workspace/node_modules`,
+              `recoder-pnpm-store:/pnpm-store`,
+            ],
           },
         });
 
         const containerInstance = await container;
         await containerInstance.start();
-        containers.set(projectId, { id: containerInstance.id, lastActive: Date.now(), port: hostPort, ptyPort });
+        // default: no background dev server started yet
+        containers.set(projectId, { id: containerInstance.id, lastActive: Date.now(), port: hostPort, ptyPort, backgroundDev: false });
 
         console.log(`✅ Container created: ${containerInstance.id.slice(0, 12)} for ${projectId} (preview: ${hostPort}, pty: ${ptyPort})`);
         return { containerId: containerInstance.id, port: hostPort, ptyPort };
@@ -462,6 +472,9 @@ app.post('/api/exec/:projectId', async (req, res) => {
 
       if (healthCheck.ready) {
         console.log(`✅ Dev server verified on port ${healthCheck.port}`);
+        // mark that this project has a background dev server (so terminal can auto-tail)
+        const currentEntry = containers.get(req.params.projectId);
+        if (currentEntry) currentEntry.backgroundDev = true;
         return res.json({
           output: 'Started in background',
           background: true,
@@ -475,14 +488,18 @@ app.post('/api/exec/:projectId', async (req, res) => {
         const psOutput = await execCommand(container, `ps aux | grep -E "vite|next|node" | grep -v grep || echo "No processes found"`).catch(() => 'Error checking processes');
         console.log(`📊 Dev server processes:\n${psOutput}`);
 
-        return res.json({
-          output: 'Started in background (building...)',
-          background: true,
-          ready: false,
-          processes: psOutput
-        });
-      }
-    }
+        // mark that a background dev server was started (logs will be in /tmp/dev.log)
+        const currentEntry = containers.get(req.params.projectId);
+        if (currentEntry) currentEntry.backgroundDev = true;
+
+         return res.json({
+           output: 'Started in background (building...)',
+           background: true,
+           ready: false,
+           processes: psOutput
+         });
+       }
+     }
 
     const output = await execCommand(container, `cd "${cwd}" && ${command}`);
     res.json({ output });
@@ -535,7 +552,7 @@ async function waitForPtyServer(port: number, maxRetries = 10, delayMs = 500): P
 }
 
 // Helper: Wait for dev server to be ready (HTTP health check)
-async function waitForDevServer(ports: number[], maxWaitMs = 30000): Promise<{ ready: boolean; port?: number }> {
+async function waitForDevServer(ports: number[], maxWaitMs = 60000): Promise<{ ready: boolean; port?: number }> {
   const startTime = Date.now();
   const checkInterval = 1000; // Check every 1 second
 
@@ -601,6 +618,16 @@ app.ws('/terminal/:projectId', async (ws, req) => {
 
   ptyWs.on('open', () => {
     console.log('Terminal connected:', projectId);
+    // If a background dev server was started, automatically tail its log file so the user
+    // sees build output immediately. Users can still run commands in the shell to stop/start.
+    try {
+      if (entry.backgroundDev) {
+        // Send command to the PTY shell to tail the dev log. This assumes the PTY spawns a bash shell.
+        ptyWs.send('tail -n 200 -f /tmp/dev.log\n');
+      }
+    } catch (e) {
+      console.error('Failed to send initial tail to PTY:', (e as any)?.message || e);
+    }
   });
 
   ptyWs.on('message', (data: Buffer) => {

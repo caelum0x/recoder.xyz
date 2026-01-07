@@ -60,12 +60,32 @@ RUN apt-get update && apt-get install -y php php-cli php-mbstring \
 # Token is injected as CLAUDE_CODE_OAUTH_TOKEN environment variable
 RUN npm install -g @anthropic-ai/claude-code
 
+# Pre-cache common npm packages to speed up installs
+RUN mkdir -p /opt/npm-cache && cd /opt/npm-cache \
+    && npm init -y \
+    && npm install --prefer-offline --no-audit --no-fund \
+       react react-dom \
+       vite @vitejs/plugin-react \
+       typescript @types/react @types/react-dom @types/node \
+       tailwindcss postcss autoprefixer \
+       express cors \
+       drizzle-orm better-sqlite3 \
+    && npm cache clean --force
+
+# Set npm to use cache
+RUN npm config set cache /opt/npm-cache/.npm --global
+
 # PTY Server
 COPY pty-server.js /opt/pty/pty-server.js
+
+# Entrypoint for smart dependency installation
+COPY entrypoint.sh /opt/entrypoint.sh
+RUN chmod +x /opt/entrypoint.sh
 
 # Workspace
 RUN mkdir -p /workspace && chmod 777 /workspace
 WORKDIR /workspace
 
 # Start PTY server
+ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["node", "/opt/pty/pty-server.js"]

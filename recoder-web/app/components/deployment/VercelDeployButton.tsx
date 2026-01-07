@@ -4,13 +4,18 @@
  */
 
 import { useState } from 'react';
-import { Upload, ExternalLink, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 
 interface DeploymentStatus {
   status: 'idle' | 'deploying' | 'success' | 'error';
   message?: string;
+  url?: string;
+  deploymentId?: string;
+}
+
+interface DeployApiResponse {
+  error?: string;
   url?: string;
   deploymentId?: string;
 }
@@ -48,7 +53,7 @@ export function VercelDeployButton() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as DeployApiResponse;
 
       if (!response.ok) {
         throw new Error(data.error || 'Deployment failed');
@@ -81,13 +86,13 @@ export function VercelDeployButton() {
   const getStatusIcon = () => {
     switch (deployStatus.status) {
       case 'deploying':
-        return <Loader2 className="w-5 h-5 animate-spin text-blue-500" />;
+        return <span className="i-ph:spinner w-5 h-5 animate-spin text-blue-500" />;
       case 'success':
-        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+        return <span className="i-ph:check-circle w-5 h-5 text-green-500" />;
       case 'error':
-        return <XCircle className="w-5 h-5 text-red-500" />;
+        return <span className="i-ph:x-circle w-5 h-5 text-red-500" />;
       default:
-        return <Upload className="w-5 h-5" />;
+        return <span className="i-ph:upload-simple w-5 h-5" />;
     }
   };
 

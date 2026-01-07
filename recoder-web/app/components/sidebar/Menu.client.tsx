@@ -59,7 +59,7 @@ async function loadHistoryFromDatabase(): Promise<ChatHistoryItem[]> {
       throw new Error(`Failed to load from database: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result = await response.json() as { success: boolean; data?: any[]; error?: string };
     const { data, success } = result;
 
     if (!success || !data) {

@@ -76,7 +76,7 @@ CRITICAL RULES:
   - recoder-vite-react-ts → Vite + React + TS
   - angular → Angular framework
   - vue → Vue.js framework
-  - bolt-expo → Expo mobile app
+  - recoder-expo → Expo mobile app
   
   🔧 BACKEND/API:
   - express-typescript → Modern TypeScript API with validation & docs
@@ -86,7 +86,7 @@ CRITICAL RULES:
   
   💼 FULL-STACK:
   - astro-shadcn → Astro with Shadcn UI
-  - bolt-qwik → Qwik framework
+  - recoder-qwik → Qwik framework
   - vite-shadcn → Vite + Shadcn UI
   
   TEMPLATE USAGE EXAMPLES:

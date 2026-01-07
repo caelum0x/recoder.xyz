@@ -38,7 +38,7 @@ const STARTER_KEYWORDS = {
   },
   'qwik': {
     keywords: ['qwik', 'qwik app', 'qwik project', 'resumable'],
-    starterId: 'bolt-qwik',
+    starterId: 'recoder-qwik',
     confidence: 0.9,
   },
   'vite-react': {

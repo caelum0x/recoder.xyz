@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Rocket, ExternalLink, Loader2, CheckCircle, XCircle, Settings, GitBranch } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 
@@ -88,7 +87,7 @@ export default function DeploymentManager() {
     try {
       const response = await fetch('/api/deployments');
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json() as { deployments?: Deployment[] };
         setDeployments(data.deployments || []);
       }
     } catch (error) {
@@ -147,11 +146,11 @@ export default function DeploymentManager() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as { error?: string };
         throw new Error(error.error || 'Deployment failed');
       }
 
-      const data = await response.json();
+      const data = await response.json() as { deployment: Deployment };
       setDeployments([data.deployment, ...deployments]);
       toast.success(`Deploying to ${selectedPlatform}...`);
       setSelectedPlatform(null);
@@ -180,11 +179,11 @@ export default function DeploymentManager() {
   const getStatusIcon = (status: Deployment['status']) => {
     switch (status) {
       case 'building':
-        return <Loader2 className="w-4 h-4 text-yellow-500 animate-spin" />;
+        return <span className="i-ph:spinner w-4 h-4 text-yellow-500 animate-spin" />;
       case 'ready':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <span className="i-ph:check-circle w-4 h-4 text-green-500" />;
       case 'error':
-        return <XCircle className="w-4 h-4 text-red-500" />;
+        return <span className="i-ph:x-circle w-4 h-4 text-red-500" />;
     }
   };
 
@@ -194,7 +193,7 @@ export default function DeploymentManager() {
       <div className="border-b border-bolt-elements-borderColor p-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
-            <Rocket className="w-6 h-6 text-white" />
+            <span className="i-ph:rocket-launch w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-bolt-elements-textPrimary">
@@ -325,7 +324,7 @@ export default function DeploymentManager() {
                 onClick={() => setShowTokenInput(true)}
                 className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-2"
               >
-                <Settings className="w-4 h-4" />
+                <span className="i-ph:gear w-4 h-4" />
                 Configure API Tokens
               </button>
             </div>
@@ -434,12 +433,12 @@ export default function DeploymentManager() {
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="i-ph:spinner w-5 h-5 animate-spin" />
                     Deploying...
                   </>
                 ) : (
                   <>
-                    <Rocket className="w-5 h-5" />
+                    <span className="i-ph:rocket-launch w-5 h-5" />
                     Deploy to {PLATFORMS.find(p => p.id === selectedPlatform)?.name}
                   </>
                 )}
@@ -456,7 +455,7 @@ export default function DeploymentManager() {
 
           {deployments.length === 0 ? (
             <div className="text-center py-12 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor border-dashed">
-              <Rocket className="w-12 h-12 text-bolt-elements-textTertiary mx-auto mb-3" />
+              <span className="i-ph:rocket-launch w-12 h-12 text-bolt-elements-textTertiary mx-auto mb-3" />
               <p className="text-bolt-elements-textSecondary">No deployments yet</p>
               <p className="text-sm text-bolt-elements-textTertiary mt-1">
                 Deploy your first project to get started
@@ -497,7 +496,7 @@ export default function DeploymentManager() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors"
                     >
-                      <ExternalLink className="w-4 h-4" />
+                      <span className="i-ph:arrow-square-out w-4 h-4" />
                       Visit Site
                     </a>
                   )}
@@ -510,7 +509,7 @@ export default function DeploymentManager() {
         {/* Info Section */}
         <div className="mt-6 bg-green-500/10 border border-green-500/50 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <GitBranch className="w-5 h-5 text-green-400 mt-0.5" />
+            <span className="i-ph:git-branch w-5 h-5 text-green-400 mt-0.5" />
             <div>
               <h3 className="font-medium text-green-400 mb-1">Production Deployments</h3>
               <p className="text-sm text-bolt-elements-textSecondary">

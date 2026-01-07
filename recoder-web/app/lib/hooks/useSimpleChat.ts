@@ -1,9 +1,13 @@
 /**
  * Custom chat hook - NO AI SDK
  * Direct fetch with streaming
+ * 
+ * FIXES:
+ * 1. Use immutable message updates (spread operator) instead of mutation
+ * 2. Create complete message object at end of streaming for reliable persistence
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface Message {
   id: string;
@@ -16,7 +20,7 @@ interface UseChatOptions {
   api: string;
   body?: Record<string, unknown>;
   onError?: (error: Error) => void;
-  onFinish?: () => void;
+  onFinish?: (message: Message) => void; // Now passes the final assistant message
   onResponse?: (response: Response) => void;
   initialMessages?: Message[];
 }
@@ -28,6 +32,15 @@ export function useSimpleChat(options: UseChatOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [input, setInput] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // 🔧 FIX: Track accumulated content separately to avoid mutation issues
+  const accumulatedContentRef = useRef<string>('');
+  const currentAssistantIdRef = useRef<string>('');
+
+  // Reset messages when initialMessages change (e.g., loading a different chat)
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -44,29 +57,35 @@ export function useSimpleChat(options: UseChatOptions) {
   const append = useCallback(async (message: Omit<Message, 'id' | 'createdAt'>) => {
     const userMessage: Message = {
       ...message,
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       createdAt: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setIsLoading(true);
+    // 🔧 FIX: Reset accumulated content for new message
+    accumulatedContentRef.current = '';
+    const assistantId = `assistant-${Date.now() + 1}`;
+    currentAssistantIdRef.current = assistantId;
 
     const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
+      id: assistantId,
       role: 'assistant',
       content: '',
       createdAt: new Date(),
     };
 
-    setMessages(prev => [...prev, assistantMessage]);
+    setMessages(prev => [...prev, userMessage, assistantMessage]);
+    setIsLoading(true);
 
     try {
       abortControllerRef.current = new AbortController();
       
+      // Include all messages including the new user message
+      const allMessages = [...messages, userMessage];
+      
       const response = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [...messages, userMessage], ...extraBody }),
+        body: JSON.stringify({ messages: allMessages, ...extraBody }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -91,18 +110,39 @@ export function useSimpleChat(options: UseChatOptions) {
 
         const text = decoder.decode(value);
         
+        // 🔧 FIX: Accumulate content in ref (not mutating state)
+        accumulatedContentRef.current += text;
+        const currentContent = accumulatedContentRef.current;
+        
+        // 🔧 FIX: Use immutable update - create new message object
         setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage && lastMessage.role === 'assistant') {
-            lastMessage.content += text;
-          }
-          return newMessages;
+          return prev.map(msg => 
+            msg.id === assistantId 
+              ? { ...msg, content: currentContent }
+              : msg
+          );
         });
       }
 
+      // 🔧 FIX: Create final message with complete content for persistence
+      const finalAssistantMessage: Message = {
+        id: assistantId,
+        role: 'assistant',
+        content: accumulatedContentRef.current,
+        createdAt: new Date(),
+      };
+
+      // Final update to ensure complete message is in state
+      setMessages(prev => {
+        return prev.map(msg => 
+          msg.id === assistantId 
+            ? finalAssistantMessage
+            : msg
+        );
+      });
+
       if (onFinish) {
-        onFinish();
+        onFinish(finalAssistantMessage);
       }
     } catch (error: any) {
       if (error.name !== 'AbortError') {
@@ -115,7 +155,7 @@ export function useSimpleChat(options: UseChatOptions) {
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [api, messages, onError, onFinish, onResponse]);
+  }, [api, messages, extraBody, onError, onFinish, onResponse]);
 
   return {
     messages,

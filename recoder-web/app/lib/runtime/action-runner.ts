@@ -18,6 +18,46 @@ const getWorkbenchStore = async () => {
 
 const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
+// 🔒 GLOBAL coordination flags - shared across ALL ActionRunner instances
+// This prevents race conditions between multiple runners and useChatHistory
+let globalNpmInstallRunning = false;
+let globalNpmInstallPromise: Promise<string | void> | null = null;
+let globalAutoInstallTriggered = false;
+let globalNpmInstallComplete = false; // ✅ NEW: Track if install has completed successfully
+
+/**
+ * Check if npm install is globally running (across all instances)
+ */
+export function isNpmInstallRunning(): boolean {
+  return globalNpmInstallRunning;
+}
+
+/**
+ * Check if npm install has completed successfully
+ */
+export function isNpmInstallComplete(): boolean {
+  return globalNpmInstallComplete;
+}
+
+/**
+ * Mark global npm install as complete
+ */
+export function markNpmInstallComplete(): void {
+  globalNpmInstallRunning = false;
+  globalNpmInstallPromise = null;
+  globalNpmInstallComplete = true;
+}
+
+/**
+ * Reset all global flags - call this when starting a new chat
+ */
+export function resetGlobalActionState(): void {
+  globalNpmInstallRunning = false;
+  globalNpmInstallPromise = null;
+  globalAutoInstallTriggered = false;
+  globalNpmInstallComplete = false;
+}
+
 let dockerAvailable: boolean | null = null;
 let lastDockerCheck = 0;
 const DOCKER_CHECK_INTERVAL = 60000;
@@ -107,16 +147,28 @@ export class ActionRunner {
   #devServerProcess: any = null;
   #packageJsonCreated: boolean = false;
   #autoInstallTimer: NodeJS.Timeout | null = null;
-  #autoInstallTriggered: boolean = false;
   #filesBeingCreated: Set<string> = new Set();
   #projectId: string | null = null;
   #dockerReady: boolean = false;
+  #isRestoredChat: boolean = false;  // True if this is a restored past chat
+  // Note: #npmInstallRunning and #autoInstallTriggered are now GLOBAL flags above
 
   actions: ActionsMap = map({});
 
   constructor(chatId?: string) {
     this.#chatId = chatId || null;
     this.#projectId = chatId || `project-${Date.now()}`;
+  }
+
+  /**
+   * Mark this chat as restored from history.
+   * This prevents auto-install from triggering since files are restored separately.
+   */
+  markAsRestoredChat() {
+    this.#isRestoredChat = true;
+    globalAutoInstallTriggered = true; // Prevent auto-install globally
+    this.#packageJsonCreated = true; // Assume package.json exists from restored files
+    logger.info('📂 ActionRunner marked as restored chat - auto-install disabled globally');
   }
 
   async #ensureDockerReady(): Promise<boolean> {
@@ -139,6 +191,18 @@ export class ActionRunner {
       if (res.ok) {
         this.#dockerReady = true;
         logger.info(`Docker container ready for project: ${this.#projectId}`);
+        
+        // ✅ CRITICAL: Notify workbench store about project ID for preview
+        if (this.#projectId && typeof window !== 'undefined') {
+          try {
+            const { workbenchStore } = await import('~/lib/stores/workbench');
+            await workbenchStore.setProjectId(this.#projectId);
+            logger.info(`✅ Workbench store notified of project: ${this.#projectId}`);
+          } catch (err) {
+            logger.warn('Could not notify workbench store:', err);
+          }
+        }
+        
         return true;
       } else {
         const errText = await res.text();
@@ -225,6 +289,13 @@ export class ActionRunner {
 
   async runAction(data: ActionCallbackData) {
     const { actionId } = data;
+    
+    // Validate actionId is a string
+    if (typeof actionId !== 'string') {
+      logger.error(`Invalid actionId type: ${typeof actionId}`, actionId);
+      return;
+    }
+    
     const action = this.actions.get()[actionId];
 
     if (!action) {
@@ -248,6 +319,12 @@ export class ActionRunner {
 
   async #executeAction(actionId: string) {
     const action = this.actions.get()[actionId];
+
+    // Guard against undefined action
+    if (!action) {
+      logger.error(`Action ${actionId} not found in actions map. Available actions:`, Object.keys(this.actions.get()));
+      throw new Error(`Action ${actionId} not found`);
+    }
 
     this.#updateAction(actionId, { status: 'running' });
 
@@ -288,11 +365,14 @@ export class ActionRunner {
       const errorMessage = error instanceof Error ? error.message : 'Action failed';
       logger.error(`Action ${actionId} failed:`, error);
 
-      this.#updateAction(actionId, { status: 'failed', error: errorMessage });
+      // Only update action if it exists
+      if (action) {
+        this.#updateAction(actionId, { status: 'failed', error: errorMessage });
+      }
 
       // Don't re-throw to prevent stopping other actions
-      // Just log the error
-      console.error(`Action ${actionId} (${action.type}) failed:`, errorMessage);
+      // Just log the error (safe access to action.type)
+      console.error(`Action ${actionId} (${action?.type || 'unknown'}) failed:`, errorMessage);
     }
   }
 
@@ -320,26 +400,144 @@ export class ActionRunner {
     }
 
     const normalizedContent = action.content.replace(/\n/g, ' ').toLowerCase();
-    const isDevServer = /npm (run )?dev|yarn dev|pnpm dev|vite|next dev|remix dev|npm start|yarn start|pnpm start/.test(normalizedContent);
-    const isInstallCommand = /npm\s+(install|i\b)|yarn\s+install|pnpm\s+install/.test(normalizedContent);
+    // 🔧 FIX: More precise detection - don't match "vite" in "npm install vite"
+    const isDevServer = /npm\s+(run\s+)?dev\b|yarn\s+dev\b|pnpm\s+dev\b|npx\s+vite\b|npm\s+start\b|yarn\s+start\b|pnpm\s+start\b|next\s+dev\b|remix\s+dev\b/.test(normalizedContent);
+    const isInstallCommand = /npm\s+(install|i\b)|yarn\s+(install|add)\b|pnpm\s+(install|add)\b/.test(normalizedContent);
     const isNpmCommand = /npm|yarn|pnpm/.test(normalizedContent);
 
-    // Skip duplicate npm install/dev if auto-install already ran
-    if (this.#autoInstallTriggered) {
+    // Skip duplicate npm install/dev if auto-install already ran OR if npm is already running
+    if (globalAutoInstallTriggered) {
       if (isInstallCommand || (isDevServer && normalizedContent.includes('npm install'))) {
         logger.info('⏭️ Skipping npm command - auto-install already handled this');
         return;
+      }
+    }
+    
+    // Prevent concurrent npm install commands (use global flag)
+    if (isInstallCommand && globalNpmInstallRunning) {
+      logger.warn('⏭️ Skipping npm install - another install is already running globally');
+      return;
+    }
+
+    // 🔧 FIX: If this is a standalone install command (not combined with dev),
+    // let it run but don't start the dev server - the auto-install will handle that
+    if (isInstallCommand && !isDevServer) {
+      logger.info('📦 Running standalone install command (dev server will start after all files are ready)');
+      // Cancel any pending auto-install since this install will handle dependencies
+      if (this.#autoInstallTimer) {
+        clearTimeout(this.#autoInstallTimer);
+        this.#autoInstallTimer = null;
+        logger.info('⏹️ Cancelled pending auto-install (shell action is running install)');
       }
     }
 
     // Execute via Docker backend only
     await this.#ensureDockerReady();
 
+    // ✅ CRITICAL FIX: If this is a dev server command or npm run command (not install),
+    // wait for npm install to complete first, OR run npm install if it hasn't been triggered yet
+    const needsDependencies = isDevServer || /npm\s+run/.test(normalizedContent);
+    if (needsDependencies && !isInstallCommand) {
+      // Check if node_modules exists
+      const nodeModulesCheck = await this.#dockerExec('test -d /workspace/node_modules && echo "exists" || echo "missing"');
+      const hasNodeModules = nodeModulesCheck.includes('exists');
+
+      if (!hasNodeModules) {
+        logger.info('📦 Dependencies not installed yet - running npm install first...');
+
+        // If auto-install is pending (timer scheduled), cancel it and run now
+        if (this.#autoInstallTimer) {
+          clearTimeout(this.#autoInstallTimer);
+          this.#autoInstallTimer = null;
+        }
+
+        // If npm install is already running, wait for it
+        if (globalNpmInstallRunning && globalNpmInstallPromise) {
+          logger.info('⏳ Waiting for ongoing npm install to complete...');
+          await globalNpmInstallPromise;
+        } else if (!globalNpmInstallComplete) {
+          // Run npm install now
+          globalAutoInstallTriggered = true;
+          globalNpmInstallRunning = true;
+
+          try {
+            logger.info('📦 Installing dependencies before running command...');
+            const installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund --loglevel=error');
+
+            if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
+              // Try with legacy peer deps
+              await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+            }
+
+            globalNpmInstallComplete = true;
+            logger.info('✅ Dependencies installed successfully');
+          } finally {
+            globalNpmInstallRunning = false;
+          }
+        }
+      } else {
+        logger.info('✅ node_modules already exists, proceeding with command');
+      }
+    }
+
     // Check if package.json exists before running npm commands
     if (isNpmCommand && !this.#packageJsonCreated) {
-      logger.warn('⚠️ No package.json detected. npm commands may fail.');
-      logger.info('💡 Tip: Ask AI to generate package.json first, or create one manually.');
-      // Still try to run the command, but warn the user
+      // Actually check if package.json exists in Docker container
+      let packageJsonExists = false;
+      try {
+        const checkResult = await this.#dockerExec('test -f /workspace/package.json && echo "exists" || echo "missing"');
+        packageJsonExists = checkResult.includes('exists');
+        if (packageJsonExists) {
+          this.#packageJsonCreated = true;
+          logger.info('✅ package.json already exists in container');
+        }
+      } catch (e) {
+        logger.warn('Could not check for package.json:', e);
+      }
+      
+      if (!packageJsonExists) {
+        logger.warn('⚠️ No package.json detected. Auto-creating minimal package.json...');
+        
+        // Auto-create minimal package.json
+        const minimalPackageJson = {
+          name: "project",
+          version: "1.0.0",
+          type: "module",
+          scripts: {
+            dev: "vite",
+            build: "vite build",
+            preview: "vite preview",
+            start: "vite"
+          },
+          dependencies: {
+            react: "^18.3.1",
+            "react-dom": "^18.3.1"
+          },
+          devDependencies: {
+            "@types/react": "^18.3.0",
+            "@types/react-dom": "^18.3.0",
+            "@vitejs/plugin-react": "^4.3.0",
+            typescript: "^5.5.0",
+            vite: "^5.4.0"
+          }
+        };
+        
+        // Write package.json directly (don't use #executeAction which expects actionId string)
+        const packageJsonContent = JSON.stringify(minimalPackageJson, null, 2);
+        await this.#dockerWriteFile('package.json', packageJsonContent);
+        
+        // Update local file store so UI shows the file
+        try {
+          const store = await getWorkbenchStore();
+          const fullPath = `${WORK_DIR}/package.json`;
+          store.files.setKey(fullPath, { type: 'file', content: packageJsonContent, isBinary: false });
+        } catch (e) {
+          logger.warn('Could not update file store for auto-created package.json');
+        }
+        
+        this.#packageJsonCreated = true;
+        logger.info('✅ Created minimal package.json with Vite + React');
+      }
     }
 
     logger.info('Executing command via Docker backend');
@@ -350,8 +548,15 @@ export class ActionRunner {
     if (hasInstallAndDev) {
       logger.info('🔀 Detected install+dev combo, splitting into separate commands');
 
-      // 🔒 CRITICAL: Mark auto-install as triggered to prevent duplicate execution
-      this.#autoInstallTriggered = true;
+      // 🔒 CRITICAL: Prevent concurrent npm installs (use global flag)
+      if (globalNpmInstallRunning) {
+        logger.warn('⏭️ Skipping - npm install already running globally');
+        return;
+      }
+
+      // 🔒 CRITICAL: Mark auto-install as triggered globally to prevent duplicate execution
+      globalAutoInstallTriggered = true;
+      globalNpmInstallRunning = true;
 
       // Cancel any pending auto-install timer
       if (this.#autoInstallTimer) {
@@ -361,29 +566,37 @@ export class ActionRunner {
       }
 
       try {
-        // Extract and run install part first (synchronous)
+        // 🚀 OPTIMIZATION: Check if node_modules is corrupted before cleaning
+        const checkExisting = await this.#dockerExec('test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"');
+        if (!checkExisting.includes('valid')) {
+          logger.info('🧹 Cleaning invalid node_modules...');
+          await this.#dockerExec('rm -rf node_modules package-lock.json');
+        }
+        
+        // Extract and run install with optimizations
         const installMatch = action.content.match(/\b(npm|yarn|pnpm)\s+(install|i\b)(\s+[^&]*)?/);
         if (installMatch) {
-          const installCmd = installMatch[0].trim();
-          logger.info('📦 Running install first:', installCmd);
-          let installOutput = await this.#dockerExec(installCmd);
+          // 🚀 OPTIMIZATION: Use faster npm options
+          logger.info('📦 Running optimized install...');
+          let installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund --loglevel=error');
 
           // Check for esbuild architecture mismatch
-          if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError'))) {
-            logger.warn('🔧 Detected esbuild architecture mismatch - fixing...');
-            await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild');
-            installOutput = await this.#dockerExec('npm install --force');
+          if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError') || installOutput.includes('ETXTBSY'))) {
+            logger.warn('🔧 Detected esbuild issue - fixing...');
+            await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild node_modules/.bin/esbuild');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
 
-            // If still failing, try clean install
             if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
               logger.warn('🔄 Retrying with clean install...');
               await this.#dockerExec('rm -rf node_modules package-lock.json');
-              installOutput = await this.#dockerExec('npm install');
+              installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
             }
 
             logger.info('✅ esbuild reinstalled with correct architecture');
-          } else if (installOutput && !installOutput.includes('npm error')) {
-            logger.info('Install output:', installOutput.substring(0, 200));
+          } else if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
+            // Try with legacy peer deps
+            installOutput = await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
           }
         }
 
@@ -394,7 +607,7 @@ export class ActionRunner {
 
           // 🔧 FIX: Force Vite to use port 5173 (mapped to host)
           if (devCmd.includes('npm') && !devCmd.includes('--port')) {
-            devCmd = `${devCmd} -- --port 5173 --host 0.0.0.0`;
+            devCmd = `${devCmd} -- --port 5173 --host 0.0.0`;
             logger.info('🔧 Forcing dev server to use port 5173');
           }
 
@@ -407,8 +620,10 @@ export class ActionRunner {
           await this.#checkDevServerHealth();
         }
 
+        globalNpmInstallRunning = false;
         return;
       } catch (error: any) {
+        globalNpmInstallRunning = false;
         logger.error('❌ Install+dev command failed:', error.message);
         throw error;
       }
@@ -439,6 +654,14 @@ export class ActionRunner {
         logger.info('Command output:', output.substring(0, 200));
       }
       logger.info('Command completed successfully');
+      
+      // 🔧 FIX: After a standalone install completes, schedule auto-install to start dev server
+      // (but only if package.json exists and auto-install hasn't been triggered yet)
+      if (isInstallCommand && !isDevServer && this.#packageJsonCreated && !globalAutoInstallTriggered) {
+        logger.info('📦 Standalone install completed - scheduling dev server start...');
+        this.#scheduleAutoInstall();
+      }
+      
       return;
     } catch (error: any) {
       logger.error('❌ Docker command failed:', error.message);
@@ -579,7 +802,8 @@ export class ActionRunner {
     this.#filesBeingCreated.delete(action.filePath);
 
     // ✅ P1: Schedule auto-install (debounced - waits for all files to finish)
-    if (this.#packageJsonCreated && !this.#autoInstallTriggered) {
+    // Use global flag to prevent multiple instances from triggering
+    if (this.#packageJsonCreated && !globalAutoInstallTriggered) {
       this.#scheduleAutoInstall();
     }
   }
@@ -743,96 +967,212 @@ export class ActionRunner {
     }
   }
 
+  /**
+   * Verify that all imports in the entry files can be resolved.
+   * This prevents Vite from crashing due to missing files.
+   * Returns list of missing files if any are detected.
+   */
+  async #verifyImportsBeforeDevServer(): Promise<{ valid: boolean; missingFiles: string[] }> {
+    const missingFiles: string[] = [];
+    
+    try {
+      // Find all JS/TS/JSX/TSX files and check their imports
+      const filesOutput = await this.#dockerExec('find /workspace/src -name "*.tsx" -o -name "*.ts" -o -name "*.jsx" -o -name "*.js" 2>/dev/null | head -50');
+      const files = filesOutput.split('\n').filter(Boolean);
+      
+      if (files.length === 0) {
+        // No source files yet, might still be creating them
+        logger.info('📁 No source files found yet');
+        return { valid: true, missingFiles: [] };
+      }
+      
+      // Check each file for relative imports
+      for (const file of files) {
+        try {
+          const content = await this.#dockerExec(`cat "${file}" 2>/dev/null`);
+          
+          // Extract relative imports: import ... from './path' or from '../path'
+          const importRegex = /(?:import|from)\s+['"](\.[^'"]+)['"]/g;
+          let match;
+          
+          while ((match = importRegex.exec(content)) !== null) {
+            const importPath = match[1];
+            const dir = file.replace(/\/[^/]+$/, ''); // dirname
+            
+            // Resolve the import path relative to the file
+            let resolvedPath = importPath;
+            if (importPath.startsWith('./')) {
+              resolvedPath = `${dir}/${importPath.slice(2)}`;
+            } else if (importPath.startsWith('../')) {
+              const parts = dir.split('/');
+              const upCount = (importPath.match(/\.\.\//g) || []).length;
+              const remaining = importPath.replace(/\.\.\//g, '');
+              resolvedPath = `${parts.slice(0, -upCount).join('/')}/${remaining}`;
+            }
+            
+            // Check if the file exists (try common extensions)
+            const extensions = ['', '.tsx', '.ts', '.jsx', '.js', '/index.tsx', '/index.ts', '/index.jsx', '/index.js'];
+            let found = false;
+            
+            for (const ext of extensions) {
+              const checkPath = resolvedPath + ext;
+              const exists = await this.#dockerExec(`test -f "${checkPath}" && echo "exists" || echo "missing"`);
+              if (exists.includes('exists')) {
+                found = true;
+                break;
+              }
+            }
+            
+            if (!found && !missingFiles.includes(resolvedPath)) {
+              missingFiles.push(resolvedPath);
+              logger.warn(`⚠️ Missing import: ${importPath} (from ${file})`);
+            }
+          }
+        } catch (e) {
+          // File might not exist or be readable, skip it
+        }
+      }
+      
+      if (missingFiles.length > 0) {
+        logger.error(`❌ Found ${missingFiles.length} missing imports:`);
+        missingFiles.forEach(f => logger.error(`   - ${f}`));
+        return { valid: false, missingFiles };
+      }
+      
+      logger.info('✅ All imports verified');
+      return { valid: true, missingFiles: [] };
+    } catch (error) {
+      logger.warn('⚠️ Could not verify imports:', error);
+      // Return valid=true to not block dev server on verification errors
+      return { valid: true, missingFiles: [] };
+    }
+  }
+  
   #scheduleAutoInstall() {
     if (this.#autoInstallTimer) {
       clearTimeout(this.#autoInstallTimer);
     }
 
-    logger.info('Scheduling auto-install (debounced, 2s delay)...');
+    // 🔧 FIX: Increased debounce to 3s to ensure all files are created before starting dev server
+    // The AI often creates many files in sequence and we need to wait for ALL of them
+    // Previous 2s was still too short for complex projects like blog platforms with 20+ files
+    logger.info('Scheduling auto-install (debounced, 3000ms delay)...');
 
     this.#autoInstallTimer = setTimeout(() => {
       this.#runAutoInstall();
-    }, 2000);
+    }, 3000);
   }
 
   async #runAutoInstall() {
-    if (this.#autoInstallTriggered) return;
+    // Use global flags to prevent race conditions across instances
+    if (globalAutoInstallTriggered) return;
+    if (globalNpmInstallRunning) {
+      logger.info('⏭️ Skipping auto-install - npm install already running globally');
+      return;
+    }
     if (this.#filesBeingCreated.size > 0) {
       this.#scheduleAutoInstall();
       return;
     }
 
-    this.#autoInstallTriggered = true;
-    logger.info('Starting auto-install and dev server...');
+    globalAutoInstallTriggered = true;
+    globalNpmInstallRunning = true;
+    logger.info('⚡ Starting optimized auto-install and dev server...');
 
     try {
       await this.#ensureDockerReady();
 
-      // Run npm install
-      logger.info('📦 Installing dependencies...');
-      let installOutput = await this.#dockerExec('npm install');
+      // 🚀 OPTIMIZATION: Only clean if there's a corrupted node_modules
+      // Check if node_modules exists and has valid structure
+      const checkExisting = await this.#dockerExec('test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"');
+      const hasValidNodeModules = checkExisting.includes('valid');
+      
+      if (!hasValidNodeModules) {
+        // Clean only if invalid
+        logger.info('🧹 Cleaning invalid/incomplete node_modules...');
+        await this.#dockerExec('rm -rf node_modules package-lock.json');
+      } else {
+        logger.info('📦 Found existing node_modules, attempting incremental install...');
+      }
+
+      // 🚀 OPTIMIZATION: Use faster npm install options
+      // --prefer-offline: Use local cache first
+      // --no-audit: Skip vulnerability audit (faster)
+      // --no-fund: Skip funding messages
+      logger.info('📦 Installing dependencies (optimized)...');
+      let installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund --loglevel=error');
 
       // Check if install actually succeeded
       if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-        logger.error('❌ npm install failed!');
-        logger.error('Error output:', installOutput.slice(0, 500));
+        logger.error('❌ npm install failed, trying fallback...');
 
         // Check if it's an esbuild architecture mismatch
-        if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError'))) {
-          logger.warn('🔧 Detected esbuild architecture mismatch - fixing...');
+        if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError') || installOutput.includes('ETXTBSY'))) {
+          logger.warn('🔧 Detected esbuild issue - fixing...');
+          await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild node_modules/.bin/esbuild');
+          await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause
+          installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
 
-          // Remove esbuild and reinstall with correct platform
-          await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild');
-          installOutput = await this.#dockerExec('npm install --force');
-
-          // Check if it worked
           if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-            logger.error('❌ Still failing after esbuild fix. Trying clean install...');
+            logger.warn('🔄 Retrying with clean install...');
             await this.#dockerExec('rm -rf node_modules package-lock.json');
-            installOutput = await this.#dockerExec('npm install');
+            installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
           }
 
           logger.info('✅ esbuild reinstalled with correct architecture');
         } else {
+          // Try with legacy peer deps
           logger.info('💡 Trying with --legacy-peer-deps...');
-          // Retry with legacy peer deps
-          installOutput = await this.#dockerExec('npm install --legacy-peer-deps');
+          installOutput = await this.#dockerExec('npm install --legacy-peer_deps --prefer-offline --no-audit --no-fund');
         }
 
         // Final check
         if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
           logger.error('❌ npm install failed even after retries');
-          logger.error('Final error:', installOutput.slice(0, 500));
           throw new Error('npm install failed - see logs for details');
         }
       }
 
       logger.info('✅ Dependencies installed successfully');
+      globalNpmInstallRunning = false;
+      globalNpmInstallComplete = true; // ✅ Mark install as complete
 
-      // Verify node_modules exists
-      const checkModules = await this.#dockerExec('test -d /workspace/node_modules && echo "exists" || echo "missing"');
-      if (checkModules.includes('missing')) {
-        logger.error('❌ node_modules directory not created! Installation failed.');
-        logger.info('💡 Please check package.json and try manually: npm install');
+      // 🚀 CRITICAL FIX: Verify all imports can be resolved before starting dev server
+      // This prevents Vite from crashing due to missing files (e.g., ./pages/Register)
+      logger.info('🔍 Verifying all imports before starting dev server...');
+      
+      let importVerification = await this.#verifyImportsBeforeDevServer();
+      
+      // If missing imports detected, wait a bit for more files to be created
+      let retries = 0;
+      const maxRetries = 5;
+      while (!importVerification.valid && retries < maxRetries) {
+        retries++;
+        logger.info(`⏳ Missing imports detected, waiting for files... (attempt ${retries}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s
+        importVerification = await this.#verifyImportsBeforeDevServer();
+      }
+      
+      if (!importVerification.valid) {
+        logger.error('❌ Cannot start dev server - missing required files:');
+        importVerification.missingFiles.forEach(f => logger.error(`   - ${f}`));
+        logger.error('');
+        logger.error('💡 The AI may still be generating files. Try again in a few seconds.');
+        logger.error('   Or ask the AI to create the missing files listed above.');
+        // Don't throw - just return so user can see the error and files continue generating
         return;
       }
 
-      // Start dev server in background (background=true is critical!)
       logger.info('🚀 Starting dev server...');
-      // Force Vite to use port 5173 (mapped to host 10001)
+      // Force Vite to use port 5173 (mapped to host 10001) and bind to all interfaces
       await this.#dockerExec('npm run dev -- --port 5173 --host 0.0.0.0', '/workspace', true);
-      logger.info('Dev server started in background');
+      logger.info('✅ Dev server started in background');
 
-      // Wait a moment then check logs for errors
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await this.#checkDevServerHealth();
+      // Check health in background (non-blocking)
+      setTimeout(() => this.#checkDevServerHealth(), 2000);
     } catch (error: any) {
+      globalNpmInstallRunning = false;
       logger.error('❌ Auto-install failed:', error.message);
-
-      // Show the actual error from Docker
-      if (error.message.includes('exit code')) {
-        logger.error('Command failed in container. Check the error above for details.');
-      }
 
       logger.info('💡 You can manually fix this:');
       logger.info('  1. Check package.json is valid');
@@ -965,7 +1305,7 @@ export class ActionRunner {
       store.files.setKey(fullPath, { type: 'file', content: fixedContent, isBinary: false });
 
       // Restart dev server if it's running (tsconfig changes require restart)
-      if (this.#autoInstallTriggered) {
+      if (globalAutoInstallTriggered) {
         logger.info('🔄 Restarting dev server to apply tsconfig changes...');
         try {
           // Kill existing dev server
