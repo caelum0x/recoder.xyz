@@ -512,7 +512,7 @@ We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guideline
 
 ```bash
 # Clone the repo
-git clone https://github.com/caelum0x/recoder-code.git
+git clone https://github.com/recoderxyz/recoder-code.git
 
 # Install dependencies
 npm install
@@ -523,14 +523,14 @@ node cli/run.js "test query"
 
 ## 📜 License
 
-Apache-2.0 © [Recoder Code Team](https://github.com/caelum0x)
+Apache-2.0 © [Recoder Code Team](https://github.com/recoderxyz)
 
 ## 🔗 Links
 
 - [NPM Package](https://www.npmjs.com/package/recoder-code)
-- [GitHub Repository](https://github.com/caelum0x/recoder-code)
+- [GitHub Repository](https://github.com/recoderxyz/recoder-code)
 - [OpenRouter (Get API Key)](https://openrouter.ai)
-- [Report Issues](https://github.com/caelum0x/recoder-code/issues)
+- [Report Issues](https://github.com/recoderxyz/recoder-code/issues)
 - 📧 Contact: recoderxyz@gmail.com
 
 ## ⭐ Star Us!
