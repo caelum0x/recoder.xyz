@@ -25,7 +25,41 @@
 - Add "Clear Terminal" and "Kill Process" buttons
 - Show dev server logs in separate "Logs" panel, not terminal
 
-### 2. Error Detection & Auto-Fix Loop
+**Learn from Rork.ai**:
+- Add command completion markers: `###COMMAND_DONE###`
+- WebSocket RPC pattern for structured terminal commands
+- Terminal sync pattern to restore state on reload
+- Reset timer to keep containers alive during activity
+- Mutation tracking for debugging terminal issues
+
+### 2. Implement Git-Based Snapshots (Rork Alternative)
+**Why**: Rork uses E2B snapshots for instant rollback - we can do same with Git (free!)
+
+**Implementation**:
+```typescript
+// Save snapshot
+async function saveSnapshot() {
+  await exec('git add -A');
+  await exec(`git commit -m "snapshot-${Date.now()}"`);
+  return getCurrentCommitHash();
+}
+
+// Restore snapshot
+async function restoreSnapshot(commitHash) {
+  await exec(`git reset --hard ${commitHash}`);
+  await exec('npm install');
+  restartDevServer();
+}
+```
+
+**Features**:
+- Auto-save snapshots every 5 minutes
+- Show snapshot timeline in UI
+- One-click rollback to any snapshot
+- Compare changes between snapshots
+- Snapshots persist across container restarts
+
+### 3. Error Detection & Auto-Fix Loop
 **Problem**: When AI generates code with errors that block `npm run dev`, users see blank preview with no clear way to fix.
 
 **Required Features**:
@@ -62,6 +96,74 @@
 - Update file tree to show error badges
 - Create error list panel component
 - Add click handlers to navigate to errors
+
+---
+
+## 🎓 Lessons from Rork.ai (Competitor Analysis)
+
+### What Makes Rork Better
+1. **E2B Cloud VMs** - More reliable than self-hosted Docker (but expensive)
+2. **Snapshot System** - Instant rollback to any previous state
+3. **Terminal Sync** - Restore terminal state across page reloads
+4. **Command Completion Tracking** - Know when commands finish
+5. **WebSocket RPC** - Structured VM communication (not just raw PTY)
+6. **Bun Support** - 10x faster package installs (3.16s for 801 packages!)
+7. **Mutation Tracking** - Debug state changes easily
+8. **Visibility Optimization** - Pause operations when tab hidden
+
+### Free Improvements We Can Copy
+
+#### 1. Command Completion Markers
+```bash
+# Add to all terminal commands
+npm install && echo "###COMMAND_DONE###"
+```
+Parse output to know when commands finish - fixes loading states.
+
+#### 2. WebSocket RPC Pattern
+```typescript
+ws.request('terminal.resize', { cols: 80, rows: 24 });
+ws.request('resetTimer', undefined); // Keep container alive
+```
+Better than raw PTY - structured, debuggable commands.
+
+#### 3. Mutation Tracking
+```typescript
+console.log(`>> mutation #${id} vmHelpers.proxyToVM`);
+// ... execute mutation ...
+console.log(`<< mutation #${id} vmHelpers.proxyToVM`);
+```
+Makes debugging 10x easier - see exactly what's happening.
+
+#### 4. Bun Package Manager
+```bash
+# In Docker containers
+bun install  # vs npm install
+# 10x faster, same compatibility
+```
+
+#### 5. Container Lifecycle Management
+```typescript
+// Reset timer on user activity
+clearTimeout(resetTimer);
+resetTimer = setTimeout(stopContainer, 30 * 60 * 1000);
+```
+
+#### 6. Visibility Change Optimization
+```typescript
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseExpensiveOperations();
+  else resumeAll();
+});
+```
+
+### Implementation Priority
+1. ✅ **Command completion markers** - Week 1
+2. ✅ **Git-based snapshots** - Week 1  
+3. ✅ **WebSocket RPC** - Week 2
+4. ✅ **Bun support** - Week 2
+5. ✅ **Mutation tracking** - Week 2
+6. ⏳ **E2B integration** - Future (if budget allows)
 
 ---
 
@@ -305,6 +407,7 @@ Build refactoring suggestions. Detect code smells and anti-patterns. Show refact
 **Note on Terminal CLI**: recoder-code v2.4.5 is already published on npm with 40+ AI models, tool calling, and MCP servers. What's missing is the platform integration (sync with recoder-web, live preview connection, shared sessions).
 
 ---
+
 
 
 
