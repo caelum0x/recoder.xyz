@@ -97,7 +97,7 @@ Please analyze the project structure, create all files, install dependencies, an
     }
 
     // Dispatch a custom event that the chat component can listen to
-    window.dispatchEvent(new CustomEvent('bolt:import', {
+    window.dispatchEvent(new CustomEvent('recoder:import', {
       detail: {
         prompt, // undefined for local starters
         files: data.files,
@@ -107,7 +107,7 @@ Please analyze the project structure, create all files, install dependencies, an
       }
     }));
 
-    console.log('✅ Import data prepared, dispatched bolt:import event');
+    console.log('✅ Import data prepared, dispatched recoder:import event');
     setShowGitHubIntegration(false);
   };
 

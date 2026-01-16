@@ -200,6 +200,29 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   // Extract the last user message for starter detection
   const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
   
+  // Enterprise AI: Check for loops before processing
+  const { checkForLoops, recordChatSession } = await import('~/lib/.server/llm/enterprise-integration');
+  const loopCheck = await checkForLoops(messages);
+  
+  if (loopCheck.hasLoop) {
+    console.warn('🔄 Loop detected in conversation');
+    if (loopCheck.suggestion) {
+      messages.push({
+        role: 'system',
+        content: `⚠️ Loop detected. Suggestion: ${loopCheck.suggestion}`
+      });
+    }
+  }
+
+  // Enterprise AI: Record chat session (non-blocking)
+  recordChatSession(`chat-${Date.now()}`, messages).catch(err => 
+    console.warn('Chat recording failed:', err)
+  );
+
+  // Enterprise AI: Try Google Cloud AI first (if available)
+  const { generateWithCloudAI, initializeCloudAI } = await import('~/lib/.server/llm/cloud-ai-integration');
+  await initializeCloudAI(env).catch(() => {}); // Initialize if configured
+  
   // FIX #2: Detect GitHub URL BEFORE AI processing
   const githubUrl = detectGitHubUrl(lastUserMessage);
   if (githubUrl) {
@@ -268,6 +291,31 @@ Create the actual application with all the features, components, and functionali
   const stream = new SwitchableStream();
 
   try {
+    // Enterprise AI: Try code_assist for code-related queries first
+    const isCodeQuery = lastUserMessage.match(/code|function|class|component|fix|debug|implement|python|java|rust|go|php|ruby|swift|kotlin|scala|dart|c\+\+|c#|html|css|sql|shell|bash|docker|yaml|json|xml/i);
+    if (isCodeQuery) {
+      try {
+        const { CodeAssistServer } = await import('~/lib/.server/llm/code_assist/server');
+        const codeAssist = new CodeAssistServer();
+        
+        const codeResponse = await codeAssist.handleQuery({
+          query: lastUserMessage,
+          messages: messages,
+          context: requestBody.recoderContext || ''
+        });
+        
+        if (codeResponse.success && codeResponse.content) {
+          // Use code_assist response and enhance with our tools
+          messages.push({
+            role: 'assistant',
+            content: `🚀 Code Assist Enhanced Response:\n\n${codeResponse.content}`
+          });
+        }
+      } catch (error) {
+        console.warn('Code Assist unavailable, using standard AI:', error);
+      }
+    }
+    
     // Get .recoder/ context from request body (already parsed)
     // console.log('📖 Loading .recoder/ project context...');
     const recoderContextPrompt = requestBody.recoderContext || '';
@@ -347,6 +395,26 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
           'X-Error-Type': 'NO_API_KEY',
         },
       });
+    }
+
+    // 🔧 AGENTIC BEHAVIOR: Inject few-shot examples and planning for error fixes
+    const { injectFewShotExamples } = await import('~/lib/.server/llm/few-shot-examples');
+    const { injectPlanningContext, isErrorFixRequest, isModificationRequest } = await import('~/lib/.server/llm/planning-enforcer');
+    
+    // Check if there are existing files (from previous messages or context)
+    const hasExistingFiles = messages.some(m => 
+      m.content?.includes('type="file"') || 
+      m.content?.includes('Created') ||
+      m.content?.includes('package.json')
+    );
+    
+    // Get the last user message
+    const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
+    
+    // Inject few-shot examples for error fixes
+    if (isErrorFixRequest(lastUserMsg) || isModificationRequest(lastUserMsg)) {
+      messages = injectFewShotExamples(messages, lastUserMsg) as Messages;
+      messages = injectPlanningContext(messages, hasExistingFiles) as Messages;
     }
 
     // Route to the correct provider's streaming function

@@ -41,14 +41,34 @@ export async function GET(request: NextRequest) {
     // Extract email from identifier
     const email = verification.identifier.replace('email-verify:', '');
 
-    // Update user email verified status in Better Auth's user table
-    await prisma.user.update({
-      where: { email },
-      data: {
-        emailVerified: true,
-        updatedAt: new Date()
-      }
-    });
+    // Update user email verified status in BOTH tables
+    // Better Auth's user table (web logins)
+    try {
+      await prisma.user.update({
+        where: { email },
+        data: {
+          emailVerified: true,
+          updatedAt: new Date()
+        }
+      });
+    } catch (e) {
+      // User might not exist in this table - that's OK
+      console.log(`[verify-email] User not in 'user' table (Better Auth): ${email}`);
+    }
+
+    // CLI users table
+    try {
+      await prisma.users.update({
+        where: { email },
+        data: {
+          emailVerified: true,
+          updatedAt: new Date()
+        }
+      });
+    } catch (e) {
+      // User might not exist in this table - that's OK
+      console.log(`[verify-email] User not in 'users' table (CLI): ${email}`);
+    }
 
     // Delete the verification token
     await prisma.verifications.delete({
@@ -78,10 +98,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check Better Auth user table (web sign-ups)
-    const user = await prisma.user.findUnique({
+    // Check BOTH user tables (web and CLI sign-ups)
+    const webUser = await prisma.user.findUnique({
       where: { email }
     });
+    const cliUser = await prisma.users.findUnique({
+      where: { email }
+    });
+
+    const user = webUser || cliUser;
 
     if (!user) {
       return NextResponse.json(

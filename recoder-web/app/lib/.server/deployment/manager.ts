@@ -7,6 +7,7 @@ import type { DeploymentConfig, DeploymentResult, FileTree, DeploymentPlatform }
 import { projectDetector } from './detector';
 import { createVercelDeployer } from './platforms/vercel';
 import { createNetlifyDeployer } from './platforms/netlify';
+import { createRailwayDeployer } from './platforms/railway';
 import { neon } from '@neondatabase/serverless';
 
 export interface DeploymentOptions {
@@ -65,7 +66,13 @@ export class DeploymentManager {
           break;
 
         case 'railway':
-          throw new Error('Railway deployment coming soon');
+          const railwayToken = config.token || this.env.RAILWAY_TOKEN;
+          if (!railwayToken) {
+            throw new Error('Railway API token required. Get your token from https://railway.com/account/tokens');
+          }
+          const railwayDeployer = createRailwayDeployer(railwayToken);
+          result = await railwayDeployer.deploy(config, files);
+          break;
 
         case 'render':
           throw new Error('Render deployment coming soon');

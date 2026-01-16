@@ -89,11 +89,17 @@ export class CLIAuthService {
         email: true,
         name: true,
         subscriptionPlan: true,
+        emailVerified: true,
       },
     });
 
     if (!user) {
       throw new Error('User not found');
+    }
+
+    // Check if email is verified
+    if (!user.emailVerified) {
+      throw new Error('Please verify your email before authorizing CLI devices. Check your inbox for the verification link.');
     }
 
     // Update device code status
@@ -241,6 +247,7 @@ export class CLIAuthService {
             name: true,
             subscriptionPlan: true,
             subscriptionStatus: true,
+            emailVerified: true,
           },
         },
       },
@@ -256,6 +263,11 @@ export class CLIAuthService {
 
     if (session.expiresAt < new Date()) {
       throw new Error('Access token expired');
+    }
+
+    // Check if email is verified
+    if (!session.users.emailVerified) {
+      throw new Error('Email not verified. Please verify your email to use CLI.');
     }
 
     // Update last used
@@ -416,6 +428,7 @@ export class CLIAuthService {
             name: true,
             subscriptionPlan: true,
             subscriptionStatus: true,
+            emailVerified: true,
           },
         },
       },
@@ -431,6 +444,11 @@ export class CLIAuthService {
 
     if (key.expiresAt && key.expiresAt < new Date()) {
       throw new Error('API key expired');
+    }
+
+    // Check if email is verified
+    if (!key.users.emailVerified) {
+      throw new Error('Email not verified. Please verify your email to use API keys.');
     }
 
     // Update usage stats

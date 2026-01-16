@@ -32,7 +32,7 @@ export function UserMenu() {
     try {
       setLoading(true);
       const response = await fetch('/api/user/profile');
-      const data = await response.json();
+      const data = await response.json() as { success?: boolean; user?: UserProfile };
 
       if (data.success && data.user) {
         userProfileStore.set(data.user);
@@ -121,6 +121,8 @@ export function UserMenu() {
             src={userProfile.image}
             alt={userProfile.name || userProfile.email}
             className="w-8 h-8 rounded-full"
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
             onError={() => setImageError(true)}
           />
         ) : (

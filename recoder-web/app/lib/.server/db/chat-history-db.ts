@@ -294,6 +294,7 @@ export class ChatHistoryDB {
 
   /**
    * Save complete chat session (backwards compatible with IndexedDB format)
+   * 🔒 CRITICAL: Merges file snapshots to prevent losing files during partial saves
    */
   async saveChat(data: {
     userId?: string;
@@ -311,19 +312,42 @@ export class ChatHistoryDB {
     // Check if session exists
     let session = await this.getSessionByUrlId(data.urlId);
 
-    // Calculate file snapshot stats
-    const fileCount = data.fileSnapshot ? Object.keys(data.fileSnapshot).length : 0;
-    const totalFileSize = data.fileSnapshot
-      ? Object.values(data.fileSnapshot).reduce((sum, content) => sum + content.length, 0)
-      : 0;
+    // 🔒 CRITICAL FIX: Merge file snapshots instead of overwriting
+    // This prevents losing files when save is triggered during streaming
+    let mergedFileSnapshot: Record<string, string> = {};
+    
+    if (session?.metadata?.fileSnapshot) {
+      // Start with existing files
+      mergedFileSnapshot = { ...session.metadata.fileSnapshot };
+    }
+    
+    if (data.fileSnapshot) {
+      // Merge new files - update existing and add new ones
+      for (const [path, content] of Object.entries(data.fileSnapshot)) {
+        // Only update if new content is non-empty
+        if (content && content.length > 0) {
+          mergedFileSnapshot[path] = content;
+        }
+      }
+    }
 
-    // Prepare metadata with file snapshot and source tracking
+    // Calculate merged file snapshot stats
+    const fileCount = Object.keys(mergedFileSnapshot).length;
+    const totalFileSize = Object.values(mergedFileSnapshot).reduce((sum, content) => sum + content.length, 0);
+
+    console.log('💾 [saveChat] File snapshot merge:', {
+      existingFiles: session?.metadata?.fileCount || 0,
+      newFiles: data.fileSnapshot ? Object.keys(data.fileSnapshot).length : 0,
+      mergedFiles: fileCount,
+    });
+
+    // Prepare metadata with merged file snapshot
     const sessionMetadata = {
-      fileSnapshot: data.fileSnapshot || {},
+      fileSnapshot: mergedFileSnapshot,
       fileCount,
       totalFileSize,
-      source: data.source || 'web', // Track source: 'web' or 'cli'
-      cliVersion: data.cliVersion, // Track CLI version if from CLI
+      source: data.source || 'web',
+      cliVersion: data.cliVersion,
       lastUpdated: new Date().toISOString(),
     };
 

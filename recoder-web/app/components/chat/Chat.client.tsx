@@ -237,6 +237,12 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     },
     onFinish: (assistantMessage) => {
       logger.debug('Finished streaming');
+
+      // Create AI snapshot after AI changes complete
+      workbenchStore.createAISnapshotForAll('AI response completed').catch((err) => {
+        logger.warn('Failed to create AI snapshot:', err);
+      });
+
       // 🔧 FIX: Immediately trigger save after AI response completes
       // Use messagesRef to get the latest messages including the completed assistant message
       if (pendingSaveRef.current) {
@@ -518,6 +524,23 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     textareaRef.current?.blur();
   };
 
+  // Listen for "Fix with AI" events from Problems panel
+  useEffect(() => {
+    const handleFixErrors = async (event: CustomEvent) => {
+      const { prompt } = event.detail;
+
+      if (prompt && !isLoading) {
+        sendMessage({} as React.UIEvent, prompt);
+      }
+    };
+
+    window.addEventListener('recoder:fix-errors', handleFixErrors as any);
+
+    return () => {
+      window.removeEventListener('recoder:fix-errors', handleFixErrors as any);
+    };
+  }, [isLoading, sendMessage]);
+
   // Listen for import events from GitHub/Starters/Templates
   useEffect(() => {
     const handleImport = async (event: CustomEvent) => {
@@ -591,10 +614,10 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       }
     };
 
-    window.addEventListener('bolt:import', handleImport as any);
+    window.addEventListener('recoder:import', handleImport as any);
 
     return () => {
-      window.removeEventListener('bolt:import', handleImport as any);
+      window.removeEventListener('recoder:import', handleImport as any);
     };
   }, [isLoading, sendMessage]);
 

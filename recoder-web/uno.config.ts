@@ -2,6 +2,7 @@ import { globSync } from 'fast-glob';
 import fs from 'node:fs/promises';
 import { basename } from 'node:path';
 import { defineConfig, presetIcons, presetUno, transformerDirectives } from 'unocss';
+import { icons as phIcons } from '@iconify-json/ph';
 
 const iconPaths = globSync('./icons/*.svg');
 
@@ -252,7 +253,12 @@ export default defineConfig({
     }),
     presetIcons({
       warn: true,
+      extraProperties: {
+        'display': 'inline-block',
+        'vertical-align': 'middle',
+      },
       collections: {
+        ph: phIcons,
         ...customIconCollection,
       },
     }),

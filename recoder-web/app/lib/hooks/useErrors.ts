@@ -1,0 +1,140 @@
+/**
+ * useErrors - Hook for on-demand error fetching from Docker backend
+ * NO POLLING - fetches only when explicitly triggered (after builds, commands, etc.)
+ */
+
+import { useCallback, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import {
+  setErrors,
+  clearErrors,
+  errorsAtom,
+  hasBlockingErrorsAtom,
+  devServerStatusAtom,
+  errorCountAtom,
+  type ErrorsResponse,
+} from '~/lib/stores/errors';
+
+const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+
+interface UseErrorsResult {
+  /** Current errors from store */
+  errors: ErrorsResponse['errors'];
+  /** Whether there are blocking errors */
+  hasBlockingErrors: boolean;
+  /** Dev server status */
+  devServerStatus: 'running' | 'crashed' | 'idle';
+  /** Total error count */
+  errorCount: number;
+  /** Whether currently fetching */
+  isLoading: boolean;
+  /** Fetch error if any */
+  fetchError: string | null;
+  /** Fetch errors from backend (call after builds/commands) */
+  fetchErrors: () => Promise<ErrorsResponse | null>;
+  /** Clear all errors */
+  clear: () => void;
+}
+
+/**
+ * Fetch errors for a project - standalone function for use outside React
+ */
+export async function fetchProjectErrors(projectId: string): Promise<ErrorsResponse | null> {
+  if (!projectId) return null;
+
+  try {
+    const response = await fetch(`${DOCKER_URL}/api/errors/${projectId}?tail=200`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        clearErrors();
+        return null;
+      }
+      throw new Error(`Failed to fetch errors: ${response.status}`);
+    }
+
+    const data: ErrorsResponse = await response.json();
+    setErrors(data);
+    return data;
+  } catch (err: any) {
+    console.error('[fetchProjectErrors] Error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Hook for accessing and fetching errors on-demand
+ * Call fetchErrors() after shell commands complete or when user requests
+ */
+export function useErrors(projectId: string | null): UseErrorsResult {
+  const errors = useStore(errorsAtom);
+  const hasBlockingErrors = useStore(hasBlockingErrorsAtom);
+  const devServerStatus = useStore(devServerStatusAtom);
+  const errorCount = useStore(errorCountAtom);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const fetchErrors = useCallback(async (): Promise<ErrorsResponse | null> => {
+    if (!projectId) return null;
+
+    setIsLoading(true);
+    setFetchError(null);
+
+    try {
+      const data = await fetchProjectErrors(projectId);
+      return data;
+    } catch (err: any) {
+      setFetchError(err.message);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId]);
+
+  const clear = useCallback(() => {
+    clearErrors();
+    setFetchError(null);
+  }, []);
+
+  return {
+    errors,
+    hasBlockingErrors,
+    devServerStatus,
+    errorCount,
+    isLoading,
+    fetchError,
+    fetchErrors,
+    clear,
+  };
+}
+
+/**
+ * Hook to get errors for a specific file (from store, no fetching)
+ */
+export function useFileErrors(filePath: string | undefined): {
+  errors: ErrorsResponse['errors'];
+  errorCount: number;
+  hasErrors: boolean;
+} {
+  const allErrors = useStore(errorsAtom);
+
+  const fileErrors = filePath
+    ? allErrors.filter((e) => {
+        if (!e.filePath) return false;
+        // Match with or without /workspace prefix
+        const normalizedPath = filePath.replace(/^\/workspace\//, '');
+        const errorPath = e.filePath.replace(/^\/workspace\//, '');
+        return normalizedPath === errorPath;
+      })
+    : [];
+
+  return {
+    errors: fileErrors,
+    errorCount: fileErrors.length,
+    hasErrors: fileErrors.length > 0,
+  };
+}

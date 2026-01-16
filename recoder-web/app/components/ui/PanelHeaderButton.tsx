@@ -7,12 +7,14 @@ interface PanelHeaderButtonProps {
   disabled?: boolean;
   children: string | JSX.Element | Array<JSX.Element | string>;
   onClick?: (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+  title?: string;
 }
 
 export const PanelHeaderButton = memo(
-  ({ className, disabledClassName, disabled = false, children, onClick }: PanelHeaderButtonProps) => {
+  ({ className, disabledClassName, disabled = false, children, onClick, title }: PanelHeaderButtonProps) => {
     return (
       <button
+        title={title}
         className={classNames(
           'flex items-center shrink-0 gap-1.5 px-1.5 rounded-md py-0.5 text-bolt-elements-item-contentDefault bg-transparent enabled:hover:text-bolt-elements-item-contentActive enabled:hover:bg-bolt-elements-item-backgroundActive disabled:cursor-not-allowed',
           {

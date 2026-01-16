@@ -66,15 +66,92 @@ export function logout(): void {
   window.location.href = `${mainSiteUrl}/api/auth/sign-out?callbackURL=${encodeURIComponent(window.location.origin)}`;
 }
 
+// Cached user session
+let cachedUser: User | null = null;
+let sessionFetched = false;
+let sessionFetchPromise: Promise<User | null> | null = null;
+
+/**
+ * Fetch session from server API
+ */
+async function fetchSession(): Promise<User | null> {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const response = await fetch('/api/session', {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.authenticated && data.user) {
+      cachedUser = data.user;
+      return data.user;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[auth-utils] Failed to fetch session:', error);
+    return null;
+  }
+}
+
+/**
+ * Initialize session - call this early in app lifecycle
+ */
+export async function initSession(): Promise<User | null> {
+  if (sessionFetched) {
+    return cachedUser;
+  }
+
+  if (sessionFetchPromise) {
+    return sessionFetchPromise;
+  }
+
+  sessionFetchPromise = fetchSession().finally(() => {
+    sessionFetched = true;
+    sessionFetchPromise = null;
+  });
+
+  return sessionFetchPromise;
+}
+
 /**
  * Get current user from client-side session
- * Note: Returns null if not authenticated
- * TODO: Implement proper client-side session retrieval
+ * Returns cached user or null if not authenticated
+ * Call initSession() first to ensure session is loaded
  */
 export function getCurrentUser(): User | null {
-  // Temporary stub - returns null (anonymous user)
-  // In production, this should check client-side session/cookie
-  return null;
+  // If session hasn't been fetched yet, trigger fetch (fire and forget)
+  if (!sessionFetched && !sessionFetchPromise) {
+    initSession();
+  }
+
+  return cachedUser;
+}
+
+/**
+ * Get current user async - waits for session to be fetched
+ */
+export async function getCurrentUserAsync(): Promise<User | null> {
+  if (sessionFetched) {
+    return cachedUser;
+  }
+
+  return initSession();
+}
+
+/**
+ * Clear cached session (call on logout)
+ */
+export function clearSession(): void {
+  cachedUser = null;
+  sessionFetched = false;
+  sessionFetchPromise = null;
 }
 
 /**

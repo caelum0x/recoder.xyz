@@ -19,7 +19,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { owner, repo, branch = 'main', localFiles, accessToken, syncMode = 'both' } = await request.json();
+    const { owner, repo, branch = 'main', localFiles, accessToken, syncMode = 'both', commitMessage } = await request.json();
 
     if (!owner || !repo || !accessToken) {
       return new Response(
@@ -163,7 +163,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const { data: newCommit } = await octokit.git.createCommit({
         owner,
         repo,
-        message: `Sync from Recoder.xyz - ${new Date().toISOString()}`,
+        message: commitMessage || `Sync from Recoder.xyz - ${new Date().toISOString()}`,
         tree: newTree.sha,
         parents: [refData.object.sha],
       });

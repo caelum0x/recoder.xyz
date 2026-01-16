@@ -6,12 +6,42 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/.local/bin:/root/.cargo/bin:/root/.bun/bin:$PATH"
 
-# Base tools + build deps for node-pty and esbuild
+# Base tools + build deps for node-pty, esbuild, and dev utilities
 RUN apt-get update && apt-get install -y \
     curl wget git bash build-essential unzip \
     software-properties-common ca-certificates \
     python3 make g++ pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+    # Search and text processing
+    ripgrep \
+    jq \
+    # Process management
+    procps \
+    # Compression (tar, gzip, gunzip built-in, adding extras)
+    gzip \
+    zip \
+    # Network utilities
+    net-tools \
+    iputils-ping \
+    dnsutils \
+    # Development helpers
+    htop \
+    vim nano \
+    lsof \
+    less \
+    tree \
+    file \
+    # SQLite for better-sqlite3 npm package
+    libsqlite3-dev \
+    sqlite3 \
+    # OpenSSL for crypto operations
+    openssl libssl-dev \
+    # Locales for proper encoding
+    locales \
+    && rm -rf /var/lib/apt/lists/* \
+    && locale-gen en_US.UTF-8
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 # Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
@@ -59,6 +89,13 @@ RUN apt-get update && apt-get install -y php php-cli php-mbstring \
 # Users can connect their Claude Pro/Max subscription via recoder.xyz settings
 # Token is injected as CLAUDE_CODE_OAUTH_TOKEN environment variable
 RUN npm install -g @anthropic-ai/claude-code
+
+# Recoder Code CLI - Recoder's AI coding assistant
+# Supports 40+ models (Claude, GPT-4, DeepSeek, Gemini, Qwen3)
+RUN npm install -g recoder-code
+
+# Global dev tools for LSP diagnostics and development
+RUN npm install -g typescript pyright prettier eslint tsx ts-node
 
 # Pre-cache common npm packages to speed up installs
 RUN mkdir -p /opt/npm-cache && cd /opt/npm-cache \
