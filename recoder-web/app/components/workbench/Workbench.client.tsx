@@ -18,6 +18,10 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import { GitHubSyncModal } from './GitHubSyncModal';
 import { BuildProgressIndicator } from './BuildProgressIndicator';
+import { SnapshotBar } from './SnapshotBar';
+import { useLSPDiagnostics } from '~/lib/hooks/useLSPDiagnostics';
+import { initializeSnapshots } from '~/lib/stores/snapshots';
+import { useFileWatcher } from '~/lib/hooks/useFileWatcher';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -65,6 +69,37 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   const files = useStore(workbenchStore.files);
   const selectedView = useStore(workbenchStore.currentView);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Get projectId (stable atom) and containerReady from workbench store
+  // NOTE: Use projectId atom (stable) NOT currentProjectId getter (creates new atom each call)
+  const projectId = useStore(workbenchStore.projectId);
+  const containerReady = useStore(workbenchStore.containerReady);
+
+  // Connect to LSP diagnostics WebSocket
+  useLSPDiagnostics(projectId);
+
+  // File watcher for CLI tool integration (claude, recoder-code)
+  // Auto-refreshes preview and file tree when files change
+  useFileWatcher({
+    enabled: !!projectId && containerReady,
+    onFileChange: (changes) => {
+      // Refresh file tree
+      workbenchStore.refreshFiles?.();
+    },
+    onPreviewRefresh: () => {
+      // Preview will auto-refresh via the recoder:file-changed event
+      console.log('[Workbench] File change detected, preview will refresh');
+    },
+  });
+
+  // Initialize snapshots only when container is ready (not just when projectId is set)
+  // This prevents 404 errors from calling snapshot APIs before container exists
+  useEffect(() => {
+    if (projectId && containerReady) {
+      console.log('🔄 [Workbench] Container ready, initializing snapshots...');
+      initializeSnapshots(projectId, true).catch(console.error);
+    }
+  }, [projectId, containerReady]);
 
   const setSelectedView = (view: WorkbenchViewType) => {
     workbenchStore.currentView.set(view);
@@ -114,7 +149,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
       // Convert files to plain object
       const filesToDownload: Record<string, string> = {};
       Object.entries(files).forEach(([path, file]) => {
-        if (file.type === 'file') {
+        if (file && file.type === 'file' && 'content' in file) {
           filesToDownload[path] = file.content;
         }
       });
@@ -164,7 +199,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
       // Convert files to plain object
       const filesToPush: Record<string, string> = {};
       Object.entries(files).forEach(([path, file]) => {
-        if (file.type === 'file') {
+        if (file && file.type === 'file' && 'content' in file) {
           filesToPush[path] = file.content;
         }
       });
@@ -205,7 +240,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as { error?: string; repoUrl?: string };
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to push to GitHub');
@@ -215,7 +250,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
         <div>
           Successfully pushed to GitHub!
           <br />
-          <a href={result.repoUrl} target="_blank" rel="noopener noreferrer" className="underline">
+          <a href={result.repoUrl || '#'} target="_blank" rel="noopener noreferrer" className="underline">
             View Repository
           </a>
         </div>
@@ -303,6 +338,9 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       <div className="i-ph:terminal" />
                       Toggle Terminal
                     </PanelHeaderButton>
+                    {projectId && (
+                      <SnapshotBar projectId={projectId} className="mr-1" />
+                    )}
                   </>
                 )}
                 <IconButton
@@ -348,7 +386,6 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
           files={files}
           onFilesUpdate={handleFilesUpdate}
         />
-        {/* ✅ P1: Build Progress Indicator */}
         <BuildProgressIndicator />
       </motion.div>
     )

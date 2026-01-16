@@ -3,6 +3,15 @@ import { toast } from 'react-toastify';
 import { IconButton } from '~/components/ui/IconButton';
 import { classNames } from '~/utils/classNames';
 
+interface GitHubApiResult {
+  error?: string;
+  files?: Record<string, string>;
+  fileCount?: number;
+  repoInfo?: { fullName: string };
+  message?: string;
+  syncResult?: { conflicts: string[] };
+}
+
 interface GitHubSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -22,6 +31,8 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
   const [isLoading, setIsLoading] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [repoInfo, setRepoInfo] = useState<any>(null);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [status, setStatus] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -35,26 +46,30 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
 
   const handleClone = async () => {
     setIsLoading(true);
+    setStatus('Connecting to GitHub...');
     try {
+      setStatus('Fetching repository...');
       const response = await fetch('/api/github/clone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoUrl, accessToken }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as GitHubApiResult;
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to clone repository');
       }
+      setStatus('Processing files...');
 
-      onFilesUpdate(result.files);
-      toast.success(`Cloned ${result.fileCount} files from ${result.repoInfo.fullName}`);
+      if (result.files) onFilesUpdate(result.files);
+      toast.success(`Cloned ${result.fileCount || 0} files from ${result.repoInfo?.fullName || 'repository'}`);
       onClose();
     } catch (error: any) {
       toast.error(`Clone failed: ${error.message}`);
     } finally {
       setIsLoading(false);
+      setStatus('');
     }
   };
 
@@ -67,14 +82,14 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
         body: JSON.stringify({ owner, repo, branch, accessToken }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as GitHubApiResult;
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to pull from repository');
       }
 
-      onFilesUpdate(result.files);
-      toast.success(`Pulled ${result.fileCount} files from ${owner}/${repo}`);
+      if (result.files) onFilesUpdate(result.files);
+      toast.success(`Pulled ${result.fileCount || 0} files from ${owner}/${repo}`);
       onClose();
     } catch (error: any) {
       toast.error(`Pull failed: ${error.message}`);
@@ -103,25 +118,26 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
           localFiles: filesToSync,
           accessToken,
           syncMode,
+          commitMessage: commitMessage || `Update from Recoder - ${new Date().toISOString()}`,
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as GitHubApiResult;
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to sync with repository');
       }
 
-      if (syncMode !== 'push') {
+      if (syncMode !== 'push' && result.files) {
         onFilesUpdate(result.files);
       }
 
       toast.success(
         <div>
           {result.message}
-          {result.syncResult.conflicts.length > 0 && (
+          {(result.syncResult?.conflicts?.length || 0) > 0 && (
             <div className="text-xs mt-1">
-              <span className="i-ph:warning" /> {result.syncResult.conflicts.length} conflicts (local changes kept)
+              <span className="i-ph:warning" /> {result.syncResult?.conflicts?.length} conflicts (local changes kept)
             </div>
           )}
         </div>
@@ -143,13 +159,13 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
         body: JSON.stringify({ owner, repo, accessToken }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as GitHubApiResult & Record<string, unknown>;
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to get repository info');
       }
 
-      setRepoInfo(result);
+      setRepoInfo(result as Record<string, unknown>);
       setShowInfo(true);
     } catch (error: any) {
       toast.error(`Failed to get info: ${error.message}`);
@@ -159,11 +175,14 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+      <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-bolt-elements-borderColor">
-          <h2 className="text-lg font-semibold">GitHub Sync</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-gradient-to-r from-purple-900/30 to-orange-900/30">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <span className="i-ph:github-logo text-xl" />
+            GitHub Sync
+          </h2>
           <IconButton icon="i-ph:x" onClick={onClose} />
         </div>
 
@@ -171,7 +190,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
         <div className="p-6 space-y-6">
           {/* Mode Selection */}
           <div>
-            <label className="block text-sm font-medium mb-2">Action</label>
+            <label className="block text-sm font-medium mb-2 text-gray-300">Action</label>
             <div className="grid grid-cols-4 gap-2">
               {(['clone', 'pull', 'push', 'sync'] as const).map((m) => (
                 <button
@@ -180,8 +199,8 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                   className={classNames(
                     'px-4 py-2 rounded text-sm font-medium transition-colors',
                     mode === m
-                      ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-                      : 'bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
                   )}
                 >
                   {m.charAt(0).toUpperCase() + m.slice(1)}
@@ -194,7 +213,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
           {mode === 'clone' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Repository URL</label>
+                <label className="block text-sm font-medium mb-2 text-gray-300">Repository URL</label>
                 <input
                   type="text"
                   value={repoUrl}
@@ -203,11 +222,11 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                     parseRepoUrl(e.target.value);
                   }}
                   placeholder="https://github.com/owner/repo"
-                  className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded"
+                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-2 text-gray-300">
                   Access Token (optional for public repos)
                 </label>
                 <input
@@ -215,7 +234,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                   value={accessToken}
                   onChange={(e) => setAccessToken(e.target.value)}
                   placeholder="ghp_..."
-                  className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded"
+                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -226,75 +245,95 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Owner</label>
+                  <label className="block text-sm font-medium mb-2 text-gray-300">Owner</label>
                   <input
                     type="text"
                     value={owner}
                     onChange={(e) => setOwner(e.target.value)}
                     placeholder="username"
-                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded"
+                    className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Repository</label>
+                  <label className="block text-sm font-medium mb-2 text-gray-300">Repository</label>
                   <input
                     type="text"
                     value={repo}
                     onChange={(e) => setRepo(e.target.value)}
                     placeholder="repo-name"
-                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded"
+                    className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Branch</label>
+                <label className="block text-sm font-medium mb-2 text-gray-300">Branch</label>
                 <input
                   type="text"
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
                   placeholder="main"
-                  className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded"
+                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Access Token</label>
+                <label className="block text-sm font-medium mb-2 text-gray-300">Access Token</label>
                 <input
                   type="password"
                   value={accessToken}
                   onChange={(e) => setAccessToken(e.target.value)}
                   placeholder="ghp_..."
-                  className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded"
+                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
                 />
-                <p className="text-xs text-bolt-elements-textSecondary mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Create at:{' '}
                   <a
                     href="https://github.com/settings/tokens"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline"
+                    className="text-orange-400 underline hover:text-orange-300"
                   >
                     github.com/settings/tokens
                   </a>
                 </p>
               </div>
+              {(mode === 'push' || mode === 'sync') && (
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-300">Commit Message</label>
+                  <input
+                    type="text"
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    placeholder="Update from Recoder"
+                    className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+              )}
             </div>
           )}
 
           {/* Repository Info */}
           {showInfo && repoInfo && (
-            <div className="p-4 bg-bolt-elements-background-depth-3 rounded space-y-2">
-              <h3 className="font-semibold">{repoInfo.repository.fullName}</h3>
-              <p className="text-sm text-bolt-elements-textSecondary">
+            <div className="p-4 bg-gray-800 border border-gray-700 rounded-lg space-y-2">
+              <h3 className="font-semibold text-white">{repoInfo.repository.fullName}</h3>
+              <p className="text-sm text-gray-400">
                 {repoInfo.repository.description}
               </p>
-              <div className="flex gap-4 text-sm">
+              <div className="flex gap-4 text-sm text-gray-300">
                 <span>⭐ {repoInfo.repository.stars}</span>
                 <span>🍴 {repoInfo.repository.forks}</span>
-                <span><span className="i-ph:git-branch" /> {repoInfo.branches.length} branches</span>
+                <span><span className="i-ph:git-branch text-purple-400" /> {repoInfo.branches.length} branches</span>
               </div>
-              <div className="text-xs text-bolt-elements-textSecondary">
+              <div className="text-xs text-gray-500">
                 Last updated: {new Date(repoInfo.repository.updatedAt).toLocaleDateString()}
               </div>
+            </div>
+          )}
+
+          {/* Status Indicator */}
+          {isLoading && status && (
+            <div className="flex items-center gap-2 p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
+              <div className="animate-spin w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full" />
+              <span className="text-sm text-purple-300">{status}</span>
             </div>
           )}
 
@@ -304,7 +343,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
               <button
                 onClick={handleClone}
                 disabled={isLoading || !repoUrl}
-                className="flex-1 px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded font-medium disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium disabled:opacity-50"
               >
                 {isLoading ? 'Cloning...' : 'Clone Repository'}
               </button>
@@ -314,14 +353,14 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                 <button
                   onClick={handleGetInfo}
                   disabled={isLoading || !owner || !repo || !accessToken}
-                  className="px-4 py-2 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 rounded font-medium"
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded font-medium"
                 >
                   Get Info
                 </button>
                 <button
                   onClick={handlePull}
                   disabled={isLoading || !owner || !repo || !accessToken}
-                  className="flex-1 px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded font-medium disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium disabled:opacity-50"
                 >
                   {isLoading ? 'Pulling...' : 'Pull Changes'}
                 </button>
@@ -331,7 +370,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
               <button
                 onClick={() => handleSync('push')}
                 disabled={isLoading || !owner || !repo || !accessToken}
-                className="flex-1 px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded font-medium disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-medium disabled:opacity-50"
               >
                 {isLoading ? 'Pushing...' : 'Push Changes'}
               </button>
@@ -341,21 +380,21 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                 <button
                   onClick={() => handleSync('pull')}
                   disabled={isLoading || !owner || !repo || !accessToken}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium disabled:opacity-50"
                 >
                   {isLoading ? 'Syncing...' : '↓ Pull Only'}
                 </button>
                 <button
                   onClick={() => handleSync('push')}
                   disabled={isLoading || !owner || !repo || !accessToken}
-                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-medium disabled:opacity-50"
                 >
                   {isLoading ? 'Syncing...' : '↑ Push Only'}
                 </button>
                 <button
                   onClick={() => handleSync('both')}
                   disabled={isLoading || !owner || !repo || !accessToken}
-                  className="flex-1 px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded font-medium disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-orange-500 hover:from-purple-700 hover:to-orange-600 text-white rounded font-medium disabled:opacity-50"
                 >
                   {isLoading ? 'Syncing...' : '⇅ Sync Both'}
                 </button>

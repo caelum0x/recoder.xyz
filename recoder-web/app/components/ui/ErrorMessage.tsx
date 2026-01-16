@@ -73,7 +73,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
             className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
             title={expanded ? 'Show less' : 'Show more'}
           >
-            <div className={classNames('i-ph:caret-down text-lg transition-transform', expanded && 'rotate-180')} />
+            <div className={classNames('i-ph:caret-down text-lg transition-transform', expanded ? 'rotate-180' : '')} />
           </button>
           {/* Dismiss button */}
           {onDismiss && (
@@ -100,7 +100,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
                 'bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover',
                 'text-bolt-elements-button-primary-text',
                 'border border-bolt-elements-borderColor',
-                index === 0 && solution.autoFixable && 'ring-2 ring-accent-500/50'
+                index === 0 && solution.autoFixable ? 'ring-2 ring-accent-500/50' : ''
               )}
               title={index === 0 && solution.autoFixable ? 'Automatic fix available' : ''}
             >

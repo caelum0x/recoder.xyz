@@ -10,8 +10,26 @@ import WebSocket from 'ws';
 import http from 'http';
 import { mountFiles } from './fileMount.js';
 import * as pty from 'node-pty';
+import { WebSocketRPC } from './websocket-rpc.js';
+import { devServerManager } from './dev-server.js';
+import { ContainerLifecycleManager } from './container-lifecycle.js';
+import { snapshotManager } from './snapshot-manager.js';
+import { autoRestoreManager, parseAllErrors, hasBlockingErrors } from './auto-restore.js';
+import { languageServerManager } from './language-server.js';
+import { searchService } from './search.js';
+import { fileWatcher } from './file-watcher.js';
+import { sessionStore } from './session-store.js';
+import { containerPool } from './container-pool.js';
 
 dotenv.config();
+
+// Initialize Redis connection (non-blocking)
+sessionStore.connect().catch(() => {
+  console.log('[Server] Redis not available, using memory fallback for sessions');
+});
+
+// Initialize container pool (non-blocking) - pre-warms containers for faster project creation
+const ENABLE_CONTAINER_POOL = process.env.ENABLE_CONTAINER_POOL !== 'false';
 
 const docker = new Docker();
 
@@ -60,7 +78,7 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
 const { app } = expressWs(express());
 
 // Trust proxy for rate limiting behind nginx
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -101,7 +119,7 @@ const creatingContainers = new Map<string, Promise<{ containerId: string; port: 
 
 const IMAGE_NAME = 'recoder-workspace:latest';
 const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min
-const MEMORY_LIMIT = 1024 * 1024 * 1024; // 1GB
+const MEMORY_LIMIT = 2 * 1024 * 1024 * 1024; // 2GB (1GB caused OOM with bun install + vite)
 const CPU_QUOTA = 100000; // 100% of 1 CPU
 
 // Track allocated ports to prevent race conditions
@@ -152,9 +170,109 @@ function releasePorts(port: number, ptyPort: number) {
   allocatedPorts.delete(ptyPort);
 }
 
+// Initialize container pool with shared port management
+// NOTE: Actual initialization happens in startupSequence() below to avoid race with cleanup
+
+/**
+ * Execute a command inside a container and return stdout
+ */
+async function execInContainer(containerId: string, cmd: string): Promise<string> {
+  const container = docker.getContainer(containerId);
+  const exec = await container.exec({
+    Cmd: ['/bin/bash', '-c', cmd],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+
+  const stream = await exec.start({});
+  const chunks: Buffer[] = [];
+  
+  return new Promise<string>((resolve, reject) => {
+    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    stream.on('end', () => {
+      const raw = Buffer.concat(chunks);
+      let result = '';
+      let i = 0;
+      while (i < raw.length) {
+        if (i + 8 <= raw.length) {
+          const size = raw.readUInt32BE(i + 4);
+          if (i + 8 + size <= raw.length) {
+            result += raw.slice(i + 8, i + 8 + size).toString();
+            i += 8 + size;
+            continue;
+          }
+        }
+        result += raw.slice(i).toString();
+        break;
+      }
+      resolve(result.trim());
+    });
+    stream.on('error', reject);
+  });
+}
+
+/**
+ * Ensure a container is running (auto-restart if stopped)
+ * Returns true if container is running, false if it needs to be recreated
+ */
+async function ensureContainerRunning(
+  entry: { id: string; lastActive: number; port: number; ptyPort: number; backgroundDev?: boolean },
+  projectId: string
+): Promise<{ running: boolean; restarted: boolean; error?: string }> {
+  try {
+    const container = docker.getContainer(entry.id);
+    const info = await container.inspect();
+
+    if (info.State.Running) {
+      // Container is already running
+      return { running: true, restarted: false };
+    }
+
+    if (info.State.Status === 'exited' || info.State.Status === 'stopped') {
+      // Container is stopped, try to restart it
+      console.log(`🔄 [Container] Restarting stopped container for ${projectId}: ${entry.id.slice(0, 12)}`);
+      await container.start();
+      console.log(`✅ [Container] Successfully restarted container for ${projectId}`);
+      return { running: true, restarted: true };
+    }
+
+    if (info.State.Status === 'paused') {
+      // Container is paused, unpause it
+      console.log(`▶️ [Container] Unpausing container for ${projectId}: ${entry.id.slice(0, 12)}`);
+      await container.unpause();
+      return { running: true, restarted: true };
+    }
+
+    // Container is in some other state (created, dead, etc.)
+    console.log(`⚠️ [Container] Container ${entry.id.slice(0, 12)} is in state: ${info.State.Status}`);
+    return { running: false, restarted: false, error: `Container in unexpected state: ${info.State.Status}` };
+  } catch (error: any) {
+    // Container doesn't exist or other error
+    console.error(`❌ [Container] Error checking container ${entry.id.slice(0, 12)}:`, error.message);
+
+    // If container not found, remove from registry so it can be recreated
+    if (error.statusCode === 404) {
+      console.log(`🗑️ [Container] Removing stale container entry for ${projectId}`);
+      containers.delete(projectId);
+      releasePorts(entry.port, entry.ptyPort);
+    }
+
+    return { running: false, restarted: false, error: error.message };
+  }
+}
+
 // Health check
 app.get('/health', (_, res) => {
   res.json({ status: 'ok', containers: containers.size });
+});
+
+// Pool stats endpoint
+app.get('/api/pool/stats', (_, res) => {
+  if (!ENABLE_CONTAINER_POOL) {
+    return res.json({ enabled: false });
+  }
+  const stats = containerPool.getStats();
+  res.json({ enabled: true, ...stats });
 });
 
 // Create or get container for project
@@ -166,12 +284,25 @@ app.post('/api/container', containerLimiter, async (req, res) => {
     // Fetch user's Claude Code token if userId provided
     const claudeCodeToken = userId ? await fetchClaudeCodeToken(userId) : null;
 
-    // Return existing container
+    // Return existing container (after ensuring it's running)
     const existing = containers.get(projectId);
     if (existing) {
       existing.lastActive = Date.now();
-      console.log(`♻️ Reusing existing container: ${existing.id.slice(0, 12)} for ${projectId}`);
-      return res.json({ containerId: existing.id, reused: true, port: existing.port, ptyPort: existing.ptyPort });
+
+      // Check if container is actually running, restart if needed
+      const containerStatus = await ensureContainerRunning(existing, projectId);
+
+      if (containerStatus.running) {
+        if (containerStatus.restarted) {
+          console.log(`🔄 Restarted and reusing container: ${existing.id.slice(0, 12)} for ${projectId}`);
+        } else {
+          console.log(`♻️ Reusing existing container: ${existing.id.slice(0, 12)} for ${projectId}`);
+        }
+        return res.json({ containerId: existing.id, reused: true, port: existing.port, ptyPort: existing.ptyPort });
+      }
+
+      // Container couldn't be restarted, will be recreated below
+      console.log(`⚠️ Container ${existing.id.slice(0, 12)} couldn't be restarted, creating new one`);
     }
 
     // 🔒 RACE CONDITION FIX: Check if container is already being created
@@ -193,59 +324,103 @@ app.post('/api/container', containerLimiter, async (req, res) => {
     const creationPromise = (async () => {
       let hostPort: number | undefined;
       let ptyPort: number | undefined;
+      let containerId: string | undefined;
+      let fromPool = false;
 
       try {
-        // Allocate host ports for preview and PTY
-        const ports = await allocatePort();
-        hostPort = ports.preview;
-        ptyPort = ports.pty;
+        // 🚀 TRY POOL FIRST - instant container acquisition
+        if (ENABLE_CONTAINER_POOL) {
+          const pooled = await containerPool.acquire();
+          if (pooled) {
+            console.log(`🚀 [Pool] Acquired pre-warmed container ${pooled.id.slice(0, 12)} for ${projectId}`);
+            containerId = pooled.id;
+            hostPort = pooled.port;
+            ptyPort = pooled.ptyPort;
+            fromPool = true;
 
-        // Build environment variables for container
-        const containerEnv = ['PTY_PORT=9999'];
+            // Inject project-specific env vars into pooled container
+            const containerInstance = docker.getContainer(containerId);
+            const exec = await containerInstance.exec({
+              Cmd: ['sh', '-c', `export RECODER_PROJECT_ID=${projectId}`],
+              AttachStdout: false,
+              AttachStderr: false,
+            });
+            await exec.start({ Detach: true });
 
-        // Inject Claude Code OAuth token if user has one configured
-        if (claudeCodeToken) {
-          containerEnv.push(`CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
-          console.log(`[Claude Code] Injecting OAuth token into container for project ${projectId}`);
+            // Inject Claude Code token if available
+            if (claudeCodeToken) {
+              const tokenExec = await containerInstance.exec({
+                Cmd: ['sh', '-c', `export CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`],
+                AttachStdout: false,
+                AttachStderr: false,
+              });
+              await tokenExec.start({ Detach: true });
+              console.log(`[Claude Code] Injecting OAuth token into pooled container for project ${projectId}`);
+            }
+          }
         }
 
-        // Create new container with security sandbox and port mapping
-        const container = await docker.createContainer({
-          Image: IMAGE_NAME,
-          Tty: true,
-          OpenStdin: true,
-          WorkingDir: '/workspace',
-          Env: containerEnv,
-          ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {}, '9999/tcp': {} },
-          HostConfig: {
-            Memory: MEMORY_LIMIT,
-            CpuPeriod: 100000,
-            CpuQuota: CPU_QUOTA,
-            NetworkMode: 'bridge',
-            PortBindings: {
-              '3000/tcp': [{ HostPort: String(hostPort) }],
-              '5173/tcp': [{ HostPort: String(hostPort + 1) }],
-              '8080/tcp': [{ HostPort: String(hostPort + 2) }],
-              '9999/tcp': [{ HostPort: String(ptyPort) }],
+        // FALLBACK: Create new container if pool empty
+        if (!containerId) {
+          // Allocate host ports for preview and PTY
+          const ports = await allocatePort();
+          hostPort = ports.preview;
+          ptyPort = ports.pty;
+
+          // Build environment variables for container
+          const containerEnv = [
+            'PTY_PORT=9999',
+            'RECODER_CONTAINER=true',
+            `RECODER_PROJECT_ID=${projectId}`,
+            `DOCKER_BACKEND_URL=https://docker.recoder.xyz`,
+          ];
+
+          // Inject Claude Code OAuth token if user has one configured
+          if (claudeCodeToken) {
+            containerEnv.push(`CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
+            console.log(`[Claude Code] Injecting OAuth token into container for project ${projectId}`);
+          }
+
+          // Create new container with security sandbox and port mapping
+          const container = await docker.createContainer({
+            Image: IMAGE_NAME,
+            Tty: true,
+            OpenStdin: true,
+            WorkingDir: '/workspace',
+            Env: containerEnv,
+            ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {}, '9999/tcp': {} },
+            HostConfig: {
+              Memory: MEMORY_LIMIT,
+              CpuPeriod: 100000,
+              CpuQuota: CPU_QUOTA,
+              NetworkMode: 'bridge',
+              PortBindings: {
+                '3000/tcp': [{ HostPort: String(hostPort) }],
+                '5173/tcp': [{ HostPort: String(hostPort + 1) }],
+                '8080/tcp': [{ HostPort: String(hostPort + 2) }],
+                '9999/tcp': [{ HostPort: String(ptyPort) }],
+              },
+              // Named volume for node_modules persistence
+              Binds: [
+                `recoder-${projectId}-node_modules:/workspace/node_modules`,
+                `recoder-pnpm-store:/pnpm-store`,
+              ],
             },
-            // Named volume for node_modules persistence
-            Binds: [
-              `recoder-${projectId}-node_modules:/workspace/node_modules`,
-              `recoder-pnpm-store:/pnpm-store`,
-            ],
-          },
-        });
+          });
 
-        const containerInstance = await container;
-        await containerInstance.start();
-        // default: no background dev server started yet
-        containers.set(projectId, { id: containerInstance.id, lastActive: Date.now(), port: hostPort, ptyPort, backgroundDev: false });
+          const containerInstance = await container;
+          await containerInstance.start();
+          containerId = containerInstance.id;
+        }
 
-        console.log(`✅ Container created: ${containerInstance.id.slice(0, 12)} for ${projectId} (preview: ${hostPort}, pty: ${ptyPort})`);
-        return { containerId: containerInstance.id, port: hostPort, ptyPort };
+        // Register container
+        containers.set(projectId, { id: containerId, lastActive: Date.now(), port: hostPort!, ptyPort: ptyPort!, backgroundDev: false });
+
+        console.log(`✅ Container ${fromPool ? '(from pool)' : 'created'}: ${containerId.slice(0, 12)} for ${projectId} (preview: ${hostPort}, pty: ${ptyPort})`);
+        return { containerId, port: hostPort!, ptyPort: ptyPort!, fromPool };
       } catch (err) {
-        // Cleanup allocated ports on failure
-        if (hostPort !== undefined && ptyPort !== undefined) {
+        // Cleanup allocated ports on failure (only if not from pool)
+        if (!fromPool && hostPort !== undefined && ptyPort !== undefined) {
           releasePorts(hostPort, ptyPort);
         }
         throw err;
@@ -260,7 +435,13 @@ app.post('/api/container', containerLimiter, async (req, res) => {
 
     // Wait for creation to complete and return result
     const result = await creationPromise;
-    res.json({ containerId: result.containerId, reused: false, port: result.port, ptyPort: result.ptyPort });
+    res.json({ 
+      containerId: result.containerId, 
+      reused: false, 
+      fromPool: result.fromPool,
+      port: result.port, 
+      ptyPort: result.ptyPort 
+    });
   } catch (err: any) {
     console.error('❌ Container create error:', err.message);
     res.status(500).json({ error: err.message });
@@ -303,11 +484,18 @@ app.post('/api/mount/:projectId', async (req, res) => {
 
 // Write file to container
 app.post('/api/file/:projectId', async (req, res) => {
-  console.log('📝 File write request:', req.params.projectId, req.body?.path);
+  const projectId = req.params.projectId;
+  console.log('📝 File write request:', projectId, req.body?.path);
   try {
     const { path, content } = req.body;
-    const entry = containers.get(req.params.projectId);
+    const entry = containers.get(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    // Ensure container is running before file operations
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({ error: 'Container not running', canRetry: true });
+    }
 
     entry.lastActive = Date.now();
     const container = docker.getContainer(entry.id);
@@ -330,10 +518,17 @@ app.post('/api/file/:projectId', async (req, res) => {
 
 // Batch write multiple files at once (much faster than individual writes)
 app.post('/api/files/:projectId/batch', async (req, res) => {
+  const projectId = req.params.projectId;
   try {
     const { files } = req.body; // Array of { path, content }
-    const entry = containers.get(req.params.projectId);
+    const entry = containers.get(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    // Ensure container is running before file operations
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({ error: 'Container not running', canRetry: true });
+    }
 
     entry.lastActive = Date.now();
     const container = docker.getContainer(entry.id);
@@ -370,16 +565,91 @@ app.post('/api/files/:projectId/batch', async (req, res) => {
 
 // Read file from container
 app.get('/api/file/:projectId', async (req, res) => {
+  const projectId = req.params.projectId;
   try {
     const { path } = req.query;
-    const entry = containers.get(req.params.projectId);
+    const entry = containers.get(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    // Ensure container is running
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({ error: 'Container not running', canRetry: true });
+    }
 
     entry.lastActive = Date.now();
     const container = docker.getContainer(entry.id);
     const content = await execCommand(container, `cat "${path}"`);
 
     res.json({ content });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete file or folder
+app.delete('/api/file/:projectId', async (req, res) => {
+  try {
+    const { path } = req.body;
+    const entry = containers.get(req.params.projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+    
+    // Create snapshot before delete
+    await snapshotManager.createSnapshot(entry.id, req.params.projectId, `Before delete: ${path}`, 'auto');
+    
+    // Delete file or folder
+    await execCommand(container, `rm -rf "${path}"`);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rename/move file or folder
+app.put('/api/file/:projectId/rename', async (req, res) => {
+  try {
+    const { oldPath, newPath } = req.body;
+    const entry = containers.get(req.params.projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+    
+    // Create snapshot before rename
+    await snapshotManager.createSnapshot(entry.id, req.params.projectId, `Before rename: ${oldPath}`, 'auto');
+    
+    // Create parent directory if needed
+    const dir = newPath.substring(0, newPath.lastIndexOf('/'));
+    if (dir) {
+      await execCommand(container, `mkdir -p "${dir}"`);
+    }
+    
+    // Move/rename
+    await execCommand(container, `mv "${oldPath}" "${newPath}"`);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create folder
+app.post('/api/folder/:projectId', async (req, res) => {
+  try {
+    const { path } = req.body;
+    const entry = containers.get(req.params.projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+    
+    await execCommand(container, `mkdir -p "${path}"`);
+
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -406,6 +676,7 @@ app.get('/api/files/:projectId', async (req, res) => {
 app.post('/api/exec/:projectId', async (req, res) => {
   try {
     let { command, cwd = '/workspace', background = false } = req.body;
+    const projectId = req.params.projectId;
 
     // Sanitize cwd - ensure it's a valid absolute path
     if (!cwd || typeof cwd !== 'string') cwd = '/workspace';
@@ -414,8 +685,18 @@ app.post('/api/exec/:projectId', async (req, res) => {
     // Remove duplicate /workspace if present
     cwd = cwd.replace(/\/workspace\/workspace/, '/workspace');
 
-    const entry = containers.get(req.params.projectId);
+    const entry = containers.get(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    // Ensure container is running before exec
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({
+        error: 'Container not running',
+        message: containerStatus.error || 'Container could not be started',
+        canRetry: true
+      });
+    }
 
     entry.lastActive = Date.now();
     const container = docker.getContainer(entry.id);
@@ -432,7 +713,8 @@ app.post('/api/exec/:projectId', async (req, res) => {
 
       // Start the dev server using setsid for proper daemonization
       // NOTE: No & at the end! Docker exec Detach: true handles backgrounding
-      const startScript = `cd "${cwd}" && exec setsid ${command} > /tmp/dev.log 2>&1 < /dev/null`;
+      // BROWSER=none prevents Vite from trying to open xdg-open (which doesn't exist in Docker)
+      const startScript = `cd "${cwd}" && BROWSER=none exec setsid ${command} > /tmp/dev.log 2>&1 < /dev/null`;
 
       const exec = await container.exec({
         Cmd: ['/bin/bash', '-c', startScript],
@@ -516,12 +798,418 @@ app.get('/api/logs/:projectId', async (req, res) => {
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
-
-    // Read last 100 lines of dev server logs
-    const logs = await execCommand(container, `tail -n 100 /tmp/dev.log 2>/dev/null || echo "No logs found"`);
+    const tail = parseInt(req.query.tail as string) || 100;
+    const logs = await devServerManager.getLogs(entry.id, req.params.projectId, tail);
 
     res.json({ logs });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get parsed build errors for frontend
+app.get('/api/errors/:projectId', async (req, res) => {
+  try {
+    const entry = containers.get(req.params.projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+
+    // Get recent logs
+    const tail = parseInt(req.query.tail as string) || 200;
+    const logs = await devServerManager.getLogs(entry.id, req.params.projectId, tail);
+
+    // Parse errors from logs
+    const errors = parseAllErrors(logs);
+    const blocking = hasBlockingErrors(logs);
+
+    // Get dev server status
+    const devStatus = devServerManager.getStatus(req.params.projectId);
+
+    // Auto-restore on blocking errors (if enabled)
+    let autoRestoreResult = null;
+    if (blocking && req.query.autoRestore !== 'false') {
+      const { hasError } = autoRestoreManager.detectErrors(logs);
+      if (hasError && autoRestoreManager.shouldRestore(req.params.projectId)) {
+        console.log(`[AutoRestore] Blocking errors detected for ${req.params.projectId}, attempting restore...`);
+        autoRestoreResult = await autoRestoreManager.attemptRestore(entry.id, req.params.projectId);
+        if (autoRestoreResult.success) {
+          console.log(`[AutoRestore] Successfully restored to ${autoRestoreResult.restoredTo}`);
+        }
+      }
+    } else if (!blocking && errors.length === 0) {
+      // Reset error count when build succeeds
+      autoRestoreManager.resetErrors(req.params.projectId);
+    }
+
+    res.json({
+      errors,
+      hasBlockingErrors: blocking,
+      devServerStatus: devStatus?.status === 'running' ? 'running' : (blocking ? 'crashed' : 'idle'),
+      errorCount: errors.length,
+      lastLogTimestamp: Date.now(),
+      autoRestore: autoRestoreResult,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manually trigger auto-restore
+app.post('/api/auto-restore/:projectId', async (req, res) => {
+  try {
+    const entry = containers.get(req.params.projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+
+    // Force restore (bypass cooldown check)
+    const { force = false, snapshotId } = req.body;
+
+    if (snapshotId) {
+      // Restore to specific snapshot
+      const snapshot = await snapshotManager.restoreSnapshot(entry.id, req.params.projectId, snapshotId);
+      res.json({ success: true, restoredTo: snapshotId, snapshot });
+    } else {
+      // Auto-restore to last working snapshot
+      const result = await autoRestoreManager.attemptRestore(entry.id, req.params.projectId);
+      res.json(result);
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Start dev server in background
+app.post('/api/dev-server/start', async (req, res) => {
+  try {
+    const { projectId, framework = 'vite' } = req.body;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const ports = [entry.port + 1, entry.port, entry.port + 2]; // Vite, Next.js, Other
+    
+    const result = await devServerManager.start(entry.id, projectId, framework, ports);
+    entry.backgroundDev = true;
+    
+    res.json(result);
+  } catch (err: any) {
+    console.error('❌ Dev server start failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Stop dev server
+app.post('/api/dev-server/stop', async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const success = await devServerManager.stop(entry.id, projectId);
+    entry.backgroundDev = false;
+    
+    res.json({ success });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Restart dev server
+app.post('/api/dev-server/restart', async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const ports = [entry.port + 1, entry.port, entry.port + 2];
+    
+    const result = await devServerManager.restart(entry.id, projectId, ports);
+    
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get dev server status
+app.get('/api/dev-server/status/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const status = devServerManager.getStatus(projectId);
+    const isRunning = devServerManager.isRunning(projectId);
+    
+    res.json({ status, isRunning, backgroundDev: entry.backgroundDev });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Configure auto-restore
+app.post('/api/auto-restore/config', async (req, res) => {
+  try {
+    const { enabled, maxRetries, cooldownMs } = req.body;
+    autoRestoreManager.configure({ enabled, maxRetries, cooldownMs });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// Snapshot API - Git-based project state management
+// ============================================================
+
+// Create a snapshot (save current state)
+app.post('/api/snapshot/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { message = 'Manual snapshot', author = 'user' } = req.body;
+    
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const snapshot = await snapshotManager.createSnapshot(entry.id, projectId, message, author);
+    
+    res.json(snapshot);
+  } catch (err: any) {
+    console.error('❌ Snapshot create error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List all snapshots
+app.get('/api/snapshots/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const limit = parseInt(req.query.limit as string) || 50;
+    
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const snapshots = await snapshotManager.listSnapshots(entry.id, limit);
+    
+    res.json({ snapshots });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get current snapshot (HEAD)
+app.get('/api/snapshot/:projectId/current', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const snapshot = await snapshotManager.getCurrentSnapshot(entry.id);
+    
+    res.json({ snapshot });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Restore to a specific snapshot
+app.post('/api/snapshot/:projectId/restore', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { snapshotId } = req.body;
+    
+    if (!snapshotId) {
+      return res.status(400).json({ error: 'snapshotId required' });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    await snapshotManager.restoreSnapshot(entry.id, projectId, snapshotId);
+    
+    res.json({ success: true, restoredTo: snapshotId });
+  } catch (err: any) {
+    console.error('❌ Snapshot restore error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get diff between snapshots
+app.get('/api/snapshot/:projectId/diff', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { from, to = 'HEAD' } = req.query;
+    
+    if (!from) {
+      return res.status(400).json({ error: 'from snapshot required' });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const diff = await snapshotManager.getDiff(entry.id, from as string, to as string);
+    
+    res.json(diff);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get file diff between snapshots
+app.get('/api/snapshot/:projectId/file-diff', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { path, from, to = 'HEAD' } = req.query;
+    
+    if (!path || !from) {
+      return res.status(400).json({ error: 'path and from snapshot required' });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const diff = await snapshotManager.getFileDiff(
+      entry.id, 
+      path as string, 
+      from as string, 
+      to as string
+    );
+    
+    res.json({ diff });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get file content at a specific snapshot
+app.get('/api/snapshot/:projectId/file', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { path, snapshotId } = req.query;
+    
+    if (!path || !snapshotId) {
+      return res.status(400).json({ error: 'path and snapshotId required' });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const content = await snapshotManager.getFileAtSnapshot(
+      entry.id,
+      path as string,
+      snapshotId as string
+    );
+    
+    if (content === null) {
+      return res.status(404).json({ error: 'File not found at snapshot' });
+    }
+
+    res.json({ content });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check for unsaved changes
+app.get('/api/snapshot/:projectId/status', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const hasChanges = await snapshotManager.hasUnsavedChanges(entry.id);
+    const current = await snapshotManager.getCurrentSnapshot(entry.id);
+    
+    res.json({ hasChanges, current });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Enable/disable auto-save
+app.post('/api/snapshot/:projectId/auto-save', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { enabled, intervalMs = 5 * 60 * 1000 } = req.body;
+    
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    if (enabled) {
+      snapshotManager.startAutoSave(entry.id, projectId, intervalMs);
+    } else {
+      snapshotManager.stopAutoSave(projectId);
+    }
+    
+    res.json({ success: true, autoSaveEnabled: enabled });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Compress snapshots (git gc)
+app.post('/api/snapshot/:projectId/compress', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const result = await snapshotManager.compress(entry.id);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Prune old snapshots
+app.post('/api/snapshot/:projectId/prune', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { keepCount = 50 } = req.body;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const pruned = await snapshotManager.pruneOldSnapshots(entry.id, keepCount);
+    res.json({ success: true, prunedCount: pruned });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get snapshot stats
+app.get('/api/snapshot/:projectId/stats', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const stats = await snapshotManager.getStats(entry.id);
+    res.json(stats);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Keep-alive / reset timer endpoint
+app.post('/api/keep-alive/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    lifecycleManager.resetTimer(projectId);
+    
+    const timeRemaining = lifecycleManager.getIdleTimeRemaining(projectId);
+    res.json({ success: true, timeRemaining });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -594,69 +1282,465 @@ async function waitForDevServer(ports: number[], maxWaitMs = 60000): Promise<{ r
 }
 
 // Terminal WebSocket - Proxy to container's PTY server
+// Each terminal gets its own independent session with RPC support
+const terminalSessions = new Map<string, { pty: pty.IPty; projectId: string; rpc: WebSocketRPC }>();
+
+// Initialize Container Lifecycle Manager
+const lifecycleManager = new ContainerLifecycleManager(containers);
+lifecycleManager.setCleanupHandler(async (projectId, containerId) => {
+  try {
+    const container = docker.getContainer(containerId);
+    await container.stop().catch(() => {});
+    await container.remove().catch(() => {});
+    const entry = containers.get(projectId);
+    if (entry) {
+      releasePorts(entry.port, entry.ptyPort);
+      containers.delete(projectId);
+    }
+    console.log(`[Lifecycle] Cleaned up container for ${projectId}`);
+  } catch (error: any) {
+    console.error(`[Lifecycle] Cleanup error: ${error.message}`);
+  }
+});
+
 app.ws('/terminal/:projectId', async (ws, req) => {
   const { projectId } = req.params;
+  const terminalId = req.query.terminalId as string || `term-${Date.now()}`;
 
-  const entry = containers.get(projectId);
+  let entry = containers.get(projectId);
+  
+  // Try to recover container from Docker if not in memory (after backend restart)
+  if (!entry) {
+    console.log(`⚠️ [Terminal] Container not in memory for ${projectId}, attempting recovery...`);
+    try {
+      const allContainers = await docker.listContainers({ all: false });
+      for (const containerInfo of allContainers) {
+        const volumes = Object.keys(containerInfo.Mounts?.reduce((acc: any, m: any) => {
+          if (m.Name) acc[m.Name] = true;
+          return acc;
+        }, {}) || {});
+        
+        if (volumes.some(v => v.includes(`recoder-${projectId}`))) {
+          const ports = containerInfo.Ports || [];
+          let basePort = 0;
+          let ptyPort = 0;
+          
+          for (const p of ports) {
+            if (p.PrivatePort === 3000 && p.PublicPort) basePort = p.PublicPort;
+            if (p.PrivatePort === 5173 && p.PublicPort && !basePort) basePort = p.PublicPort - 1;
+            if (p.PrivatePort === 9999 && p.PublicPort) ptyPort = p.PublicPort;
+          }
+          
+          if (basePort > 0) {
+            entry = {
+              id: containerInfo.Id,
+              lastActive: Date.now(),
+              port: basePort,
+              ptyPort: ptyPort || basePort + 3,
+              backgroundDev: false
+            };
+            containers.set(projectId, entry);
+            console.log(`🔄 [Terminal] Recovered container for ${projectId}: ${containerInfo.Id.slice(0, 12)}`);
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`❌ [Terminal] Recovery failed for ${projectId}:`, err);
+    }
+  }
+  
   if (!entry) {
     ws.close(1008, 'Container not found');
     return;
   }
 
   entry.lastActive = Date.now();
+  lifecycleManager.resetTimer(projectId);
 
-  // Wait for PTY server to be ready
-  const ptyReady = await waitForPtyServer(entry.ptyPort);
-  if (!ptyReady) {
-    console.error('PTY server not ready for project:', projectId);
-    ws.close(1011, 'PTY server not ready');
+  // Initialize WebSocket RPC for this connection
+  const rpc = new WebSocketRPC(ws as any);
+
+  // Check if this terminal session already exists
+  let session = terminalSessions.get(terminalId);
+  
+  if (!session) {
+    // Create new independent PTY session via docker exec
+    const container = docker.getContainer(entry.id);
+    
+    // Create exec instance for interactive shell
+    const exec = await container.exec({
+      Cmd: ['/bin/bash'],
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: true,
+    });
+
+    const stream = await exec.start({ hijack: true, stdin: true }) as Duplex;
+    
+    console.log(`✅ Terminal session created: ${terminalId} for ${projectId}`);
+
+    // Send initial prompt setup
+    stream.write('cd /workspace && clear\n');
+
+    // Handle data from container to client
+    stream.on('data', (data: Buffer) => {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    stream.on('error', (err: Error) => {
+      console.error(`Terminal ${terminalId} error:`, err.message);
+    });
+
+    stream.on('end', () => {
+      console.log(`Terminal ${terminalId} stream ended`);
+      terminalSessions.delete(terminalId);
+      if (ws.readyState === ws.OPEN) {
+        ws.close(1000);
+      }
+    });
+
+    // Save terminal session to Redis for persistence
+    sessionStore.saveTerminalSession({
+      projectId,
+      terminalId,
+      createdAt: Date.now(),
+      lastActive: Date.now(),
+      history: [],
+      cwd: '/workspace',
+      env: {},
+    }).catch(() => {});
+
+    // Register RPC handlers for this terminal session
+    rpc.register('terminal.resize', async ({ cols, rows }) => {
+      // Docker exec doesn't support resize directly, but we acknowledge
+      console.log(`[RPC] Terminal resize: ${cols}x${rows}`);
+      return { success: true };
+    });
+
+    rpc.register('terminal.clear', async () => {
+      stream.write('\x1bc'); // Clear screen ANSI escape
+      return { success: true };
+    });
+
+    rpc.register('terminal.kill', async () => {
+      stream.write('\x03'); // Send Ctrl+C
+      return { success: true };
+    });
+
+    rpc.register('terminal.saveHistory', async ({ command }) => {
+      // Save command to container's bash history
+      await execInContainer(entry.id, `echo "${command.replace(/"/g, '\\"')}" >> ~/.bash_history`);
+      // Also save to Redis for persistence
+      sessionStore.addCommandToHistory(projectId, terminalId, command).catch(() => {});
+      return { success: true };
+    });
+
+    rpc.register('terminal.getHistory', async () => {
+      // Try Redis first, fallback to container
+      const redisSession = await sessionStore.getTerminalSession(projectId, terminalId);
+      if (redisSession?.history?.length) {
+        return { history: redisSession.history };
+      }
+      // Fallback to container's bash history
+      const history = await execInContainer(entry.id, 'tail -n 100 ~/.bash_history || echo ""');
+      return { history: history.split('\n').filter(Boolean) };
+    });
+
+    rpc.register('resetTimer', async () => {
+      lifecycleManager.resetTimer(projectId);
+      sessionStore.updateTerminalActivity(projectId, terminalId).catch(() => {});
+      return { success: true };
+    });
+
+    // Store session with stream and RPC reference
+    session = { pty: stream as any, projectId, rpc };
+    terminalSessions.set(terminalId, session);
+
+    // Handle data from client to container
+    ws.on('message', async (data: Buffer | string) => {
+      entry.lastActive = Date.now();
+      lifecycleManager.resetTimer(projectId);
+
+      // Check if it's an RPC message
+      if (typeof data === 'string') {
+        const handled = await rpc.handleMessage(data);
+        if (handled) return;
+      }
+
+      // Otherwise, write to terminal
+      stream.write(data);
+    });
+
+    ws.on('close', () => {
+      console.log(`Terminal ${terminalId} WebSocket closed`);
+      // Don't destroy session immediately - allow reconnection
+      setTimeout(() => {
+        const s = terminalSessions.get(terminalId);
+        if (s) {
+          stream.end();
+          terminalSessions.delete(terminalId);
+        }
+      }, 5000); // 5 second grace period for reconnection
+    });
+  } else {
+    // Reconnect to existing session
+    console.log(`♻️ Reconnecting to terminal session: ${terminalId}`);
+    const stream = session.pty as unknown as Duplex;
+    
+    // Update RPC reference for reconnected session
+    session.rpc = rpc;
+
+    // Re-register RPC handlers
+    rpc.register('terminal.resize', async ({ cols, rows }) => {
+      console.log(`[RPC] Terminal resize: ${cols}x${rows}`);
+      return { success: true };
+    });
+
+    rpc.register('terminal.clear', async () => {
+      stream.write('\x1bc');
+      return { success: true };
+    });
+
+    rpc.register('terminal.kill', async () => {
+      stream.write('\x03');
+      return { success: true };
+    });
+
+    rpc.register('resetTimer', async () => {
+      lifecycleManager.resetTimer(projectId);
+      return { success: true };
+    });
+    
+    stream.on('data', (data: Buffer) => {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    ws.on('message', async (data: Buffer | string) => {
+      entry.lastActive = Date.now();
+      lifecycleManager.resetTimer(projectId);
+
+      if (typeof data === 'string') {
+        const handled = await rpc.handleMessage(data);
+        if (handled) return;
+      }
+
+      stream.write(data);
+    });
+
+    ws.on('close', () => {
+      console.log(`Terminal ${terminalId} WebSocket closed (reconnectable)`);
+    });
+  }
+});
+
+// WebSocket endpoint for LSP diagnostics
+app.ws('/diagnostics/:projectId', async (ws, req) => {
+  const { projectId } = req.params;
+  const entry = containers.get(projectId);
+  
+  if (!entry) {
+    ws.close(1008, 'Container not found');
     return;
   }
 
-  // Connect to container's PTY server
-  const ptyWs = new WebSocket(`ws://127.0.0.1:${entry.ptyPort}`);
+  console.log(`[LSP] Diagnostics WebSocket connected for ${projectId}`);
 
-  ptyWs.on('open', () => {
-    console.log('Terminal connected:', projectId);
-    // If a background dev server was started, automatically tail its log file so the user
-    // sees build output immediately. Users can still run commands in the shell to stop/start.
-    try {
-      if (entry.backgroundDev) {
-        // Send command to the PTY shell to tail the dev log. This assumes the PTY spawns a bash shell.
-        ptyWs.send('tail -n 200 -f /tmp/dev.log\n');
-      }
-    } catch (e) {
-      console.error('Failed to send initial tail to PTY:', (e as any)?.message || e);
+  // Start language server if not already running
+  try {
+    await languageServerManager.autoStart(entry.id, projectId);
+  } catch (error: any) {
+    console.error(`[LSP] Failed to start:`, error.message);
+    ws.send(JSON.stringify({ type: 'error', message: error.message }));
+  }
+
+  // Listen for diagnostic updates
+  const diagnosticHandler = ({ projectId: pid, diagnostics }: any) => {
+    if (pid === projectId && ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ type: 'diagnostics', diagnostics }));
     }
-  });
+  };
 
-  ptyWs.on('message', (data: Buffer) => {
+  languageServerManager.on('diagnostics', diagnosticHandler);
+
+  // Send initial diagnostics
+  languageServerManager.getAllDiagnostics(entry.id, projectId).then(diagnostics => {
     if (ws.readyState === ws.OPEN) {
-      ws.send(data);
-    }
-  });
-
-  ptyWs.on('error', (err: Error) => {
-    console.error('PTY connection error:', err.message);
-    ws.close(1011, 'PTY connection failed');
-  });
-
-  ptyWs.on('close', () => {
-    if (ws.readyState === ws.OPEN) {
-      ws.close(1000);
-    }
-  });
-
-  ws.on('message', (data: Buffer | string) => {
-    entry.lastActive = Date.now();
-    if (ptyWs.readyState === WebSocket.OPEN) {
-      ptyWs.send(data);
+      ws.send(JSON.stringify({ type: 'diagnostics', diagnostics }));
     }
   });
 
   ws.on('close', () => {
-    ptyWs.close();
+    languageServerManager.removeListener('diagnostics', diagnosticHandler);
+    console.log(`[LSP] Diagnostics WebSocket closed for ${projectId}`);
   });
+});
+
+// WebSocket endpoint for file watching (CLI integration)
+// Used by recoder-code CLI to sync file changes with web editor
+app.ws('/watch/:projectId', async (ws, req) => {
+  const { projectId } = req.params;
+  const entry = containers.get(projectId);
+  
+  if (!entry) {
+    ws.close(1008, 'Container not found');
+    return;
+  }
+
+  console.log(`[FileWatch] WebSocket connected for ${projectId}`);
+
+  // Start file watcher for this project
+  fileWatcher.startWatching(entry.id, projectId);
+
+  // Listen for file changes and forward to client
+  const changeHandler = ({ projectId: pid, changes }: any) => {
+    if (pid === projectId && ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ type: 'file-changes', changes }));
+    }
+  };
+
+  fileWatcher.on('changes', changeHandler);
+
+  ws.on('close', () => {
+    fileWatcher.removeListener('changes', changeHandler);
+    fileWatcher.stopWatching(projectId);
+    console.log(`[FileWatch] WebSocket closed for ${projectId}`);
+  });
+
+  ws.on('error', (err) => {
+    console.error(`[FileWatch] Error for ${projectId}:`, err.message);
+  });
+});
+
+// Get code fixes for a diagnostic
+app.post('/api/code-fixes', async (req, res) => {
+  try {
+    const { projectId, diagnostic } = req.body;
+    const entry = containers.get(projectId);
+    
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+    
+    const fixes = await languageServerManager.getCodeFixes(entry.id, diagnostic);
+    res.json({ fixes });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Apply code fix
+app.post('/api/apply-fix', async (req, res) => {
+  try {
+    const { projectId, fix } = req.body;
+    const entry = containers.get(projectId);
+    
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+    
+    const success = await languageServerManager.applyCodeFix(entry.id, fix);
+    res.json({ success });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Hover info
+app.post('/api/hover/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { file, line, character } = req.body;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+    
+    const result = await languageServerManager.getHover(entry.id, file, line, character);
+    res.json(result || {});
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Go to definition
+app.post('/api/definition/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { file, line, character } = req.body;
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+    
+    const result = await languageServerManager.getDefinition(entry.id, file, line, character);
+    res.json(result || {});
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Search in files
+app.post('/api/search/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { query, options } = req.body;
+    let entry = containers.get(projectId);
+    
+    // Try to recover container from Docker if not in memory
+    if (!entry) {
+      console.log(`⚠️ [Search] Container not in memory for ${projectId}, attempting recovery...`);
+      const allContainers = await docker.listContainers({ all: false });
+      for (const containerInfo of allContainers) {
+        const volumes = Object.keys(containerInfo.Mounts?.reduce((acc: any, m: any) => {
+          if (m.Name) acc[m.Name] = true;
+          return acc;
+        }, {}) || {});
+        if (volumes.some(v => v.includes(`recoder-${projectId}`))) {
+          const ports = containerInfo.Ports || [];
+          let basePort = 0;
+          for (const p of ports) {
+            if (p.PrivatePort === 3000 && p.PublicPort) basePort = p.PublicPort;
+            if (p.PrivatePort === 5173 && p.PublicPort && !basePort) basePort = p.PublicPort - 1;
+          }
+          if (basePort > 0) {
+            entry = { id: containerInfo.Id, lastActive: Date.now(), port: basePort, ptyPort: basePort + 3, backgroundDev: false };
+            containers.set(projectId, entry);
+            console.log(`🔄 [Search] Recovered container for ${projectId}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+    
+    const results = await searchService.search(entry.id, query, options);
+    res.json({ results, total: results.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Replace in files
+app.post('/api/replace/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { searchQuery, replaceText, files } = req.body;
+    const entry = containers.get(projectId);
+    
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+    
+    const result = await searchService.replace(entry.id, searchQuery, replaceText, files);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // File sync WebSocket (real-time)
@@ -755,32 +1839,137 @@ setInterval(async () => {
   }
 }, 60000); // Check every minute
 
-// Startup cleanup - remove old recoder containers
-(async () => {
-  try {
-    const allContainers = await docker.listContainers({ all: true });
-    for (const c of allContainers) {
-      if (c.Image === IMAGE_NAME) {
-        try {
-          const container = docker.getContainer(c.Id);
-          await container.stop().catch(() => {});
-          await container.remove().catch(() => {});
-          console.log(`🧹 Startup cleanup: removed ${c.Id.slice(0, 12)}`);
-        } catch {}
+// Snapshot compression and cleanup - runs every 10 minutes
+const lastCompression = new Map<string, number>();
+setInterval(async () => {
+  const now = Date.now();
+  const COMPRESSION_INTERVAL = 10 * 60 * 1000; // 10 minutes
+
+  for (const [projectId, entry] of containers) {
+    const lastCompress = lastCompression.get(projectId) || 0;
+
+    // Only compress if container has been active and hasn't been compressed recently
+    if (now - lastCompress > COMPRESSION_INTERVAL && now - entry.lastActive < IDLE_TIMEOUT) {
+      try {
+        // Run git gc to compress snapshots
+        await snapshotManager.compress(entry.id);
+
+        // Prune old snapshots (keep last 50)
+        await snapshotManager.pruneOldSnapshots(entry.id, 50);
+
+        lastCompression.set(projectId, now);
+        console.log(`[Snapshot] Compressed and pruned snapshots for ${projectId}`);
+      } catch (err) {
+        // Silently ignore errors - compression is best-effort
       }
     }
-  } catch (e) {
-    console.error('Startup cleanup failed:', e);
   }
-})();
+}, 10 * 60 * 1000); // Run every 10 minutes
+
+// Startup sequence - cleanup THEN pool initialization (in correct order)
+async function startupSequence() {
+  // Step 1: Cleanup old containers FIRST
+  console.log('🧹 [Startup] Cleaning up old containers...');
+  try {
+    console.log('🧹 [Startup] Listing containers...');
+    const allContainers = await docker.listContainers({ all: true });
+    console.log(`🧹 [Startup] Found ${allContainers.length} total containers`);
+
+    const recoderContainers = allContainers.filter(c => c.Image === IMAGE_NAME);
+    console.log(`🧹 [Startup] Found ${recoderContainers.length} recoder containers to clean`);
+
+    for (const c of recoderContainers) {
+      try {
+        console.log(`🧹 [Startup] Removing container ${c.Id.slice(0, 12)}...`);
+        const container = docker.getContainer(c.Id);
+        await container.stop().catch(() => {});
+        await container.remove().catch(() => {});
+        console.log(`🧹 [Startup] Removed ${c.Id.slice(0, 12)}`);
+      } catch (err: any) {
+        console.error(`🧹 [Startup] Failed to remove ${c.Id.slice(0, 12)}:`, err.message);
+      }
+    }
+    console.log('✅ [Startup] Cleanup complete');
+  } catch (e: any) {
+    console.error('❌ [Startup] Cleanup failed:', e.message);
+    console.error('❌ [Startup] Full error:', e);
+  }
+
+  // Step 2: THEN initialize container pool (after cleanup is done)
+  if (ENABLE_CONTAINER_POOL) {
+    console.log('🚀 [Startup] Initializing container pool...');
+    containerPool.setPortManager(allocatePort, releasePorts);
+    try {
+      await containerPool.initialize();
+      console.log('✅ [Startup] Container pool ready');
+    } catch (err: any) {
+      console.error('❌ [Startup] Container pool initialization failed:', err.message);
+    }
+  }
+}
+
+// NOTE: startupSequence() is called inside app.listen() callback below
 
 // Import and setup preview proxy
 import { setupPreviewProxy } from './preview';
 setupPreviewProxy(app as any, containers);
 
+// File Watch WebSocket - notifies frontend of file changes from CLI tools
+const fileWatchClients = new Map<string, Set<WebSocket>>();
+
+app.ws('/watch/:projectId', async (ws, req) => {
+  const { projectId } = req.params;
+  const entry = containers.get(projectId);
+  
+  if (!entry) {
+    ws.close(1008, 'Container not found');
+    return;
+  }
+
+  // Add client to watch list
+  if (!fileWatchClients.has(projectId)) {
+    fileWatchClients.set(projectId, new Set());
+  }
+  fileWatchClients.get(projectId)!.add(ws as any);
+
+  // Start file watcher for this project if not already running
+  fileWatcher.startWatching(entry.id, projectId);
+
+  console.log(`[FileWatch] Client connected for ${projectId}`);
+
+  ws.on('close', () => {
+    const clients = fileWatchClients.get(projectId);
+    if (clients) {
+      clients.delete(ws as any);
+      if (clients.size === 0) {
+        fileWatcher.stopWatching(projectId);
+        fileWatchClients.delete(projectId);
+      }
+    }
+    console.log(`[FileWatch] Client disconnected for ${projectId}`);
+  });
+});
+
+// Forward file watcher events to WebSocket clients
+fileWatcher.on('changes', ({ projectId, changes }) => {
+  const clients = fileWatchClients.get(projectId);
+  if (clients && clients.size > 0) {
+    const message = JSON.stringify({ type: 'file-changes', changes });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  }
+});
+
 const PORT = process.env.PORT || 3100;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Recoder Docker Backend running on port ${PORT}`);
   console.log(`📦 Image: ${IMAGE_NAME}`);
   console.log(`🌐 Preview URL: http://localhost:${PORT}/preview/{projectId}`);
+
+  // Run startup sequence AFTER server is listening
+  // This ensures cleanup happens first, then pool is initialized
+  await startupSequence();
 });

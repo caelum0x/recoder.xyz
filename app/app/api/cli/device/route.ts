@@ -204,6 +204,22 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Check if email is verified before allowing CLI authorization
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { emailVerified: true }
+    });
+
+    if (!user?.emailVerified) {
+      return NextResponse.json(
+        {
+          error: 'Please verify your email before authorizing CLI devices.',
+          emailNotVerified: true
+        },
+        { status: 403 }
+      );
+    }
+
     const { userCode, action } = await request.json();
 
     if (!userCode || !action) {

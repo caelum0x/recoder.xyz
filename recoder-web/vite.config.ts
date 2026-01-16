@@ -12,6 +12,10 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// React 18.3.1 paths - used for deduplication
+const REACT_18_PATH = resolve(__dirname, 'node_modules/react');
+const REACT_DOM_18_PATH = resolve(__dirname, 'node_modules/react-dom');
+
 export default defineConfig((config) => {
   const isDev = config.mode === 'development';
   const isProduction = config.mode === 'production';
@@ -21,9 +25,11 @@ export default defineConfig((config) => {
       stringify: true,
     },
     resolve: {
-      // Force single React instance to prevent "Invalid hook call" errors
-      dedupe: ['react', 'react-dom'],
+      // Force single React instance - point to recoder-web's React 18.3.1
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
       alias: {
+        // Do NOT alias React here - it breaks SSR (CJS vs ESM conflict)
+        // Instead, rely on dedupe + correct node_modules resolution
         'remix-island': resolve(__dirname, '../node_modules/.pnpm/remix-island@0.2.0_@remix-run+react@2.17.2_react-dom@18.3.1_react@18.3.1__react@18.3.1__1de70fbddf8fc2777d4dadc638f2e70d/node_modules/remix-island/dist/index.mjs'),
         // Skip ajv JSON schema files that cause build issues
         'ajv/dist/refs/json-schema-draft-07.json': resolve(__dirname, 'app/lib/empty-json.js'),
@@ -116,7 +122,7 @@ export default defineConfig((config) => {
         'isbot',
       ],
       exclude: [
-        // Only exclude server-side packages
+        // Server-side packages
         'fs',
         'path',
         'os',
@@ -134,11 +140,16 @@ export default defineConfig((config) => {
       strictPort: true,
       host: true,
       allowedHosts: ['web.recoder.xyz', 'localhost'],
-      // Improve HMR reliability
-      hmr: {
+      // HMR configuration - use localhost for dev, production for deployed
+      hmr: isProduction ? {
         protocol: 'wss',
         host: 'web.recoder.xyz',
         port: 443,
+        overlay: true,
+      } : {
+        protocol: 'ws',
+        host: 'localhost',
+        port: 5173,
         overlay: true,
       },
       // Watch options to prevent issues
@@ -158,12 +169,8 @@ export default defineConfig((config) => {
     },
     ssr: {
       target: 'node',
-      // Externalize React and backend-specific packages for SSR
-      // React must be external in SSR to use Node.js CJS modules properly
+      // Externalize backend-specific packages for SSR (NOT React - causes duplicate instance)
       external: [
-        'react',
-        'react-dom',
-        'react-dom/server',
         'knex',
         '@neondatabase/serverless',
         'pg',

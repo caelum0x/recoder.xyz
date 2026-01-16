@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from 'react-resizable-panels';
 import {
   CodeMirrorEditor,
@@ -20,10 +20,21 @@ import { classNames } from '~/utils/classNames';
 import { WORK_DIR } from '~/utils/constants';
 import { renderLogger } from '~/utils/logger';
 import { isMobile } from '~/utils/mobile';
+import { EditorTabs } from './EditorTabs';
 import { FileBreadcrumb } from './FileBreadcrumb';
 import { FileTree } from './FileTree';
 import { Terminal, type TerminalRef } from './terminal/Terminal';
+import { TerminalControls } from './terminal/TerminalControls';
 import { CLIStatus } from './terminal/CLIStatus';
+import { LogsPanel } from './LogsPanel';
+import { ProblemsPanel } from './ProblemsPanel';
+import { SearchPanel } from './SearchPanel';
+import { GitPanel } from './GitPanel';
+import { DiffViewer } from './DiffViewer';
+import { useStore as useNanoStore } from '@nanostores/react';
+import { errorCountAtom, criticalErrorCountAtom } from '~/lib/stores/errors';
+import { createFile, createFolder, deleteFile, renameFile, copyFilePath } from '~/lib/services/file-operations';
+import { toast } from 'react-toastify';
 
 interface EditorPanelProps {
   files?: FileMap;
@@ -44,6 +55,9 @@ const DEFAULT_EDITOR_SIZE = 100 - DEFAULT_TERMINAL_SIZE;
 
 const editorSettings: EditorSettings = { tabSize: 2 };
 
+type BottomPanelView = 'terminal' | 'logs' | 'problems';
+type SidebarView = 'files' | 'search' | 'git';
+
 export const EditorPanel = memo(
   ({
     files,
@@ -62,6 +76,10 @@ export const EditorPanel = memo(
     const theme = useStore(themeStore);
     const showTerminal = useStore(workbenchStore.showTerminal);
     const highlightTerminal = useStore(workbenchStore.highlightTerminal);
+    const commandRunning = useStore(workbenchStore.commandRunning);
+    const projectId = useStore(workbenchStore.currentProjectId);
+    const errorCount = useNanoStore(errorCountAtom);
+    const criticalErrorCount = useNanoStore(criticalErrorCountAtom);
 
     const terminalRefs = useRef<Array<TerminalRef | null>>([]);
     const terminalPanelRef = useRef<ImperativePanelHandle>(null);
@@ -69,6 +87,9 @@ export const EditorPanel = memo(
 
     const [activeTerminal, setActiveTerminal] = useState(0);
     const [terminalCount, setTerminalCount] = useState(1);
+    const [bottomPanelView, setBottomPanelView] = useState<BottomPanelView>('terminal');
+    const [sidebarView, setSidebarView] = useState<SidebarView>('files');
+    const [diffView, setDiffView] = useState<{ path: string; original: string; modified: string } | null>(null);
 
     const activeFileSegments = useMemo(() => {
       if (!editorDocument) {
@@ -93,10 +114,79 @@ export const EditorPanel = memo(
         }
       });
 
+      // Keyboard shortcut for search (Cmd+Shift+F)
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
+          e.preventDefault();
+          setSidebarView('search');
+        }
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
+          e.preventDefault();
+          setSidebarView('files');
+        }
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'g') {
+          e.preventDefault();
+          setSidebarView('git');
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
       return () => {
         unsubscribeFromEventEmitter();
         unsubscribeFromThemeStore();
+        window.removeEventListener('keydown', handleKeyDown);
       };
+    }, []);
+
+    // File operation handlers
+    const handleFileCreate = useCallback(async (folderPath: string, fileName: string) => {
+      if (!projectId) return;
+      const fullPath = `${folderPath}/${fileName}`;
+      const result = await createFile(projectId, fullPath, '');
+      if (result.success) {
+        toast.success(`Created ${fileName}`);
+        onFileSelect?.(fullPath);
+      } else {
+        toast.error(result.error || 'Failed to create file');
+      }
+    }, [projectId, onFileSelect]);
+
+    const handleFolderCreate = useCallback(async (folderPath: string, folderName: string) => {
+      if (!projectId) return;
+      const fullPath = `${folderPath}/${folderName}`;
+      const result = await createFolder(projectId, fullPath);
+      if (result.success) {
+        toast.success(`Created folder ${folderName}`);
+      } else {
+        toast.error(result.error || 'Failed to create folder');
+      }
+    }, [projectId]);
+
+    const handleFileDelete = useCallback(async (filePath: string) => {
+      if (!projectId) return;
+      if (!confirm(`Delete ${filePath.split('/').pop()}?`)) return;
+      const result = await deleteFile(projectId, filePath);
+      if (result.success) {
+        toast.success('Deleted');
+      } else {
+        toast.error(result.error || 'Failed to delete');
+      }
+    }, [projectId]);
+
+    const handleFileRename = useCallback(async (oldPath: string, newPath: string) => {
+      if (!projectId) return;
+      const result = await renameFile(projectId, oldPath, newPath);
+      if (result.success) {
+        toast.success('Renamed');
+        onFileSelect?.(newPath);
+      } else {
+        toast.error(result.error || 'Failed to rename');
+      }
+    }, [projectId, onFileSelect]);
+
+    const handleFileCopy = useCallback(async (filePath: string) => {
+      await copyFilePath(filePath);
+      toast.success('Path copied');
     }, []);
 
     useEffect(() => {
@@ -124,7 +214,24 @@ export const EditorPanel = memo(
       }
     };
 
+    const handleClearTerminal = useCallback(() => {
+      workbenchStore.clearActiveTerminal();
+    }, []);
+
+    const handleKillProcess = useCallback(() => {
+      workbenchStore.killActiveProcess();
+    }, []);
+
+    const handleCloseTerminal = useCallback(() => {
+      if (terminalCount > 1) {
+        workbenchStore.closeTerminal(activeTerminal);
+        setTerminalCount(prev => prev - 1);
+        setActiveTerminal(prev => Math.max(0, prev - 1));
+      }
+    }, [activeTerminal, terminalCount]);
+
     return (
+      <>
       <PanelGroup direction="vertical">
         <Panel defaultSize={showTerminal ? DEFAULT_EDITOR_SIZE : 100} minSize={20}>
           <PanelGroup direction="horizontal">
@@ -135,20 +242,83 @@ export const EditorPanel = memo(
               collapsible
             >
               <div className="flex flex-col border-r border-bolt-elements-borderColor h-full overflow-hidden">
-                <PanelHeader>
-                  <div className="i-ph:tree-structure-duotone shrink-0" />
-                  Files
-                </PanelHeader>
+                {/* Sidebar Tabs */}
+                <div className="flex border-b border-bolt-elements-borderColor">
+                  <button
+                    onClick={() => setSidebarView('files')}
+                    className={classNames(
+                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
+                      sidebarView === 'files'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-blue-500'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2'
+                    )}
+                    title="Explorer (Cmd+Shift+E)"
+                  >
+                    <span className="i-ph:tree-structure-duotone" />
+                    Files
+                  </button>
+                  <button
+                    onClick={() => setSidebarView('search')}
+                    className={classNames(
+                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
+                      sidebarView === 'search'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-blue-500'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2'
+                    )}
+                    title="Search (Cmd+Shift+F)"
+                  >
+                    <span className="i-ph:magnifying-glass" />
+                    Search
+                  </button>
+                  <button
+                    onClick={() => setSidebarView('git')}
+                    className={classNames(
+                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
+                      sidebarView === 'git'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-purple-500'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2'
+                    )}
+                    title="Source Control (Cmd+Shift+G)"
+                  >
+                    <span className="i-ph:git-branch" />
+                    Git
+                  </button>
+                </div>
+                
+                {/* Sidebar Content */}
                 <div className="flex-1 overflow-auto">
-                  <FileTree
-                    className="h-full"
-                    files={files}
-                    hideRoot
-                    unsavedFiles={unsavedFiles}
-                    rootFolder={WORK_DIR}
-                    selectedFile={selectedFile}
-                    onFileSelect={onFileSelect}
-                  />
+                  {sidebarView === 'files' && (
+                    <FileTree
+                      className="h-full"
+                      files={files}
+                      hideRoot
+                      unsavedFiles={unsavedFiles}
+                      rootFolder={WORK_DIR}
+                      selectedFile={selectedFile}
+                      onFileSelect={onFileSelect}
+                      onFileCreate={handleFileCreate}
+                      onFolderCreate={handleFolderCreate}
+                      onFileDelete={handleFileDelete}
+                      onFileRename={handleFileRename}
+                      onFileCopy={handleFileCopy}
+                    />
+                  )}
+                  {sidebarView === 'search' && (
+                    <SearchPanel
+                      onFileOpen={(file, line, column) => {
+                        onFileSelect?.(`${WORK_DIR}/${file}`);
+                      }}
+                    />
+                  )}
+                  {sidebarView === 'git' && (
+                    <GitPanel
+                      files={files || {}}
+                      onFileSelect={onFileSelect}
+                      onShowDiff={(path, original, modified) => {
+                        setDiffView({ path, original, modified });
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             </Panel>
@@ -158,6 +328,8 @@ export const EditorPanel = memo(
               defaultSize={75}  // ✅ P2: Adjusted from 80% (25% + 75% = 100%)
               minSize={30}      // ✅ P2: Increased from 20% to 30% to prevent squishing
             >
+              {/* Editor Tabs */}
+              <EditorTabs unsavedFiles={unsavedFiles} />
               <PanelHeader className="overflow-x-auto">
                 {activeFileSegments?.length && (
                   <div className="flex items-center flex-1 text-sm">
@@ -221,62 +393,179 @@ export const EditorPanel = memo(
                   },
                 )}
               >
-                {Array.from({ length: terminalCount }, (_, index) => {
-                  const isActive = activeTerminal === index;
+                {/* Tab: Terminal */}
+                <button
+                  className={classNames(
+                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
+                    {
+                      'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': bottomPanelView === 'terminal',
+                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
+                        bottomPanelView !== 'terminal',
+                    },
+                  )}
+                  onClick={() => setBottomPanelView('terminal')}
+                >
+                  <div className="i-ph:terminal-window-duotone text-lg" />
+                  Terminal
+                  {commandRunning && (
+                    <span className="ml-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  )}
+                </button>
 
-                  return (
-                    <button
-                      key={index}
-                      className={classNames(
-                        'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
-                        {
-                          'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': isActive,
-                          'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
-                            !isActive,
-                        },
-                      )}
-                      onClick={() => setActiveTerminal(index)}
-                    >
-                      <div className="i-ph:terminal-window-duotone text-lg" />
-                      Terminal {terminalCount > 1 && index + 1}
-                      {highlightTerminal && isActive && (
-                        <span className="ml-2 w-2 h-2 bg-green-500 rounded-full" />
-                      )}
-                    </button>
-                  );
-                })}
-                {terminalCount < MAX_TERMINALS && <IconButton icon="i-ph:plus" size="md" onClick={addTerminal} />}
+                {/* Tab: Logs */}
+                <button
+                  className={classNames(
+                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
+                    {
+                      'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': bottomPanelView === 'logs',
+                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
+                        bottomPanelView !== 'logs',
+                    },
+                  )}
+                  onClick={() => setBottomPanelView('logs')}
+                >
+                  <div className="i-ph:file-text-duotone text-lg" />
+                  Logs
+                </button>
+
+                {/* Tab: Problems */}
+                <button
+                  className={classNames(
+                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
+                    {
+                      'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': bottomPanelView === 'problems',
+                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
+                        bottomPanelView !== 'problems',
+                    },
+                  )}
+                  onClick={() => setBottomPanelView('problems')}
+                >
+                  <div className={classNames('text-lg', criticalErrorCount > 0 ? 'i-ph:x-circle-fill text-red-500' : 'i-ph:warning-circle-duotone')} />
+                  Problems
+                  {errorCount > 0 && (
+                    <span className={classNames(
+                      'ml-1 px-1.5 py-0.5 text-xs rounded-full',
+                      criticalErrorCount > 0 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
+                    )}>
+                      {errorCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Terminal tabs (only show when terminal view is active) */}
+                {bottomPanelView === 'terminal' && (
+                  <>
+                    <div className="w-px h-4 bg-bolt-elements-borderColor mx-1" />
+                    {Array.from({ length: terminalCount }, (_, index) => {
+                      const isActive = activeTerminal === index;
+
+                      return (
+                        <button
+                          key={index}
+                          className={classNames(
+                            'flex items-center text-xs cursor-pointer gap-1 px-2 py-1 whitespace-nowrap rounded',
+                            {
+                              'bg-bolt-elements-item-backgroundActive text-bolt-elements-textPrimary': isActive,
+                              'text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive/50':
+                                !isActive,
+                            },
+                          )}
+                          onClick={() => setActiveTerminal(index)}
+                        >
+                          {index + 1}
+                          {highlightTerminal && isActive && (
+                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                          )}
+                        </button>
+                      );
+                    })}
+                    {terminalCount < MAX_TERMINALS && (
+                      <IconButton icon="i-ph:plus" size="sm" onClick={addTerminal} title="New Terminal" />
+                    )}
+                  </>
+                )}
+
+                <div className="flex-1" />
+
+                {/* Terminal Controls (only show when terminal view is active) */}
+                {bottomPanelView === 'terminal' && (
+                  <TerminalControls
+                    onClear={handleClearTerminal}
+                    onKill={handleKillProcess}
+                    onCloseTerminal={terminalCount > 1 ? handleCloseTerminal : undefined}
+                    isRunning={commandRunning}
+                    terminalCount={terminalCount}
+                    activeIndex={activeTerminal}
+                  />
+                )}
+
                 <CLIStatus />
                 <IconButton
-                  className="ml-auto"
+                  className="ml-2"
                   icon="i-ph:caret-down"
                   title="Close"
                   size="md"
                   onClick={() => workbenchStore.toggleTerminal(false)}
                 />
               </div>
-              {Array.from({ length: terminalCount }, (_, index) => {
-                const isActive = activeTerminal === index;
 
-                return (
-                  <Terminal
-                    key={index}
-                    className={classNames('h-full overflow-hidden', {
-                      hidden: !isActive,
-                    })}
-                    ref={(ref) => {
-                      terminalRefs.current.push(ref);
-                    }}
-                    onTerminalReady={(terminal) => workbenchStore.attachTerminal(terminal)}
-                    onTerminalResize={(cols, rows) => workbenchStore.onTerminalResize(cols, rows)}
-                    theme={theme}
-                  />
-                );
-              })}
+              {/* Terminal View */}
+              {bottomPanelView === 'terminal' && (
+                <>
+                  {Array.from({ length: terminalCount }, (_, index) => {
+                    const isActive = activeTerminal === index;
+
+                    return (
+                      <Terminal
+                        key={index}
+                        className={classNames('h-full overflow-hidden', {
+                          hidden: !isActive,
+                        })}
+                        ref={(ref) => {
+                          terminalRefs.current.push(ref);
+                        }}
+                        onTerminalReady={(terminal) => workbenchStore.attachTerminal(terminal)}
+                        onTerminalResize={(cols, rows) => workbenchStore.onTerminalResize(cols, rows)}
+                        theme={theme}
+                      />
+                    );
+                  })}
+                </>
+              )}
+
+              {/* Logs View */}
+              {bottomPanelView === 'logs' && (
+                <LogsPanel projectId={projectId} className="flex-1" />
+              )}
+
+              {/* Problems View */}
+              {bottomPanelView === 'problems' && (
+                <ProblemsPanel
+                  className="flex-1"
+                  onErrorClick={(error) => {
+                    // Navigate to file when error is clicked
+                    if (error.filePath) {
+                      const filePath = error.filePath.replace('/workspace', '');
+                      onFileSelect?.(filePath);
+                    }
+                  }}
+                />
+              )}
             </div>
           </div>
         </Panel>
       </PanelGroup>
-    );
+
+      {/* Diff Viewer Modal */}
+      {diffView && (
+        <DiffViewer
+          filePath={diffView.path}
+          original={diffView.original}
+          modified={diffView.modified}
+          onClose={() => setDiffView(null)}
+        />
+      )}
+    </>
+  );
   },
 );

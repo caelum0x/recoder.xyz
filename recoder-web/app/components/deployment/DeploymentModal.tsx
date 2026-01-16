@@ -200,6 +200,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                   <p className="mt-1 text-xs text-bolt-elements-textTertiary">
                     {selectedPlatform === 'vercel' && 'Get your token from https://vercel.com/account/tokens'}
                     {selectedPlatform === 'netlify' && 'Get your token from https://app.netlify.com/user/applications'}
+                    {selectedPlatform === 'railway' && 'Get your token from https://railway.com/account/tokens'}
                     {selectedPlatform === 'cloudflare-pages' && 'Get your token from Cloudflare Dashboard → My Profile → API Tokens'}
                   </p>
                 </div>
@@ -236,6 +237,32 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                     </div>
                   </div>
                 )}
+
+                {/* Environment Variables */}
+                <div>
+                  <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                    Environment Variables (optional)
+                  </label>
+                  <textarea
+                    value={Object.entries(envVars).map(([k, v]) => `${k}=${v}`).join('\n')}
+                    onChange={(e) => {
+                      const vars: Record<string, string> = {};
+                      e.target.value.split('\n').forEach(line => {
+                        const [key, ...valueParts] = line.split('=');
+                        if (key?.trim()) {
+                          vars[key.trim()] = valueParts.join('=').trim();
+                        }
+                      });
+                      setEnvVars(vars);
+                    }}
+                    placeholder="KEY=value&#10;ANOTHER_KEY=another_value"
+                    rows={3}
+                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary font-mono text-sm placeholder:text-gray-500"
+                  />
+                  <p className="mt-1 text-xs text-bolt-elements-textTertiary">
+                    One variable per line in KEY=value format
+                  </p>
+                </div>
 
                 {error && (
                   <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">

@@ -1,14 +1,16 @@
 /**
  * User Registration API Route
  * Handles new user registration with database persistence
+ * Sends verification email to confirm email ownership
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/crypto';
 import { getPlanLimits } from '@/lib/plan-config';
-import { sendWelcomeEmail } from '@/lib/email';
+import { sendVerificationEmail } from '@/lib/email';
 import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 
 interface RegisterRequest {
   email: string;
@@ -86,10 +88,33 @@ export async function POST(request: NextRequest) {
     // Determine if onboarding is needed (free users need to add API key)
     const needsOnboarding = planLimits.requiresOwnApiKey;
 
-    // Send welcome email (non-blocking)
-    sendWelcomeEmail(user.email, user.name).catch(err => 
-      console.error('Failed to send welcome email:', err)
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Store verification token
+    await prisma.verifications.create({
+      data: {
+        id: crypto.randomUUID(),
+        identifier: `email-verify:${user.email}`,
+        value: hashedToken,
+        expires_at: expiresAt,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }
+    });
+
+    // Build verification URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+    const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
+
+    // Send verification email (non-blocking)
+    sendVerificationEmail(user.email, verificationUrl).catch(err =>
+      console.error('Failed to send verification email:', err)
     );
+
+    console.log(`📧 Verification email sent to ${user.email}`);
 
     return NextResponse.json({
       success: true,
@@ -99,11 +124,10 @@ export async function POST(request: NextRequest) {
         name: user.name,
         plan: user.subscription,
         needsApiKey: needsOnboarding,
-        onboardingUrl: needsOnboarding ? `/auth/onboarding?userId=${user.id}` : null,
+        emailVerified: false,
       },
-      message: needsOnboarding 
-        ? 'Registration successful. Please add your OpenRouter API key to continue.' 
-        : 'Registration successful!'
+      message: 'Registration successful! Please check your email to verify your account.',
+      requiresVerification: true,
     });
 
   } catch (error) {

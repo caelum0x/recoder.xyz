@@ -5,3 +5,4 @@ export * from './useSnapScroll';
 export * from './useKeyboardShortcuts';
 export * from './useChatHistory';
 export * from './useSimpleChat';
+export * from './useErrors';

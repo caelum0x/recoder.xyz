@@ -1,5 +1,5 @@
 import { memo, useEffect, useState, useRef } from 'react';
-import Fuse from 'fuse.js';
+import Fuse, { type FuseResult, type FuseResultMatch } from 'fuse.js';
 import { classNames } from '~/utils/classNames';
 import type { FileMap } from '~/lib/stores/files';
 
@@ -12,7 +12,7 @@ interface Props {
 
 interface SearchResult {
   path: string;
-  matches?: Fuse.FuseResultMatch[];
+  matches?: readonly FuseResultMatch[];
 }
 
 export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: Props) => {
@@ -52,7 +52,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
     }
 
     const searchResults = fuse.current?.search(query, { limit: 50 }) || [];
-    const formattedResults: SearchResult[] = searchResults.map((result) => ({
+    const formattedResults: SearchResult[] = searchResults.map((result: FuseResult<string>) => ({
       path: result.item,
       matches: result.matches,
     }));
@@ -120,7 +120,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
     onClose();
   };
 
-  const highlightMatches = (path: string, matches?: Fuse.FuseResultMatch[]) => {
+  const highlightMatches = (path: string, matches?: readonly FuseResultMatch[]) => {
     if (!matches || matches.length === 0) {
       return <span>{path}</span>;
     }
@@ -130,7 +130,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
     const parts: JSX.Element[] = [];
     let lastIndex = 0;
 
-    indices.forEach(([start, end], i) => {
+    indices.forEach(([start, end]: [number, number], i: number) => {
       // Add non-matched text
       if (start > lastIndex) {
         parts.push(

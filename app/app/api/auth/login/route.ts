@@ -50,6 +50,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if email is verified
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        {
+          error: 'Please verify your email before signing in. Check your inbox for the verification link.',
+          emailNotVerified: true,
+          email: user.email
+        },
+        { status: 403 }
+      );
+    }
+
     // Check if 2FA is enabled
     const securitySettings = await prisma.$queryRaw<any[]>`
       SELECT two_factor_enabled FROM security_settings WHERE user_id = ${user.id}

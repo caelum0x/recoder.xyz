@@ -51,11 +51,12 @@ export async function streamTextNative(
   usage: { promptTokens: number; completionTokens: number };
   toAIStream: () => ReadableStream<Uint8Array>;
 }> {
-  // Get API key
-  const openrouterKey = env.OPENROUTER_API_KEY;
+  // BYOK: Get user's API key
+  const { getAPIKey } = await import('./api-key');
+  const openrouterKey = await getAPIKey(env, options?.request, 'openrouter');
   
   if (!openrouterKey) {
-    throw new Error('OPENROUTER_API_KEY is required');
+    throw new Error('No API key configured. Add your OpenRouter API key in Settings.');
   }
 
   // Get configuration

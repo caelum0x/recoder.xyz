@@ -11,6 +11,9 @@ import { infoCommand } from './web/info.js';
 import { pushCommand } from './web/push.js';
 import { syncCommand } from './web/sync.js';
 import { launchCommand } from './web/launch.js';
+import { linkCommand } from './web/link.js';
+import { unlinkCommand } from './web/unlink.js';
+import { statusCommand } from './web/status.js';
 
 export const webCommand: CommandModule = {
   command: 'web',
@@ -18,6 +21,9 @@ export const webCommand: CommandModule = {
   builder: (yargs: Argv) =>
     yargs
       .command(launchCommand)
+      .command(linkCommand)
+      .command(unlinkCommand)
+      .command(statusCommand)
       .command(listCommand)
       .command(downloadCommand)
       .command(openCommand)
