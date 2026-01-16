@@ -35,7 +35,7 @@ const platforms = [
     description: 'Full-stack apps with Docker and databases',
     iconClass: 'i-ph:train',
     color: 'from-purple-500 to-pink-600',
-    supported: false,
+    supported: true,
   },
 ];
 

@@ -1,31 +1,42 @@
-import { acceptCompletion, autocompletion, closeBrackets } from '@codemirror/autocomplete';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { bracketMatching, foldGutter, indentOnInput, indentUnit } from '@codemirror/language';
-import { searchKeymap } from '@codemirror/search';
+import { acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { bracketMatching, codeFolding, foldGutter, foldKeymap, indentOnInput, indentUnit } from '@codemirror/language';
+import { lintGutter, lintKeymap, setDiagnostics } from '@codemirror/lint';
+import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
 import {
+  crosshairCursor,
   drawSelection,
   dropCursor,
   EditorView,
   highlightActiveLine,
   highlightActiveLineGutter,
   highlightSpecialChars,
+  highlightWhitespace,
+  hoverTooltip,
   keymap,
   lineNumbers,
+  placeholder,
+  rectangularSelection,
   scrollPastEnd,
   showTooltip,
   tooltips,
   type Tooltip,
 } from '@codemirror/view';
 import { memo, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useStore } from '@nanostores/react';
+import { errorsAtom, type BuildError } from '~/lib/stores/errors';
+import { createStaticDiagnostics } from './diagnostics';
 import type { Theme } from '~/types/theme';
 import { classNames } from '~/utils/classNames';
 import { debounce } from '~/utils/debounce';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BinaryContent } from './BinaryContent';
 import { getTheme, reconfigureTheme } from './cm-theme';
+import { inlineCopilot } from './inline-copilot';
 import { indentKeyBinding } from './indent';
 import { getLanguage } from './languages';
+import { lspHoverTooltip, gotoDefinition } from './lsp-extensions';
 
 const logger = createScopedLogger('CodeMirrorEditor');
 
@@ -71,6 +82,8 @@ interface Props {
   onChange?: OnChangeCallback;
   onScroll?: OnScrollCallback;
   onSave?: OnSaveCallback;
+  onGotoDefinition?: (file: string, line: number) => void;
+  projectId?: string;
   className?: string;
   settings?: EditorSettings;
 }
@@ -127,6 +140,8 @@ export const CodeMirrorEditor = memo(
     onScroll,
     onChange,
     onSave,
+    onGotoDefinition,
+    projectId,
     theme,
     settings,
     className = '',
@@ -134,6 +149,8 @@ export const CodeMirrorEditor = memo(
     renderLogger.trace('CodeMirrorEditor');
 
     const [languageCompartment] = useState(new Compartment());
+    const [lspCompartment] = useState(new Compartment());
+    const errors = useStore(errorsAtom);
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewRef = useRef<EditorView>();
@@ -143,6 +160,7 @@ export const CodeMirrorEditor = memo(
     const onScrollRef = useRef(onScroll);
     const onChangeRef = useRef(onChange);
     const onSaveRef = useRef(onSave);
+    const onGotoDefinitionRef = useRef(onGotoDefinition);
 
     /**
      * This effect is used to avoid side effects directly in the render function
@@ -152,6 +170,7 @@ export const CodeMirrorEditor = memo(
       onScrollRef.current = onScroll;
       onChangeRef.current = onChange;
       onSaveRef.current = onSave;
+      onGotoDefinitionRef.current = onGotoDefinition;
       docRef.current = doc;
       themeRef.current = theme;
     });
@@ -212,9 +231,16 @@ export const CodeMirrorEditor = memo(
       const view = viewRef.current!;
       const theme = themeRef.current!;
 
+      // Build LSP extensions if projectId is available
+      const lspExtensions = projectId && doc?.filePath ? [
+        lspHoverTooltip(projectId, doc.filePath),
+        gotoDefinition(projectId, doc.filePath, (file, line) => onGotoDefinitionRef.current?.(file, line)),
+      ] : [];
+
       if (!doc) {
         const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
           languageCompartment.of([]),
+          lspCompartment.of([]),
         ]);
 
         view.setState(state);
@@ -237,12 +263,16 @@ export const CodeMirrorEditor = memo(
       if (!state) {
         state = newEditorState(doc.value, theme, settings, onScrollRef, debounceScroll, onSaveRef, [
           languageCompartment.of([]),
+          lspCompartment.of(lspExtensions),
         ]);
 
         editorStates.set(doc.filePath, state);
       }
 
       view.setState(state);
+
+      // Update LSP extensions when file changes
+      view.dispatch({ effects: lspCompartment.reconfigure(lspExtensions) });
 
       setEditorDocument(
         view,
@@ -252,7 +282,22 @@ export const CodeMirrorEditor = memo(
         autoFocusOnDocumentChange,
         doc as TextEditorDocument,
       );
-    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange]);
+    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange, projectId]);
+
+    // Update diagnostics (red underlines) when errors change
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view || !doc?.filePath) {
+        return;
+      }
+
+      // Create diagnostics for current file
+      const diagnostics = createStaticDiagnostics(errors, view.state.doc, doc.filePath);
+
+      // Update the view with new diagnostics
+      view.dispatch(setDiagnostics(view.state, diagnostics));
+    }, [errors, doc?.filePath]);
 
     return (
       <div className={classNames('relative h-full', className)}>
@@ -305,6 +350,10 @@ function newEditorState(
         ...defaultKeymap,
         ...historyKeymap,
         ...searchKeymap,
+        ...lintKeymap,
+        ...closeBracketsKeymap,
+        ...foldKeymap,
+        ...completionKeymap,
         { key: 'Tab', run: acceptCompletion },
         {
           key: 'Mod-s',
@@ -316,6 +365,12 @@ function newEditorState(
         },
         indentKeyBinding,
       ]),
+      search(),
+      highlightSelectionMatches(),
+      rectangularSelection(),
+      crosshairCursor(),
+      placeholder('Start typing...'),
+      lintGutter(),
       indentUnit.of('\t'),
       autocompletion({
         closeOnBlur: false,
@@ -341,8 +396,10 @@ function newEditorState(
       dropCursor(),
       drawSelection(),
       bracketMatching(),
+      codeFolding(),
       EditorState.tabSize.of(settings?.tabSize ?? 2),
       indentOnInput(),
+      EditorState.allowMultipleSelections.of(true),
       editableTooltipField,
       editableStateField,
       EditorState.readOnly.from(editableStateField, (editable) => !editable),
@@ -357,6 +414,20 @@ function newEditorState(
           return icon;
         },
       }),
+      inlineCopilot(async (prefix, suffix) => {
+        try {
+          const res = await fetch('/api/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prefix, suffix }),
+          });
+          if (!res.ok) return '';
+          const data = await res.json() as { completion?: string };
+          return data.completion || '';
+        } catch {
+          return '';
+        }
+      }, 800),
       ...extensions,
     ],
   });

@@ -220,6 +220,16 @@ export async function main() {
   }
   // ===== END AUTH GUARD =====
 
+  // ===== RECODER.XYZ PLATFORM INTEGRATION =====
+  // Auto-detect if running in recoder.xyz container and show preview URL
+  try {
+    const { platformSync } = await import('./services/PlatformSyncService.js');
+    await platformSync.autoInitialize();
+  } catch (e) {
+    // Silently ignore - platform integration is optional
+  }
+  // ===== END PLATFORM INTEGRATION =====
+
   // Check if API key is configured before proceeding
   const { isApiKeyConfigured, checkAndSetupApiKey } = await import('./setup/apiKeySetup.js');
   if (!isApiKeyConfigured()) {

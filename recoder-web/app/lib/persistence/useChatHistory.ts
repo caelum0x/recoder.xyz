@@ -5,15 +5,90 @@ import type { Message } from 'ai';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { getMessages, getNextId, getUrlId, openDatabase, setMessages } from './db';
-import { getCurrentUser } from '~/utils/auth-utils';
+import { getCurrentUser, getCurrentUserAsync, initSession } from '~/utils/auth-utils';
+import { useAuth } from '~/lib/contexts/AuthContext';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import { getCurrentUserId } from '~/lib/stores/user';
-import { resetGlobalActionState } from '~/lib/runtime/action-runner';
+import { resetGlobalActionState, markNpmInstallComplete } from '~/lib/runtime/action-runner';
+import { fetchProjectErrors } from '~/lib/hooks/useErrors';
+import { formatErrorsForAI } from '~/lib/services/auto-fix';
+import { canAutoFix, setAutoFixing } from '~/lib/stores/errors';
 
 // 🔒 Global flags to coordinate npm install across components
 // These are module-level to prevent race conditions between different instances
 let globalNpmInstallRunning = false;
 let globalNpmInstallPromise: Promise<void> | null = null;
+
+/**
+ * 🔧 AUTO-FIX: Check for build errors and automatically trigger AI fix
+ * Called after dev server starts to catch errors early
+ */
+async function checkAndAutoFixErrors(projectId: string): Promise<void> {
+  // Wait a bit for dev server to fully initialize and show errors
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
+  try {
+    console.log('🔍 [AutoFix] Checking for build errors...');
+    const errorResponse = await fetchProjectErrors(projectId);
+
+    if (!errorResponse) {
+      console.log('✅ [AutoFix] No errors detected');
+      return;
+    }
+
+    const { errors, hasBlockingErrors } = errorResponse;
+
+    if (!hasBlockingErrors || errors.length === 0) {
+      console.log('✅ [AutoFix] No blocking errors');
+      return;
+    }
+
+    // Check if we can still auto-fix (haven't exceeded max attempts)
+    if (!canAutoFix()) {
+      console.warn('⚠️ [AutoFix] Max auto-fix attempts reached, skipping');
+      return;
+    }
+
+    console.log(`🔧 [AutoFix] Found ${errors.length} errors, triggering automatic fix...`);
+
+    // Format errors for AI
+    const prompt = formatErrorsForAI(errors);
+
+    // Set auto-fixing state
+    setAutoFixing(true);
+
+    // Dispatch event to trigger AI fix (Chat.client.tsx listens for this)
+    window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+      detail: { prompt, automatic: true }
+    }));
+
+    console.log('🚀 [AutoFix] Automatic fix triggered');
+  } catch (err) {
+    console.error('❌ [AutoFix] Error checking for build errors:', err);
+  }
+}
+
+// 🔒 Global container creation coordination - prevents duplicate container creation
+const containerCreationPromises = new Map<string, Promise<boolean>>();
+
+// 🔒 Global file restoration coordination - prevents duplicate restoration on HMR
+const fileRestorationPromises = new Map<string, Promise<boolean>>();
+const restoredProjectIds = new Set<string>();
+
+/**
+ * Clear restoration state for a project (call when navigating away)
+ */
+export function clearRestorationState(projectId?: string) {
+  if (projectId) {
+    restoredProjectIds.delete(projectId);
+    fileRestorationPromises.delete(projectId);
+    containerCreationPromises.delete(projectId);
+  } else {
+    restoredProjectIds.clear();
+    fileRestorationPromises.clear();
+    containerCreationPromises.clear();
+  }
+}
 
 export interface ChatHistoryItem {
   id: string;
@@ -87,6 +162,8 @@ export function clearSessionState() {
   resetGlobalActionState(); // Also reset ActionRunner's global state
   // Reset workbench restored chat flag
   workbenchStore.resetRestoredChatFlag();
+  // Reset container ready state
+  workbenchStore.resetContainerReady();
   // Clear workbench artifact list to prevent artifact ID contamination
   // firstArtifact is a getter that returns artifactIdList[0], so clear the array
   if (workbenchStore.artifactIdList.length > 0) {
@@ -96,9 +173,12 @@ export function clearSessionState() {
 }
 
 // Initialize database on first import (but don't await - lazy load)
-getDatabase().then(() => {
-  // Database initialized
-});
+// SSR guard - only initialize in browser environment
+if (typeof window !== 'undefined') {
+  getDatabase().then(() => {
+    // Database initialized
+  });
+}
 
 /**
  * Save chat to database API with retry logic
@@ -110,7 +190,8 @@ async function saveChatToDatabase(
   artifactId?: string,
   fileSnapshot?: Record<string, string>,
   projectId?: string,
-  source?: 'web' | 'cli'
+  source?: 'web' | 'cli',
+  authUser?: { id: string; email: string; name?: string | null } | null
 ): Promise<boolean> {
   if (!USE_DATABASE) {
     // console.log('⚠️ [saveChatToDatabase] Database saving disabled (USE_DATABASE=false)');
@@ -122,7 +203,8 @@ async function saveChatToDatabase(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const user = getCurrentUser();
+      // Use passed authUser from React context, fallback to async fetch
+      const user = authUser || await getCurrentUserAsync();
       const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
       const fileCount = fileSnapshot ? Object.keys(fileSnapshot).length : 0;
@@ -232,24 +314,24 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
 const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
 /**
- * Run npm install with coordination to prevent concurrent runs
- * 🚀 OPTIMIZED: Uses fast npm options and automatically starts dev server
+ * Run bun install with coordination to prevent concurrent runs
+ * 🚀 OPTIMIZED: Uses bun for faster installs (no peer dep issues)
  */
 async function runNpmInstallWithCoordination(projectId: string): Promise<boolean> {
   // If already running, wait for it to complete
   if (globalNpmInstallRunning && globalNpmInstallPromise) {
-    console.log('⏳ [runNpmInstallWithCoordination] npm install already running, waiting...');
+    console.log('⏳ [runInstallWithCoordination] bun install already running, waiting...');
     await globalNpmInstallPromise;
     return true;
   }
-  
+
   if (globalNpmInstallRunning) {
-    console.log('⏭️ [runNpmInstallWithCoordination] npm install already in progress, skipping');
+    console.log('⏭️ [runInstallWithCoordination] bun install already in progress, skipping');
     return false;
   }
-  
+
   globalNpmInstallRunning = true;
-  
+
   globalNpmInstallPromise = (async () => {
     try {
       // 🚀 OPTIMIZATION: Check if node_modules is valid before cleaning
@@ -259,68 +341,204 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
         body: JSON.stringify({ command: 'test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"' }),
         signal: AbortSignal.timeout(5000),
       });
-      
+
       const checkResult = await checkRes.json() as { output?: string };
       const isValid = checkResult.output?.includes('valid');
-      
+
       if (!isValid) {
-        console.log('🧹 [runNpmInstallWithCoordination] Cleaning invalid node_modules...');
+        console.log('🧹 [runInstallWithCoordination] Cleaning invalid node_modules...');
         await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'rm -rf node_modules package-lock.json' }),
+          body: JSON.stringify({ command: 'rm -rf node_modules package-lock.json bun.lockb' }),
           signal: AbortSignal.timeout(30000),
         });
       }
-      
-      // 🚀 OPTIMIZATION: Use faster npm install options
-      console.log('📦 [runNpmInstallWithCoordination] Running optimized npm install...');
-      const installRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+
+      // 🚀 OPTIMIZATION: Use bun for faster installs - --force handles peer deps
+      console.log('📦 [runInstallWithCoordination] Running bun install...');
+      let installRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'npm install --prefer-offline --no-audit --no-fund --loglevel=error' }),
-        signal: AbortSignal.timeout(120000), // 2 minute timeout for install
+        body: JSON.stringify({ command: 'bun install --force' }),
+        signal: AbortSignal.timeout(90000), // 90s timeout for bun (it's faster)
       });
-      
+
       if (!installRes.ok) {
-        console.warn('⚠️ [runNpmInstallWithCoordination] npm install request failed');
-        return;
-      }
-      
-      const result = await installRes.json() as { output?: string; error?: string };
-      if (result.error) {
-        console.warn('⚠️ [runNpmInstallWithCoordination] npm install error:', result.error);
-      } else {
-        console.log('✅ [runNpmInstallWithCoordination] npm install completed');
-        
-        // 🚀 OPTIMIZATION: Automatically start dev server after npm install
-        console.log('🚀 [runNpmInstallWithCoordination] Starting dev server...');
-        fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+        console.warn('⚠️ [runInstallWithCoordination] bun install request failed, trying npm fallback...');
+        installRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            command: 'npm run dev -- --port 5173 --host 0.0.0.0', 
-            cwd: '/workspace',
-            background: true 
-          }),
-        }).then((devRes) => {
-          if (devRes.ok) {
-            console.log('✅ [runNpmInstallWithCoordination] Dev server started in background');
-          }
-        }).catch((err) => {
-          console.warn('⚠️ [runNpmInstallWithCoordination] Dev server start failed:', err);
+          body: JSON.stringify({ command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' }),
+          signal: AbortSignal.timeout(120000),
         });
       }
+
+      if (!installRes.ok) {
+        console.warn('⚠️ [runInstallWithCoordination] Install request failed');
+        return;
+      }
+
+      const result = await installRes.json() as { output?: string; error?: string };
+
+      // Check for bun/npm errors
+      if (result.error || result.output?.includes('error:') || result.output?.includes('npm ERR!')) {
+        console.warn('⚠️ [runInstallWithCoordination] Install had errors:', result.error || result.output?.substring(0, 200));
+        // Try npm fallback if bun failed
+        if (!result.output?.includes('npm ERR!')) {
+          console.log('📦 [runInstallWithCoordination] Trying npm fallback...');
+          const npmRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' }),
+            signal: AbortSignal.timeout(120000),
+          });
+          if (npmRes.ok) {
+            console.log('✅ [runInstallWithCoordination] npm fallback succeeded');
+          }
+        }
+      } else {
+        console.log('✅ [runInstallWithCoordination] bun install completed');
+      }
+
+      // Mark install as complete globally so ActionRunner knows
+      markNpmInstallComplete();
+
+      // 🚀 OPTIMIZATION: Automatically start dev server after install
+      console.log('🚀 [runInstallWithCoordination] Starting dev server...');
+      
+      // Helper to mark container ready and trigger auto-fix
+      const markReady = async () => {
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.setContainerReady(true);
+          console.log('✅ [runInstallWithCoordination] Container marked as ready');
+
+          // 🔧 AUTO-FIX: Check for errors after dev server starts
+          // Run in background so we don't block the UI
+          checkAndAutoFixErrors(projectId).catch(err => {
+            console.warn('⚠️ [AutoFix] Background error check failed:', err);
+          });
+        } catch (e) {
+          console.warn('Could not set container ready:', e);
+        }
+      };
+      
+      try {
+        const devRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'bun run dev -- --port 5173 --host 0.0.0.0',
+            cwd: '/workspace',
+            background: true
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        
+        if (!devRes.ok) {
+          console.warn('⚠️ [runInstallWithCoordination] Dev server start returned error:', devRes.status);
+          await markReady(); // Mark ready anyway so user can see error
+          return;
+        }
+        
+        const devResult = await devRes.json() as { ready?: boolean; port?: number };
+        console.log('✅ [runInstallWithCoordination] Dev server started in background');
+
+        if (devResult.ready) {
+          console.log(`✅ [runInstallWithCoordination] Dev server confirmed ready on port ${devResult.port}`);
+          await markReady();
+        } else {
+          // Dev server started but not ready yet - poll the health endpoint
+          console.log('⏳ [runInstallWithCoordination] Dev server building, polling for ready state...');
+          const maxWaitMs = 45000;
+          const pollInterval = 2000;
+          const startTime = Date.now();
+          
+          while (Date.now() - startTime < maxWaitMs) {
+            try {
+              const healthRes = await fetch(`${DOCKER_URL}/api/preview/${projectId}/health`, {
+                signal: AbortSignal.timeout(3000),
+              });
+              if (healthRes.ok) {
+                const health = await healthRes.json() as { ports?: Array<{ port: number; responding: boolean }> };
+                const readyPort = health.ports?.find(p => p.responding);
+                if (readyPort) {
+                  console.log(`✅ [runInstallWithCoordination] Dev server ready on port ${readyPort.port}`);
+                  await markReady();
+                  return;
+                }
+              }
+            } catch {
+              // Health check failed, continue polling
+            }
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+          }
+          
+          // Timeout - mark ready anyway so user can see error in preview
+          console.warn('⚠️ [runInstallWithCoordination] Dev server health check timeout, marking ready anyway');
+          await markReady();
+        }
+      } catch (err) {
+        console.warn('⚠️ [runInstallWithCoordination] Dev server start failed:', err);
+        await markReady(); // Mark ready anyway so UI isn't stuck
+      }
     } catch (error) {
-      console.error('❌ [runNpmInstallWithCoordination] npm install failed:', error);
+      console.error('❌ [runInstallWithCoordination] Install failed:', error);
     } finally {
       globalNpmInstallRunning = false;
       globalNpmInstallPromise = null;
     }
   })();
-  
+
   await globalNpmInstallPromise;
   return true;
+}
+
+/**
+ * Ensure container exists with coordination to prevent race conditions.
+ * Multiple callers (terminal, file restore) share the same promise.
+ * @exported for use by terminal.ts
+ */
+export async function ensureContainerExists(projectId: string): Promise<boolean> {
+  // If already creating this container, wait for the existing promise
+  const existingPromise = containerCreationPromises.get(projectId);
+  if (existingPromise) {
+    console.log('⏳ [ensureContainerExists] Waiting for existing container creation...');
+    return existingPromise;
+  }
+
+  // Create new promise for this container
+  const createPromise = (async (): Promise<boolean> => {
+    try {
+      const userId = getCurrentUserId();
+      console.log('🐳 [ensureContainerExists] Creating container for', projectId);
+
+      const res = await fetch(`${DOCKER_URL}/api/container`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, userId }),
+        signal: AbortSignal.timeout(45000), // 45s timeout
+      });
+
+      if (!res.ok) {
+        console.error('❌ [ensureContainerExists] Failed:', res.status);
+        return false;
+      }
+
+      console.log('✅ [ensureContainerExists] Container ready');
+      return true;
+    } catch (error: any) {
+      console.error('❌ [ensureContainerExists] Error:', error.message);
+      return false;
+    } finally {
+      // Clean up after completion
+      containerCreationPromises.delete(projectId);
+    }
+  })();
+
+  containerCreationPromises.set(projectId, createPromise);
+  return createPromise;
 }
 
 /**
@@ -335,21 +553,29 @@ async function restoreFilesToDocker(
   if (!DOCKER_URL || !fileSnapshot || Object.keys(fileSnapshot).length === 0) {
     return false;
   }
-  
-  try {
-    // First ensure container exists
-    const userId = getCurrentUserId();
-    const containerRes = await fetch(`${DOCKER_URL}/api/container`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, userId }),
-      signal: AbortSignal.timeout(10000),
-    });
-    
-    if (!containerRes.ok) {
-      console.error('Failed to create Docker container for file restoration');
-      return false;
-    }
+
+  // 🔒 Skip if already restored (prevents duplicate restoration on HMR)
+  if (restoredProjectIds.has(projectId)) {
+    console.log(`⏭️ [restoreFilesToDocker] Already restored ${projectId}, skipping`);
+    return true;
+  }
+
+  // 🔒 Wait for existing restoration if in progress
+  const existingPromise = fileRestorationPromises.get(projectId);
+  if (existingPromise) {
+    console.log(`⏳ [restoreFilesToDocker] Waiting for existing restoration of ${projectId}...`);
+    return existingPromise;
+  }
+
+  // Create restoration promise
+  const restorePromise = (async (): Promise<boolean> => {
+    try {
+      // Use coordinated container creation to avoid race conditions with terminal
+      const containerReady = await ensureContainerExists(projectId);
+      if (!containerReady) {
+        console.error('❌ [restoreFilesToDocker] Container not available');
+        return false;
+      }
     
     // Filter out node_modules and other generated files that shouldn't be restored
     const filesToRestore = Object.entries(fileSnapshot).filter(([path]) => {
@@ -389,41 +615,63 @@ async function restoreFilesToDocker(
     // 🚀 OPTIMIZATION: Create all directories in one command
     if (directories.size > 0) {
       const mkdirCmd = `mkdir -p ${Array.from(directories).map(d => `"${d}"`).join(' ')}`;
-      await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: mkdirCmd }),
-      });
+      try {
+        await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: mkdirCmd }),
+          signal: AbortSignal.timeout(10000), // 10s timeout
+        });
+      } catch (e) {
+        console.warn('[restoreFilesToDocker] mkdir failed:', e);
+      }
     }
     
     // 🚀 OPTIMIZATION: Write files in parallel batches (5 at a time to avoid overwhelming)
     const BATCH_SIZE = 5;
+    let filesWritten = 0;
     for (let i = 0; i < normalizedFiles.length; i += BATCH_SIZE) {
       const batch = normalizedFiles.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async ({ fullPath, content }) => {
-        const writeRes = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: fullPath, content }),
-        });
-        if (!writeRes.ok) {
-          console.warn(`Failed to write file: ${fullPath}`);
+        try {
+          const writeRes = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: fullPath, content }),
+            signal: AbortSignal.timeout(15000), // 15s timeout per file
+          });
+          if (writeRes.ok) {
+            filesWritten++;
+          } else {
+            console.warn(`Failed to write file: ${fullPath} (${writeRes.status})`);
+          }
+        } catch (e) {
+          console.warn(`Failed to write file: ${fullPath}`, e);
         }
       }));
     }
+    console.log(`📁 [restoreFilesToDocker] Wrote ${filesWritten}/${normalizedFiles.length} files`);
     
-    console.log(`✅ [restoreFilesToDocker] Files restored successfully`);
-    return true;
-  } catch (error) {
-    console.error('❌ [restoreFilesToDocker] Failed:', error);
-    return false;
-  }
+      console.log(`✅ [restoreFilesToDocker] Files restored successfully`);
+      restoredProjectIds.add(projectId);
+      return true;
+    } catch (error) {
+      console.error('❌ [restoreFilesToDocker] Failed:', error);
+      return false;
+    } finally {
+      fileRestorationPromises.delete(projectId);
+    }
+  })();
+
+  fileRestorationPromises.set(projectId, restorePromise);
+  return restorePromise;
 }
 
 export function useChatHistory() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id: mixedId, projectId } = useLoaderData<{ id?: string; projectId?: string }>();
+  const { user } = useAuth(); // Get authenticated user from context
 
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState<boolean>(false);
@@ -440,12 +688,14 @@ export function useChatHistory() {
     if (currentPath === '/' && previousPath !== '/') {
       // console.log('🏠 [useChatHistory] Navigated to home - clearing session state');
       clearSessionState();
+      clearRestorationState(); // Clear file restoration locks
       setUrlId(undefined);
       setInitialMessages([]);
       setReady(false); // ← Force re-mount to ensure clean state
     } else if (currentPath.startsWith('/chat/') && previousPath.startsWith('/chat/') && currentPath !== previousPath) {
       // console.log('🔄 [useChatHistory] Navigated between chats - clearing for fresh load');
       clearSessionState();
+      clearRestorationState(); // Clear file restoration locks for new chat
       setUrlId(undefined);
       // DON'T clear initialMessages or ready - the React key prop will force remount
       // and the useEffect will load fresh data which updates the component
@@ -511,36 +761,47 @@ export function useChatHistory() {
                   workbenchStore.setDocuments(updatedFiles);
                   workbenchStore.showWorkbench.set(true);
                   
-                  // 🚀 OPTIMIZATION: Restore files AND run npm install in PARALLEL
+                  // 🚀 OPTIMIZATION: Restore files FIRST, then run npm install
                   // Use the urlId as projectId for consistency
                   const projectId = dbChat.urlId || dbChat.id || mixedId;
                   console.log(`📂 [useChatHistory] Restoring past chat files to Docker, projectId: ${projectId}`);
-                  
-                  // Check if package.json exists before starting parallel operations
-                  const hasPackageJson = Object.keys(dbChat.fileSnapshot!).some(path => 
+
+                  // Check if package.json exists
+                  const hasPackageJson = Object.keys(dbChat.fileSnapshot!).some(path =>
                     path.endsWith('package.json') || path === '/home/project/package.json'
                   );
-                  
-                  // Start file restoration
-                  const fileRestorePromise = restoreFilesToDocker(projectId, dbChat.fileSnapshot!);
-                  
-                  // If has package.json, start npm install in parallel (after brief delay for files to start writing)
-                  let npmInstallPromise: Promise<boolean> | null = null;
-                  if (hasPackageJson) {
-                    console.log('📦 [useChatHistory] Starting npm install in parallel with file restoration...');
-                    // Small delay to ensure package.json is written first
-                    npmInstallPromise = new Promise((resolve) => setTimeout(resolve, 500))
-                      .then(() => runNpmInstallWithCoordination(projectId));
-                  }
-                  
-                  // Wait for both operations
-                  const [dockerRestored] = await Promise.all([
-                    fileRestorePromise,
-                    npmInstallPromise || Promise.resolve(false)
-                  ]);
-                  
+
+                  // First restore files (this also creates the container)
+                  const dockerRestored = await restoreFilesToDocker(projectId, dbChat.fileSnapshot!);
+
                   if (dockerRestored) {
                     console.log('✅ [useChatHistory] Files restored to Docker container');
+
+                    // Check if install is needed BEFORE running it
+                    if (hasPackageJson) {
+                      // Check if node_modules exists and is recent
+                      const checkModules = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' }),
+                      });
+                      
+                      if (!checkModules.ok || !(await checkModules.text()).trim()) {
+                        console.log('📦 [useChatHistory] Running bun install after file restoration...');
+                        runNpmInstallWithCoordination(projectId).catch(err => {
+                          console.warn('⚠️ [useChatHistory] bun install failed:', err);
+                        });
+                      } else {
+                        console.log('⚡ [useChatHistory] Skipping install - node_modules is recent');
+                      }
+                    }
+                    
+                    // Trigger auto-fix after restoration
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('recoder:fix-errors'));
+                    }, 2000);
+                  } else {
+                    console.warn('⚠️ [useChatHistory] File restoration failed, skipping bun install');
                   }
                   
                   // console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
@@ -729,6 +990,7 @@ export function useChatHistory() {
 
       // Try database first with file snapshot
       // Always mark chats from recoder-web as 'web' source
+      // Pass the authenticated user from React context
       const dbSaved = await saveChatToDatabase(
         finalUrlId,
         enhancedMessages,
@@ -736,7 +998,8 @@ export function useChatHistory() {
         firstArtifact?.id,
         fileSnapshot,
         currentProjectId,
-        'web' // Mark as web source
+        'web', // Mark as web source
+        user // Pass authenticated user from context
       );
 
       if (dbSaved) {

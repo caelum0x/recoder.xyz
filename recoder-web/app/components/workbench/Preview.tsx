@@ -30,6 +30,13 @@ export const Preview = memo(() => {
   const firstLoadTimeout = 45000; // First attempt: 45 seconds (matches backend health check)
   const retryLoadTimeout = 10000; // Subsequent attempts: 10 seconds
 
+  // Set credentialless attribute on iframe (can't be done in JSX due to React warning)
+  useEffect(() => {
+    if (iframeRef.current) {
+      iframeRef.current.setAttribute('credentialless', 'true');
+    }
+  }, [iframeUrl, retryCount]);
+
   // Clear timers on unmount
   useEffect(() => {
     return () => {
@@ -92,9 +99,74 @@ export const Preview = memo(() => {
         }
       }, delay);
     } else {
-      console.error('❌ [Preview] Max retries reached, giving up');
+      console.error('❌ [Preview] Max retries reached, attempting auto-fix');
       setIsLoading(false);
       setPreviewError('Dev server not responding after multiple retries. Check terminal for errors.');
+      
+      // Auto-fetch errors and trigger AI fix (inline to avoid hoisting issues)
+      (async () => {
+        if (!activePreview) return;
+        let pid: string | undefined = (activePreview as any).projectId;
+        if (!pid && activePreview.baseUrl) {
+          try {
+            const u = new URL(activePreview.baseUrl);
+            const parts = u.pathname.split('/').filter(Boolean);
+            const idx = parts.indexOf('preview');
+            if (idx >= 0 && parts.length > idx + 1) pid = parts[idx + 1];
+          } catch {}
+        }
+        if (!pid || pid === 'undefined' || pid === 'null') return;
+        
+        const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+        let errorPrompt = '';
+        
+        try {
+          // First try to get Vite error directly from preview response
+          const previewResp = await fetch(activePreview.baseUrl, { signal: AbortSignal.timeout(5000) });
+          const html = await previewResp.text();
+          
+          // Extract missing package from Vite error
+          // Pattern: Failed to resolve import "package-name"
+          const importMatch = html.match(/Failed to resolve import "([^"]+)"/);
+          if (importMatch) {
+            const packageName = importMatch[1];
+            console.log('🔍 [Preview] Found missing package:', packageName);
+            errorPrompt = `Build error: Missing npm package "${packageName}". Please add it to package.json and run: bun add ${packageName}`;
+          } else {
+            // Try to find other Vite errors
+            const errorMatch = html.match(/"message":"([^"]{10,200})"/);
+            if (errorMatch && (errorMatch[1].includes('Failed') || errorMatch[1].includes('Error'))) {
+              console.log('🔍 [Preview] Found Vite error:', errorMatch[1]);
+              errorPrompt = `Build error: ${errorMatch[1]}`;
+            }
+          }
+        } catch (e) {
+          console.warn('[Preview] Failed to fetch preview for error parsing:', e);
+        }
+        
+        // If no Vite error found, try the errors API
+        if (!errorPrompt) {
+          try {
+            const resp = await fetch(`${DOCKER_URL}/api/errors/${pid}?tail=200`);
+            if (resp.ok) {
+              const data = await resp.json() as { errors?: any[]; hasBlockingErrors?: boolean };
+              if (data.errors?.length || data.hasBlockingErrors) {
+                const { formatErrorsForAI } = await import('~/lib/services/auto-fix');
+                errorPrompt = formatErrorsForAI(data.errors || []) || '';
+              }
+            }
+          } catch (e) {
+            console.warn('[Preview] Auto-fix fetch failed:', e);
+          }
+        }
+        
+        if (errorPrompt) {
+          console.log('🤖 [Preview] Auto-triggering AI fix for build errors');
+          window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+            detail: { prompt: errorPrompt, auto: true }
+          }));
+        }
+      })();
     }
   }, [retryCount, maxRetries, activePreview]);
 
@@ -118,14 +190,24 @@ export const Preview = memo(() => {
       return;
     }
 
-    const { baseUrl } = activePreview;
+    const { baseUrl, ready } = activePreview;
 
-    // Preview changed - reset retry state
+    // Don't set iframe URL until dev server is ready
+    if (!ready) {
+      setUrl(baseUrl);
+      setIframeUrl(undefined); // Don't load iframe yet
+      setIsLoading(false);
+      console.log('🔄 [Preview] Waiting for dev server to be ready...');
+      return;
+    }
+
+    // Preview is ready - load it
+    console.log('✅ [Preview] Dev server ready, loading preview:', baseUrl);
     setRetryCount(0);
     setUrl(baseUrl);
     setIframeUrl(baseUrl);
     setPreviewError(null);
-    setIsLoading(true); // Show loading initially
+    setIsLoading(true); // Show loading while iframe loads
 
     if (retryTimerRef.current) {
       clearTimeout(retryTimerRef.current);
@@ -231,6 +313,22 @@ export const Preview = memo(() => {
     }
   };
 
+  // Listen for file changes from CLI tools (claude, recoder-code) to auto-refresh
+  useEffect(() => {
+    const handleFileChange = (event: CustomEvent) => {
+      console.log('[Preview] File changes detected from CLI, refreshing...');
+      // Small delay to let Vite hot reload process the changes
+      setTimeout(() => {
+        reloadPreview();
+      }, 500);
+    };
+
+    window.addEventListener('recoder:file-changed', handleFileChange as EventListener);
+    return () => {
+      window.removeEventListener('recoder:file-changed', handleFileChange as EventListener);
+    };
+  }, []);
+
   // Resolve projectId helper (shared by logs and health checks)
   const resolveProjectId = useCallback((): string | undefined => {
     if (!activePreview) return undefined;
@@ -258,10 +356,10 @@ export const Preview = memo(() => {
     try {
       const resp = await fetch(`/api/preview/${encodeURIComponent(pid)}/health`);
       if (!resp.ok) return false;
-      const json = await resp.json().catch(() => ({}));
+      const json = await resp.json().catch(() => ({})) as { ports?: Array<{ responding?: boolean }> };
       // If any port is responding, consider healthy
       if (Array.isArray(json.ports)) {
-        return json.ports.some((p: any) => p.responding === true);
+        return json.ports.some((p) => p.responding === true);
       }
       return false;
     } catch (err) {
@@ -345,10 +443,10 @@ export const Preview = memo(() => {
 
       const resp = await fetch(`/api/preview/${encodeURIComponent(pid)}/logs?tail=${tail}`);
       if (!resp.ok) {
-        const json = await resp.json().catch(() => ({}));
+        const json = await resp.json().catch(() => ({})) as { message?: string };
         setLogs(`Failed to fetch logs: ${resp.status} ${resp.statusText}\n${JSON.stringify(json)}`);
       } else {
-        const json = await resp.json();
+        const json = await resp.json() as { logs?: string };
         setLogs(json.logs || '');
       }
     } catch (err) {
@@ -400,7 +498,17 @@ export const Preview = memo(() => {
         )}
       </div>
       <div className="flex-1 border-t border-bolt-elements-borderColor relative">
-        {previewError ? (
+        {(activePreview && !activePreview.ready) || (activePreview && !iframeUrl) ? (
+          // ✅ Show loading state when preview URL is set but dev server not ready yet
+          <div className="flex w-full h-full justify-center items-center bg-white">
+            <div className="text-center p-6">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <div className="text-gray-700 text-lg mb-2">Waiting for dev server...</div>
+              <div className="text-gray-500 text-sm">Installing dependencies and starting server</div>
+              <div className="text-gray-400 text-xs mt-2">This usually takes 10-30 seconds</div>
+            </div>
+          </div>
+        ) : previewError ? (
           <div className="flex w-full h-full justify-center items-center bg-white">
             <div className="text-center p-6">
               <div className="text-red-500 text-lg mb-2"><span className="i-ph:warning" /> Preview Error</div>
@@ -457,7 +565,6 @@ export const Preview = memo(() => {
               </div>
             )}
             <iframe
-              credentialless
               key={retryCount} // Force re-render on retry
               ref={iframeRef}
               className="border-none w-full h-full bg-white"

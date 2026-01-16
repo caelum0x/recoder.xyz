@@ -62,6 +62,53 @@ export class PreviewsStore {
       return;
     }
 
+    // Don't set ready: true immediately - wait for containerReady
+    const previewInfo: PreviewInfo = {
+      port: 3000,
+      ready: false, // ✅ Not ready until containerReady is true
+      baseUrl: `${DOCKER_URL}/preview/${this.#projectId}`,
+      projectId: this.#projectId,
+    };
+    this.#availablePreviews.set(3000, previewInfo);
+    this.previews.set([previewInfo]);
+    console.log('🔄 [PreviewsStore] Docker preview URL set (waiting for containerReady):', previewInfo.baseUrl);
+
+    // Subscribe to containerReady - only start polling when container is confirmed ready
+    this.#waitForContainerReady();
+  }
+
+  async #waitForContainerReady() {
+    if (!this.#projectId || !DOCKER_URL) return;
+
+    try {
+      // Import workbenchStore dynamically to avoid circular dependency
+      const { workbenchStore } = await import('./workbench');
+
+      // Check if already ready
+      if (workbenchStore.containerReady.get()) {
+        console.log('✅ [PreviewsStore] Container already ready, enabling preview');
+        this.#enablePreview();
+        return;
+      }
+
+      // Subscribe to containerReady changes
+      const unsubscribe = workbenchStore.containerReady.subscribe((ready) => {
+        if (ready) {
+          console.log('✅ [PreviewsStore] containerReady became true, enabling preview');
+          unsubscribe();
+          this.#enablePreview();
+        }
+      });
+    } catch (e) {
+      console.warn('⚠️ [PreviewsStore] Could not subscribe to containerReady:', e);
+      // Fallback: poll for health after delay
+      setTimeout(() => this.#pollForDevServer(), 5000);
+    }
+  }
+
+  #enablePreview() {
+    if (!this.#projectId) return;
+
     const previewInfo: PreviewInfo = {
       port: 3000,
       ready: true,
@@ -70,7 +117,44 @@ export class PreviewsStore {
     };
     this.#availablePreviews.set(3000, previewInfo);
     this.previews.set([previewInfo]);
-    console.log('✅ [PreviewsStore] Docker preview initialized:', previewInfo.baseUrl);
+    console.log('✅ [PreviewsStore] Preview enabled');
+  }
+
+  async #pollForDevServer() {
+    if (!this.#projectId || !DOCKER_URL) return;
+
+    const maxAttempts = 30; // 30 attempts * 2s = 60s max
+    let attempts = 0;
+
+    const checkHealth = async () => {
+      attempts++;
+      try {
+        const res = await fetch(`${DOCKER_URL}/api/preview/${this.#projectId}/health`, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (res.ok) {
+          const data = await res.json() as { ports: Array<{ port: number; responding: boolean }> };
+          const respondingPort = data.ports.find(p => p.responding);
+
+          if (respondingPort) {
+            this.#enablePreview();
+            return; // Stop polling
+          }
+        }
+      } catch {
+        // Ignore errors, keep polling
+      }
+
+      // Keep polling if not at max attempts
+      if (attempts < maxAttempts) {
+        setTimeout(checkHealth, 2000);
+      } else {
+        console.warn('⚠️ [PreviewsStore] Dev server health check timed out');
+        this.#enablePreview(); // Allow manual refresh
+      }
+    };
+
+    setTimeout(checkHealth, 2000);
   }
 
   async #initWebContainerPreview() {

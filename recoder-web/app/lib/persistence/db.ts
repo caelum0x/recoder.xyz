@@ -6,6 +6,11 @@ const logger = createScopedLogger('ChatHistory');
 
 // this is used at the top level and never rejects
 export async function openDatabase(): Promise<IDBDatabase | undefined> {
+  // SSR guard - indexedDB only exists in browser
+  if (typeof indexedDB === 'undefined') {
+    return undefined;
+  }
+
   return new Promise((resolve) => {
     const request = indexedDB.open('recoderHistory', 2);
 

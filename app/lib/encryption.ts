@@ -122,6 +122,10 @@ export function validateApiKeyFormat(apiKey: string, provider: string): boolean 
     case 'anthropic':
       return apiKey.startsWith('sk-ant-') && apiKey.length > 20;
 
+    case 'claude-code':
+      // Claude Code OAuth tokens: sk-ant-oat01-...
+      return apiKey.startsWith('sk-ant-oat') && apiKey.length > 20;
+
     case 'openai':
       return apiKey.startsWith('sk-') && apiKey.length > 20;
 

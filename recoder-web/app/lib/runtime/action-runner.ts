@@ -6,6 +6,7 @@ import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { WORK_DIR } from '~/utils/constants';
 import { getCurrentUserId } from '~/lib/stores/user';
+import { snapshotBeforeAI, snapshotAfterAI, setAutoSave, createSnapshot } from '~/lib/stores/snapshots';
 
 let _workbenchStore: any = null;
 const getWorkbenchStore = async () => {
@@ -151,6 +152,7 @@ export class ActionRunner {
   #projectId: string | null = null;
   #dockerReady: boolean = false;
   #isRestoredChat: boolean = false;  // True if this is a restored past chat
+  #snapshotTaken: boolean = false;  // Track if snapshot was taken before AI changes
   // Note: #npmInstallRunning and #autoInstallTriggered are now GLOBAL flags above
 
   actions: ActionsMap = map({});
@@ -158,6 +160,36 @@ export class ActionRunner {
   constructor(chatId?: string) {
     this.#chatId = chatId || null;
     this.#projectId = chatId || `project-${Date.now()}`;
+  }
+
+  /**
+   * Create a snapshot after AI changes complete.
+   * Call this when AI streaming finishes.
+   */
+  async createAISnapshot(description: string = 'AI changes'): Promise<void> {
+    if (!this.#snapshotTaken || !this.#projectId || !this.#dockerReady) {
+      return;
+    }
+
+    // Wait for all pending actions to complete
+    await this.#currentExecutionPromise;
+
+    // Small delay to ensure file writes are flushed
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    try {
+      await snapshotAfterAI(this.#projectId, description);
+      logger.info(`✅ Created AI snapshot: ${description}`);
+    } catch (err) {
+      logger.warn('Failed to create AI snapshot:', err);
+    }
+  }
+
+  /**
+   * Get the project ID for this runner
+   */
+  getProjectId(): string | null {
+    return this.#projectId;
   }
 
   /**
@@ -306,6 +338,18 @@ export class ActionRunner {
       return;
     }
 
+    // Take snapshot before first AI action
+    if (!this.#snapshotTaken && this.#projectId && this.#dockerReady) {
+      this.#snapshotTaken = true;
+      snapshotBeforeAI(this.#projectId).catch(err => 
+        logger.warn('Snapshot before AI failed:', err)
+      );
+      // Enable auto-save (5 min intervals)
+      setAutoSave(this.#projectId, true).catch(err =>
+        logger.warn('Auto-save enable failed:', err)
+      );
+    }
+
     this.#updateAction(actionId, { ...action, ...data.action, executed: true });
 
     this.#currentExecutionPromise = this.#currentExecutionPromise
@@ -358,6 +402,42 @@ export class ActionRunner {
           await this.#runSearchFilesAction(action);
           break;
         }
+        case 'str_replace': {
+          await this.#runStrReplaceAction(action);
+          break;
+        }
+        case 'delegate_subagent': {
+          await this.#runDelegateSubagentAction(action);
+          break;
+        }
+        case 'web_search': {
+          await this.#runWebSearchAction(action);
+          break;
+        }
+        case 'web_fetch': {
+          await this.#runWebFetchAction(action);
+          break;
+        }
+        case 'memory_operation': {
+          await this.#runMemoryAction(action);
+          break;
+        }
+        case 'glob_search': {
+          await this.#runGlobAction(action);
+          break;
+        }
+        case 'ripgrep_search': {
+          await this.#runRipGrepAction(action);
+          break;
+        }
+        case 'edit_file': {
+          await this.#runEditFileAction(action);
+          break;
+        }
+        case 'read_many_files': {
+          await this.#runReadManyFilesAction(action);
+          break;
+        }
       }
 
       this.#updateAction(actionId, { status: action.abortSignal.aborted ? 'aborted' : 'complete' });
@@ -381,6 +461,19 @@ export class ActionRunner {
       unreachable('Expected shell action');
     }
 
+    const normalizedContent = action.content.replace(/\n/g, ' ').toLowerCase();
+    // 🔧 FIX: More precise detection - don't match "vite" in "npm install vite"
+    const isDevServer = /npm\s+(run\s+)?dev\b|yarn\s+dev\b|pnpm\s+dev\b|bun\s+(run\s+)?dev\b|npx\s+vite\b|npm\s+start\b|yarn\s+start\b|pnpm\s+start\b|next\s+dev\b|remix\s+dev\b/.test(normalizedContent);
+    const isInstallCommand = /npm\s+(install|i\b)|yarn\s+(install|add)\b|pnpm\s+(install|add)\b|bun\s+(install|add)\b/.test(normalizedContent);
+    const isNpmCommand = /npm|yarn|pnpm|bun/.test(normalizedContent);
+
+    // 🔧 CRITICAL FIX: For restored chats, skip ALL install/dev commands
+    // useChatHistory handles file restoration, bun install, and dev server start
+    if (this.#isRestoredChat && (isInstallCommand || isDevServer)) {
+      logger.debug('⏭️ Skipping install/dev command - restored chat (handled by useChatHistory)');
+      return;
+    }
+
     logger.info(`🔨 Executing shell command: ${action.content.substring(0, 100)}${action.content.length > 100 ? '...' : ''}`);
 
     // ✅ FIX #4: Auto-show terminal when shell commands execute
@@ -391,28 +484,20 @@ export class ActionRunner {
 
         if (terminalStore) {
           terminalStore.toggleTerminal(true);
-          terminalStore.flashTerminalHighlight();
-          logger.info('✅ Terminal auto-shown and highlighted for shell command execution');
         }
       } catch (error) {
         logger.warn('Could not auto-show terminal:', error);
       }
     }
 
-    const normalizedContent = action.content.replace(/\n/g, ' ').toLowerCase();
-    // 🔧 FIX: More precise detection - don't match "vite" in "npm install vite"
-    const isDevServer = /npm\s+(run\s+)?dev\b|yarn\s+dev\b|pnpm\s+dev\b|npx\s+vite\b|npm\s+start\b|yarn\s+start\b|pnpm\s+start\b|next\s+dev\b|remix\s+dev\b/.test(normalizedContent);
-    const isInstallCommand = /npm\s+(install|i\b)|yarn\s+(install|add)\b|pnpm\s+(install|add)\b/.test(normalizedContent);
-    const isNpmCommand = /npm|yarn|pnpm/.test(normalizedContent);
-
-    // Skip duplicate npm install/dev if auto-install already ran OR if npm is already running
-    if (globalAutoInstallTriggered) {
-      if (isInstallCommand || (isDevServer && normalizedContent.includes('npm install'))) {
-        logger.info('⏭️ Skipping npm command - auto-install already handled this');
+    // Skip duplicate npm install/dev if auto-install already COMPLETED successfully
+    if (globalAutoInstallTriggered && globalNpmInstallComplete) {
+      if (isInstallCommand || isDevServer) {
+        logger.info('⏭️ Skipping npm command - auto-install already completed successfully');
         return;
       }
     }
-    
+
     // Prevent concurrent npm install commands (use global flag)
     if (isInstallCommand && globalNpmInstallRunning) {
       logger.warn('⏭️ Skipping npm install - another install is already running globally');
@@ -461,11 +546,12 @@ export class ActionRunner {
           globalNpmInstallRunning = true;
 
           try {
-            logger.info('📦 Installing dependencies before running command...');
-            const installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund --loglevel=error');
+            logger.info('📦 Installing dependencies with bun...');
+            const installOutput = await this.#dockerExec('bun install --force');
 
-            if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-              // Try with legacy peer deps
+            if (installOutput.includes('error:') || installOutput.includes('failed')) {
+              // Fallback to npm with legacy peer deps
+              logger.warn('⚠️ bun failed, trying npm fallback...');
               await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
             }
 
@@ -555,29 +641,14 @@ export class ActionRunner {
           await this.#dockerExec('rm -rf node_modules package-lock.json');
         }
         
-        // Extract and run install with optimizations
+        // Extract and run install with bun (faster, no peer dep issues)
         const installMatch = action.content.match(/\b(npm|yarn|pnpm)\s+(install|i\b)(\s+[^&]*)?/);
         if (installMatch) {
-          // 🚀 OPTIMIZATION: Use faster npm options
-          logger.info('📦 Running optimized install...');
-          let installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund --loglevel=error');
+          logger.info('📦 Installing with bun...');
+          let installOutput = await this.#dockerExec('bun install --force');
 
-          // Check for esbuild architecture mismatch
-          if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError') || installOutput.includes('ETXTBSY'))) {
-            logger.warn('🔧 Detected esbuild issue - fixing...');
-            await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild node_modules/.bin/esbuild');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
-
-            if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-              logger.warn('🔄 Retrying with clean install...');
-              await this.#dockerExec('rm -rf node_modules package-lock.json');
-              installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
-            }
-
-            logger.info('✅ esbuild reinstalled with correct architecture');
-          } else if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-            // Try with legacy peer deps
+          if (installOutput.includes('error:') || installOutput.includes('failed')) {
+            logger.warn('⚠️ bun failed, trying npm fallback...');
             installOutput = await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
           }
         }
@@ -666,6 +737,13 @@ export class ActionRunner {
     // FIX #3: Prevent file generation after repository clone
     if (this.#repositoryCloned) {
       logger.warn(`⚠️ Skipping file action for '${action.filePath}' - Repository '${this.#clonedRepoUrl}' was already cloned. AI should not generate additional files after cloning.`);
+      return;
+    }
+
+    // 🔧 CRITICAL FIX: Skip file creation for restored chats
+    // Files are already restored from database snapshot by useChatHistory
+    if (this.#isRestoredChat) {
+      logger.debug(`⏭️ Skipping file action for '${action.filePath}' - restored chat (files from snapshot)`);
       return;
     }
 
@@ -1168,41 +1246,21 @@ export class ActionRunner {
         logger.info('📦 Found existing node_modules, attempting incremental install...');
       }
 
-      // 🚀 OPTIMIZATION: Use faster npm install options
-      // --prefer-offline: Use local cache first
-      // --no-audit: Skip vulnerability audit (faster)
-      // --no-fund: Skip funding messages
-      logger.info('📦 Installing dependencies (optimized)...');
-      let installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund --loglevel=error');
+      // 🚀 Use bun for fast installs - --force handles peer dependency conflicts
+      logger.info('📦 Installing dependencies with bun...');
+      let installOutput = await this.#dockerExec('bun install --force');
 
-      // Check if install actually succeeded
-      if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-        logger.error('❌ npm install failed, trying fallback...');
+      // Check if bun install succeeded
+      if (installOutput.includes('error:') || installOutput.includes('failed')) {
+        logger.warn('⚠️ bun install had issues, trying npm fallback...');
+        
+        // Fallback to npm with legacy peer deps
+        await this.#dockerExec('rm -rf node_modules bun.lockb');
+        installOutput = await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
 
-        // Check if it's an esbuild architecture mismatch
-        if (installOutput.includes('esbuild') && (installOutput.includes('ELF') || installOutput.includes('SyntaxError') || installOutput.includes('ETXTBSY'))) {
-          logger.warn('🔧 Detected esbuild issue - fixing...');
-          await this.#dockerExec('rm -rf node_modules/esbuild node_modules/@esbuild node_modules/.bin/esbuild');
-          await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause
-          installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
-
-          if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-            logger.warn('🔄 Retrying with clean install...');
-            await this.#dockerExec('rm -rf node_modules package-lock.json');
-            installOutput = await this.#dockerExec('npm install --prefer-offline --no-audit --no-fund');
-          }
-
-          logger.info('✅ esbuild reinstalled with correct architecture');
-        } else {
-          // Try with legacy peer deps
-          logger.info('💡 Trying with --legacy-peer-deps...');
-          installOutput = await this.#dockerExec('npm install --legacy-peer_deps --prefer-offline --no-audit --no-fund');
-        }
-
-        // Final check
         if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-          logger.error('❌ npm install failed even after retries');
-          throw new Error('npm install failed - see logs for details');
+          logger.error('❌ npm install also failed');
+          throw new Error('Package installation failed - see logs for details');
         }
       }
 
@@ -1245,20 +1303,20 @@ export class ActionRunner {
       // This handles cases where the AI creates a backend but doesn't use concurrently
       await this.#autoStartBackendIfNeeded();
 
-      // Check health in background (non-blocking)
-      setTimeout(() => this.#checkDevServerHealth(), 2000);
+      // Check health and mark container as ready
+      setTimeout(() => this.#checkDevServerHealth(true), 2000);
     } catch (error: any) {
       globalNpmInstallRunning = false;
       logger.error('❌ Auto-install failed:', error.message);
 
       logger.info('💡 You can manually fix this:');
       logger.info('  1. Check package.json is valid');
-      logger.info('  2. Run: npm install --legacy-peer-deps');
-      logger.info('  3. Run: npm run dev');
+      logger.info('  2. Run: bun install');
+      logger.info('  3. Run: bun run dev');
     }
   }
 
-  async #checkDevServerHealth() {
+  async #checkDevServerHealth(markContainerReady: boolean = false) {
     try {
       // Check preview health endpoint
       const healthRes = await fetch(`${DOCKER_URL}/api/preview/${this.#projectId}/health`);
@@ -1268,9 +1326,24 @@ export class ActionRunner {
 
         if (respondingPort) {
           logger.info(`✅ Dev server verified responding on port ${respondingPort.port} (${respondingPort.type})`);
+
+          // Mark container as ready if requested
+          if (markContainerReady && typeof window !== 'undefined') {
+            try {
+              const { workbenchStore } = await import('~/lib/stores/workbench');
+              workbenchStore.setContainerReady(true);
+            } catch (e) {
+              logger.warn('Could not set container ready:', e);
+            }
+          }
         } else {
           logger.warn(`⚠️ Dev server not responding yet on any port`);
           logger.info(`Checked ports: ${healthData.ports.map(p => `${p.port} (${p.type})`).join(', ')}`);
+
+          // Retry after a delay if not ready yet
+          if (markContainerReady) {
+            setTimeout(() => this.#checkDevServerHealth(true), 3000);
+          }
         }
       }
 
@@ -1422,9 +1495,62 @@ export class ActionRunner {
 
     try {
       await this.#ensureDockerReady();
-      const content = await this.#dockerReadFile(action.filePath);
-      action.content = content;
-      logger.info(`Read ${content.length} characters from ${action.filePath}`);
+      
+      // Call enterprise tools API for enhanced file reading
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'readFileEnhanced',
+          params: {
+            filePath: action.filePath,
+            startLine: action.startLine,
+            endLine: action.endLine,
+            maxLines: action.maxLines,
+          }
+        })
+      });
+      
+      const result = await response.json();
+
+      if (result.success) {
+        let message = result.message;
+        if (result.truncated) {
+          message += `\n\nNote: File was truncated. Use line ranges to read specific sections.`;
+        }
+        if (result.isBinary) {
+          message += `\n\nNote: Binary file detected. Content not displayed.`;
+        }
+        
+        // Enterprise enhancement: Use code_assist for code analysis
+        if (action.filePath.match(/\.(ts|tsx|js|jsx|py|java|cpp|c|cs|go|rs|rb|php|swift|kt|scala|dart|vue|svelte|html|css|scss|sass|less|sql|sh|bash|ps1|yaml|yml|json|xml|toml|ini|cfg|conf|dockerfile|makefile|cmake|gradle|pom\.xml|cargo\.toml|package\.json|requirements\.txt|gemfile|composer\.json)$/i)) {
+          try {
+            const analysisResponse = await fetch('/api/enterprise-tools', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tool: 'codeAssist',
+                params: {
+                  query: `Analyze this code: ${action.filePath}`,
+                  context: result.content || ''
+                }
+              })
+            });
+            const analysis = await analysisResponse.json();
+            
+            if (analysis.suggestions) {
+              message += `\n\n🔍 Code Analysis:\n${analysis.suggestions}`;
+            }
+          } catch (error) {
+            logger.warn('Code analysis unavailable:', error);
+          }
+        }
+        
+        action.content = result.content || message;
+        logger.info(`Successfully read file: ${action.filePath} (${result.lineCount || 0} lines)`);
+      } else {
+        throw new Error(result.message);
+      }
     } catch (error) {
       logger.error(`Failed to read file ${action.filePath}:`, error);
       throw new Error(`Could not read file: ${action.filePath}`);
@@ -1455,8 +1581,31 @@ export class ActionRunner {
 
     try {
       await this.#ensureDockerReady();
+      
+      // Enterprise enhancement: Smart file discovery
+      try {
+        const discoveryResponse = await fetch('/api/enterprise-tools', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tool: 'discoverFiles',
+            params: {
+              query: action.query || '',
+              workingDir: '/workspace'
+            }
+          })
+        });
+        const relevantFiles = await discoveryResponse.json();
+        
+        if (relevantFiles.length > 0) {
+          action.content = `Smart discovery found relevant files:\n${relevantFiles.join('\n')}\n\nFull listing:\n`;
+        }
+      } catch (error) {
+        logger.warn('Smart file discovery unavailable:', error);
+      }
+      
       const output = await this.#dockerExec(`ls -la "${path}"`);
-      action.content = output;
+      action.content = (action.content || '') + output;
       logger.info(`Listed files in ${path}`);
     } catch (error) {
       logger.error(`Failed to list files in ${path}:`, error);
@@ -1479,6 +1628,345 @@ export class ActionRunner {
     } catch (error) {
       logger.error(`Search failed:`, error);
       action.content = '';
+    }
+  }
+
+  async #runStrReplaceAction(action: ActionState) {
+    if (action.type !== 'str_replace') {
+      unreachable('Expected str_replace action');
+    }
+
+    logger.info(`Replacing text in: ${action.filePath}`);
+
+    try {
+      await this.#ensureDockerReady();
+      
+      // Call enterprise tools API for search-replace
+      const replaceResponse = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'searchReplace',
+          params: {
+            file_path: action.filePath,
+            old_string: action.oldString,
+            new_string: action.newString,
+          }
+        })
+      });
+      
+      const result = await replaceResponse.json();
+
+      if (result.success) {
+        action.content = result.message + (result.diff ? `\n\nDiff:\n${result.diff}` : '');
+        logger.info(`Successfully replaced text in ${action.filePath}`);
+        
+        // Enterprise enhancement: Auto-commit changes
+        try {
+          const commitResponse = await fetch('/api/enterprise-tools', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tool: 'autoCommit',
+              params: {
+                files: [action.filePath],
+                workingDir: '/workspace'
+              }
+            })
+          });
+          const commitResult = await commitResponse.json();
+          
+          if (commitResult.success) {
+            action.content += `\n\n✅ Auto-committed: ${commitResult.commitHash}`;
+          }
+        } catch (error) {
+          logger.warn('Auto-commit failed:', error);
+        }
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      logger.error(`String replacement failed:`, error);
+      throw new Error(`Could not replace text in: ${action.filePath}`);
+    }
+  }
+
+  async #runDelegateSubagentAction(action: ActionState) {
+    if (action.type !== 'delegate_subagent') {
+      unreachable('Expected delegate_subagent action');
+    }
+
+    logger.info(`Delegating task to ${action.agentType} subagent: ${action.taskDescription}`);
+
+    try {
+      // Call enterprise tools API for subagent delegation
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'delegateSubagent',
+          params: {
+            agentType: action.agentType,
+            task: action.taskDescription,
+            context: action.context || ''
+          }
+        })
+      });
+      
+      const result = await response.json();
+      
+      action.content = `Subagent (${action.agentType}) completed:\n${result.output || result.message}`;
+      logger.info(`Subagent task completed successfully`);
+    } catch (error) {
+      logger.error(`Subagent delegation failed:`, error);
+      throw new Error(`Failed to delegate to ${action.agentType}: ${error}`);
+    }
+  }
+
+  async #runWebSearchAction(action: ActionState) {
+    if (action.type !== 'web_search') {
+      unreachable('Expected web_search action');
+    }
+
+    logger.info(`Web searching: ${action.query}`);
+
+    try {
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'webSearch',
+          params: {
+            query: action.query,
+            options: { maxResults: action.maxResults || 5 }
+          }
+        })
+      });
+      const result = await response.json();
+      
+      if (!result || !result.results) {
+        action.content = `Web search completed but no results found for "${action.query}"`;
+        return;
+      }
+      
+      action.content = `Web search results for "${action.query}":\n${result.results.map(r => `• ${r.title}: ${r.snippet}`).join('\n')}`;
+      logger.info(`Web search completed with ${result.results.length} results`);
+    } catch (error) {
+      logger.warn('Web search unavailable:', error);
+      action.content = `Web search for "${action.query}" - Service temporarily unavailable. Try using webFetch with a specific URL instead.`;
+    }
+  }
+
+  async #runWebFetchAction(action: ActionState) {
+    if (action.type !== 'web_fetch') {
+      unreachable('Expected web_fetch action');
+    }
+
+    logger.info(`Fetching URL: ${action.url}`);
+
+    try {
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'webFetch',
+          params: {
+            url: action.url,
+            options: { selector: action.selector }
+          }
+        })
+      });
+      const result = await response.json();
+      
+      if (!result || !result.content) {
+        action.content = `Failed to fetch content from ${action.url}`;
+        return;
+      }
+      
+      action.content = `Content from ${action.url}:\n${result.content.substring(0, 5000)}${result.content.length > 5000 ? '\n\n[Content truncated - use selector to get specific sections]' : ''}`;
+      logger.info(`URL fetch completed, ${result.content.length} chars`);
+    } catch (error) {
+      logger.warn('URL fetch unavailable:', error);
+      action.content = `Failed to fetch ${action.url} - Service temporarily unavailable or URL inaccessible.`;
+    }
+  }
+
+  async #runMemoryAction(action: ActionState) {
+    if (action.type !== 'memory_operation') {
+      unreachable('Expected memory_operation action');
+    }
+
+    logger.info(`Memory operation: ${action.operation}`);
+
+    try {
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'memory',
+          params: {
+            operation: action.operation,
+            data: { key: action.key, value: action.value }
+          }
+        })
+      });
+      const result = await response.json();
+      
+      if (action.operation === 'list') {
+        action.content = `Stored memories:\n${result.items?.map(i => `• ${i.key}: ${i.value}`).join('\n') || 'No memories stored yet'}`;
+      } else if (action.operation === 'retrieve') {
+        action.content = result.value ? `Retrieved: ${result.value}` : `No memory found for key: ${action.key}`;
+      } else {
+        action.content = `Memory stored: ${action.key}`;
+      }
+      
+      logger.info(`Memory ${action.operation} completed`);
+    } catch (error) {
+      logger.warn('Memory operation unavailable:', error);
+      action.content = `Memory ${action.operation} - Service temporarily unavailable. Memory will be available in next session.`;
+    }
+  }
+
+  async #runGlobAction(action: ActionState) {
+    if (action.type !== 'glob_search') {
+      unreachable('Expected glob_search action');
+    }
+
+    logger.info(`Glob search: ${action.pattern}`);
+
+    try {
+      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "glob", params: { pattern: action.pattern, options: action.options } }) }); const globTool = await response.json();
+      const result = await globTool.search(action.pattern, action.exclude, action.maxDepth);
+      
+      if (!result || !result.files || result.files.length === 0) {
+        action.content = `No files found matching pattern "${action.pattern}"`;
+        return;
+      }
+      
+      const fileList = result.files.slice(0, 100).join('\n');
+      const truncated = result.files.length > 100 ? `\n\n[Showing 100 of ${result.files.length} files]` : '';
+      
+      action.content = `Files matching "${action.pattern}":\n${fileList}${truncated}`;
+      logger.info(`Glob search found ${result.files.length} files`);
+    } catch (error) {
+      logger.warn('Glob search unavailable:', error);
+      action.content = `Glob search for "${action.pattern}" - Using fallback to listFiles instead.`;
+    }
+  }
+
+  async #runRipGrepAction(action: ActionState) {
+    if (action.type !== 'ripgrep_search') {
+      unreachable('Expected ripgrep_search action');
+    }
+
+    logger.info(`RipGrep search: ${action.query}`);
+
+    try {
+      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "ripGrep", params: { pattern: action.pattern, path: action.path, options: action.options } }) }); const ripGrep = await response.json();
+      const result = await ripGrep({
+        query: action.query,
+        filePattern: action.filePattern,
+        caseSensitive: action.caseSensitive,
+        maxResults: action.maxResults || 100
+      }, '/workspace');
+      
+      if (!result || !result.matches || result.matches.length === 0) {
+        action.content = `No matches found for "${action.query}"${action.filePattern ? ` in ${action.filePattern}` : ''}`;
+        return;
+      }
+      
+      const matches = result.matches.slice(0, 50);
+      const truncated = result.matches.length > 50 ? `\n\n[Showing 50 of ${result.matches.length} matches]` : '';
+      
+      action.content = `RipGrep results for "${action.query}":\n${matches.join('\n')}${truncated}`;
+      logger.info(`RipGrep found ${result.matches.length} matches`);
+    } catch (error) {
+      logger.warn('RipGrep unavailable, using fallback:', error);
+      // Fallback to basic search
+      try {
+        await this.#runSearchFilesAction({ ...action, type: 'searchFiles' } as any);
+      } catch {
+        action.content = `Search for "${action.query}" - Service temporarily unavailable.`;
+      }
+    }
+  }
+
+  async #runEditFileAction(action: ActionState) {
+    if (action.type !== 'edit_file') {
+      unreachable('Expected edit_file action');
+    }
+
+    logger.info(`Editing file: ${action.filePath} at line ${action.lineNumber}`);
+
+    try {
+      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "editFile", params: { filePath: action.filePath, edits: action.edits, workingDir: "/workspace" } }) }); const editFile = await response.json();
+      
+      // Validate line numbers
+      if (action.lineNumber < 1) {
+        action.content = `Invalid line number: ${action.lineNumber}. Line numbers start at 1.`;
+        return;
+      }
+      
+      if (action.endLineNumber && action.endLineNumber < action.lineNumber) {
+        action.content = `Invalid range: end line (${action.endLineNumber}) must be >= start line (${action.lineNumber})`;
+        return;
+      }
+      
+      const result = await editFile({
+        filePath: action.filePath,
+        operation: action.operation,
+        lineNumber: action.lineNumber,
+        content: action.content,
+        endLineNumber: action.endLineNumber
+      }, '/workspace');
+      
+      action.content = `File edit completed: ${result.message}\n\nModified ${action.filePath} at line ${action.lineNumber}`;
+      logger.info(`File edit completed: ${action.operation} at line ${action.lineNumber}`);
+    } catch (error) {
+      logger.warn('EditFile unavailable, using strReplace:', error);
+      action.content = `Line-based edit failed. Use strReplace for this change instead.`;
+    }
+  }
+
+  async #runReadManyFilesAction(action: ActionState) {
+    if (action.type !== 'read_many_files') {
+      unreachable('Expected read_many_files action');
+    }
+
+    logger.info(`Reading ${action.filePaths.length} files`);
+
+    try {
+      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "readManyFiles", params: { files: action.files, workingDir: "/workspace" } }) }); const readManyFiles = await response.json();
+      
+      if (!action.filePaths || action.filePaths.length === 0) {
+        action.content = 'No files specified to read';
+        return;
+      }
+      
+      if (action.filePaths.length > 20) {
+        action.content = `Too many files requested (${action.filePaths.length}). Maximum is 20 files per batch. Use glob or listFiles to find files first.`;
+        return;
+      }
+      
+      const result = await readManyFiles({
+        filePaths: action.filePaths,
+        maxFileSize: action.maxFileSize || 100000 // 100KB default
+      }, '/workspace');
+      
+      if (!result || !result.files || result.files.length === 0) {
+        action.content = `Failed to read files: ${action.filePaths.join(', ')}`;
+        return;
+      }
+      
+      const fileContents = result.files.map(f => 
+        `=== ${f.path} ===\n${f.content.substring(0, 1000)}${f.content.length > 1000 ? '\n[truncated]' : ''}`
+      ).join('\n\n');
+      
+      action.content = `Read ${result.files.length} files:\n\n${fileContents}`;
+      logger.info(`Read ${result.files.length} files successfully`);
+    } catch (error) {
+      logger.warn('ReadManyFiles unavailable:', error);
+      action.content = `Batch read failed. Try reading files individually with readFile instead.`;
     }
   }
 

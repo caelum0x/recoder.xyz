@@ -43,6 +43,7 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
         },
       ],
       (context as any)?.cloudflare?.env || process.env,
+      { request }, // Pass request for BYOK
     );
 
     // Use textStream from native implementation

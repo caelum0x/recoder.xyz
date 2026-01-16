@@ -137,7 +137,7 @@ export function QuickActions({ onSelectAction, disabled }: QuickActionsProps) {
           'text-white shadow-lg hover:shadow-xl',
           'transition-all duration-200 transform hover:scale-110',
           'disabled:opacity-50 disabled:cursor-not-allowed',
-          isOpen && 'rotate-45'
+          isOpen ? 'rotate-45' : ''
         )}
         title="Quick Actions"
       >

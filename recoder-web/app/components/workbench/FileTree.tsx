@@ -1,5 +1,7 @@
-import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useStore } from '@nanostores/react';
 import type { FileMap } from '~/lib/stores/files';
+import { filesWithErrorsAtom, getFileErrorCount } from '~/lib/stores/errors';
 import { classNames } from '~/utils/classNames';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 
@@ -8,10 +10,22 @@ const logger = createScopedLogger('FileTree');
 const NODE_PADDING_LEFT = 8;
 const DEFAULT_HIDDEN_FILES = [/\/node_modules\//, /\/\.next/, /\/\.astro/];
 
+interface ContextMenuState {
+  x: number;
+  y: number;
+  path: string;
+  type: 'file' | 'folder';
+}
+
 interface Props {
   files?: FileMap;
   selectedFile?: string;
   onFileSelect?: (filePath: string) => void;
+  onFileCreate?: (folderPath: string, fileName: string) => void;
+  onFolderCreate?: (folderPath: string, folderName: string) => void;
+  onFileDelete?: (filePath: string) => void;
+  onFileRename?: (oldPath: string, newPath: string) => void;
+  onFileCopy?: (filePath: string) => void;
   rootFolder?: string;
   hideRoot?: boolean;
   collapsed?: boolean;
@@ -25,6 +39,11 @@ export const FileTree = memo(
   ({
     files = {},
     onFileSelect,
+    onFileCreate,
+    onFolderCreate,
+    onFileDelete,
+    onFileRename,
+    onFileCopy,
     selectedFile,
     rootFolder,
     hideRoot = false,
@@ -36,7 +55,12 @@ export const FileTree = memo(
   }: Props) => {
     renderLogger.trace('FileTree');
 
+    const filesWithErrors = useStore(filesWithErrorsAtom);
     const computedHiddenFiles = useMemo(() => [...DEFAULT_HIDDEN_FILES, ...(hiddenFiles ?? [])], [hiddenFiles]);
+    const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+    const [renaming, setRenaming] = useState<string | null>(null);
+    const [newItemName, setNewItemName] = useState('');
+    const [creatingIn, setCreatingIn] = useState<{ path: string; type: 'file' | 'folder' } | null>(null);
 
     const fileList = useMemo(() => {
       return buildFileList(files, rootFolder, hideRoot, computedHiddenFiles);
@@ -110,24 +134,154 @@ export const FileTree = memo(
       });
     };
 
+    // Context menu handlers
+    const handleContextMenu = useCallback((e: React.MouseEvent, path: string, type: 'file' | 'folder') => {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, path, type });
+    }, []);
+
+    const closeContextMenu = useCallback(() => {
+      setContextMenu(null);
+    }, []);
+
+    const handleNewFile = useCallback(() => {
+      if (contextMenu) {
+        const folderPath = contextMenu.type === 'folder' ? contextMenu.path : contextMenu.path.substring(0, contextMenu.path.lastIndexOf('/'));
+        setCreatingIn({ path: folderPath, type: 'file' });
+        setNewItemName('');
+      }
+      closeContextMenu();
+    }, [contextMenu, closeContextMenu]);
+
+    const handleNewFolder = useCallback(() => {
+      if (contextMenu) {
+        const folderPath = contextMenu.type === 'folder' ? contextMenu.path : contextMenu.path.substring(0, contextMenu.path.lastIndexOf('/'));
+        setCreatingIn({ path: folderPath, type: 'folder' });
+        setNewItemName('');
+      }
+      closeContextMenu();
+    }, [contextMenu, closeContextMenu]);
+
+    const handleRename = useCallback(() => {
+      if (contextMenu) {
+        setRenaming(contextMenu.path);
+        const name = contextMenu.path.split('/').pop() || '';
+        setNewItemName(name);
+      }
+      closeContextMenu();
+    }, [contextMenu, closeContextMenu]);
+
+    const handleDelete = useCallback(() => {
+      if (contextMenu && onFileDelete) {
+        onFileDelete(contextMenu.path);
+      }
+      closeContextMenu();
+    }, [contextMenu, onFileDelete, closeContextMenu]);
+
+    const handleCopy = useCallback(() => {
+      if (contextMenu && onFileCopy) {
+        onFileCopy(contextMenu.path);
+      }
+      closeContextMenu();
+    }, [contextMenu, onFileCopy, closeContextMenu]);
+
+    const submitNewItem = useCallback(() => {
+      if (creatingIn && newItemName.trim()) {
+        if (creatingIn.type === 'file' && onFileCreate) {
+          onFileCreate(creatingIn.path, newItemName.trim());
+        } else if (creatingIn.type === 'folder' && onFolderCreate) {
+          onFolderCreate(creatingIn.path, newItemName.trim());
+        }
+      }
+      setCreatingIn(null);
+      setNewItemName('');
+    }, [creatingIn, newItemName, onFileCreate, onFolderCreate]);
+
+    const submitRename = useCallback(() => {
+      if (renaming && newItemName.trim() && onFileRename) {
+        const dir = renaming.substring(0, renaming.lastIndexOf('/'));
+        const newPath = `${dir}/${newItemName.trim()}`;
+        onFileRename(renaming, newPath);
+      }
+      setRenaming(null);
+      setNewItemName('');
+    }, [renaming, newItemName, onFileRename]);
+
+    // Close context menu on click outside
+    useEffect(() => {
+      const handleClick = () => closeContextMenu();
+      if (contextMenu) {
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+      }
+    }, [contextMenu, closeContextMenu]);
+
     return (
-      <div className={classNames('text-sm', className)}>
+      <div className={classNames('text-sm relative', className)}>
         {filteredFileList.map((fileOrFolder) => {
           switch (fileOrFolder.kind) {
             case 'file': {
+              // Check if file has errors (try with and without /workspace prefix)
+              const hasErrors = filesWithErrors.has(fileOrFolder.fullPath) ||
+                filesWithErrors.has(`/workspace${fileOrFolder.fullPath}`) ||
+                filesWithErrors.has(fileOrFolder.fullPath.replace('/workspace', ''));
+              const errorCount = hasErrors ? getFileErrorCount(fileOrFolder.fullPath) : 0;
+
+              // Check if renaming this file
+              if (renaming === fileOrFolder.fullPath) {
+                return (
+                  <div key={fileOrFolder.id} style={{ paddingLeft: `${6 + fileOrFolder.depth * NODE_PADDING_LEFT}px` }} className="py-0.5">
+                    <input
+                      type="text"
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') submitRename();
+                        if (e.key === 'Escape') { setRenaming(null); setNewItemName(''); }
+                      }}
+                      onBlur={submitRename}
+                      autoFocus
+                      className="w-full px-1 py-0.5 text-sm text-white bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
+                    />
+                  </div>
+                );
+              }
+
               return (
                 <File
                   key={fileOrFolder.id}
                   selected={selectedFile === fileOrFolder.fullPath}
                   file={fileOrFolder}
                   unsavedChanges={unsavedFiles?.has(fileOrFolder.fullPath)}
+                  errorCount={errorCount}
                   onClick={() => {
                     onFileSelect?.(fileOrFolder.fullPath);
                   }}
+                  onContextMenu={(e) => handleContextMenu(e, fileOrFolder.fullPath, 'file')}
                 />
               );
             }
             case 'folder': {
+              // Check if renaming this folder
+              if (renaming === fileOrFolder.fullPath) {
+                return (
+                  <div key={fileOrFolder.id} style={{ paddingLeft: `${6 + fileOrFolder.depth * NODE_PADDING_LEFT}px` }} className="py-0.5">
+                    <input
+                      type="text"
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') submitRename();
+                        if (e.key === 'Escape') { setRenaming(null); setNewItemName(''); }
+                      }}
+                      onBlur={submitRename}
+                      autoFocus
+                      className="w-full px-1 py-0.5 text-sm text-white bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
+                    />
+                  </div>
+                );
+              }
+
               return (
                 <Folder
                   key={fileOrFolder.id}
@@ -137,6 +291,7 @@ export const FileTree = memo(
                   onClick={() => {
                     toggleCollapseState(fileOrFolder.fullPath);
                   }}
+                  onContextMenu={(e) => handleContextMenu(e, fileOrFolder.fullPath, 'folder')}
                 />
               );
             }
@@ -145,6 +300,70 @@ export const FileTree = memo(
             }
           }
         })}
+
+        {/* New file/folder input */}
+        {creatingIn && (
+          <div style={{ paddingLeft: `${6 + 2 * NODE_PADDING_LEFT}px` }} className="py-0.5">
+            <div className="flex items-center gap-1">
+              <span className={creatingIn.type === 'file' ? 'i-ph:file-duotone' : 'i-ph:folder-duotone'} />
+              <input
+                type="text"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitNewItem();
+                  if (e.key === 'Escape') { setCreatingIn(null); setNewItemName(''); }
+                }}
+                onBlur={submitNewItem}
+                autoFocus
+                placeholder={creatingIn.type === 'file' ? 'filename.ts' : 'folder-name'}
+                className="flex-1 px-1 py-0.5 text-sm text-white bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <div
+            className="fixed z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded shadow-lg py-1 min-w-[160px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={handleNewFile}
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+            >
+              <span className="i-ph:file-plus" /> New File
+            </button>
+            <button
+              onClick={handleNewFolder}
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+            >
+              <span className="i-ph:folder-plus" /> New Folder
+            </button>
+            <div className="border-t border-bolt-elements-borderColor my-1" />
+            <button
+              onClick={handleRename}
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+            >
+              <span className="i-ph:pencil" /> Rename
+            </button>
+            <button
+              onClick={handleCopy}
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+            >
+              <span className="i-ph:copy" /> Copy Path
+            </button>
+            <div className="border-t border-bolt-elements-borderColor my-1" />
+            <button
+              onClick={handleDelete}
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 text-red-400 flex items-center gap-2"
+            >
+              <span className="i-ph:trash" /> Delete
+            </button>
+          </div>
+        )}
       </div>
     );
   },
@@ -157,9 +376,10 @@ interface FolderProps {
   collapsed: boolean;
   selected?: boolean;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-function Folder({ folder: { depth, name }, collapsed, selected = false, onClick }: FolderProps) {
+function Folder({ folder: { depth, name }, collapsed, selected = false, onClick, onContextMenu }: FolderProps) {
   return (
     <NodeButton
       className={classNames('group', {
@@ -173,6 +393,7 @@ function Folder({ folder: { depth, name }, collapsed, selected = false, onClick 
         'i-ph:caret-down scale-98': !collapsed,
       })}
       onClick={onClick}
+      onContextMenu={onContextMenu}
     >
       {name}
     </NodeButton>
@@ -183,10 +404,12 @@ interface FileProps {
   file: FileNode;
   selected: boolean;
   unsavedChanges?: boolean;
+  errorCount?: number;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-function File({ file: { depth, name }, onClick, selected, unsavedChanges = false }: FileProps) {
+function File({ file: { depth, name }, onClick, selected, unsavedChanges = false, errorCount = 0, onContextMenu }: FileProps) {
   return (
     <NodeButton
       className={classNames('group', {
@@ -196,15 +419,20 @@ function File({ file: { depth, name }, onClick, selected, unsavedChanges = false
       depth={depth}
       iconClasses={classNames('i-ph:file-duotone scale-98', {
         'group-hover:text-bolt-elements-item-contentActive': !selected,
+        'text-red-500': errorCount > 0,
       })}
       onClick={onClick}
+      onContextMenu={onContextMenu}
     >
       <div
         className={classNames('flex items-center', {
           'group-hover:text-bolt-elements-item-contentActive': !selected,
         })}
       >
-        <div className="flex-1 truncate pr-2">{name}</div>
+        <div className={classNames('flex-1 truncate pr-2', { 'text-red-400': errorCount > 0 })}>{name}</div>
+        {errorCount > 0 && (
+          <span className="i-ph:x-circle-fill scale-75 shrink-0 text-red-500 mr-1" title={`${errorCount} error${errorCount > 1 ? 's' : ''}`} />
+        )}
         {unsavedChanges && <span className="i-ph:circle-fill scale-68 shrink-0 text-orange-500" />}
       </div>
     </NodeButton>
@@ -217,9 +445,10 @@ interface ButtonProps {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-function NodeButton({ depth, iconClasses, onClick, className, children }: ButtonProps) {
+function NodeButton({ depth, iconClasses, onClick, onContextMenu, className, children }: ButtonProps) {
   return (
     <button
       className={classNames(
@@ -228,6 +457,7 @@ function NodeButton({ depth, iconClasses, onClick, className, children }: Button
       )}
       style={{ paddingLeft: `${6 + depth * NODE_PADDING_LEFT}px` }}
       onClick={() => onClick?.()}
+      onContextMenu={onContextMenu}
     >
       <div className={classNames('scale-120 shrink-0', iconClasses)}></div>
       <div className="truncate w-full text-left">{children}</div>

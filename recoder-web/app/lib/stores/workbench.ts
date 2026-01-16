@@ -45,6 +45,13 @@ export class WorkbenchStore {
   artifactIdList: string[] = [];
   #currentProjectId: string | null = null;
   #isRestoredChat: boolean = false;  // Track if this is a restored past chat
+  
+  // Stable atom for project ID (used by useStore in components)
+  projectId: WritableAtom<string | null> = import.meta.hot?.data.projectId ?? atom<string | null>(null);
+
+  // ✅ Container ready flag - true only when container exists AND dev server is responding
+  // NOTE: Do NOT preserve via HMR - must always start false on page load
+  containerReady: WritableAtom<boolean> = atom<boolean>(false);
 
   // ✅ P1: Build progress feedback
   buildStatus: WritableAtom<BuildStatus> = import.meta.hot?.data.buildStatus ?? atom({
@@ -60,6 +67,8 @@ export class WorkbenchStore {
       import.meta.hot.data.showWorkbench = this.showWorkbench;
       import.meta.hot.data.currentView = this.currentView;
       import.meta.hot.data.buildStatus = this.buildStatus;
+      import.meta.hot.data.projectId = this.projectId;
+      // NOTE: Do NOT preserve containerReady - must always start false
     }
   }
 
@@ -85,6 +94,23 @@ export class WorkbenchStore {
     return this.#isRestoredChat;
   }
 
+  /**
+   * Mark container as ready - call this when dev server is confirmed running
+   */
+  setContainerReady(ready: boolean = true) {
+    this.containerReady.set(ready);
+    if (ready) {
+      console.log('✅ [WorkbenchStore] Container marked as ready');
+    }
+  }
+
+  /**
+   * Reset container ready state - call this when starting a new conversation
+   */
+  resetContainerReady() {
+    this.containerReady.set(false);
+  }
+
   get previews() {
     return this.#previewsStore.previews;
   }
@@ -99,6 +125,10 @@ export class WorkbenchStore {
 
   get selectedFile(): ReadableAtom<string | undefined> {
     return this.#editorStore.selectedFile;
+  }
+
+  get openTabs(): ReadableAtom<string[]> {
+    return this.#editorStore.openTabs;
   }
 
   get firstArtifact(): ArtifactState | undefined {
@@ -117,6 +147,18 @@ export class WorkbenchStore {
     return this.#terminalStore.highlightTerminal;
   }
 
+  get commandRunning() {
+    return this.#terminalStore.commandRunning;
+  }
+
+  get currentProjectId() {
+    return atom(this.#currentProjectId);
+  }
+
+  getProjectId(): string | null {
+    return this.#currentProjectId;
+  }
+
   get terminalStore() {
     return {
       get: () => this.#terminalStore
@@ -126,8 +168,31 @@ export class WorkbenchStore {
   // Set project ID for Docker backend
   async setProjectId(projectId: string) {
     this.#currentProjectId = projectId;
+    this.projectId.set(projectId);
     await this.#terminalStore.setProjectId(projectId);
     await this.#previewsStore.setProjectId(projectId);
+  }
+
+  /**
+   * Refresh file tree from Docker container
+   * Called when CLI tools (claude, recoder-code) modify files
+   */
+  async refreshFiles() {
+    if (!this.#currentProjectId) return;
+    
+    const DOCKER_URL = import.meta.env?.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+    
+    try {
+      const resp = await fetch(`${DOCKER_URL}/api/files/${this.#currentProjectId}`);
+      if (!resp.ok) return;
+      
+      const data = await resp.json();
+      // Update files store with new file list
+      // The files are returned as { files: [...] }
+      console.log('[WorkbenchStore] Refreshed file list from Docker');
+    } catch (e) {
+      console.warn('[WorkbenchStore] Failed to refresh files:', e);
+    }
   }
 
   toggleTerminal(value?: boolean) {
@@ -144,6 +209,22 @@ export class WorkbenchStore {
 
   onTerminalResize(cols: number, rows: number) {
     this.#terminalStore.onTerminalResize(cols, rows);
+  }
+
+  clearActiveTerminal() {
+    this.#terminalStore.clearActiveTerminal();
+  }
+
+  killActiveProcess() {
+    this.#terminalStore.killActiveProcess();
+  }
+
+  closeTerminal(index: number) {
+    this.#terminalStore.closeTerminal(index);
+  }
+
+  async sendTerminalCommand(command: string) {
+    await this.#terminalStore.sendCommand(command);
   }
 
   setDocuments(files: FileMap) {
@@ -210,7 +291,23 @@ export class WorkbenchStore {
   }
 
   setSelectedFile(filePath: string | undefined) {
-    this.#editorStore.setSelectedFile(filePath);
+    if (filePath) {
+      this.#editorStore.addTab(filePath);
+    } else {
+      this.#editorStore.setSelectedFile(undefined);
+    }
+  }
+
+  closeTab(filePath: string) {
+    this.#editorStore.closeTab(filePath);
+  }
+
+  closeOtherTabs(filePath: string) {
+    this.#editorStore.closeOtherTabs(filePath);
+  }
+
+  closeAllTabs() {
+    this.#editorStore.closeAllTabs();
   }
 
   async saveFile(filePath: string) {
@@ -340,6 +437,29 @@ export class WorkbenchStore {
   #getArtifact(id: string) {
     const artifacts = this.artifacts.get();
     return artifacts[id];
+  }
+
+  /**
+   * Create an AI snapshot after AI changes complete.
+   * Call this when AI streaming finishes.
+   */
+  async createAISnapshot(messageId: string, description: string = 'AI changes'): Promise<void> {
+    const artifact = this.#getArtifact(messageId);
+    if (artifact?.runner) {
+      await artifact.runner.createAISnapshot(description);
+    }
+  }
+
+  /**
+   * Create an AI snapshot for all active artifacts
+   */
+  async createAISnapshotForAll(description: string = 'AI changes'): Promise<void> {
+    const artifacts = this.artifacts.get();
+    for (const artifact of Object.values(artifacts)) {
+      if (artifact?.runner) {
+        await artifact.runner.createAISnapshot(description);
+      }
+    }
   }
 }
 

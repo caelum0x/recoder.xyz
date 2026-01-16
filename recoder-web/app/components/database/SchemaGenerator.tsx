@@ -148,7 +148,7 @@ Files to import (${fileCount} total): ${fileList}
 Please create all these files in the project and set up the database configuration. Analyze the schema structure and help set up any necessary database connections or migrations.`;
 
       // Dispatch the import event (same pattern as GitHub/Templates/Starters)
-      window.dispatchEvent(new CustomEvent('bolt:import', {
+      window.dispatchEvent(new CustomEvent('recoder:import', {
         detail: {
           prompt,
           files: fileMap,

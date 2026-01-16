@@ -41,13 +41,14 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
     // Create user account
+    // emailVerified: true because receiving the temp password proves email ownership
     const user = await prisma.users.create({
       data: {
         id: crypto.randomUUID(),
         email,
         name,
         password: hashedPassword,
-        emailVerified: false, // Will be verified when they first login
+        emailVerified: true, // Temp password email proves ownership
         subscription: 'free',
         role: 'user',
         isActive: true,
