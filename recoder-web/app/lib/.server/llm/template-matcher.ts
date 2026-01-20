@@ -11,9 +11,12 @@ export interface TemplateInfo {
   description: string;
   keywords: string[];
   framework: string;
-  category: 'frontend' | 'backend' | 'fullstack' | 'animation' | 'utility';
-  complexity: 'simple' | 'moderate' | 'advanced';
+  category: 'frontend' | 'backend' | 'fullstack' | 'animation' | 'utility' | 'ecommerce';
+  complexity: 'simple' | 'moderate' | 'advanced' | 'intermediate';
   features: string[];
+  webContainerCompatible?: boolean;
+  requiresNativeBinaries?: boolean;
+  hasWebContainerAlternative?: string;
 }
 
 export const STARTER_TEMPLATES: TemplateInfo[] = [
@@ -428,12 +431,13 @@ export function matchTemplate(userMessage: string): TemplateMatch | null {
     }
 
     // Category matching
-    const categoryKeywords = {
+    const categoryKeywords: Record<string, string[]> = {
       frontend: ['frontend', 'client', 'ui', 'website', 'web app'],
       backend: ['backend', 'server', 'api', 'rest', 'graphql'],
       fullstack: ['fullstack', 'full stack', 'full-stack', 'complete app'],
       animation: ['animation', 'animated', 'gsap', 'motion'],
-      utility: ['presentation', 'slides', 'tool']
+      utility: ['presentation', 'slides', 'tool'],
+      ecommerce: ['ecommerce', 'e-commerce', 'shop', 'store', 'shopping', 'marketplace']
     };
 
     const categoryWords = categoryKeywords[template.category] || [];

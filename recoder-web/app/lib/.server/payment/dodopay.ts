@@ -58,11 +58,14 @@ export class DodoPayClient {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as { message?: string };
         throw new Error(`DodoPay API error: ${error.message}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as {
+        checkout_url: string;
+        session_id: string;
+      };
 
       return {
         checkoutUrl: data.checkout_url,
@@ -95,7 +98,7 @@ export class DodoPayClient {
 /**
  * Initialize DodoPay client
  */
-export function getDodoPayClient(env: Env): DodoPayClient {
+export function getDodoPayClient(env: any): DodoPayClient {
   if (!env.DODOPAY_API_KEY) {
     throw new Error('DODOPAY_API_KEY not configured');
   }

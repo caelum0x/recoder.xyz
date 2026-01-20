@@ -362,8 +362,8 @@ export class GitHubMCPServer {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Failed to create repository: ${error.message}`);
+      const error = await response.json() as { message?: string };
+      throw new Error(`Failed to create repository: ${error.message || 'Unknown error'}`);
     }
 
     const data = await response.json() as any;
@@ -472,8 +472,8 @@ export class GitHubMCPServer {
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Failed to create issue: ${error.message}`);
+      const error = await response.json() as { message?: string };
+      throw new Error(`Failed to create issue: ${error.message || 'Unknown error'}`);
     }
 
     const data = await response.json() as any;
@@ -509,8 +509,8 @@ export class GitHubMCPServer {
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Failed to create pull request: ${error.message}`);
+      const error = await response.json() as { message?: string };
+      throw new Error(`Failed to create pull request: ${error.message || 'Unknown error'}`);
     }
 
     const data = await response.json() as any;

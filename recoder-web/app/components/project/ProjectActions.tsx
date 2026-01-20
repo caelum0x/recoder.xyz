@@ -10,7 +10,7 @@ interface ProjectActionsProps {
   projectName?: string;
   className?: string;
   variant?: 'buttons' | 'icons' | 'dropdown';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'default' | 'sm' | 'lg';
 }
 
 export function ProjectActions({

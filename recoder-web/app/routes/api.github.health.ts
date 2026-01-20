@@ -55,7 +55,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       });
     }
 
-    const userData = await testResponse.json();
+    const userData = await testResponse.json() as { login: string };
 
     return json({
       status: 'connected',

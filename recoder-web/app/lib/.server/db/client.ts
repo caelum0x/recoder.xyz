@@ -26,14 +26,18 @@ export function getDatabase(env: Env) {
   cachedDb = {
     // Execute raw SQL query
     execute: async (query: string, params: any[] = []) => {
-      return await sql(query, params);
+      // Note: Neon's sql function expects template literals, not string + params
+      // For raw SQL execution, we need to use the sql function directly
+      // This is a workaround for the type system
+      const result = await (sql as any)(query, params);
+      return result as Record<string, any>[];
     },
 
     // Get user by email
     getUserByEmail: async (email: string) => {
       const result = await sql`
         SELECT * FROM users WHERE email = ${email} LIMIT 1
-      `;
+      ` as Record<string, any>[];
       return result[0] || null;
     },
 
@@ -44,7 +48,7 @@ export function getDatabase(env: Env) {
         VALUES (${email}, ${name || email.split('@')[0]})
         ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
         RETURNING *
-      `;
+      ` as Record<string, any>[];
       return result[0];
     },
 
@@ -56,7 +60,7 @@ export function getDatabase(env: Env) {
         AND status IN ('active', 'trialing')
         ORDER BY created_at DESC
         LIMIT 1
-      `;
+      ` as Record<string, any>[];
       return result[0] || null;
     },
 
@@ -120,12 +124,13 @@ export function getDatabase(env: Env) {
 
     // Get payment history
     getPaymentHistory: async (userId: string, limit: number = 10) => {
-      return await sql`
+      const result = await sql`
         SELECT * FROM payment_transactions
         WHERE user_id = ${userId}
         ORDER BY created_at DESC
         LIMIT ${limit}
       `;
+      return result as Record<string, any>[];
     },
 
     // Store webhook event

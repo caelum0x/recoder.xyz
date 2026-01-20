@@ -20,6 +20,7 @@ out/
 **/.next/static/chunks/
 
 # Environment variables (NEVER commit actual secrets)
+# CRITICAL: These files contain secrets - ALWAYS use templates instead
 .env
 .env.local
 .env.production
@@ -33,6 +34,10 @@ out/
 **/.env.local
 **/.env.production
 **/.env.development
+backend/.env.production
+packages/cli/.env.production
+packages/recoder-cli-router/.env.production
+.env.domain
 
 # Recoder extension environment files
 recoder-extension/.env*

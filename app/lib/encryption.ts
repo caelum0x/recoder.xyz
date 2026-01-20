@@ -3,8 +3,23 @@ import crypto from 'crypto';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.API_KEY_ENCRYPTION_SECRET;
 const ALGORITHM = 'aes-256-gcm';
 
-if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
-  console.warn('WARNING: ENCRYPTION_KEY is not set or too short. API keys will not be encrypted securely.');
+// CRITICAL: Validate encryption key at startup
+// AES-256 requires a 32-byte (256-bit) key
+// We expect a 64-character hex string (32 bytes when decoded)
+if (!ENCRYPTION_KEY) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('CRITICAL: ENCRYPTION_KEY environment variable is not set. Cannot start application in production without encryption.');
+  }
+  console.error('CRITICAL: ENCRYPTION_KEY is not set. API key encryption is DISABLED.');
+}
+
+if (ENCRYPTION_KEY && ENCRYPTION_KEY.length < 32) {
+  throw new Error(`CRITICAL: ENCRYPTION_KEY must be at least 32 characters. Current length: ${ENCRYPTION_KEY.length}`);
+}
+
+// For hex keys (64 chars = 32 bytes), validate the format
+if (ENCRYPTION_KEY && ENCRYPTION_KEY.length === 64 && !/^[0-9a-fA-F]{64}$/.test(ENCRYPTION_KEY)) {
+  console.warn('WARNING: ENCRYPTION_KEY appears to be hex but contains invalid characters. Using as-is.');
 }
 
 /**

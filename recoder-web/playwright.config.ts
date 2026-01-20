@@ -27,21 +27,24 @@ export default defineConfig({
   use: {
     // Base URL for tests
     baseURL: 'http://localhost:5173',
-    
+
     // Collect trace on first retry
     trace: 'on-first-retry',
-    
+
     // Screenshot on failure
     screenshot: 'only-on-failure',
-    
+
     // Video on failure
     video: 'retain-on-failure',
-    
+
     // Increased timeout for actions
     actionTimeout: 30 * 1000,
-    
+
     // Navigation timeout
     navigationTimeout: 60 * 1000,
+
+    // Storage state for auth (will be set by fixture)
+    // storageState: './e2e/.auth/user.json', // Handled by auth fixture instead
   },
 
   // Configure projects for different browsers
@@ -62,11 +65,12 @@ export default defineConfig({
     // },
   ],
 
-  // Web server configuration
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  // Web server configuration - disabled when server already running
+  // Start with: npm run dev
+  // webServer: {
+  //   command: 'npm run dev',
+  //   url: 'http://localhost:5173',
+  //   reuseExistingServer: true,
+  //   timeout: 180 * 1000,
+  // },
 });

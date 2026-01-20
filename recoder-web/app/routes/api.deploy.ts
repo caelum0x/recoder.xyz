@@ -8,6 +8,20 @@ import { createDeploymentManager } from '~/lib/.server/deployment/manager';
 import type { DeploymentConfig } from '~/lib/.server/deployment/types';
 
 /**
+ * Extract session token from cookies for docker-backend authentication
+ */
+function extractSessionToken(cookieHeader: string): string | undefined {
+  const cookies = cookieHeader.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'recoder.session_token' || name === 'session_token') {
+      return decodeURIComponent(value);
+    }
+  }
+  return undefined;
+}
+
+/**
  * GET /api/deploy - Get deployment info
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -74,20 +88,39 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 /**
  * POST /api/deploy - Deploy project
+ * SECURITY: Requires authentication for all deployment actions
  */
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, { status: 405 });
   }
 
+  // SECURITY: Verify user is authenticated
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+
+  if (!session?.user) {
+    return json({
+      success: false,
+      error: 'Authentication required'
+    }, { status: 401 });
+  }
+
   try {
     // Support both Cloudflare Workers and local development
     const env = context?.cloudflare?.env || process.env || {};
-    const body = await request.json();
+    const body = await request.json() as {
+      action?: string;
+      config?: any;
+      files?: any;
+      sessionId?: string;
+      projectId?: string;
+      localPort?: number;
+    };
     const { action: deployAction, config, files } = body;
 
-    // TODO: Get user ID from session/auth
-    const userId = body.userId;
+    // SECURITY: Use authenticated user ID instead of client-provided
+    const userId = session.user.id;
     const sessionId = body.sessionId;
 
     const manager = createDeploymentManager(env, {
@@ -130,6 +163,69 @@ export async function action({ request, context }: ActionFunctionArgs) {
           success: result.status === 'deployed',
           data: result,
         });
+
+      case 'tunnel-start': {
+        // One-click public URL via tunnel
+        const { projectId, localPort = 5173 } = body;
+        if (!projectId) {
+          return json({ success: false, error: 'projectId required' }, { status: 400 });
+        }
+
+        // Extract session token from cookies for docker-backend authentication
+        const cookieHeader = request.headers.get('Cookie') || '';
+        const sessionToken = extractSessionToken(cookieHeader);
+
+        const { startTunnel } = await import('~/lib/.server/deploy/tunnel-deploy');
+        const DOCKER_URL = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
+        const tunnel = await startTunnel(projectId, localPort, DOCKER_URL, sessionToken);
+
+        return json({
+          success: true,
+          data: {
+            id: tunnel.id,
+            publicUrl: tunnel.publicUrl,
+            status: tunnel.status,
+            expiresAt: tunnel.expiresAt,
+          },
+        });
+      }
+
+      case 'tunnel-stop': {
+        const { projectId } = body;
+        if (!projectId) {
+          return json({ success: false, error: 'projectId required' }, { status: 400 });
+        }
+
+        // Extract session token from cookies for docker-backend authentication
+        const stopCookieHeader = request.headers.get('Cookie') || '';
+        const stopSessionToken = extractSessionToken(stopCookieHeader);
+
+        const { stopTunnel } = await import('~/lib/.server/deploy/tunnel-deploy');
+        const DOCKER_URL = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
+        await stopTunnel(projectId, DOCKER_URL, stopSessionToken);
+
+        return json({ success: true, message: 'Tunnel stopped' });
+      }
+
+      case 'tunnel-status': {
+        const { projectId } = body;
+        if (!projectId) {
+          return json({ success: false, error: 'projectId required' }, { status: 400 });
+        }
+
+        const { getTunnelStatus } = await import('~/lib/.server/deploy/tunnel-deploy');
+        const status = getTunnelStatus(projectId);
+
+        return json({
+          success: true,
+          data: status ? {
+            id: status.id,
+            publicUrl: status.publicUrl,
+            status: status.status,
+            expiresAt: status.expiresAt,
+          } : null,
+        });
+      }
 
       default:
         return json(

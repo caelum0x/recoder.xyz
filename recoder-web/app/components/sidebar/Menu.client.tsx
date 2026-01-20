@@ -116,7 +116,7 @@ export function Menu() {
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
-      showSmartError(error);
+      showSmartError(error instanceof Error ? error : new Error(String(error)));
 
       // Final fallback to IndexedDB
       const db = getDB();

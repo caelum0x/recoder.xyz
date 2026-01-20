@@ -29,15 +29,16 @@ export function useCustomTools() {
     if (!tool) return;
 
     // Execute via terminal
-    const terminalStore = workbenchStore.get();
-    
+    const terminalStoreGetter = workbenchStore.terminalStore;
+    const terminalStore = terminalStoreGetter.get();
+
     return executeCustomTool(toolId, async (command) => {
       // Write command to active terminal
-      const terminals = terminalStore.terminals;
+      const terminals = terminalStore.getTerminals();
       if (terminals.length > 0) {
         const terminal = terminals[0];
         // Send command to terminal
-        terminal.terminal?.paste(command + '\n');
+        (terminal.terminal as any).paste?.(command + '\n') || terminal.terminal.write(command + '\n');
       }
       return 'Command sent to terminal';
     });

@@ -1,396 +1,532 @@
 /**
  * GitPanel - VS Code style Source Control panel
- * Shows changed files, staging, commit, push/pull
+ * Enhanced with local git support, branches, and commit history
  */
 
 import { memo, useState, useCallback, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { dockerGet, dockerPost, dockerDelete } from '~/lib/services/docker-api';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
+import { GitBranchList, type GitBranch } from './GitBranchList';
+import { GitHistory, type GitCommit } from './GitHistory';
 
 interface GitPanelProps {
-  files: Record<string, any>;
+  files: Record<string, unknown>;
   onFileSelect?: (filePath: string) => void;
   onShowDiff?: (filePath: string, original: string, modified: string) => void;
 }
 
-interface ChangedFile {
+interface GitFileChange {
   path: string;
-  status: 'added' | 'modified' | 'deleted';
-  staged: boolean;
-  content: string;
-  originalContent?: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+  oldPath?: string;
 }
 
-interface GitConfig {
-  owner: string;
-  repo: string;
+interface GitStatus {
   branch: string;
-  accessToken: string;
+  ahead: number;
+  behind: number;
+  staged: GitFileChange[];
+  unstaged: GitFileChange[];
+  untracked: string[];
+  conflicts: string[];
 }
 
-interface GitApiResponse {
-  files?: Record<string, string>;
-  error?: string;
-  success?: boolean;
-}
+type TabView = 'changes' | 'history';
 
 export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps) => {
-  const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([]);
-  const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
+  const projectId = useStore(workbenchStore.projectId);
+  const containerReady = useStore(workbenchStore.containerReady);
+
+  const [status, setStatus] = useState<GitStatus | null>(null);
+  const [branches, setBranches] = useState<GitBranch[]>([]);
+  const [commits, setCommits] = useState<GitCommit[]>([]);
   const [commitMessage, setCommitMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [gitConfig, setGitConfig] = useState<GitConfig | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
-  const [remoteFiles, setRemoteFiles] = useState<Record<string, string>>({});
+  const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState<TabView>('changes');
+  const [showGitHubConfig, setShowGitHubConfig] = useState(false);
+  const [gitHubConfig, setGitHubConfig] = useState<{
+    owner: string;
+    repo: string;
+    branch: string;
+    accessToken: string;
+  } | null>(null);
 
-  // Load git config from localStorage
+  // Load GitHub config from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('recoder-git-config');
     if (saved) {
       try {
-        setGitConfig(JSON.parse(saved));
-      } catch (e) {}
+        setGitHubConfig(JSON.parse(saved));
+      } catch {}
     }
   }, []);
 
-  // Save git config
-  const saveGitConfig = useCallback((config: GitConfig) => {
-    setGitConfig(config);
-    localStorage.setItem('recoder-git-config', JSON.stringify(config));
-    setShowConfig(false);
-  }, []);
+  // Load git status when container is ready
+  useEffect(() => {
+    if (containerReady && projectId) {
+      refreshStatus();
+    }
+  }, [containerReady, projectId]);
 
-  // Fetch remote files and calculate diff
-  const refreshChanges = useCallback(async () => {
-    if (!gitConfig) return;
+  // Refresh git status
+  const refreshStatus = useCallback(async () => {
+    if (!projectId) return;
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/github/pull', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner: gitConfig.owner,
-          repo: gitConfig.repo,
-          branch: gitConfig.branch,
-          accessToken: gitConfig.accessToken,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch remote');
-
-      const data = await response.json() as GitApiResponse;
-      const remoteFilesData = data.files || {};
-      setRemoteFiles(remoteFilesData);
-
-      // Calculate changes
-      const changes: ChangedFile[] = [];
-
-      // Check local files against remote
-      Object.entries(files).forEach(([path, file]) => {
-        if (file.type !== 'file') return;
-        const remotePath = path.startsWith('/') ? path : `/${path}`;
-        const remoteContent = remoteFilesData[remotePath];
-
-        if (!remoteContent) {
-          changes.push({
-            path,
-            status: 'added',
-            staged: stagedFiles.has(path),
-            content: file.content,
-          });
-        } else if (remoteContent !== file.content) {
-          changes.push({
-            path,
-            status: 'modified',
-            staged: stagedFiles.has(path),
-            content: file.content,
-            originalContent: remoteContent,
-          });
-        }
-      });
-
-      // Check for deleted files
-      Object.keys(remoteFilesData).forEach((remotePath) => {
-        const localPath = remotePath.startsWith('/') ? remotePath : `/${remotePath}`;
-        if (!files[localPath] && !files[remotePath.slice(1)]) {
-          changes.push({
-            path: remotePath,
-            status: 'deleted',
-            staged: stagedFiles.has(remotePath),
-            content: '',
-            originalContent: remoteFilesData[remotePath],
-          });
-        }
-      });
-
-      setChangedFiles(changes);
-    } catch (error: any) {
-      toast.error(`Failed to refresh: ${error.message}`);
+      const data = await dockerGet<GitStatus>(`/api/git/${projectId}/status`);
+      if (data) {
+        setStatus(data);
+        setIsGitRepo(!!data.branch);
+      } else {
+        setIsGitRepo(false);
+      }
+    } catch (error) {
+      console.error('[Git] Status error:', error);
+      setIsGitRepo(false);
     } finally {
       setIsLoading(false);
     }
-  }, [gitConfig, files, stagedFiles]);
+  }, [projectId]);
 
-  // Stage/unstage file
-  const toggleStage = useCallback((path: string) => {
-    setStagedFiles((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
+  // Load branches
+  const loadBranches = useCallback(async () => {
+    if (!projectId) return;
+
+    try {
+      const data = await dockerGet<{ branches: GitBranch[] }>(`/api/git/${projectId}/branches`);
+      if (data) {
+        setBranches(data.branches || []);
       }
-      return next;
-    });
-    setChangedFiles((prev) =>
-      prev.map((f) => (f.path === path ? { ...f, staged: !f.staged } : f))
-    );
-  }, []);
+    } catch (error) {
+      console.error('[Git] Branches error:', error);
+    }
+  }, [projectId]);
 
-  // Stage all
-  const stageAll = useCallback(() => {
-    const allPaths = changedFiles.map((f) => f.path);
-    setStagedFiles(new Set(allPaths));
-    setChangedFiles((prev) => prev.map((f) => ({ ...f, staged: true })));
-  }, [changedFiles]);
+  // Load commit history
+  const loadHistory = useCallback(async () => {
+    if (!projectId) return;
 
-  // Unstage all
-  const unstageAll = useCallback(() => {
-    setStagedFiles(new Set());
-    setChangedFiles((prev) => prev.map((f) => ({ ...f, staged: false })));
-  }, []);
+    setIsLoading(true);
+    try {
+      const data = await dockerGet<{ commits: GitCommit[] }>(`/api/git/${projectId}/log?limit=50`);
+      if (data) {
+        setCommits(data.commits || []);
+      }
+    } catch (error) {
+      console.error('[Git] History error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId]);
 
-  // Commit and push staged files
-  const commitAndPush = useCallback(async () => {
-    if (!gitConfig || stagedFiles.size === 0 || !commitMessage.trim()) {
-      toast.error('Please stage files and enter a commit message');
+  // Load branches when tab changes or on mount
+  useEffect(() => {
+    if (isGitRepo && projectId) {
+      loadBranches();
+    }
+  }, [isGitRepo, projectId, loadBranches]);
+
+  // Load history when history tab is active
+  useEffect(() => {
+    if (activeTab === 'history' && isGitRepo) {
+      loadHistory();
+    }
+  }, [activeTab, isGitRepo, loadHistory]);
+
+  // Initialize git repo
+  const initRepo = useCallback(async () => {
+    if (!projectId) return;
+
+    setIsLoading(true);
+    try {
+      await dockerPost(`/api/git/${projectId}/init`);
+      toast.success('Git repository initialized');
+      setIsGitRepo(true);
+      refreshStatus();
+    } catch (error) {
+      toast.error('Failed to initialize repository');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus]);
+
+  // Stage files
+  const stageFiles = useCallback(async (paths: string[]) => {
+    if (!projectId) return;
+
+    try {
+      await dockerPost(`/api/git/${projectId}/stage`, { files: paths });
+      refreshStatus();
+    } catch (error) {
+      toast.error('Failed to stage files');
+    }
+  }, [projectId, refreshStatus]);
+
+  // Unstage files
+  const unstageFiles = useCallback(async (paths: string[]) => {
+    if (!projectId) return;
+
+    try {
+      await dockerPost(`/api/git/${projectId}/unstage`, { files: paths });
+      refreshStatus();
+    } catch (error) {
+      toast.error('Failed to unstage files');
+    }
+  }, [projectId, refreshStatus]);
+
+  // Commit changes
+  const commit = useCallback(async () => {
+    if (!projectId || !commitMessage.trim()) {
+      toast.error('Please enter a commit message');
       return;
     }
 
     setIsLoading(true);
     try {
-      const filesToPush: Record<string, string> = {};
-      changedFiles
-        .filter((f) => f.staged && f.status !== 'deleted')
-        .forEach((f) => {
-          filesToPush[f.path] = f.content;
-        });
-
-      const response = await fetch('/api/github/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner: gitConfig.owner,
-          repo: gitConfig.repo,
-          branch: gitConfig.branch,
-          localFiles: filesToPush,
-          accessToken: gitConfig.accessToken,
-          syncMode: 'push',
-          commitMessage: commitMessage.trim(),
-        }),
+      await dockerPost<{ error?: string }>(`/api/git/${projectId}/commit`, {
+        message: commitMessage.trim(),
       });
-
-      if (!response.ok) throw new Error('Failed to push');
-
-      const data = await response.json() as { syncResult?: { pushed?: string[] } };
-      toast.success(`Pushed ${data.syncResult?.pushed?.length || 0} files`);
+      toast.success('Changes committed');
       setCommitMessage('');
-      setStagedFiles(new Set());
-      refreshChanges();
-    } catch (error: any) {
-      toast.error(`Push failed: ${error.message}`);
+      refreshStatus();
+      if (activeTab === 'history') {
+        loadHistory();
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to commit';
+      toast.error(errorMsg);
     } finally {
       setIsLoading(false);
     }
-  }, [gitConfig, stagedFiles, commitMessage, changedFiles, refreshChanges]);
+  }, [projectId, commitMessage, refreshStatus, activeTab, loadHistory]);
 
-  // Pull changes
-  const pullChanges = useCallback(async () => {
-    if (!gitConfig) return;
+  // Discard changes
+  const discardChanges = useCallback(async (paths: string[]) => {
+    if (!projectId) return;
+    if (!confirm(`Discard changes to ${paths.length} file(s)?`)) return;
+
+    try {
+      await dockerPost(`/api/git/${projectId}/discard`, { files: paths });
+      toast.success('Changes discarded');
+      refreshStatus();
+    } catch (error) {
+      toast.error('Failed to discard changes');
+    }
+  }, [projectId, refreshStatus]);
+
+  // Checkout branch
+  const checkoutBranch = useCallback(async (branch: string) => {
+    if (!projectId) return;
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/github/pull', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner: gitConfig.owner,
-          repo: gitConfig.repo,
-          branch: gitConfig.branch,
-          accessToken: gitConfig.accessToken,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to pull');
-
-      const data = await response.json() as { fileCount?: number };
-      toast.success(`Pulled ${data.fileCount || 0} files`);
-      // Note: Caller needs to update files via onFilesUpdate prop
-    } catch (error: any) {
-      toast.error(`Pull failed: ${error.message}`);
+      await dockerPost(`/api/git/${projectId}/checkout`, { branch });
+      toast.success(`Switched to ${branch}`);
+      refreshStatus();
+      loadBranches();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to switch branch';
+      toast.error(errorMsg);
     } finally {
       setIsLoading(false);
     }
-  }, [gitConfig]);
+  }, [projectId, refreshStatus, loadBranches]);
 
-  const stagedCount = changedFiles.filter((f) => f.staged).length;
-  const unstagedCount = changedFiles.filter((f) => !f.staged).length;
+  // Create branch
+  const createBranch = useCallback(async (name: string) => {
+    if (!projectId) return;
 
-  // No config set
-  if (!gitConfig || showConfig) {
+    setIsLoading(true);
+    try {
+      await dockerPost(`/api/git/${projectId}/branch`, { name, checkout: true });
+      toast.success(`Created and switched to ${name}`);
+      refreshStatus();
+      loadBranches();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to create branch';
+      toast.error(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus, loadBranches]);
+
+  // Delete branch
+  const deleteBranch = useCallback(async (name: string, force?: boolean) => {
+    if (!projectId) return;
+
+    try {
+      await dockerDelete(`/api/git/${projectId}/branch/${encodeURIComponent(name)}${force ? '?force=true' : ''}`);
+      toast.success(`Deleted branch ${name}`);
+      loadBranches();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to delete branch';
+      toast.error(errorMsg);
+    }
+  }, [projectId, loadBranches]);
+
+  // Not a git repo
+  if (isGitRepo === false) {
     return (
-      <GitConfigForm
-        initialConfig={gitConfig}
-        onSave={saveGitConfig}
-        onCancel={() => setShowConfig(false)}
-      />
+      <div className="flex flex-col h-full text-sm">
+        <div className="p-4 text-center">
+          <span className="i-ph:git-branch text-4xl text-purple-400 mb-3 block" />
+          <h3 className="text-bolt-elements-textPrimary font-medium mb-2">
+            No Git Repository
+          </h3>
+          <p className="text-bolt-elements-textTertiary text-xs mb-4">
+            Initialize a git repository to track changes
+          </p>
+          <button
+            onClick={initRepo}
+            disabled={isLoading}
+            className="px-4 py-2 text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-white"
+          >
+            {isLoading ? (
+              <span className="i-ph:spinner animate-spin" />
+            ) : (
+              <>
+                <span className="i-ph:git-branch mr-1" />
+                Initialize Repository
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     );
   }
 
+  // Loading state
+  if (!containerReady || isGitRepo === null) {
+    return (
+      <div className="flex flex-col h-full justify-center items-center text-sm">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mb-2" />
+        <span className="text-bolt-elements-textTertiary">
+          {!containerReady ? 'Waiting for container...' : 'Loading git status...'}
+        </span>
+      </div>
+    );
+  }
+
+  const stagedCount = status?.staged?.length || 0;
+  const unstagedCount = (status?.unstaged?.length || 0) + (status?.untracked?.length || 0);
+  const hasConflicts = (status?.conflicts?.length || 0) > 0;
+
   return (
     <div className="flex flex-col h-full text-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
-        <div className="flex items-center gap-2">
-          <span className="i-ph:git-branch text-purple-400" />
-          <span className="font-medium text-bolt-elements-textPrimary">
-            {gitConfig.owner}/{gitConfig.repo}
-          </span>
-          <span className="text-xs text-bolt-elements-textTertiary">
-            ({gitConfig.branch})
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={refreshChanges}
-            disabled={isLoading}
-            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded"
-            title="Refresh"
-          >
-            <span className={classNames('i-ph:arrows-clockwise', isLoading ? 'animate-spin' : '')} />
-          </button>
-          <button
-            onClick={() => setShowConfig(true)}
-            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded"
-            title="Settings"
-          >
-            <span className="i-ph:gear" />
-          </button>
-        </div>
-      </div>
-
-      {/* Commit input */}
+      {/* Header with Branch Selector */}
       <div className="px-3 py-2 border-b border-bolt-elements-borderColor">
-        <input
-          type="text"
-          value={commitMessage}
-          onChange={(e) => setCommitMessage(e.target.value)}
-          placeholder="Commit message"
-          className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-white placeholder:text-gray-500"
-          onKeyDown={(e) => e.key === 'Enter' && commitAndPush()}
+        <GitBranchList
+          branches={branches}
+          currentBranch={status?.branch || 'main'}
+          isLoading={isLoading}
+          onCheckout={checkoutBranch}
+          onCreate={createBranch}
+          onDelete={deleteBranch}
+          onRefresh={loadBranches}
         />
-        <div className="flex gap-1 mt-2">
-          <button
-            onClick={commitAndPush}
-            disabled={isLoading || stagedCount === 0 || !commitMessage.trim()}
-            className="flex-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 rounded text-white"
-          >
-            Commit & Push ({stagedCount})
-          </button>
-          <button
-            onClick={pullChanges}
-            disabled={isLoading}
-            className="px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-white"
-            title="Pull"
-          >
-            <span className="i-ph:arrow-down" />
-          </button>
-        </div>
-      </div>
 
-      {/* Staged Changes */}
-      {stagedCount > 0 && (
-        <div className="border-b border-bolt-elements-borderColor">
-          <div className="flex items-center justify-between px-3 py-1.5 bg-bolt-elements-background-depth-2">
-            <span className="text-xs font-medium text-green-400">
-              Staged Changes ({stagedCount})
-            </span>
-            <button
-              onClick={unstageAll}
-              className="text-xs text-bolt-elements-textTertiary hover:text-white"
-            >
-              Unstage All
-            </button>
-          </div>
-          <div className="max-h-32 overflow-auto">
-            {changedFiles
-              .filter((f) => f.staged)
-              .map((file) => (
-                <FileItem
-                  key={file.path}
-                  file={file}
-                  onToggleStage={() => toggleStage(file.path)}
-                  onSelect={() => onFileSelect?.(file.path)}
-                  onShowDiff={() =>
-                    onShowDiff?.(file.path, file.originalContent || '', file.content)
-                  }
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Unstaged Changes */}
-      <div className="flex-1 overflow-auto">
-        <div className="flex items-center justify-between px-3 py-1.5 bg-bolt-elements-background-depth-2 sticky top-0">
-          <span className="text-xs font-medium text-bolt-elements-textSecondary">
-            Changes ({unstagedCount})
-          </span>
-          {unstagedCount > 0 && (
-            <button
-              onClick={stageAll}
-              className="text-xs text-bolt-elements-textTertiary hover:text-white"
-            >
-              Stage All
-            </button>
-          )}
-        </div>
-        {changedFiles.filter((f) => !f.staged).length === 0 ? (
-          <div className="px-3 py-4 text-center text-bolt-elements-textTertiary text-xs">
-            {changedFiles.length === 0 ? (
-              <>
-                <span className="i-ph:check-circle text-green-500 text-lg block mb-1" />
-                No changes
-                <button
-                  onClick={refreshChanges}
-                  className="block mx-auto mt-2 text-blue-400 hover:underline"
-                >
-                  Check for changes
-                </button>
-              </>
-            ) : (
-              'All changes staged'
+        {/* Ahead/Behind indicator */}
+        {(status?.ahead || status?.behind) ? (
+          <div className="flex items-center gap-2 mt-2 text-xs text-bolt-elements-textTertiary">
+            {status.ahead > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="i-ph:arrow-up" />
+                {status.ahead} ahead
+              </span>
+            )}
+            {status.behind > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="i-ph:arrow-down" />
+                {status.behind} behind
+              </span>
             )}
           </div>
-        ) : (
-          changedFiles
-            .filter((f) => !f.staged)
-            .map((file) => (
-              <FileItem
-                key={file.path}
-                file={file}
-                onToggleStage={() => toggleStage(file.path)}
-                onSelect={() => onFileSelect?.(file.path)}
-                onShowDiff={() =>
-                  onShowDiff?.(file.path, file.originalContent || '', file.content)
-                }
-              />
-            ))
-        )}
+        ) : null}
       </div>
+
+      {/* Tab Bar */}
+      <div className="flex border-b border-bolt-elements-borderColor">
+        <button
+          onClick={() => setActiveTab('changes')}
+          className={classNames(
+            'flex-1 px-3 py-2 text-xs font-medium transition-colors',
+            activeTab === 'changes'
+              ? 'text-bolt-elements-textPrimary border-b-2 border-purple-500'
+              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+          )}
+        >
+          Changes
+          {(stagedCount + unstagedCount) > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded">
+              {stagedCount + unstagedCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={classNames(
+            'flex-1 px-3 py-2 text-xs font-medium transition-colors',
+            activeTab === 'history'
+              ? 'text-bolt-elements-textPrimary border-b-2 border-purple-500'
+              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+          )}
+        >
+          History
+        </button>
+        <button
+          onClick={refreshStatus}
+          disabled={isLoading}
+          className="px-2 py-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+          title="Refresh"
+        >
+          <span className={classNames('i-ph:arrows-clockwise', isLoading ? 'animate-spin' : '')} />
+        </button>
+      </div>
+
+      {/* Changes View */}
+      {activeTab === 'changes' && (
+        <>
+          {/* Conflicts Warning */}
+          {hasConflicts && (
+            <div className="px-3 py-2 bg-red-500/10 border-b border-red-500/30">
+              <div className="flex items-center gap-2 text-red-400 text-xs">
+                <span className="i-ph:warning-circle" />
+                {status?.conflicts?.length} merge conflict(s)
+              </div>
+            </div>
+          )}
+
+          {/* Commit input */}
+          <div className="px-3 py-2 border-b border-bolt-elements-borderColor">
+            <textarea
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              placeholder="Commit message"
+              rows={2}
+              className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-purple-500 focus:outline-none text-white placeholder:text-gray-500 resize-none"
+            />
+            <div className="flex gap-1 mt-2">
+              <button
+                onClick={commit}
+                disabled={isLoading || stagedCount === 0 || !commitMessage.trim()}
+                className="flex-1 px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:opacity-50 rounded text-white"
+              >
+                {isLoading ? (
+                  <span className="i-ph:spinner animate-spin" />
+                ) : (
+                  `Commit (${stagedCount})`
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Staged Changes */}
+          {stagedCount > 0 && (
+            <div className="border-b border-bolt-elements-borderColor">
+              <div className="flex items-center justify-between px-3 py-1.5 bg-bolt-elements-background-depth-2">
+                <span className="text-xs font-medium text-green-400">
+                  Staged Changes ({stagedCount})
+                </span>
+                <button
+                  onClick={() => unstageFiles([])}
+                  className="text-xs text-bolt-elements-textTertiary hover:text-white"
+                >
+                  Unstage All
+                </button>
+              </div>
+              <div className="max-h-32 overflow-auto">
+                {status?.staged?.map((file) => (
+                  <FileItem
+                    key={file.path}
+                    path={file.path}
+                    status={file.status}
+                    staged
+                    onToggleStage={() => unstageFiles([file.path])}
+                    onSelect={() => onFileSelect?.(file.path)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Unstaged Changes */}
+          <div className="flex-1 overflow-auto">
+            <div className="flex items-center justify-between px-3 py-1.5 bg-bolt-elements-background-depth-2 sticky top-0">
+              <span className="text-xs font-medium text-bolt-elements-textSecondary">
+                Changes ({unstagedCount})
+              </span>
+              {unstagedCount > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => stageFiles([])}
+                    className="text-xs text-bolt-elements-textTertiary hover:text-white"
+                  >
+                    Stage All
+                  </button>
+                  <button
+                    onClick={() => {
+                      const allPaths = [
+                        ...(status?.unstaged?.map(f => f.path) || []),
+                      ];
+                      discardChanges(allPaths);
+                    }}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    Discard All
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {unstagedCount === 0 ? (
+              <div className="px-3 py-4 text-center text-bolt-elements-textTertiary text-xs">
+                <span className="i-ph:check-circle text-green-500 text-lg block mb-1" />
+                {stagedCount === 0 ? 'No changes' : 'All changes staged'}
+              </div>
+            ) : (
+              <>
+                {status?.unstaged?.map((file) => (
+                  <FileItem
+                    key={file.path}
+                    path={file.path}
+                    status={file.status}
+                    staged={false}
+                    onToggleStage={() => stageFiles([file.path])}
+                    onSelect={() => onFileSelect?.(file.path)}
+                    onDiscard={() => discardChanges([file.path])}
+                  />
+                ))}
+                {status?.untracked?.map((path) => (
+                  <FileItem
+                    key={path}
+                    path={path}
+                    status="added"
+                    staged={false}
+                    untracked
+                    onToggleStage={() => stageFiles([path])}
+                    onSelect={() => onFileSelect?.(path)}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* History View */}
+      {activeTab === 'history' && (
+        <GitHistory
+          commits={commits}
+          isLoading={isLoading}
+          onLoadMore={() => {}} // TODO: implement pagination
+          hasMore={false}
+        />
+      )}
     </div>
   );
 });
@@ -399,26 +535,33 @@ GitPanel.displayName = 'GitPanel';
 
 // File item component
 interface FileItemProps {
-  file: ChangedFile;
+  path: string;
+  status: string;
+  staged: boolean;
+  untracked?: boolean;
   onToggleStage: () => void;
   onSelect: () => void;
-  onShowDiff: () => void;
+  onDiscard?: () => void;
 }
 
-const FileItem = memo(({ file, onToggleStage, onSelect, onShowDiff }: FileItemProps) => {
-  const fileName = file.path.split('/').pop() || file.path;
-  const dirPath = file.path.substring(0, file.path.lastIndexOf('/')) || '/';
+const FileItem = memo(({ path, status, staged, untracked, onToggleStage, onSelect, onDiscard }: FileItemProps) => {
+  const fileName = path.split('/').pop() || path;
+  const dirPath = path.substring(0, path.lastIndexOf('/')) || '';
 
-  const statusColors = {
+  const statusColors: Record<string, string> = {
     added: 'text-green-400',
     modified: 'text-yellow-400',
     deleted: 'text-red-400',
+    renamed: 'text-blue-400',
+    copied: 'text-blue-400',
   };
 
-  const statusIcons = {
+  const statusIcons: Record<string, string> = {
     added: 'i-ph:plus',
     modified: 'i-ph:pencil',
     deleted: 'i-ph:trash',
+    renamed: 'i-ph:arrow-right',
+    copied: 'i-ph:copy',
   };
 
   return (
@@ -427,30 +570,33 @@ const FileItem = memo(({ file, onToggleStage, onSelect, onShowDiff }: FileItemPr
         onClick={onToggleStage}
         className={classNames(
           'p-0.5 rounded hover:bg-bolt-elements-background-depth-4',
-          file.staged ? 'text-green-400' : 'text-bolt-elements-textTertiary'
+          staged ? 'text-green-400' : 'text-bolt-elements-textTertiary'
         )}
-        title={file.staged ? 'Unstage' : 'Stage'}
+        title={staged ? 'Unstage' : 'Stage'}
       >
-        <span className={file.staged ? 'i-ph:minus' : 'i-ph:plus'} />
+        <span className={staged ? 'i-ph:minus' : 'i-ph:plus'} />
       </button>
-      <span className={classNames('text-xs', statusColors[file.status])}>
-        <span className={statusIcons[file.status]} />
+      <span className={classNames('text-xs', statusColors[status] || 'text-bolt-elements-textTertiary')}>
+        <span className={statusIcons[status] || 'i-ph:file'} />
       </span>
+      {untracked && (
+        <span className="text-xs text-green-400/70">U</span>
+      )}
       <button
         onClick={onSelect}
         className="flex-1 text-left truncate text-xs text-bolt-elements-textPrimary hover:underline"
-        title={file.path}
+        title={path}
       >
         {fileName}
-        <span className="text-bolt-elements-textTertiary ml-1">{dirPath}</span>
+        {dirPath && <span className="text-bolt-elements-textTertiary ml-1">{dirPath}</span>}
       </button>
-      {file.status === 'modified' && (
+      {!staged && onDiscard && (
         <button
-          onClick={onShowDiff}
-          className="p-0.5 opacity-0 group-hover:opacity-100 text-bolt-elements-textTertiary hover:text-white rounded"
-          title="View Diff"
+          onClick={onDiscard}
+          className="p-0.5 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 rounded"
+          title="Discard changes"
         >
-          <span className="i-ph:git-diff" />
+          <span className="i-ph:arrow-counter-clockwise text-xs" />
         </button>
       )}
     </div>
@@ -458,98 +604,5 @@ const FileItem = memo(({ file, onToggleStage, onSelect, onShowDiff }: FileItemPr
 });
 
 FileItem.displayName = 'FileItem';
-
-// Git config form
-interface GitConfigFormProps {
-  initialConfig: GitConfig | null;
-  onSave: (config: GitConfig) => void;
-  onCancel: () => void;
-}
-
-const GitConfigForm = memo(({ initialConfig, onSave, onCancel }: GitConfigFormProps) => {
-  const [owner, setOwner] = useState(initialConfig?.owner || '');
-  const [repo, setRepo] = useState(initialConfig?.repo || '');
-  const [branch, setBranch] = useState(initialConfig?.branch || 'main');
-  const [accessToken, setAccessToken] = useState(initialConfig?.accessToken || '');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (owner && repo && accessToken) {
-      onSave({ owner, repo, branch, accessToken });
-    }
-  };
-
-  return (
-    <div className="p-4">
-      <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-3 flex items-center gap-2">
-        <span className="i-ph:git-branch text-purple-400" />
-        Connect Repository
-      </h3>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="text"
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            placeholder="Owner"
-            className="px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white placeholder:text-gray-500"
-          />
-          <input
-            type="text"
-            value={repo}
-            onChange={(e) => setRepo(e.target.value)}
-            placeholder="Repository"
-            className="px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white placeholder:text-gray-500"
-          />
-        </div>
-        <input
-          type="text"
-          value={branch}
-          onChange={(e) => setBranch(e.target.value)}
-          placeholder="Branch (main)"
-          className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white placeholder:text-gray-500"
-        />
-        <input
-          type="password"
-          value={accessToken}
-          onChange={(e) => setAccessToken(e.target.value)}
-          placeholder="GitHub Access Token"
-          className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white placeholder:text-gray-500"
-        />
-        <p className="text-xs text-bolt-elements-textTertiary">
-          Get token:{' '}
-          <a
-            href="https://github.com/settings/tokens"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:underline"
-          >
-            github.com/settings/tokens
-          </a>
-        </p>
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={!owner || !repo || !accessToken}
-            className="flex-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-white"
-          >
-            Connect
-          </button>
-          {initialConfig && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-3 py-1.5 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 rounded text-bolt-elements-textSecondary"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
-    </div>
-  );
-});
-
-GitConfigForm.displayName = 'GitConfigForm';
 
 export default GitPanel;

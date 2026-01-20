@@ -65,7 +65,10 @@ export default function SchemaGenerator() {
   useEffect(() => {
     fetch('/api/schema')
       .then(res => res.json())
-      .then((data: { examples?: Example[] }) => setExamples(data.examples || []))
+      .then((data) => {
+        const typedData = data as { examples?: Example[] };
+        setExamples(typedData.examples || []);
+      })
       .catch(() => {});
   }, []);
 

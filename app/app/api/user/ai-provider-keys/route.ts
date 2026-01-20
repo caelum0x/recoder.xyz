@@ -189,6 +189,85 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * PUT /api/user/ai-provider-keys (Internal)
+ * Get decrypted AI provider keys for container injection
+ * This should only be called by the docker-backend service
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const { userId, serviceKey } = await request.json();
+
+    // Verify this is an internal service call
+    const expectedKey = process.env.INTERNAL_SERVICE_KEY;
+    if (!expectedKey || serviceKey !== expectedKey) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    }
+
+    // Find user by Better Auth ID (web users use 'user' table)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({
+        keys: {},
+        message: 'User not found'
+      });
+    }
+
+    // Look up the user in the users table (app uses 'users' table for API keys)
+    const appUser = await prisma.users.findUnique({
+      where: { email: user.email },
+      select: { id: true }
+    });
+
+    if (!appUser) {
+      return NextResponse.json({
+        keys: {},
+        message: 'User not found in app database'
+      });
+    }
+
+    // Fetch user's AI provider keys
+    const apiKeys = await prisma.user_api_keys.findMany({
+      where: {
+        userId: appUser.id,
+        isActive: true
+      },
+      select: {
+        provider: true,
+        encryptedKey: true,
+      }
+    });
+
+    // Decrypt keys and map by provider
+    const decryptedKeys: Record<string, string> = {};
+    for (const key of apiKeys) {
+      try {
+        const decrypted = decrypt(key.encryptedKey);
+        decryptedKeys[key.provider] = decrypted;
+      } catch (e) {
+        console.error(`Failed to decrypt key for provider ${key.provider}:`, e);
+      }
+    }
+
+    console.log(`[AI Provider Keys] Retrieved ${Object.keys(decryptedKeys).length} keys for user ${userId}`);
+
+    return NextResponse.json({
+      keys: decryptedKeys,
+    });
+  } catch (error: any) {
+    console.error('Get decrypted AI provider keys error:', error);
+    return NextResponse.json({ error: 'Failed to get keys' }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/user/ai-provider-keys?id=<keyId>
  * Delete an AI provider API key
  */

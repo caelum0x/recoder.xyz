@@ -4,6 +4,7 @@ import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import { LoadingIndicator } from './LoadingIndicator';
+import { useAuth } from '~/lib/contexts/AuthContext';
 
 interface MessagesProps {
   id?: string;
@@ -12,9 +13,46 @@ interface MessagesProps {
   messages?: Message[];
 }
 
+/**
+ * User Avatar component - Shows profile picture or fallback initials
+ */
+function UserAvatar({ name, image }: { name?: string | null; image?: string | null }) {
+  // Generate initials from name (e.g., "John Doe" -> "JD")
+  const initials = name
+    ? name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : 'U';
+
+  if (image) {
+    return (
+      <img
+        src={image}
+        alt={name || 'User'}
+        className="w-[34px] h-[34px] rounded-full object-cover"
+        onError={(e) => {
+          // Fallback to initials if image fails to load
+          e.currentTarget.style.display = 'none';
+          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center w-[34px] h-[34px] bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-medium rounded-full">
+      {initials}
+    </div>
+  );
+}
+
 export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: MessagesProps, ref) => {
   const { id, isStreaming = false, messages = [] } = props;
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -41,8 +79,8 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
                 })}
               >
                 {isUserMessage && (
-                  <div className="flex items-center justify-center w-[34px] h-[34px] overflow-hidden bg-white text-gray-600 rounded-full shrink-0 self-start">
-                    <div className="i-ph:user-fill text-xl"></div>
+                  <div className="shrink-0 self-start">
+                    <UserAvatar name={user?.name} image={user?.image} />
                   </div>
                 )}
                 <div className="grid grid-col-1 w-full">
@@ -61,3 +99,5 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
     </div>
   );
 });
+
+Messages.displayName = 'Messages';

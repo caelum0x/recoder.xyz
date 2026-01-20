@@ -7,6 +7,13 @@ import { useState } from 'react';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 
+// Icon components using UnoCSS classes
+const Upload = ({ className }: { className?: string }) => <div className={`i-ph:upload-simple ${className}`} />;
+const Loader2 = ({ className }: { className?: string }) => <div className={`i-ph:spinner ${className}`} />;
+const CheckCircle2 = ({ className }: { className?: string }) => <div className={`i-ph:check-circle-fill ${className}`} />;
+const ExternalLink = ({ className }: { className?: string }) => <div className={`i-ph:arrow-square-out ${className}`} />;
+const XCircle = ({ className }: { className?: string }) => <div className={`i-ph:x-circle-fill ${className}`} />;
+
 interface DeploymentStatus {
   status: 'idle' | 'deploying' | 'success' | 'error';
   message?: string;

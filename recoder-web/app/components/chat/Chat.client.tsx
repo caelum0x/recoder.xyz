@@ -10,12 +10,16 @@ import { useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { getToolsForAI, initCustomTools } from '~/lib/stores/custom-tools';
+import { currentMode } from '~/lib/stores/mode';
 import { fileModificationsToHTML } from '~/utils/diff';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { showSmartError } from '~/lib/errors/toast-error';
 import { BaseChat } from './BaseChat';
 import { QuickActions } from './QuickActions';
+import { CloneUrlModal } from './CloneUrlModal';
+import { GitHubImporter } from '~/components/github/GitHubImporter';
+import { DeploymentModal } from '~/components/deployment/DeploymentModal';
 import { KeyboardShortcutsDialog } from '~/components/ui/KeyboardShortcutsDialog';
 import { SaveIndicator } from './SaveIndicator';
 
@@ -82,22 +86,14 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
   const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [showGitHubModal, setShowGitHubModal] = useState(false);
+  const [showDeployModal, setShowDeployModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | undefined>();
 
-  // Lightning Mode and Task Categories
-  const [lightningMode, setLightningMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('lightningMode') === 'true';
-    }
-    return false;
-  });
-  const [taskCategory, setTaskCategory] = useState<'code' | 'debug' | 'refactor' | 'explain' | 'test' | 'deploy' | 'general'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('taskCategory') as any) || 'general';
-    }
-    return 'general';
-  });
+  // AI Mode (architect, code, ask, debug, orchestrator)
+  const mode = useStore(currentMode);
 
   // Max tokens control
   const [maxTokens, setMaxTokens] = useState(() => {
@@ -126,38 +122,9 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedProvider', selectedProvider);
       localStorage.setItem('selectedModel', selectedModel);
-      localStorage.setItem('lightningMode', String(lightningMode));
-      localStorage.setItem('taskCategory', taskCategory);
       localStorage.setItem('maxTokens', String(maxTokens));
     }
-  }, [selectedProvider, selectedModel, lightningMode, taskCategory, maxTokens]);
-
-  // Auto-switch model when Lightning Mode changes
-  useEffect(() => {
-    if (lightningMode) {
-      // Switch to fast models
-      const fastModels: Record<string, string> = {
-        'openrouter': 'google/gemini-2.0-flash-exp:free',
-        'anthropic': 'anthropic/claude-3-haiku',
-        'openai': 'openai/gpt-4o-mini',
-        'google': 'google/gemini-2.0-flash-exp:free',
-        'groq': 'groq/llama-3.3-70b-versatile',
-      };
-      const fastModel = fastModels[selectedProvider] || fastModels['openrouter'];
-      setSelectedModel(fastModel);
-    } else {
-      // Switch back to standard models
-      const standardModels: Record<string, string> = {
-        'openrouter': 'anthropic/claude-3.5-sonnet',
-        'anthropic': 'anthropic/claude-3.5-sonnet',
-        'openai': 'openai/gpt-4o',
-        'google': 'google/gemini-2.0-flash-thinking-exp:free',
-        'groq': 'groq/llama-3.3-70b-versatile',
-      };
-      const standardModel = standardModels[selectedProvider] || standardModels['openrouter'];
-      setSelectedModel(standardModel);
-    }
-  }, [lightningMode, selectedProvider]);
+  }, [selectedProvider, selectedModel, maxTokens]);
 
   const { showChat } = useStore(chatStore);
 
@@ -217,9 +184,8 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     body: {
       provider: selectedProvider,
       model: selectedModel,
-      lightningMode,
-      taskCategory,
       maxTokens,
+      mode, // AI mode (architect, code, ask, debug, orchestrator)
       projectContext, // Pass project context to server
       customTools, // Pass custom tools to server
       mcpTools, // Pass MCP tools to server
@@ -524,6 +490,36 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     textareaRef.current?.blur();
   };
 
+  // Handle cloned website files
+  const handleCloneComplete = async (data: { files: Record<string, string>; prompt: string; title: string }) => {
+    logger.info(`Clone complete: ${Object.keys(data.files).length} files`);
+
+    // Create files using import event
+    window.dispatchEvent(new CustomEvent('recoder:import', {
+      detail: {
+        files: data.files,
+        repository: { name: data.title },
+        prompt: data.prompt,
+      }
+    }));
+  };
+
+  // Handle GitHub repository import
+  const handleGitHubImport = (repoData: { files: Record<string, string>; repository: any }) => {
+    logger.info(`GitHub import: ${Object.keys(repoData.files).length} files from ${repoData.repository.name}`);
+
+    // Create files using import event
+    window.dispatchEvent(new CustomEvent('recoder:import', {
+      detail: {
+        files: repoData.files,
+        repository: repoData.repository,
+        prompt: `I imported the repository "${repoData.repository.name}" (${repoData.repository.description || 'no description'}). Please analyze the codebase structure and let me know how I can help you work with this project.`,
+      }
+    }));
+
+    setShowGitHubModal(false);
+  };
+
   // Listen for "Fix with AI" events from Problems panel
   useEffect(() => {
     const handleFixErrors = async (event: CustomEvent) => {
@@ -538,6 +534,40 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
 
     return () => {
       window.removeEventListener('recoder:fix-errors', handleFixErrors as any);
+    };
+  }, [isLoading, sendMessage]);
+
+  // Listen for spawn task events from AI actions
+  useEffect(() => {
+    const handleSpawnTask = async (event: CustomEvent) => {
+      const { taskId, prompt, mode } = event.detail;
+
+      console.log(`[Spawn Task] Received task ${taskId}:`, prompt?.substring(0, 100));
+
+      // Switch mode if specified
+      if (mode && mode !== 'code') {
+        try {
+          const { setMode } = await import('~/lib/stores/mode');
+          setMode(mode);
+          console.log(`[Spawn Task] Switched to ${mode} mode`);
+        } catch (error) {
+          console.warn('[Spawn Task] Failed to switch mode:', error);
+        }
+      }
+
+      // Send the task as a message to the AI
+      if (prompt && !isLoading) {
+        // Small delay to ensure mode switch takes effect
+        setTimeout(() => {
+          sendMessage({} as React.UIEvent, prompt);
+        }, 100);
+      }
+    };
+
+    window.addEventListener('recoder:spawn-task', handleSpawnTask as any);
+
+    return () => {
+      window.removeEventListener('recoder:spawn-task', handleSpawnTask as any);
     };
   }, [isLoading, sendMessage]);
 
@@ -639,13 +669,9 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         promptEnhanced={promptEnhanced}
         selectedProvider={selectedProvider}
         selectedModel={selectedModel}
-        lightningMode={lightningMode}
-        taskCategory={taskCategory}
         maxTokens={maxTokens}
         onProviderChange={setSelectedProvider}
         onModelChange={setSelectedModel}
-        onLightningModeChange={setLightningMode}
-        onTaskCategoryChange={setTaskCategory}
         onMaxTokensChange={setMaxTokens}
         onSettingsClick={() => {
           // Navigate to API key management page
@@ -689,6 +715,36 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
 
       {/* Save Indicator */}
       <SaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
+
+      {/* Quick Actions FAB */}
+      <QuickActions
+        onSelectAction={(prompt) => sendMessage({} as React.UIEvent, prompt)}
+        disabled={isLoading}
+        onCloneWebsite={() => setShowCloneModal(true)}
+        onImportGitHub={() => setShowGitHubModal(true)}
+        onDeploy={() => setShowDeployModal(true)}
+      />
+
+      {/* Clone Website Modal */}
+      <CloneUrlModal
+        open={showCloneModal}
+        onClose={() => setShowCloneModal(false)}
+        onCloneComplete={handleCloneComplete}
+      />
+
+      {/* GitHub Import Modal */}
+      {showGitHubModal && (
+        <GitHubImporter
+          onImport={handleGitHubImport}
+          onClose={() => setShowGitHubModal(false)}
+        />
+      )}
+
+      {/* Deploy Modal */}
+      <DeploymentModal
+        open={showDeployModal}
+        onClose={() => setShowDeployModal(false)}
+      />
     </>
   );
 });

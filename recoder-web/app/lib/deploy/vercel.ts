@@ -30,7 +30,7 @@ export async function deployToVercel(options: DeployOptions, token: string): Pro
     throw new Error('Deployment failed');
   }
 
-  const data = await response.json();
+  const data = await response.json() as any;
   return { url: `https://${data.url}` };
 }
 
@@ -47,7 +47,7 @@ export async function deployToNetlify(options: DeployOptions, token: string): Pr
     body: JSON.stringify({ name: projectName }),
   });
 
-  const site = await siteResponse.json();
+  const site = await siteResponse.json() as any;
 
   // Deploy files
   const deployResponse = await fetch(`https://api.netlify.com/api/v1/sites/${site.id}/deploys`, {
@@ -66,6 +66,6 @@ export async function deployToNetlify(options: DeployOptions, token: string): Pr
     }),
   });
 
-  const deploy = await deployResponse.json();
+  const deploy = await deployResponse.json() as any;
   return { url: deploy.url };
 }

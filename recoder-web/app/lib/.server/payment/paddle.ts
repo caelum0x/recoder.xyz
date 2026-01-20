@@ -27,7 +27,7 @@ export class PaddleClient {
   constructor(config: PaddleConfig) {
     this.config = config;
     this.paddle = new Paddle(config.apiKey, {
-      environment: config.environment,
+      environment: config.environment as any,
     });
   }
 
@@ -58,7 +58,7 @@ export class PaddleClient {
         checkoutData.cancelUrl = options.cancelUrl;
       }
 
-      const checkout = await this.paddle.checkout.create(checkoutData);
+      const checkout = await (this.paddle as any).checkout.create(checkoutData) as any;
 
       return {
         checkoutUrl: checkout.url,
@@ -75,7 +75,7 @@ export class PaddleClient {
    */
   async getSubscription(subscriptionId: string) {
     try {
-      const subscription = await this.paddle.subscriptions.get(subscriptionId);
+      const subscription = await this.paddle.subscriptions.get(subscriptionId) as any;
       return subscription;
     } catch (error) {
       console.error('Failed to get Paddle subscription:', error);
@@ -90,13 +90,13 @@ export class PaddleClient {
     try {
       if (immediate) {
         const result = await this.paddle.subscriptions.cancel(subscriptionId, {
-          effectiveFrom: 'immediately',
-        });
+          effectiveFrom: 'immediately' as any,
+        }) as any;
         return result;
       } else {
         const result = await this.paddle.subscriptions.cancel(subscriptionId, {
-          effectiveFrom: 'next_billing_period',
-        });
+          effectiveFrom: 'next_billing_period' as any,
+        }) as any;
         return result;
       }
     } catch (error) {

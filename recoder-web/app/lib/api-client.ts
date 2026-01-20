@@ -24,7 +24,7 @@ export async function typedFetch<T>(
   const response = await fetch(url, options);
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json().catch(() => ({})) as any;
     throw new ApiError(
       errorData.error || `HTTP ${response.status}: ${response.statusText}`,
       response.status,

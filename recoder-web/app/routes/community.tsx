@@ -1,9 +1,23 @@
 import { useLoaderData } from '@remix-run/react';
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 
+interface CommunityProject {
+  id: string;
+  project_name: string;
+  description?: string;
+  views: number;
+  likes: number;
+  forks: number;
+  framework?: string;
+}
+
+interface LoaderData {
+  projects: CommunityProject[];
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const res = await fetch(new URL('/api/community', request.url));
-  const data = await res.json();
+  const data = await res.json() as LoaderData;
   return json(data);
 }
 
@@ -29,7 +43,7 @@ export default function CommunityPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map((project: any) => (
+            {projects.map((project) => (
               <div
                 key={project.id}
                 className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-6 hover:border-bolt-elements-borderColorActive transition-colors"

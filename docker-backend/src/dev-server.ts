@@ -36,7 +36,8 @@ export class DevServerManager {
 
     // Kill any existing dev server first
     try {
-      await this.execCommand(container, `pkill -f "npm run dev|vite|next dev|bun run dev" || true`);
+      const killPattern = this.getKillPattern(framework);
+      await this.execCommand(container, `pkill -f "${killPattern}" || true`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch {}
 
@@ -90,9 +91,12 @@ export class DevServerManager {
    */
   async stop(containerId: string, projectId: string): Promise<boolean> {
     const container = docker.getContainer(containerId);
-    
+    const info = this.servers.get(projectId);
+    const framework = info?.framework || 'vite';
+
     try {
-      await this.execCommand(container, `pkill -f "npm run dev|vite|next dev|bun run dev" || true`);
+      const killPattern = this.getKillPattern(framework);
+      await this.execCommand(container, `pkill -f "${killPattern}" || true`);
       this.servers.delete(projectId);
       console.log(`[DevServer] Stopped for ${projectId}`);
       return true;
@@ -185,16 +189,63 @@ export class DevServerManager {
   }
 
   private getStartCommand(framework: string): string {
-    // Prefer bun for 10x faster startup
+    // Prefer bun for 10x faster startup for Node.js projects
     const commands: Record<string, string> = {
+      // Node.js frameworks
       vite: 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
       next: 'bun run dev 2>/dev/null || npm run dev',
       react: 'bun start 2>/dev/null || npm start',
       vue: 'bun run serve 2>/dev/null || npm run serve',
       bun: 'bun run dev',
       expo: 'bunx expo start --web 2>/dev/null || npx expo start --web',
+
+      // Python frameworks
+      flask: 'python -m flask run --host=0.0.0.0 --port=5173',
+      django: 'python manage.py runserver 0.0.0.0:5173',
+      fastapi: 'uvicorn main:app --host 0.0.0.0 --port 5173 --reload',
+      python: 'python main.py',
+
+      // Rust
+      rust: 'cargo run',
+
+      // Go
+      go: 'go run .',
+
+      // Java
+      'java-spring': 'mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=8080',
+      java: 'mvn exec:java',
     };
     return commands[framework] || 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0';
+  }
+
+  /**
+   * Get the kill pattern for a framework's dev server process
+   */
+  private getKillPattern(framework: string): string {
+    const patterns: Record<string, string> = {
+      // Node.js
+      vite: 'npm run dev|vite|bun run dev',
+      next: 'next dev',
+      react: 'react-scripts start',
+      vue: 'vue-cli-service serve',
+
+      // Python
+      flask: 'flask run|python.*flask',
+      django: 'manage.py runserver',
+      fastapi: 'uvicorn',
+      python: 'python main.py',
+
+      // Rust
+      rust: 'cargo run|target/debug',
+
+      // Go
+      go: 'go run',
+
+      // Java
+      'java-spring': 'spring-boot:run|java.*-jar',
+      java: 'mvn exec:java|java.*-jar',
+    };
+    return patterns[framework] || 'npm run dev|vite|next dev|bun run dev';
   }
 
   private async waitForReady(ports: number[], maxWaitMs: number = 60000): Promise<{ ready: boolean; port?: number }> {

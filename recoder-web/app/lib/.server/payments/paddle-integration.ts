@@ -118,7 +118,10 @@ export class PaddleClient {
       throw new Error(`Paddle checkout failed: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      url: string;
+      id: string;
+    };
     return {
       checkoutUrl: data.url,
       sessionId: data.id
@@ -139,7 +142,7 @@ export class PaddleClient {
       throw new Error(`Failed to fetch subscription: ${response.statusText}`);
     }
 
-    return response.json();
+    return response.json() as Promise<any>;
   }
 
   /**

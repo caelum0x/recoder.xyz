@@ -474,7 +474,7 @@ export function populateMcpServerCommand(
 ): Record<string, MCPServerConfig> {
   if (mcpServerCommand) {
     const cmd = mcpServerCommand;
-    const args = parse(cmd, process.env) as string[];
+    const args = parse(cmd) as string[];
     if (args.some((arg) => typeof arg !== 'string')) {
       throw new Error('failed to parse mcpServerCommand: ' + cmd);
     }

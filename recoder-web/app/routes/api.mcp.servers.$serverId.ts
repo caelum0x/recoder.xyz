@@ -3,8 +3,12 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-r
 // GET - Get server details
 export async function loader({ params, context }: LoaderFunctionArgs) {
   const { cloudflare } = context;
-  const db = cloudflare.env.DB;
+  const db = cloudflare?.env?.DB;
   const { serverId } = params;
+
+  if (!db) {
+    return json({ error: 'Database not available' }, { status: 500 });
+  }
 
   try {
     const server = await db
@@ -36,8 +40,12 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
 // POST/PATCH/DELETE
 export async function action({ request, params, context }: ActionFunctionArgs) {
   const { cloudflare } = context;
-  const db = cloudflare.env.DB;
+  const db = cloudflare?.env?.DB;
   const { serverId } = params;
+
+  if (!db) {
+    return json({ error: 'Database not available' }, { status: 500 });
+  }
 
   if (request.method === 'DELETE') {
     try {
@@ -54,7 +62,13 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
   if (request.method === 'PATCH') {
     try {
-      const body = await request.json();
+      const body = await request.json() as {
+        enabled?: boolean;
+        name?: string;
+        command?: string;
+        args?: any;
+        env?: any;
+      };
       const updates: string[] = [];
       const bindings: any[] = [];
 
@@ -99,6 +113,10 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
         .prepare('SELECT * FROM mcp_servers WHERE server_id = ?')
         .bind(serverId)
         .first();
+
+      if (!server) {
+        return json({ error: 'Server not found after update' }, { status: 404 });
+      }
 
       return json({
         success: true,

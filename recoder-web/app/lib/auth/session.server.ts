@@ -18,6 +18,22 @@ export interface Session {
   expiresAt: Date;
 }
 
+// API Response Type for session verification
+interface SessionApiResponse {
+  user?: {
+    id: string;
+    email: string;
+    name?: string | null;
+    image?: string | null;
+    subscriptionPlan?: string;
+    subscriptionStatus?: string;
+  };
+  session?: {
+    id?: string;
+    expiresAt?: string;
+  };
+}
+
 /**
  * Get the main site URL based on environment
  */
@@ -63,7 +79,7 @@ export async function verifySession(request: Request): Promise<Session | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as SessionApiResponse;
 
     if (!data?.user) {
       console.log('[Auth] No user in session response');
@@ -76,12 +92,12 @@ export async function verifySession(request: Request): Promise<Session | null> {
       user: {
         id: data.user.id,
         email: data.user.email,
-        name: data.user.name,
-        image: data.user.image,
-        subscriptionPlan: data.user.subscriptionPlan || 'free',
-        subscriptionStatus: data.user.subscriptionStatus || 'active',
+        name: data.user.name ?? null,
+        image: data.user.image ?? null,
+        subscriptionPlan: data.user.subscriptionPlan ?? 'free',
+        subscriptionStatus: data.user.subscriptionStatus ?? 'active',
       },
-      sessionId: data.session?.id || '',
+      sessionId: data.session?.id ?? '',
       expiresAt: data.session?.expiresAt ? new Date(data.session.expiresAt) : new Date(),
     };
   } catch (error) {

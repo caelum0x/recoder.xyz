@@ -815,6 +815,9 @@ importers:
       fzf:
         specifier: ^0.5.2
         version: 0.5.2
+      https-proxy-agent:
+        specifier: ^7.0.6
+        version: 7.0.6(supports-color@10.2.0)
       isbot:
         specifier: ^4.1.0
         version: 4.4.0
@@ -867,7 +870,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.1
       remix-island:
-        specifier: ^0.2.0
+        specifier: 0.2.0
         version: 0.2.0(@remix-run/react@2.17.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.2))(@remix-run/server-runtime@2.17.2(typescript@5.9.2))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       remix-utils:
         specifier: ^7.6.0
@@ -884,6 +887,9 @@ importers:
       unist-util-visit:
         specifier: ^5.0.0
         version: 5.0.0
+      y-protocols:
+        specifier: ^1.0.7
+        version: 1.0.7(yjs@13.6.27)
     devDependencies:
       '@blitz/eslint-plugin':
         specifier: 0.1.0
@@ -952,8 +958,8 @@ importers:
         specifier: ^1.1.0
         version: 1.2.0(vite@5.4.21(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1))
       vite-tsconfig-paths:
-        specifier: ^4.3.2
-        version: 4.3.2(typescript@5.9.2)(vite@5.4.21(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1))
+        specifier: ^6.0.4
+        version: 6.0.4(typescript@5.9.2)(vite@5.4.21(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1))
       vitest:
         specifier: ^2.0.1
         version: 2.1.9(@types/node@22.18.1)(jsdom@26.1.0(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@5.0.10))(sass@1.93.3)(terser@5.44.1)
@@ -16173,8 +16179,8 @@ packages:
     peerDependencies:
       vite: ^6.0.0 || ^5.0.0 || ^4.0.0 || ^3.0.0 || ^2.0.0
 
-  vite-tsconfig-paths@4.3.2:
-    resolution: {integrity: sha512-0Vd/a6po6Q+86rPlntHye7F31zA2URZMbH8M3saAZ/xR9QoGN/L21bxEGfXdWmFdNkqPpRdxFT7nmNe12e9/uA==}
+  vite-tsconfig-paths@6.0.4:
+    resolution: {integrity: sha512-iIsEJ+ek5KqRTK17pmxtgIxXtqr3qDdE6OxrP9mVeGhVDNXRJTKN/l9oMbujTQNzMLe6XZ8qmpztfbkPu2TiFQ==}
     peerDependencies:
       vite: '*'
     peerDependenciesMeta:
@@ -16624,6 +16630,12 @@ packages:
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
     engines: {node: '>=0.4'}
+
+  y-protocols@1.0.7:
+    resolution: {integrity: sha512-YSVsLoXxO67J6eE/nV4AtFtT3QEotZf5sK5BHxFBXso7VDUT3Tx07IfA6hsu5Q5OmBdMkQVmFZ9QOA7fikWvnw==}
+    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
+    peerDependencies:
+      yjs: ^13.0.0
 
   y18n@4.0.3:
     resolution: {integrity: sha512-JKhqTOwSrqNA1NY5lSztJ1GrBiUodLMmIZuLiDaMRJ+itFd+ABVE8XBjOvIWL+rSqNDC74LCSFmlb/U4UZ4hJQ==}
@@ -25165,7 +25177,7 @@ snapshots:
 
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 20.19.22
+      '@types/node': 22.18.1
       form-data: 4.0.4
 
   '@types/node@12.20.55': {}
@@ -37787,9 +37799,9 @@ snapshots:
     dependencies:
       vite: 5.4.21(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1)
 
-  vite-tsconfig-paths@4.3.2(typescript@5.9.2)(vite@5.4.21(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1)):
+  vite-tsconfig-paths@6.0.4(typescript@5.9.2)(vite@5.4.21(@types/node@22.18.1)(sass@1.93.3)(terser@5.44.1)):
     dependencies:
-      debug: 4.4.1
+      debug: 4.4.3(supports-color@10.2.0)
       globrex: 0.1.2
       tsconfck: 3.1.6(typescript@5.9.2)
     optionalDependencies:
@@ -38422,6 +38434,11 @@ snapshots:
       cssfilter: 0.0.10
 
   xtend@4.0.2: {}
+
+  y-protocols@1.0.7(yjs@13.6.27):
+    dependencies:
+      lib0: 0.2.114
+      yjs: 13.6.27
 
   y18n@4.0.3: {}
 

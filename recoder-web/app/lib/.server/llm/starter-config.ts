@@ -123,12 +123,12 @@ export function getConfig<T = any>(path: string): T {
  */
 export function shouldIgnoreFile(path: string, name: string): boolean {
   const { ignorePatterns, ignoreDirs } = STARTER_CONFIG.fileLoading;
-  
-  // Check if directory name is in ignore list
-  if (ignoreDirs.includes(name)) {
+
+  // Check if directory name is in ignore list (cast to readonly string array)
+  if ((ignoreDirs as readonly string[]).includes(name)) {
     return true;
   }
-  
+
   // Check against patterns
   return ignorePatterns.some((pattern) => pattern.test(path));
 }

@@ -38,7 +38,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Handle both JSON and FormData
     if (contentType?.includes('application/json')) {
-      const body = await request.json();
+      const body = await request.json() as { action: string; repoUrl?: string; path?: string };
       actionType = body.action;
       repoUrl = body.repoUrl;
       subPath = body.path;

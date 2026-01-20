@@ -15,10 +15,14 @@ import {
   canAutoFix,
   type BuildError,
 } from '~/lib/stores/errors';
-import { formatErrorsForAI } from '~/lib/services/auto-fix';
+import {
+  formatErrorsForAI,
+  requestEnhancedAIFix,
+  createFixPlan,
+  type AutoFixOptions,
+} from '~/lib/services/auto-fix';
 import { workbenchStore } from '~/lib/stores/workbench';
-
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+import { dockerGet } from '~/lib/services/docker-api';
 
 interface ProblemsPanelProps {
   /** Callback when clicking an error to navigate to file:line */
@@ -42,6 +46,12 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
   const [searchQuery, setSearchQuery] = useState('');
   const [showFixableOnly, setShowFixableOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Auto-fix state
+  const [showFixPlan, setShowFixPlan] = useState(false);
+  const [fixPlan, setFixPlan] = useState<ReturnType<typeof createFixPlan> | null>(null);
+  const [autoFixEnabled, setAutoFixEnabled] = useState(true);
+  const [requireConfirmation, setRequireConfirmation] = useState(true);
   
   // Fetch errors when panel mounts or projectId changes
   useEffect(() => {
@@ -50,11 +60,8 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
     const fetchErrors = async () => {
       setIsLoading(true);
       try {
-        const resp = await fetch(`${DOCKER_URL}/api/errors/${projectId}?tail=200`);
-        if (resp.ok) {
-          const data = await resp.json() as import('~/lib/stores/errors').ErrorsResponse;
-          setErrors(data);
-        }
+        const data = await dockerGet<import('~/lib/stores/errors').ErrorsResponse>(`/api/errors/${projectId}?tail=200`);
+        setErrors(data);
       } catch (e) {
         console.warn('[ProblemsPanel] Failed to fetch errors:', e);
       } finally {
@@ -107,28 +114,65 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
     [onErrorClick]
   );
 
-  const handleFixAll = useCallback(() => {
-    if (!canAutoFix() || filteredErrors.length === 0) return;
+  const handleShowFixPlan = useCallback(() => {
+    if (filteredErrors.length === 0) return;
 
-    // Format errors for AI
-    const prompt = formatErrorsForAI(filteredErrors);
+    const plan = createFixPlan(filteredErrors, {
+      requireConfirmation,
+      autoReadFiles: autoFixEnabled,
+      checkDependencies: autoFixEnabled,
+    });
 
-    if (prompt) {
-      // Set fixing state
-      setAutoFixing(true);
+    setFixPlan(plan);
+    setShowFixPlan(true);
+  }, [filteredErrors, requireConfirmation, autoFixEnabled]);
 
-      // Dispatch event to chat
-      window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
-        detail: { prompt, errors: filteredErrors }
-      }));
+  const handleFixAll = useCallback(async () => {
+    if (!canAutoFix() || filteredErrors.length === 0 || !projectId) return;
 
-      // Reset fixing state after a short delay (chat will handle the actual fix)
+    // Set fixing state
+    setAutoFixing(true);
+
+    try {
+      const options: AutoFixOptions = {
+        requireConfirmation,
+        autoReadFiles: autoFixEnabled,
+        checkDependencies: autoFixEnabled,
+        maxFilesToRead: 10,
+      };
+
+      // Use enhanced AI fix if auto-fix is enabled
+      if (autoFixEnabled) {
+        await requestEnhancedAIFix(
+          filteredErrors,
+          projectId,
+          (prompt) => {
+            // Dispatch event to chat
+            window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+              detail: { prompt, errors: filteredErrors }
+            }));
+          },
+          options
+        );
+      } else {
+        // Use basic format
+        const prompt = formatErrorsForAI(filteredErrors, options);
+        if (prompt) {
+          window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+            detail: { prompt, errors: filteredErrors }
+          }));
+        }
+      }
+
+      // Also call callback if provided
+      onFixWithAI?.(filteredErrors);
+    } catch (error) {
+      console.error('[ProblemsPanel] Fix failed:', error);
+    } finally {
+      // Reset fixing state after a short delay
       setTimeout(() => setAutoFixing(false), 2000);
     }
-
-    // Also call callback if provided
-    onFixWithAI?.(filteredErrors);
-  }, [filteredErrors, onFixWithAI]);
+  }, [filteredErrors, projectId, onFixWithAI, requireConfirmation, autoFixEnabled]);
 
   // Sort files by error count (most errors first)
   const sortedFiles = useMemo(() => {
@@ -150,6 +194,82 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
 
   return (
     <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
+      {/* Fix Plan Modal */}
+      {showFixPlan && fixPlan && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto">
+            <div className="p-4 border-b border-bolt-elements-borderColor">
+              <h3 className="text-lg font-medium">Auto-Fix Plan</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <h4 className="text-sm font-medium mb-2">Errors to Fix ({fixPlan.errors.length})</h4>
+                <div className="space-y-1 text-xs">
+                  {fixPlan.errors.slice(0, 5).map((error) => (
+                    <div key={error.id} className="text-gray-300">
+                      - {error.filePath ? error.filePath.replace('/workspace/', '') : 'General'}: {error.shortMessage}
+                    </div>
+                  ))}
+                  {fixPlan.errors.length > 5 && (
+                    <div className="text-gray-400">... and {fixPlan.errors.length - 5} more</div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-medium mb-2">Files to Read ({fixPlan.filesToRead.length})</h4>
+                <div className="space-y-1 text-xs text-gray-300">
+                  {fixPlan.filesToRead.map((file) => (
+                    <div key={file}>- {file}</div>
+                  ))}
+                </div>
+              </div>
+
+              {fixPlan.missingDependencies.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2 text-yellow-400">
+                    Missing Dependencies ({fixPlan.missingDependencies.length})
+                  </h4>
+                  <div className="space-y-1 text-xs text-gray-300">
+                    {fixPlan.missingDependencies.map((dep) => (
+                      <div key={dep}>- {dep}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-bolt-elements-borderColor">
+                <div className="text-xs text-gray-400">
+                  Estimated steps: {fixPlan.estimatedSteps}
+                </div>
+                {fixPlan.requiresUserConfirmation && (
+                  <div className="text-xs text-yellow-400 mt-1">
+                    You will be asked to confirm before fixes are applied
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-4 border-t border-bolt-elements-borderColor flex justify-end gap-2">
+              <button
+                onClick={() => setShowFixPlan(false)}
+                className="px-3 py-1.5 text-sm bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowFixPlan(false);
+                  handleFixAll();
+                }}
+                className="px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+              >
+                Proceed with Fix
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header with Filters */}
       <div className="flex flex-col border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
         {/* Top row: Title and actions */}
@@ -172,31 +292,62 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
             </div>
           </div>
 
-          {/* Fix All button */}
+          {/* Fix All buttons */}
           {onFixWithAI && filteredErrors.length > 0 && (
-            <button
-              onClick={handleFixAll}
-              disabled={isAutoFixing || !canAutoFix()}
-              className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                isAutoFixing
-                  ? 'bg-blue-500/20 text-blue-300 cursor-wait'
-                  : canAutoFix()
-                  ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
-                  : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {isAutoFixing ? (
-                <>
-                  <span className="i-ph:spinner animate-spin" />
-                  Fixing...
-                </>
-              ) : (
-                <>
-                  <span className="i-ph:magic-wand" />
-                  Fix All with AI
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Settings toggle */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setRequireConfirmation(!requireConfirmation)}
+                  className="text-xs text-gray-400 hover:text-gray-300"
+                  title={requireConfirmation ? "Confirmation required" : "Auto-fix without confirmation"}
+                >
+                  <span className={requireConfirmation ? "i-ph:shield-check" : "i-ph:shield"} />
+                </button>
+                <button
+                  onClick={() => setAutoFixEnabled(!autoFixEnabled)}
+                  className="text-xs text-gray-400 hover:text-gray-300"
+                  title={autoFixEnabled ? "Enhanced auto-fix enabled" : "Basic mode"}
+                >
+                  <span className={autoFixEnabled ? "i-ph:lightning-fill" : "i-ph:lightning"} />
+                </button>
+              </div>
+
+              {/* Show Plan button */}
+              <button
+                onClick={handleShowFixPlan}
+                disabled={isAutoFixing}
+                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded transition-colors bg-bolt-elements-background-depth-3 text-gray-300 hover:bg-bolt-elements-background-depth-4"
+              >
+                <span className="i-ph:list-checks" />
+                Plan
+              </button>
+
+              {/* Fix All button */}
+              <button
+                onClick={handleFixAll}
+                disabled={isAutoFixing || !canAutoFix()}
+                className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                  isAutoFixing
+                    ? 'bg-blue-500/20 text-blue-300 cursor-wait'
+                    : canAutoFix()
+                    ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
+                    : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {isAutoFixing ? (
+                  <>
+                    <span className="i-ph:spinner animate-spin" />
+                    Fixing...
+                  </>
+                ) : (
+                  <>
+                    <span className="i-ph:magic-wand" />
+                    Fix All
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
 

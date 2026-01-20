@@ -18,7 +18,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   try {
-    const { files, repoName, description, isPrivate = false, accessToken } = await request.json();
+    const body = await request.json() as {
+      files?: Record<string, string>;
+      repoName?: string;
+      description?: string;
+      isPrivate?: boolean;
+      accessToken?: string;
+    };
+    const { files, repoName, description, isPrivate = false, accessToken } = body;
 
     if (!files || typeof files !== 'object') {
       return new Response(

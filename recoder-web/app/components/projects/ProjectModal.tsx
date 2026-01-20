@@ -36,8 +36,8 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
         setFormData({
           name: initialData.name,
           description: initialData.description || '',
-          icon: initialData.icon,
-          color: initialData.color
+          icon: initialData.icon || 'i-ph:folder',
+          color: initialData.color || '#3b82f6'
         });
       } else {
         setFormData({

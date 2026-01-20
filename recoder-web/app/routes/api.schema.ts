@@ -12,7 +12,11 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json() as {
+      description?: string;
+      dbType?: string;
+      format?: string;
+    };
     const { description, dbType = 'sqlite', format = 'complete' } = body;
 
     if (!description || typeof description !== 'string' || description.trim().length === 0) {
@@ -23,21 +27,24 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Validate dbType
-    const validDbTypes = ['postgresql', 'mysql', 'sqlite'];
-    if (!validDbTypes.includes(dbType)) {
+    const validDbTypes = ['postgresql', 'mysql', 'sqlite'] as const;
+    if (!validDbTypes.includes(dbType as any)) {
       return json(
         { error: `Invalid dbType. Must be one of: ${validDbTypes.join(', ')}` },
         { status: 400 }
       );
     }
 
+    type DatabaseType = typeof validDbTypes[number];
+    const validatedDbType = dbType as DatabaseType;
+
     const config: DatabaseSchemaConfig = {
       description,
-      dbType,
+      dbType: validatedDbType,
       includeSeedData: true,
       seedRecordsPerEntity: 5,
       includeTypes: true,
-      includePrisma: dbType === 'postgresql',
+      includePrisma: validatedDbType === 'postgresql',
       includeDrizzle: true,
     };
 

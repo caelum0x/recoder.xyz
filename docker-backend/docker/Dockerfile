@@ -85,6 +85,23 @@ RUN apt-get update && apt-get install -y ruby-full \
 RUN apt-get update && apt-get install -y php php-cli php-mbstring \
     && rm -rf /var/lib/apt/lists/*
 
+# Chromium for browser automation (Puppeteer)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium-browser \
+    libxss1 \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    libgbm1 \
+    libasound2 \
+    fonts-liberation \
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Puppeteer environment - use system Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Claude Code CLI - Anthropic's AI coding assistant
 # Users can connect their Claude Pro/Max subscription via recoder.xyz settings
 # Token is injected as CLAUDE_CODE_OAUTH_TOKEN environment variable
@@ -95,7 +112,145 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN npm install -g recoder-code
 
 # Global dev tools for LSP diagnostics and development
-RUN npm install -g typescript pyright prettier eslint tsx ts-node
+RUN npm install -g typescript prettier eslint tsx ts-node \
+    && npm cache clean --force
+
+# ============================================
+# Language Server Protocol (LSP) Servers
+# Pre-installed for instant startup with zero download time
+# These provide real-time code intelligence, completions, and diagnostics
+# ============================================
+
+# TypeScript/JavaScript LSP (tsserver wrapper)
+# Provides IntelliSense for TS/JS projects
+RUN npm install -g typescript typescript-language-server \
+    && npm cache clean --force
+
+# Python LSP (Pyright - faster and more accurate than pylsp)
+# Microsoft's static type checker with LSP support
+RUN npm install -g pyright \
+    && pip3 install --no-cache-dir debugpy
+
+# HTML/CSS/JSON LSP (extracted from VSCode)
+# Provides web development language support
+RUN npm install -g vscode-langservers-extracted \
+    && npm cache clean --force
+
+# Rust Analyzer (official Rust LSP)
+# Download latest stable release for x86_64 Linux
+RUN curl -L https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-unknown-linux-gnu.gz \
+    | gunzip -c > /usr/local/bin/rust-analyzer \
+    && chmod +x /usr/local/bin/rust-analyzer
+
+# Go LSP (gopls - official Go language server)
+# Installed via Go toolchain
+ENV PATH="$PATH:/root/go/bin"
+RUN go install golang.org/x/tools/gopls@latest
+
+# Vue.js LSP (Volar - official Vue language server)
+# Supports Vue 3 SFC with TypeScript
+RUN npm install -g @vue/language-server \
+    && npm cache clean --force
+
+# Tailwind CSS LSP (IntelliSense for Tailwind)
+# Autocomplete and validation for Tailwind utility classes
+RUN npm install -g @tailwindcss/language-server \
+    && npm cache clean --force
+
+# YAML LSP (YAML Language Server)
+# Schema validation and completion for YAML files
+RUN npm install -g yaml-language-server \
+    && npm cache clean --force
+
+# Dockerfile LSP
+# IntelliSense and linting for Dockerfiles
+RUN npm install -g dockerfile-language-server-nodejs \
+    && npm cache clean --force
+
+# Bash LSP (Bash Language Server)
+# IntelliSense for shell scripts
+RUN npm install -g bash-language-server \
+    && npm cache clean --force
+
+# Java LSP (Eclipse JDT.LS)
+# Full-featured Java language server
+RUN mkdir -p /opt/jdtls \
+    && cd /opt/jdtls \
+    && curl -L "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/1.31.0/jdt-language-server-1.31.0-202401111522.tar.gz&r=1" \
+       -o jdtls.tar.gz \
+    && tar -xzf jdtls.tar.gz \
+    && rm jdtls.tar.gz \
+    && chmod +x /opt/jdtls/bin/jdtls 2>/dev/null || true
+
+# ============================================
+# Debug Adapters
+# Enable debugging for multiple languages via Debug Adapter Protocol (DAP)
+# ============================================
+
+# Python debugger (debugpy - already installed above with pyright)
+# Supports VSCode Debug Adapter Protocol
+# Usage: python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client script.py
+
+# Node.js debugging is built-in via --inspect-brk flag
+# Usage: node --inspect-brk=0.0.0.0:9229 script.js
+
+# Go debugger (Delve - official Go debugger with DAP support)
+# Provides breakpoints, stepping, variable inspection for Go
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+ENV PATH="$PATH:/root/go/bin"
+
+# Rust debugger (LLDB with VSCode DAP support)
+# Install LLDB and the VSCode debug adapter
+RUN apt-get update && apt-get install -y lldb lldb-15 python3-lldb-15 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/lldb-15 /usr/bin/lldb \
+    && ln -sf /usr/bin/lldb-server-15 /usr/bin/lldb-server
+
+# Install lldb-vscode for Rust DAP support (CodeLLDB alternative)
+# This provides VSCode-compatible debug adapter for LLDB
+RUN mkdir -p /opt/codelldb \
+    && cd /opt/codelldb \
+    && curl -L "https://github.com/nicknisi/codelldb/releases/download/v1.10.0/codelldb-x86_64-linux.vsix" -o codelldb.vsix \
+    && unzip -q codelldb.vsix -d . \
+    && rm codelldb.vsix \
+    && chmod +x extension/adapter/codelldb 2>/dev/null || true
+ENV CODELLDB_PATH=/opt/codelldb/extension/adapter/codelldb
+
+# Ruby debugger (debug gem with DAP support)
+RUN gem install debug --no-document
+
+# Java debugger (Java Debug Server - jdtls includes debugging support)
+# Already available via Eclipse JDT.LS installed above
+
+# ============================================
+# Mobile Development Tools
+# Expo and React Native tooling
+# ============================================
+
+# Expo CLI for React Native development
+# EAS CLI for Expo Application Services (builds, updates)
+RUN npm install -g expo-cli eas-cli \
+    && npm cache clean --force
+
+# ============================================
+# LSP Environment Variables
+# Point to installed language servers
+# ============================================
+
+ENV RUST_ANALYZER_PATH=/usr/local/bin/rust-analyzer
+ENV GOPLS_PATH=/root/go/bin/gopls
+ENV JDTLS_PATH=/opt/jdtls
+
+# Debug Adapter Environment Variables
+ENV DLV_PATH=/root/go/bin/dlv
+ENV DEBUGPY_PATH=/usr/bin/python3
+ENV LLDB_VSCODE_PATH=/opt/codelldb/extension/adapter/codelldb
+
+# Additional AI CLI Tools
+# - OpenAI Codex: AI coding assistant (requires OPENAI_API_KEY)
+# - Google Gemini CLI: Google's AI assistant (requires GEMINI_API_KEY)
+# - OpenCode: Multi-provider AI agent (supports multiple providers)
+RUN npm install -g @openai/codex @google/gemini-cli opencode-ai
 
 # Pre-cache common npm packages to speed up installs
 RUN mkdir -p /opt/npm-cache && cd /opt/npm-cache \
@@ -107,7 +262,22 @@ RUN mkdir -p /opt/npm-cache && cd /opt/npm-cache \
        tailwindcss postcss autoprefixer \
        express cors \
        drizzle-orm better-sqlite3 \
+       puppeteer \
     && npm cache clean --force
+
+# Pre-install MCP servers for instant startup (no npx download needed)
+RUN mkdir -p /opt/mcp-servers && cd /opt/mcp-servers \
+    && npm init -y \
+    && npm install --prefer-offline --no-audit --no-fund \
+       @modelcontextprotocol/server-filesystem \
+       @modelcontextprotocol/server-memory \
+       @modelcontextprotocol/server-sequential-thinking \
+       @modelcontextprotocol/server-fetch \
+       @modelcontextprotocol/server-time \
+    && npm cache clean --force
+
+# Add MCP servers to PATH for direct execution
+ENV PATH="/opt/mcp-servers/node_modules/.bin:$PATH"
 
 # Set npm to use cache
 RUN npm config set cache /opt/npm-cache/.npm --global

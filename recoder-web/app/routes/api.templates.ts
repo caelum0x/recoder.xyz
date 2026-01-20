@@ -69,11 +69,16 @@ const DEFAULT_TEMPLATES = [
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { cloudflare } = context;
-  const db = cloudflare.env.DB;
+  const db = cloudflare?.env?.DB;
   const url = new URL(request.url);
   const category = url.searchParams.get('category');
 
   try {
+    if (!db) {
+      console.warn('Database not available, using default templates');
+      return json({ templates: DEFAULT_TEMPLATES });
+    }
+
     let templates = await db.prepare('SELECT * FROM templates ORDER BY featured DESC, usage_count DESC').all();
 
     if (!templates.results || templates.results.length === 0) {

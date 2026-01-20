@@ -1,13 +1,31 @@
 import { useState, useMemo } from 'react';
-import { Search, FolderOpen, File, ChevronRight, ChevronDown, X } from 'lucide-react';
 import type { FileMap } from '~/lib/stores/files';
 import { FileTree } from './FileTree';
+
+// Icon components using UnoCSS classes (Cloudflare Workers compatible)
+const Search = ({ className }: { className?: string }) => <div className={`i-ph:magnifying-glass ${className || ''}`} />;
+const FolderOpen = ({ className }: { className?: string }) => <div className={`i-ph:folder-open ${className || ''}`} />;
+const File = ({ className }: { className?: string }) => <div className={`i-ph:file ${className || ''}`} />;
+const ChevronRight = ({ className }: { className?: string }) => <div className={`i-ph:caret-right ${className || ''}`} />;
+const ChevronDown = ({ className }: { className?: string }) => <div className={`i-ph:caret-down ${className || ''}`} />;
+const X = ({ className }: { className?: string }) => <div className={`i-ph:x ${className || ''}`} />;
 
 interface EnhancedFileTreeProps {
   files: FileMap;
   selectedFile?: string;
   onFileSelect?: (filePath: string) => void;
+  onFileCreate?: (folderPath: string, fileName: string) => void;
+  onFolderCreate?: (folderPath: string, folderName: string) => void;
+  onFileDelete?: (filePath: string) => void;
+  onFileRename?: (oldPath: string, newPath: string) => void;
+  onFileCopy?: (filePath: string) => void;
+  rootFolder?: string;
+  hideRoot?: boolean;
+  collapsed?: boolean;
+  allowFolderSelection?: boolean;
+  hiddenFiles?: Array<string | RegExp>;
   unsavedFiles?: Set<string>;
+  className?: string;
 }
 
 // File extension to icon/color mapping
@@ -33,9 +51,25 @@ const FILE_ICONS: Record<string, { icon: string; color: string }> = {
   gitignore: { icon: '󰊢', color: 'text-orange-400' },
 };
 
-export function EnhancedFileTree({ files, selectedFile, onFileSelect, unsavedFiles }: EnhancedFileTreeProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
+export function EnhancedFileTree({
+  files,
+  selectedFile,
+  onFileSelect,
+  onFileCreate,
+  onFolderCreate,
+  onFileDelete,
+  onFileRename,
+  onFileCopy,
+  rootFolder,
+  hideRoot = true,
+  collapsed,
+  allowFolderSelection,
+  hiddenFiles,
+  unsavedFiles,
+  className,
+}: EnhancedFileTreeProps) {
+  // Search functionality moved to dedicated Search tab
+  const searchQuery = '';  // Keep for filtering compatibility
 
   const fileStats = useMemo(() => {
     const paths = Object.keys(files);
@@ -61,17 +95,9 @@ export function EnhancedFileTree({ files, selectedFile, onFileSelect, unsavedFil
     return filtered;
   }, [files, searchQuery]);
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    
-    const query = searchQuery.toLowerCase();
-    return Object.keys(files)
-      .filter(path => path.toLowerCase().includes(query))
-      .slice(0, 10);
-  }, [files, searchQuery]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className={`h-full flex flex-col ${className || ''}`}>
       {/* Header with stats */}
       <div className="p-2 border-b border-bolt-elements-borderColor flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary">
@@ -84,64 +110,8 @@ export function EnhancedFileTree({ files, selectedFile, onFileSelect, unsavedFil
             {fileStats.folders}
           </span>
         </div>
-        <button
-          onClick={() => setShowSearch(!showSearch)}
-          className="p-1 hover:bg-bolt-elements-background-depth-2 rounded"
-        >
-          <Search className="w-4 h-4 text-bolt-elements-textSecondary" />
-        </button>
+        {/* Search button removed - use the dedicated Search tab instead */}
       </div>
-
-      {/* Search input */}
-      {showSearch && (
-        <div className="p-2 border-b border-bolt-elements-borderColor">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-bolt-elements-textSecondary" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search files..."
-              className="w-full pl-8 pr-8 py-1.5 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-bolt-elements-focus"
-              autoFocus
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-              >
-                <X className="w-4 h-4 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary" />
-              </button>
-            )}
-          </div>
-          
-          {/* Quick search results */}
-          {searchQuery && searchResults.length > 0 && (
-            <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
-              {searchResults.map((path) => {
-                const fileName = path.split('/').pop() || '';
-                const ext = fileName.split('.').pop() || '';
-                const iconInfo = FILE_ICONS[ext] || { icon: '󰈔', color: 'text-gray-400' };
-                
-                return (
-                  <button
-                    key={path}
-                    onClick={() => {
-                      onFileSelect?.(path);
-                      setSearchQuery('');
-                      setShowSearch(false);
-                    }}
-                    className="w-full text-left px-2 py-1 text-xs hover:bg-bolt-elements-background-depth-2 rounded flex items-center gap-2"
-                  >
-                    <span className={iconInfo.color}>{iconInfo.icon}</span>
-                    <span className="truncate flex-1">{path}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* File tree */}
       <div className="flex-1 overflow-y-auto">
@@ -149,8 +119,18 @@ export function EnhancedFileTree({ files, selectedFile, onFileSelect, unsavedFil
           files={filteredFiles}
           selectedFile={selectedFile}
           onFileSelect={onFileSelect}
+          onFileCreate={onFileCreate}
+          onFolderCreate={onFolderCreate}
+          onFileDelete={onFileDelete}
+          onFileRename={onFileRename}
+          onFileCopy={onFileCopy}
+          rootFolder={rootFolder}
+          hideRoot={hideRoot}
+          collapsed={collapsed}
+          allowFolderSelection={allowFolderSelection}
+          hiddenFiles={hiddenFiles}
           unsavedFiles={unsavedFiles}
-          hideRoot
+          className={className}
         />
       </div>
     </div>

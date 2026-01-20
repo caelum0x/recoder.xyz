@@ -14,15 +14,15 @@ import { LoopDetectionService } from './services/loopDetectionService';
 import { SubagentManager } from './subagents/subagent-manager';
 
 // Advanced tools from recoder-code
-import { ripGrep } from './tools/ripGrep';
-import { editFile } from './tools/edit';
-import { writeFile } from './tools/write-file';
-import { readManyFiles } from './tools/read-many-files';
-import { webFetch } from './tools/web-fetch';
-import { webSearch } from './tools/web-search';
-import { memoryTool as memoryToolImpl } from './tools/memoryTool';
-import { mcpTool } from './tools/mcp-tool';
-import { globTool as globToolImpl } from './tools/glob';
+import { RipGrepTool } from './tools/ripGrep';
+import { EditTool } from './tools/edit';
+import { WriteFileTool } from './tools/write-file';
+import { ReadManyFilesTool } from './tools/read-many-files';
+import { WebFetchTool } from './tools/web-fetch';
+import { WebSearchTool } from './tools/web-search';
+import { MemoryTool } from './tools/memoryTool';
+import { DiscoveredMCPTool } from './tools/mcp-tool';
+import { GlobTool } from './tools/glob';
 
 /**
  * Enhanced tool for reading file contents with line ranges and smart truncation
@@ -442,16 +442,16 @@ export function shouldEnableTools(modelId: string): boolean {
  * Get tools for a specific mode (for future mode-based restrictions)
  */
 export function getToolsForMode(mode: 'architect' | 'code' | 'debug' | 'ask' = 'code') {
-  const modeToolGroups = {
+  const modeToolGroups: Record<string, string[]> = {
     architect: ['read', 'browser'], // Read-only + research
     code: ['read', 'edit', 'command', 'advanced', 'project'], // Full access
     debug: ['read', 'edit', 'command'], // No project management
     ask: ['read', 'browser'], // Read-only + research
   };
-  
+
   const allowedGroups = modeToolGroups[mode];
-  const allowedToolNames = allowedGroups.flatMap(group => toolGroups[group] || []);
-  
+  const allowedToolNames = allowedGroups.flatMap(group => (toolGroups as Record<string, string[]>)[group] || []);
+
   return Object.fromEntries(
     Object.entries(recoderTools).filter(([name]) => allowedToolNames.includes(name))
   );

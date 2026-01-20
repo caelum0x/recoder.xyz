@@ -3,6 +3,8 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { PortDropdown } from './PortDropdown';
+import { dockerGet } from '~/lib/services/docker-api';
+import { classNames } from '~/utils/classNames';
 
 export const Preview = memo(() => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -21,6 +23,12 @@ export const Preview = memo(() => {
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logs, setLogs] = useState<string>('');
   const [isFetchingLogs, setIsFetchingLogs] = useState(false);
+
+  // Tunnel state for public URL sharing
+  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
+  const [tunnelLoading, setTunnelLoading] = useState(false);
+  const [showTunnelCopied, setShowTunnelCopied] = useState(false);
+
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const healthTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -117,7 +125,6 @@ export const Preview = memo(() => {
         }
         if (!pid || pid === 'undefined' || pid === 'null') return;
         
-        const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
         let errorPrompt = '';
         
         try {
@@ -147,13 +154,10 @@ export const Preview = memo(() => {
         // If no Vite error found, try the errors API
         if (!errorPrompt) {
           try {
-            const resp = await fetch(`${DOCKER_URL}/api/errors/${pid}?tail=200`);
-            if (resp.ok) {
-              const data = await resp.json() as { errors?: any[]; hasBlockingErrors?: boolean };
-              if (data.errors?.length || data.hasBlockingErrors) {
-                const { formatErrorsForAI } = await import('~/lib/services/auto-fix');
-                errorPrompt = formatErrorsForAI(data.errors || []) || '';
-              }
+            const data = await dockerGet<{ errors?: any[]; hasBlockingErrors?: boolean }>(`/api/errors/${pid}?tail=200`);
+            if (data.errors?.length || data.hasBlockingErrors) {
+              const { formatErrorsForAI } = await import('~/lib/services/auto-fix');
+              errorPrompt = formatErrorsForAI(data.errors || []) || '';
             }
           } catch (e) {
             console.warn('[Preview] Auto-fix fetch failed:', e);
@@ -456,6 +460,71 @@ export const Preview = memo(() => {
     }
   }, [activePreview]);
 
+  // Start tunnel for public URL sharing
+  const startTunnel = useCallback(async () => {
+    const pid = resolveProjectId();
+    if (!pid) {
+      console.warn('[Preview] Cannot start tunnel - no project ID');
+      return;
+    }
+
+    setTunnelLoading(true);
+    try {
+      const resp = await fetch('/api/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'tunnel-start',
+          projectId: pid,
+          localPort: 5173,
+        }),
+      });
+
+      const data = await resp.json() as { success: boolean; error?: string; data?: { publicUrl: string; id: string } };
+
+      if (data.success && data.data?.publicUrl) {
+        setTunnelUrl(data.data.publicUrl);
+        console.log('[Preview] Tunnel started:', data.data.publicUrl);
+      } else {
+        console.error('[Preview] Failed to start tunnel:', data.error);
+      }
+    } catch (err) {
+      console.error('[Preview] Tunnel error:', err);
+    } finally {
+      setTunnelLoading(false);
+    }
+  }, [resolveProjectId]);
+
+  // Stop tunnel
+  const stopTunnel = useCallback(async () => {
+    const pid = resolveProjectId();
+    if (!pid) return;
+
+    try {
+      await fetch('/api/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'tunnel-stop',
+          projectId: pid,
+        }),
+      });
+      setTunnelUrl(null);
+      console.log('[Preview] Tunnel stopped');
+    } catch (err) {
+      console.error('[Preview] Failed to stop tunnel:', err);
+    }
+  }, [resolveProjectId]);
+
+  // Copy tunnel URL to clipboard
+  const copyTunnelUrl = useCallback(() => {
+    if (tunnelUrl) {
+      navigator.clipboard.writeText(tunnelUrl);
+      setShowTunnelCopied(true);
+      setTimeout(() => setShowTunnelCopied(false), 2000);
+    }
+  }, [tunnelUrl]);
+
   return (
     <div className="w-full h-full flex flex-col">
       {isPortDropdownOpen && (
@@ -496,6 +565,58 @@ export const Preview = memo(() => {
             previews={previews}
           />
         )}
+
+        {/* Public URL / Tunnel button */}
+        {activePreview && (
+          <div className="relative">
+            {tunnelUrl ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={copyTunnelUrl}
+                  className={classNames(
+                    'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors',
+                    'bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30'
+                  )}
+                  title={tunnelUrl}
+                >
+                  <div className="i-ph:link text-sm" />
+                  {showTunnelCopied ? 'Copied!' : 'Public URL'}
+                </button>
+                <button
+                  onClick={stopTunnel}
+                  className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  title="Stop sharing"
+                >
+                  <div className="i-ph:x text-sm" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={startTunnel}
+                disabled={tunnelLoading || !activePreview.ready}
+                className={classNames(
+                  'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors',
+                  'bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover',
+                  'text-bolt-elements-button-secondary-text border border-bolt-elements-borderColor',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+                title="Get a public URL to share your preview"
+              >
+                {tunnelLoading ? (
+                  <>
+                    <div className="i-ph:spinner animate-spin text-sm" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <div className="i-ph:share-network text-sm" />
+                    Share
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex-1 border-t border-bolt-elements-borderColor relative">
         {(activePreview && !activePreview.ready) || (activePreview && !iframeUrl) ? (
@@ -510,10 +631,19 @@ export const Preview = memo(() => {
           </div>
         ) : previewError ? (
           <div className="flex w-full h-full justify-center items-center bg-white">
-            <div className="text-center p-6">
-              <div className="text-red-500 text-lg mb-2"><span className="i-ph:warning" /> Preview Error</div>
-              <div className="text-gray-600">{previewError}</div>
-              <div className="flex gap-2 justify-center mt-4">
+            <div className="text-center p-6 max-w-md">
+              <div className="flex items-center justify-center gap-2 text-red-500 text-lg mb-3">
+                <span className="i-ph:warning-circle text-2xl" />
+                <span>Preview Error</span>
+              </div>
+              <div className="text-gray-600 mb-4">{previewError}</div>
+              {isCheckingHealth && (
+                <div className="flex items-center justify-center gap-2 text-gray-500 text-sm mb-4">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+                  Checking server health...
+                </div>
+              )}
+              <div className="flex gap-2 justify-center">
                 <button
                   onClick={() => {
                     setRetryCount(0);
@@ -523,8 +653,9 @@ export const Preview = memo(() => {
                       iframeRef.current.src = activePreview.baseUrl;
                     }
                   }}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
+                  <span className="i-ph:arrow-clockwise" />
                   Retry
                 </button>
                 <button
@@ -532,9 +663,10 @@ export const Preview = memo(() => {
                     setShowLogsModal(true);
                     fetchLogs();
                   }}
-                  className="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors"
                 >
-                  Tail logs
+                  <span className="i-ph:list text-gray-600" />
+                  View Logs
                 </button>
               </div>
             </div>

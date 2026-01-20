@@ -9,6 +9,7 @@ import { EditorStore } from './editor';
 import { FilesStore, type FileMap } from './files';
 import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
+import { dockerGet } from '~/lib/services/docker-api';
 
 export interface ArtifactState {
   id: string;
@@ -72,12 +73,23 @@ export class WorkbenchStore {
     }
   }
 
+  #restoredFilePaths: string[] = [];  // Files restored from snapshot
+
   /**
    * Mark this session as a restored past chat.
    * This tells ActionRunner to not auto-install since we handle it separately.
+   * @param restoredFiles - Array of file paths that were restored from snapshot
    */
-  markAsRestoredChat() {
+  markAsRestoredChat(restoredFiles?: string[]) {
     this.#isRestoredChat = true;
+    this.#restoredFilePaths = restoredFiles || [];
+  }
+
+  /**
+   * Get the list of restored file paths.
+   */
+  getRestoredFilePaths(): string[] {
+    return this.#restoredFilePaths;
   }
 
   /**
@@ -179,14 +191,12 @@ export class WorkbenchStore {
    */
   async refreshFiles() {
     if (!this.#currentProjectId) return;
-    
-    const DOCKER_URL = import.meta.env?.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
-    
+
     try {
-      const resp = await fetch(`${DOCKER_URL}/api/files/${this.#currentProjectId}`);
+      const resp = await dockerGet(`/api/files/${this.#currentProjectId}`) as Response;
       if (!resp.ok) return;
-      
-      const data = await resp.json();
+
+      const data = await resp.json() as { files: any[] };
       // Update files store with new file list
       // The files are returned as { files: [...] }
       console.log('[WorkbenchStore] Refreshed file list from Docker');
@@ -221,6 +231,14 @@ export class WorkbenchStore {
 
   closeTerminal(index: number) {
     this.#terminalStore.closeTerminal(index);
+  }
+
+  renameTerminal(index: number, newName: string) {
+    this.#terminalStore.renameTerminal(index, newName);
+  }
+
+  async launchCommand(command: string, newTerminalName?: string) {
+    await this.#terminalStore.launchCommand(command, newTerminalName);
   }
 
   async sendTerminalCommand(command: string) {
@@ -384,9 +402,9 @@ export class WorkbenchStore {
 
     const runner = new ActionRunner(this.#currentProjectId || undefined);
     
-    // If this is a restored past chat, mark the runner to disable auto-install
+    // If this is a restored past chat, mark the runner with the restored file paths
     if (this.#isRestoredChat) {
-      runner.markAsRestoredChat();
+      runner.markAsRestoredChat(this.#restoredFilePaths);
     }
 
     this.artifacts.setKey(messageId, {

@@ -36,7 +36,7 @@ export async function clonePublicRepo(repoUrl: string): Promise<Record<string, s
       throw new Error(`Failed to fetch repository tree: ${treeResponse.status} - ${error}`);
     }
 
-    const treeData = await treeResponse.json();
+    const treeData = await treeResponse.json() as any;
     const files: Record<string, string> = {};
 
     console.log(`📁 Found ${treeData.tree.length} items in repository`);

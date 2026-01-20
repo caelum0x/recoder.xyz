@@ -60,7 +60,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
       console.log('[useChatHistory] Loading history with params:', Object.fromEntries(params));
 
       const response = await fetch(`/api/chat-history?${params}`);
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; data?: ChatHistorySession[]; error?: string };
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load chat history');
@@ -104,7 +104,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; data?: { id: string; sessionId: string; urlId: string }; error?: string };
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to save chat');
@@ -132,7 +132,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
       console.log('[useChatHistory] Loading session:', sessionId);
 
       const response = await fetch(`/api/chat-history/${sessionId}`);
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; data?: ChatHistorySession; error?: string };
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load session');
@@ -158,7 +158,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
         method: 'DELETE',
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; error?: string };
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete session');
@@ -196,7 +196,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; data?: { claimed: number }; error?: string };
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to claim sessions');

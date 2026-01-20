@@ -13,7 +13,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
   const db = getDatabase((context as any)?.cloudflare?.env || process.env);
 
   try {
-    const body = await request.json();
+    const body = await request.json() as any;
     const { repoName, isPrivate = true, description = '' } = body;
 
     if (!repoName) {
@@ -80,7 +80,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
     // Create blobs for all files
     const blobs = await Promise.all(
-      files.rows.map(async (file) => {
+      files.rows.map(async (file: any) => {
         const { data: blob } = await octokit.git.createBlob({
           owner: user.login,
           repo: repoName,

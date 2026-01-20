@@ -103,7 +103,6 @@ function getOpenRouterModel(modelId: string, apiKey: string): LanguageModel {
       'HTTP-Referer': 'https://recoder.xyz',
       'X-Title': 'Recoder.xyz'
     },
-    compatibility: 'strict',
   });
 
   // Map our model ID to OpenRouter model ID
@@ -111,8 +110,8 @@ function getOpenRouterModel(modelId: string, apiKey: string): LanguageModel {
 
   console.log(`🌐 OpenRouter: ${modelId} → ${openrouterModelId}`);
 
-  // Use .chat() for OpenAI SDK adapter
-  return openrouter.chat(openrouterModelId);
+  // Use .chat() for OpenAI SDK adapter - cast through unknown to avoid type mismatch
+  return openrouter.chat(openrouterModelId) as unknown as LanguageModel;
 }
 
 /**

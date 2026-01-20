@@ -1,10 +1,16 @@
 import { useState, useMemo } from 'react';
-import { 
-  FileCode, Folder, Database, Server, Globe, Shield, 
-  Layers, GitBranch, Package, ChevronDown, ChevronRight,
-  CheckCircle, Circle, Clock, AlertCircle
-} from 'lucide-react';
 import type { FileMap } from '~/lib/stores/files';
+
+// Icon components using UnoCSS classes (Cloudflare Workers compatible)
+const FileCode = ({ className }: { className?: string }) => <div className={`i-ph:file-code ${className || ''}`} />;
+const Database = ({ className }: { className?: string }) => <div className={`i-ph:database ${className || ''}`} />;
+const Server = ({ className }: { className?: string }) => <div className={`i-ph:hard-drives ${className || ''}`} />;
+const Globe = ({ className }: { className?: string }) => <div className={`i-ph:globe ${className || ''}`} />;
+const Shield = ({ className }: { className?: string }) => <div className={`i-ph:shield ${className || ''}`} />;
+const Layers = ({ className }: { className?: string }) => <div className={`i-ph:stack ${className || ''}`} />;
+const Gear = ({ className }: { className?: string }) => <div className={`i-ph:gear ${className || ''}`} />;
+const ChevronDown = ({ className }: { className?: string }) => <div className={`i-ph:caret-down ${className || ''}`} />;
+const ChevronRight = ({ className }: { className?: string }) => <div className={`i-ph:caret-right ${className || ''}`} />;
 
 interface ProjectPlanPanelProps {
   files: FileMap;
@@ -31,7 +37,7 @@ const TYPE_ICONS: Record<string, any> = {
   backend: Server,
   database: Database,
   api: Layers,
-  config: Package,
+  config: Gear,
   test: Shield,
   docs: FileCode,
 };
@@ -57,7 +63,8 @@ export function ProjectPlanPanel({ files, projectName, onFileSelect }: ProjectPl
 
     filePaths.forEach(path => {
       const ext = path.split('.').pop()?.toLowerCase() || 'other';
-      const content = files[path]?.content || '';
+      const entry = files[path];
+      const content = entry?.type === 'file' ? entry.content : '';
       totalSize += content.length;
 
       const langMap: Record<string, string> = {
@@ -261,20 +268,6 @@ export function ProjectPlanPanel({ files, projectName, onFileSelect }: ProjectPl
           )}
         </div>
 
-        {/* Quick Actions */}
-        <div className="p-3">
-          <span className="text-xs font-medium text-bolt-elements-textSecondary">QUICK ACTIONS</span>
-          <div className="mt-2 space-y-1">
-            <button className="w-full p-2 text-left text-sm bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 rounded flex items-center gap-2">
-              <GitBranch className="w-4 h-4 text-purple-400" />
-              View Git History
-            </button>
-            <button className="w-full p-2 text-left text-sm bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 rounded flex items-center gap-2">
-              <Package className="w-4 h-4 text-green-400" />
-              View Dependencies
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

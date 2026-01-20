@@ -12,7 +12,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { files, projectName = 'recoder-project' } = await request.json();
+    const { files, projectName = 'recoder-project' } = await request.json() as { files: Record<string, string>; projectName?: string };
 
     if (!files || typeof files !== 'object') {
       return new Response(
@@ -34,12 +34,12 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     // Generate ZIP file
-    const zipBlob = await zip.generateAsync({ type: 'uint8array' });
+    const zipBlob = await zip.generateAsync({ type: 'uint8array' }) as Uint8Array;
 
     console.log('✅ [download-code] ZIP created successfully:', zipBlob.byteLength, 'bytes');
 
     // Return ZIP file
-    return new Response(zipBlob, {
+    return new Response(zipBlob as any, {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',

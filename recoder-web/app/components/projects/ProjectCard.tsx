@@ -4,7 +4,7 @@ import type { Project } from '~/lib/.server/db/projects-db';
 interface ProjectCardProps {
   project: Project;
   onEdit: (project: Project) => void;
-  onDelete: (projectId: number) => void;
+  onDelete: (projectId: string) => void;
 }
 
 export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
@@ -51,9 +51,9 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
         <div className="flex items-start justify-between mb-4">
           <div
             className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
-            style={{ backgroundColor: project.color }}
+            style={{ backgroundColor: project.color || '#3b82f6' }}
           >
-            {project.icon}
+            {project.icon || '📁'}
           </div>
           
           <div className="relative">
@@ -105,17 +105,17 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
           <div className="flex items-center gap-4 text-xs text-bolt-elements-textSecondary">
             <div className="flex items-center gap-1">
               <div className="i-ph:chat-circle text-sm" />
-              <span>{project.chat_count || 0} chats</span>
+              <span>{project.chatCount || 0} chats</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="i-ph:file text-sm" />
-              <span>{project.file_count || 0} files</span>
+              <span>{project.fileCount || 0} files</span>
             </div>
           </div>
 
           {/* Last updated */}
           <div className="text-xs text-bolt-elements-textSecondary">
-            Updated {formatDate(project.updated_at)}
+            Updated {formatDate(project.updatedAt)}
           </div>
         </div>
       </div>

@@ -10,7 +10,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   try {
-    const { prompt, width = 1024, height = 1024 } = await request.json();
+    const { prompt, width = 1024, height = 1024 } = await request.json() as {
+      prompt: string;
+      width?: number;
+      height?: number;
+    };
 
     if (!prompt) {
       return json({ error: 'Prompt is required' }, { status: 400 });
@@ -47,8 +51,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ error: 'Image generation failed' }, { status: 500 });
     }
 
-    const data = await response.json();
-    
+    const data = await response.json() as {
+      data?: Array<{
+        url?: string;
+        b64_json?: string;
+      }>;
+    };
+
     // OpenRouter returns { data: [{ url: "..." }] }
     const imageUrl = data.data?.[0]?.url || data.data?.[0]?.b64_json;
 
@@ -56,10 +65,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ error: 'No image returned' }, { status: 500 });
     }
 
-    return json({ 
-      success: true, 
+    return json({
+      success: true,
       imageUrl,
-      isBase64: !!data.data?.[0]?.b64_json 
+      isBase64: !!data.data?.[0]?.b64_json
     });
   } catch (error) {
     console.error('[generate-image] Error:', error);

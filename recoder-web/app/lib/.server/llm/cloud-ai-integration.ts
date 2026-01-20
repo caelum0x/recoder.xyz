@@ -18,7 +18,7 @@ export async function initializeCloudAI(config?: any): Promise<boolean> {
     }
 
     cloudAIProvider = await createCodeAssistContentGenerator(
-      { port: 3000 },
+      {} as any, // HttpOptions - port property removed as it's not part of the type
       AuthType.LOGIN_WITH_GOOGLE,
       config
     );

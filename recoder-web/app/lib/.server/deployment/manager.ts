@@ -8,6 +8,7 @@ import { projectDetector } from './detector';
 import { createVercelDeployer } from './platforms/vercel';
 import { createNetlifyDeployer } from './platforms/netlify';
 import { createRailwayDeployer } from './platforms/railway';
+import { createCloudflareDeployer } from './platforms/cloudflare';
 import { neon } from '@neondatabase/serverless';
 
 export interface DeploymentOptions {
@@ -74,11 +75,24 @@ export class DeploymentManager {
           result = await railwayDeployer.deploy(config, files);
           break;
 
+        case 'cloudflare-pages':
+          const cfToken = config.token || this.env.CLOUDFLARE_API_TOKEN;
+          const cfAccountId = this.env.CLOUDFLARE_ACCOUNT_ID;
+          if (!cfToken) {
+            throw new Error('Cloudflare API token required. Get your token from https://dash.cloudflare.com/profile/api-tokens');
+          }
+          if (!cfAccountId) {
+            throw new Error('Cloudflare Account ID required. Find it in your dashboard URL: dash.cloudflare.com/{account_id}');
+          }
+          const cloudflareDeployer = createCloudflareDeployer(cfToken, cfAccountId);
+          result = await cloudflareDeployer.deploy(config, files);
+          break;
+
         case 'render':
-          throw new Error('Render deployment coming soon');
+          throw new Error('Render deployment coming soon. We recommend using Railway or Vercel in the meantime.');
 
         case 'fly.io':
-          throw new Error('Fly.io deployment coming soon');
+          throw new Error('Fly.io deployment coming soon. We recommend using Railway or Vercel in the meantime.');
 
         default:
           throw new Error(`Unknown platform: ${config.platform}`);
@@ -230,27 +244,27 @@ export class DeploymentManager {
         id: 'railway',
         name: 'Railway',
         description: 'Deploy full-stack apps with databases',
-        supported: false,
-        requiresToken: true,
-      },
-      {
-        id: 'render',
-        name: 'Render',
-        description: 'Deploy web services and databases',
-        supported: false,
-        requiresToken: true,
-      },
-      {
-        id: 'fly.io',
-        name: 'Fly.io',
-        description: 'Deploy apps globally at the edge',
-        supported: false,
+        supported: !!this.env.RAILWAY_TOKEN,
         requiresToken: true,
       },
       {
         id: 'cloudflare-pages',
         name: 'Cloudflare Pages',
         description: 'Deploy static sites on Cloudflare edge network',
+        supported: !!(this.env.CLOUDFLARE_API_TOKEN && this.env.CLOUDFLARE_ACCOUNT_ID),
+        requiresToken: true,
+      },
+      {
+        id: 'render',
+        name: 'Render',
+        description: 'Deploy web services and databases (coming soon)',
+        supported: false,
+        requiresToken: true,
+      },
+      {
+        id: 'fly.io',
+        name: 'Fly.io',
+        description: 'Deploy apps globally at the edge (coming soon)',
         supported: false,
         requiresToken: true,
       },
@@ -273,11 +287,87 @@ export class DeploymentManager {
           const netlifyDeployer = createNetlifyDeployer(this.env.NETLIFY_TOKEN);
           return await netlifyDeployer.testConnection();
 
+        case 'railway':
+          if (!this.env.RAILWAY_TOKEN) return false;
+          const railwayDeployer = createRailwayDeployer(this.env.RAILWAY_TOKEN);
+          return await railwayDeployer.testConnection();
+
+        case 'cloudflare-pages':
+          if (!this.env.CLOUDFLARE_API_TOKEN || !this.env.CLOUDFLARE_ACCOUNT_ID) return false;
+          const cfDeployer = createCloudflareDeployer(
+            this.env.CLOUDFLARE_API_TOKEN,
+            this.env.CLOUDFLARE_ACCOUNT_ID
+          );
+          return await cfDeployer.testConnection();
+
         default:
           return false;
       }
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Get deployment status from platform
+   */
+  async getDeploymentStatus(
+    platform: DeploymentPlatform,
+    deploymentId: string,
+    projectName?: string
+  ): Promise<{ status: string; url?: string; logs?: string } | null> {
+    try {
+      switch (platform) {
+        case 'vercel':
+          if (!this.env.VERCEL_TOKEN) return null;
+          const vercelDeployer = createVercelDeployer(this.env.VERCEL_TOKEN);
+          const vercelDeploy = await vercelDeployer.getDeployment(deploymentId);
+          if (!vercelDeploy) return null;
+          return {
+            status: vercelDeploy.readyState,
+            url: vercelDeploy.url ? `https://${vercelDeploy.url}` : undefined,
+            logs: await vercelDeployer.getDeploymentLogs(deploymentId),
+          };
+
+        case 'netlify':
+          if (!this.env.NETLIFY_TOKEN) return null;
+          const netlifyDeployer = createNetlifyDeployer(this.env.NETLIFY_TOKEN);
+          const netlifyDeploy = await netlifyDeployer.getDeploy(deploymentId);
+          return {
+            status: netlifyDeploy.state,
+            url: netlifyDeploy.ssl_url || netlifyDeploy.url,
+            logs: await netlifyDeployer.getDeploymentLogs(deploymentId),
+          };
+
+        case 'railway':
+          if (!this.env.RAILWAY_TOKEN) return null;
+          const railwayDeployer = createRailwayDeployer(this.env.RAILWAY_TOKEN);
+          const railwayDeploy = await railwayDeployer.getDeploymentStatus(deploymentId);
+          if (!railwayDeploy) return null;
+          return {
+            status: railwayDeploy.status,
+            url: railwayDeploy.staticUrl,
+            logs: await railwayDeployer.getDeploymentLogs(deploymentId),
+          };
+
+        case 'cloudflare-pages':
+          if (!this.env.CLOUDFLARE_API_TOKEN || !this.env.CLOUDFLARE_ACCOUNT_ID || !projectName) return null;
+          const cfDeployer = createCloudflareDeployer(
+            this.env.CLOUDFLARE_API_TOKEN,
+            this.env.CLOUDFLARE_ACCOUNT_ID
+          );
+          const cfDeploy = await cfDeployer.getDeployment(projectName, deploymentId);
+          return {
+            status: cfDeploy.latest_stage.status,
+            url: cfDeploy.url,
+            logs: await cfDeployer.getDeploymentLogs(projectName, deploymentId),
+          };
+
+        default:
+          return null;
+      }
+    } catch {
+      return null;
     }
   }
 }

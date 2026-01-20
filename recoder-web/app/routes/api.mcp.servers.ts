@@ -33,10 +33,26 @@ export async function loader({ context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const { cloudflare } = context;
-  const db = cloudflare.env.DB;
+  const db = cloudflare?.env?.DB;
+
+  if (!db) {
+    return json({ error: 'Database not available' }, { status: 500 });
+  }
 
   if (request.method === 'POST') {
-    const body = await request.json();
+    const body = await request.json() as {
+      serverId?: string;
+      id?: string;
+      name?: string;
+      command?: string;
+      args?: any[];
+      env?: any;
+      config?: {
+        command?: string;
+        args?: any[];
+        env?: any;
+      };
+    };
 
     try {
       // Support both formats: {id, name, command, args} and {serverId, config: {command, args}}

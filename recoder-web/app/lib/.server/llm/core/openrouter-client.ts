@@ -130,7 +130,7 @@ export class OpenRouterClient {
         throw new Error(`Failed to fetch models: ${response.statusText}`);
       }
       
-      const data = await response.json();
+      const data = await response.json() as { data?: any[] };
       return data.data || [];
     } catch (error) {
       console.error('Error fetching OpenRouter models:', error);
@@ -163,7 +163,7 @@ export class OpenRouterClient {
         throw new Error(`Failed to fetch endpoints: ${response.statusText}`);
       }
       
-      const data = await response.json();
+      const data = await response.json() as { data?: any };
       return data.data;
     } catch (error) {
       console.error('Error fetching model endpoints:', error);

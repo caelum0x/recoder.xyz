@@ -43,6 +43,7 @@ import { hintsCommand } from '../commands/hints.js';
 import { modelsCommand } from '../commands/models-cmd.js';
 import { configureCommand } from '../commands/configure.js';
 import { connectCommand } from '../commands/connect-cmd.js';
+import { parallelCommand, parallelFinishCommand } from '../commands/parallel.js';
 import type { Settings } from './settings.js';
 
 import { resolvePath } from '../utils/resolvePath.js';
@@ -378,7 +379,10 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     // Register configure command for interactive setup
     .command(configureCommand)
     // Register connect command for custom providers
-    .command(connectCommand);
+    .command(connectCommand)
+    // Register parallel mode commands for git worktree-based parallel execution
+    .command(parallelCommand)
+    .command(parallelFinishCommand);
 
   if (settings?.experimental?.extensionManagement ?? false) {
     yargsInstance.command(extensionsCommand);
@@ -399,7 +403,7 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
   // and not return to main CLI logic
   if (
     result._.length > 0 &&
-    (result._[0] === 'mcp' || result._[0] === 'extensions' || result._[0] === 'auth' || result._[0] === 'ai' || result._[0] === 'web' || result._[0] === 'init' || result._[0] === 'plan')
+    (result._[0] === 'mcp' || result._[0] === 'extensions' || result._[0] === 'auth' || result._[0] === 'ai' || result._[0] === 'web' || result._[0] === 'init' || result._[0] === 'plan' || result._[0] === 'parallel' || result._[0] === 'parallel-finish')
   ) {
     // Subcommands handle their own execution and process exit
     process.exit(0);

@@ -24,6 +24,12 @@
       "NODE_ENV": "production"
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/email-automation",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
