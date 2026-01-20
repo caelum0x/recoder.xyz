@@ -1188,7 +1188,12 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
         AttachStdout: true,
         AttachStderr: true,
       });
-      await mkdirExec.start({});
+      const mkdirStream = await mkdirExec.start({});
+      // Wait for mkdir to complete
+      await new Promise<void>((resolve) => {
+        mkdirStream.on('end', resolve);
+        mkdirStream.on('error', resolve); // Don't fail on mkdir errors
+      });
     }
 
     // Write file using base64 to handle special chars (sanitized path)
@@ -1201,7 +1206,12 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
       AttachStdout: true,
       AttachStderr: true,
     });
-    await writeExec.start({});
+    const writeStream = await writeExec.start({});
+    // CRITICAL: Wait for file write to complete before returning success
+    await new Promise<void>((resolve, reject) => {
+      writeStream.on('end', resolve);
+      writeStream.on('error', reject);
+    });
 
     // PERFORMANCE: Invalidate cache on write
     fileCache.invalidate(projectId, safePath);
@@ -1253,7 +1263,12 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
         AttachStdout: true,
         AttachStderr: true,
       });
-      await mkdirExec.start({});
+      const mkdirStream = await mkdirExec.start({});
+      // Wait for mkdir to complete
+      await new Promise<void>((resolve) => {
+        mkdirStream.on('end', resolve);
+        mkdirStream.on('error', resolve);
+      });
     }
 
     // Write files in parallel batches of 10 (with sanitized paths)
@@ -1268,7 +1283,12 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
           AttachStdout: true,
           AttachStderr: true,
         });
-        await writeExec.start({});
+        const writeStream = await writeExec.start({});
+        // Wait for file write to complete
+        await new Promise<void>((resolve, reject) => {
+          writeStream.on('end', resolve);
+          writeStream.on('error', reject);
+        });
       }));
     }
 
