@@ -159,14 +159,14 @@ export function SlashCommandMenu({
             {/* Command info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm text-bolt-elements-textPrimary">
+                <span className="font-mono text-sm font-semibold text-orange-400">
                   /{command.id}
                 </span>
-                <span className="text-xs text-bolt-elements-textTertiary">
+                <span className="text-xs text-bolt-elements-textSecondary">
                   {command.name}
                 </span>
               </div>
-              <p className="text-xs text-bolt-elements-textSecondary truncate">
+              <p className="text-xs text-bolt-elements-textTertiary truncate">
                 {command.description}
               </p>
             </div>
