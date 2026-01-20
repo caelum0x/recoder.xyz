@@ -1783,11 +1783,25 @@ export class ActionRunner {
         action.content = result.content || message;
         logger.info(`Successfully read file: ${action.filePath} (${result.lineCount || 0} lines)`);
       } else {
-        throw new Error(result.message);
+        // File not found is NOT an error - it means we need to create it
+        const errorMsg = result.message || result.error || 'File not found';
+        if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('no such file')) {
+          action.content = `[File does not exist: ${action.filePath}]\n\nThis file needs to be created. Use <recoderAction type="file"> to create it.`;
+          logger.info(`File not found (new project): ${action.filePath}`);
+        } else {
+          throw new Error(errorMsg);
+        }
       }
     } catch (error) {
-      logger.error(`Failed to read file ${action.filePath}:`, error);
-      throw new Error(`Could not read file: ${action.filePath}`);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Handle "file not found" gracefully - this is expected for new projects
+      if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('no such file')) {
+        action.content = `[File does not exist: ${action.filePath}]\n\nThis file needs to be created. Use <recoderAction type="file"> to create it.`;
+        logger.info(`File not found (new project): ${action.filePath}`);
+      } else {
+        logger.error(`Failed to read file ${action.filePath}:`, error);
+        throw new Error(`Could not read file: ${action.filePath}`);
+      }
     }
   }
 
