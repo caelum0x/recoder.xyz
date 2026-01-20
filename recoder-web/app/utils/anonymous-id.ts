@@ -66,13 +66,13 @@ export async function claimAnonymousSessions(userId: string): Promise<number> {
       throw new Error('Failed to claim sessions');
     }
 
-    const { claimedCount } = await response.json();
-    console.log(`✅ Claimed ${claimedCount} anonymous sessions for user ${userId}`);
+    const result = await response.json() as { claimedCount: number };
+    console.log(`✅ Claimed ${result.claimedCount} anonymous sessions for user ${userId}`);
     
     // Clear anonymous ID after claiming
     clearAnonymousId();
     
-    return claimedCount;
+    return result.claimedCount;
   } catch (error) {
     console.error('❌ Failed to claim anonymous sessions:', error);
     return 0;

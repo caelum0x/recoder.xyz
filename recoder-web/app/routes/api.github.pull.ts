@@ -12,7 +12,13 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { owner, repo, branch = 'main', accessToken } = await request.json();
+    const body = await request.json() as {
+      owner?: string;
+      repo?: string;
+      branch?: string;
+      accessToken?: string
+    };
+    const { owner, repo, branch = 'main', accessToken } = body;
 
     if (!owner || !repo || !accessToken) {
       return new Response(

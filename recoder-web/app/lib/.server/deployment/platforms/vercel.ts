@@ -1,9 +1,12 @@
 /**
  * Vercel Deployment Integration
  * Handles deployments to Vercel platform
+ *
+ * API Documentation: https://vercel.com/docs/rest-api
  */
 
 import type { DeploymentConfig, DeploymentResult, FileTree } from '../types';
+import { fetchWithRetry, withRetry } from '../utils/retry';
 
 export class VercelDeployer {
   private apiUrl = 'https://api.vercel.com';
@@ -75,40 +78,47 @@ export class VercelDeployer {
    * Create or get existing project
    */
   private async createOrGetProject(projectName: string, framework?: string): Promise<any> {
-    try {
-      // Try to get existing project
-      const response = await fetch(`${this.apiUrl}/v9/projects/${projectName}`, {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
+    return withRetry(async () => {
+      try {
+        // Try to get existing project
+        const response = await fetchWithRetry(`${this.apiUrl}/v9/projects/${projectName}`, {
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+          },
+        });
 
-      if (response.ok) {
-        return await response.json();
+        if (response.ok) {
+          return await response.json() as any;
+        }
+
+        // Create new project
+        const createResponse = await fetchWithRetry(`${this.apiUrl}/v9/projects`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: projectName,
+            framework: this.mapFrameworkToVercel(framework),
+          }),
+        });
+
+        if (!createResponse.ok) {
+          const error = await createResponse.json() as any;
+          throw new Error(`Failed to create project: ${error.error?.message || 'Unknown error'}`);
+        }
+
+        return await createResponse.json() as any;
+      } catch (error: any) {
+        throw new Error(`Project setup failed: ${error.message}`);
       }
-
-      // Create new project
-      const createResponse = await fetch(`${this.apiUrl}/v9/projects`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: projectName,
-          framework: this.mapFrameworkToVercel(framework),
-        }),
-      });
-
-      if (!createResponse.ok) {
-        const error = await createResponse.json();
-        throw new Error(`Failed to create project: ${error.error?.message || 'Unknown error'}`);
-      }
-
-      return await createResponse.json();
-    } catch (error) {
-      throw new Error(`Project setup failed: ${error.message}`);
-    }
+    }, {
+      maxRetries: 2,
+      onRetry: (attempt, error) => {
+        console.log(`[Vercel] Retrying project setup (attempt ${attempt}): ${error.message}`);
+      },
+    });
   }
 
   /**
@@ -136,21 +146,28 @@ export class VercelDeployer {
    * Create deployment
    */
   private async createDeployment(payload: any): Promise<any> {
-    const response = await fetch(`${this.apiUrl}/v13/deployments`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
+    return withRetry(async () => {
+      const response = await fetchWithRetry(`${this.apiUrl}/v13/deployments`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json() as any;
+        throw new Error(`Deployment creation failed: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      return await response.json() as any;
+    }, {
+      maxRetries: 2,
+      onRetry: (attempt, error) => {
+        console.log(`[Vercel] Retrying deployment creation (attempt ${attempt}): ${error.message}`);
       },
-      body: JSON.stringify(payload),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Deployment creation failed: ${error.error?.message || 'Unknown error'}`);
-    }
-
-    return await response.json();
   }
 
   /**
@@ -176,20 +193,25 @@ export class VercelDeployer {
   }
 
   /**
-   * Get deployment status
+   * Get deployment status (public method for status API)
    */
-  private async getDeployment(deploymentId: string): Promise<any> {
-    const response = await fetch(`${this.apiUrl}/v13/deployments/${deploymentId}`, {
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-      },
-    });
+  async getDeployment(deploymentId: string): Promise<any> {
+    return withRetry(async () => {
+      const response = await fetchWithRetry(`${this.apiUrl}/v13/deployments/${deploymentId}`, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error('Failed to get deployment status');
-    }
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error('Failed to get deployment status');
+      }
 
-    return await response.json();
+      return await response.json() as any;
+    }, { maxRetries: 3 });
   }
 
   /**
@@ -207,7 +229,7 @@ export class VercelDeployer {
         return 'Failed to fetch deployment logs';
       }
 
-      const events = await response.json();
+      const events = await response.json() as any;
       return events.map((e: any) => `[${e.type}] ${e.payload?.text || ''}`).join('\n');
     } catch {
       return 'Logs unavailable';

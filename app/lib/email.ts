@@ -26,7 +26,7 @@ interface EmailOptions {
   text?: string;
 }
 
-async function sendEmail({ to, subject, html, text }: EmailOptions) {
+export async function sendEmail({ to, subject, html, text }: EmailOptions) {
   // Check if no email service is configured
   if (!process.env.RESEND_API_KEY && !process.env.SMTP_USER) {
     if (process.env.NODE_ENV === 'development') {
@@ -137,6 +137,78 @@ export async function sendWelcomeEmail(email: string, name: string) {
   return sendEmail({ to: email, subject, html });
 }
 
+/**
+ * Send verification email with 6-digit code (primary method)
+ */
+export async function sendVerificationEmailWithCode(email: string, code: string, verificationUrl: string) {
+  const subject = `${code} is your Recoder.xyz verification code`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #ffffff; background: #000000; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white; padding: 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .header h1 { margin: 0; font-size: 28px; }
+          .content { background: #111111; padding: 40px 30px; border-radius: 0 0 16px 16px; border: 1px solid #333; border-top: none; }
+          .code-box { background: #1a1a1a; padding: 24px; border-radius: 12px; margin: 24px 0; text-align: center; border: 2px solid #333; }
+          .code { font-size: 40px; font-weight: bold; color: #f97316; letter-spacing: 8px; font-family: 'Courier New', monospace; }
+          .button { display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white !important; text-decoration: none; border-radius: 8px; margin: 24px 0; font-weight: 600; font-size: 16px; }
+          .link-box { background: #1a1a1a; padding: 16px; border-radius: 8px; margin: 20px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: #f97316; border: 1px solid #333; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          p { color: #cccccc; margin: 16px 0; }
+          .divider { border-top: 1px solid #333; margin: 24px 0; }
+        </style>
+      </head>
+      <body style="background: #000000;">
+        <div class="container">
+          <div class="header">
+            <h1>🚀 Verify Your Email</h1>
+          </div>
+          <div class="content">
+            <p style="font-size: 18px; color: #ffffff;">Welcome to Recoder.xyz!</p>
+            <p>Use this verification code to complete your registration:</p>
+
+            <div class="code-box">
+              <div style="font-size: 12px; color: #888; margin-bottom: 8px;">YOUR VERIFICATION CODE</div>
+              <div class="code">${code}</div>
+              <div style="font-size: 12px; color: #888; margin-top: 8px;">Expires in 24 hours</div>
+            </div>
+
+            <p style="text-align: center;">Or click the button below to verify automatically:</p>
+
+            <div style="text-align: center;">
+              <a href="${verificationUrl}" class="button">Verify Email Address</a>
+            </div>
+
+            <div class="divider"></div>
+
+            <p style="color: #888; font-size: 14px;">If the button doesn't work, copy and paste this link:</p>
+            <div class="link-box">${verificationUrl}</div>
+
+            <p style="color: #666; font-size: 12px;">If you didn't create an account with Recoder.xyz, please ignore this email.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Recoder.xyz - AI-Powered Development Platform</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const result = await sendEmail({ to: email, subject, html });
+
+  if (!result.success) {
+    console.error(`Failed to send verification email to ${email}:`, result.error);
+  }
+
+  return result;
+}
+
+/**
+ * Send verification email with link only (legacy/fallback)
+ */
 export async function sendVerificationEmail(email: string, verificationUrl: string) {
   // Note: better-auth passes the full verification URL, not just the token
   const subject = 'Verify Your Email - Recoder.xyz';
@@ -417,11 +489,299 @@ If you didn't create an account, please contact support at support@recoder.xyz
   return sendEmail({ to: email, subject, html, text });
 }
 
+/**
+ * Onboarding Email: Getting Started Tips (Day 1)
+ */
+export async function sendGettingStartedEmail(email: string, name: string) {
+  const subject = '🚀 Getting Started with Recoder - Quick Tips';
+  const dashboardUrl = process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #ffffff; background: #000000; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white; padding: 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .content { background: #111111; padding: 40px 30px; border-radius: 0 0 16px 16px; border: 1px solid #333; border-top: none; }
+          .tip-card { background: #1a1a1a; padding: 20px; border-radius: 12px; margin: 16px 0; border: 1px solid #333; }
+          .tip-number { display: inline-block; width: 28px; height: 28px; background: linear-gradient(135deg, #f97316, #9333ea); color: white; border-radius: 50%; text-align: center; line-height: 28px; font-weight: bold; margin-right: 12px; }
+          .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white !important; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: 600; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          h2 { color: #ffffff; }
+          p { color: #cccccc; }
+          .highlight { color: #f97316; }
+        </style>
+      </head>
+      <body style="background: #000000;">
+        <div class="container">
+          <div class="header">
+            <h1>Quick Tips to Get Started</h1>
+          </div>
+          <div class="content">
+            <h2>Hey ${name}! 👋</h2>
+            <p>Here are some quick tips to help you get the most out of Recoder:</p>
+
+            <div class="tip-card">
+              <span class="tip-number">1</span>
+              <strong style="color: #fff;">Be Specific with Prompts</strong>
+              <p style="margin: 8px 0 0 40px;">Instead of "make a website", try "create a React landing page with a hero section, features grid, and contact form using Tailwind CSS"</p>
+            </div>
+
+            <div class="tip-card">
+              <span class="tip-number">2</span>
+              <strong style="color: #fff;">Use the Debug Mode</strong>
+              <p style="margin: 8px 0 0 40px;">When you encounter errors, click "Fix with AI" in the Problems panel. The AI will diagnose and fix issues automatically.</p>
+            </div>
+
+            <div class="tip-card">
+              <span class="tip-number">3</span>
+              <strong style="color: #fff;">Try Different AI Models</strong>
+              <p style="margin: 8px 0 0 40px;">Switch between Claude, GPT-4, and Gemini in settings. Different models excel at different tasks.</p>
+            </div>
+
+            <div class="tip-card">
+              <span class="tip-number">4</span>
+              <strong style="color: #fff;">Use Keyboard Shortcuts</strong>
+              <p style="margin: 8px 0 0 40px;"><code style="background: #333; padding: 2px 6px; border-radius: 4px;">Ctrl+K</code> opens the command palette, <code style="background: #333; padding: 2px 6px; border-radius: 4px;">Ctrl+/</code> triggers inline completions.</p>
+            </div>
+
+            <div style="text-align: center;">
+              <a href="${dashboardUrl}/dashboard" class="button">Open Dashboard</a>
+            </div>
+
+            <p>Need help? Reply to this email or check our <a href="${dashboardUrl}/docs" style="color: #f97316;">documentation</a>.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Recoder.xyz - AI-Powered Development Platform</p>
+            <p><a href="${dashboardUrl}/unsubscribe?email=${encodeURIComponent(email)}" style="color: #666;">Unsubscribe</a></p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  return sendEmail({ to: email, subject, html });
+}
+
+/**
+ * Onboarding Email: Feature Deep Dive (Day 3)
+ */
+export async function sendFeatureDeepDiveEmail(email: string, name: string) {
+  const subject = '💡 Unlock Recoder\'s Most Powerful Features';
+  const dashboardUrl = process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #ffffff; background: #000000; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); color: white; padding: 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .content { background: #111111; padding: 40px 30px; border-radius: 0 0 16px 16px; border: 1px solid #333; border-top: none; }
+          .feature { background: #1a1a1a; padding: 24px; border-radius: 12px; margin: 20px 0; border: 1px solid #333; }
+          .feature-icon { font-size: 32px; margin-bottom: 12px; }
+          .feature h3 { color: #ffffff; margin: 0 0 8px 0; }
+          .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); color: white !important; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: 600; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          p { color: #cccccc; }
+        </style>
+      </head>
+      <body style="background: #000000;">
+        <div class="container">
+          <div class="header">
+            <h1>Pro Features You Should Try</h1>
+          </div>
+          <div class="content">
+            <h2 style="color: #fff;">Hi ${name}!</h2>
+            <p>You've been using Recoder for a few days now. Here are some powerful features you might not have discovered yet:</p>
+
+            <div class="feature">
+              <div class="feature-icon">🔄</div>
+              <h3>Git Integration</h3>
+              <p>Push your projects directly to GitHub. Version control built right in - no terminal needed.</p>
+            </div>
+
+            <div class="feature">
+              <div class="feature-icon">⚡</div>
+              <h3>Inline Autocomplete</h3>
+              <p>Ghost text suggestions as you type, just like Copilot. Accept with Tab, dismiss with Escape.</p>
+            </div>
+
+            <div class="feature">
+              <div class="feature-icon">🎨</div>
+              <h3>Starter Templates</h3>
+              <p>Start faster with React, Next.js, Vue, or Astro templates. No setup required.</p>
+            </div>
+
+            <div class="feature">
+              <div class="feature-icon">🚀</div>
+              <h3>One-Click Deploy</h3>
+              <p>Deploy to Vercel or Railway instantly. Get a live URL in seconds.</p>
+            </div>
+
+            <div style="text-align: center;">
+              <a href="${dashboardUrl}/dashboard" class="button">Try These Features</a>
+            </div>
+          </div>
+          <div class="footer">
+            <p>© 2025 Recoder.xyz - AI-Powered Development Platform</p>
+            <p><a href="${dashboardUrl}/unsubscribe?email=${encodeURIComponent(email)}" style="color: #666;">Unsubscribe</a></p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  return sendEmail({ to: email, subject, html });
+}
+
+/**
+ * Onboarding Email: Engagement/Re-engagement (Day 7 or if inactive)
+ */
+export async function sendEngagementEmail(email: string, name: string) {
+  const subject = '👋 We miss you! Here\'s what\'s new in Recoder';
+  const dashboardUrl = process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #ffffff; background: #000000; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); color: white; padding: 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .content { background: #111111; padding: 40px 30px; border-radius: 0 0 16px 16px; border: 1px solid #333; border-top: none; }
+          .update { background: #1a1a1a; padding: 16px 20px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #8b5cf6; }
+          .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); color: white !important; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: 600; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          p { color: #cccccc; }
+        </style>
+      </head>
+      <body style="background: #000000;">
+        <div class="container">
+          <div class="header">
+            <h1>What's New in Recoder</h1>
+          </div>
+          <div class="content">
+            <h2 style="color: #fff;">Hey ${name}!</h2>
+            <p>It's been a while since we've seen you. Here's what you've been missing:</p>
+
+            <div class="update">
+              <strong style="color: #fff;">✨ Improved AI Quality</strong>
+              <p style="margin: 8px 0 0 0;">Better code generation with enhanced agentic workflow. The AI now reads your code before making changes.</p>
+            </div>
+
+            <div class="update">
+              <strong style="color: #fff;">🐛 Smart Debug Mode</strong>
+              <p style="margin: 8px 0 0 0;">Click "Fix with AI" and let the AI diagnose and fix errors automatically with confirmation before changes.</p>
+            </div>
+
+            <div class="update">
+              <strong style="color: #fff;">⚡ Faster Performance</strong>
+              <p style="margin: 8px 0 0 0;">Pre-warmed containers for instant project startup. No more waiting.</p>
+            </div>
+
+            <div style="text-align: center;">
+              <a href="${dashboardUrl}/dashboard" class="button">Start Building Again</a>
+            </div>
+
+            <p style="color: #888; font-size: 14px;">Have feedback? We'd love to hear from you - just reply to this email.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Recoder.xyz - AI-Powered Development Platform</p>
+            <p><a href="${dashboardUrl}/unsubscribe?email=${encodeURIComponent(email)}" style="color: #666;">Unsubscribe</a></p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  return sendEmail({ to: email, subject, html });
+}
+
+/**
+ * Weekly tips email (for active users)
+ */
+export async function sendWeeklyTipsEmail(email: string, name: string, tipNumber: number = 1) {
+  const tips = [
+    {
+      title: 'Use Mode Switching',
+      tip: 'Switch to Architect mode for planning, Debug mode for fixing errors, or Ask mode for questions. Each mode optimizes the AI for specific tasks.',
+    },
+    {
+      title: 'Leverage Web Search',
+      tip: 'The AI can search the web for documentation, APIs, and solutions. Just ask it to "search for" or "look up" something.',
+    },
+    {
+      title: 'Snapshot Your Progress',
+      tip: 'Use snapshots to save your project state before major changes. Easy to restore if something goes wrong.',
+    },
+    {
+      title: 'Multi-file Edits',
+      tip: 'The AI can edit multiple files at once atomically. Just describe the change and it will update all relevant files together.',
+    },
+  ];
+
+  const currentTip = tips[(tipNumber - 1) % tips.length];
+  const subject = `💡 Weekly Tip: ${currentTip.title}`;
+  const dashboardUrl = process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #ffffff; background: #000000; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white; padding: 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .content { background: #111111; padding: 40px 30px; border-radius: 0 0 16px 16px; border: 1px solid #333; border-top: none; }
+          .tip-box { background: linear-gradient(135deg, rgba(249, 115, 22, 0.1), rgba(147, 51, 234, 0.1)); border: 1px solid #333; padding: 24px; border-radius: 12px; margin: 20px 0; }
+          .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #f97316 0%, #9333ea 100%); color: white !important; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: 600; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          p { color: #cccccc; }
+        </style>
+      </head>
+      <body style="background: #000000;">
+        <div class="container">
+          <div class="header">
+            <h1>💡 Tip of the Week</h1>
+          </div>
+          <div class="content">
+            <h2 style="color: #fff;">Hi ${name}!</h2>
+
+            <div class="tip-box">
+              <h3 style="color: #f97316; margin-top: 0;">${currentTip.title}</h3>
+              <p style="margin-bottom: 0; font-size: 16px;">${currentTip.tip}</p>
+            </div>
+
+            <div style="text-align: center;">
+              <a href="${dashboardUrl}/dashboard" class="button">Try It Now</a>
+            </div>
+
+            <p style="color: #888; font-size: 14px;">Got a tip to share? Reply to this email!</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Recoder.xyz - AI-Powered Development Platform</p>
+            <p><a href="${dashboardUrl}/unsubscribe?email=${encodeURIComponent(email)}" style="color: #666;">Unsubscribe</a></p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  return sendEmail({ to: email, subject, html });
+}
+
 export default {
   sendWelcomeEmail,
   sendVerificationEmail,
+  sendVerificationEmailWithCode,
   sendPasswordResetEmail,
   sendSubscriptionConfirmationEmail,
   sendApiKeyCreatedEmail,
   sendTemporaryPasswordEmail,
+  // Onboarding sequence
+  sendGettingStartedEmail,
+  sendFeatureDeepDiveEmail,
+  sendEngagementEmail,
+  sendWeeklyTipsEmail,
 };

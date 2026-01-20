@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { OpenRouterPDFProcessor } from './openrouterPDFProcessor.js';
-import type { PDFProcessOptions, PDFChatOptions } from './types.js';
+import type { PDFProcessingOptions, PDFToChatOptions } from './types.js';
 
 describe('OpenRouterPDFProcessor', () => {
   beforeEach(() => {
@@ -32,8 +32,8 @@ describe('OpenRouterPDFProcessor', () => {
   describe('process', () => {
     it('should require a PDF file', async () => {
       const processor = new OpenRouterPDFProcessor();
-      const options: PDFProcessOptions = { pdfFile: '' };
-      
+      const options: PDFProcessingOptions = { pdfFile: '' };
+
       await expect(processor.process(options)).rejects.toThrow();
     });
 
@@ -46,10 +46,10 @@ describe('OpenRouterPDFProcessor', () => {
           metadata: {
             pageCount: 5,
           },
-        }),
+        }) as any,
       } as Response);
 
-      const options: PDFProcessOptions = {
+      const options: PDFProcessingOptions = {
         pdfFile: 'test.pdf',
       };
 
@@ -62,8 +62,8 @@ describe('OpenRouterPDFProcessor', () => {
   describe('chat', () => {
     it('should require PDF file and instruction', async () => {
       const processor = new OpenRouterPDFProcessor();
-      const options: PDFChatOptions = { pdfFile: '', instruction: '' };
-      
+      const options: PDFToChatOptions = { pdfFile: '', instruction: '' };
+
       await expect(processor.chat(options)).rejects.toThrow();
     });
 
@@ -77,10 +77,10 @@ describe('OpenRouterPDFProcessor', () => {
             inputTokens: 1000,
             outputTokens: 50,
           },
-        }),
+        }) as any,
       } as Response);
 
-      const options: PDFChatOptions = {
+      const options: PDFToChatOptions = {
         pdfFile: 'test.pdf',
         instruction: 'What is this document about?',
       };

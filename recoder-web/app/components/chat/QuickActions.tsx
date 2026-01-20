@@ -4,9 +4,50 @@ import { classNames } from '~/utils/classNames';
 interface QuickActionsProps {
   onSelectAction: (prompt: string) => void;
   disabled?: boolean;
+  onCloneWebsite?: () => void;
+  onImportGitHub?: () => void;
+  onDeploy?: () => void;
 }
 
-const QUICK_ACTIONS = [
+type ActionType = 'prompt' | 'clone' | 'github' | 'deploy';
+
+interface QuickAction {
+  id: string;
+  iconClass: string;
+  label: string;
+  prompt?: string;
+  description: string;
+  color: string;
+  actionType: ActionType;
+}
+
+const QUICK_ACTIONS: QuickAction[] = [
+  // Modal-based actions (most impactful - show first)
+  {
+    id: 'clone-website',
+    iconClass: 'i-ph:globe',
+    label: 'Clone Website',
+    description: 'Clone any website instantly',
+    color: 'from-purple-500 to-purple-600',
+    actionType: 'clone',
+  },
+  {
+    id: 'import-github',
+    iconClass: 'i-ph:github-logo',
+    label: 'Import Repo',
+    description: 'Import from GitHub',
+    color: 'from-gray-700 to-gray-800',
+    actionType: 'github',
+  },
+  {
+    id: 'deploy-project',
+    iconClass: 'i-ph:rocket-launch',
+    label: 'Deploy',
+    description: 'Deploy to Vercel/Netlify',
+    color: 'from-green-500 to-green-600',
+    actionType: 'deploy',
+  },
+  // Prompt-based actions
   {
     id: 'database',
     iconClass: 'i-ph:database',
@@ -14,6 +55,7 @@ const QUICK_ACTIONS = [
     prompt: 'Add a SQLite database to this project with schema, migrations, and connection setup. Include TypeScript types for the models.',
     description: 'Set up database with schema',
     color: 'from-blue-500 to-blue-600',
+    actionType: 'prompt',
   },
   {
     id: 'auth',
@@ -21,7 +63,8 @@ const QUICK_ACTIONS = [
     label: 'Add Auth',
     prompt: 'Implement user authentication with JWT tokens, including registration, login, logout, and password hashing. Add middleware for protected routes.',
     description: 'User authentication system',
-    color: 'from-green-500 to-green-600',
+    color: 'from-teal-500 to-teal-600',
+    actionType: 'prompt',
   },
   {
     id: 'api',
@@ -29,7 +72,8 @@ const QUICK_ACTIONS = [
     label: 'Create API',
     prompt: 'Create a RESTful API endpoint with CRUD operations, input validation, error handling, and proper HTTP status codes. Include TypeScript types.',
     description: 'REST API with CRUD',
-    color: 'from-purple-500 to-purple-600',
+    color: 'from-indigo-500 to-indigo-600',
+    actionType: 'prompt',
   },
   {
     id: 'component',
@@ -38,6 +82,7 @@ const QUICK_ACTIONS = [
     prompt: 'Create a new React component with TypeScript, props interface, and styling. Make it reusable and well-documented.',
     description: 'React component with props',
     color: 'from-pink-500 to-pink-600',
+    actionType: 'prompt',
   },
   {
     id: 'tests',
@@ -46,23 +91,51 @@ const QUICK_ACTIONS = [
     prompt: 'Add unit tests for the main functionality using a testing framework. Include test cases for success and error scenarios.',
     description: 'Unit tests for code',
     color: 'from-orange-500 to-orange-600',
+    actionType: 'prompt',
   },
   {
-    id: 'deploy',
-    iconClass: 'i-ph:rocket-launch',
-    label: 'Deploy Setup',
-    prompt: 'Set up deployment configuration for Vercel or Netlify. Include environment variables, build commands, and deployment scripts.',
-    description: 'Deployment configuration',
-    color: 'from-red-500 to-red-600',
+    id: 'refactor',
+    iconClass: 'i-ph:wrench',
+    label: 'Improve Code',
+    prompt: `Analyze the currently open file for code improvements.
+
+First, use the readFile tool to read the current file, then:
+1. Identify areas for improvement (readability, maintainability, best practices)
+2. For each issue, show the BEFORE code with line numbers
+3. Explain WHY it should change
+4. Show the AFTER code
+5. Rate impact: [LOW/MEDIUM/HIGH]
+
+Focus on actionable changes that provide real value. Don't suggest trivial changes.
+After analysis, ask if I want to apply any changes using str_replace or multi_apply_diff tools.`,
+    description: 'AI-powered refactoring',
+    color: 'from-cyan-500 to-cyan-600',
+    actionType: 'prompt',
   },
 ];
 
-export function QuickActions({ onSelectAction, disabled }: QuickActionsProps) {
+export function QuickActions({ onSelectAction, disabled, onCloneWebsite, onImportGitHub, onDeploy }: QuickActionsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredAction, setHoveredAction] = useState<string | null>(null);
 
-  const handleActionClick = (action: typeof QUICK_ACTIONS[0]) => {
-    onSelectAction(action.prompt);
+  const handleActionClick = (action: QuickAction) => {
+    switch (action.actionType) {
+      case 'clone':
+        onCloneWebsite?.();
+        break;
+      case 'github':
+        onImportGitHub?.();
+        break;
+      case 'deploy':
+        onDeploy?.();
+        break;
+      case 'prompt':
+      default:
+        if (action.prompt) {
+          onSelectAction(action.prompt);
+        }
+        break;
+    }
     setIsOpen(false);
   };
 
@@ -116,8 +189,8 @@ export function QuickActions({ onSelectAction, disabled }: QuickActionsProps) {
                 <div className="i-ph:arrow-right text-lg" />
               </div>
 
-              {/* Tooltip on hover */}
-              {hoveredAction === action.id && (
+              {/* Tooltip on hover - only show for prompt actions */}
+              {hoveredAction === action.id && action.prompt && (
                 <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-3 py-2 bg-bolt-elements-background-depth-4 rounded-lg border border-bolt-elements-borderColor shadow-xl text-xs text-bolt-elements-textSecondary max-w-xs whitespace-normal z-10">
                   {action.prompt}
                 </div>
@@ -151,17 +224,20 @@ export function QuickActions({ onSelectAction, disabled }: QuickActionsProps) {
   );
 }
 
-// Inline quick actions for within chat
-export function InlineQuickActions({ onSelectAction }: QuickActionsProps) {
+// Inline quick actions for within chat - only shows prompt-based actions
+export function InlineQuickActions({ onSelectAction }: Pick<QuickActionsProps, 'onSelectAction'>) {
+  // Filter to only show prompt-based actions for inline display
+  const promptActions = QUICK_ACTIONS.filter(action => action.actionType === 'prompt' && action.prompt);
+
   return (
     <div className="flex flex-wrap gap-2 p-4">
       <div className="w-full text-sm text-bolt-elements-textSecondary mb-2">
         Quick actions:
       </div>
-      {QUICK_ACTIONS.slice(0, 4).map((action) => (
+      {promptActions.slice(0, 4).map((action) => (
         <button
           key={action.id}
-          onClick={() => onSelectAction(action.prompt)}
+          onClick={() => action.prompt && onSelectAction(action.prompt)}
           className={classNames(
             'flex items-center gap-2 px-3 py-2 rounded-lg',
             'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3',

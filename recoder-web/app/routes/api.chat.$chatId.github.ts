@@ -12,7 +12,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const session = await verifySession(request);
   if (!session) return json({ error: 'Unauthorized' }, { status: 401 });
 
-  const chatId = params.chatId;
+  const chatId = params.chatId!;
   const url = new URL(request.url);
   const action = url.searchParams.get('action');
 
@@ -22,7 +22,12 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       SELECT repo, branch, auto_sync, last_sync
       FROM chat_github_connections
       WHERE chat_id = ${chatId} AND user_id = ${session.user.id}
-    `;
+    ` as Array<{
+      repo: string;
+      branch: string;
+      auto_sync: boolean;
+      last_sync: string;
+    }>;
 
     if (!connection) {
       return json({ connected: false });
@@ -45,8 +50,14 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
   if (!session) return json({ error: 'Unauthorized' }, { status: 401 });
 
   const sql = getDb(context);
-  const chatId = params.chatId;
-  const body = await request.json();
+  const chatId = params.chatId!;
+  const body = await request.json() as {
+    action: string;
+    repo?: string;
+    branch?: string;
+    files?: any[];
+    message?: string;
+  };
   const { action } = body;
 
   if (action === 'connect') {
@@ -72,12 +83,15 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
   }
 
   if (action === 'push') {
-    const { files, message, branch } = body;
+    const { files = [], message, branch } = body;
 
     const [connection] = await sql`
       SELECT repo, branch as default_branch FROM chat_github_connections
       WHERE chat_id = ${chatId} AND user_id = ${session.user.id}
-    `;
+    ` as Array<{
+      repo: string;
+      default_branch: string;
+    }>;
 
     if (!connection) {
       return json({ error: 'Not connected to GitHub' }, { status: 400 });
@@ -87,7 +101,9 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       SELECT "accessToken" FROM oauth_accounts
       WHERE "userId" = ${session.user.id} AND provider = 'github'
       ORDER BY "createdAt" DESC LIMIT 1
-    `;
+    ` as Array<{
+      accessToken: string;
+    }>;
 
     if (!oauthAccount?.accessToken) {
       return json({ error: 'GitHub not connected' }, { status: 400 });
@@ -167,13 +183,15 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
   }
 
   if (action === 'clone') {
-    const { repo, branch = 'main' } = body;
+    const { repo = '', branch = 'main' } = body;
 
     const [oauthAccount] = await sql`
       SELECT "accessToken" FROM oauth_accounts
       WHERE "userId" = ${session.user.id} AND provider = 'github'
       ORDER BY "createdAt" DESC LIMIT 1
-    `;
+    ` as Array<{
+      accessToken: string;
+    }>;
 
     const token = oauthAccount?.accessToken;
 
@@ -233,7 +251,10 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     const [connection] = await sql`
       SELECT repo, branch FROM chat_github_connections
       WHERE chat_id = ${chatId} AND user_id = ${session.user.id}
-    `;
+    ` as Array<{
+      repo: string;
+      branch: string;
+    }>;
 
     if (!connection) {
       return json({ error: 'Not connected to GitHub' }, { status: 400 });
@@ -243,7 +264,9 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       SELECT "accessToken" FROM oauth_accounts
       WHERE "userId" = ${session.user.id} AND provider = 'github'
       ORDER BY "createdAt" DESC LIMIT 1
-    `;
+    ` as Array<{
+      accessToken: string;
+    }>;
 
     const token = oauthAccount?.accessToken;
 

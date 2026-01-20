@@ -1,8 +1,11 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/auth';
 
 /**
  * E2E Test Suite 1: Basic Application Flow
  * Tests the core functionality and user journey
+ *
+ * Note: These tests use the auth fixture which automatically handles
+ * authentication setup for all tests.
  */
 
 test.describe('Basic Application Flow', () => {

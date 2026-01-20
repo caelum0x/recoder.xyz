@@ -1,0 +1,3702 @@
+openapi: 3.0.3
+info:
+  title: Recoder Docker Backend API
+  description: |
+    API for managing containerized development environments in Recoder.
+
+    ## Authentication
+    All endpoints require a Better Auth session token passed in the Authorization header.
+
+    ## Rate Limiting
+    - General API: 100 requests/minute
+    - Container Creation: 10 requests/minute
+  version: 1.0.0
+  contact:
+    name: Recoder Support
+    url: https://recoder.xyz
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://docker.recoder.xyz
+    description: Production server
+  - url: http://localhost:3100
+    description: Local development
+
+tags:
+  - name: Health
+    description: Health check and status endpoints
+  - name: Container
+    description: Container lifecycle management
+  - name: File
+    description: File operations in containers
+  - name: DevServer
+    description: Development server management
+  - name: Snapshot
+    description: Version control with snapshots
+  - name: Search
+    description: Search and replace in files
+  - name: Package
+    description: Package manager operations
+  - name: Secret
+    description: Environment variables and secrets
+  - name: Git
+    description: Git operations
+  - name: LSP
+    description: Language Server Protocol
+  - name: Collaboration
+    description: Real-time collaboration
+  - name: Sync
+    description: CLI-Web synchronization
+  - name: MCP
+    description: Model Context Protocol servers
+  - name: Tunnel
+    description: Public URL tunneling
+  - name: Browser
+    description: Browser automation
+  - name: CodeIndex
+    description: Semantic code search
+  - name: Debug
+    description: Debug session management (DAP protocol)
+  - name: Organizations
+    description: Enterprise organization management
+  - name: Mobile
+    description: Mobile API for React Native/Expo apps
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  containers:
+                    type: integer
+                    example: 5
+
+  /api/pool/stats:
+    get:
+      tags: [Health]
+      summary: Get container pool statistics
+      security: []
+      responses:
+        '200':
+          description: Pool statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  available:
+                    type: integer
+                  total:
+                    type: integer
+                  inUse:
+                    type: integer
+
+  /api/container:
+    post:
+      tags: [Container]
+      summary: Create or get container for a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Container created or retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContainerResponse'
+        '429':
+          description: Container limit reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContainerLimitError'
+
+  /api/container/{projectId}:
+    delete:
+      tags: [Container]
+      summary: Delete container
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Container deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Container not found
+
+  /api/keep-alive/{projectId}:
+    post:
+      tags: [Container]
+      summary: Reset container idle timer
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Timer reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  timeRemaining:
+                    type: integer
+                    description: Milliseconds until idle timeout
+
+  /api/file/{projectId}:
+    post:
+      tags: [File]
+      summary: Write file to container
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, content]
+              properties:
+                path:
+                  type: string
+                  example: src/index.ts
+                content:
+                  type: string
+      responses:
+        '200':
+          description: File written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    get:
+      tags: [File]
+      summary: Read file from container
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          example: src/index.ts
+      responses:
+        '200':
+          description: File content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+    delete:
+      tags: [File]
+      summary: Delete file or folder
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+      responses:
+        '200':
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/file/{projectId}/rename:
+    put:
+      tags: [File]
+      summary: Rename or move file
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [oldPath, newPath]
+              properties:
+                oldPath:
+                  type: string
+                newPath:
+                  type: string
+      responses:
+        '200':
+          description: File renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/files/{projectId}:
+    get:
+      tags: [File]
+      summary: List files in container
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: path
+          in: query
+          schema:
+            type: string
+            default: /workspace
+      responses:
+        '200':
+          description: File list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: string
+
+  /api/files/{projectId}/batch:
+    post:
+      tags: [File]
+      summary: Write multiple files at once
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      path:
+                        type: string
+                      content:
+                        type: string
+      responses:
+        '200':
+          description: Files written
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+
+  /api/folder/{projectId}:
+    post:
+      tags: [File]
+      summary: Create folder
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+      responses:
+        '200':
+          description: Folder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/exec/{projectId}:
+    post:
+      tags: [Container]
+      summary: Execute command in container
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                  example: npm install
+                cwd:
+                  type: string
+                  default: /workspace
+                background:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Command executed
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      output:
+                        type: string
+                  - type: object
+                    properties:
+                      output:
+                        type: string
+                      background:
+                        type: boolean
+                      ready:
+                        type: boolean
+                      port:
+                        type: integer
+        '403':
+          description: Command blocked for security
+
+  /api/dev-server/start:
+    post:
+      tags: [DevServer]
+      summary: Start development server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId:
+                  type: string
+                framework:
+                  type: string
+                  enum: [vite, next, cra, remix]
+                  default: vite
+      responses:
+        '200':
+          description: Dev server started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  port:
+                    type: integer
+                  url:
+                    type: string
+
+  /api/dev-server/stop:
+    post:
+      tags: [DevServer]
+      summary: Stop development server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId:
+                  type: string
+      responses:
+        '200':
+          description: Dev server stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/dev-server/restart:
+    post:
+      tags: [DevServer]
+      summary: Restart development server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId:
+                  type: string
+      responses:
+        '200':
+          description: Dev server restarted
+
+  /api/dev-server/status/{projectId}:
+    get:
+      tags: [DevServer]
+      summary: Get development server status
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Dev server status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: object
+                  isRunning:
+                    type: boolean
+                  backgroundDev:
+                    type: boolean
+
+  /api/logs/{projectId}:
+    get:
+      tags: [DevServer]
+      summary: Get development server logs
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: tail
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Dev server logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: string
+
+  /api/errors/{projectId}:
+    get:
+      tags: [DevServer]
+      summary: Get parsed build errors
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: tail
+          in: query
+          schema:
+            type: integer
+            default: 200
+        - name: autoRestore
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Parsed errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorsResponse'
+
+  /api/snapshot/{projectId}:
+    post:
+      tags: [Snapshot]
+      summary: Create snapshot
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  default: Manual snapshot
+                author:
+                  type: string
+                  default: user
+      responses:
+        '200':
+          description: Snapshot created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+
+  /api/snapshots/{projectId}:
+    get:
+      tags: [Snapshot]
+      summary: List snapshots
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+      responses:
+        '200':
+          description: Snapshot list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshots:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Snapshot'
+
+  /api/snapshot/{projectId}/current:
+    get:
+      tags: [Snapshot]
+      summary: Get current snapshot
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Current snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot:
+                    $ref: '#/components/schemas/Snapshot'
+
+  /api/snapshot/{projectId}/restore:
+    post:
+      tags: [Snapshot]
+      summary: Restore to snapshot
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [snapshotId]
+              properties:
+                snapshotId:
+                  type: string
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  restoredTo:
+                    type: string
+
+  /api/search/{projectId}:
+    post:
+      tags: [Search]
+      summary: Search in files
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                options:
+                  type: object
+                  properties:
+                    regex:
+                      type: boolean
+                    caseSensitive:
+                      type: boolean
+                    wholeWord:
+                      type: boolean
+                    include:
+                      type: string
+                    exclude:
+                      type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchResult'
+                  total:
+                    type: integer
+
+  /api/replace/{projectId}:
+    post:
+      tags: [Search]
+      summary: Replace in files
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [searchQuery, replaceText]
+              properties:
+                searchQuery:
+                  type: string
+                replaceText:
+                  type: string
+                files:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Replace completed
+
+  /api/packages/{projectId}:
+    get:
+      tags: [Package]
+      summary: Get installed packages
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: manager
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [npm, bun, pip, cargo, go, composer, gem]
+      responses:
+        '200':
+          description: Package list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  packages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Package'
+                  manager:
+                    type: string
+
+  /api/packages/{projectId}/search:
+    post:
+      tags: [Package]
+      summary: Search package registry
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query, manager]
+              properties:
+                query:
+                  type: string
+                manager:
+                  type: string
+                  enum: [npm, bun, pip, cargo, go, composer, gem]
+      responses:
+        '200':
+          description: Search results
+
+  /api/packages/{projectId}/install:
+    post:
+      tags: [Package]
+      summary: Install package
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [packageName, manager]
+              properties:
+                packageName:
+                  type: string
+                manager:
+                  type: string
+                  enum: [npm, bun, pip, cargo, go, composer, gem]
+                isDev:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Package installed
+
+  /api/packages/{projectId}/uninstall:
+    post:
+      tags: [Package]
+      summary: Uninstall package
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [packageName, manager]
+              properties:
+                packageName:
+                  type: string
+                manager:
+                  type: string
+      responses:
+        '200':
+          description: Package uninstalled
+
+  /api/secrets/{projectId}:
+    get:
+      tags: [Secret]
+      summary: Get secrets
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: environment
+          in: query
+          schema:
+            type: string
+            enum: [development, production, test, local]
+            default: development
+      responses:
+        '200':
+          description: Secrets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secrets:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  environment:
+                    type: string
+    post:
+      tags: [Secret]
+      summary: Set secret
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+                environment:
+                  type: string
+                  default: development
+      responses:
+        '200':
+          description: Secret set
+
+  /api/secrets/{projectId}/{key}:
+    delete:
+      tags: [Secret]
+      summary: Delete secret
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: environment
+          in: query
+          schema:
+            type: string
+            default: development
+      responses:
+        '200':
+          description: Secret deleted
+
+  /api/git/{projectId}/status:
+    get:
+      tags: [Git]
+      summary: Get git status
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Git status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitStatus'
+
+  /api/git/{projectId}/branches:
+    get:
+      tags: [Git]
+      summary: Get branches
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Branch list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  branches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Branch'
+
+  /api/git/{projectId}/branch:
+    post:
+      tags: [Git]
+      summary: Create branch
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                checkout:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Branch created
+
+  /api/git/{projectId}/checkout:
+    post:
+      tags: [Git]
+      summary: Checkout branch
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branch]
+              properties:
+                branch:
+                  type: string
+      responses:
+        '200':
+          description: Branch checked out
+
+  /api/git/{projectId}/branch/{name}:
+    delete:
+      tags: [Git]
+      summary: Delete branch
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Branch deleted
+
+  /api/git/{projectId}/log:
+    get:
+      tags: [Git]
+      summary: Get commit history
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: branch
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Commit history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Commit'
+
+  /api/git/{projectId}/stage:
+    post:
+      tags: [Git]
+      summary: Stage files
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Files staged
+
+  /api/git/{projectId}/unstage:
+    post:
+      tags: [Git]
+      summary: Unstage files
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Files unstaged
+
+  /api/git/{projectId}/commit:
+    post:
+      tags: [Git]
+      summary: Create commit
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+      responses:
+        '200':
+          description: Commit created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  hash:
+                    type: string
+
+  /api/git/{projectId}/discard:
+    post:
+      tags: [Git]
+      summary: Discard changes
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Changes discarded
+
+  /api/git/{projectId}/init:
+    post:
+      tags: [Git]
+      summary: Initialize git repository
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Repository initialized
+
+  /api/lsp/{projectId}/start:
+    post:
+      tags: [LSP]
+      summary: Start LSP servers
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: LSP servers started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  servers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        languageId:
+                          type: string
+                        status:
+                          type: string
+                  message:
+                    type: string
+
+  /api/lsp/{projectId}/stop:
+    post:
+      tags: [LSP]
+      summary: Stop LSP servers
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: LSP servers stopped
+
+  /api/lsp/{projectId}/status:
+    get:
+      tags: [LSP]
+      summary: Get LSP server status
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: LSP status
+
+  /api/lsp/configs:
+    get:
+      tags: [LSP]
+      summary: Get available LSP configurations
+      responses:
+        '200':
+          description: LSP configurations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  configs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        languageId:
+                          type: string
+                        name:
+                          type: string
+                        extensions:
+                          type: array
+                          items:
+                            type: string
+
+  /api/lsp/{projectId}/request:
+    post:
+      tags: [LSP]
+      summary: Send LSP request
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePath, method]
+              properties:
+                filePath:
+                  type: string
+                method:
+                  type: string
+                  example: textDocument/completion
+                params:
+                  type: object
+      responses:
+        '200':
+          description: LSP response
+
+  /api/collab/stats:
+    get:
+      tags: [Collaboration]
+      summary: Get collaboration statistics
+      responses:
+        '200':
+          description: Collaboration stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stats:
+                    type: object
+                    properties:
+                      totalDocuments:
+                        type: integer
+                      totalConnections:
+                        type: integer
+                      documents:
+                        type: array
+                        items:
+                          type: object
+
+  /api/sync/{projectId}/link:
+    post:
+      tags: [Sync]
+      summary: Link CLI to project
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId]
+              properties:
+                clientId:
+                  type: string
+                cliVersion:
+                  type: string
+      responses:
+        '200':
+          description: CLI linked
+
+  /api/sync/{projectId}/unlink:
+    delete:
+      tags: [Sync]
+      summary: Unlink CLI from project
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: CLI unlinked
+
+  /api/sync/{projectId}/status:
+    get:
+      tags: [Sync]
+      summary: Get sync status
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Sync status
+
+  /api/sync/{projectId}/push:
+    post:
+      tags: [Sync]
+      summary: Push files from CLI to web
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: object
+                  additionalProperties:
+                    type: string
+                clientId:
+                  type: string
+      responses:
+        '200':
+          description: Files pushed
+
+  /api/sync/{projectId}/pull:
+    get:
+      tags: [Sync]
+      summary: Pull files from web to CLI
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Files retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  files:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  fileCount:
+                    type: integer
+
+  /api/sync/{projectId}/diff:
+    post:
+      tags: [Sync]
+      summary: Get diff between CLI and web
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [localFiles]
+              properties:
+                localFiles:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        '200':
+          description: Diff result
+
+  /api/mcp/catalog:
+    get:
+      tags: [MCP]
+      summary: Get MCP server catalog
+      responses:
+        '200':
+          description: MCP servers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  servers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MCPServer'
+
+  /api/mcp/{projectId}/start:
+    post:
+      tags: [MCP]
+      summary: Start MCP server
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serverId]
+              properties:
+                serverId:
+                  type: string
+                config:
+                  type: object
+                  properties:
+                    env:
+                      type: object
+                      additionalProperties:
+                        type: string
+      responses:
+        '200':
+          description: MCP server started
+
+  /api/mcp/{projectId}/stop:
+    post:
+      tags: [MCP]
+      summary: Stop MCP server
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serverId]
+              properties:
+                serverId:
+                  type: string
+      responses:
+        '200':
+          description: MCP server stopped
+
+  /api/mcp/{projectId}/servers:
+    get:
+      tags: [MCP]
+      summary: Get running MCP servers
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Running servers
+
+  /api/mcp/{projectId}/tools:
+    get:
+      tags: [MCP]
+      summary: Get available MCP tools
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: MCP tools
+
+  /api/mcp/{projectId}/call:
+    post:
+      tags: [MCP]
+      summary: Call MCP tool
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serverId, toolName]
+              properties:
+                serverId:
+                  type: string
+                toolName:
+                  type: string
+                args:
+                  type: object
+      responses:
+        '200':
+          description: Tool result
+
+  /api/tunnel/start:
+    post:
+      tags: [Tunnel]
+      summary: Start public tunnel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId:
+                  type: string
+                localPort:
+                  type: integer
+                  default: 5173
+                useCloudflared:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Tunnel started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  url:
+                    type: string
+                  expiresAt:
+                    type: integer
+                  type:
+                    type: string
+                    enum: [cloudflared, preview]
+
+  /api/tunnel/stop:
+    post:
+      tags: [Tunnel]
+      summary: Stop tunnel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId:
+                  type: string
+      responses:
+        '200':
+          description: Tunnel stopped
+
+  /api/tunnel/status/{projectId}:
+    get:
+      tags: [Tunnel]
+      summary: Get tunnel status
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Tunnel status
+
+  /api/clone-url/{projectId}:
+    post:
+      tags: [Browser]
+      summary: Clone website to container
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Website cloned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  title:
+                    type: string
+                  url:
+                    type: string
+                  files:
+                    type: array
+                    items:
+                      type: string
+                  fileCount:
+                    type: integer
+
+  /api/browser/{projectId}:
+    post:
+      tags: [Browser]
+      summary: Browser automation
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [launch, click, type, screenshot, extract, execute, scroll_up, scroll_down, navigate, close, status]
+                url:
+                  type: string
+                selector:
+                  type: string
+                text:
+                  type: string
+                script:
+                  type: string
+      responses:
+        '200':
+          description: Action result
+
+  /api/code-index/{projectId}/index:
+    post:
+      tags: [CodeIndex]
+      summary: Index workspace for semantic search
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [openaiApiKey]
+              properties:
+                openaiApiKey:
+                  type: string
+      responses:
+        '200':
+          description: Indexing complete
+
+  /api/code-index/{projectId}/search:
+    post:
+      tags: [CodeIndex]
+      summary: Semantic code search
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query, openaiApiKey]
+              properties:
+                query:
+                  type: string
+                openaiApiKey:
+                  type: string
+                maxResults:
+                  type: integer
+                  default: 10
+                directoryPrefix:
+                  type: string
+      responses:
+        '200':
+          description: Search results
+
+  /api/code-index/{projectId}/status:
+    get:
+      tags: [CodeIndex]
+      summary: Get index status
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Index status
+
+  /api/code-index/{projectId}:
+    delete:
+      tags: [CodeIndex]
+      summary: Clear code index
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Index cleared
+
+  /api/debug/{projectId}/start:
+    post:
+      tags: [Debug]
+      summary: Start debug session
+      description: Initialize a DAP debug session for JavaScript, TypeScript, Python, Go, or Rust
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [language, program]
+              properties:
+                language:
+                  type: string
+                  enum: [javascript, typescript, python, go, rust]
+                  description: Programming language to debug
+                program:
+                  type: string
+                  description: Path to file to debug
+                  example: src/index.ts
+                args:
+                  type: array
+                  items:
+                    type: string
+                  description: Command-line arguments for the program
+                cwd:
+                  type: string
+                  description: Working directory
+                  default: /workspace
+                env:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Environment variables
+                stopOnEntry:
+                  type: boolean
+                  description: Stop at first line
+                  default: false
+      responses:
+        '200':
+          description: Debug session started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  sessionId:
+                    type: string
+                  debugPort:
+                    type: integer
+                  wsUrl:
+                    type: string
+                    description: WebSocket URL for debug events
+        '400':
+          description: Invalid language or missing required fields
+        '404':
+          description: Container not found
+
+  /api/debug/{projectId}/stop:
+    post:
+      tags: [Debug]
+      summary: Stop debug session
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+      responses:
+        '200':
+          description: Session stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Session does not belong to this project
+        '404':
+          description: Debug session not found
+
+  /api/debug/{projectId}/restart:
+    post:
+      tags: [Debug]
+      summary: Restart debug session
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+      responses:
+        '200':
+          description: Session restarted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  session:
+                    type: object
+
+  /api/debug/{projectId}/sessions:
+    get:
+      tags: [Debug]
+      summary: Get all debug sessions for project
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Debug sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        language:
+                          type: string
+                        state:
+                          type: string
+                          enum: [starting, running, stopped, paused]
+                        program:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        lastActivity:
+                          type: string
+                          format: date-time
+
+  /api/debug/{projectId}/breakpoints:
+    post:
+      tags: [Debug]
+      summary: Set breakpoints
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, filePath, breakpoints]
+              properties:
+                sessionId:
+                  type: string
+                filePath:
+                  type: string
+                  example: src/index.ts
+                breakpoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      line:
+                        type: integer
+                      condition:
+                        type: string
+                      hitCondition:
+                        type: string
+      responses:
+        '200':
+          description: Breakpoints set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  breakpoints:
+                    type: array
+    delete:
+      tags: [Debug]
+      summary: Clear breakpoints
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, filePath]
+              properties:
+                sessionId:
+                  type: string
+                filePath:
+                  type: string
+      responses:
+        '200':
+          description: Breakpoints cleared
+
+  /api/debug/{projectId}/continue:
+    post:
+      tags: [Debug]
+      summary: Continue execution
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                threadId:
+                  type: integer
+      responses:
+        '200':
+          description: Execution continued
+
+  /api/debug/{projectId}/stepOver:
+    post:
+      tags: [Debug]
+      summary: Step over current line
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                threadId:
+                  type: integer
+      responses:
+        '200':
+          description: Stepped over
+
+  /api/debug/{projectId}/stepInto:
+    post:
+      tags: [Debug]
+      summary: Step into function
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                threadId:
+                  type: integer
+      responses:
+        '200':
+          description: Stepped into
+
+  /api/debug/{projectId}/stepOut:
+    post:
+      tags: [Debug]
+      summary: Step out of function
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                threadId:
+                  type: integer
+      responses:
+        '200':
+          description: Stepped out
+
+  /api/debug/{projectId}/pause:
+    post:
+      tags: [Debug]
+      summary: Pause execution
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                threadId:
+                  type: integer
+      responses:
+        '200':
+          description: Execution paused
+
+  /api/debug/{projectId}/threads:
+    get:
+      tags: [Debug]
+      summary: Get threads
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  threads:
+                    type: array
+
+  /api/debug/{projectId}/stacktrace:
+    get:
+      tags: [Debug]
+      summary: Get stack trace
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: threadId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Stack frames
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stackFrames:
+                    type: array
+
+  /api/debug/{projectId}/scopes:
+    get:
+      tags: [Debug]
+      summary: Get variable scopes
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: frameId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Variable scopes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  scopes:
+                    type: array
+
+  /api/debug/{projectId}/variables:
+    get:
+      tags: [Debug]
+      summary: Get variables
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: variablesReference
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Variables
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  variables:
+                    type: array
+
+  /api/debug/{projectId}/evaluate:
+    post:
+      tags: [Debug]
+      summary: Evaluate expression
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, expression]
+              properties:
+                sessionId:
+                  type: string
+                expression:
+                  type: string
+                  example: myVar + 1
+                frameId:
+                  type: integer
+                context:
+                  type: string
+                  enum: [watch, repl, hover]
+                  default: repl
+      responses:
+        '200':
+          description: Evaluation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  result:
+                    type: string
+                  type:
+                    type: string
+                  variablesReference:
+                    type: integer
+
+  /api/debug/stats:
+    get:
+      tags: [Debug]
+      summary: Get debug system statistics
+      responses:
+        '200':
+          description: Debug statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stats:
+                    type: object
+                    properties:
+                      totalSessions:
+                        type: integer
+                      activeSessions:
+                        type: integer
+                      sessionsByLanguage:
+                        type: object
+
+  /api/organizations:
+    get:
+      tags: [Organizations]
+      summary: List organizations for current user
+      responses:
+        '200':
+          description: Organization list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organizations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+    post:
+      tags: [Organizations]
+      summary: Create organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug]
+              properties:
+                name:
+                  type: string
+                  example: Acme Corp
+                slug:
+                  type: string
+                  example: acme-corp
+                settings:
+                  $ref: '#/components/schemas/OrganizationSettings'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organization:
+                    $ref: '#/components/schemas/Organization'
+
+  /api/organizations/{orgId}:
+    get:
+      tags: [Organizations]
+      summary: Get organization by ID
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organization:
+                    $ref: '#/components/schemas/Organization'
+    put:
+      tags: [Organizations]
+      summary: Update organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                settings:
+                  $ref: '#/components/schemas/OrganizationSettings'
+      responses:
+        '200':
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organization:
+                    $ref: '#/components/schemas/Organization'
+    delete:
+      tags: [Organizations]
+      summary: Delete organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /api/organizations/{orgId}/transfer:
+    post:
+      tags: [Organizations]
+      summary: Transfer organization ownership
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newOwnerId]
+              properties:
+                newOwnerId:
+                  type: string
+      responses:
+        '200':
+          description: Ownership transferred
+
+  /api/organizations/{orgId}/settings:
+    get:
+      tags: [Organizations]
+      summary: Get organization settings
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/OrganizationSettings'
+    put:
+      tags: [Organizations]
+      summary: Update organization settings
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationSettings'
+      responses:
+        '200':
+          description: Settings updated
+
+  /api/organizations/{orgId}/activity:
+    get:
+      tags: [Organizations]
+      summary: Get organization activity log
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: actions
+          in: query
+          schema:
+            type: string
+            description: Comma-separated list of action types
+        - name: actorIds
+          in: query
+          schema:
+            type: string
+            description: Comma-separated list of actor IDs
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Activity log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activity:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogEntry'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  hasMore:
+                    type: boolean
+
+  /api/organizations/{orgId}/teams:
+    get:
+      tags: [Organizations]
+      summary: List teams in organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  teams:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Team'
+    post:
+      tags: [Organizations]
+      summary: Create team
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Team created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  team:
+                    $ref: '#/components/schemas/Team'
+
+  /api/organizations/{orgId}/teams/{teamId}:
+    get:
+      tags: [Organizations]
+      summary: Get team
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  team:
+                    $ref: '#/components/schemas/Team'
+    put:
+      tags: [Organizations]
+      summary: Update team
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Team updated
+    delete:
+      tags: [Organizations]
+      summary: Delete team
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team deleted
+
+  /api/organizations/{orgId}/teams/{teamId}/members:
+    post:
+      tags: [Organizations]
+      summary: Add member to team
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetUserId]
+              properties:
+                targetUserId:
+                  type: string
+                role:
+                  type: string
+                  enum: [lead, member]
+                  default: member
+      responses:
+        '200':
+          description: Member added
+
+  /api/organizations/{orgId}/teams/{teamId}/members/{targetUserId}:
+    delete:
+      tags: [Organizations]
+      summary: Remove member from team
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: targetUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed
+
+  /api/organizations/{orgId}/members:
+    get:
+      tags: [Organizations]
+      summary: List organization members
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrganizationMember'
+
+  /api/organizations/{orgId}/members/{targetUserId}:
+    get:
+      tags: [Organizations]
+      summary: Get specific member
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: targetUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  member:
+                    $ref: '#/components/schemas/OrganizationMember'
+    delete:
+      tags: [Organizations]
+      summary: Remove member from organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: targetUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed
+
+  /api/organizations/{orgId}/members/{targetUserId}/role:
+    put:
+      tags: [Organizations]
+      summary: Update member role
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: targetUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [owner, admin, member, viewer]
+      responses:
+        '200':
+          description: Role updated
+
+  /api/mobile/register:
+    post:
+      tags: [Mobile]
+      summary: Register mobile device and create session
+      description: Register a mobile device (iOS/Android/Web) and obtain a long-lived session token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, deviceName, platform, appVersion, osVersion]
+              properties:
+                userId:
+                  type: string
+                deviceName:
+                  type: string
+                  example: iPhone 14 Pro
+                platform:
+                  type: string
+                  enum: [ios, android, web]
+                appVersion:
+                  type: string
+                  example: 1.0.0
+                osVersion:
+                  type: string
+                  example: iOS 17.0
+                pushToken:
+                  type: string
+                  description: FCM/APNS push token
+                pushTokenType:
+                  type: string
+                  enum: [fcm, apns]
+      responses:
+        '200':
+          description: Device registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device:
+                    $ref: '#/components/schemas/MobileDevice'
+                  session:
+                    $ref: '#/components/schemas/MobileSession'
+
+  /api/mobile/logout:
+    post:
+      tags: [Mobile]
+      summary: Logout and revoke session
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /api/mobile/devices:
+    get:
+      tags: [Mobile]
+      summary: Get all devices for current user
+      responses:
+        '200':
+          description: Device list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MobileDevice'
+
+  /api/mobile/devices/{deviceId}:
+    delete:
+      tags: [Mobile]
+      summary: Remove device
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device removed
+
+  /api/mobile/push/token:
+    post:
+      tags: [Mobile]
+      summary: Update push notification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, tokenType]
+              properties:
+                token:
+                  type: string
+                tokenType:
+                  type: string
+                  enum: [fcm, apns]
+      responses:
+        '200':
+          description: Token updated
+    delete:
+      tags: [Mobile]
+      summary: Remove push notification token
+      responses:
+        '200':
+          description: Token removed
+
+  /api/mobile/projects:
+    get:
+      tags: [Mobile]
+      summary: Get projects for user (paginated)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [name, updatedAt, createdAt]
+            default: updatedAt
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Project list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMobileProjects'
+
+  /api/mobile/project/{projectId}:
+    get:
+      tags: [Mobile]
+      summary: Get project details
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: includeFiles
+          in: query
+          schema:
+            type: boolean
+            default: true
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 1
+            description: Directory depth for file listing
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project:
+                    $ref: '#/components/schemas/MobileProjectDetail'
+
+  /api/mobile/project/{projectId}/files:
+    get:
+      tags: [Mobile]
+      summary: Get files in project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: path
+          in: query
+          schema:
+            type: string
+            default: ''
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: File list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MobileFile'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+
+  /api/mobile/sync:
+    post:
+      tags: [Mobile]
+      summary: Sync operations (offline-first support)
+      description: Upload local changes and download remote changes with conflict resolution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId, operations]
+              properties:
+                projectId:
+                  type: string
+                operations:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SyncOperation'
+                lastSyncAt:
+                  type: integer
+                  description: Timestamp of last sync
+                conflictResolution:
+                  type: string
+                  enum: [server_wins, client_wins, manual]
+                  default: server_wins
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResult'
+
+  /api/mobile/sync/status/{projectId}:
+    get:
+      tags: [Mobile]
+      summary: Get sync status for project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatusInfo'
+
+  /api/mobile/sync/pending/{projectId}:
+    get:
+      tags: [Mobile]
+      summary: Get pending changes
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: since
+          in: query
+          schema:
+            type: integer
+            description: Timestamp to get changes since
+      responses:
+        '200':
+          description: Pending operations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SyncOperation'
+
+  /api/mobile/notifications:
+    get:
+      tags: [Mobile]
+      summary: Get notifications
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MobileNotification'
+                  total:
+                    type: integer
+                  unreadCount:
+                    type: integer
+
+  /api/mobile/notifications/{notificationId}/read:
+    post:
+      tags: [Mobile]
+      summary: Mark notification as read
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification marked as read
+
+  /api/mobile/notifications/read-all:
+    post:
+      tags: [Mobile]
+      summary: Mark all notifications as read
+      responses:
+        '200':
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+
+  /api/mobile/notifications/{notificationId}:
+    delete:
+      tags: [Mobile]
+      summary: Delete notification
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification deleted
+
+  /api/mobile/session:
+    get:
+      tags: [Mobile]
+      summary: Get current session info
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: '#/components/schemas/MobileSession'
+                  device:
+                    $ref: '#/components/schemas/MobileDevice'
+
+  /api/mobile/session/refresh:
+    post:
+      tags: [Mobile]
+      summary: Refresh session token
+      description: Get a new session token before the current one expires
+      responses:
+        '200':
+          description: New session token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: '#/components/schemas/MobileSession'
+
+  /api/mobile/stats:
+    get:
+      tags: [Mobile]
+      summary: Get mobile API statistics
+      responses:
+        '200':
+          description: Mobile API stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stats:
+                    type: object
+                    properties:
+                      push:
+                        type: object
+                      sync:
+                        type: object
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Better Auth session token
+
+  parameters:
+    projectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Project UUID
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    ContainerResponse:
+      type: object
+      properties:
+        containerId:
+          type: string
+        reused:
+          type: boolean
+        fromPool:
+          type: boolean
+        port:
+          type: integer
+        ptyPort:
+          type: integer
+
+    ContainerLimitError:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          example: CONTAINER_LIMIT_REACHED
+        current:
+          type: integer
+        max:
+          type: integer
+
+    Snapshot:
+      type: object
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+        author:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    SearchResult:
+      type: object
+      properties:
+        file:
+          type: string
+        line:
+          type: integer
+        column:
+          type: integer
+        match:
+          type: string
+        context:
+          type: string
+
+    Package:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        isDev:
+          type: boolean
+
+    GitStatus:
+      type: object
+      properties:
+        isRepo:
+          type: boolean
+        branch:
+          type: string
+        staged:
+          type: array
+          items:
+            type: string
+        unstaged:
+          type: array
+          items:
+            type: string
+        untracked:
+          type: array
+          items:
+            type: string
+        ahead:
+          type: integer
+        behind:
+          type: integer
+
+    Branch:
+      type: object
+      properties:
+        name:
+          type: string
+        current:
+          type: boolean
+
+    Commit:
+      type: object
+      properties:
+        hash:
+          type: string
+        message:
+          type: string
+        author:
+          type: string
+        date:
+          type: string
+          format: date-time
+
+    MCPServer:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        preinstalled:
+          type: boolean
+        requiresApiKey:
+          type: boolean
+        requiredEnvVars:
+          type: array
+          items:
+            type: string
+
+    ErrorsResponse:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              file:
+                type: string
+              line:
+                type: integer
+              column:
+                type: integer
+              message:
+                type: string
+              severity:
+                type: string
+        hasBlockingErrors:
+          type: boolean
+        devServerStatus:
+          type: string
+        errorCount:
+          type: integer
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        ownerId:
+          type: string
+        settings:
+          $ref: '#/components/schemas/OrganizationSettings'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrganizationSettings:
+      type: object
+      properties:
+        allowPublicProjects:
+          type: boolean
+          default: false
+        defaultProjectVisibility:
+          type: string
+          enum: [private, internal, public]
+          default: private
+        maxSeats:
+          type: integer
+        ssoEnabled:
+          type: boolean
+          default: false
+        ssoProvider:
+          type: string
+        allowedDomains:
+          type: array
+          items:
+            type: string
+
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+        organizationId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+              role:
+                type: string
+                enum: [lead, member]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrganizationMember:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, member, viewer]
+        joinedAt:
+          type: string
+          format: date-time
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        organizationId:
+          type: string
+        action:
+          type: string
+        actor:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+            email:
+              type: string
+            ipAddress:
+              type: string
+            userAgent:
+              type: string
+        targetResource:
+          type: string
+        targetId:
+          type: string
+        changes:
+          type: array
+          items:
+            type: object
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    MobileDevice:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        platform:
+          type: string
+          enum: [ios, android, web]
+        appVersion:
+          type: string
+        osVersion:
+          type: string
+        pushToken:
+          type: string
+        pushTokenType:
+          type: string
+          enum: [fcm, apns]
+        lastActive:
+          type: integer
+        createdAt:
+          type: integer
+
+    MobileSession:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        deviceId:
+          type: string
+        token:
+          type: string
+        createdAt:
+          type: integer
+        expiresAt:
+          type: integer
+        lastActivity:
+          type: integer
+        ipAddress:
+          type: string
+        userAgent:
+          type: string
+
+    MobileProject:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        template:
+          type: string
+        language:
+          type: string
+        framework:
+          type: string
+        createdAt:
+          type: integer
+        updatedAt:
+          type: integer
+        lastOpenedAt:
+          type: integer
+        thumbnailUrl:
+          type: string
+        fileCount:
+          type: integer
+        totalSize:
+          type: integer
+        isStarred:
+          type: boolean
+        syncStatus:
+          type: string
+          enum: [synced, pending, conflict]
+        lastSyncAt:
+          type: integer
+
+    MobileProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/MobileProject'
+        - type: object
+          properties:
+            files:
+              type: array
+              items:
+                $ref: '#/components/schemas/MobileFile'
+            recentFiles:
+              type: array
+              items:
+                type: string
+            collaborators:
+              type: array
+              items:
+                $ref: '#/components/schemas/MobileCollaborator'
+            gitBranch:
+              type: string
+            gitStatus:
+              $ref: '#/components/schemas/MobileGitStatus'
+            devServerUrl:
+              type: string
+            previewUrl:
+              type: string
+
+    MobileFile:
+      type: object
+      properties:
+        path:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+        size:
+          type: integer
+        modifiedAt:
+          type: integer
+        mimeType:
+          type: string
+        isNew:
+          type: boolean
+        isModified:
+          type: boolean
+        isDeleted:
+          type: boolean
+
+    MobileCollaborator:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+        isOnline:
+          type: boolean
+        cursor:
+          type: object
+          properties:
+            file:
+              type: string
+            line:
+              type: integer
+            column:
+              type: integer
+
+    MobileGitStatus:
+      type: object
+      properties:
+        branch:
+          type: string
+        ahead:
+          type: integer
+        behind:
+          type: integer
+        staged:
+          type: array
+          items:
+            type: string
+        unstaged:
+          type: array
+          items:
+            type: string
+        untracked:
+          type: array
+          items:
+            type: string
+
+    MobileNotification:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        data:
+          type: object
+        read:
+          type: boolean
+        createdAt:
+          type: integer
+        expiresAt:
+          type: integer
+
+    PaginatedMobileProjects:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MobileProject'
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+
+    SyncOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [create, update, delete, rename]
+        filePath:
+          type: string
+        content:
+          type: string
+        oldPath:
+          type: string
+        timestamp:
+          type: integer
+        hash:
+          type: string
+        deviceId:
+          type: string
+
+    SyncResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        applied:
+          type: integer
+        conflicts:
+          type: array
+          items:
+            type: object
+            properties:
+              filePath:
+                type: string
+              type:
+                type: string
+              resolution:
+                type: string
+              serverVersion:
+                type: string
+              clientVersion:
+                type: string
+        serverOperations:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncOperation'
+        lastSyncAt:
+          type: integer
+
+    SyncStatusInfo:
+      type: object
+      properties:
+        projectId:
+          type: string
+        status:
+          type: string
+          enum: [synced, pending, syncing, conflict, error]
+        lastSyncAt:
+          type: integer
+        pendingOperations:
+          type: integer
+        conflicts:
+          type: array

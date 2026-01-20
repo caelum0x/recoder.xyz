@@ -113,7 +113,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   }
 
   // CRITICAL: Verify user authentication FIRST
-  const { isAuthenticated, hasUserApiKey, getSessionCookie } = await import('~/lib/.server/llm/user-api-key');
   const { verifySession } = await import('~/lib/auth/session.server');
 
   const session = await verifySession(request);
@@ -158,14 +157,17 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   let maxTokens: number = 8000;
 
   try {
-    requestBody = await request.json<{
+    requestBody = await request.json() as {
       messages: Messages;
       provider?: string;
       model?: string;
       maxTokens?: number;
       recoderContext?: string;
       projectContext?: string;
-    }>();
+      mode?: string; // AI mode: architect, code, ask, debug, orchestrator
+      customTools?: string;
+      mcpTools?: string;
+    };
 
     // Extract provider and model from request
     if (requestBody.provider) {
@@ -292,29 +294,17 @@ Create the actual application with all the features, components, and functionali
 
   try {
     // Enterprise AI: Try code_assist for code-related queries first
-    const isCodeQuery = lastUserMessage.match(/code|function|class|component|fix|debug|implement|python|java|rust|go|php|ruby|swift|kotlin|scala|dart|c\+\+|c#|html|css|sql|shell|bash|docker|yaml|json|xml/i);
-    if (isCodeQuery) {
-      try {
-        const { CodeAssistServer } = await import('~/lib/.server/llm/code_assist/server');
-        const codeAssist = new CodeAssistServer();
-        
-        const codeResponse = await codeAssist.handleQuery({
-          query: lastUserMessage,
-          messages: messages,
-          context: requestBody.recoderContext || ''
-        });
-        
-        if (codeResponse.success && codeResponse.content) {
-          // Use code_assist response and enhance with our tools
-          messages.push({
-            role: 'assistant',
-            content: `🚀 Code Assist Enhanced Response:\n\n${codeResponse.content}`
-          });
-        }
-      } catch (error) {
-        console.warn('Code Assist unavailable, using standard AI:', error);
-      }
-    }
+    // Note: Code Assist requires Google OAuth2Client and is currently disabled
+    // const isCodeQuery = lastUserMessage.match(/code|function|class|component|fix|debug|implement|python|java|rust|go|php|ruby|swift|kotlin|scala|dart|c\+\+|c#|html|css|sql|shell|bash|docker|yaml|json|xml/i);
+    // if (isCodeQuery) {
+    //   try {
+    //     const { CodeAssistServer } = await import('~/lib/.server/llm/code_assist/server');
+    //     const codeAssist = new CodeAssistServer(oauthClient, projectId, {}, sessionId, userTier);
+    //     // ... code assist logic
+    //   } catch (error) {
+    //     console.warn('Code Assist unavailable, using standard AI:', error);
+    //   }
+    // }
     
     // Get .recoder/ context from request body (already parsed)
     // console.log('📖 Loading .recoder/ project context...');
@@ -347,8 +337,11 @@ Create the actual application with all the features, components, and functionali
     // Get client-side MCP tools from request
     const clientMcpTools = requestBody.mcpTools || '';
 
-    // Get system prompt and append all context
-    const baseSystemPrompt = getSystemPrompt(undefined, customTools);
+    // Get AI mode from request (default to 'code')
+    const aiMode = requestBody.mode || 'code';
+
+    // Get system prompt and append all context (with mode)
+    const baseSystemPrompt = getSystemPrompt(undefined, customTools, aiMode);
     const systemPrompt = baseSystemPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext;
 
     // Get API key (User's BYOK > Environment variable)

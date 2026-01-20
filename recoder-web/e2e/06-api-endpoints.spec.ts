@@ -3,6 +3,10 @@ import { test, expect } from '@playwright/test';
 /**
  * E2E Test Suite 6: API Endpoints
  * Tests critical API endpoints
+ *
+ * Note: These tests use direct API requests and don't require
+ * page-based authentication. API endpoints that require auth
+ * should handle it via headers or cookies separately.
  */
 
 test.describe('API Endpoints', () => {

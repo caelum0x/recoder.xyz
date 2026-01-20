@@ -122,7 +122,13 @@ export async function createDodoPayCheckout(
     throw new Error(`DodoPay checkout failed: ${error}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as {
+    code: number;
+    message?: string;
+    data: {
+      payment_url: string;
+    };
+  };
 
   if (data.code !== 0) {
     throw new Error(`DodoPay error: ${data.message}`);
@@ -170,7 +176,19 @@ export async function getDodoPaySubscription(
     throw new Error(`Failed to get DodoPay subscription: ${error}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as {
+    code: number;
+    message?: string;
+    data: {
+      subscription_id: string;
+      customer_id: string;
+      plan_id: string;
+      status: string;
+      next_payment_amount: string;
+      currency: string;
+      next_payment_date: string;
+    };
+  };
 
   if (data.code !== 0) {
     throw new Error(`DodoPay error: ${data.message}`);
@@ -229,7 +247,10 @@ export async function cancelDodoPaySubscription(
     throw new Error(`Failed to cancel DodoPay subscription: ${error}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as {
+    code: number;
+    message?: string;
+  };
 
   if (data.code !== 0) {
     throw new Error(`DodoPay error: ${data.message}`);
@@ -275,7 +296,10 @@ export async function updateDodoPaySubscription(
     throw new Error(`Failed to update DodoPay subscription: ${error}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as {
+    code: number;
+    message?: string;
+  };
 
   if (data.code !== 0) {
     throw new Error(`DodoPay error: ${data.message}`);

@@ -7,6 +7,64 @@ import { autoSyncToGitHub } from './github-auto-sync';
 import { WORK_DIR } from '~/utils/constants';
 import { getCurrentUserId } from '~/lib/stores/user';
 import { snapshotBeforeAI, snapshotAfterAI, setAutoSave, createSnapshot } from '~/lib/stores/snapshots';
+import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { isNonNodeFramework, getInstallCommand, getDevServerCommand } from './language-generators';
+
+// Type definitions for API responses
+interface DockerHealthResponse {
+  ok: boolean;
+}
+
+interface DockerExecResponse {
+  output?: string;
+  error?: string;
+  ready?: boolean;
+  port?: number;
+  background?: boolean;
+}
+
+interface DockerLogsResponse {
+  logs: string;
+}
+
+interface DockerHealthCheckResponse {
+  ports: Array<{ port: number; responding: boolean; type: string }>;
+}
+
+interface EnterpriseToolsResponse {
+  success?: boolean;
+  message?: string;
+  content?: string;
+  lineCount?: number;
+  truncated?: boolean;
+  isBinary?: boolean;
+  suggestions?: string;
+  output?: string;
+  data?: any;
+  results?: Array<{ file: string; line: number; content: string; title?: string; snippet?: string }>;
+  files?: Array<string | { path: string; content?: string; error?: string }>;
+  matches?: Array<{ file: string; line: number; content: string }>;
+  items?: Array<{ key: string; value: string }>;
+  value?: string;
+  error?: string;
+  diff?: string;
+  commitHash?: string;
+  appliedCount?: number;
+  totalCount?: number;
+}
+
+interface CloneUrlResponse {
+  success: boolean;
+  title: string;
+  url: string;
+  files: string[];
+  fileCount: number;
+  assetCount: number;
+}
+
+interface ErrorResponse {
+  error?: string;
+}
 
 let _workbenchStore: any = null;
 const getWorkbenchStore = async () => {
@@ -17,14 +75,13 @@ const getWorkbenchStore = async () => {
   return _workbenchStore;
 };
 
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
-
 // 🔒 GLOBAL coordination flags - shared across ALL ActionRunner instances
 // This prevents race conditions between multiple runners and useChatHistory
 let globalNpmInstallRunning = false;
 let globalNpmInstallPromise: Promise<string | void> | null = null;
 let globalAutoInstallTriggered = false;
 let globalNpmInstallComplete = false; // ✅ NEW: Track if install has completed successfully
+let globalStaticServerStarted = false; // 🌐 Track if static file server was started
 
 /**
  * Check if npm install is globally running (across all instances)
@@ -57,6 +114,7 @@ export function resetGlobalActionState(): void {
   globalNpmInstallPromise = null;
   globalAutoInstallTriggered = false;
   globalNpmInstallComplete = false;
+  globalStaticServerStarted = false;
 }
 
 let dockerAvailable: boolean | null = null;
@@ -71,16 +129,16 @@ async function checkDockerAvailable(forceCheck = false): Promise<boolean> {
   }
   
   if (!DOCKER_URL) return false;
-  
+
   try {
-    const res = await fetch(`${DOCKER_URL}/health`, { signal: AbortSignal.timeout(3000) });
-    dockerAvailable = res.ok;
+    const res = await dockerFetch<DockerHealthResponse>('/health', { signal: AbortSignal.timeout(3000) });
+    dockerAvailable = res.ok === true;
     lastDockerCheck = now;
   } catch {
     dockerAvailable = false;
     lastDockerCheck = now;
   }
-  return dockerAvailable;
+  return dockerAvailable === true;
 }
 
 if (typeof window !== 'undefined') {
@@ -148,10 +206,13 @@ export class ActionRunner {
   #devServerProcess: any = null;
   #packageJsonCreated: boolean = false;
   #autoInstallTimer: NodeJS.Timeout | null = null;
+  #staticServerTimer: NodeJS.Timeout | null = null;  // Timer for static file server
+  #htmlFileCreated: boolean = false;  // Track if HTML file was created
   #filesBeingCreated: Set<string> = new Set();
   #projectId: string | null = null;
   #dockerReady: boolean = false;
   #isRestoredChat: boolean = false;  // True if this is a restored past chat
+  #restoredFilePaths: Set<string> = new Set();  // Files that were restored from snapshot
   #snapshotTaken: boolean = false;  // Track if snapshot was taken before AI changes
   // Note: #npmInstallRunning and #autoInstallTriggered are now GLOBAL flags above
 
@@ -195,12 +256,20 @@ export class ActionRunner {
   /**
    * Mark this chat as restored from history.
    * This prevents auto-install from triggering since files are restored separately.
+   * @param restoredFiles - Array of file paths that were restored from snapshot
    */
-  markAsRestoredChat() {
+  markAsRestoredChat(restoredFiles?: string[]) {
     this.#isRestoredChat = true;
     globalAutoInstallTriggered = true; // Prevent auto-install globally
     this.#packageJsonCreated = true; // Assume package.json exists from restored files
-    logger.info('📂 ActionRunner marked as restored chat - auto-install disabled globally');
+
+    // Track which files were restored so we only skip those, not new files
+    if (restoredFiles) {
+      this.#restoredFilePaths = new Set(restoredFiles);
+      logger.info(`📂 ActionRunner marked as restored chat with ${restoredFiles.length} files - auto-install disabled globally`);
+    } else {
+      logger.info('📂 ActionRunner marked as restored chat - auto-install disabled globally');
+    }
   }
 
   async #ensureDockerReady(): Promise<boolean> {
@@ -215,15 +284,18 @@ export class ActionRunner {
       const userId = getCurrentUserId();
       const res = await fetch(`${DOCKER_URL}/api/container`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getSessionToken() || ''}`,
+        },
         body: JSON.stringify({ projectId: this.#projectId, userId }),
         signal: AbortSignal.timeout(10000),
       });
-      
+
       if (res.ok) {
         this.#dockerReady = true;
         logger.info(`Docker container ready for project: ${this.#projectId}`);
-        
+
         // ✅ CRITICAL: Notify workbench store about project ID for preview
         if (this.#projectId && typeof window !== 'undefined') {
           try {
@@ -234,7 +306,7 @@ export class ActionRunner {
             logger.warn('Could not notify workbench store:', err);
           }
         }
-        
+
         return true;
       } else {
         const errText = await res.text();
@@ -252,7 +324,10 @@ export class ActionRunner {
     const fullPath = path.startsWith('/') ? path : `/workspace/${path}`;
     const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getSessionToken() || ''}`,
+      },
       body: JSON.stringify({ path: fullPath, content }),
     });
     if (!res.ok) {
@@ -266,10 +341,13 @@ export class ActionRunner {
     const workDir = cwd ? (cwd.startsWith('/') ? cwd : `/workspace/${cwd}`) : '/workspace';
     const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getSessionToken() || ''}`,
+      },
       body: JSON.stringify({ command, cwd: workDir, background }),
     });
-    const data = await res.json() as { output?: string; error?: string; ready?: boolean; port?: number; background?: boolean };
+    const data = await res.json() as DockerExecResponse;
     if (!res.ok) throw new Error(data.error || 'Docker exec failed');
 
     // For background processes, log the ready status
@@ -390,6 +468,18 @@ export class ActionRunner {
           await this.#runCloneGitHubAction(action);
           break;
         }
+        case 'cloneUrl': {
+          await this.#runCloneUrlAction(action);
+          break;
+        }
+        case 'spawn_task': {
+          await this.#runSpawnTaskAction(action);
+          break;
+        }
+        case 'switch_mode': {
+          await this.#runSwitchModeAction(action);
+          break;
+        }
         case 'readFile': {
           await this.#runReadFileAction(action);
           break;
@@ -404,6 +494,10 @@ export class ActionRunner {
         }
         case 'str_replace': {
           await this.#runStrReplaceAction(action);
+          break;
+        }
+        case 'multi_apply_diff': {
+          await this.#runMultiApplyDiffAction(action);
           break;
         }
         case 'delegate_subagent': {
@@ -740,10 +834,10 @@ export class ActionRunner {
       return;
     }
 
-    // 🔧 CRITICAL FIX: Skip file creation for restored chats
-    // Files are already restored from database snapshot by useChatHistory
-    if (this.#isRestoredChat) {
-      logger.debug(`⏭️ Skipping file action for '${action.filePath}' - restored chat (files from snapshot)`);
+    // 🔧 CRITICAL FIX: Skip file creation ONLY for files that were actually restored from snapshot
+    // New files generated after restoring should still be written
+    if (this.#isRestoredChat && this.#restoredFilePaths.has(action.filePath)) {
+      logger.debug(`⏭️ Skipping file action for '${action.filePath}' - file already restored from snapshot`);
       return;
     }
 
@@ -861,10 +955,20 @@ export class ActionRunner {
     // ✅ P1: Remove from tracking
     this.#filesBeingCreated.delete(action.filePath);
 
+    // Track HTML file creation for static server fallback
+    const isHtmlFile = action.filePath.endsWith('.html') || action.filePath.endsWith('.htm');
+    if (isHtmlFile) {
+      this.#htmlFileCreated = true;
+    }
+
     // ✅ P1: Schedule auto-install (debounced - waits for all files to finish)
     // Use global flag to prevent multiple instances from triggering
     if (this.#packageJsonCreated && !globalAutoInstallTriggered) {
       this.#scheduleAutoInstall();
+    } else if (this.#htmlFileCreated && !this.#packageJsonCreated && !globalStaticServerStarted && !globalAutoInstallTriggered) {
+      // 🌐 Static HTML project - no package.json, but HTML files exist
+      // Schedule static file server start (debounced)
+      this.#scheduleStaticServer();
     }
   }
 
@@ -1214,6 +1318,71 @@ export class ActionRunner {
     }, 3000);
   }
 
+  /**
+   * Schedule static file server start (debounced)
+   * Used for HTML/CSS/JS projects without package.json
+   */
+  #scheduleStaticServer() {
+    if (this.#staticServerTimer) {
+      clearTimeout(this.#staticServerTimer);
+    }
+
+    logger.info('🌐 Scheduling static file server (debounced, 2000ms delay)...');
+
+    this.#staticServerTimer = setTimeout(() => {
+      this.#runStaticServer();
+    }, 2000);
+  }
+
+  /**
+   * Start a simple static file server for HTML/CSS/JS projects
+   */
+  async #runStaticServer() {
+    if (globalStaticServerStarted) return;
+    if (globalAutoInstallTriggered) return;  // npm-based project took over
+    if (this.#packageJsonCreated) return;  // package.json was created later
+
+    // Double-check: maybe package.json was created by AI during the delay
+    try {
+      const checkResult = await this.#dockerExec('test -f /workspace/package.json && echo "exists" || echo "missing"');
+      if (checkResult.includes('exists')) {
+        logger.info('📦 package.json detected - switching to npm-based install instead of static server');
+        this.#packageJsonCreated = true;
+        this.#scheduleAutoInstall();
+        return;
+      }
+    } catch (e) {
+      // Continue with static server
+    }
+
+    globalStaticServerStarted = true;
+    logger.info('🌐 Starting static file server for HTML project...');
+
+    try {
+      await this.#ensureDockerReady();
+
+      // Start Python's simple HTTP server on port 5173 (same port Vite uses)
+      // This makes the preview work without any npm dependencies
+      await this.#dockerExec('python3 -m http.server 5173 --bind 0.0.0.0 &', '/workspace', true);
+      logger.info('✅ Static file server started on port 5173');
+
+      // Mark container as ready
+      setTimeout(async () => {
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.setContainerReady(true);
+          logger.info('✅ Container marked as ready (static server)');
+        } catch (e) {
+          logger.warn('Could not set container ready:', e);
+        }
+      }, 1000);
+
+    } catch (error: any) {
+      logger.error('❌ Failed to start static file server:', error.message);
+      globalStaticServerStarted = false;
+    }
+  }
+
   async #runAutoInstall() {
     // Use global flags to prevent race conditions across instances
     if (globalAutoInstallTriggered) return;
@@ -1232,6 +1401,16 @@ export class ActionRunner {
 
     try {
       await this.#ensureDockerReady();
+
+      // 🌐 Detect framework to determine install/run approach
+      const framework = await this.#detectFramework();
+      logger.info(`🔍 Detected framework: ${framework}`);
+
+      // Handle non-Node.js languages
+      if (isNonNodeFramework(framework)) {
+        await this.#runNonNodeInstall(framework);
+        return;
+      }
 
       // 🚀 OPTIMIZATION: Only clean if there's a corrupted node_modules
       // Check if node_modules exists and has valid structure
@@ -1319,9 +1498,13 @@ export class ActionRunner {
   async #checkDevServerHealth(markContainerReady: boolean = false) {
     try {
       // Check preview health endpoint
-      const healthRes = await fetch(`${DOCKER_URL}/api/preview/${this.#projectId}/health`);
+      const healthRes = await fetch(`${DOCKER_URL}/api/preview/${this.#projectId}/health`, {
+        headers: {
+          'Authorization': `Bearer ${getSessionToken() || ''}`,
+        },
+      });
       if (healthRes.ok) {
-        const healthData = await healthRes.json() as { ports: Array<{ port: number; responding: boolean; type: string }> };
+        const healthData = await healthRes.json() as DockerHealthCheckResponse;
         const respondingPort = healthData.ports.find(p => p.responding);
 
         if (respondingPort) {
@@ -1348,13 +1531,17 @@ export class ActionRunner {
       }
 
       // Also check logs for errors
-      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`);
+      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`, {
+        headers: {
+          'Authorization': `Bearer ${getSessionToken() || ''}`,
+        },
+      });
       if (!res.ok) {
         logger.warn('⚠️ Could not read dev server logs');
         return;
       }
 
-      const data = await res.json() as { logs: string };
+      const data = await res.json() as DockerLogsResponse;
       const logs = data.logs;
 
       // If no logs, check if process is even running
@@ -1414,6 +1601,53 @@ export class ActionRunner {
       }
     } catch (error) {
       logger.warn('Could not check dev server health:', error);
+    }
+  }
+
+  /**
+   * Run install and dev server for non-Node.js languages (Python, Rust, Go, Java)
+   */
+  async #runNonNodeInstall(framework: string) {
+    logger.info(`🌐 Running ${framework} project install and dev server...`);
+
+    try {
+      const installCmd = getInstallCommand(framework);
+      const { command: devCmd, port } = getDevServerCommand(framework);
+
+      // Run install command
+      if (installCmd) {
+        logger.info(`📦 Installing dependencies: ${installCmd}`);
+        const installOutput = await this.#dockerExec(installCmd, '/workspace');
+
+        // Check for errors
+        if (installOutput.includes('error') || installOutput.includes('Error') || installOutput.includes('failed')) {
+          logger.warn(`⚠️ ${framework} install may have issues:`, installOutput.substring(0, 500));
+        } else {
+          logger.info(`✅ ${framework} dependencies installed`);
+        }
+      }
+
+      globalNpmInstallRunning = false;
+      globalNpmInstallComplete = true;
+
+      // Start dev server
+      if (devCmd) {
+        logger.info(`🚀 Starting ${framework} dev server: ${devCmd}`);
+        await this.#dockerExec(devCmd, '/workspace', true);
+        logger.info(`✅ ${framework} dev server started on port ${port}`);
+      }
+
+      // Check health and mark ready
+      setTimeout(() => this.#checkDevServerHealth(true), 3000);
+
+    } catch (error: any) {
+      globalNpmInstallRunning = false;
+      logger.error(`❌ ${framework} install failed:`, error.message);
+
+      logger.info('💡 You can manually fix this:');
+      logger.info(`  1. Check your ${framework} project files are valid`);
+      logger.info(`  2. Run: ${getInstallCommand(framework)}`);
+      logger.info(`  3. Run: ${getDevServerCommand(framework).command}`);
     }
   }
 
@@ -1511,17 +1745,17 @@ export class ActionRunner {
         })
       });
       
-      const result = await response.json();
+      const result = await response.json() as EnterpriseToolsResponse;
 
       if (result.success) {
-        let message = result.message;
+        let message = result.message || '';
         if (result.truncated) {
           message += `\n\nNote: File was truncated. Use line ranges to read specific sections.`;
         }
         if (result.isBinary) {
           message += `\n\nNote: Binary file detected. Content not displayed.`;
         }
-        
+
         // Enterprise enhancement: Use code_assist for code analysis
         if (action.filePath.match(/\.(ts|tsx|js|jsx|py|java|cpp|c|cs|go|rs|rb|php|swift|kt|scala|dart|vue|svelte|html|css|scss|sass|less|sql|sh|bash|ps1|yaml|yml|json|xml|toml|ini|cfg|conf|dockerfile|makefile|cmake|gradle|pom\.xml|cargo\.toml|package\.json|requirements\.txt|gemfile|composer\.json)$/i)) {
           try {
@@ -1536,8 +1770,8 @@ export class ActionRunner {
                 }
               })
             });
-            const analysis = await analysisResponse.json();
-            
+            const analysis = await analysisResponse.json() as EnterpriseToolsResponse;
+
             if (analysis.suggestions) {
               message += `\n\n🔍 Code Analysis:\n${analysis.suggestions}`;
             }
@@ -1545,7 +1779,7 @@ export class ActionRunner {
             logger.warn('Code analysis unavailable:', error);
           }
         }
-        
+
         action.content = result.content || message;
         logger.info(`Successfully read file: ${action.filePath} (${result.lineCount || 0} lines)`);
       } else {
@@ -1561,13 +1795,16 @@ export class ActionRunner {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getSessionToken() || ''}`,
+      },
       body: JSON.stringify({ command: `cat "/workspace${normalizedPath}"` }),
     });
     if (!res.ok) {
       throw new Error('Docker read failed');
     }
-    const data = await res.json() as { output?: string };
+    const data = await res.json() as DockerExecResponse;
     return data.output || '';
   }
 
@@ -1595,8 +1832,8 @@ export class ActionRunner {
             }
           })
         });
-        const relevantFiles = await discoveryResponse.json();
-        
+        const relevantFiles = await discoveryResponse.json() as string[];
+
         if (relevantFiles.length > 0) {
           action.content = `Smart discovery found relevant files:\n${relevantFiles.join('\n')}\n\nFull listing:\n`;
         }
@@ -1655,12 +1892,12 @@ export class ActionRunner {
         })
       });
       
-      const result = await replaceResponse.json();
+      const result = await replaceResponse.json() as EnterpriseToolsResponse;
 
       if (result.success) {
-        action.content = result.message + (result.diff ? `\n\nDiff:\n${result.diff}` : '');
+        action.content = (result.message || '') + (result.diff ? `\n\nDiff:\n${result.diff}` : '');
         logger.info(`Successfully replaced text in ${action.filePath}`);
-        
+
         // Enterprise enhancement: Auto-commit changes
         try {
           const commitResponse = await fetch('/api/enterprise-tools', {
@@ -1674,8 +1911,8 @@ export class ActionRunner {
               }
             })
           });
-          const commitResult = await commitResponse.json();
-          
+          const commitResult = await commitResponse.json() as EnterpriseToolsResponse;
+
           if (commitResult.success) {
             action.content += `\n\n✅ Auto-committed: ${commitResult.commitHash}`;
           }
@@ -1688,6 +1925,78 @@ export class ActionRunner {
     } catch (error) {
       logger.error(`String replacement failed:`, error);
       throw new Error(`Could not replace text in: ${action.filePath}`);
+    }
+  }
+
+  async #runMultiApplyDiffAction(action: ActionState) {
+    if (action.type !== 'multi_apply_diff') {
+      unreachable('Expected multi_apply_diff action');
+    }
+
+    const diffCount = action.diffs?.length || 0;
+    logger.info(`Applying ${diffCount} atomic diffs`);
+
+    try {
+      await this.#ensureDockerReady();
+
+      // Call enterprise tools API for multi-file atomic diff
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'multiApplyDiff',
+          params: {
+            diffs: action.diffs,
+            workingDir: '/workspace',
+            commitMessage: action.commitMessage
+          }
+        })
+      });
+
+      const result = await response.json() as EnterpriseToolsResponse & {
+        results?: Array<{ status: string; filePath: string; diff?: string; error?: string }>;
+      };
+
+      if (result.success) {
+        let summary = `✅ ${result.message}\n\n`;
+
+        // Show per-file results
+        if (result.results) {
+          for (const fileResult of result.results) {
+            if (fileResult.status === 'applied') {
+              summary += `📝 ${fileResult.filePath}: Applied\n`;
+              if (fileResult.diff) {
+                summary += `\`\`\`diff\n${fileResult.diff.substring(0, 500)}${fileResult.diff.length > 500 ? '...' : ''}\n\`\`\`\n`;
+              }
+            } else if (fileResult.status === 'failed') {
+              summary += `❌ ${fileResult.filePath}: ${fileResult.error}\n`;
+            }
+          }
+        }
+
+        if (result.commitHash) {
+          summary += `\n🔗 Committed: ${result.commitHash}`;
+        }
+
+        action.content = summary;
+        logger.info(`Multi-apply-diff succeeded: ${result.appliedCount}/${result.totalCount} applied`);
+      } else {
+        action.content = `❌ Multi-apply-diff failed: ${result.message}\n\n`;
+
+        // Show individual failures
+        if (result.results) {
+          for (const fileResult of result.results) {
+            if (fileResult.status === 'failed') {
+              action.content += `• ${fileResult.filePath}: ${fileResult.error}\n`;
+            }
+          }
+        }
+
+        logger.warn(`Multi-apply-diff failed: ${result.message}`);
+      }
+    } catch (error) {
+      logger.error(`Multi-apply-diff failed:`, error);
+      action.content = `❌ Failed to apply atomic diffs: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   }
 
@@ -1713,8 +2022,8 @@ export class ActionRunner {
         })
       });
       
-      const result = await response.json();
-      
+      const result = await response.json() as EnterpriseToolsResponse;
+
       action.content = `Subagent (${action.agentType}) completed:\n${result.output || result.message}`;
       logger.info(`Subagent task completed successfully`);
     } catch (error) {
@@ -1742,14 +2051,14 @@ export class ActionRunner {
           }
         })
       });
-      const result = await response.json();
-      
-      if (!result || !result.results) {
+      const result = await response.json() as EnterpriseToolsResponse;
+
+      if (!result || !result.results || result.results.length === 0) {
         action.content = `Web search completed but no results found for "${action.query}"`;
         return;
       }
-      
-      action.content = `Web search results for "${action.query}":\n${result.results.map(r => `• ${r.title}: ${r.snippet}`).join('\n')}`;
+
+      action.content = `Web search results for "${action.query}":\n${result.results.map((r: any) => `• ${r.title}: ${r.snippet}`).join('\n')}`;
       logger.info(`Web search completed with ${result.results.length} results`);
     } catch (error) {
       logger.warn('Web search unavailable:', error);
@@ -1776,13 +2085,13 @@ export class ActionRunner {
           }
         })
       });
-      const result = await response.json();
-      
+      const result = await response.json() as EnterpriseToolsResponse;
+
       if (!result || !result.content) {
         action.content = `Failed to fetch content from ${action.url}`;
         return;
       }
-      
+
       action.content = `Content from ${action.url}:\n${result.content.substring(0, 5000)}${result.content.length > 5000 ? '\n\n[Content truncated - use selector to get specific sections]' : ''}`;
       logger.info(`URL fetch completed, ${result.content.length} chars`);
     } catch (error) {
@@ -1810,16 +2119,16 @@ export class ActionRunner {
           }
         })
       });
-      const result = await response.json();
-      
+      const result = await response.json() as EnterpriseToolsResponse;
+
       if (action.operation === 'list') {
-        action.content = `Stored memories:\n${result.items?.map(i => `• ${i.key}: ${i.value}`).join('\n') || 'No memories stored yet'}`;
+        action.content = `Stored memories:\n${result.items?.map((i: any) => `• ${i.key}: ${i.value}`).join('\n') || 'No memories stored yet'}`;
       } else if (action.operation === 'retrieve') {
         action.content = result.value ? `Retrieved: ${result.value}` : `No memory found for key: ${action.key}`;
       } else {
         action.content = `Memory stored: ${action.key}`;
       }
-      
+
       logger.info(`Memory ${action.operation} completed`);
     } catch (error) {
       logger.warn('Memory operation unavailable:', error);
@@ -1835,19 +2144,31 @@ export class ActionRunner {
     logger.info(`Glob search: ${action.pattern}`);
 
     try {
-      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "glob", params: { pattern: action.pattern, options: action.options } }) }); const globTool = await response.json();
-      const result = await globTool.search(action.pattern, action.exclude, action.maxDepth);
-      
-      if (!result || !result.files || result.files.length === 0) {
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'glob',
+          params: {
+            pattern: action.pattern,
+            path: '/workspace',
+            ignore: action.exclude
+          }
+        })
+      });
+      const result = await response.json() as EnterpriseToolsResponse;
+
+      if (!result.success || !result.files || (Array.isArray(result.files) && result.files.length === 0)) {
         action.content = `No files found matching pattern "${action.pattern}"`;
         return;
       }
-      
-      const fileList = result.files.slice(0, 100).join('\n');
-      const truncated = result.files.length > 100 ? `\n\n[Showing 100 of ${result.files.length} files]` : '';
-      
+
+      const filesArray = Array.isArray(result.files) ? result.files : [];
+      const fileList = filesArray.slice(0, 100).join('\n');
+      const truncated = filesArray.length > 100 ? `\n\n[Showing 100 of ${filesArray.length} files]` : '';
+
       action.content = `Files matching "${action.pattern}":\n${fileList}${truncated}`;
-      logger.info(`Glob search found ${result.files.length} files`);
+      logger.info(`Glob search found ${filesArray.length} files`);
     } catch (error) {
       logger.warn('Glob search unavailable:', error);
       action.content = `Glob search for "${action.pattern}" - Using fallback to listFiles instead.`;
@@ -1862,23 +2183,32 @@ export class ActionRunner {
     logger.info(`RipGrep search: ${action.query}`);
 
     try {
-      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "ripGrep", params: { pattern: action.pattern, path: action.path, options: action.options } }) }); const ripGrep = await response.json();
-      const result = await ripGrep({
-        query: action.query,
-        filePattern: action.filePattern,
-        caseSensitive: action.caseSensitive,
-        maxResults: action.maxResults || 100
-      }, '/workspace');
-      
-      if (!result || !result.matches || result.matches.length === 0) {
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'ripGrep',
+          params: {
+            pattern: action.query,
+            path: '/workspace',
+            caseSensitive: action.caseSensitive,
+            maxResults: action.maxResults || 100
+          }
+        })
+      });
+      const result = await response.json() as EnterpriseToolsResponse;
+
+      if (!result.success || !result.matches || result.matches.length === 0) {
         action.content = `No matches found for "${action.query}"${action.filePattern ? ` in ${action.filePattern}` : ''}`;
         return;
       }
-      
-      const matches = result.matches.slice(0, 50);
+
+      const matchLines = result.matches.slice(0, 50).map(
+        (m: any) => `${m.file}:${m.line}: ${m.content}`
+      );
       const truncated = result.matches.length > 50 ? `\n\n[Showing 50 of ${result.matches.length} matches]` : '';
-      
-      action.content = `RipGrep results for "${action.query}":\n${matches.join('\n')}${truncated}`;
+
+      action.content = `RipGrep results for "${action.query}":\n${matchLines.join('\n')}${truncated}`;
       logger.info(`RipGrep found ${result.matches.length} matches`);
     } catch (error) {
       logger.warn('RipGrep unavailable, using fallback:', error);
@@ -1899,28 +2229,42 @@ export class ActionRunner {
     logger.info(`Editing file: ${action.filePath} at line ${action.lineNumber}`);
 
     try {
-      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "editFile", params: { filePath: action.filePath, edits: action.edits, workingDir: "/workspace" } }) }); const editFile = await response.json();
-      
       // Validate line numbers
       if (action.lineNumber < 1) {
         action.content = `Invalid line number: ${action.lineNumber}. Line numbers start at 1.`;
         return;
       }
-      
+
       if (action.endLineNumber && action.endLineNumber < action.lineNumber) {
         action.content = `Invalid range: end line (${action.endLineNumber}) must be >= start line (${action.lineNumber})`;
         return;
       }
-      
-      const result = await editFile({
-        filePath: action.filePath,
-        operation: action.operation,
-        lineNumber: action.lineNumber,
-        content: action.content,
-        endLineNumber: action.endLineNumber
-      }, '/workspace');
-      
-      action.content = `File edit completed: ${result.message}\n\nModified ${action.filePath} at line ${action.lineNumber}`;
+
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'editFile',
+          params: {
+            filePath: action.filePath,
+            edits: [{
+              lineNumber: action.lineNumber,
+              operation: action.operation,
+              content: action.content,
+              endLine: action.endLineNumber
+            }],
+            workingDir: '/workspace'
+          }
+        })
+      });
+      const result = await response.json() as EnterpriseToolsResponse;
+
+      if (!result.success) {
+        action.content = `File edit failed: ${result.error || 'Unknown error'}`;
+        return;
+      }
+
+      action.content = `File edit completed. Modified ${action.filePath} at line ${action.lineNumber}`;
       logger.info(`File edit completed: ${action.operation} at line ${action.lineNumber}`);
     } catch (error) {
       logger.warn('EditFile unavailable, using strReplace:', error);
@@ -1933,37 +2277,47 @@ export class ActionRunner {
       unreachable('Expected read_many_files action');
     }
 
-    logger.info(`Reading ${action.filePaths.length} files`);
+    logger.info(`Reading ${action.filePaths?.length || 0} files`);
 
     try {
-      const response = await fetch("/api/enterprise-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool: "readManyFiles", params: { files: action.files, workingDir: "/workspace" } }) }); const readManyFiles = await response.json();
-      
       if (!action.filePaths || action.filePaths.length === 0) {
         action.content = 'No files specified to read';
         return;
       }
-      
+
       if (action.filePaths.length > 20) {
         action.content = `Too many files requested (${action.filePaths.length}). Maximum is 20 files per batch. Use glob or listFiles to find files first.`;
         return;
       }
-      
-      const result = await readManyFiles({
-        filePaths: action.filePaths,
-        maxFileSize: action.maxFileSize || 100000 // 100KB default
-      }, '/workspace');
-      
-      if (!result || !result.files || result.files.length === 0) {
+
+      const response = await fetch('/api/enterprise-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'readManyFiles',
+          params: {
+            files: action.filePaths,
+            workingDir: '/workspace',
+            maxFileSize: action.maxFileSize || 100000
+          }
+        })
+      });
+      const result = await response.json() as EnterpriseToolsResponse;
+
+      if (!result.success || !result.files || (Array.isArray(result.files) && result.files.length === 0)) {
         action.content = `Failed to read files: ${action.filePaths.join(', ')}`;
         return;
       }
-      
-      const fileContents = result.files.map(f => 
-        `=== ${f.path} ===\n${f.content.substring(0, 1000)}${f.content.length > 1000 ? '\n[truncated]' : ''}`
+
+      const filesArray = Array.isArray(result.files) ? result.files : [];
+      const fileContents = filesArray.map((f: any) =>
+        f.error
+          ? `=== ${f.path} ===\n[Error: ${f.error}]`
+          : `=== ${f.path} ===\n${(f.content || '').substring(0, 1000)}${(f.content?.length || 0) > 1000 ? '\n[truncated]' : ''}`
       ).join('\n\n');
-      
-      action.content = `Read ${result.files.length} files:\n\n${fileContents}`;
-      logger.info(`Read ${result.files.length} files successfully`);
+
+      action.content = `Read ${filesArray.length} files:\n\n${fileContents}`;
+      logger.info(`Read ${filesArray.length} files successfully`);
     } catch (error) {
       logger.warn('ReadManyFiles unavailable:', error);
       action.content = `Batch read failed. Try reading files individually with readFile instead.`;
@@ -2020,6 +2374,20 @@ export class ActionRunner {
       // Rust detection
       if (fileList.includes('cargo.toml')) {
         return 'rust';
+      }
+
+      // Java detection
+      if (fileList.includes('pom.xml') || fileList.includes('build.gradle')) {
+        // Check for Spring Boot
+        if (fileList.includes('spring-boot') || fileList.includes('application.properties') || fileList.includes('application.yml')) {
+          return 'java-spring';
+        }
+        return 'java';
+      }
+
+      // FastAPI detection (Python with main.py containing FastAPI)
+      if (fileList.includes('main.py') && (fileList.includes('requirements.txt') || fileList.includes('pyproject.toml'))) {
+        return 'fastapi';
       }
 
       // Default to Vite for React/Vue/Svelte
@@ -2173,6 +2541,169 @@ export class ActionRunner {
             vite: "^5.4.0"
           }
         };
+    }
+  }
+
+  /**
+   * Clone a website's UI from a URL - creates exact replica
+   * Calls docker-backend which has full Node.js capabilities for fetching
+   */
+  async #runCloneUrlAction(action: ActionState) {
+    if (action.type !== 'cloneUrl') {
+      unreachable('Expected cloneUrl action');
+    }
+
+    logger.info(`🌐 Cloning website from: ${action.url}`);
+    if (action.reason) {
+      logger.info(`   Reason: ${action.reason}`);
+    }
+
+    try {
+      await this.#ensureDockerReady();
+
+      if (!this.#projectId) {
+        throw new Error('No project ID available');
+      }
+
+      // Call docker-backend to clone the website (it has full Node.js capabilities)
+      const response = await fetch(`${DOCKER_URL}/api/clone-url/${this.#projectId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getSessionToken() || ''}`,
+        },
+        body: JSON.stringify({
+          url: action.url,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to clone URL' })) as ErrorResponse;
+        throw new Error(error.error || `Failed to clone URL: ${response.status}`);
+      }
+
+      const result = await response.json() as CloneUrlResponse;
+
+      logger.info(`📄 Page title: ${result.title}`);
+      logger.info(`📁 Files created: ${result.fileCount}`);
+      logger.info(`🎨 Assets embedded: ${result.assetCount}`);
+
+      // Refresh file tree from container
+      const store = await getWorkbenchStore();
+
+      // Add files to the store for UI display
+      for (const filePath of result.files) {
+        const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+        const fullPath = `${WORK_DIR}/${relativePath}`;
+        const parts = fullPath.split('/').filter(Boolean);
+
+        // Create all parent folders in the file tree
+        for (let i = 1; i < parts.length; i++) {
+          const folderPath = '/' + parts.slice(0, i).join('/');
+          if (!store.files.get()[folderPath]) {
+            store.files.setKey(folderPath, { type: 'folder' });
+          }
+        }
+        // Mark file as existing (content will be loaded on demand)
+        store.files.setKey(fullPath, { type: 'file', content: '', isBinary: false });
+      }
+
+      logger.info(`✅ Website cloned successfully: ${result.title}`);
+      logger.info(`🌐 Original URL: ${result.url}`);
+      logger.info(`📝 Run 'npm run dev' to view the cloned site`);
+
+      // Set flag to prevent additional file generation
+      this.#repositoryCloned = true;
+      this.#clonedRepoUrl = action.url;
+
+      // Store summary for AI context
+      action.content = `Website "${result.title}" cloned successfully from ${result.url}. ${result.fileCount} files created with ${result.assetCount} assets embedded. Run 'npm run dev' to preview.`;
+    } catch (error) {
+      logger.error(`❌ Failed to clone website:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Spawn a subtask with a specific mode
+   * This triggers the AI to execute the task in the chat
+   */
+  async #runSpawnTaskAction(action: ActionState) {
+    if (action.type !== 'spawn_task') {
+      unreachable('Expected spawn_task action');
+    }
+
+    logger.info(`🚀 Spawning subtask: ${action.taskDescription}`);
+    if (action.mode) {
+      logger.info(`   Mode: ${action.mode}`);
+    }
+
+    try {
+      const taskId = `task-${Date.now().toString(36)}`;
+
+      // Build the task prompt with context
+      let taskPrompt = action.taskDescription;
+
+      // Add context if provided
+      if (action.context) {
+        taskPrompt = `Context: ${action.context}\n\nTask: ${taskPrompt}`;
+      }
+
+      // Add mode instruction if different from current
+      if (action.mode && action.mode !== 'code') {
+        taskPrompt = `[Mode: ${action.mode}] ${taskPrompt}`;
+      }
+
+      // Dispatch event to trigger the chat to send this as a message
+      // The Chat.client.tsx component listens for this event
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('recoder:spawn-task', {
+          detail: {
+            taskId,
+            prompt: taskPrompt,
+            mode: action.mode || 'code',
+            context: action.context,
+          },
+        });
+        window.dispatchEvent(event);
+
+        logger.info(`✅ Subtask dispatched to chat: ${taskId}`);
+        action.content = `Task "${action.taskDescription}" sent to AI for execution`;
+      } else {
+        // Server-side fallback - just log
+        logger.info(`✅ Subtask logged (server-side): ${taskId}`);
+        action.content = `Task logged: ${action.taskDescription}`;
+      }
+    } catch (error) {
+      logger.error(`❌ Failed to spawn subtask:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Switch the AI mode mid-conversation
+   */
+  async #runSwitchModeAction(action: ActionState) {
+    if (action.type !== 'switch_mode') {
+      unreachable('Expected switch_mode action');
+    }
+
+    logger.info(`🔄 Switching to ${action.targetMode} mode`);
+    if (action.reason) {
+      logger.info(`   Reason: ${action.reason}`);
+    }
+
+    // Import the mode store and update it
+    try {
+      const { setMode } = await import('../stores/mode');
+      setMode(action.targetMode);
+
+      logger.info(`✅ Mode switched to: ${action.targetMode}`);
+      action.content = `Mode switched to ${action.targetMode}`;
+    } catch (error) {
+      logger.error(`❌ Failed to switch mode:`, error);
+      // Don't throw - mode switching is non-critical
+      action.content = `Mode switch requested: ${action.targetMode}`;
     }
   }
 }

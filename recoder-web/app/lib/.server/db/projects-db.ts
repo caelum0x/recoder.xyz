@@ -22,6 +22,11 @@ export interface Project {
   templateId?: string;
   createdAt: Date;
   updatedAt: Date;
+  // UI display properties (can be stored in metadata)
+  color?: string;
+  icon?: string;
+  chatCount?: number;
+  fileCount?: number;
 }
 
 export interface CreateProjectData {
@@ -60,12 +65,12 @@ export class ProjectsDB {
       }
 
       const result = await this.sql`
-        SELECT * FROM projects 
+        SELECT * FROM projects
         WHERE "userId" = ${userId}
         ORDER BY "updatedAt" DESC
-      `;
-      
-      return result as Project[];
+      ` as unknown as Project[];
+
+      return result;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('❌ [ProjectsDB.getUserProjects] Database error:', message);
@@ -110,14 +115,14 @@ export class ProjectsDB {
           ${now}
         )
         RETURNING *
-      `;
-      
+      ` as unknown as Project[];
+
       if (!result || result.length === 0) {
         throw new Error('No project returned from database');
       }
 
       console.log('✅ Project created in DB:', result[0].id);
-      return result[0] as Project;
+      return result[0];
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('❌ [ProjectsDB.createProject] Database error:', message);
@@ -132,8 +137,8 @@ export class ProjectsDB {
   async updateProject(projectId: string, data: Partial<CreateProjectData>, userId: string): Promise<Project | null> {
     try {
       const result = await this.sql`
-        UPDATE projects 
-        SET 
+        UPDATE projects
+        SET
           name = COALESCE(${data.name || null}, name),
           description = COALESCE(${data.description || null}, description),
           framework = COALESCE(${data.framework || null}, framework),
@@ -142,13 +147,13 @@ export class ProjectsDB {
           "updatedAt" = NOW()
         WHERE id = ${projectId} AND "userId" = ${userId}
         RETURNING *
-      `;
-      
+      ` as unknown as Project[];
+
       if (!result || result.length === 0) {
         return null;
       }
 
-      return result[0] as Project;
+      return result[0];
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('❌ [ProjectsDB.updateProject] Database error:', message);
@@ -162,11 +167,11 @@ export class ProjectsDB {
   async deleteProject(projectId: string, userId: string): Promise<boolean> {
     try {
       const result = await this.sql`
-        DELETE FROM projects 
+        DELETE FROM projects
         WHERE id = ${projectId} AND "userId" = ${userId}
         RETURNING id
-      `;
-      
+      ` as unknown as { id: string }[];
+
       return result && result.length > 0;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -180,25 +185,26 @@ export class ProjectsDB {
    */
   async getProject(projectId: string, userId?: string): Promise<Project | null> {
     try {
-      let result;
-      
+      let result: unknown;
+
       if (userId) {
         result = await this.sql`
-          SELECT * FROM projects 
+          SELECT * FROM projects
           WHERE id = ${projectId} AND "userId" = ${userId}
         `;
       } else {
         result = await this.sql`
-          SELECT * FROM projects 
+          SELECT * FROM projects
           WHERE id = ${projectId}
         `;
       }
-      
-      if (!result || result.length === 0) {
+
+      const projects = result as Project[];
+      if (!projects || projects.length === 0) {
         return null;
       }
 
-      return result[0] as Project;
+      return projects[0];
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('❌ [ProjectsDB.getProject] Database error:', message);
@@ -212,13 +218,13 @@ export class ProjectsDB {
   async getPublicProjects(limit: number = 20, offset: number = 0): Promise<Project[]> {
     try {
       const result = await this.sql`
-        SELECT * FROM projects 
+        SELECT * FROM projects
         WHERE "isPrivate" = false
         ORDER BY "updatedAt" DESC
         LIMIT ${limit} OFFSET ${offset}
-      `;
-      
-      return result as Project[];
+      ` as unknown as Project[];
+
+      return result;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('❌ [ProjectsDB.getPublicProjects] Database error:', message);
@@ -265,11 +271,11 @@ export class ProjectsDB {
   async getProjectChats(projectId: string): Promise<unknown[]> {
     try {
       const result = await this.sql`
-        SELECT * FROM chat_sessions 
+        SELECT * FROM chat_sessions
         WHERE "projectId" = ${projectId}
         ORDER BY "updatedAt" DESC
-      `;
-      
+      ` as unknown as unknown[];
+
       return result;
     } catch (error: unknown) {
       console.error('❌ [ProjectsDB.getProjectChats] Database error:', error);

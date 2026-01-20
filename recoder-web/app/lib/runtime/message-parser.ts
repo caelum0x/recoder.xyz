@@ -1,4 +1,4 @@
-import type { ActionType, RecoderAction, RecoderActionData, FileAction, ShellAction, ImportStarterAction, CloneGitHubAction } from '~/types/actions';
+import type { ActionType, RecoderAction, RecoderActionData, FileAction, ShellAction, ImportStarterAction, CloneGitHubAction, CloneUrlAction, SpawnTaskAction, SwitchModeAction, MultiApplyDiffAction, DiffOperation } from '~/types/actions';
 import type { RecoderArtifactData } from '~/types/artifact';
 import { unreachable } from '~/utils/unreachable';
 
@@ -116,8 +116,8 @@ export class StreamingMessageParser {
           const currentAction = state.currentAction;
 
           if (closeIndex !== -1) {
-            currentAction.content += input.slice(i, closeIndex);
-            let content = currentAction.content.trim();
+            currentAction.content = (currentAction.content || '') + input.slice(i, closeIndex);
+            let content = (currentAction.content || '').trim();
 
             if ('type' in currentAction && currentAction.type === 'file') {
               content += '\n';
@@ -128,10 +128,17 @@ export class StreamingMessageParser {
             if ('type' in currentAction && currentAction.type === 'shell') {
               const validation = validateShellCommand(content);
               if (!validation.valid) {
-                currentAction.type = 'file';
-                (currentAction as FileAction).filePath = 'README-BLOCKED-COMMAND.md';
+                // Convert blocked shell command to a file action
+                (currentAction as unknown as FileAction).type = 'file';
+                (currentAction as unknown as FileAction).filePath = 'README-BLOCKED-COMMAND.md';
                 currentAction.content = `# ⚠️ Blocked Command\n\n${validation.reason}\n`;
               }
+            }
+
+            // Parse multi_apply_diff content into diff operations
+            if ('type' in currentAction && currentAction.type === 'multi_apply_diff') {
+              const diffs = this.#parseMultiDiffContent(content);
+              (currentAction as MultiApplyDiffAction).diffs = diffs;
             }
 
             this._options.callbacks?.onActionClose?.({
@@ -269,6 +276,23 @@ export class StreamingMessageParser {
       const reason = this.#extractAttribute(actionTag, 'reason') as string;
       (actionAttributes as CloneGitHubAction).repoUrl = repoUrl || '';
       (actionAttributes as CloneGitHubAction).reason = reason || '';
+    } else if (actionType === 'cloneUrl') {
+      const url = this.#extractAttribute(actionTag, 'url') as string;
+      const reason = this.#extractAttribute(actionTag, 'reason') as string;
+      (actionAttributes as CloneUrlAction).url = url || '';
+      (actionAttributes as CloneUrlAction).reason = reason || '';
+    } else if (actionType === 'spawn_task') {
+      const taskDescription = this.#extractAttribute(actionTag, 'taskDescription') as string;
+      const mode = this.#extractAttribute(actionTag, 'mode') as string;
+      const context = this.#extractAttribute(actionTag, 'context') as string;
+      (actionAttributes as SpawnTaskAction).taskDescription = taskDescription || '';
+      if (mode) (actionAttributes as SpawnTaskAction).mode = mode as any;
+      if (context) (actionAttributes as SpawnTaskAction).context = context;
+    } else if (actionType === 'switch_mode') {
+      const targetMode = this.#extractAttribute(actionTag, 'targetMode') as string;
+      const reason = this.#extractAttribute(actionTag, 'reason') as string;
+      (actionAttributes as SwitchModeAction).targetMode = (targetMode || 'code') as any;
+      if (reason) (actionAttributes as SwitchModeAction).reason = reason;
     } else if (actionType === 'readFile') {
       let filePath = this.#extractAttribute(actionTag, 'filePath') as string;
       if (!filePath) filePath = this.#extractAttribute(actionTag, 'filepath') as string;
@@ -279,6 +303,12 @@ export class StreamingMessageParser {
       }
       if (!filePath) filePath = 'unknown-file.txt';
       (actionAttributes as any).filePath = filePath;
+    } else if (actionType === 'multi_apply_diff') {
+      const commitMessage = this.#extractAttribute(actionTag, 'commitMessage') as string;
+      (actionAttributes as MultiApplyDiffAction).diffs = [];
+      if (commitMessage) {
+        (actionAttributes as MultiApplyDiffAction).commitMessage = commitMessage;
+      }
     }
 
     return actionAttributes as RecoderAction;
@@ -292,6 +322,111 @@ export class StreamingMessageParser {
     match = tag.match(REGEX_CACHE.noQuotes(attributeName));
     if (match) return match[1];
     return undefined;
+  }
+
+  /**
+   * Parse multi_apply_diff content into diff operations
+   * Supports both XML format and JSON format
+   *
+   * XML format:
+   * <diff>
+   *   <file path="src/App.tsx">
+   *     <old_string>const x = 1;</old_string>
+   *     <new_string>const x = 2;</new_string>
+   *     <start_line>10</start_line>
+   *   </file>
+   * </diff>
+   *
+   * JSON format:
+   * [{"filePath": "src/App.tsx", "oldString": "...", "newString": "..."}]
+   */
+  #parseMultiDiffContent(content: string): DiffOperation[] {
+    const diffs: DiffOperation[] = [];
+    const trimmed = content.trim();
+
+    // Try JSON format first
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        for (const item of items) {
+          if (item.filePath && (item.oldString !== undefined || item.old_string !== undefined)) {
+            diffs.push({
+              filePath: item.filePath || item.file_path,
+              oldString: item.oldString || item.old_string || '',
+              newString: item.newString || item.new_string || '',
+              startLine: item.startLine || item.start_line,
+            });
+          }
+        }
+        return diffs;
+      } catch {
+        // Not valid JSON, try XML
+      }
+    }
+
+    // Parse XML format
+    const fileRegex = /<file\s+path=["']([^"']+)["']>([\s\S]*?)<\/file>/gi;
+    let fileMatch;
+
+    while ((fileMatch = fileRegex.exec(trimmed)) !== null) {
+      const filePath = fileMatch[1];
+      const fileContent = fileMatch[2];
+
+      // Extract old_string
+      const oldStringMatch = fileContent.match(/<old_string>([\s\S]*?)<\/old_string>/i);
+      // Extract new_string
+      const newStringMatch = fileContent.match(/<new_string>([\s\S]*?)<\/new_string>/i);
+      // Extract optional start_line
+      const startLineMatch = fileContent.match(/<start_line>(\d+)<\/start_line>/i);
+
+      if (oldStringMatch || newStringMatch) {
+        diffs.push({
+          filePath,
+          oldString: oldStringMatch ? this.#unescapeXml(oldStringMatch[1]) : '',
+          newString: newStringMatch ? this.#unescapeXml(newStringMatch[1]) : '',
+          startLine: startLineMatch ? parseInt(startLineMatch[1], 10) : undefined,
+        });
+      }
+    }
+
+    // Also support SEARCH/REPLACE block format (like Kilo Code)
+    const searchReplaceRegex = /<<<<<<< SEARCH\s*\n?([\s\S]*?)\n?=======\s*\n?([\s\S]*?)\n?>>>>>>> REPLACE/gi;
+    let srMatch;
+    let currentFilePath = '';
+
+    // Try to extract file path from content
+    const filePathMatch = trimmed.match(/(?:file|path):\s*["']?([^\s"'\n]+)["']?/i);
+    if (filePathMatch) {
+      currentFilePath = filePathMatch[1];
+    }
+
+    while ((srMatch = searchReplaceRegex.exec(trimmed)) !== null) {
+      const oldString = srMatch[1].trim();
+      const newString = srMatch[2].trim();
+
+      if (currentFilePath && (oldString || newString)) {
+        diffs.push({
+          filePath: currentFilePath,
+          oldString,
+          newString,
+        });
+      }
+    }
+
+    return diffs;
+  }
+
+  /**
+   * Unescape XML entities
+   */
+  #unescapeXml(str: string): string {
+    return str
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'");
   }
 }
 

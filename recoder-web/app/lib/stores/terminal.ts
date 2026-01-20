@@ -3,16 +3,16 @@ import type { ITerminal } from '~/types/terminal';
 import { newShellProcess, type ShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
 import { terminalSync } from '~/lib/terminal-sync';
+import { dockerPost } from '~/lib/services/docker-api';
 // NOTE: ensureContainerExists is imported dynamically to avoid circular dependency
 // terminal.ts -> useChatHistory.ts -> workbench.ts -> terminal.ts
-
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
 
 interface TerminalSession {
   terminal: ITerminal;
   process: ShellProcess;
   terminalId: string;
   isCommandRunning?: boolean;
+  name: string; // Display name for the terminal tab
 }
 
 export class TerminalStore {
@@ -20,12 +20,17 @@ export class TerminalStore {
   #projectId: string | null = null;
   #pendingTerminals: ITerminal[] = [];
   #keepAliveInterval?: NodeJS.Timer;
+  #terminalNameCounter = 0;
+  // PERFORMANCE: Track subscription cleanup functions to prevent memory leaks
+  #pendingSubscriptions = new Map<ITerminal, () => void>();
 
   showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(false);
   highlightTerminal: WritableAtom<boolean> = import.meta.hot?.data.highlightTerminal ?? atom(false);
   activeTerminalIndex: WritableAtom<number> = import.meta.hot?.data.activeTerminalIndex ?? atom(0);
   terminalCount: WritableAtom<number> = import.meta.hot?.data.terminalCount ?? atom(0);
   commandRunning: WritableAtom<boolean> = import.meta.hot?.data.commandRunning ?? atom(false);
+  // Terminal names for UI display
+  terminalNames: WritableAtom<Record<string, string>> = import.meta.hot?.data.terminalNames ?? atom({});
 
   constructor() {
     if (import.meta.hot) {
@@ -34,6 +39,13 @@ export class TerminalStore {
       import.meta.hot.data.activeTerminalIndex = this.activeTerminalIndex;
       import.meta.hot.data.terminalCount = this.terminalCount;
       import.meta.hot.data.commandRunning = this.commandRunning;
+      import.meta.hot.data.terminalNames = this.terminalNames;
+    }
+
+    // Load persisted terminal names
+    const names = terminalSync.getAllTerminalNames();
+    if (Object.keys(names).length > 0) {
+      this.terminalNames.set(names);
     }
   }
 
@@ -74,9 +86,7 @@ export class TerminalStore {
     this.#keepAliveInterval = setInterval(async () => {
       if (this.#projectId) {
         try {
-          await fetch(`${DOCKER_URL}/api/keep-alive/${this.#projectId}`, {
-            method: 'POST',
-          });
+          await dockerPost(`/api/keep-alive/${this.#projectId}`);
           console.log('[Terminal] Keep-alive sent');
         } catch (error) {
           console.warn('[Terminal] Keep-alive failed:', error);
@@ -106,10 +116,11 @@ export class TerminalStore {
           terminal.write('\x1b[33mWaiting for container to be ready...\x1b[0m\r\n');
           this.#pendingTerminals.push(terminal);
 
-          // Subscribe to containerReady changes
+          // PERFORMANCE: Subscribe to containerReady changes and track for cleanup
           const unsubscribe = workbenchStore.containerReady.subscribe((ready) => {
             if (ready && this.#pendingTerminals.includes(terminal)) {
               unsubscribe();
+              this.#pendingSubscriptions.delete(terminal);  // Clean up tracking
               this.#pendingTerminals = this.#pendingTerminals.filter(t => t !== terminal);
               terminal.write('\x1b[32mContainer ready! Connecting...\x1b[0m\r\n');
               this.#attachDockerTerminal(terminal, existingTerminalId).catch((err) => {
@@ -117,6 +128,8 @@ export class TerminalStore {
               });
             }
           });
+          // Track subscription for potential cleanup
+          this.#pendingSubscriptions.set(terminal, unsubscribe);
           return;
         }
 
@@ -131,7 +144,7 @@ export class TerminalStore {
     }
   }
 
-  async #attachDockerTerminal(terminal: ITerminal, existingTerminalId?: string) {
+  async #attachDockerTerminal(terminal: ITerminal, existingTerminalId?: string, customName?: string) {
     // Use coordinated container creation to avoid race conditions
     try {
       // Dynamic import to avoid circular dependency
@@ -147,11 +160,19 @@ export class TerminalStore {
 
     // Create new shell process with unique terminal ID (or restore existing)
     const shellProcess = await newShellProcess(terminal, this.#projectId!, existingTerminalId);
+
+    // Generate or retrieve terminal name
+    this.#terminalNameCounter++;
+    const terminalName = customName ||
+      terminalSync.getTerminalName(shellProcess.terminalId) ||
+      `Terminal ${this.#terminalNameCounter}`;
+
     const session: TerminalSession = {
       terminal,
       process: shellProcess,
       terminalId: shellProcess.terminalId,
       isCommandRunning: false,
+      name: terminalName,
     };
 
     // Track command completion
@@ -159,14 +180,19 @@ export class TerminalStore {
       session.isCommandRunning = false;
       this.#updateCommandRunningState();
     });
-    
+
     this.#terminals.push(session);
     this.terminalCount.set(this.#terminals.length);
 
+    // Update terminal names atom
+    const currentNames = this.terminalNames.get();
+    this.terminalNames.set({ ...currentNames, [shellProcess.terminalId]: terminalName });
+
     // Save session for persistence
     terminalSync.saveSession(shellProcess.terminalId, this.#projectId!);
-    
-    console.log(`✅ Terminal attached: ${shellProcess.terminalId} (total: ${this.#terminals.length})`);
+    terminalSync.setTerminalName(shellProcess.terminalId, terminalName);
+
+    console.log(`✅ Terminal attached: ${shellProcess.terminalId} (${terminalName}) (total: ${this.#terminals.length})`);
   }
 
   #updateCommandRunningState() {
@@ -219,14 +245,59 @@ export class TerminalStore {
     if (session) {
       session.process.kill();
       terminalSync.removeSession(session.terminalId);
+      terminalSync.removeTerminalName(session.terminalId);
+
+      // Remove from terminal names atom
+      const currentNames = this.terminalNames.get();
+      const { [session.terminalId]: _, ...remainingNames } = currentNames;
+      this.terminalNames.set(remainingNames);
+
       this.#terminals.splice(index, 1);
       this.terminalCount.set(this.#terminals.length);
-      
+
       // Adjust active index if needed
       const activeIndex = this.activeTerminalIndex.get();
       if (activeIndex >= this.#terminals.length) {
         this.activeTerminalIndex.set(Math.max(0, this.#terminals.length - 1));
       }
+    }
+  }
+
+  // Rename a terminal
+  renameTerminal(index: number, newName: string) {
+    const session = this.#terminals[index];
+    if (session) {
+      session.name = newName;
+      terminalSync.setTerminalName(session.terminalId, newName);
+
+      // Update names atom
+      const currentNames = this.terminalNames.get();
+      this.terminalNames.set({ ...currentNames, [session.terminalId]: newName });
+    }
+  }
+
+  // Get terminal info for tabs
+  getTerminalTabs(): Array<{ id: string; name: string; isRunning: boolean }> {
+    return this.#terminals.map(session => ({
+      id: session.terminalId,
+      name: session.name,
+      isRunning: session.isCommandRunning || false,
+    }));
+  }
+
+  // Launch a command in the active terminal (for REPL launcher)
+  async launchCommand(command: string, newTerminalName?: string) {
+    // If a new terminal name is provided, create a new terminal
+    if (newTerminalName && this.#terminals.length < 3) {
+      // Create new terminal with the given name - this will be done through the UI
+      // For now, just send to active terminal
+    }
+
+    const session = this.getActiveTerminal();
+    if (session) {
+      session.isCommandRunning = true;
+      this.#updateCommandRunningState();
+      await session.process.sendCommand(command);
     }
   }
 
@@ -247,11 +318,20 @@ export class TerminalStore {
   }
 
   // Cleanup on unmount
+  // PERFORMANCE: Properly clean up all subscriptions and intervals to prevent memory leaks
   cleanup() {
     if (this.#keepAliveInterval) {
       clearInterval(this.#keepAliveInterval as NodeJS.Timeout);
+      this.#keepAliveInterval = undefined;
     }
-    
+
+    // Clean up pending subscriptions to prevent memory leaks
+    for (const unsubscribe of this.#pendingSubscriptions.values()) {
+      unsubscribe();
+    }
+    this.#pendingSubscriptions.clear();
+    this.#pendingTerminals = [];
+
     // Save all terminal states
     for (const session of this.#terminals) {
       if (this.#projectId) {

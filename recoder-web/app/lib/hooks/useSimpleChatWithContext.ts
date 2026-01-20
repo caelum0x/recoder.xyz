@@ -37,13 +37,13 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
 
   const loadRecoderContext = async () => {
     try {
-      const wc = await webcontainer;
+      const wc = await webcontainer as any;
       const contextPrompt = await integrateRecoderContext(
         {
-          readFile: (path, encoding) => wc.fs.readFile(path, encoding || 'utf-8'),
-          writeFile: (path, content) => wc.fs.writeFile(path, content),
-          mkdir: (path, options) => wc.fs.mkdir(path, options),
-          readdir: (path) => wc.fs.readdir(path),
+          readFile: (path: string, encoding?: string) => wc.fs.readFile(path, encoding || 'utf-8'),
+          writeFile: (path: string, content: string) => wc.fs.writeFile(path, content),
+          mkdir: (path: string, options?: any) => wc.fs.mkdir(path, options),
+          readdir: (path: string) => wc.fs.readdir(path),
         },
         messages.length === 0 // isFirstMessage
       );

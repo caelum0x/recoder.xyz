@@ -138,7 +138,7 @@ export default defineConfig((config) => {
     server: {
       port: 5173,
       strictPort: true,
-      host: true,
+      host: '0.0.0.0', // Force IPv4 binding for Playwright tests
       allowedHosts: ['web.recoder.xyz', 'localhost'],
       // HMR configuration - use localhost for dev, production for deployed
       hmr: isProduction ? {

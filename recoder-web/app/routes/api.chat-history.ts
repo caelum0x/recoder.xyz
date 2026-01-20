@@ -104,7 +104,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Handle claim endpoint
     if (url.pathname.endsWith('/claim')) {
-      const { anonymousId, userId } = await request.json();
+      const claimBody = await request.json() as { anonymousId?: string; userId?: string };
+      const { anonymousId, userId } = claimBody;
 
       if (!anonymousId || !userId) {
         return json({ error: 'anonymousId and userId required' }, { status: 400 });
@@ -121,7 +122,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (request.method === 'DELETE') {
       // Delete a chat session
-      const { sessionId } = await request.json();
+      const deleteBody = await request.json() as { sessionId?: string };
+      const { sessionId } = deleteBody;
 
       if (!sessionId) {
         return json({ error: 'sessionId required' }, { status: 400 });
@@ -136,7 +138,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     // POST - Save chat
-    const data = await request.json();
+    const data = await request.json() as {
+      userId?: string;
+      anonymousId?: string;
+      urlId?: string;
+      title?: string;
+      description?: string;
+      messages?: any[];
+      artifactId?: string;
+      fileSnapshot?: any;
+      projectId?: string;
+      source?: string;
+      cliVersion?: string;
+    };
 
     const { userId, anonymousId, urlId, title, description, messages, artifactId, fileSnapshot, projectId, source, cliVersion } = data;
 
@@ -180,20 +194,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
       artifactId,
       fileSnapshot,
       projectId,
-      source: source || 'web',
+      source: (source as 'web' | 'cli' | undefined) || 'web',
       cliVersion,
     });
 
     console.log('✅ [api.chat-history.action] Save successful:', {
       sessionId: session.id,
-      urlId: session.url_id,
+      urlId: session.urlId,
     });
 
     return json({
       success: true,
       data: {
         sessionId: session.id,
-        urlId: session.url_id,
+        urlId: session.urlId,
       },
     });
   } catch (error) {

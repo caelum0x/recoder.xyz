@@ -2,8 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import { parseErrorsFromLogs } from '~/lib/errors/parse-logs';
 import { errorsAtom } from '~/lib/stores/errors';
-
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+import { dockerGet } from '~/lib/services/docker-api';
 
 interface LogsPanelProps {
   projectId: string | null;
@@ -22,15 +21,11 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
     if (!projectId) return;
 
     try {
-      const response = await fetch(`${DOCKER_URL}/api/logs/${projectId}?tail=200`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch logs: ${response.status}`);
-      }
-      const data = await response.json() as { logs?: string };
-      const newLogs = data.logs || 'No logs available';
+      const data = await dockerGet<{ logs?: string }>(`/api/logs/${projectId}?tail=200`);
+      const newLogs = data?.logs || 'No logs available';
       setLogs(newLogs);
       setError(null);
-      
+
       // Parse errors from logs and update error store
       const parsedErrors = parseErrorsFromLogs(newLogs);
       errorsAtom.set(parsedErrors);
@@ -143,14 +138,15 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
           />
           <button
             onClick={handleToggleAutoScroll}
-            className={`px-2 py-1 text-xs rounded transition-colors ${
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
               autoScroll
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                 : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary border border-bolt-elements-borderColor'
             }`}
-            title={autoScroll ? 'Auto-scroll enabled' : 'Auto-scroll disabled'}
+            title={autoScroll ? 'Auto-scroll enabled (click to pause)' : 'Auto-scroll paused (click to enable)'}
           >
-            {autoScroll ? '📌 Auto' : '⏸ Paused'}
+            <span className={autoScroll ? 'i-ph:pin-fill' : 'i-ph:pause'} />
+            {autoScroll ? 'Auto' : 'Paused'}
           </button>
           <IconButton
             icon="i-ph:trash"

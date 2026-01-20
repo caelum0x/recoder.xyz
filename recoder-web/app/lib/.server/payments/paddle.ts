@@ -45,9 +45,9 @@ export function getPaddleClient(env: Env): PaddleConfig {
   }
 
   return {
-    vendorId,
-    apiKey,
-    publicKey,
+    vendorId: vendorId || '',
+    apiKey: apiKey || '',
+    publicKey: publicKey || '',
     environment
   };
 }
@@ -87,7 +87,7 @@ export async function createPaddleCheckout(
     throw new Error(`Paddle checkout failed: ${error}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as any;
   return {
     checkoutUrl: data.data.checkout.url,
     sessionId: data.data.id
@@ -116,7 +116,7 @@ export async function getPaddleSubscription(
     throw new Error(`Failed to get Paddle subscription: ${error}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as any;
   const sub = data.data;
 
   return {

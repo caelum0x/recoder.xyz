@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
+// @ts-ignore - mock-fs types not available
 import mock from 'mock-fs';
 import * as path from 'node:path';
 import { WorkspaceContext } from './workspaceContext.js';

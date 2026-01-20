@@ -21,7 +21,23 @@ import { AuthType } from '../../core/contentGenerator.js';
 import type { ConfigParameters } from '../../config/config.js';
 import { EventMetadataKey } from './event-metadata-key.js';
 import { makeFakeConfig } from '../../test-utils/config.js';
-import { http, HttpResponse } from 'msw';
+// Mock http and HttpResponse for testing
+const http = {
+  post: (url: string, handler: any) => ({ url, handler }),
+};
+class HttpResponse extends Response {
+  constructor(body?: any, init?: ResponseInit) {
+    const bodyString = typeof body === 'string' ? body : JSON.stringify(body);
+    super(bodyString, init);
+  }
+  static text(body: string) {
+    return new Response(body, { status: 200 });
+  }
+  static error() {
+    return new Response(null, { status: 500 });
+  }
+}
+
 import { server } from '../../mocks/msw.js';
 import { UserPromptEvent, makeChatCompressionEvent } from '../types.js';
 import { GIT_COMMIT_INFO, CLI_VERSION } from '../../generated/git-commit.js';
@@ -29,13 +45,13 @@ import { UserAccountManager } from '../../utils/userAccountManager.js';
 import { InstallationManager } from '../../utils/installationManager.js';
 
 interface CustomMatchers<R = unknown> {
-  toHaveMetadataValue: ([key, value]: [EventMetadataKey, string]) => R;
+  toHaveMetadataValue: (params: [EventMetadataKey, string]) => R;
   toHaveEventName: (name: EventNames) => R;
 }
 
 declare module 'vitest' {
-   
-  interface Matchers<T = any> extends CustomMatchers<T> {}
+  interface Assertion<T = any> extends CustomMatchers<T> {}
+  interface AsymmetricMatchersContaining extends CustomMatchers {}
 }
 
 expect.extend({

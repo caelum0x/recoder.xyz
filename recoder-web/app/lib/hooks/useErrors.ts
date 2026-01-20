@@ -14,8 +14,7 @@ import {
   errorCountAtom,
   type ErrorsResponse,
 } from '~/lib/stores/errors';
-
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+import { dockerGet } from '~/lib/services/docker-api';
 
 interface UseErrorsResult {
   /** Current errors from store */
@@ -43,10 +42,7 @@ export async function fetchProjectErrors(projectId: string): Promise<ErrorsRespo
   if (!projectId) return null;
 
   try {
-    const response = await fetch(`${DOCKER_URL}/api/errors/${projectId}?tail=200`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const response = await dockerGet(`/api/errors/${projectId}?tail=200`) as Response;
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -56,7 +52,7 @@ export async function fetchProjectErrors(projectId: string): Promise<ErrorsRespo
       throw new Error(`Failed to fetch errors: ${response.status}`);
     }
 
-    const data: ErrorsResponse = await response.json();
+    const data = await response.json() as ErrorsResponse;
     setErrors(data);
     return data;
   } catch (err: any) {

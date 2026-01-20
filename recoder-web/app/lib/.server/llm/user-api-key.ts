@@ -59,7 +59,7 @@ export async function getUserApiKey(
       return null;
     }
 
-    const data: UserApiKeyResponse = await response.json();
+    const data = await response.json() as UserApiKeyResponse;
 
     if (data.success && data.apiKey) {
       console.log(`[getUserApiKey] Successfully fetched API key for ${provider}`);
@@ -100,9 +100,9 @@ export async function hasUserApiKey(sessionCookie: string | null): Promise<boole
       return false;
     }
 
-    const data = await response.json();
+    const data = await response.json() as { success?: boolean; keys?: any[] };
 
-    return data.success && data.keys && data.keys.length > 0;
+    return !!(data.success && data.keys && data.keys.length > 0);
   } catch (error) {
     console.error('[hasUserApiKey] Error checking API keys:', error);
     return false;

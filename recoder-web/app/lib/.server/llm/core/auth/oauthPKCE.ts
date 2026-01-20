@@ -84,13 +84,13 @@ export class OAuthPKCEClient {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `Token exchange failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         access_token: data.key,
@@ -122,13 +122,13 @@ export class OAuthPKCEClient {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `Token refresh failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         access_token: data.key,

@@ -33,9 +33,13 @@ export function GitHubIntegration({ onImportComplete }: GitHubIntegrationProps) 
         throw new Error('Failed to import starter');
       }
 
-      const result = await response.json();
+      const result = (await response.json()) as {
+        success: boolean;
+        data?: { files: Record<string, string> };
+        error?: string;
+      };
 
-      if (result.success) {
+      if (result.success && result.data) {
         setShowStarters(false);
         onImportComplete({
           files: result.data.files,

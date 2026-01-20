@@ -26,7 +26,7 @@ export function TemplateGallery({ onSelectTemplate }: TemplateGalleryProps) {
 
   async function loadTemplates() {
     const res = await fetch('/api/templates');
-    const data = await res.json();
+    const data = (await res.json()) as { templates?: Template[] };
     setTemplates(data.templates || []);
   }
 

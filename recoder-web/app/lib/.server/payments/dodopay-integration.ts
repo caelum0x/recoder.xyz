@@ -96,11 +96,14 @@ export class DodoPayClient {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as { message?: string };
       throw new Error(`DodoPay session failed: ${error.message}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      payment_url: string;
+      session_id: string;
+    };
     return {
       paymentUrl: data.payment_url,
       sessionId: data.session_id
@@ -250,7 +253,9 @@ export class DodoPayClient {
       throw new Error('Failed to list payment methods');
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      payment_methods: any[];
+    };
     return data.payment_methods;
   }
 
@@ -274,7 +279,9 @@ export class DodoPayClient {
       throw new Error('Failed to create portal session');
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      url: string;
+    };
     return data.url;
   }
 }

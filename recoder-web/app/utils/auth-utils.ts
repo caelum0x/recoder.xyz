@@ -86,7 +86,7 @@ async function fetchSession(): Promise<User | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as { authenticated?: boolean; user?: User };
 
     if (data.authenticated && data.user) {
       cachedUser = data.user;

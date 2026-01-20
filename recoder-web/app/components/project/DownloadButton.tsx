@@ -10,7 +10,7 @@ interface DownloadButtonProps {
   projectId: string;
   className?: string;
   variant?: 'default' | 'ghost' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'default' | 'lg';
   showText?: boolean;
 }
 
@@ -33,7 +33,7 @@ export function DownloadButton({
       const response = await fetch(`/api/project/${projectId}/download`);
       
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as { error?: string };
         throw new Error(error.error || 'Download failed');
       }
 
@@ -77,13 +77,14 @@ export function DownloadButton({
   };
 
   const iconSize = size === 'sm' ? 14 : size === 'lg' ? 18 : 16;
+  const buttonSize = size === 'default' ? 'default' : size;
 
   return (
     <Button
       onClick={handleDownload}
       disabled={isDownloading}
       variant={variant}
-      size={size}
+      size={buttonSize}
       className={`${className}`}
       title="Download project as ZIP file"
     >

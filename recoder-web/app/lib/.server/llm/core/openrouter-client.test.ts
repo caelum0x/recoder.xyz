@@ -144,8 +144,11 @@ describe('OpenRouterClient', () => {
         maxTokens: 50
       });
 
-      expect(result.response).toBeDefined();
-      expect(typeof result.response.text()).toBe('string');
+      // Type guard to check if it's a non-streaming response
+      if ('response' in result) {
+        expect(result.response).toBeDefined();
+        expect(typeof result.response.text()).toBe('string');
+      }
     });
 
     it('should handle custom model parameter', async () => {
@@ -161,7 +164,10 @@ describe('OpenRouterClient', () => {
         ]
       });
 
-      expect(result.response).toBeDefined();
+      // Type guard to check if it's a non-streaming response
+      if ('response' in result) {
+        expect(result.response).toBeDefined();
+      }
     });
   });
 

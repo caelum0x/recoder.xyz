@@ -55,7 +55,7 @@ export class SubscriptionDB {
       SELECT * FROM subscriptions
       WHERE user_id = ${userId}
       LIMIT 1
-    `;
+    ` as unknown as Subscription[];
 
     return result[0] || null;
   }
@@ -118,7 +118,7 @@ export class SubscriptionDB {
         generations_limit = EXCLUDED.generations_limit,
         updated_at = NOW()
       RETURNING *
-    `;
+    ` as unknown as Subscription[];
 
     return result[0];
   }
@@ -277,7 +277,7 @@ export class SubscriptionDB {
     byModel: Record<string, number>;
     byDay: Array<{ date: string; count: number }>;
   }> {
-    const stats = await this.sql`
+    const statsResult = await this.sql`
       SELECT
         COUNT(*) as total_generations,
         SUM(tokens_used) as total_tokens,
@@ -289,12 +289,12 @@ export class SubscriptionDB {
         user_id = ${userId}
         AND created_at >= NOW() - INTERVAL '${days} days'
       GROUP BY model_used, DATE(created_at)
-    `;
+    ` as unknown as Record<string, any>[];
 
     const byModel: Record<string, number> = {};
     const byDay: Array<{ date: string; count: number }> = [];
 
-    stats.forEach((row: any) => {
+    statsResult.forEach((row: any) => {
       if (row.model_used) {
         byModel[row.model_used] = (byModel[row.model_used] || 0) + parseInt(row.total_generations);
       }
@@ -309,9 +309,9 @@ export class SubscriptionDB {
     });
 
     return {
-      totalGenerations: stats.reduce((sum: number, row: any) => sum + parseInt(row.total_generations || 0), 0),
-      totalTokens: stats.reduce((sum: number, row: any) => sum + parseInt(row.total_tokens || 0), 0),
-      totalCost: stats.reduce((sum: number, row: any) => sum + parseFloat(row.total_cost || 0), 0),
+      totalGenerations: statsResult.reduce((sum: number, row: any) => sum + parseInt(row.total_generations || 0), 0),
+      totalTokens: statsResult.reduce((sum: number, row: any) => sum + parseInt(row.total_tokens || 0), 0),
+      totalCost: statsResult.reduce((sum: number, row: any) => sum + parseFloat(row.total_cost || 0), 0),
       byModel,
       byDay
     };

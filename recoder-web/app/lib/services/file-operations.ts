@@ -4,7 +4,7 @@
  * Auto-snapshots before destructive operations
  */
 
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+import { dockerPost, dockerDelete, dockerPut } from './docker-api';
 
 export interface FileOperationResult {
   success: boolean;
@@ -20,17 +20,7 @@ export async function createFile(
   content: string = ''
 ): Promise<FileOperationResult> {
   try {
-    const response = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      return { success: false, error: data.error };
-    }
-
+    await dockerPost<void>(`/api/file/${projectId}`, { path, content });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -45,17 +35,7 @@ export async function createFolder(
   path: string
 ): Promise<FileOperationResult> {
   try {
-    const response = await fetch(`${DOCKER_URL}/api/folder/${projectId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      return { success: false, error: data.error };
-    }
-
+    await dockerPost<void>(`/api/folder/${projectId}`, { path });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -70,17 +50,7 @@ export async function deleteFile(
   path: string
 ): Promise<FileOperationResult> {
   try {
-    const response = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      return { success: false, error: data.error };
-    }
-
+    await dockerDelete<void>(`/api/file/${projectId}`, { path });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -96,17 +66,7 @@ export async function renameFile(
   newPath: string
 ): Promise<FileOperationResult> {
   try {
-    const response = await fetch(`${DOCKER_URL}/api/file/${projectId}/rename`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldPath, newPath }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      return { success: false, error: data.error };
-    }
-
+    await dockerPut<void>(`/api/file/${projectId}/rename`, { oldPath, newPath });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

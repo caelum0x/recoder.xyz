@@ -63,7 +63,13 @@ node /home/project/cli-tools/node_modules/recoder-code/bin/recoder.js "$@"`;
         
         // Add bin to PATH by updating shell profile
         const pathExport = 'export PATH="/home/project/bin:$PATH"';
-        await webcontainer.fs.writeFile('.bashrc', pathExport + '\n', { append: true });
+        let bashrcContent = '';
+        try {
+          bashrcContent = await webcontainer.fs.readFile('.bashrc', 'utf-8');
+        } catch {
+          // .bashrc doesn't exist yet, that's fine
+        }
+        await webcontainer.fs.writeFile('.bashrc', bashrcContent + pathExport + '\n');
         
         console.log('✅ recoder-code CLI installed successfully');
         console.log('💡 CLI available as "recoder" command in terminal');

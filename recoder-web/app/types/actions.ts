@@ -1,4 +1,4 @@
-export type ActionType = 'file' | 'shell' | 'importStarter' | 'cloneGitHub' | 'readFile' | 'listFiles' | 'searchFiles' | 'str_replace' | 'delegate_subagent' | 'ripgrep_search' | 'edit_file' | 'read_many_files' | 'web_search' | 'web_fetch' | 'memory_operation' | 'glob_search';
+export type ActionType = 'file' | 'shell' | 'importStarter' | 'cloneGitHub' | 'cloneUrl' | 'readFile' | 'listFiles' | 'searchFiles' | 'str_replace' | 'delegate_subagent' | 'ripgrep_search' | 'edit_file' | 'read_many_files' | 'web_search' | 'web_fetch' | 'memory_operation' | 'glob_search' | 'multi_apply_diff' | 'spawn_task' | 'switch_mode';
 
 export interface BaseAction {
   content: string;
@@ -23,6 +23,25 @@ export interface CloneGitHubAction extends BaseAction {
   type: 'cloneGitHub';
   repoUrl: string;
   reason: string;
+}
+
+export interface CloneUrlAction extends BaseAction {
+  type: 'cloneUrl';
+  url: string;
+  reason?: string;
+}
+
+export interface SpawnTaskAction extends BaseAction {
+  type: 'spawn_task';
+  taskDescription: string;
+  mode?: 'architect' | 'code' | 'debug' | 'ask';
+  context?: string;
+}
+
+export interface SwitchModeAction extends BaseAction {
+  type: 'switch_mode';
+  targetMode: 'architect' | 'code' | 'debug' | 'ask' | 'orchestrator';
+  reason?: string;
 }
 
 export interface ReadFileAction extends BaseAction {
@@ -94,12 +113,12 @@ export interface RipGrepAction extends BaseAction {
   maxResults?: number;
 }
 
-export interface EditFileAction extends BaseAction {
+export interface EditFileAction extends Omit<BaseAction, 'content'> {
   type: 'edit_file';
   filePath: string;
   operation: 'insert' | 'delete' | 'replace';
   lineNumber: number;
-  content?: string;
+  content: string; // Required for insert/replace operations
   endLineNumber?: number;
 }
 
@@ -109,6 +128,30 @@ export interface ReadManyFilesAction extends BaseAction {
   maxFileSize?: number;
 }
 
-export type RecoderAction = FileAction | ShellAction | ImportStarterAction | CloneGitHubAction | ReadFileAction | ListFilesAction | SearchFilesAction | StrReplaceAction | DelegateSubagentAction | WebSearchAction | WebFetchAction | MemoryAction | GlobAction | RipGrepAction | EditFileAction | ReadManyFilesAction;
+/**
+ * Multi-file atomic diff application
+ * Applies multiple search/replace operations across multiple files atomically
+ * If any diff fails, all changes are rolled back
+ */
+export interface DiffOperation {
+  /** File path relative to workspace */
+  filePath: string;
+  /** The exact text to find and replace */
+  oldString: string;
+  /** The replacement text */
+  newString: string;
+  /** Optional start line hint for faster matching */
+  startLine?: number;
+}
+
+export interface MultiApplyDiffAction extends BaseAction {
+  type: 'multi_apply_diff';
+  /** Array of diff operations to apply atomically */
+  diffs: DiffOperation[];
+  /** Optional: commit message for auto-commit after successful apply */
+  commitMessage?: string;
+}
+
+export type RecoderAction = FileAction | ShellAction | ImportStarterAction | CloneGitHubAction | CloneUrlAction | SpawnTaskAction | SwitchModeAction | ReadFileAction | ListFilesAction | SearchFilesAction | StrReplaceAction | DelegateSubagentAction | WebSearchAction | WebFetchAction | MemoryAction | GlobAction | RipGrepAction | EditFileAction | ReadManyFilesAction | MultiApplyDiffAction;
 
 export type RecoderActionData = RecoderAction | BaseAction;

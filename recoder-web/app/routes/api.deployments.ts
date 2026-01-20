@@ -38,7 +38,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json() as {
+      platform?: string;
+      files?: any;
+      config?: any;
+      apiToken?: any;
+    };
     const { platform, files, config, apiToken } = body;
 
     if (!platform || !files) {

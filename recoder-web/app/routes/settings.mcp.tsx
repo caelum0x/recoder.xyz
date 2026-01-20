@@ -3,18 +3,42 @@
  * Manage MCP servers and tools
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMCP } from '~/lib/hooks/useMCP';
+import MCPMarketplace from '~/components/mcp/MCPMarketplace';
 
 export default function MCPSettings() {
-  const { 
+  const {
     servers, tools, loading, error,
     connect, disconnect, addServer, updateServer, removeServer, toggleServer,
-    connectedServers 
+    connectedServers
   } = useMCP();
-  
+
   const [showAdd, setShowAdd] = useState(false);
+  const [showMarketplace, setShowMarketplace] = useState(false);
   const [newServer, setNewServer] = useState({ name: '', command: '', args: '' });
+
+  // Get list of installed server IDs for marketplace
+  const installedServerIds = useMemo(() => {
+    return servers.map(s => s.id).filter(Boolean) as string[];
+  }, [servers]);
+
+  const handleMarketplaceInstall = (serverConfig: { id: string; name: string; command: string; args: string[]; env?: Record<string, string>; enabled: boolean }) => {
+    // Check if already installed
+    if (installedServerIds.includes(serverConfig.id)) {
+      return;
+    }
+    // Add server using the useMCP hook (saves to localStorage)
+    addServer({
+      id: serverConfig.id, // Use marketplace ID for deduplication
+      name: serverConfig.name,
+      command: serverConfig.command,
+      args: serverConfig.args,
+      env: serverConfig.env,
+      enabled: serverConfig.enabled,
+    });
+    setShowMarketplace(false);
+  };
 
   const handleAdd = () => {
     if (!newServer.name || !newServer.command) return;
@@ -39,10 +63,16 @@ export default function MCPSettings() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => setShowMarketplace(true)}
+            className="px-3 py-1.5 text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-md hover:from-blue-700 hover:to-purple-700"
+          >
+            Marketplace
+          </button>
+          <button
             onClick={() => setShowAdd(!showAdd)}
             className="px-3 py-1.5 text-sm bg-bolt-elements-background-depth-3 rounded-md hover:bg-bolt-elements-item-backgroundHover"
           >
-            {showAdd ? 'Cancel' : '+ Add Server'}
+            {showAdd ? 'Cancel' : '+ Custom'}
           </button>
           <button
             onClick={connectedServers.length > 0 ? disconnect : connect}
@@ -173,6 +203,19 @@ export default function MCPSettings() {
           Learn more about MCP →
         </a>
       </div>
+
+      {/* Marketplace Modal */}
+      {showMarketplace && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-5xl h-[80vh] bg-bolt-elements-background-depth-1 rounded-xl shadow-2xl overflow-hidden">
+            <MCPMarketplace
+              installedServerIds={installedServerIds}
+              onInstall={handleMarketplaceInstall}
+              onClose={() => setShowMarketplace(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { resetGlobalActionState, markNpmInstallComplete } from '~/lib/runtime/ac
 import { fetchProjectErrors } from '~/lib/hooks/useErrors';
 import { formatErrorsForAI } from '~/lib/services/auto-fix';
 import { canAutoFix, setAutoFixing } from '~/lib/stores/errors';
+import { dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 
 // 🔒 Global flags to coordinate npm install across components
 // These are module-level to prevent race conditions between different instances
@@ -311,8 +312,6 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
   }
 }
 
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
-
 /**
  * Run bun install with coordination to prevent concurrent runs
  * 🚀 OPTIMIZED: Uses bun for faster installs (no peer dep issues)
@@ -335,51 +334,29 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
   globalNpmInstallPromise = (async () => {
     try {
       // 🚀 OPTIMIZATION: Check if node_modules is valid before cleaning
-      const checkRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"' }),
-        signal: AbortSignal.timeout(5000),
-      });
-
-      const checkResult = await checkRes.json() as { output?: string };
+      const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: 'test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"' });
       const isValid = checkResult.output?.includes('valid');
 
       if (!isValid) {
         console.log('🧹 [runInstallWithCoordination] Cleaning invalid node_modules...');
-        await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'rm -rf node_modules package-lock.json bun.lockb' }),
-          signal: AbortSignal.timeout(30000),
-        });
+        await dockerPost(`/api/exec/${projectId}`, { command: 'rm -rf node_modules package-lock.json bun.lockb' });
       }
 
       // 🚀 OPTIMIZATION: Use bun for faster installs - --force handles peer deps
       console.log('📦 [runInstallWithCoordination] Running bun install...');
-      let installRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'bun install --force' }),
-        signal: AbortSignal.timeout(90000), // 90s timeout for bun (it's faster)
-      });
+      let result: { output?: string; error?: string };
 
-      if (!installRes.ok) {
+      try {
+        result = await dockerPost<{ output?: string; error?: string }>(`/api/exec/${projectId}`, { command: 'bun install --force' });
+      } catch (error) {
         console.warn('⚠️ [runInstallWithCoordination] bun install request failed, trying npm fallback...');
-        installRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' }),
-          signal: AbortSignal.timeout(120000),
-        });
+        try {
+          result = await dockerPost<{ output?: string; error?: string }>(`/api/exec/${projectId}`, { command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' });
+        } catch (npmError) {
+          console.warn('⚠️ [runInstallWithCoordination] Install request failed');
+          return;
+        }
       }
-
-      if (!installRes.ok) {
-        console.warn('⚠️ [runInstallWithCoordination] Install request failed');
-        return;
-      }
-
-      const result = await installRes.json() as { output?: string; error?: string };
 
       // Check for bun/npm errors
       if (result.error || result.output?.includes('error:') || result.output?.includes('npm ERR!')) {
@@ -387,14 +364,11 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
         // Try npm fallback if bun failed
         if (!result.output?.includes('npm ERR!')) {
           console.log('📦 [runInstallWithCoordination] Trying npm fallback...');
-          const npmRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' }),
-            signal: AbortSignal.timeout(120000),
-          });
-          if (npmRes.ok) {
+          try {
+            await dockerPost<{ output?: string; error?: string }>(`/api/exec/${projectId}`, { command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' });
             console.log('✅ [runInstallWithCoordination] npm fallback succeeded');
+          } catch (e) {
+            console.warn('⚠️ [runInstallWithCoordination] npm fallback failed');
           }
         }
       } else {
@@ -425,24 +399,12 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
       };
       
       try {
-        const devRes = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            command: 'bun run dev -- --port 5173 --host 0.0.0.0',
-            cwd: '/workspace',
-            background: true
-          }),
-          signal: AbortSignal.timeout(30000),
+        const devResult = await dockerPost<{ ready?: boolean; port?: number }>(`/api/exec/${projectId}`, {
+          command: 'bun run dev -- --port 5173 --host 0.0.0.0',
+          cwd: '/workspace',
+          background: true
         });
-        
-        if (!devRes.ok) {
-          console.warn('⚠️ [runInstallWithCoordination] Dev server start returned error:', devRes.status);
-          await markReady(); // Mark ready anyway so user can see error
-          return;
-        }
-        
-        const devResult = await devRes.json() as { ready?: boolean; port?: number };
+
         console.log('✅ [runInstallWithCoordination] Dev server started in background');
 
         if (devResult.ready) {
@@ -457,17 +419,12 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
           
           while (Date.now() - startTime < maxWaitMs) {
             try {
-              const healthRes = await fetch(`${DOCKER_URL}/api/preview/${projectId}/health`, {
-                signal: AbortSignal.timeout(3000),
-              });
-              if (healthRes.ok) {
-                const health = await healthRes.json() as { ports?: Array<{ port: number; responding: boolean }> };
-                const readyPort = health.ports?.find(p => p.responding);
-                if (readyPort) {
-                  console.log(`✅ [runInstallWithCoordination] Dev server ready on port ${readyPort.port}`);
-                  await markReady();
-                  return;
-                }
+              const health = await dockerGet<{ ports?: Array<{ port: number; responding: boolean }> }>(`/api/preview/${projectId}/health`);
+              const readyPort = health.ports?.find(p => p.responding);
+              if (readyPort) {
+                console.log(`✅ [runInstallWithCoordination] Dev server ready on port ${readyPort.port}`);
+                await markReady();
+                return;
               }
             } catch {
               // Health check failed, continue polling
@@ -483,7 +440,7 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
         console.warn('⚠️ [runInstallWithCoordination] Dev server start failed:', err);
         await markReady(); // Mark ready anyway so UI isn't stuck
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [runInstallWithCoordination] Install failed:', error);
     } finally {
       globalNpmInstallRunning = false;
@@ -514,17 +471,7 @@ export async function ensureContainerExists(projectId: string): Promise<boolean>
       const userId = getCurrentUserId();
       console.log('🐳 [ensureContainerExists] Creating container for', projectId);
 
-      const res = await fetch(`${DOCKER_URL}/api/container`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, userId }),
-        signal: AbortSignal.timeout(45000), // 45s timeout
-      });
-
-      if (!res.ok) {
-        console.error('❌ [ensureContainerExists] Failed:', res.status);
-        return false;
-      }
+      await dockerPost<{ success: boolean }>('/api/container', { projectId, userId });
 
       console.log('✅ [ensureContainerExists] Container ready');
       return true;
@@ -592,7 +539,7 @@ async function restoreFilesToDocker(
     // 🚀 OPTIMIZATION: Collect all unique directories first
     const directories = new Set<string>();
     const normalizedFiles: Array<{ fullPath: string; content: string }> = [];
-    
+
     for (const [path, content] of filesToRestore) {
       // Normalize path - remove leading /home/project if present
       let normalizedPath = path;
@@ -601,32 +548,27 @@ async function restoreFilesToDocker(
       } else if (path.startsWith('/home/project')) {
         normalizedPath = path.replace('/home/project', '');
       }
-      
+
       const fullPath = normalizedPath.startsWith('/') ? `/workspace${normalizedPath}` : `/workspace/${normalizedPath}`;
       normalizedFiles.push({ fullPath, content });
-      
+
       // Track directory
       const dir = fullPath.split('/').slice(0, -1).join('/');
       if (dir && dir !== '/workspace') {
         directories.add(dir);
       }
     }
-    
+
     // 🚀 OPTIMIZATION: Create all directories in one command
     if (directories.size > 0) {
       const mkdirCmd = `mkdir -p ${Array.from(directories).map(d => `"${d}"`).join(' ')}`;
       try {
-        await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: mkdirCmd }),
-          signal: AbortSignal.timeout(10000), // 10s timeout
-        });
+        await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: mkdirCmd });
       } catch (e) {
         console.warn('[restoreFilesToDocker] mkdir failed:', e);
       }
     }
-    
+
     // 🚀 OPTIMIZATION: Write files in parallel batches (5 at a time to avoid overwhelming)
     const BATCH_SIZE = 5;
     let filesWritten = 0;
@@ -634,17 +576,8 @@ async function restoreFilesToDocker(
       const batch = normalizedFiles.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async ({ fullPath, content }) => {
         try {
-          const writeRes = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: fullPath, content }),
-            signal: AbortSignal.timeout(15000), // 15s timeout per file
-          });
-          if (writeRes.ok) {
-            filesWritten++;
-          } else {
-            console.warn(`Failed to write file: ${fullPath} (${writeRes.status})`);
-          }
+          await dockerPost<{ success: boolean }>(`/api/file/${projectId}`, { path: fullPath, content });
+          filesWritten++;
         } catch (e) {
           console.warn(`Failed to write file: ${fullPath}`, e);
         }
@@ -727,19 +660,21 @@ export function useChatHistory() {
       if (mixedId) {
       // Try loading from database first, then fallback to IndexedDB
       loadChatFromDatabase(mixedId)
-        .then((dbChat) => {
+        .then(async (dbChat): Promise<ChatHistoryItem | { success: boolean } | null> => {
           if (dbChat && dbChat.messages.length > 0) {
             // console.log('✅ Loaded chat from database:', dbChat.id);
-            
-            // Mark workbench as restored chat - this prevents ActionRunner from auto-installing
-            workbenchStore.markAsRestoredChat();
-            
+
+            // Mark workbench as restored chat with the file paths from snapshot
+            // This prevents ActionRunner from re-creating files that already exist
+            const restoredFilePaths = dbChat.fileSnapshot ? Object.keys(dbChat.fileSnapshot) : [];
+            workbenchStore.markAsRestoredChat(restoredFilePaths);
+
             // Set state first
             setInitialMessages(dbChat.messages);
             setUrlId(dbChat.urlId);
             description.set(dbChat.description);
             chatId.set(dbChat.id);
-            
+
             // Restore fileSnapshot to workbench AFTER state is set
             // Use setTimeout to ensure component is fully mounted AND WebContainer is ready
             if (dbChat.fileSnapshot && Object.keys(dbChat.fileSnapshot).length > 0) {
@@ -760,7 +695,7 @@ export function useChatHistory() {
                   workbenchStore.files.set(updatedFiles);
                   workbenchStore.setDocuments(updatedFiles);
                   workbenchStore.showWorkbench.set(true);
-                  
+
                   // 🚀 OPTIMIZATION: Restore files FIRST, then run npm install
                   // Use the urlId as projectId for consistency
                   const projectId = dbChat.urlId || dbChat.id || mixedId;
@@ -780,22 +715,25 @@ export function useChatHistory() {
                     // Check if install is needed BEFORE running it
                     if (hasPackageJson) {
                       // Check if node_modules exists and is recent
-                      const checkModules = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' }),
-                      });
-                      
-                      if (!checkModules.ok || !(await checkModules.text()).trim()) {
+                      try {
+                        const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' });
+
+                        if (!checkResult.output?.trim()) {
+                          console.log('📦 [useChatHistory] Running bun install after file restoration...');
+                          runNpmInstallWithCoordination(projectId).catch(err => {
+                            console.warn('⚠️ [useChatHistory] bun install failed:', err);
+                          });
+                        } else {
+                          console.log('⚡ [useChatHistory] Skipping install - node_modules is recent');
+                        }
+                      } catch (e) {
                         console.log('📦 [useChatHistory] Running bun install after file restoration...');
                         runNpmInstallWithCoordination(projectId).catch(err => {
                           console.warn('⚠️ [useChatHistory] bun install failed:', err);
                         });
-                      } else {
-                        console.log('⚡ [useChatHistory] Skipping install - node_modules is recent');
                       }
                     }
-                    
+
                     // Trigger auto-fix after restoration
                     setTimeout(() => {
                       window.dispatchEvent(new CustomEvent('recoder:fix-errors'));
@@ -803,7 +741,7 @@ export function useChatHistory() {
                   } else {
                     console.warn('⚠️ [useChatHistory] File restoration failed, skipping bun install');
                   }
-                  
+
                   // console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
                 } catch (error) {
                   console.error('❌ [useChatHistory] Failed to restore workbench files:', error);
@@ -811,7 +749,7 @@ export function useChatHistory() {
                 }
               }, 300); // 🚀 OPTIMIZATION: Reduced from 500ms to 300ms
             }
-            
+
             // Set ready LAST
             setReady(true);
             return { success: true }; // ← FIXED: Return success marker to skip next .then()
@@ -819,18 +757,18 @@ export function useChatHistory() {
 
           // Fallback to IndexedDB
           if (db) {
-            return getMessages(db, mixedId);
+            return await getMessages(db, mixedId);
           }
           return null;
         })
-        .then((storedMessages) => {
+        .then((storedMessages: ChatHistoryItem | { success: boolean } | null) => {
           // Skip if database already loaded successfully
           if (storedMessages && typeof storedMessages === 'object' && 'success' in storedMessages) {
             // console.log('✅ Database load already handled, skipping IndexedDB fallback');
             return; // ← Don't navigate to home!
           }
 
-          if (storedMessages && storedMessages.messages && storedMessages.messages.length > 0) {
+          if (storedMessages && typeof storedMessages === 'object' && 'messages' in storedMessages && storedMessages.messages && storedMessages.messages.length > 0) {
             // console.log('✅ Loaded chat from IndexedDB:', storedMessages.id);
             setInitialMessages(storedMessages.messages);
             setUrlId(storedMessages.urlId);

@@ -19,7 +19,15 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { owner, repo, branch = 'main', localFiles, accessToken, syncMode = 'both', commitMessage } = await request.json();
+    const { owner, repo, branch = 'main', localFiles, accessToken, syncMode = 'both', commitMessage } = await request.json() as {
+      owner: string;
+      repo: string;
+      branch?: string;
+      localFiles: Record<string, string>;
+      accessToken: string;
+      syncMode?: 'pull' | 'push' | 'both';
+      commitMessage?: string;
+    };
 
     if (!owner || !repo || !accessToken) {
       return new Response(

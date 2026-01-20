@@ -4,7 +4,12 @@
  */
 
 import { useState } from 'react';
-import { Check, Zap, Users, Building2 } from 'lucide-react';
+
+// Icon components using UnoCSS classes (Cloudflare Workers compatible)
+const Check = ({ className }: { className?: string }) => <div className={`i-ph:check ${className || ''}`} />;
+const Zap = ({ className }: { className?: string }) => <div className={`i-ph:lightning ${className || ''}`} />;
+const Users = ({ className }: { className?: string }) => <div className={`i-ph:users ${className || ''}`} />;
+const Building2 = ({ className }: { className?: string }) => <div className={`i-ph:building ${className || ''}`} />;
 
 interface PricingPlan {
   id: string;
@@ -131,19 +136,19 @@ export function PricingPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create checkout session');
+        const errorData = (await response.json()) as { error?: string };
+        throw new Error(errorData.error || 'Failed to create checkout session');
       }
 
-      const { checkoutUrl, provider } = await response.json();
+      const { checkoutUrl, provider } = (await response.json()) as { checkoutUrl: string; provider: string };
 
       console.log(`Redirecting to ${provider} checkout...`);
 
       // Redirect to checkout page
       window.location.href = checkoutUrl;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Subscription error:', err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(null);
     }
@@ -284,7 +289,7 @@ async function detectUserCountry(): Promise<string> {
   try {
     // Use a geolocation API to detect user's country
     const response = await fetch('https://ipapi.co/json/');
-    const data = await response.json();
+    const data = (await response.json()) as { country_code: string };
     return data.country_code;
   } catch {
     return 'US'; // Default to US

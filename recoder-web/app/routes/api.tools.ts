@@ -16,7 +16,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const body = await request.json();
+  const body = await request.json() as {
+    projectId?: string;
+    action?: string;
+    tool?: any;
+    toolId?: string;
+  };
   const { projectId, action, tool, toolId } = body;
 
   if (!projectId) {

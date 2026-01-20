@@ -1,7 +1,6 @@
 import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
-
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
+import { dockerFetch, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 
 export interface PreviewInfo {
   port: number;
@@ -17,6 +16,8 @@ export class PreviewsStore {
   #useDocker: boolean = false;
   #projectId: string | null = null;
   #initPromise: Promise<void>;
+  // PERFORMANCE: Track subscription cleanup to prevent memory leaks
+  #containerReadyUnsubscribe?: () => void;
 
   previews = atom<PreviewInfo[]>([]);
 
@@ -39,7 +40,7 @@ export class PreviewsStore {
   async #init() {
     if (DOCKER_URL) {
       try {
-        const res = await fetch(`${DOCKER_URL}/health`, { signal: AbortSignal.timeout(2000) });
+        const res = await dockerFetch('/health', { signal: AbortSignal.timeout(2000) }) as Response;
         if (res.ok) {
           this.#useDocker = true;
         }
@@ -91,11 +92,12 @@ export class PreviewsStore {
         return;
       }
 
-      // Subscribe to containerReady changes
-      const unsubscribe = workbenchStore.containerReady.subscribe((ready) => {
+      // PERFORMANCE: Subscribe to containerReady changes and track for cleanup
+      this.#containerReadyUnsubscribe = workbenchStore.containerReady.subscribe((ready) => {
         if (ready) {
           console.log('✅ [PreviewsStore] containerReady became true, enabling preview');
-          unsubscribe();
+          this.#containerReadyUnsubscribe?.();
+          this.#containerReadyUnsubscribe = undefined;
           this.#enablePreview();
         }
       });
@@ -129,12 +131,10 @@ export class PreviewsStore {
     const checkHealth = async () => {
       attempts++;
       try {
-        const res = await fetch(`${DOCKER_URL}/api/preview/${this.#projectId}/health`, {
-          signal: AbortSignal.timeout(3000)
-        });
+        const res = await dockerGet(`/api/preview/${this.#projectId}/health`) as Response;
         if (res.ok) {
           const data = await res.json() as { ports: Array<{ port: number; responding: boolean }> };
-          const respondingPort = data.ports.find(p => p.responding);
+          const respondingPort = data.ports.find((p: { port: number; responding: boolean }) => p.responding);
 
           if (respondingPort) {
             this.#enablePreview();
@@ -225,9 +225,16 @@ export class PreviewsStore {
     return this.#useDocker;
   }
 
+  // PERFORMANCE: Proper cleanup to prevent memory leaks
   destroy() {
     if (this.#heartbeatInterval) {
       clearInterval(this.#heartbeatInterval);
+      this.#heartbeatInterval = undefined;
+    }
+    // Clean up containerReady subscription if still active
+    if (this.#containerReadyUnsubscribe) {
+      this.#containerReadyUnsubscribe();
+      this.#containerReadyUnsubscribe = undefined;
     }
   }
 }

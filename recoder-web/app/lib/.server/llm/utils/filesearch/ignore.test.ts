@@ -6,6 +6,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { Ignore, loadIgnoreRules } from './ignore.js';
+// @ts-ignore - Test utility types may not resolve properly
 import { createTmpDir, cleanupTmpDir } from '@qwen-code/qwen-code-test-utils';
 
 describe('Ignore', () => {

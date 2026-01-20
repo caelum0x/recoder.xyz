@@ -1,11 +1,20 @@
 /**
  * Deployment Manager
- * Handles deployments to various platforms (Vercel, Netlify, Cloudflare Pages)
+ * Handles deployments to various platforms (Vercel, Netlify, Cloudflare Pages, Railway)
+ *
+ * This is a simplified deployment manager for backwards compatibility.
+ * For new integrations, prefer using the DeploymentManager from ./manager.ts
  */
+
+import { createVercelDeployer } from './platforms/vercel';
+import { createNetlifyDeployer } from './platforms/netlify';
+import { createRailwayDeployer } from './platforms/railway';
+import { createCloudflareDeployer } from './platforms/cloudflare';
+import type { FileTree, DeploymentConfig as PlatformDeploymentConfig } from './types';
 
 interface Deployment {
   id: string;
-  platform: 'vercel' | 'netlify' | 'cloudflare';
+  platform: 'vercel' | 'netlify' | 'cloudflare' | 'railway';
   url: string;
   status: 'building' | 'ready' | 'error';
   createdAt: Date;
@@ -151,9 +160,6 @@ export class DeploymentManager {
   }
 
   private async deployToVercel(config: DeploymentConfig): Promise<string> {
-    // Vercel deployment implementation
-    // This would use Vercel's API to create a deployment
-
     const vercelToken = this.env.VERCEL_TOKEN;
     if (!vercelToken) {
       throw new Error('VERCEL_TOKEN not configured. Please add VERCEL_TOKEN to your environment variables (.dev.vars file). Get your token from: https://vercel.com/account/tokens');
@@ -162,39 +168,34 @@ export class DeploymentManager {
     console.log('📦 Deploying to Vercel...');
 
     const projectName = config.config?.projectName || `recoder-${Date.now()}`;
-    const fileCount = Object.keys(config.files).length;
 
-    console.log(`   Project name: ${projectName}`);
-    console.log(`   Files to deploy: ${fileCount}`);
-
-    // In production, this would:
-    // 1. Create a deployment via Vercel API
-    // 2. Upload files
-    // 3. Trigger build
-    // 4. Wait for deployment to be ready
-    // 5. Return deployment URL
-
-    try {
-      // TODO: Implement actual Vercel API integration
-      // Example: https://vercel.com/docs/rest-api/endpoints/deployments
-
-      // For now, provide helpful error message
-      throw new Error(`Vercel deployment not yet implemented. To deploy to Vercel:
-1. Add VERCEL_TOKEN to .dev.vars
-2. Implement Vercel API integration in deployment-manager.ts
-3. Or use Vercel CLI: 'vercel deploy' in your project directory`);
-
-      // Simulate deployment (for testing)
-      // await new Promise(resolve => setTimeout(resolve, 3000));
-      // return `https://${projectName}.vercel.app`;
-    } catch (error) {
-      console.error('❌ Vercel deployment error:', error);
-      throw error;
+    // Convert files to FileTree format
+    const files: FileTree = {};
+    for (const [path, content] of Object.entries(config.files)) {
+      files[path] = { content: content as string };
     }
+
+    // Create deployer and deploy
+    const deployer = createVercelDeployer(vercelToken);
+
+    const platformConfig: PlatformDeploymentConfig = {
+      platform: 'vercel',
+      projectName,
+      buildCommand: config.config?.buildCommand,
+      outputDirectory: config.config?.outputDirectory,
+      environmentVariables: config.config?.envVars,
+    };
+
+    const result = await deployer.deploy(platformConfig, files);
+
+    if (result.status === 'failed') {
+      throw new Error(result.error || 'Vercel deployment failed');
+    }
+
+    return result.url || `https://${projectName}.vercel.app`;
   }
 
   private async deployToNetlify(config: DeploymentConfig): Promise<string> {
-    // Netlify deployment implementation
     const netlifyToken = this.env.NETLIFY_TOKEN;
     if (!netlifyToken) {
       throw new Error('NETLIFY_TOKEN not configured. Please add NETLIFY_TOKEN to your environment variables (.dev.vars file). Get your token from: https://app.netlify.com/user/applications#personal-access-tokens');
@@ -203,37 +204,34 @@ export class DeploymentManager {
     console.log('📦 Deploying to Netlify...');
 
     const projectName = config.config?.projectName || `recoder-${Date.now()}`;
-    const fileCount = Object.keys(config.files).length;
 
-    console.log(`   Project name: ${projectName}`);
-    console.log(`   Files to deploy: ${fileCount}`);
-
-    // In production, this would:
-    // 1. Create a site via Netlify API
-    // 2. Deploy files
-    // 3. Wait for build to complete
-    // 4. Return deployment URL
-
-    try {
-      // TODO: Implement actual Netlify API integration
-      // Example: https://docs.netlify.com/api/get-started/
-
-      throw new Error(`Netlify deployment not yet implemented. To deploy to Netlify:
-1. Add NETLIFY_TOKEN to .dev.vars
-2. Implement Netlify API integration in deployment-manager.ts
-3. Or use Netlify CLI: 'netlify deploy' in your project directory`);
-
-      // Simulate deployment (for testing)
-      // await new Promise(resolve => setTimeout(resolve, 3000));
-      // return `https://${projectName}.netlify.app`;
-    } catch (error) {
-      console.error('❌ Netlify deployment error:', error);
-      throw error;
+    // Convert files to FileTree format
+    const files: FileTree = {};
+    for (const [path, content] of Object.entries(config.files)) {
+      files[path] = { content: content as string };
     }
+
+    // Create deployer and deploy
+    const deployer = createNetlifyDeployer(netlifyToken);
+
+    const platformConfig: PlatformDeploymentConfig = {
+      platform: 'netlify',
+      projectName,
+      buildCommand: config.config?.buildCommand,
+      outputDirectory: config.config?.outputDirectory,
+      environmentVariables: config.config?.envVars,
+    };
+
+    const result = await deployer.deploy(platformConfig, files);
+
+    if (result.status === 'failed') {
+      throw new Error(result.error || 'Netlify deployment failed');
+    }
+
+    return result.url || `https://${projectName}.netlify.app`;
   }
 
   private async deployToCloudflare(config: DeploymentConfig): Promise<string> {
-    // Cloudflare Pages deployment implementation
     const cfToken = this.env.CLOUDFLARE_API_TOKEN;
     const cfAccountId = this.env.CLOUDFLARE_ACCOUNT_ID;
 
@@ -244,34 +242,31 @@ export class DeploymentManager {
     console.log('📦 Deploying to Cloudflare Pages...');
 
     const projectName = config.config?.projectName || `recoder-${Date.now()}`;
-    const fileCount = Object.keys(config.files).length;
 
-    console.log(`   Project name: ${projectName}`);
-    console.log(`   Files to deploy: ${fileCount}`);
-    console.log(`   Account ID: ${cfAccountId.substring(0, 8)}...`);
-
-    // In production, this would:
-    // 1. Create a Pages project
-    // 2. Upload files
-    // 3. Trigger deployment
-    // 4. Return deployment URL
-
-    try {
-      // TODO: Implement actual Cloudflare Pages API integration
-      // Example: https://developers.cloudflare.com/api/operations/pages-project-create-project
-
-      throw new Error(`Cloudflare Pages deployment not yet implemented. To deploy to Cloudflare:
-1. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to .dev.vars
-2. Implement Cloudflare Pages API integration in deployment-manager.ts
-3. Or use Wrangler CLI: 'wrangler pages deploy' in your project directory`);
-
-      // Simulate deployment (for testing)
-      // await new Promise(resolve => setTimeout(resolve, 3000));
-      // return `https://${projectName}.pages.dev`;
-    } catch (error) {
-      console.error('❌ Cloudflare deployment error:', error);
-      throw error;
+    // Convert files to FileTree format
+    const files: FileTree = {};
+    for (const [path, content] of Object.entries(config.files)) {
+      files[path] = { content: content as string };
     }
+
+    // Create deployer and deploy
+    const deployer = createCloudflareDeployer(cfToken, cfAccountId);
+
+    const platformConfig: PlatformDeploymentConfig = {
+      platform: 'cloudflare-pages',
+      projectName,
+      buildCommand: config.config?.buildCommand,
+      outputDirectory: config.config?.outputDirectory,
+      environmentVariables: config.config?.envVars,
+    };
+
+    const result = await deployer.deploy(platformConfig, files);
+
+    if (result.status === 'failed') {
+      throw new Error(result.error || 'Cloudflare Pages deployment failed');
+    }
+
+    return result.url || `https://${projectName}.pages.dev`;
   }
 
   async getDeployment(deploymentId: string): Promise<Deployment | null> {

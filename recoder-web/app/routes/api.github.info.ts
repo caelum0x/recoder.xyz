@@ -12,7 +12,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { owner, repo, accessToken } = await request.json();
+    const body = await request.json() as { owner?: string; repo?: string; accessToken?: string };
+    const { owner, repo, accessToken } = body;
 
     if (!owner || !repo || !accessToken) {
       return new Response(

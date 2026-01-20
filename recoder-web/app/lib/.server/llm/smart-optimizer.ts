@@ -78,17 +78,17 @@ export function optimizeRequest(
         template: {
           id: starterMatch.template.id,
           name: starterMatch.template.name,
+          path: `/starters/${starterMatch.template.id}`,
           description: starterMatch.template.description,
           keywords: starterMatch.template.keywords,
           framework: starterMatch.template.framework as any,
+          category: 'fullstack' as any,
           complexity: 'moderate' as any,
           features: starterMatch.template.files.slice(0, 5), // Top 5 files as features
-          estimatedFiles: starterMatch.template.files.length,
-          estimatedLines: starterMatch.template.files.length * 50, // Rough estimate
-          setupInstructions: `Based on ${starterMatch.template.name} starter template from /starters/${starterMatch.template.id}`
         },
         confidence: starterMatch.confidence,
-        reasoning: starterMatch.reasoning
+        reasoning: starterMatch.reasoning,
+        matchedKeywords: starterMatch.template.keywords
       };
 
       console.log(`🎯 REAL TEMPLATE MATCH: ${starterMatch.template.name} (${starterMatch.confidence}% confidence, ${starterMatch.template.files.length} files)`);
