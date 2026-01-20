@@ -7,8 +7,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
-
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+import { dockerPost } from '~/lib/services/docker-api';
 
 interface SearchResult {
   file: string;
@@ -64,16 +63,8 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
 
     setIsSearching(true);
     try {
-      const response = await fetch(`${DOCKER_URL}/api/search/${projectId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, options }),
-      });
-
-      if (response.ok) {
-        const data = await response.json() as { results?: SearchResult[] };
-        setResults(data.results || []);
-      }
+      const data = await dockerPost<{ results?: SearchResult[] }>(`/api/search/${projectId}`, { query, options });
+      setResults(data.results || []);
     } catch (error) {
       console.error('[Search] Error:', error);
     } finally {
@@ -102,18 +93,14 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
 
   const handleReplace = useCallback(async (file: string) => {
     if (!replaceText || !projectId) return;
-    
+
     try {
-      await fetch(`${DOCKER_URL}/api/replace/${projectId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          searchQuery: query,
-          replaceText,
-          files: [`/workspace/${file}`],
-        }),
+      await dockerPost(`/api/replace/${projectId}`, {
+        searchQuery: query,
+        replaceText,
+        files: [`/workspace/${file}`],
       });
-      
+
       // Refresh search
       handleSearch();
     } catch (error) {
@@ -123,16 +110,11 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
 
   const handleReplaceAll = useCallback(async () => {
     if (!replaceText || !projectId) return;
-    
+
     const files = Object.keys(resultsByFile).map(f => `/workspace/${f}`);
-    
+
     try {
-      await fetch(`${DOCKER_URL}/api/replace/${projectId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchQuery: query, replaceText, files }),
-      });
-      
+      await dockerPost(`/api/replace/${projectId}`, { searchQuery: query, replaceText, files });
       handleSearch();
     } catch (error) {
       console.error('[Search] Replace all error:', error);
@@ -266,7 +248,17 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
 
         {containerReady && !query && (
           <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+            <span className="i-ph:magnifying-glass text-2xl block mb-2 mx-auto" />
             Type to search files...
+            <div className="text-xs mt-2 text-bolt-elements-textTertiary/70">
+              Press <kbd className="px-1 py-0.5 bg-bolt-elements-background-depth-3 rounded text-xs">Cmd+Shift+F</kbd> to focus
+            </div>
+          </div>
+        )}
+
+        {containerReady && query.length === 1 && (
+          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+            Type at least 2 characters to search...
           </div>
         )}
 
@@ -319,5 +311,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
     </div>
   );
 });
+
+SearchPanel.displayName = 'SearchPanel';
 
 export default SearchPanel;

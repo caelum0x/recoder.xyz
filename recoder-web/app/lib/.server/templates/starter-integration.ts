@@ -25,6 +25,9 @@ export interface StarterTemplate {
   category: string;
   files: string[];
   packageJson?: any;
+  webContainerCompatible?: boolean;
+  requiresNativeBinaries?: boolean;
+  hasWebContainerAlternative?: string;
 }
 
 /**

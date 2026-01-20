@@ -27,13 +27,17 @@ async function getConnectionStatus(chatId: string): Promise<{ connected: boolean
       connectionStatusCache = { chatId, connected: false, autoSync: false, timestamp: Date.now() };
       return connectionStatusCache;
     }
-    const status = await response.json();
-    connectionStatusCache = { 
-      chatId, 
-      connected: status.connected || false, 
+    const status = await response.json() as {
+      connected?: boolean;
+      autoSync?: boolean;
+      branch?: string;
+    };
+    connectionStatusCache = {
+      chatId,
+      connected: status.connected || false,
       autoSync: status.autoSync || false,
       branch: status.branch,
-      timestamp: Date.now() 
+      timestamp: Date.now()
     };
     return connectionStatusCache;
   } catch {

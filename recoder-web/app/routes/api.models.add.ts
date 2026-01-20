@@ -7,7 +7,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { providerId, model } = await request.json();
+    const body = await request.json() as { providerId?: string; model?: any };
+    const { providerId, model } = body;
 
     if (!providerId || !model || !model.name || !model.id) {
       return json({ error: 'Missing required fields' }, { status: 400 });

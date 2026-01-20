@@ -1,49 +1,73 @@
+/**
+ * MCP Hook - Manages MCP server connections via Docker Backend
+ *
+ * This hook communicates with the docker-backend to start/stop MCP servers
+ * that run inside user containers. Servers are spawned on-demand and
+ * auto-killed after 5 minutes of inactivity.
+ */
+
 import { useState, useEffect, useCallback } from 'react';
-import { mcpClient, type MCPServerConfig, type MCPTool } from '../mcp/client';
+import { useStore } from '@nanostores/react';
+import { workbenchStore } from '../stores/workbench';
+import { dockerGet, dockerPost } from '../services/docker-api';
+
+export interface MCPServerConfig {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  enabled: boolean;
+}
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: any;
+  serverId: string;
+}
+
+interface CatalogServer {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  preinstalled: boolean;
+  requiresApiKey: boolean;
+  requiredEnvVars?: string[];
+}
 
 const STORAGE_KEY = 'recoder-mcp-servers';
 
-// Default MCP servers
+// Default servers (shown in settings, fetched from catalog on load)
 const DEFAULT_SERVERS: MCPServerConfig[] = [
-  {
-    id: 'eternos',
-    name: 'Eternos (72 tools)',
-    command: 'npx',
-    args: ['-y', 'recoder-mcp-eternos'],
-    enabled: true,
-  },
   {
     id: 'filesystem',
     name: 'Filesystem',
-    command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-filesystem', '/workspace'],
-    enabled: false,
+    command: 'node',
+    args: [],
+    enabled: true,
   },
   {
-    id: 'brave-search',
-    name: 'Brave Search',
-    command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-brave-search'],
-    env: { BRAVE_API_KEY: '' },
-    enabled: false,
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-github'],
-    env: { GITHUB_PERSONAL_ACCESS_TOKEN: '' },
+    id: 'memory',
+    name: 'Memory',
+    command: 'node',
+    args: [],
     enabled: false,
   },
 ];
 
 export function useMCP() {
+  const projectId = useStore(workbenchStore.projectId);
   const [servers, setServers] = useState<MCPServerConfig[]>([]);
+  const [catalog, setCatalog] = useState<CatalogServer[]>([]);
   const [tools, setTools] = useState<MCPTool[]>([]);
+  const [connectedServers, setConnectedServers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load servers from storage
+  // Load servers from storage on mount
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -57,6 +81,42 @@ export function useMCP() {
     }
   }, []);
 
+  // Load catalog from docker-backend
+  useEffect(() => {
+    async function loadCatalog() {
+      try {
+        const data = await dockerGet<{ servers?: CatalogServer[] }>('/api/mcp/catalog');
+        setCatalog(data.servers || []);
+      } catch (err) {
+        console.error('[MCP] Failed to load catalog:', err);
+      }
+    }
+    loadCatalog();
+  }, []);
+
+  // Load running servers status when projectId changes
+  useEffect(() => {
+    if (!projectId) return;
+
+    async function loadStatus() {
+      try {
+        const data = await dockerGet<{ servers?: any[] }>(`/api/mcp/${projectId}/servers`);
+        const running = (data.servers || []).filter((s: any) => s.status === 'running');
+        setConnectedServers(running.map((s: any) => s.id));
+
+        // Collect all tools from running servers
+        const allTools: MCPTool[] = [];
+        for (const server of running) {
+          allTools.push(...(server.tools || []));
+        }
+        setTools(allTools);
+      } catch (err) {
+        console.error('[MCP] Failed to load status:', err);
+      }
+    }
+    loadStatus();
+  }, [projectId]);
+
   // Save servers to storage
   const saveServers = useCallback((newServers: MCPServerConfig[]) => {
     setServers(newServers);
@@ -65,30 +125,78 @@ export function useMCP() {
 
   // Connect to enabled servers
   const connect = useCallback(async () => {
+    if (!projectId) {
+      setError('No project selected');
+      return;
+    }
+
     setLoading(true);
     setError(null);
+
     try {
       const enabledServers = servers.filter(s => s.enabled);
-      const discoveredTools = await mcpClient.connectAll(enabledServers);
-      setTools(discoveredTools);
+      const allTools: MCPTool[] = [];
+      const connected: string[] = [];
+
+      for (const server of enabledServers) {
+        try {
+          const data = await dockerPost<{ success?: boolean; tools?: MCPTool[] }>(`/api/mcp/${projectId}/start`, {
+            serverId: server.id,
+            config: {
+              name: server.name,
+              command: server.command,
+              args: server.args,
+              env: server.env,
+            },
+          });
+
+          if (data.success && data.tools) {
+            allTools.push(...data.tools);
+            connected.push(server.id);
+            console.log(`[MCP] Connected to ${server.name} with ${data.tools.length} tools`);
+          }
+        } catch (err: any) {
+          console.error(`[MCP] Error starting ${server.name}:`, err.message);
+        }
+      }
+
+      setTools(allTools);
+      setConnectedServers(connected);
+
+      if (connected.length === 0 && enabledServers.length > 0) {
+        setError('Failed to connect to any MCP servers');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [servers]);
+  }, [projectId, servers]);
 
-  // Disconnect all
+  // Disconnect all servers
   const disconnect = useCallback(async () => {
-    await mcpClient.disconnectAll();
-    setTools([]);
-  }, []);
+    if (!projectId) return;
 
-  // Add server
-  const addServer = useCallback((server: Omit<MCPServerConfig, 'id'>) => {
+    try {
+      await dockerPost(`/api/mcp/${projectId}/stop-all`, {});
+      setTools([]);
+      setConnectedServers([]);
+    } catch (err: any) {
+      console.error('[MCP] Error disconnecting:', err.message);
+    }
+  }, [projectId]);
+
+  // Add server (optionally with a specific ID)
+  const addServer = useCallback((server: Omit<MCPServerConfig, 'id'> & { id?: string }) => {
+    const existingId = server.id;
+    if (existingId && servers.some(s => s.id === existingId)) {
+      console.log(`Server ${existingId} already exists, skipping`);
+      return;
+    }
+
     const newServer: MCPServerConfig = {
       ...server,
-      id: `server-${Date.now()}`,
+      id: server.id || `server-${Date.now()}`,
     };
     saveServers([...servers, newServer]);
   }, [servers, saveServers]);
@@ -100,32 +208,83 @@ export function useMCP() {
 
   // Remove server
   const removeServer = useCallback(async (id: string) => {
-    await mcpClient.disconnect(id);
+    if (projectId && connectedServers.includes(id)) {
+      try {
+        await dockerPost(`/api/mcp/${projectId}/stop`, { serverId: id });
+      } catch (err) {
+        console.error('[MCP] Error stopping server:', err);
+      }
+    }
     saveServers(servers.filter(s => s.id !== id));
     setTools(tools.filter(t => t.serverId !== id));
-  }, [servers, tools, saveServers]);
+    setConnectedServers(connectedServers.filter(s => s !== id));
+  }, [projectId, servers, tools, connectedServers, saveServers]);
 
-  // Toggle server
+  // Toggle server enabled state
   const toggleServer = useCallback((id: string) => {
     saveServers(servers.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
   }, [servers, saveServers]);
 
-  // Call tool
+  // Call a tool on an MCP server
   const callTool = useCallback(async (toolName: string, args: any) => {
-    return mcpClient.callTool(toolName, args);
-  }, []);
+    if (!projectId) {
+      throw new Error('No project selected');
+    }
 
-  // Get tools for AI
+    // Parse serverId from tool name (format: serverId__toolName or just toolName)
+    let serverId: string;
+    let actualToolName: string;
+
+    if (toolName.includes('__')) {
+      [serverId, actualToolName] = toolName.split('__', 2);
+    } else {
+      // Find which server has this tool
+      const tool = tools.find(t => t.name === toolName);
+      if (!tool) {
+        throw new Error(`Tool not found: ${toolName}`);
+      }
+      serverId = tool.serverId;
+      actualToolName = toolName;
+    }
+
+    const data = await dockerPost<{ result?: any }>(`/api/mcp/${projectId}/call`, {
+      serverId,
+      toolName: actualToolName,
+      args,
+    });
+
+    return data.result;
+  }, [projectId, tools]);
+
+  // Get tools formatted for AI (OpenAI/Anthropic function calling format)
   const getToolsForAI = useCallback(() => {
-    return mcpClient.getToolsForAI();
-  }, []);
+    return tools.map(tool => ({
+      type: 'function',
+      function: {
+        name: `${tool.serverId}__${tool.name}`,
+        description: tool.description,
+        parameters: tool.inputSchema,
+      },
+    }));
+  }, [tools]);
 
+  // Get tools description for system prompt
   const getToolsPrompt = useCallback(() => {
-    return mcpClient.getToolsPrompt();
-  }, []);
+    if (tools.length === 0) return '';
+
+    return `
+## Available MCP Tools
+You have access to these tools via MCP servers:
+
+${tools.map(t => `- **${t.name}** (${t.serverId}): ${t.description}`).join('\n')}
+
+To use a tool, respond with a tool_use block specifying the tool name and arguments.
+`;
+  }, [tools]);
 
   return {
     servers,
+    catalog,
     tools,
     loading,
     error,
@@ -138,6 +297,6 @@ export function useMCP() {
     callTool,
     getToolsForAI,
     getToolsPrompt,
-    connectedServers: mcpClient.getConnectedServers(),
+    connectedServers,
   };
 }

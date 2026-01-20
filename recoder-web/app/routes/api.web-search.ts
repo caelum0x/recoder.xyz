@@ -4,13 +4,31 @@ import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
  * POST /api/web-search
  * Search the web using DuckDuckGo or SearXNG
  */
+interface DDGResponse {
+  Abstract?: string;
+  Heading?: string;
+  AbstractURL?: string;
+  AbstractSource?: string;
+  RelatedTopics?: Array<{
+    Text?: string;
+    FirstURL?: string;
+  }>;
+  Infobox?: {
+    content?: Array<{
+      label?: string;
+      value?: string;
+    }>;
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, { status: 405 });
   }
 
   try {
-    const { query, numResults = 5 } = await request.json();
+    const body = await request.json() as { query?: string; numResults?: number };
+    const { query, numResults = 5 } = body;
 
     if (!query) {
       return json({ error: 'Query is required' }, { status: 400 });
@@ -18,7 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Try DuckDuckGo Instant Answer API (free, no key needed)
     const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`;
-    
+
     const response = await fetch(ddgUrl, {
       headers: {
         'User-Agent': 'Recoder.xyz/1.0',
@@ -29,7 +47,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: 'Search failed' }, { status: 500 });
     }
 
-    const data = await response.json();
+    const data = await response.json() as DDGResponse;
 
     // Format results
     const results = [];

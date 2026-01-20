@@ -72,8 +72,8 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
         body: JSON.stringify({ name, description, type, userId }),
       });
 
-      const result = await response.json();
-      
+      const result = await response.json() as { error?: string };
+
       if (!response.ok) {
         throw new Error(result.error || 'Failed to create project');
       }
@@ -99,7 +99,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
       });
 
       if (!response.ok) {
-        const result = await response.json();
+        const result = await response.json() as { error?: string };
         throw new Error(result.error || 'Failed to delete project');
       }
       
@@ -114,8 +114,8 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
     setIsLoading(true);
     try {
       const response = await fetch(`/api/projects?userId=${uid}`);
-      const data = await response.json();
-      
+      const data = await response.json() as { projects?: Project[] };
+
       if (response.ok && data.projects) {
         setProjects(data.projects);
       }

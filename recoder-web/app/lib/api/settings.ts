@@ -105,6 +105,15 @@ export interface AllSettings {
   integrations: IntegrationSettings;
 }
 
+// API Response Types
+interface ApiResponse<T = any> {
+  success: boolean;
+  error?: string;
+  profile?: ProfileSettings;
+  settings?: T;
+  [key: string]: any;
+}
+
 // API Client Functions
 
 /**
@@ -122,10 +131,10 @@ export async function getProfileSettings(): Promise<ProfileSettings | null> {
       }
     );
 
-    const data = await response.json();
+    const data = await response.json() as ApiResponse;
 
     if (data.success) {
-      return data.profile;
+      return data.profile ?? null;
     }
 
     console.error('Failed to fetch profile settings:', data.error);
@@ -153,8 +162,8 @@ export async function updateProfileSettings(settings: Partial<ProfileSettings>):
       }
     );
 
-    const data = await response.json();
-    return data.success;
+    const data = await response.json() as ApiResponse;
+    return data.success ?? false;
   } catch (error) {
     console.error('Error updating profile settings:', error);
     return false;
@@ -176,10 +185,10 @@ export async function getEditorSettings(): Promise<EditorSettings | null> {
       }
     );
 
-    const data = await response.json();
+    const data = await response.json() as ApiResponse<EditorSettings>;
 
     if (data.success) {
-      return data.settings;
+      return data.settings ?? null;
     }
 
     console.error('Failed to fetch editor settings:', data.error);
@@ -207,8 +216,8 @@ export async function updateEditorSettings(settings: Partial<EditorSettings>): P
       }
     );
 
-    const data = await response.json();
-    return data.success;
+    const data = await response.json() as ApiResponse;
+    return data.success ?? false;
   } catch (error) {
     console.error('Error updating editor settings:', error);
     return false;
@@ -230,10 +239,10 @@ export async function getAISettings(): Promise<AISettings | null> {
       }
     );
 
-    const data = await response.json();
+    const data = await response.json() as ApiResponse<AISettings>;
 
     if (data.success) {
-      return data.settings;
+      return data.settings ?? null;
     }
 
     console.error('Failed to fetch AI settings:', data.error);
@@ -261,8 +270,8 @@ export async function updateAISettings(settings: Partial<AISettings>): Promise<b
       }
     );
 
-    const data = await response.json();
-    return data.success;
+    const data = await response.json() as ApiResponse;
+    return data.success ?? false;
   } catch (error) {
     console.error('Error updating AI settings:', error);
     return false;
@@ -284,10 +293,10 @@ export async function getAllSettings(): Promise<AllSettings | null> {
       }
     );
 
-    const data = await response.json();
+    const data = await response.json() as ApiResponse<AllSettings>;
 
     if (data.success) {
-      return data.settings;
+      return data.settings ?? null;
     }
 
     console.error('Failed to fetch all settings:', data.error);

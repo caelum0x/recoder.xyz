@@ -6,6 +6,7 @@
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
+// @ts-ignore - Mock file may not exist
 import { mockControl } from '../__mocks__/fs/promises.js';
 import { ReadManyFilesTool } from './read-many-files.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';

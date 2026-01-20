@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendVerificationEmail } from '@/lib/email';
+import { sendVerificationEmail, sendVerificationEmailWithCode } from '@/lib/email';
 import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
@@ -122,12 +122,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate new verification token
+    // Generate new verification token (for link-based verification)
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Store token in verifications table
+    // Generate 6-digit code (for code-based verification)
+    const verificationCode = crypto.randomInt(100000, 999999).toString();
+    const hashedCode = crypto.createHash('sha256').update(verificationCode).digest('hex');
+
+    // Store token in verifications table (link-based)
     await prisma.verifications.create({
       data: {
         id: crypto.randomUUID(),
@@ -139,18 +143,45 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Build full verification URL
+    // Store code in verifications table (code-based)
+    await prisma.verifications.create({
+      data: {
+        id: crypto.randomUUID(),
+        identifier: `email-code:${email}`,
+        value: hashedCode,
+        expires_at: expiresAt,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }
+    });
+
+    // Build full verification URL with code
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
-    const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${baseUrl}/verify?code=${verificationCode}&email=${encodeURIComponent(email)}`;
 
-    // Send verification email with full URL
-    await sendVerificationEmail(email, verificationUrl);
+    // Send verification email with code and URL
+    const emailResult = await sendVerificationEmailWithCode(email, verificationCode, verificationUrl);
 
-    console.log(`Verification email sent to ${email}`);
+    console.log(`Verification email sent to ${email} with code ${verificationCode}`);
+
+    // In development, include the verification token for testing
+    const isDev = process.env.NODE_ENV === 'development';
+    const showTestData = isDev || process.env.SHOW_TEST_CREDENTIALS === 'true';
 
     return NextResponse.json({
       success: true,
-      message: 'Verification email sent. Please check your inbox.'
+      message: 'Verification email sent. Please check your inbox.',
+      emailSent: emailResult.success,
+      emailProvider: process.env.RESEND_API_KEY ? 'Resend' : (process.env.SMTP_USER ? 'SMTP' : 'Dev'),
+      // Include verification data in dev mode for testing
+      ...(showTestData && {
+        _dev: {
+          verificationCode,
+          verificationToken,
+          verificationUrl,
+          note: 'This is only shown in development mode for testing'
+        }
+      })
     });
 
   } catch (error) {

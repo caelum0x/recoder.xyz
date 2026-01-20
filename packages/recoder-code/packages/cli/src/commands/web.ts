@@ -9,11 +9,14 @@ import { downloadCommand } from './web/download.js';
 import { openCommand } from './web/open.js';
 import { infoCommand } from './web/info.js';
 import { pushCommand } from './web/push.js';
+import { pullCommand } from './web/pull.js';
 import { syncCommand } from './web/sync.js';
 import { launchCommand } from './web/launch.js';
 import { linkCommand } from './web/link.js';
 import { unlinkCommand } from './web/unlink.js';
 import { statusCommand } from './web/status.js';
+import { diffCommand } from './web/diff.js';
+import { watchCommand } from './web/watch.js';
 
 export const webCommand: CommandModule = {
   command: 'web',
@@ -29,7 +32,10 @@ export const webCommand: CommandModule = {
       .command(openCommand)
       .command(infoCommand)
       .command(pushCommand)
+      .command(pullCommand)
       .command(syncCommand)
+      .command(diffCommand)
+      .command(watchCommand)
       .demandCommand(1, 'You need at least one command. Try: recoder web launch')
       .version(false),
   handler: () => {

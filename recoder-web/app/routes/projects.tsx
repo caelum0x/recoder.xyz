@@ -3,7 +3,13 @@ import { useLoaderData } from '@remix-run/react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { ProjectsPage } from '~/components/projects/ProjectsPage.client';
 import { Header } from '~/components/header/Header';
-import { ProjectsDB } from '~/lib/.server/db/projects-db';
+import { ProjectsDB, type Project } from '~/lib/.server/db/projects-db';
+
+// Remix serializes Date to string via JSON
+type SerializedProject = Omit<Project, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
 
 export const meta: MetaFunction = () => {
   return [
@@ -43,6 +49,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 export default function Projects() {
   const { projects, error, databaseConfigured } = useLoaderData<typeof loader>();
 
+  // Convert serialized projects back to Project type with Date objects
+  const projectsWithDates: Project[] = (projects || []).map(p => ({
+    ...p,
+    createdAt: new Date(p?.createdAt || Date.now()),
+    updatedAt: new Date(p?.updatedAt || Date.now()),
+  })) as Project[];
+
   return (
     <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
       <Header />
@@ -54,7 +67,7 @@ export default function Projects() {
           </div>
         </div>
       }>
-        {() => <ProjectsPage initialProjects={projects} error={error} databaseConfigured={databaseConfigured} />}
+        {() => <ProjectsPage initialProjects={projectsWithDates} error={error} databaseConfigured={databaseConfigured} />}
       </ClientOnly>
     </div>
   );

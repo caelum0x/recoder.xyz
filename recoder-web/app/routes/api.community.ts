@@ -3,7 +3,8 @@ import { requireAuth } from '~/lib/auth-helpers';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
-    const { db } = await import('~/lib/.server/db/client');
+    const { getDatabase } = await import('~/lib/.server/db/client');
+    const db = getDatabase(process.env as unknown as Env);
     
     const projects = await db.query(`
       SELECT 
@@ -24,13 +25,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { user } = await requireAuth(request);
-  
+  const authResult = await requireAuth(request);
+  const user = (authResult as any).user;
+
   if (request.method === 'POST') {
-    const { projectName, description, files, previewUrl, framework, language, tags } = await request.json();
+    const body = await request.json() as {
+      projectName?: string;
+      description?: string;
+      files?: any;
+      previewUrl?: string;
+      framework?: string;
+      language?: string;
+      tags?: string;
+    };
+    const { projectName, description, files, previewUrl, framework, language, tags } = body;
 
     try {
-      const { db } = await import('~/lib/.server/db/client');
+      const { getDatabase } = await import('~/lib/.server/db/client');
+      const db = getDatabase(process.env as unknown as Env);
       
       const result = await db.query(`
         INSERT INTO shared_projects 

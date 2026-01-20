@@ -22,7 +22,7 @@ export function ProjectGallery() {
   async function loadProjects() {
     try {
       const res = await fetch('/api/projects');
-      const data = await res.json();
+      const data = (await res.json()) as { projects?: Project[] };
       setProjects(data.projects || []);
     } catch (error) {
       console.error('Failed to load projects:', error);

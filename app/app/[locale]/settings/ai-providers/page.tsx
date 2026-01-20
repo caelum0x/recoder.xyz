@@ -60,6 +60,15 @@ const PROVIDERS = [
     docs: 'https://console.groq.com/docs',
     keyFormat: 'gsk_...',
     features: ['Llama 3', 'Mixtral', 'Lightning fast responses']
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    description: 'Google\'s latest AI models (Gemini Pro, Ultra)',
+    getKeyUrl: 'https://aistudio.google.com/app/apikey',
+    docs: 'https://ai.google.dev/docs',
+    keyFormat: 'AIza...',
+    features: ['Gemini Pro', 'Gemini Ultra', 'Multimodal capabilities', 'Used by Gemini CLI in containers']
   }
 ];
 
@@ -443,6 +452,46 @@ export default function AIProvidersPage() {
               <li>• <strong>Your Control:</strong> Use your own credits, switch providers anytime</li>
               <li>• <strong>Privacy First:</strong> Your API key is encrypted and only you can access it</li>
             </ul>
+          </div>
+
+          {/* AI CLI Tools Section */}
+          <div className="mt-6 p-6 rounded-2xl bg-purple-500/10 border border-purple-500/20">
+            <h3 className="font-semibold text-purple-400 mb-2 flex items-center gap-2">
+              <Terminal className="w-5 h-5" />
+              AI CLI Tools in Containers
+            </h3>
+            <p className="text-sm text-gray-300 mb-3">
+              Your API keys are automatically injected into container environments, enabling these powerful AI CLI tools:
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                <div className="font-medium text-white mb-1">OpenAI Codex</div>
+                <p className="text-xs text-gray-400">AI coding assistant from OpenAI</p>
+                <code className="text-xs text-orange-400">codex</code>
+                <span className="text-xs text-gray-500 ml-2">Uses: OPENAI_API_KEY</span>
+              </div>
+              <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                <div className="font-medium text-white mb-1">Google Gemini CLI</div>
+                <p className="text-xs text-gray-400">Google&apos;s AI assistant for terminal</p>
+                <code className="text-xs text-orange-400">gemini</code>
+                <span className="text-xs text-gray-500 ml-2">Uses: GEMINI_API_KEY</span>
+              </div>
+              <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                <div className="font-medium text-white mb-1">Claude Code</div>
+                <p className="text-xs text-gray-400">Anthropic&apos;s CLI coding assistant</p>
+                <code className="text-xs text-orange-400">claude</code>
+                <span className="text-xs text-gray-500 ml-2">Uses: Claude Code Token</span>
+              </div>
+              <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                <div className="font-medium text-white mb-1">OpenCode</div>
+                <p className="text-xs text-gray-400">Multi-provider AI agent</p>
+                <code className="text-xs text-orange-400">opencode</code>
+                <span className="text-xs text-gray-500 ml-2">Supports multiple providers</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              Just open a terminal in your project and run these commands. Your keys are securely injected at container startup.
+            </p>
           </div>
         </div>
       </div>

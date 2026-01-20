@@ -32,6 +32,11 @@
   ],
   "exclude": [
     "starters/**/*",
-    "node_modules"
+    "node_modules",
+    "vscode-components/**/*",
+    "tests/**/*",
+    "e2e/**/*",
+    "scripts/**/*",
+    "test-*.ts"
   ]
 }

@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { webcontainer } from '~/lib/webcontainer';
 import type { WebContainer } from '@webcontainer/api';
 import { getCurrentUserId } from '~/lib/stores/user';
+import { dockerFetch, dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 
 export type RuntimeMode = 'webcontainer' | 'docker';
 
@@ -21,8 +22,6 @@ interface ApiResponse {
   output?: string;
   error?: string;
 }
-
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
 
 export function useRuntime(projectId: string) {
   const [state, setState] = useState<RuntimeState>({
@@ -41,18 +40,14 @@ export function useRuntime(projectId: string) {
     async function init() {
       try {
         if (DOCKER_URL) {
-          const health = await fetch(`${DOCKER_URL}/health`, {
+          const health = await dockerFetch('/health', {
             signal: AbortSignal.timeout(3000),
-          }).catch(() => null);
+          }).catch(() => null) as Response | null;
 
           if (health?.ok) {
             // Include userId for Claude Code token injection
             const userId = getCurrentUserId();
-            const res = await fetch(`${DOCKER_URL}/api/container`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ projectId, userId }),
-            });
+            const res = await dockerPost('/api/container', { projectId, userId }) as Response;
 
             if (res.ok && !cancelled) {
               setState({ mode: 'docker', ready: true, error: null });
@@ -87,11 +82,7 @@ export function useRuntime(projectId: string) {
   const writeFile = useCallback(
     async (path: string, content: string) => {
       if (state.mode === 'docker' && DOCKER_URL) {
-        const res = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: `/workspace${path}`, content }),
-        });
+        const res = await dockerPost(`/api/file/${projectId}`, { path: `/workspace${path}`, content }) as Response;
         if (!res.ok) {
           const data = (await res.json()) as ApiResponse;
           throw new Error(data.error || 'Write failed');
@@ -109,7 +100,7 @@ export function useRuntime(projectId: string) {
   const readFile = useCallback(
     async (path: string): Promise<string> => {
       if (state.mode === 'docker' && DOCKER_URL) {
-        const res = await fetch(`${DOCKER_URL}/api/file/${projectId}?path=/workspace${path}`);
+        const res = await dockerGet(`/api/file/${projectId}?path=/workspace${path}`) as Response;
         const data = (await res.json()) as ApiResponse;
         if (!res.ok) throw new Error(data.error || 'Read failed');
         return data.content || '';
@@ -125,11 +116,7 @@ export function useRuntime(projectId: string) {
   const exec = useCallback(
     async (command: string, cwd: string = '/'): Promise<string> => {
       if (state.mode === 'docker' && DOCKER_URL) {
-        const res = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command, cwd: `/workspace${cwd}` }),
-        });
+        const res = await dockerPost(`/api/exec/${projectId}`, { command, cwd: `/workspace${cwd}` }) as Response;
         const data = (await res.json()) as ApiResponse;
         if (!res.ok) throw new Error(data.error || 'Exec failed');
         return data.output || '';

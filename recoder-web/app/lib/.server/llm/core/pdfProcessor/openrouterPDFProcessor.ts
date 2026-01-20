@@ -121,13 +121,13 @@ export class OpenRouterPDFProcessor {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `PDF processing failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
       }
 
-      const result = await response.json();
+      const result = await response.json() as any;
       const endTime = Date.now();
 
       // Extract metadata from headers
@@ -231,13 +231,13 @@ export class OpenRouterPDFProcessor {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `PDF chat failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
       }
 
-      const result = await response.json();
+      const result = await response.json() as any;
       const endTime = Date.now();
 
       // Extract metadata from headers

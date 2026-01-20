@@ -16,7 +16,7 @@ interface PushToGitHubButtonProps {
   projectName?: string;
   className?: string;
   variant?: 'default' | 'ghost' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'default' | 'lg';
   showText?: boolean;
 }
 
@@ -63,16 +63,16 @@ export function PushToGitHubButton({
         })
       });
 
-      const result = await response.json();
+      const result = await response.json() as { error?: string; repoUrl?: string };
 
       if (!response.ok) {
         throw new Error(result.error || 'Push to GitHub failed');
       }
 
       // Success!
-      setRepoUrl(result.repoUrl);
+      setRepoUrl(result.repoUrl || null);
       localStorage.setItem('github_token', githubToken); // Save for next time
-      
+
       console.log('✅ Successfully pushed to GitHub:', result.repoUrl);
       
     } catch (error) {
@@ -89,13 +89,14 @@ export function PushToGitHubButton({
   };
 
   const iconSize = size === 'sm' ? 14 : size === 'lg' ? 18 : 16;
+  const buttonSize = size === 'default' ? 'default' : size;
 
   return (
     <>
       <Button
         onClick={() => setIsOpen(true)}
         variant={variant}
-        size={size}
+        size={buttonSize}
         className={className}
         title="Push project to GitHub repository"
       >

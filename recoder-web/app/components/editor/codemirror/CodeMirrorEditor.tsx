@@ -23,7 +23,7 @@ import {
   tooltips,
   type Tooltip,
 } from '@codemirror/view';
-import { memo, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useEffect, useRef, useState, useCallback, type MutableRefObject } from 'react';
 import { useStore } from '@nanostores/react';
 import { errorsAtom, type BuildError } from '~/lib/stores/errors';
 import { createStaticDiagnostics } from './diagnostics';
@@ -36,7 +36,8 @@ import { getTheme, reconfigureTheme } from './cm-theme';
 import { inlineCopilot } from './inline-copilot';
 import { indentKeyBinding } from './indent';
 import { getLanguage } from './languages';
-import { lspHoverTooltip, gotoDefinition } from './lsp-extensions';
+import { lspExtension, lspDocumentSync, lspAutoInit, type DefinitionLocation } from './lsp-extensions';
+import { getLSPClient } from '~/lib/lsp/lsp-client';
 
 const logger = createScopedLogger('CodeMirrorEditor');
 
@@ -82,10 +83,13 @@ interface Props {
   onChange?: OnChangeCallback;
   onScroll?: OnScrollCallback;
   onSave?: OnSaveCallback;
-  onGotoDefinition?: (file: string, line: number) => void;
+  onGotoDefinition?: (file: string, line: number, character?: number) => void;
+  onReferencesFound?: (locations: DefinitionLocation[]) => void;
   projectId?: string;
   className?: string;
   settings?: EditorSettings;
+  /** Enable LSP features (hover, completions, go-to-definition) */
+  enableLSP?: boolean;
 }
 
 type EditorStates = Map<string, EditorState>;
@@ -141,10 +145,12 @@ export const CodeMirrorEditor = memo(
     onChange,
     onSave,
     onGotoDefinition,
+    onReferencesFound,
     projectId,
     theme,
     settings,
     className = '',
+    enableLSP = true,
   }: Props) => {
     renderLogger.trace('CodeMirrorEditor');
 
@@ -161,6 +167,7 @@ export const CodeMirrorEditor = memo(
     const onChangeRef = useRef(onChange);
     const onSaveRef = useRef(onSave);
     const onGotoDefinitionRef = useRef(onGotoDefinition);
+    const onReferencesFoundRef = useRef(onReferencesFound);
 
     /**
      * This effect is used to avoid side effects directly in the render function
@@ -171,6 +178,7 @@ export const CodeMirrorEditor = memo(
       onChangeRef.current = onChange;
       onSaveRef.current = onSave;
       onGotoDefinitionRef.current = onGotoDefinition;
+      onReferencesFoundRef.current = onReferencesFound;
       docRef.current = doc;
       themeRef.current = theme;
     });
@@ -226,16 +234,51 @@ export const CodeMirrorEditor = memo(
       editorStatesRef.current = new Map<string, EditorState>();
     }, [id]);
 
+    // Initialize LSP when projectId changes
+    useEffect(() => {
+      if (!projectId || !enableLSP) return;
+
+      // Initialize LSP client in background when project loads
+      const client = getLSPClient(projectId);
+      if (!client.isReady()) {
+        client.initialize().catch((err) => {
+          logger.warn('LSP initialization failed:', err);
+        });
+      }
+
+      return () => {
+        // Note: We don't dispose the client here as it may be shared
+        // The client will be cleaned up when the project is closed
+      };
+    }, [projectId, enableLSP]);
+
     useEffect(() => {
       const editorStates = editorStatesRef.current!;
       const view = viewRef.current!;
       const theme = themeRef.current!;
 
-      // Build LSP extensions if projectId is available
-      const lspExtensions = projectId && doc?.filePath ? [
-        lspHoverTooltip(projectId, doc.filePath),
-        gotoDefinition(projectId, doc.filePath, (file, line) => onGotoDefinitionRef.current?.(file, line)),
-      ] : [];
+      // Build LSP extensions if projectId is available and LSP is enabled
+      // Includes hover, go-to-definition, find references, and document sync
+      const lspExtensions: Extension[] = [];
+
+      if (enableLSP && projectId && doc?.filePath) {
+        // Add core LSP features (hover, go-to-definition, find references)
+        lspExtensions.push(
+          ...lspExtension(projectId, doc.filePath, {
+            onGotoDefinition: (file, line, character) => onGotoDefinitionRef.current?.(file, line, character),
+            onReferencesFound: (locations) => onReferencesFoundRef.current?.(locations),
+            enableHover: true,
+            enableDefinition: true,
+            enableReferences: true,
+          })
+        );
+
+        // Add document sync for better LSP accuracy
+        lspExtensions.push(lspDocumentSync(projectId, doc.filePath, 500));
+
+        // Add auto-init to ensure LSP is ready
+        lspExtensions.push(lspAutoInit(projectId, doc.filePath));
+      }
 
       if (!doc) {
         const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
@@ -282,7 +325,7 @@ export const CodeMirrorEditor = memo(
         autoFocusOnDocumentChange,
         doc as TextEditorDocument,
       );
-    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange, projectId]);
+    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange, projectId, enableLSP]);
 
     // Update diagnostics (red underlines) when errors change
     useEffect(() => {

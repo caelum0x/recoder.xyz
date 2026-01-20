@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { webcontainer } from '~/lib/webcontainer';
+import { getWebContainer } from '~/lib/runtime';
 import { integrateRecoderContext } from '~/lib/recoder-context/webcontainer-integration';
 
 export function useRecoderContext(isFirstMessage: boolean) {
@@ -17,13 +17,16 @@ export function useRecoderContext(isFirstMessage: boolean) {
   const loadContext = async () => {
     setIsLoading(true);
     try {
-      const wc = await webcontainer;
+      const wc = await getWebContainer();
       const contextPrompt = await integrateRecoderContext(
         {
-          readFile: (path, encoding) => wc.fs.readFile(path, encoding || 'utf-8'),
-          writeFile: (path, content) => wc.fs.writeFile(path, content),
-          mkdir: (path, options) => wc.fs.mkdir(path, options),
-          readdir: (path) => wc.fs.readdir(path),
+          readFile: async (path: string, _encoding?: string) => {
+            const result = await wc.fs.readFile(path, 'utf-8');
+            return result as string;
+          },
+          writeFile: async (path: string, content: string) => { await wc.fs.writeFile(path, content); },
+          mkdir: async (path: string, options?: { recursive?: boolean }) => { await wc.fs.mkdir(path, options as any); },
+          readdir: async (path: string) => wc.fs.readdir(path) as unknown as string[],
         },
         isFirstMessage
       );

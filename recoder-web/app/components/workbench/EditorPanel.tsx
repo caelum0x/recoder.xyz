@@ -22,19 +22,27 @@ import { renderLogger } from '~/utils/logger';
 import { isMobile } from '~/utils/mobile';
 import { EditorTabs } from './EditorTabs';
 import { FileBreadcrumb } from './FileBreadcrumb';
-import { FileTree } from './FileTree';
+import { EnhancedFileTree } from './EnhancedFileTree';
+import { ProjectPlanPanel } from './ProjectPlanPanel';
 import { Terminal, type TerminalRef } from './terminal/Terminal';
 import { TerminalControls } from './terminal/TerminalControls';
+import { TerminalTabs, type TerminalTab } from './terminal/TerminalTabs';
+import { ReplLauncher } from './terminal/ReplLauncher';
 import { CLIStatus } from './terminal/CLIStatus';
+import { terminalSync } from '~/lib/terminal-sync';
 import { LogsPanel } from './LogsPanel';
 import { ProblemsPanel } from './ProblemsPanel';
 import { SearchPanel } from './SearchPanel';
 import { GitPanel } from './GitPanel';
 import { DiffViewer } from './DiffViewer';
+import { PackageManagerPanel } from './PackageManagerPanel';
+import { SecretsPanel } from './SecretsPanel';
+// Note: DatabaseExplorer removed - needs security rewrite
 import { useStore as useNanoStore } from '@nanostores/react';
 import { errorCountAtom, criticalErrorCountAtom } from '~/lib/stores/errors';
 import { createFile, createFolder, deleteFile, renameFile, copyFilePath } from '~/lib/services/file-operations';
 import { toast } from 'react-toastify';
+import { PanelErrorBoundary } from './PanelErrorBoundary';
 
 interface EditorPanelProps {
   files?: FileMap;
@@ -50,13 +58,21 @@ interface EditorPanelProps {
 }
 
 const MAX_TERMINALS = 3;
-const DEFAULT_TERMINAL_SIZE = 25; // Smaller default for more editor space
+// Get saved terminal size or use default
+const getSavedTerminalSize = () => {
+  try {
+    return terminalSync.getSizePrefs().panelSize;
+  } catch {
+    return 25;
+  }
+};
+const DEFAULT_TERMINAL_SIZE = getSavedTerminalSize();
 const DEFAULT_EDITOR_SIZE = 100 - DEFAULT_TERMINAL_SIZE;
 
 const editorSettings: EditorSettings = { tabSize: 2 };
 
-type BottomPanelView = 'terminal' | 'logs' | 'problems';
-type SidebarView = 'files' | 'search' | 'git';
+type BottomPanelView = 'terminal' | 'logs' | 'problems' | 'secrets';
+type SidebarView = 'files' | 'search' | 'git' | 'packages' | 'architecture';
 
 export const EditorPanel = memo(
   ({
@@ -87,9 +103,17 @@ export const EditorPanel = memo(
 
     const [activeTerminal, setActiveTerminal] = useState(0);
     const [terminalCount, setTerminalCount] = useState(1);
+    const [terminalNames, setTerminalNames] = useState<string[]>(['Terminal 1']);
     const [bottomPanelView, setBottomPanelView] = useState<BottomPanelView>('terminal');
     const [sidebarView, setSidebarView] = useState<SidebarView>('files');
     const [diffView, setDiffView] = useState<{ path: string; original: string; modified: string } | null>(null);
+    const [replLauncherExpanded, setReplLauncherExpanded] = useState(false);
+
+    // Get available files for REPL detection
+    const availableFileNames = useMemo(() => {
+      if (!files) return new Set<string>();
+      return new Set(Object.keys(files).map(f => f.split('/').pop() || ''));
+    }, [files]);
 
     const activeFileSegments = useMemo(() => {
       if (!editorDocument) {
@@ -207,12 +231,14 @@ export const EditorPanel = memo(
       terminalToggledByShortcut.current = false;
     }, [showTerminal]);
 
-    const addTerminal = () => {
+    const addTerminal = useCallback(() => {
       if (terminalCount < MAX_TERMINALS) {
+        const newName = `Terminal ${terminalCount + 1}`;
+        setTerminalNames(prev => [...prev, newName]);
         setTerminalCount(terminalCount + 1);
         setActiveTerminal(terminalCount);
       }
-    };
+    }, [terminalCount]);
 
     const handleClearTerminal = useCallback(() => {
       workbenchStore.clearActiveTerminal();
@@ -222,13 +248,65 @@ export const EditorPanel = memo(
       workbenchStore.killActiveProcess();
     }, []);
 
-    const handleCloseTerminal = useCallback(() => {
+    const handleCloseTerminal = useCallback((index: number) => {
       if (terminalCount > 1) {
-        workbenchStore.closeTerminal(activeTerminal);
+        workbenchStore.closeTerminal(index);
+        setTerminalNames(prev => {
+          const newNames = [...prev];
+          newNames.splice(index, 1);
+          return newNames;
+        });
         setTerminalCount(prev => prev - 1);
-        setActiveTerminal(prev => Math.max(0, prev - 1));
+        setActiveTerminal(prev => Math.max(0, Math.min(prev, terminalCount - 2)));
       }
-    }, [activeTerminal, terminalCount]);
+    }, [terminalCount]);
+
+    const handleRenameTerminal = useCallback((index: number, newName: string) => {
+      setTerminalNames(prev => {
+        const newNames = [...prev];
+        newNames[index] = newName;
+        return newNames;
+      });
+      workbenchStore.renameTerminal(index, newName);
+    }, []);
+
+    const handleReplLaunch = useCallback((command: string, name: string) => {
+      setReplLauncherExpanded(false);
+      // Send command to active terminal
+      workbenchStore.launchCommand(command);
+    }, []);
+
+    // PERFORMANCE: Memoize terminal ready/resize handlers to prevent re-renders
+    const handleTerminalReady = useCallback((terminal: any) => {
+      workbenchStore.attachTerminal(terminal);
+    }, []);
+
+    const handleTerminalResize = useCallback((cols: number, rows: number) => {
+      workbenchStore.onTerminalResize(cols, rows);
+    }, []);
+
+    // PERFORMANCE: Memoize sidebar view setters
+    const handleSetFilesView = useCallback(() => setSidebarView('files'), []);
+    const handleSetSearchView = useCallback(() => setSidebarView('search'), []);
+    const handleSetGitView = useCallback(() => setSidebarView('git'), []);
+    const handleSetPackagesView = useCallback(() => setSidebarView('packages'), []);
+    const handleSetArchView = useCallback(() => setSidebarView('architecture'), []);
+
+    // PERFORMANCE: Memoize bottom panel view setters
+    const handleSetTerminalView = useCallback(() => setBottomPanelView('terminal'), []);
+    const handleSetLogsView = useCallback(() => setBottomPanelView('logs'), []);
+    const handleSetProblemsView = useCallback(() => setBottomPanelView('problems'), []);
+    const handleSetSecretsView = useCallback(() => setBottomPanelView('secrets'), []);
+
+    // Build terminal tabs data
+    const terminalTabs: TerminalTab[] = useMemo(() => {
+      return terminalNames.map((name, index) => ({
+        id: `terminal-${index}`,
+        name,
+        isActive: index === activeTerminal,
+        isRunning: commandRunning && index === activeTerminal,
+      }));
+    }, [terminalNames, activeTerminal, commandRunning]);
 
     return (
       <>
@@ -243,81 +321,139 @@ export const EditorPanel = memo(
             >
               <div className="flex flex-col border-r border-bolt-elements-borderColor h-full overflow-hidden">
                 {/* Sidebar Tabs */}
+                {/* PERFORMANCE: Using memoized click handlers */}
                 <div className="flex border-b border-bolt-elements-borderColor">
                   <button
-                    onClick={() => setSidebarView('files')}
+                    onClick={handleSetFilesView}
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'files'
                         ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-blue-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
                     )}
-                    title="Explorer (Cmd+Shift+E)"
+                    title="Explorer - Browse project files (Cmd+Shift+E)"
+                    aria-label="File explorer"
+                    aria-selected={sidebarView === 'files'}
                   >
                     <span className="i-ph:tree-structure-duotone" />
                     Files
                   </button>
                   <button
-                    onClick={() => setSidebarView('search')}
+                    onClick={handleSetSearchView}
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'search'
                         ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-blue-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
                     )}
-                    title="Search (Cmd+Shift+F)"
+                    title="Search - Find in files (Cmd+Shift+F)"
+                    aria-label="Search files"
+                    aria-selected={sidebarView === 'search'}
                   >
                     <span className="i-ph:magnifying-glass" />
                     Search
                   </button>
                   <button
-                    onClick={() => setSidebarView('git')}
+                    onClick={handleSetGitView}
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'git'
                         ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-purple-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
                     )}
-                    title="Source Control (Cmd+Shift+G)"
+                    title="Source Control - Git changes and history (Cmd+Shift+G)"
+                    aria-label="Git source control"
+                    aria-selected={sidebarView === 'git'}
                   >
                     <span className="i-ph:git-branch" />
                     Git
+                  </button>
+                  <button
+                    onClick={handleSetPackagesView}
+                    className={classNames(
+                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
+                      sidebarView === 'packages'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-green-500'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
+                    )}
+                    title="Package Manager - Install and manage dependencies"
+                    aria-label="Package manager"
+                    aria-selected={sidebarView === 'packages'}
+                  >
+                    <span className="i-ph:package" />
+                    Pkgs
+                  </button>
+                  <button
+                    onClick={handleSetArchView}
+                    className={classNames(
+                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
+                      sidebarView === 'architecture'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-orange-500'
+                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
+                    )}
+                    title="Architecture - Project structure and stats overview"
+                    aria-label="Project architecture"
+                    aria-selected={sidebarView === 'architecture'}
+                  >
+                    <span className="i-ph:stack" />
+                    Arch
                   </button>
                 </div>
                 
                 {/* Sidebar Content */}
                 <div className="flex-1 overflow-auto">
                   {sidebarView === 'files' && (
-                    <FileTree
-                      className="h-full"
-                      files={files}
-                      hideRoot
-                      unsavedFiles={unsavedFiles}
-                      rootFolder={WORK_DIR}
-                      selectedFile={selectedFile}
-                      onFileSelect={onFileSelect}
-                      onFileCreate={handleFileCreate}
-                      onFolderCreate={handleFolderCreate}
-                      onFileDelete={handleFileDelete}
-                      onFileRename={handleFileRename}
-                      onFileCopy={handleFileCopy}
-                    />
+                    <PanelErrorBoundary panelName="File Explorer">
+                      <EnhancedFileTree
+                        className="h-full"
+                        files={files || {}}
+                        hideRoot
+                        unsavedFiles={unsavedFiles}
+                        rootFolder={WORK_DIR}
+                        selectedFile={selectedFile}
+                        onFileSelect={onFileSelect}
+                        onFileCreate={handleFileCreate}
+                        onFolderCreate={handleFolderCreate}
+                        onFileDelete={handleFileDelete}
+                        onFileRename={handleFileRename}
+                        onFileCopy={handleFileCopy}
+                      />
+                    </PanelErrorBoundary>
                   )}
                   {sidebarView === 'search' && (
-                    <SearchPanel
-                      onFileOpen={(file, line, column) => {
-                        onFileSelect?.(`${WORK_DIR}/${file}`);
-                      }}
-                    />
+                    <PanelErrorBoundary panelName="Search">
+                      <SearchPanel
+                        onFileOpen={(file, line, column) => {
+                          onFileSelect?.(`${WORK_DIR}/${file}`);
+                        }}
+                      />
+                    </PanelErrorBoundary>
                   )}
                   {sidebarView === 'git' && (
-                    <GitPanel
-                      files={files || {}}
-                      onFileSelect={onFileSelect}
-                      onShowDiff={(path, original, modified) => {
-                        setDiffView({ path, original, modified });
-                      }}
-                    />
+                    <PanelErrorBoundary panelName="Git">
+                      <GitPanel
+                        files={files || {}}
+                        onFileSelect={onFileSelect}
+                        onShowDiff={(path, original, modified) => {
+                          setDiffView({ path, original, modified });
+                        }}
+                      />
+                    </PanelErrorBoundary>
+                  )}
+                  {sidebarView === 'packages' && (
+                    <PanelErrorBoundary panelName="Package Manager">
+                      <PackageManagerPanel
+                        files={files || {}}
+                      />
+                    </PanelErrorBoundary>
+                  )}
+                  {sidebarView === 'architecture' && (
+                    <PanelErrorBoundary panelName="Architecture">
+                      <ProjectPlanPanel
+                        files={files || {}}
+                        onFileSelect={onFileSelect}
+                      />
+                    </PanelErrorBoundary>
                   )}
                 </div>
               </div>
@@ -381,6 +517,12 @@ export const EditorPanel = memo(
               workbenchStore.toggleTerminal(false);
             }
           }}
+          onResize={(size: number) => {
+            // Save panel size preference when user resizes
+            if (size > 5) { // Don't save when collapsed
+              terminalSync.setSizePrefs(size);
+            }
+          }}
         >
           <div className="h-full">
             <div className="bg-bolt-elements-terminals-background h-full flex flex-col">
@@ -403,7 +545,7 @@ export const EditorPanel = memo(
                         bottomPanelView !== 'terminal',
                     },
                   )}
-                  onClick={() => setBottomPanelView('terminal')}
+                  onClick={handleSetTerminalView}
                 >
                   <div className="i-ph:terminal-window-duotone text-lg" />
                   Terminal
@@ -422,7 +564,7 @@ export const EditorPanel = memo(
                         bottomPanelView !== 'logs',
                     },
                   )}
-                  onClick={() => setBottomPanelView('logs')}
+                  onClick={handleSetLogsView}
                 >
                   <div className="i-ph:file-text-duotone text-lg" />
                   Logs
@@ -438,7 +580,7 @@ export const EditorPanel = memo(
                         bottomPanelView !== 'problems',
                     },
                   )}
-                  onClick={() => setBottomPanelView('problems')}
+                  onClick={handleSetProblemsView}
                 >
                   <div className={classNames('text-lg', criticalErrorCount > 0 ? 'i-ph:x-circle-fill text-red-500' : 'i-ph:warning-circle-duotone')} />
                   Problems
@@ -452,36 +594,35 @@ export const EditorPanel = memo(
                   )}
                 </button>
 
+                {/* Tab: Secrets */}
+                <button
+                  className={classNames(
+                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
+                    {
+                      'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': bottomPanelView === 'secrets',
+                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
+                        bottomPanelView !== 'secrets',
+                    },
+                  )}
+                  onClick={handleSetSecretsView}
+                >
+                  <div className="i-ph:key-duotone text-lg text-yellow-400" />
+                  Secrets
+                </button>
+
                 {/* Terminal tabs (only show when terminal view is active) */}
                 {bottomPanelView === 'terminal' && (
                   <>
                     <div className="w-px h-4 bg-bolt-elements-borderColor mx-1" />
-                    {Array.from({ length: terminalCount }, (_, index) => {
-                      const isActive = activeTerminal === index;
-
-                      return (
-                        <button
-                          key={index}
-                          className={classNames(
-                            'flex items-center text-xs cursor-pointer gap-1 px-2 py-1 whitespace-nowrap rounded',
-                            {
-                              'bg-bolt-elements-item-backgroundActive text-bolt-elements-textPrimary': isActive,
-                              'text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive/50':
-                                !isActive,
-                            },
-                          )}
-                          onClick={() => setActiveTerminal(index)}
-                        >
-                          {index + 1}
-                          {highlightTerminal && isActive && (
-                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                          )}
-                        </button>
-                      );
-                    })}
-                    {terminalCount < MAX_TERMINALS && (
-                      <IconButton icon="i-ph:plus" size="sm" onClick={addTerminal} title="New Terminal" />
-                    )}
+                    <TerminalTabs
+                      tabs={terminalTabs}
+                      activeIndex={activeTerminal}
+                      maxTerminals={MAX_TERMINALS}
+                      onSelect={setActiveTerminal}
+                      onAdd={addTerminal}
+                      onClose={handleCloseTerminal}
+                      onRename={handleRenameTerminal}
+                    />
                   </>
                 )}
 
@@ -489,14 +630,21 @@ export const EditorPanel = memo(
 
                 {/* Terminal Controls (only show when terminal view is active) */}
                 {bottomPanelView === 'terminal' && (
-                  <TerminalControls
-                    onClear={handleClearTerminal}
-                    onKill={handleKillProcess}
-                    onCloseTerminal={terminalCount > 1 ? handleCloseTerminal : undefined}
-                    isRunning={commandRunning}
-                    terminalCount={terminalCount}
-                    activeIndex={activeTerminal}
-                  />
+                  <div className="flex items-center gap-1 relative">
+                    <ReplLauncher
+                      onLaunch={handleReplLaunch}
+                      availableFiles={availableFileNames}
+                      isExpanded={replLauncherExpanded}
+                      onToggleExpand={() => setReplLauncherExpanded(!replLauncherExpanded)}
+                    />
+                    <TerminalControls
+                      onClear={handleClearTerminal}
+                      onKill={handleKillProcess}
+                      isRunning={commandRunning}
+                      terminalCount={terminalCount}
+                      activeIndex={activeTerminal}
+                    />
+                  </div>
                 )}
 
                 <CLIStatus />
@@ -510,6 +658,7 @@ export const EditorPanel = memo(
               </div>
 
               {/* Terminal View */}
+              {/* PERFORMANCE: Only render terminals when view is active, use stable refs */}
               {bottomPanelView === 'terminal' && (
                 <>
                   {Array.from({ length: terminalCount }, (_, index) => {
@@ -517,15 +666,16 @@ export const EditorPanel = memo(
 
                     return (
                       <Terminal
-                        key={index}
+                        key={`terminal-${index}`}
                         className={classNames('h-full overflow-hidden', {
                           hidden: !isActive,
                         })}
                         ref={(ref) => {
-                          terminalRefs.current.push(ref);
+                          // PERFORMANCE: Avoid array growth on each render
+                          terminalRefs.current[index] = ref;
                         }}
-                        onTerminalReady={(terminal) => workbenchStore.attachTerminal(terminal)}
-                        onTerminalResize={(cols, rows) => workbenchStore.onTerminalResize(cols, rows)}
+                        onTerminalReady={handleTerminalReady}
+                        onTerminalResize={handleTerminalResize}
                         theme={theme}
                       />
                     );
@@ -550,6 +700,11 @@ export const EditorPanel = memo(
                     }
                   }}
                 />
+              )}
+
+              {/* Secrets View */}
+              {bottomPanelView === 'secrets' && (
+                <SecretsPanel className="flex-1" />
               )}
             </div>
           </div>

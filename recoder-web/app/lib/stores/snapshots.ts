@@ -4,10 +4,7 @@
  */
 
 import { atom, map } from 'nanostores';
-
-const DOCKER_URL = typeof window !== 'undefined' 
-  ? (import.meta.env?.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100')
-  : 'http://localhost:3100';
+import { dockerGet, dockerPost } from '~/lib/services/docker-api';
 
 export interface Snapshot {
   id: string;           // Git commit hash (short)
@@ -33,6 +30,43 @@ export interface SnapshotDiff {
     additions: number;
     deletions: number;
   };
+}
+
+// ============================================
+// API Response Types
+// ============================================
+
+interface ErrorResponse {
+  error?: string;
+}
+
+interface CreateSnapshotResponse extends Snapshot {}
+
+interface LoadSnapshotsResponse {
+  snapshots: Snapshot[];
+}
+
+interface SnapshotStatusResponse {
+  hasChanges: boolean;
+  current: Snapshot | null;
+}
+
+interface RestoreSnapshotResponse {
+  success: boolean;
+}
+
+interface DiffResponse extends SnapshotDiff {}
+
+interface FileDiffResponse {
+  diff: string;
+}
+
+interface FileContentResponse {
+  content: string;
+}
+
+interface AutoSaveResponse {
+  success: boolean;
 }
 
 // ============================================
@@ -112,18 +146,8 @@ export async function createSnapshot(
   }
 
   try {
-    const response = await fetch(`${DOCKER_URL}/api/snapshot/${projectId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, author }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json() as { error?: string };
-      throw new Error(data.error || 'Failed to create snapshot');
-    }
-
-    return await response.json() as Snapshot;
+    const snapshot = await dockerPost<CreateSnapshotResponse>(`/api/snapshot/${projectId}`, { message, author });
+    return snapshot;
   } catch (error: any) {
     console.error('[Snapshot] Create error:', error);
     return null;
@@ -144,14 +168,7 @@ export async function loadSnapshots(projectId: string, limit: number = 50): Prom
   snapshotStore.setKey('error', null);
 
   try {
-    const response = await fetch(`${DOCKER_URL}/api/snapshots/${projectId}?limit=${limit}`);
-
-    if (!response.ok) {
-      const data = await response.json() as { error?: string };
-      throw new Error(data.error || 'Failed to load snapshots');
-    }
-
-    const data = await response.json() as { snapshots: Snapshot[] };
+    const data = await dockerGet<LoadSnapshotsResponse>(`/api/snapshots/${projectId}?limit=${limit}`);
 
     snapshotStore.setKey('snapshots', data.snapshots);
     if (data.snapshots.length > 0) {
@@ -170,12 +187,8 @@ export async function loadSnapshots(projectId: string, limit: number = 50): Prom
  */
 export async function checkSnapshotStatus(projectId: string): Promise<void> {
   try {
-    const response = await fetch(`${DOCKER_URL}/api/snapshot/${projectId}/status`);
+    const data = await dockerGet<SnapshotStatusResponse>(`/api/snapshot/${projectId}/status`);
 
-    if (!response.ok) return;
-
-    const data = await response.json() as { hasChanges: boolean; current: Snapshot | null };
-    
     snapshotStore.setKey('hasUnsavedChanges', data.hasChanges);
     if (data.current) {
       snapshotStore.setKey('currentSnapshot', data.current);
@@ -193,20 +206,11 @@ export async function restoreSnapshot(projectId: string, snapshotId: string): Pr
   snapshotStore.setKey('error', null);
 
   try {
-    const response = await fetch(`${DOCKER_URL}/api/snapshot/${projectId}/restore`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ snapshotId }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json() as { error?: string };
-      throw new Error(data.error || 'Failed to restore snapshot');
-    }
+    await dockerPost<RestoreSnapshotResponse>(`/api/snapshot/${projectId}/restore`, { snapshotId });
 
     // Reload snapshots to get updated list
     await loadSnapshots(projectId);
-    
+
     return true;
   } catch (error: any) {
     snapshotStore.setKey('error', error.message);
@@ -225,27 +229,18 @@ export async function getDiff(
   to: string = 'HEAD'
 ): Promise<SnapshotDiff | null> {
   const cacheKey = `${projectId}:${from}:${to}`;
-  
+
   // Check cache
   if (diffCache.has(cacheKey)) {
     return diffCache.get(cacheKey)!;
   }
 
   try {
-    const response = await fetch(
-      `${DOCKER_URL}/api/snapshot/${projectId}/diff?from=${from}&to=${to}`
-    );
+    const diff = await dockerGet<DiffResponse>(`/api/snapshot/${projectId}/diff?from=${from}&to=${to}`);
 
-    if (!response.ok) {
-      const data = await response.json() as { error?: string };
-      throw new Error(data.error || 'Failed to get diff');
-    }
-
-    const diff = await response.json() as SnapshotDiff;
-    
     // Cache the result
     diffCache.set(cacheKey, diff);
-    
+
     return diff;
   } catch (error: any) {
     console.error('[Snapshot] Diff error:', error);
@@ -263,13 +258,9 @@ export async function getFileDiff(
   to: string = 'HEAD'
 ): Promise<string | null> {
   try {
-    const response = await fetch(
-      `${DOCKER_URL}/api/snapshot/${projectId}/file-diff?path=${encodeURIComponent(filePath)}&from=${from}&to=${to}`
+    const data = await dockerGet<FileDiffResponse>(
+      `/api/snapshot/${projectId}/file-diff?path=${encodeURIComponent(filePath)}&from=${from}&to=${to}`
     );
-
-    if (!response.ok) return null;
-
-    const data = await response.json() as { diff: string };
     return data.diff;
   } catch (error) {
     console.error('[Snapshot] File diff error:', error);
@@ -286,13 +277,9 @@ export async function getFileAtSnapshot(
   snapshotId: string
 ): Promise<string | null> {
   try {
-    const response = await fetch(
-      `${DOCKER_URL}/api/snapshot/${projectId}/file?path=${encodeURIComponent(filePath)}&snapshotId=${snapshotId}`
+    const data = await dockerGet<FileContentResponse>(
+      `/api/snapshot/${projectId}/file?path=${encodeURIComponent(filePath)}&snapshotId=${snapshotId}`
     );
-
-    if (!response.ok) return null;
-
-    const data = await response.json() as { content: string };
     return data.content;
   } catch (error) {
     console.error('[Snapshot] Get file error:', error);
@@ -309,15 +296,8 @@ export async function setAutoSave(
   intervalMs: number = 5 * 60 * 1000
 ): Promise<void> {
   try {
-    const response = await fetch(`${DOCKER_URL}/api/snapshot/${projectId}/auto-save`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled, intervalMs }),
-    });
-
-    if (response.ok) {
-      snapshotStore.setKey('autoSaveEnabled', enabled);
-    }
+    await dockerPost<AutoSaveResponse>(`/api/snapshot/${projectId}/auto-save`, { enabled, intervalMs });
+    snapshotStore.setKey('autoSaveEnabled', enabled);
   } catch (error) {
     console.error('[Snapshot] Auto-save toggle error:', error);
   }

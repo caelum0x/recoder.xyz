@@ -17,7 +17,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     const files = await db.query(
       `SELECT file_path, content FROM project_files WHERE project_id = $1`,
       [projectId]
-    );
+    ) as any;
 
     if (!files.rows || files.rows.length === 0) {
       return json({ error: 'No files found in project' }, { status: 404 });
@@ -25,17 +25,17 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
 
     // Create ZIP file
     const zip = new JSZip();
-    
+
     for (const file of files.rows) {
       zip.file(file.file_path, file.content);
     }
 
     // Generate ZIP as buffer
-    const zipBuffer = await zip.generateAsync({ 
+    const zipBuffer = await zip.generateAsync({
       type: 'nodebuffer',
       compression: 'DEFLATE',
       compressionOptions: { level: 9 }
-    });
+    }) as any;
 
     // Return ZIP file
     return new Response(zipBuffer, {

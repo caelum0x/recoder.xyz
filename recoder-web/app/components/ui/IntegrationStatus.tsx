@@ -25,7 +25,7 @@ export function IntegrationStatus({ type }: StatusIndicatorProps) {
     try {
       const endpoint = type === 'mcp' ? '/api/mcp/health' : '/api/github/health';
       const response = await fetch(endpoint);
-      const data = await response.json();
+      const data = (await response.json()) as { connected?: boolean; enabled?: boolean; message?: string };
 
       setStatus({
         connected: data.connected || data.enabled || false,

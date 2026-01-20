@@ -1,0 +1,772 @@
+/**
+ * Git Operations Service
+ * Handles git operations within containers
+ */
+
+import Docker from 'dockerode';
+
+const docker = new Docker();
+
+// ============================================
+// Security: Constants and Validation
+// ============================================
+
+// Maximum limits to prevent memory/performance issues
+const MAX_COMMIT_HISTORY = 500;
+const MAX_BRANCH_NAME_LENGTH = 250;
+const MAX_COMMIT_MESSAGE_LENGTH = 10000;
+const MAX_FILES_TO_STAGE = 1000;
+const MAX_DIFF_SIZE_BYTES = 1024 * 1024; // 1MB max diff
+
+/**
+ * Validates and sanitizes a git branch name
+ * Follows git's branch naming rules
+ */
+function sanitizeBranchName(name: string): { valid: boolean; sanitized?: string; error?: string } {
+  if (!name || typeof name !== 'string') {
+    return { valid: false, error: 'Branch name is required' };
+  }
+
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Branch name cannot be empty' };
+  }
+
+  if (trimmed.length > MAX_BRANCH_NAME_LENGTH) {
+    return { valid: false, error: `Branch name too long (max ${MAX_BRANCH_NAME_LENGTH} chars)` };
+  }
+
+  // Remove dangerous characters that could cause shell injection
+  // Git branch names allow: alphanumeric, /, -, _, .
+  // But we're extra strict to prevent any shell issues
+  const sanitized = trimmed.replace(/[^a-zA-Z0-9/_.-]/g, '-');
+
+  // Git-specific rules
+  if (sanitized.startsWith('-') || sanitized.startsWith('.')) {
+    return { valid: false, error: 'Branch name cannot start with - or .' };
+  }
+  if (sanitized.endsWith('.lock') || sanitized.endsWith('/')) {
+    return { valid: false, error: 'Branch name cannot end with .lock or /' };
+  }
+  if (sanitized.includes('..') || sanitized.includes('//')) {
+    return { valid: false, error: 'Branch name cannot contain .. or //' };
+  }
+  if (sanitized === '@') {
+    return { valid: false, error: 'Branch name cannot be @' };
+  }
+
+  return { valid: true, sanitized };
+}
+
+/**
+ * Safely escapes a file path for shell usage
+ */
+function escapeFilePath(path: string): string {
+  // Replace single quotes with escaped version
+  return path.replace(/'/g, "'\\''");
+}
+
+/**
+ * Validates file paths to prevent path traversal
+ */
+function validateFilePath(path: string): { valid: boolean; error?: string } {
+  if (!path || typeof path !== 'string') {
+    return { valid: false, error: 'File path is required' };
+  }
+
+  const trimmed = path.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'File path cannot be empty' };
+  }
+
+  // Check for path traversal attempts
+  if (trimmed.includes('..') || trimmed.startsWith('/') || trimmed.startsWith('~')) {
+    return { valid: false, error: 'Invalid file path' };
+  }
+
+  // Check for null bytes (common attack vector)
+  if (trimmed.includes('\0')) {
+    return { valid: false, error: 'Invalid characters in file path' };
+  }
+
+  return { valid: true };
+}
+
+// ============================================
+// Types
+// ============================================
+
+export interface GitBranch {
+  name: string;
+  current: boolean;
+  remote?: string;
+  lastCommit?: string;
+  lastCommitDate?: string;
+}
+
+export interface GitCommit {
+  hash: string;
+  shortHash: string;
+  message: string;
+  author: string;
+  authorEmail: string;
+  date: string;
+  timestamp: number;
+}
+
+export interface GitStatus {
+  branch: string;
+  ahead: number;
+  behind: number;
+  staged: GitFileChange[];
+  unstaged: GitFileChange[];
+  untracked: string[];
+  conflicts: string[];
+}
+
+export interface GitFileChange {
+  path: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+  oldPath?: string;
+}
+
+export interface GitDiff {
+  path: string;
+  hunks: GitDiffHunk[];
+  binary: boolean;
+}
+
+export interface GitDiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: GitDiffLine[];
+}
+
+export interface GitDiffLine {
+  type: 'context' | 'add' | 'delete' | 'header';
+  content: string;
+  oldLineNumber?: number;
+  newLineNumber?: number;
+}
+
+// ============================================
+// Execute command in container
+// ============================================
+
+async function execInContainer(containerId: string, cmd: string): Promise<string> {
+  const container = docker.getContainer(containerId);
+  const exec = await container.exec({
+    Cmd: ['/bin/bash', '-c', cmd],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+
+  const stream = await exec.start({});
+  const chunks: Buffer[] = [];
+
+  return new Promise<string>((resolve, reject) => {
+    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    stream.on('end', () => {
+      const raw = Buffer.concat(chunks);
+      let result = '';
+      let i = 0;
+      while (i < raw.length) {
+        if (i + 8 <= raw.length) {
+          const size = raw.readUInt32BE(i + 4);
+          if (i + 8 + size <= raw.length) {
+            result += raw.slice(i + 8, i + 8 + size).toString();
+            i += 8 + size;
+            continue;
+          }
+        }
+        result += raw.slice(i).toString();
+        break;
+      }
+      resolve(result.trim());
+    });
+    stream.on('error', reject);
+  });
+}
+
+// ============================================
+// Check if git repo exists
+// ============================================
+
+export async function isGitRepo(containerId: string): Promise<boolean> {
+  try {
+    const result = await execInContainer(containerId, 'cd /workspace && git rev-parse --is-inside-work-tree 2>/dev/null');
+    return result === 'true';
+  } catch {
+    return false;
+  }
+}
+
+// ============================================
+// Initialize git repo
+// ============================================
+
+export async function initRepo(containerId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await execInContainer(containerId, 'cd /workspace && git init');
+    await execInContainer(containerId, 'cd /workspace && git config user.email "recoder@recoder.xyz"');
+    await execInContainer(containerId, 'cd /workspace && git config user.name "Recoder User"');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// Get git status
+// ============================================
+
+export async function getStatus(containerId: string): Promise<GitStatus> {
+  const isRepo = await isGitRepo(containerId);
+  if (!isRepo) {
+    return {
+      branch: '',
+      ahead: 0,
+      behind: 0,
+      staged: [],
+      unstaged: [],
+      untracked: [],
+      conflicts: [],
+    };
+  }
+
+  try {
+    // Get current branch
+    const branch = await execInContainer(containerId, 'cd /workspace && git branch --show-current 2>/dev/null || echo "main"');
+
+    // Get ahead/behind
+    let ahead = 0;
+    let behind = 0;
+    try {
+      const tracking = await execInContainer(containerId, 'cd /workspace && git rev-list --left-right --count HEAD...@{u} 2>/dev/null || echo "0 0"');
+      const [a, b] = tracking.split(/\s+/);
+      ahead = parseInt(a) || 0;
+      behind = parseInt(b) || 0;
+    } catch {}
+
+    // Get status (porcelain v2 format for better parsing)
+    const statusOutput = await execInContainer(containerId, 'cd /workspace && git status --porcelain=v1 2>/dev/null || echo ""');
+
+    const staged: GitFileChange[] = [];
+    const unstaged: GitFileChange[] = [];
+    const untracked: string[] = [];
+    const conflicts: string[] = [];
+
+    if (statusOutput) {
+      const lines = statusOutput.split('\n');
+      for (const line of lines) {
+        if (!line) continue;
+
+        const indexStatus = line[0];
+        const workingStatus = line[1];
+        const path = line.substring(3);
+
+        // Check for conflicts (both modified)
+        if (indexStatus === 'U' || workingStatus === 'U' || (indexStatus === 'A' && workingStatus === 'A')) {
+          conflicts.push(path);
+          continue;
+        }
+
+        // Untracked
+        if (indexStatus === '?' && workingStatus === '?') {
+          untracked.push(path);
+          continue;
+        }
+
+        // Staged changes
+        if (indexStatus !== ' ' && indexStatus !== '?') {
+          staged.push({
+            path,
+            status: getStatusFromChar(indexStatus),
+          });
+        }
+
+        // Unstaged changes
+        if (workingStatus !== ' ' && workingStatus !== '?') {
+          unstaged.push({
+            path,
+            status: getStatusFromChar(workingStatus),
+          });
+        }
+      }
+    }
+
+    return {
+      branch,
+      ahead,
+      behind,
+      staged,
+      unstaged,
+      untracked,
+      conflicts,
+    };
+  } catch (error) {
+    console.error('[Git] Error getting status:', error);
+    return {
+      branch: 'main',
+      ahead: 0,
+      behind: 0,
+      staged: [],
+      unstaged: [],
+      untracked: [],
+      conflicts: [],
+    };
+  }
+}
+
+function getStatusFromChar(char: string): GitFileChange['status'] {
+  switch (char) {
+    case 'A': return 'added';
+    case 'M': return 'modified';
+    case 'D': return 'deleted';
+    case 'R': return 'renamed';
+    case 'C': return 'copied';
+    default: return 'modified';
+  }
+}
+
+// ============================================
+// Get branches
+// ============================================
+
+export async function getBranches(containerId: string): Promise<GitBranch[]> {
+  const isRepo = await isGitRepo(containerId);
+  if (!isRepo) {
+    return [];
+  }
+
+  try {
+    const output = await execInContainer(containerId, `cd /workspace && git branch -a --format='%(refname:short)|%(HEAD)|%(objectname:short)|%(committerdate:relative)' 2>/dev/null || echo ""`);
+
+    if (!output) return [];
+
+    const branches: GitBranch[] = [];
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      if (!line) continue;
+      const [name, head, commit, date] = line.split('|');
+      if (!name) continue;
+
+      // Skip HEAD pointer
+      if (name === 'HEAD') continue;
+
+      branches.push({
+        name: name.replace('origin/', ''),
+        current: head === '*',
+        remote: name.startsWith('origin/') ? 'origin' : undefined,
+        lastCommit: commit,
+        lastCommitDate: date,
+      });
+    }
+
+    return branches;
+  } catch (error) {
+    console.error('[Git] Error getting branches:', error);
+    return [];
+  }
+}
+
+// ============================================
+// Create branch
+// ============================================
+
+export async function createBranch(
+  containerId: string,
+  branchName: string,
+  checkout: boolean = true
+): Promise<{ success: boolean; error?: string }> {
+  // SECURITY: Validate and sanitize branch name
+  const validation = sanitizeBranchName(branchName);
+  if (!validation.valid || !validation.sanitized) {
+    console.warn(`[Git] Rejected invalid branch name: ${branchName}`);
+    return { success: false, error: validation.error || 'Invalid branch name' };
+  }
+
+  const safeName = validation.sanitized;
+
+  try {
+    if (checkout) {
+      await execInContainer(containerId, `cd /workspace && git checkout -b '${safeName}'`);
+    } else {
+      await execInContainer(containerId, `cd /workspace && git branch '${safeName}'`);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// Checkout branch
+// ============================================
+
+export async function checkoutBranch(
+  containerId: string,
+  branchName: string
+): Promise<{ success: boolean; error?: string }> {
+  // SECURITY: Validate and sanitize branch name
+  const validation = sanitizeBranchName(branchName);
+  if (!validation.valid || !validation.sanitized) {
+    console.warn(`[Git] Rejected invalid branch name for checkout: ${branchName}`);
+    return { success: false, error: validation.error || 'Invalid branch name' };
+  }
+
+  const safeName = validation.sanitized;
+
+  try {
+    await execInContainer(containerId, `cd /workspace && git checkout '${safeName}'`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// Delete branch
+// ============================================
+
+export async function deleteBranch(
+  containerId: string,
+  branchName: string,
+  force: boolean = false
+): Promise<{ success: boolean; error?: string }> {
+  // SECURITY: Validate and sanitize branch name
+  const validation = sanitizeBranchName(branchName);
+  if (!validation.valid || !validation.sanitized) {
+    console.warn(`[Git] Rejected invalid branch name for deletion: ${branchName}`);
+    return { success: false, error: validation.error || 'Invalid branch name' };
+  }
+
+  const safeName = validation.sanitized;
+  const flag = force ? '-D' : '-d';
+
+  try {
+    await execInContainer(containerId, `cd /workspace && git branch ${flag} '${safeName}'`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// Get commit history
+// ============================================
+
+export async function getCommitHistory(
+  containerId: string,
+  limit: number = 50,
+  branch?: string
+): Promise<GitCommit[]> {
+  const isRepo = await isGitRepo(containerId);
+  if (!isRepo) {
+    return [];
+  }
+
+  // SECURITY: Enforce maximum limit
+  const safeLimit = Math.min(Math.max(1, limit), MAX_COMMIT_HISTORY);
+
+  // SECURITY: Validate branch name if provided
+  let branchArg = '';
+  if (branch) {
+    const validation = sanitizeBranchName(branch);
+    if (!validation.valid || !validation.sanitized) {
+      console.warn(`[Git] Rejected invalid branch name for history: ${branch}`);
+      return [];
+    }
+    branchArg = `'${validation.sanitized}'`;
+  }
+
+  try {
+    const output = await execInContainer(
+      containerId,
+      `cd /workspace && git log ${branchArg} -${safeLimit} --format='%H|%h|%s|%an|%ae|%ci|%ct' 2>/dev/null || echo ""`
+    );
+
+    if (!output) return [];
+
+    const commits: GitCommit[] = [];
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      if (!line) continue;
+      const [hash, shortHash, message, author, authorEmail, date, timestamp] = line.split('|');
+      if (!hash) continue;
+
+      commits.push({
+        hash,
+        shortHash,
+        message: message?.substring(0, 1000) || '', // Limit message length in response
+        author: author?.substring(0, 200) || '',
+        authorEmail: authorEmail?.substring(0, 200) || '',
+        date,
+        timestamp: parseInt(timestamp) * 1000,
+      });
+    }
+
+    return commits;
+  } catch (error) {
+    console.error('[Git] Error getting history:', error);
+    return [];
+  }
+}
+
+// ============================================
+// Get diff for a file
+// ============================================
+
+export async function getFileDiff(
+  containerId: string,
+  filePath: string,
+  staged: boolean = false
+): Promise<GitDiff | null> {
+  // SECURITY: Validate file path
+  const validation = validateFilePath(filePath);
+  if (!validation.valid) {
+    console.warn(`[Git] Rejected invalid file path for diff: ${filePath}`);
+    return null;
+  }
+
+  try {
+    const safePath = escapeFilePath(filePath);
+    const stageFlag = staged ? '--cached' : '';
+    const output = await execInContainer(
+      containerId,
+      `cd /workspace && git diff ${stageFlag} -- '${safePath}' 2>/dev/null | head -c ${MAX_DIFF_SIZE_BYTES} || echo ""`
+    );
+
+    if (!output) return null;
+
+    // Parse diff output
+    const hunks: GitDiffHunk[] = [];
+    const lines = output.split('\n');
+    let currentHunk: GitDiffHunk | null = null;
+    let binary = false;
+    let oldLineNum = 0;
+    let newLineNum = 0;
+
+    for (const line of lines) {
+      if (line.startsWith('Binary files')) {
+        binary = true;
+        break;
+      }
+
+      // Hunk header: @@ -start,lines +start,lines @@
+      const hunkMatch = line.match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
+      if (hunkMatch) {
+        if (currentHunk) {
+          hunks.push(currentHunk);
+        }
+        oldLineNum = parseInt(hunkMatch[1]);
+        newLineNum = parseInt(hunkMatch[3]);
+        currentHunk = {
+          oldStart: oldLineNum,
+          oldLines: parseInt(hunkMatch[2]) || 1,
+          newStart: newLineNum,
+          newLines: parseInt(hunkMatch[4]) || 1,
+          lines: [],
+        };
+        continue;
+      }
+
+      if (!currentHunk) continue;
+
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        currentHunk.lines.push({
+          type: 'add',
+          content: line.substring(1),
+          newLineNumber: newLineNum++,
+        });
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        currentHunk.lines.push({
+          type: 'delete',
+          content: line.substring(1),
+          oldLineNumber: oldLineNum++,
+        });
+      } else if (line.startsWith(' ')) {
+        currentHunk.lines.push({
+          type: 'context',
+          content: line.substring(1),
+          oldLineNumber: oldLineNum++,
+          newLineNumber: newLineNum++,
+        });
+      }
+    }
+
+    if (currentHunk) {
+      hunks.push(currentHunk);
+    }
+
+    return {
+      path: filePath,
+      hunks,
+      binary,
+    };
+  } catch (error) {
+    console.error('[Git] Error getting diff:', error);
+    return null;
+  }
+}
+
+// ============================================
+// Stage files
+// ============================================
+
+export async function stageFiles(
+  containerId: string,
+  files: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (files.length === 0) {
+      await execInContainer(containerId, `cd /workspace && git add -A`);
+    } else {
+      // SECURITY: Limit number of files
+      if (files.length > MAX_FILES_TO_STAGE) {
+        return { success: false, error: `Too many files (max ${MAX_FILES_TO_STAGE})` };
+      }
+
+      // SECURITY: Validate each file path
+      for (const file of files) {
+        const validation = validateFilePath(file);
+        if (!validation.valid) {
+          console.warn(`[Git] Rejected invalid file path: ${file}`);
+          return { success: false, error: `Invalid file path: ${validation.error}` };
+        }
+      }
+
+      const safePaths = files.map(f => `'${escapeFilePath(f)}'`).join(' ');
+      await execInContainer(containerId, `cd /workspace && git add ${safePaths}`);
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// Unstage files
+// ============================================
+
+export async function unstageFiles(
+  containerId: string,
+  files: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (files.length === 0) {
+      await execInContainer(containerId, `cd /workspace && git reset HEAD`);
+    } else {
+      // SECURITY: Limit number of files
+      if (files.length > MAX_FILES_TO_STAGE) {
+        return { success: false, error: `Too many files (max ${MAX_FILES_TO_STAGE})` };
+      }
+
+      // SECURITY: Validate each file path
+      for (const file of files) {
+        const validation = validateFilePath(file);
+        if (!validation.valid) {
+          console.warn(`[Git] Rejected invalid file path: ${file}`);
+          return { success: false, error: `Invalid file path: ${validation.error}` };
+        }
+      }
+
+      const safePaths = files.map(f => `'${escapeFilePath(f)}'`).join(' ');
+      await execInContainer(containerId, `cd /workspace && git reset HEAD -- ${safePaths}`);
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// Commit
+// ============================================
+
+export async function commit(
+  containerId: string,
+  message: string
+): Promise<{ success: boolean; hash?: string; error?: string }> {
+  // SECURITY: Validate commit message
+  if (!message || typeof message !== 'string') {
+    return { success: false, error: 'Commit message is required' };
+  }
+
+  const trimmedMessage = message.trim();
+  if (trimmedMessage.length === 0) {
+    return { success: false, error: 'Commit message cannot be empty' };
+  }
+
+  if (trimmedMessage.length > MAX_COMMIT_MESSAGE_LENGTH) {
+    return { success: false, error: `Commit message too long (max ${MAX_COMMIT_MESSAGE_LENGTH} chars)` };
+  }
+
+  try {
+    // Use base64 encoding for safe message passing (avoids all shell escaping issues)
+    const b64Message = Buffer.from(trimmedMessage).toString('base64');
+    await execInContainer(containerId, `cd /workspace && git commit -m "$(echo '${b64Message}' | base64 -d)"`);
+
+    // Get the new commit hash
+    const hash = await execInContainer(containerId, `cd /workspace && git rev-parse HEAD`);
+    return { success: true, hash };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// Discard changes
+// ============================================
+
+export async function discardChanges(
+  containerId: string,
+  files: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (files.length === 0) {
+      await execInContainer(containerId, `cd /workspace && git checkout -- .`);
+    } else {
+      // SECURITY: Limit number of files
+      if (files.length > MAX_FILES_TO_STAGE) {
+        return { success: false, error: `Too many files (max ${MAX_FILES_TO_STAGE})` };
+      }
+
+      // SECURITY: Validate each file path
+      for (const file of files) {
+        const validation = validateFilePath(file);
+        if (!validation.valid) {
+          console.warn(`[Git] Rejected invalid file path: ${file}`);
+          return { success: false, error: `Invalid file path: ${validation.error}` };
+        }
+      }
+
+      const safePaths = files.map(f => `'${escapeFilePath(f)}'`).join(' ');
+      await execInContainer(containerId, `cd /workspace && git checkout -- ${safePaths}`);
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export const gitOperations = {
+  isGitRepo,
+  initRepo,
+  getStatus,
+  getBranches,
+  createBranch,
+  checkoutBranch,
+  deleteBranch,
+  getCommitHistory,
+  getFileDiff,
+  stageFiles,
+  unstageFiles,
+  commit,
+  discardChanges,
+};

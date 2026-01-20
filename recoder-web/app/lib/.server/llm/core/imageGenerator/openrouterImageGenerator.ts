@@ -119,13 +119,13 @@ export class OpenRouterImageGenerator {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `Image generation failed: ${response.status} ${response.statusText}. ${errorData.error?.message || JSON.stringify(errorData)}`,
         );
       }
 
-      const result = await response.json();
+      const result = await response.json() as any;
       const endTime = Date.now();
 
       // Extract generation ID and cost from headers if available
@@ -234,13 +234,13 @@ export class OpenRouterImageGenerator {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `Image generation failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
       }
 
-      const result = await response.json();
+      const result = await response.json() as any;
       const endTime = Date.now();
 
       // Extract generation ID and cost from headers if available

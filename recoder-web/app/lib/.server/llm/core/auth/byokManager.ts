@@ -143,6 +143,7 @@ export class BYOKManager {
    * List all available (configured) providers
    */
   listAvailableProviders(): Array<{
+    id: string;
     name: string;
     configured: boolean;
     hasBaseUrl: boolean;
@@ -159,6 +160,7 @@ export class BYOKManager {
     ];
 
     return allProviders.map((provider) => ({
+      id: provider,
       name: provider,
       configured: this.hasProvider(provider),
       hasBaseUrl: !!this.credentials[provider]?.baseUrl,

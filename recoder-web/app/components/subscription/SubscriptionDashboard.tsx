@@ -4,7 +4,13 @@
  */
 
 import { useState, useEffect } from 'react';
-import { CreditCard, TrendingUp, Calendar, AlertCircle, CheckCircle } from 'lucide-react';
+
+// Icon components using UnoCSS classes (Cloudflare Workers compatible)
+const CreditCard = ({ className }: { className?: string }) => <div className={`i-ph:credit-card ${className || ''}`} />;
+const TrendingUp = ({ className }: { className?: string }) => <div className={`i-ph:trend-up ${className || ''}`} />;
+const Calendar = ({ className }: { className?: string }) => <div className={`i-ph:calendar ${className || ''}`} />;
+const AlertCircle = ({ className }: { className?: string }) => <div className={`i-ph:warning-circle ${className || ''}`} />;
+const CheckCircle = ({ className }: { className?: string }) => <div className={`i-ph:check-circle ${className || ''}`} />;
 
 interface SubscriptionData {
   subscription: any;
@@ -45,10 +51,10 @@ export function SubscriptionDashboard() {
         throw new Error('Failed to load subscription data');
       }
 
-      const result = await response.json();
+      const result = (await response.json()) as SubscriptionData;
       setData(result);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
@@ -84,8 +90,8 @@ export function SubscriptionDashboard() {
 
       alert('Subscription cancelled. You will keep access until the end of your billing period.');
       loadSubscriptionData();
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error: ${err instanceof Error ? err.message : 'An unknown error occurred'}`);
     }
   }
 
@@ -110,10 +116,10 @@ export function SubscriptionDashboard() {
         throw new Error('Failed to open billing portal');
       }
 
-      const { portalUrl } = await response.json();
+      const { portalUrl } = (await response.json()) as { portalUrl: string };
       window.location.href = portalUrl;
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error: ${err instanceof Error ? err.message : 'An unknown error occurred'}`);
     }
   }
 

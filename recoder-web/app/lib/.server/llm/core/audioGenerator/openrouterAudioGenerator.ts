@@ -109,13 +109,13 @@ export class OpenRouterAudioGenerator {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `Transcription failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
       }
 
-      const result = await response.json();
+      const result = await response.json() as any;
       const endTime = Date.now();
 
       // Extract metadata from headers
@@ -196,7 +196,7 @@ export class OpenRouterAudioGenerator {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `Text-to-speech failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
@@ -278,13 +278,13 @@ export class OpenRouterAudioGenerator {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({})) as any;
         throw new Error(
           `Translation failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`,
         );
       }
 
-      const result = await response.json();
+      const result = await response.json() as any;
       const endTime = Date.now();
 
       // Extract metadata from headers

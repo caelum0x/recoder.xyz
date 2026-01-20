@@ -90,7 +90,18 @@ export class OpenRouterFeaturesClient {
         throw new Error(`Failed to fetch credits: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as {
+        data: {
+          limit?: number;
+          usage?: number;
+          label: string | null;
+          is_free_tier?: boolean;
+          rate_limit?: {
+            requests: number;
+            interval: string;
+          };
+        };
+      };
       return {
         total_credits: data.data.limit || 0,
         used_credits: data.data.usage || 0,
@@ -135,7 +146,9 @@ export class OpenRouterFeaturesClient {
         throw new Error(`Failed to fetch activity: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as {
+        data?: OpenRouterActivity[];
+      };
       return data.data || [];
     } catch (error) {
       console.error('Error fetching OpenRouter activity:', error);
@@ -249,8 +262,16 @@ export class OpenRouterFeaturesClient {
         throw new Error('Failed to fetch model pricing');
       }
 
-      const data = await response.json();
-      const model = data.data.find((m: any) => m.id === params.model);
+      const data = await response.json() as {
+        data: Array<{
+          id: string;
+          pricing?: {
+            prompt: string;
+            completion: string;
+          };
+        }>;
+      };
+      const model = data.data.find((m) => m.id === params.model);
 
       if (!model || !model.pricing) {
         throw new Error(`Pricing not available for model: ${params.model}`);

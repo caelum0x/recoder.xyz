@@ -12,7 +12,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { repoUrl, accessToken } = await request.json();
+    const body = await request.json() as { repoUrl?: string; accessToken?: string };
+    const { repoUrl, accessToken } = body;
 
     if (!repoUrl) {
       return new Response(

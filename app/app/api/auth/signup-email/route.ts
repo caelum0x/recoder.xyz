@@ -79,17 +79,30 @@ export async function POST(request: NextRequest) {
     });
 
     // Send temporary password email
-    await sendTemporaryPasswordEmail(email, tempPassword);
+    const emailResult = await sendTemporaryPasswordEmail(email, tempPassword);
 
     // ✅ Send welcome email to new user
     await sendWelcomeEmail(email, name);
 
     console.log(`✅ Account created for ${email}, welcome and temporary password emails sent`);
 
+    // In development, include the temp password for testing
+    const isDev = process.env.NODE_ENV === 'development';
+    const showTestData = isDev || process.env.SHOW_TEST_CREDENTIALS === 'true';
+
     return NextResponse.json({
       success: true,
       message: 'Account created successfully! Check your email for your temporary password and welcome message.',
-      email
+      email,
+      emailSent: emailResult.success,
+      emailProvider: process.env.RESEND_API_KEY ? 'Resend' : (process.env.SMTP_USER ? 'SMTP' : 'Dev'),
+      // Include temp password in dev mode for testing
+      ...(showTestData && {
+        _dev: {
+          tempPassword,
+          note: 'This is only shown in development mode for testing'
+        }
+      })
     });
 
   } catch (error: any) {

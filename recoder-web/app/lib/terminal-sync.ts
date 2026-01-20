@@ -9,18 +9,33 @@ interface TerminalState {
   scrollPosition: number;
   cwd?: string;
   lastActive: number;
+  name?: string; // Custom terminal name
+}
+
+interface TerminalSizePrefs {
+  panelSize: number; // Percentage of bottom panel
+  cols?: number;
+  rows?: number;
 }
 
 interface TerminalSyncStorage {
   sessions: TerminalState[];
   activeIndex: number;
+  sizePrefs: TerminalSizePrefs;
+  terminalNames: Record<string, string>; // terminalId -> custom name
 }
 
 const STORAGE_KEY = 'recoder-terminal-state';
 const SESSION_EXPIRY = 30 * 60 * 1000; // 30 minutes
+const DEFAULT_PANEL_SIZE = 25; // Default panel size percentage
 
 export class TerminalSync {
-  private storage: TerminalSyncStorage = { sessions: [], activeIndex: 0 };
+  private storage: TerminalSyncStorage = {
+    sessions: [],
+    activeIndex: 0,
+    sizePrefs: { panelSize: DEFAULT_PANEL_SIZE },
+    terminalNames: {},
+  };
 
   constructor() {
     this.load();
@@ -36,14 +51,20 @@ export class TerminalSync {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) {
         const parsed = JSON.parse(data) as TerminalSyncStorage;
-        
+
         // Filter out expired sessions
         const now = Date.now();
         parsed.sessions = parsed.sessions.filter(
           s => now - s.lastActive < SESSION_EXPIRY
         );
-        
-        this.storage = parsed;
+
+        // Ensure defaults for new fields
+        this.storage = {
+          sessions: parsed.sessions || [],
+          activeIndex: parsed.activeIndex || 0,
+          sizePrefs: parsed.sizePrefs || { panelSize: DEFAULT_PANEL_SIZE },
+          terminalNames: parsed.terminalNames || {},
+        };
       }
     } catch (error) {
       console.warn('[TerminalSync] Failed to load state:', error);
@@ -146,11 +167,67 @@ export class TerminalSync {
     this.storage.sessions = this.storage.sessions.filter(
       s => now - s.lastActive < SESSION_EXPIRY
     );
-    
+
     if (this.storage.sessions.length !== before) {
       console.log(`[TerminalSync] Cleaned up ${before - this.storage.sessions.length} expired sessions`);
       this.persist();
     }
+  }
+
+  /**
+   * Save terminal panel size preference
+   */
+  setSizePrefs(panelSize: number, cols?: number, rows?: number) {
+    this.storage.sizePrefs = {
+      panelSize: Math.max(10, Math.min(70, panelSize)), // Clamp between 10-70%
+      cols,
+      rows,
+    };
+    this.persist();
+  }
+
+  /**
+   * Get terminal size preferences
+   */
+  getSizePrefs(): TerminalSizePrefs {
+    return this.storage.sizePrefs;
+  }
+
+  /**
+   * Set a custom name for a terminal
+   */
+  setTerminalName(terminalId: string, name: string) {
+    this.storage.terminalNames[terminalId] = name;
+    this.persist();
+  }
+
+  /**
+   * Get custom name for a terminal
+   */
+  getTerminalName(terminalId: string): string | undefined {
+    return this.storage.terminalNames[terminalId];
+  }
+
+  /**
+   * Remove terminal name when terminal is closed
+   */
+  removeTerminalName(terminalId: string) {
+    delete this.storage.terminalNames[terminalId];
+    this.persist();
+  }
+
+  /**
+   * Get the default panel size
+   */
+  getDefaultPanelSize(): number {
+    return DEFAULT_PANEL_SIZE;
+  }
+
+  /**
+   * Get all terminal names
+   */
+  getAllTerminalNames(): Record<string, string> {
+    return { ...this.storage.terminalNames };
   }
 }
 
@@ -184,5 +261,14 @@ export function useTerminalSync(projectId: string | null) {
     removeSession: terminalSync.removeSession.bind(terminalSync),
     setActiveIndex: terminalSync.setActiveIndex.bind(terminalSync),
     getActiveIndex: terminalSync.getActiveIndex.bind(terminalSync),
+    // Size preferences
+    setSizePrefs: terminalSync.setSizePrefs.bind(terminalSync),
+    getSizePrefs: terminalSync.getSizePrefs.bind(terminalSync),
+    getDefaultPanelSize: terminalSync.getDefaultPanelSize.bind(terminalSync),
+    // Terminal naming
+    setTerminalName: terminalSync.setTerminalName.bind(terminalSync),
+    getTerminalName: terminalSync.getTerminalName.bind(terminalSync),
+    removeTerminalName: terminalSync.removeTerminalName.bind(terminalSync),
+    getAllTerminalNames: terminalSync.getAllTerminalNames.bind(terminalSync),
   };
 }

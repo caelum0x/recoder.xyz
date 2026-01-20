@@ -8,7 +8,7 @@ import { getPaddleClient } from '~/lib/.server/payment/paddle';
 import { getDatabase } from '~/lib/.server/db/client';
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = (context as any)?.cloudflare?.env || process.env as Env;
+  const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
   
   try {
     // Get raw body and signature

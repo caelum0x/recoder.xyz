@@ -35,4 +35,8 @@ app/lib/.server/llm/starters-bundle.json
 test-results/
 playwright-report/
 test-results.json
+
+# E2E Auth State (contains test session cookies)
+e2e/.auth/
+
 .vercel

@@ -8,7 +8,7 @@ import { getDatabase } from '~/lib/.server/db/client';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
-    const env = (context as any)?.cloudflare?.env || process.env as Env;
+    const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
     const userId = request.headers.get('x-user-id');
     
     if (!userId) {
@@ -30,7 +30,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   try {
-    const env = (context as any)?.cloudflare?.env || process.env as Env;
+    const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
     const userId = request.headers.get('x-user-id');
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
@@ -39,7 +39,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const body = await request.json();
+    const body = await request.json() as any;
     
     switch (action) {
       case 'create-checkout':
@@ -100,7 +100,7 @@ async function getSubscriptionData(env: Env, userId: string) {
       enterprise: 2000,
     };
     
-    const limit = subscription?.monthly_request_limit || planLimits[planId] || 5;
+    const limit = subscription?.monthly_request_limit || planLimits[planId as keyof typeof planLimits] || 5;
     const used = limit - usage.used;
     
     return {

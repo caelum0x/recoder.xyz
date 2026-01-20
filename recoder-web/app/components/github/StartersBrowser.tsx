@@ -32,9 +32,12 @@ export function StartersBrowser({ onSelectStarter, onClose }: StartersBrowserPro
   const loadStarters = async () => {
     try {
       const response = await fetch('/api/starters');
-      const result = await response.json();
+      const result = (await response.json()) as {
+        success: boolean;
+        data?: Starter[];
+      };
 
-      if (result.success) {
+      if (result.success && result.data) {
         setStarters(result.data);
       } else {
         toast.error('Failed to load starters');

@@ -109,7 +109,11 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json() as {
+      toolName?: string;
+      parameters?: any;
+      context?: any;
+    };
     const { toolName, parameters, context } = body;
 
     if (!toolName) {
