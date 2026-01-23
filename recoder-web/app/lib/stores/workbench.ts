@@ -183,6 +183,45 @@ export class WorkbenchStore {
     this.projectId.set(projectId);
     await this.#terminalStore.setProjectId(projectId);
     await this.#previewsStore.setProjectId(projectId);
+
+    // Check if container already has a running dev server
+    this.#checkExistingDevServer(projectId);
+  }
+
+  // Check if container already has a running dev server and set containerReady
+  async #checkExistingDevServer(projectId: string) {
+    try {
+      const res = await dockerGet(`/api/preview/${projectId}/health`) as Response;
+      if (res.ok) {
+        const data = await res.json() as { ports: Array<{ port: number; responding: boolean }> };
+        const respondingPort = data.ports?.find((p: { port: number; responding: boolean }) => p.responding);
+
+        if (respondingPort) {
+          console.log(`✅ [WorkbenchStore] Container already has dev server on port ${respondingPort.port}`);
+          this.setContainerReady(true);
+          return;
+        }
+      }
+    } catch (e) {
+      // Ignore errors - container may not be ready yet
+    }
+
+    // Also check if container has files (package.json) as a secondary indicator
+    try {
+      const filesRes = await dockerGet(`/api/files/${projectId}`) as Response;
+      if (filesRes.ok) {
+        const filesData = await filesRes.json() as { files: Array<{ name: string }> };
+        const hasPackageJson = filesData.files?.some((f: { name: string }) => f.name === 'package.json');
+
+        if (hasPackageJson) {
+          console.log('📁 [WorkbenchStore] Container has package.json, marking as ready for search');
+          // Mark ready even without dev server - search should work
+          this.setContainerReady(true);
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
   }
 
   /**
@@ -390,9 +429,11 @@ export class WorkbenchStore {
   }
 
   addArtifact({ messageId, title, id }: ArtifactCallbackData) {
+    console.log('🎨 [WorkbenchStore] addArtifact called:', id, title, 'messageId:', messageId);
     const artifact = this.#getArtifact(messageId);
 
     if (artifact) {
+      console.log('⏭️  [WorkbenchStore] Artifact already exists, skipping');
       return;
     }
 
@@ -400,7 +441,12 @@ export class WorkbenchStore {
       this.artifactIdList.push(messageId);
     }
 
-    const runner = new ActionRunner(this.#currentProjectId || undefined);
+    const projectIdToUse = this.#currentProjectId || this.projectId.get();
+    if (!projectIdToUse) {
+      console.error('[WorkbenchStore] CRITICAL: No projectId when creating ActionRunner');
+    }
+    const runner = new ActionRunner(projectIdToUse || undefined);
+    console.log(`[WorkbenchStore] ActionRunner created with projectId: ${projectIdToUse}`);
     
     // If this is a restored past chat, mark the runner with the restored file paths
     if (this.#isRestoredChat) {
@@ -427,28 +473,31 @@ export class WorkbenchStore {
 
   async addAction(data: ActionCallbackData) {
     const { messageId } = data;
+    console.log('🏪 [WorkbenchStore] addAction called:', data.action?.type, 'messageId:', messageId);
 
     const artifact = this.#getArtifact(messageId);
 
     if (!artifact) {
+      console.error('❌ [WorkbenchStore] Artifact not found for messageId:', messageId, 'Available:', Object.keys(this.artifacts.get()));
       unreachable('Artifact not found');
     }
 
+    console.log('🏪 [WorkbenchStore] Calling artifact.runner.addAction');
     artifact.runner.addAction(data);
   }
 
   async runAction(data: ActionCallbackData) {
     const { messageId } = data;
-    // console.log('🔧 workbench.runAction called:', data.action?.type, data.action);
+    console.log('🏪 [WorkbenchStore] runAction called:', data.action?.type, 'messageId:', messageId);
 
     const artifact = this.#getArtifact(messageId);
 
     if (!artifact) {
-      console.error('🔧 Artifact not found for messageId:', messageId);
+      console.error('❌ [WorkbenchStore] Artifact not found for messageId:', messageId, 'Available:', Object.keys(this.artifacts.get()));
       unreachable('Artifact not found');
     }
 
-    // console.log('🔧 Calling artifact.runner.runAction');
+    console.log('🏪 [WorkbenchStore] Calling artifact.runner.runAction');
     artifact.runner.runAction(data);
   }
 

@@ -17,6 +17,8 @@ interface FileChangeEvent {
 class FileWatcher extends EventEmitter {
   private watchers = new Map<string, { interval: NodeJS.Timeout; lastCheck: Map<string, number> }>();
   private pollInterval = 1000; // Check every 1 second
+  private recentEvents = new Map<string, Set<string>>(); // projectId -> Set of event keys
+  private readonly DEBOUNCE_MS = 2000; // Deduplicate events within 2 seconds
 
   /**
    * Start watching a container's /workspace directory
@@ -73,10 +75,13 @@ class FileWatcher extends EventEmitter {
           lastCheck.set(path, mtime);
         }
 
-        // Emit changes
+        // Emit changes (after deduplication)
         if (changes.length > 0) {
-          console.log(`[FileWatcher] ${projectId}: ${changes.length} file changes detected`);
-          this.emit('changes', { projectId, changes });
+          const dedupedChanges = this.deduplicateEvents(projectId, changes);
+          if (dedupedChanges.length > 0) {
+            console.log(`[FileWatcher] ${projectId}: ${dedupedChanges.length} file changes detected (${changes.length - dedupedChanges.length} duplicates filtered)`);
+            this.emit('changes', { projectId, changes: dedupedChanges });
+          }
         }
       } catch (e) {
         // Container might be stopped, ignore errors
@@ -95,8 +100,39 @@ class FileWatcher extends EventEmitter {
     if (watcher) {
       clearInterval(watcher.interval);
       this.watchers.delete(projectId);
+      this.recentEvents.delete(projectId);
       console.log(`[FileWatcher] Stopped watching ${projectId}`);
     }
+  }
+
+  /**
+   * Deduplicate file change events to prevent infinite loops
+   * Same file+event type should not trigger multiple times within DEBOUNCE_MS
+   */
+  private deduplicateEvents(projectId: string, changes: FileChangeEvent[]): FileChangeEvent[] {
+    if (!this.recentEvents.has(projectId)) {
+      this.recentEvents.set(projectId, new Set());
+    }
+
+    const recentSet = this.recentEvents.get(projectId)!;
+    const dedupedChanges: FileChangeEvent[] = [];
+
+    for (const change of changes) {
+      const eventKey = `${change.type}:${change.path}`;
+
+      if (!recentSet.has(eventKey)) {
+        // New event, add it
+        dedupedChanges.push(change);
+        recentSet.add(eventKey);
+
+        // Remove from set after debounce period
+        setTimeout(() => {
+          recentSet.delete(eventKey);
+        }, this.DEBOUNCE_MS);
+      }
+    }
+
+    return dedupedChanges;
   }
 
   /**

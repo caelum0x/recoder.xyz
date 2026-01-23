@@ -87,53 +87,93 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
 
     try {
       abortControllerRef.current = new AbortController();
-      
-      const response = await fetch(api, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          messages: [...messages, userMessage],
-          recoderContext, // Include .recoder/ context
-        }),
-        signal: abortControllerRef.current.signal,
-      });
 
-      if (onResponse) {
-        onResponse(response);
+      // Initial connection timeout (60s - server proxy handles Cloudflare limits)
+      let timeoutId = setTimeout(() => {
+        abortControllerRef.current?.abort();
+      }, 60000);
+
+      try {
+        const response = await fetch(api, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [...messages, userMessage],
+            recoderContext, // Include .recoder/ context
+          }),
+          signal: abortControllerRef.current.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (onResponse) {
+          onResponse(response);
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        if (!response.body) {
+          throw new Error('No response body');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        // Streaming timeout - reset whenever data is received (30s idle timeout)
+        let streamingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+        const resetStreamingTimeout = () => {
+          if (streamingTimeoutId) clearTimeout(streamingTimeoutId);
+          streamingTimeoutId = setTimeout(() => {
+            abortControllerRef.current?.abort();
+          }, 30000); // 30s idle timeout during streaming
+        };
+
+        while (true) {
+          resetStreamingTimeout(); // Reset timeout on each chunk
+          const { done, value } = await reader.read();
+          if (done) {
+            if (streamingTimeoutId) clearTimeout(streamingTimeoutId);
+            break;
+          }
+
+          const text = decoder.decode(value);
+
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content += text;
+            }
+            return newMessages;
+          });
+        }
+
+        if (onFinish) {
+          onFinish();
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        throw fetchError;
       }
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const text = decoder.decode(value);
-        
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        const timeoutError = new Error('Request timed out. The response is taking too long. Please try a shorter message or simpler request.');
+        console.error('Chat timeout:', timeoutError);
+        if (onError) {
+          onError(timeoutError);
+        }
+        // Update the assistant message to show timeout error
         setMessages(prev => {
           const newMessages = [...prev];
           const lastMessage = newMessages[newMessages.length - 1];
           if (lastMessage && lastMessage.role === 'assistant') {
-            lastMessage.content += text;
+            lastMessage.content = '⚠️ Request timed out. Please try a shorter message or simpler request.';
           }
           return newMessages;
         });
-      }
-
-      if (onFinish) {
-        onFinish();
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
+      } else {
         console.error('Chat error:', error);
         if (onError) {
           onError(error);
