@@ -123,7 +123,9 @@ async function parseResponse<T>(response: Response, endpoint: string): Promise<T
   }
 
   // Check for error response
-  if (!response.ok || !data.success) {
+  // Note: Some endpoints return data without success field - treat 2xx without explicit success:false as success
+  const hasExplicitError = data.success === false || (data as any).error;
+  if (!response.ok || hasExplicitError) {
     const errorResponse = data as ApiErrorResponse;
     throw new DockerApiError(
       errorResponse.error || `Request failed with status ${response.status}`,
@@ -136,7 +138,8 @@ async function parseResponse<T>(response: Response, endpoint: string): Promise<T
     );
   }
 
-  return (data as ApiSuccessResponse<T>).data as T;
+  // Return data field if present, otherwise return the whole response (for endpoints without success wrapper)
+  return ((data as ApiSuccessResponse<T>).data ?? data) as T;
 }
 
 /**

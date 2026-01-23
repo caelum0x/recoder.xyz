@@ -21,25 +21,44 @@ export async function streamOpenRouterResponse(
   console.log('📝 [OpenRouter] Model:', model);
   console.log('📊 [OpenRouter] Messages count:', messages.length);
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://recoder.xyz',
-      'X-Title': 'Recoder.xyz',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages
-      ],
-      stream: true,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 8000,
-    }),
-  });
+  // Add timeout for initial connection (55s - Cloudflare's 30s limit is for CPU time, not I/O waiting)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, 55000);
+
+  let response: Response;
+  try {
+    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://recoder.xyz',
+        'X-Title': 'Recoder.xyz',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages
+        ],
+        stream: true,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.max_tokens ?? 8000,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error('❌ [OpenRouter] Request timed out');
+      throw new Error('Request timed out. The AI response is taking too long. Please try a shorter message.');
+    }
+    throw error;
+  }
 
   console.log('📡 [OpenRouter] Response received:', response.status, response.statusText);
 

@@ -10,57 +10,26 @@ import { snapshotBeforeAI, snapshotAfterAI, setAutoSave, createSnapshot } from '
 import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
 import { isNonNodeFramework, getInstallCommand, getDevServerCommand } from './language-generators';
 
-// Type definitions for API responses
-interface DockerHealthResponse {
-  ok: boolean;
-}
-
-interface DockerExecResponse {
-  output?: string;
-  error?: string;
-  ready?: boolean;
-  port?: number;
-  background?: boolean;
-}
-
-interface DockerLogsResponse {
-  logs: string;
-}
-
-interface DockerHealthCheckResponse {
-  ports: Array<{ port: number; responding: boolean; type: string }>;
-}
-
-interface EnterpriseToolsResponse {
-  success?: boolean;
-  message?: string;
-  content?: string;
-  lineCount?: number;
-  truncated?: boolean;
-  isBinary?: boolean;
-  suggestions?: string;
-  output?: string;
-  data?: any;
-  results?: Array<{ file: string; line: number; content: string; title?: string; snippet?: string }>;
-  files?: Array<string | { path: string; content?: string; error?: string }>;
-  matches?: Array<{ file: string; line: number; content: string }>;
-  items?: Array<{ key: string; value: string }>;
-  value?: string;
-  error?: string;
-  diff?: string;
-  commitHash?: string;
-  appliedCount?: number;
-  totalCount?: number;
-}
-
-interface CloneUrlResponse {
-  success: boolean;
-  title: string;
-  url: string;
-  files: string[];
-  fileCount: number;
-  assetCount: number;
-}
+// Import types and utilities from extracted modules
+import type {
+  DockerHealthResponse,
+  DockerExecResponse,
+  DockerLogsResponse,
+  DockerHealthCheckResponse,
+} from './actions/docker-operations';
+import type { EnterpriseToolsResponse, CloneUrlResponse } from './actions';
+import {
+  checkDockerAvailable as checkDockerAvailableUtil,
+  waitForFile,
+} from './actions/docker-operations';
+import {
+  SHELL_PATTERNS,
+  detectFramework as detectFrameworkUtil,
+  generatePackageJson as generatePackageJsonUtil,
+  BACKEND_SERVER_PATHS,
+  isServerFile,
+  getBackendRunCommand,
+} from './actions/shell-actions';
 
 interface ErrorResponse {
   error?: string;
@@ -82,6 +51,14 @@ let globalNpmInstallPromise: Promise<string | void> | null = null;
 let globalAutoInstallTriggered = false;
 let globalNpmInstallComplete = false; // ✅ NEW: Track if install has completed successfully
 let globalStaticServerStarted = false; // 🌐 Track if static file server was started
+let globalActionsInProgress = 0; // 🔒 Track number of actions currently executing
+
+/**
+ * Get the number of actions currently in progress (used by streaming timeout)
+ */
+export function getActionsInProgress(): number {
+  return globalActionsInProgress;
+}
 
 /**
  * Check if npm install is globally running (across all instances)
@@ -296,15 +273,19 @@ export class ActionRunner {
         this.#dockerReady = true;
         logger.info(`Docker container ready for project: ${this.#projectId}`);
 
-        // ✅ CRITICAL: Notify workbench store about project ID for preview
+        // ✅ Notify workbench store about project ID for preview (non-blocking)
+        // Don't await this - it can run in background while file operations proceed
         if (this.#projectId && typeof window !== 'undefined') {
-          try {
-            const { workbenchStore } = await import('~/lib/stores/workbench');
-            await workbenchStore.setProjectId(this.#projectId);
-            logger.info(`✅ Workbench store notified of project: ${this.#projectId}`);
-          } catch (err) {
-            logger.warn('Could not notify workbench store:', err);
-          }
+          const projectId = this.#projectId;
+          import('~/lib/stores/workbench').then(({ workbenchStore }) => {
+            workbenchStore.setProjectId(projectId).then(() => {
+              logger.info(`✅ Workbench store notified of project: ${projectId}`);
+            }).catch(err => {
+              logger.warn('Could not notify workbench store:', err);
+            });
+          }).catch(err => {
+            logger.warn('Could not import workbench store:', err);
+          });
         }
 
         return true;
@@ -320,15 +301,22 @@ export class ActionRunner {
 
   // Docker file operations
   async #dockerWriteFile(path: string, content: string): Promise<void> {
-    // If path is absolute, use as-is; otherwise prepend /workspace/
-    const fullPath = path.startsWith('/') ? path : `/workspace/${path}`;
+    // Server already prepends /workspace/, so just send the relative path
+    // Remove any leading /workspace/ or / to get the relative path
+    let relativePath = path;
+    if (relativePath.startsWith('/workspace/')) {
+      relativePath = relativePath.substring('/workspace/'.length);
+    } else if (relativePath.startsWith('/')) {
+      relativePath = relativePath.substring(1);
+    }
+
     const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${getSessionToken() || ''}`,
       },
-      body: JSON.stringify({ path: fullPath, content }),
+      body: JSON.stringify({ path: relativePath, content }),
     });
     if (!res.ok) {
       const errData = await res.json() as { error?: string };
@@ -350,6 +338,11 @@ export class ActionRunner {
     const data = await res.json() as DockerExecResponse;
     if (!res.ok) throw new Error(data.error || 'Docker exec failed');
 
+    // Check if command failed based on success flag or exit code
+    if (data.success === false || (data.exitCode !== undefined && data.exitCode !== 0)) {
+      throw new Error(data.error || data.output || `Command failed with exit code ${data.exitCode}`);
+    }
+
     // For background processes, log the ready status
     if (background && data.background) {
       if (data.ready) {
@@ -370,12 +363,14 @@ export class ActionRunner {
 
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
+    console.log('➕ [ActionRunner] addAction called:', data.action.type, actionId);
 
     const actions = this.actions.get();
     const action = actions[actionId];
 
     if (action) {
       // action already added
+      console.log('⏭️  [ActionRunner] Action already added, skipping:', actionId);
       return;
     }
 
@@ -399,20 +394,23 @@ export class ActionRunner {
 
   async runAction(data: ActionCallbackData) {
     const { actionId } = data;
-    
+    console.log('▶️  [ActionRunner] runAction called:', data.action.type, actionId);
+
     // Validate actionId is a string
     if (typeof actionId !== 'string') {
       logger.error(`Invalid actionId type: ${typeof actionId}`, actionId);
       return;
     }
-    
+
     const action = this.actions.get()[actionId];
 
     if (!action) {
+      console.error('❌ [ActionRunner] Action not found:', actionId, 'Available:', Object.keys(this.actions.get()));
       unreachable(`Action ${actionId} not found`);
     }
 
     if (action.executed) {
+      console.log('⏭️  [ActionRunner] Action already executed, skipping:', actionId);
       return;
     }
 
@@ -430,17 +428,24 @@ export class ActionRunner {
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: true });
 
+    console.log('🔗 [ActionRunner] Queueing action execution:', actionId, action.type);
     this.#currentExecutionPromise = this.#currentExecutionPromise
       .then(() => {
+        console.log('⏩ [ActionRunner] Previous action done, executing:', actionId, action.type);
         return this.#executeAction(actionId);
       })
+      .then(() => {
+        console.log('✅ [ActionRunner] Action execution complete:', actionId, action.type);
+      })
       .catch((error) => {
-        console.error('Action failed:', error);
+        console.error('❌ [ActionRunner] Action failed:', actionId, error);
       });
   }
 
   async #executeAction(actionId: string) {
     const action = this.actions.get()[actionId];
+
+    console.log('🚀 [ActionRunner] #executeAction called:', actionId, action?.type);
 
     // Guard against undefined action
     if (!action) {
@@ -448,15 +453,32 @@ export class ActionRunner {
       throw new Error(`Action ${actionId} not found`);
     }
 
-    this.#updateAction(actionId, { status: 'running' });
+    // 🔒 FIX 0B: Track actions in progress for streaming timeout
+    globalActionsInProgress++;
 
     try {
+      // 🔒 FIX 0A: Wait for container to be ready before executing container-dependent actions
+      const containerDependentTypes = new Set([
+        'file', 'shell', 'str_replace', 'multi_apply_diff',
+        'readFile', 'listFiles', 'searchFiles', 'importStarter',
+        'cloneGitHub', 'cloneUrl', 'edit_file', 'read_many_files',
+        'glob_search', 'ripgrep_search'
+      ]);
+
+      if (containerDependentTypes.has(action.type)) {
+        await this.#waitForContainerReady();
+      }
+
+      this.#updateAction(actionId, { status: 'running' });
+
+      console.log('🔀 [ActionRunner] Executing action type:', action.type);
       switch (action.type) {
         case 'shell': {
           await this.#runShellAction(action);
           break;
         }
         case 'file': {
+          console.log('📄 [ActionRunner] Calling #runFileAction');
           await this.#runFileAction(action);
           break;
         }
@@ -547,6 +569,33 @@ export class ActionRunner {
       // Don't re-throw to prevent stopping other actions
       // Just log the error (safe access to action.type)
       console.error(`Action ${actionId} (${action?.type || 'unknown'}) failed:`, errorMessage);
+    } finally {
+      // 🔒 FIX 0B: Decrement actions in progress counter
+      globalActionsInProgress--;
+    }
+  }
+
+  /**
+   * 🔒 FIX 0A: Wait for container to be ready before executing container-dependent actions
+   * NOTE: This only waits for the CONTAINER to be created, NOT for the dev server.
+   * The containerReady flag in workbenchStore is for the dev server preview, which
+   * won't exist for new projects until files are created.
+   */
+  async #waitForContainerReady(timeoutMs: number = 30000): Promise<void> {
+    console.log('⏳ [ActionRunner] #waitForContainerReady starting...');
+
+    try {
+      // Ensure Docker container is created (this is all we need for file operations)
+      console.log('⏳ [ActionRunner] Calling #ensureDockerReady...');
+      await this.#ensureDockerReady();
+      console.log('✅ [ActionRunner] Container created, ready for file operations');
+
+      // NOTE: We do NOT wait for workbenchStore.containerReady here.
+      // That flag tracks the dev server, which won't exist for new projects.
+      // File operations only need the container to exist.
+    } catch (error) {
+      console.error('❌ [ActionRunner] #waitForContainerReady error:', error);
+      throw error;
     }
   }
 
@@ -641,16 +690,21 @@ export class ActionRunner {
 
           try {
             logger.info('📦 Installing dependencies with bun...');
-            const installOutput = await this.#dockerExec('bun install --force');
-
-            if (installOutput.includes('error:') || installOutput.includes('failed')) {
-              // Fallback to npm with legacy peer deps
-              logger.warn('⚠️ bun failed, trying npm fallback...');
+            try {
+              await this.#dockerExec('bun install --force');
+              logger.info('✅ Dependencies installed successfully with bun');
+            } catch (bunError: any) {
+              // Fallback to npm with legacy peer deps if bun fails
+              logger.warn('⚠️ bun install failed, trying npm fallback...');
               await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+              logger.info('✅ Dependencies installed successfully with npm');
             }
 
+            // Only mark as complete if we reach this point without exceptions
             globalNpmInstallComplete = true;
-            logger.info('✅ Dependencies installed successfully');
+          } catch (error: any) {
+            logger.error('❌ npm install failed:', error.message);
+            throw error; // Re-throw to let caller handle
           } finally {
             globalNpmInstallRunning = false;
           }
@@ -764,7 +818,7 @@ export class ActionRunner {
 
           // Wait a moment then check health
           await new Promise(resolve => setTimeout(resolve, 2000));
-          await this.#checkDevServerHealth();
+          await this.#checkDevServerHealth(true);
         }
 
         globalNpmInstallRunning = false;
@@ -785,7 +839,7 @@ export class ActionRunner {
 
         // Wait a moment then check health
         await new Promise(resolve => setTimeout(resolve, 2000));
-        await this.#checkDevServerHealth();
+        await this.#checkDevServerHealth(true);
 
         return;
       } catch (error: any) {
@@ -824,12 +878,14 @@ export class ActionRunner {
   }
 
   async #runFileAction(action: ActionState) {
+    console.log('📁 [ActionRunner] #runFileAction called for:', (action as any).filePath);
     if (action.type !== 'file') {
       unreachable('Expected file action');
     }
 
     // FIX #3: Prevent file generation after repository clone
     if (this.#repositoryCloned) {
+      console.log(`⚠️ [ActionRunner] Skipping file - repository was cloned:`, action.filePath);
       logger.warn(`⚠️ Skipping file action for '${action.filePath}' - Repository '${this.#clonedRepoUrl}' was already cloned. AI should not generate additional files after cloning.`);
       return;
     }
@@ -893,10 +949,12 @@ export class ActionRunner {
     }
 
     // Write file with retry logic
+    console.log('📝 [FileAction] Writing file:', action.filePath, 'content length:', action.content?.length || 0);
     let retries = 2;
     while (retries >= 0) {
       try {
         await this.#dockerWriteFile(action.filePath, action.content);
+        console.log('✅ [FileAction] File written:', action.filePath);
 
         // Update local file store so UI shows the file
         const store = await getWorkbenchStore();
@@ -1007,11 +1065,14 @@ export class ActionRunner {
       logger.info(`✅ Starter template loaded: ${fileCount} files`);
 
       // Write all files from the starter template using Docker
+      console.log('📦 [importStarter] Ensuring Docker is ready...');
       await this.#ensureDockerReady();
+      console.log('📦 [importStarter] Docker ready, writing', Object.keys(result.data.files).length, 'files...');
       const files = result.data.files;
       const store = await getWorkbenchStore();
 
       // Files are in format: { "path/to/file.js": "content", ... }
+      let filesWritten = 0;
       for (const [filePath, content] of Object.entries(files)) {
         const folder = nodePath.dirname(filePath);
 
@@ -1039,9 +1100,11 @@ export class ActionRunner {
           }
         }
         store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
-        logger.debug(`Created: ${filePath}`);
+        filesWritten++;
+        console.log(`📦 [importStarter] Written ${filesWritten}/${fileCount}: ${filePath}`);
       }
 
+      console.log(`📦 [importStarter] All ${filesWritten} files written to Docker`);
       logger.info(`✅ Starter template imported successfully: ${action.templateId}`);
     } catch (error) {
       logger.error(`❌ Failed to import starter template:`, error);
@@ -1427,23 +1490,18 @@ export class ActionRunner {
 
       // 🚀 Use bun for fast installs - --force handles peer dependency conflicts
       logger.info('📦 Installing dependencies with bun...');
-      let installOutput = await this.#dockerExec('bun install --force');
-
-      // Check if bun install succeeded
-      if (installOutput.includes('error:') || installOutput.includes('failed')) {
-        logger.warn('⚠️ bun install had issues, trying npm fallback...');
-        
-        // Fallback to npm with legacy peer deps
+      try {
+        await this.#dockerExec('bun install --force');
+        logger.info('✅ Dependencies installed successfully with bun');
+      } catch (bunError: any) {
+        // Fallback to npm with legacy peer deps if bun fails
+        logger.warn('⚠️ bun install failed, trying npm fallback...');
         await this.#dockerExec('rm -rf node_modules bun.lockb');
-        installOutput = await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
-
-        if (installOutput.includes('npm error') || installOutput.includes('npm ERR!')) {
-          logger.error('❌ npm install also failed');
-          throw new Error('Package installation failed - see logs for details');
-        }
+        await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+        logger.info('✅ Dependencies installed successfully with npm');
       }
 
-      logger.info('✅ Dependencies installed successfully');
+      // Only mark as complete if we reach this point without exceptions
       globalNpmInstallRunning = false;
       globalNpmInstallComplete = true; // ✅ Mark install as complete
 
@@ -1617,16 +1675,11 @@ export class ActionRunner {
       // Run install command
       if (installCmd) {
         logger.info(`📦 Installing dependencies: ${installCmd}`);
-        const installOutput = await this.#dockerExec(installCmd, '/workspace');
-
-        // Check for errors
-        if (installOutput.includes('error') || installOutput.includes('Error') || installOutput.includes('failed')) {
-          logger.warn(`⚠️ ${framework} install may have issues:`, installOutput.substring(0, 500));
-        } else {
-          logger.info(`✅ ${framework} dependencies installed`);
-        }
+        await this.#dockerExec(installCmd, '/workspace');
+        logger.info(`✅ ${framework} dependencies installed`);
       }
 
+      // Only mark as complete if we reach this point without exceptions
       globalNpmInstallRunning = false;
       globalNpmInstallComplete = true;
 
@@ -1729,73 +1782,45 @@ export class ActionRunner {
 
     try {
       await this.#ensureDockerReady();
-      
-      // Call enterprise tools API for enhanced file reading
-      const response = await fetch('/api/enterprise-tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'readFileEnhanced',
-          params: {
-            filePath: action.filePath,
-            startLine: action.startLine,
-            endLine: action.endLine,
-            maxLines: action.maxLines,
-          }
-        })
-      });
-      
-      const result = await response.json() as EnterpriseToolsResponse;
 
-      if (result.success) {
-        let message = result.message || '';
-        if (result.truncated) {
-          message += `\n\nNote: File was truncated. Use line ranges to read specific sections.`;
-        }
-        if (result.isBinary) {
-          message += `\n\nNote: Binary file detected. Content not displayed.`;
-        }
+      // Read file directly from Docker container (not from server filesystem)
+      const content = await this.#dockerReadFile(action.filePath);
 
-        // Enterprise enhancement: Use code_assist for code analysis
-        if (action.filePath.match(/\.(ts|tsx|js|jsx|py|java|cpp|c|cs|go|rs|rb|php|swift|kt|scala|dart|vue|svelte|html|css|scss|sass|less|sql|sh|bash|ps1|yaml|yml|json|xml|toml|ini|cfg|conf|dockerfile|makefile|cmake|gradle|pom\.xml|cargo\.toml|package\.json|requirements\.txt|gemfile|composer\.json)$/i)) {
-          try {
-            const analysisResponse = await fetch('/api/enterprise-tools', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                tool: 'codeAssist',
-                params: {
-                  query: `Analyze this code: ${action.filePath}`,
-                  context: result.content || ''
-                }
-              })
-            });
-            const analysis = await analysisResponse.json() as EnterpriseToolsResponse;
-
-            if (analysis.suggestions) {
-              message += `\n\n🔍 Code Analysis:\n${analysis.suggestions}`;
-            }
-          } catch (error) {
-            logger.warn('Code analysis unavailable:', error);
-          }
-        }
-
-        action.content = result.content || message;
-        logger.info(`Successfully read file: ${action.filePath} (${result.lineCount || 0} lines)`);
-      } else {
-        // File not found is NOT an error - it means we need to create it
-        const errorMsg = result.message || result.error || 'File not found';
-        if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('no such file')) {
-          action.content = `[File does not exist: ${action.filePath}]\n\nThis file needs to be created. Use <recoderAction type="file"> to create it.`;
-          logger.info(`File not found (new project): ${action.filePath}`);
-        } else {
-          throw new Error(errorMsg);
-        }
+      // Check if file exists (empty response might indicate file not found or actual empty file)
+      if (content === '' || content.includes('No such file or directory') || content.includes('cat:')) {
+        // File doesn't exist - this is expected for new projects
+        action.content = `[File does not exist: ${action.filePath}]\n\nThis file needs to be created. Use <recoderAction type="file"> to create it.`;
+        logger.info(`File not found (new project): ${action.filePath}`);
+        return;
       }
+
+      // Apply line range if specified
+      let resultContent = content;
+      let lineCount = content.split('\n').length;
+
+      if (action.startLine || action.endLine) {
+        const lines = content.split('\n');
+        const start = Math.max(0, (action.startLine || 1) - 1);
+        const end = action.endLine || lines.length;
+        resultContent = lines.slice(start, end).join('\n');
+        lineCount = end - start;
+      }
+
+      // Apply maxLines limit if specified
+      if (action.maxLines && resultContent.split('\n').length > action.maxLines) {
+        const lines = resultContent.split('\n');
+        resultContent = lines.slice(0, action.maxLines).join('\n');
+        resultContent += `\n\n[...truncated to ${action.maxLines} lines. Use line ranges to read more.]`;
+      }
+
+      action.content = resultContent;
+      logger.info(`Successfully read file: ${action.filePath} (${lineCount} lines)`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       // Handle "file not found" gracefully - this is expected for new projects
-      if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('no such file')) {
+      if (errorMsg.toLowerCase().includes('not found') ||
+          errorMsg.toLowerCase().includes('no such file') ||
+          errorMsg.toLowerCase().includes('does not exist')) {
         action.content = `[File does not exist: ${action.filePath}]\n\nThis file needs to be created. Use <recoderAction type="file"> to create it.`;
         logger.info(`File not found (new project): ${action.filePath}`);
       } else {
@@ -1869,11 +1894,20 @@ export class ActionRunner {
       unreachable('Expected searchFiles action');
     }
 
+    // Validate query before searching
+    if (!action.query || action.query === 'undefined' || action.query.trim() === '') {
+      logger.warn('Search skipped: empty or undefined query');
+      action.content = '[Search skipped: no query provided]';
+      return;
+    }
+
     logger.info(`Searching for: "${action.query}"`);
 
     try {
       await this.#ensureDockerReady();
-      const output = await this.#dockerExec(`grep -rni "${action.query}" . 2>/dev/null | head -100`);
+      // Escape special characters in query for grep
+      const escapedQuery = action.query.replace(/[\\'"$`]/g, '\\$&');
+      const output = await this.#dockerExec(`grep -rni "${escapedQuery}" . 2>/dev/null | head -100`);
       action.content = output;
       logger.info(`Search completed`);
     } catch (error) {
@@ -1891,7 +1925,45 @@ export class ActionRunner {
 
     try {
       await this.#ensureDockerReady();
-      
+
+      // 🔒 FIX 0C: Wait for file to exist (may be created by preceding action)
+      const maxWaitMs = 5000;
+      const startTime = Date.now();
+      const filePath = action.filePath?.startsWith('/') ? action.filePath : `/workspace/${action.filePath}`;
+      let fileExists = false;
+
+      while (Date.now() - startTime < maxWaitMs) {
+        try {
+          const check = await this.#dockerExec(
+            `test -f "${filePath}" && echo "exists" || echo "missing"`
+          );
+          if (check.includes('exists')) {
+            logger.debug(`File ${action.filePath} exists, proceeding with str_replace`);
+            fileExists = true;
+            break;
+          }
+        } catch (e) {
+          // Ignore errors during check
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      // 🚨 CRITICAL: Return error if file doesn't exist
+      if (!fileExists) {
+        const errorMessage = `ERROR: File "${action.filePath}" does not exist. Cannot use str_replace on a non-existent file.
+
+To create a NEW file, use:
+<recoderAction type="file" filePath="${action.filePath}">
+[file contents here]
+</recoderAction>
+
+str_replace is ONLY for modifying EXISTING files.`;
+
+        logger.error(`str_replace attempted on non-existent file: ${action.filePath}`);
+        action.content = errorMessage;
+        throw new Error(errorMessage);
+      }
+
       // Call enterprise tools API for search-replace
       const replaceResponse = await fetch('/api/enterprise-tools', {
         method: 'POST',
