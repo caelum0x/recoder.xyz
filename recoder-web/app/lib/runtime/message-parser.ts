@@ -303,6 +303,34 @@ export class StreamingMessageParser {
       }
       if (!filePath) filePath = 'unknown-file.txt';
       (actionAttributes as any).filePath = filePath;
+    } else if (actionType === 'searchFiles') {
+      // Parse searchFiles action attributes
+      const query = this.#extractAttribute(actionTag, 'query') as string;
+      const filePattern = this.#extractAttribute(actionTag, 'filePattern') as string;
+      (actionAttributes as any).query = query || '';
+      if (filePattern) (actionAttributes as any).filePattern = filePattern;
+    } else if (actionType === 'listFiles') {
+      // Parse listFiles action attributes
+      let path = this.#extractAttribute(actionTag, 'path') as string;
+      if (!path) path = this.#extractAttribute(actionTag, 'dir') as string;
+      if (!path) path = this.#extractAttribute(actionTag, 'directory') as string;
+      const recursive = this.#extractAttribute(actionTag, 'recursive') as string;
+      const query = this.#extractAttribute(actionTag, 'query') as string;
+      (actionAttributes as any).path = path || '.';
+      if (recursive === 'true') (actionAttributes as any).recursive = true;
+      if (query) (actionAttributes as any).query = query;
+    } else if (actionType === 'str_replace' || actionType === 'strReplace') {
+      // Parse str_replace action attributes (also accept camelCase alias)
+      // Normalize to snake_case for action-runner
+      (actionAttributes as any).type = 'str_replace';
+      let filePath = this.#extractAttribute(actionTag, 'filePath') as string;
+      if (!filePath) filePath = this.#extractAttribute(actionTag, 'filepath') as string;
+      if (!filePath) filePath = this.#extractAttribute(actionTag, 'path') as string;
+      const oldString = this.#extractAttribute(actionTag, 'oldString') as string;
+      const newString = this.#extractAttribute(actionTag, 'newString') as string;
+      (actionAttributes as any).filePath = filePath || '';
+      (actionAttributes as any).oldString = oldString || '';
+      (actionAttributes as any).newString = newString || '';
     } else if (actionType === 'multi_apply_diff') {
       const commitMessage = this.#extractAttribute(actionTag, 'commitMessage') as string;
       (actionAttributes as MultiApplyDiffAction).diffs = [];

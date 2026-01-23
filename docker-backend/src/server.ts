@@ -126,6 +126,81 @@ interface AuthenticatedRequest extends express.Request {
   sessionId?: string;
 }
 
+// Helper to parse cookies from request headers (no need for cookie-parser dependency)
+function parseCookies(cookieHeader: string | undefined): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) return cookies;
+
+  cookieHeader.split(';').forEach(cookie => {
+    const [name, ...rest] = cookie.trim().split('=');
+    if (name && rest.length > 0) {
+      cookies[name] = decodeURIComponent(rest.join('='));
+    }
+  });
+  return cookies;
+}
+
+// Get session token from request (Authorization header or cookies)
+function getSessionTokenFromRequest(req: express.Request): string | null {
+  // First try Authorization header
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.replace('Bearer ', '');
+  }
+
+  // Then try cookies - Better Auth uses prefix.session_token format
+  const cookies = parseCookies(req.headers.cookie);
+
+  // Try various cookie names that Better Auth might use
+  // With cookiePrefix: "recoder", the cookie is named "recoder.session_token"
+  return cookies['recoder.session_token']
+    || cookies['recoder_session_token']
+    || cookies['session_token']
+    || null;
+}
+
+// WebSocket authentication helper
+// For WebSockets, token is passed via query string (?token=xxx) or cookies
+async function authenticateWebSocket(
+  ws: WebSocket,
+  req: express.Request
+): Promise<{ userId: string; sessionId: string } | null> {
+  // Try query string first (standard for WebSockets)
+  let token = req.query.token as string;
+
+  // Fall back to cookies
+  if (!token) {
+    const cookies = parseCookies(req.headers.cookie);
+    token = cookies['recoder.session_token']
+      || cookies['recoder_session_token']
+      || cookies['session_token']
+      || '';
+  }
+
+  if (!token) {
+    // In migration mode, allow anonymous access with warning
+    if (!REQUIRE_AUTH) {
+      console.warn(`[Auth] WARNING: Anonymous WebSocket connection to ${req.path}`);
+      return { userId: 'anonymous', sessionId: 'anon' };
+    }
+    ws.close(1008, 'Authentication required');
+    return null;
+  }
+
+  const session = await verifySessionToken(token);
+  if (!session) {
+    // In migration mode, allow with warning
+    if (!REQUIRE_AUTH) {
+      console.warn(`[Auth] WARNING: Invalid token for WebSocket ${req.path}, allowing in migration mode`);
+      return { userId: 'anonymous', sessionId: 'anon' };
+    }
+    ws.close(1008, 'Invalid or expired session');
+    return null;
+  }
+
+  return session;
+}
+
 // Verify Better Auth session token with the main app API
 // The token is the value of the 'recoder.session_token' cookie from Better Auth
 async function verifySessionToken(token: string): Promise<{ userId: string; sessionId: string } | null> {
@@ -195,7 +270,8 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
 const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
 
 function authenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  // Get token from Authorization header OR cookies (for cross-origin with httpOnly cookies)
+  const token = getSessionTokenFromRequest(req);
   const origin = req.headers.origin || '';
 
   // If no token provided
@@ -569,6 +645,7 @@ const ALLOWED_ORIGINS = [
   'https://recoder.xyz',
   'https://www.recoder.xyz',
   'https://web.recoder.xyz',
+  'https://docker.recoder.xyz', // Self-reference for same-origin API calls
   'http://localhost:3000',
   'http://localhost:5173'
 ];
@@ -729,8 +806,8 @@ async function execInContainer(containerId: string, cmd: string): Promise<string
 
   const stream = await exec.start({});
   const chunks: Buffer[] = [];
-  
-  return new Promise<string>((resolve, reject) => {
+
+  const output = await new Promise<string>((resolve, reject) => {
     stream.on('data', (chunk: Buffer) => chunks.push(chunk));
     stream.on('end', () => {
       const raw = Buffer.concat(chunks);
@@ -752,6 +829,14 @@ async function execInContainer(containerId: string, cmd: string): Promise<string
     });
     stream.on('error', reject);
   });
+
+  // Check exit code after command completes
+  const inspection = await exec.inspect();
+  if (inspection.ExitCode !== 0 && inspection.ExitCode !== null) {
+    throw new Error(`Command failed with exit code ${inspection.ExitCode}: ${output}`);
+  }
+
+  return output;
 }
 
 /**
@@ -920,13 +1005,27 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
           const pooled = await containerPool.acquire();
           if (pooled) {
             console.log(`🚀 [Pool] Acquired pre-warmed container ${pooled.id.slice(0, 12)} for ${projectId}`);
-            containerId = pooled.id;
-            hostPort = pooled.port;
-            ptyPort = pooled.ptyPort;
-            fromPool = true;
 
-            // Inject project-specific env vars into pooled container
-            const containerInstance = docker.getContainer(containerId);
+            // 🔧 FIX: Ensure pooled container is actually running before using it
+            const pooledEntry = { id: pooled.id, lastActive: Date.now(), port: pooled.port, ptyPort: pooled.ptyPort };
+            const pooledStatus = await ensureContainerRunning(pooledEntry, projectId);
+
+            if (!pooledStatus.running) {
+              console.log(`⚠️ [Pool] Pooled container ${pooled.id.slice(0, 12)} not running, will create fresh container`);
+              // Return the container to pool or discard it
+              releasePorts(pooled.port, pooled.ptyPort);
+              // Continue to create a fresh container below
+            } else {
+              containerId = pooled.id;
+              hostPort = pooled.port;
+              ptyPort = pooled.ptyPort;
+              fromPool = true;
+              if (pooledStatus.restarted) {
+                console.log(`🔄 [Pool] Restarted pooled container ${pooled.id.slice(0, 12)} for ${projectId}`);
+              }
+
+              // Inject project-specific env vars into pooled container
+              const containerInstance = docker.getContainer(containerId);
             const exec = await containerInstance.exec({
               Cmd: ['sh', '-c', `export RECODER_PROJECT_ID=${projectId}`],
               AttachStdout: false,
@@ -973,8 +1072,9 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
               await keyExec.start({ Detach: true });
               console.log(`[AI Tools] Injecting Anthropic API key into pooled container for project ${projectId}`);
             }
-          }
-        }
+            } // Close: if (pooledStatus.running)
+          } // Close: if (pooled)
+        } // Close: if (ENABLE_CONTAINER_POOL)
 
         // FALLBACK: Create new container if pool empty
         if (!containerId) {
@@ -1179,6 +1279,18 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
     entry.lastActive = Date.now();
     const container = docker.getContainer(entry.id);
 
+    // Helper to wait for exec stream with timeout (exec streams may emit 'close' instead of 'end')
+    const waitForExecStream = (stream: any, timeoutMs = 10000): Promise<void> => {
+      return Promise.race([
+        new Promise<void>((resolve) => {
+          stream.on('end', resolve);
+          stream.on('close', resolve);
+          stream.on('error', resolve); // Don't fail, just continue
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+      ]);
+    };
+
     // Create directory if needed (using sanitized path)
     const dir = safePath.substring(0, safePath.lastIndexOf('/'));
     if (dir) {
@@ -1189,11 +1301,7 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
         AttachStderr: true,
       });
       const mkdirStream = await mkdirExec.start({});
-      // Wait for mkdir to complete
-      await new Promise<void>((resolve) => {
-        mkdirStream.on('end', resolve);
-        mkdirStream.on('error', resolve); // Don't fail on mkdir errors
-      });
+      await waitForExecStream(mkdirStream, 5000);
     }
 
     // Write file using base64 to handle special chars (sanitized path)
@@ -1207,11 +1315,33 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
       AttachStderr: true,
     });
     const writeStream = await writeExec.start({});
-    // CRITICAL: Wait for file write to complete before returning success
-    await new Promise<void>((resolve, reject) => {
-      writeStream.on('end', resolve);
-      writeStream.on('error', reject);
+    // Wait for file write with timeout (exec streams may not emit 'end')
+    await waitForExecStream(writeStream, 10000);
+
+    // Force filesystem sync to ensure file is written to disk
+    const syncExec = await container.exec({
+      Cmd: ['sync'],
+      AttachStdout: true,
+      AttachStderr: true,
     });
+    const syncStream = await syncExec.start({});
+    await waitForExecStream(syncStream, 5000);
+
+    // Verify file exists before returning success
+    const verifyExec = await container.exec({
+      Cmd: ['test', '-f', fullPath],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const verifyStream = await verifyExec.start({});
+    await waitForExecStream(verifyStream, 5000);
+    const verifyResult = await verifyExec.inspect();
+    if (verifyResult.ExitCode !== 0) {
+      console.error('❌ File verification failed:', fullPath);
+      return res.status(500).json({ error: 'File write verification failed' });
+    }
+
+    console.log('✅ File write complete:', projectId, safePath);
 
     // PERFORMANCE: Invalidate cache on write
     fileCache.invalidate(projectId, safePath);
@@ -1256,6 +1386,18 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
       return { path: safePath, content: file.content };
     }).filter((f: { path: string }) => f.path); // Remove invalid paths
 
+    // Helper to wait for exec stream with timeout (exec streams may emit 'close' instead of 'end')
+    const waitForExecStream = (stream: any, timeoutMs = 10000): Promise<void> => {
+      return Promise.race([
+        new Promise<void>((resolve) => {
+          stream.on('end', resolve);
+          stream.on('close', resolve);
+          stream.on('error', resolve);
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+      ]);
+    };
+
     // Create all directories first using array-based exec
     if (dirs.size > 0) {
       const mkdirExec = await container.exec({
@@ -1264,11 +1406,7 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
         AttachStderr: true,
       });
       const mkdirStream = await mkdirExec.start({});
-      // Wait for mkdir to complete
-      await new Promise<void>((resolve) => {
-        mkdirStream.on('end', resolve);
-        mkdirStream.on('error', resolve);
-      });
+      await waitForExecStream(mkdirStream, 5000);
     }
 
     // Write files in parallel batches of 10 (with sanitized paths)
@@ -1284,11 +1422,7 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
           AttachStderr: true,
         });
         const writeStream = await writeExec.start({});
-        // Wait for file write to complete
-        await new Promise<void>((resolve, reject) => {
-          writeStream.on('end', resolve);
-          writeStream.on('error', reject);
-        });
+        await waitForExecStream(writeStream, 10000);
       }));
     }
 
@@ -1582,7 +1716,10 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       /umount/i,             // Unmount
       /mkfs/i,               // Filesystem creation
       /dd\s+if=/i,           // Disk operations
-      />\s*\/dev\//,         // Writing to devices
+      />\s*\/dev\/sd/i,      // Writing to block devices (sda, sdb, etc.)
+      />\s*\/dev\/hd/i,      // Writing to IDE devices (hda, hdb, etc.)
+      />\s*\/dev\/vd/i,      // Writing to virtual devices (vda, vdb, etc.)
+      />\s*\/dev\/xvd/i,     // Writing to Xen devices
       /curl.*\|\s*sh/i,      // Piped shell scripts
       /wget.*\|\s*sh/i,      // Piped shell scripts
       /rm\s+-rf\s+\//,       // Root deletion
@@ -1707,10 +1844,35 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
      }
 
     const output = await execCommand(container, `cd "${cwd}" && ${command}`);
-    res.json({ output });
+    res.json({ output, success: true, exitCode: 0 });
   } catch (err: any) {
-    console.error('❌ Command execution failed:', err.message);
-    res.status(500).json({ error: err.message });
+    const errMsg = err.message || '';
+
+    // Handle "file not found" errors gracefully - return 200 with empty output
+    // This is expected for new projects when AI tries to read package.json
+    if (errMsg.includes('No such file or directory') ||
+        errMsg.includes('not found') ||
+        errMsg.includes('ENOENT')) {
+      console.log('📁 File not found (expected for new projects):', errMsg);
+      return res.json({
+        output: `[File not found]\n${errMsg}`,
+        fileNotFound: true,
+        success: true,
+        exitCode: 0
+      });
+    }
+
+    // Extract exit code from error message if present
+    const exitCodeMatch = errMsg.match(/exit code (\d+)/);
+    const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 1;
+
+    console.error('❌ Command execution failed:', errMsg);
+    res.status(500).json({
+      error: errMsg,
+      success: false,
+      exitCode,
+      output: errMsg
+    });
   }
 });
 
@@ -2346,6 +2508,10 @@ app.ws('/terminal/:projectId', async (ws, req) => {
   const { projectId } = req.params;
   const terminalId = req.query.terminalId as string || `term-${Date.now()}`;
 
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return; // Connection closed by auth helper
+
   let entry = containers.get(projectId);
   
   // Try to recover container from Docker if not in memory (after backend restart)
@@ -2582,14 +2748,19 @@ app.ws('/terminal/:projectId', async (ws, req) => {
 // Used by recoder-code CLI to sync file changes with web editor
 app.ws('/watch/:projectId', async (ws, req) => {
   const { projectId } = req.params;
+
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return;
+
   const entry = containers.get(projectId);
-  
+
   if (!entry) {
     ws.close(1008, 'Container not found');
     return;
   }
 
-  console.log(`[FileWatch] WebSocket connected for ${projectId}`);
+  console.log(`[FileWatch] WebSocket connected for ${projectId} [user: ${authSession.userId}]`);
 
   // Start file watcher for this project
   fileWatcher.startWatching(entry.id, projectId);
@@ -3605,7 +3776,13 @@ app.get('/api/collab/stats', authenticateRequest, (req: AuthenticatedRequest, re
 
 // File sync WebSocket (real-time)
 app.ws('/sync/:projectId', async (ws, req) => {
-  const entry = containers.get(req.params.projectId);
+  const { projectId } = req.params;
+
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return;
+
+  const entry = containers.get(projectId);
   if (!entry) {
     ws.close(1008, 'Container not found');
     return;
@@ -4291,13 +4468,18 @@ const cliSyncClients = new Map<string, Set<WebSocket>>();
 
 app.ws('/cli-sync/:projectId', async (ws, req) => {
   const { projectId } = req.params;
+
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return;
+
   const sanitizedProjectId = sanitizeProjectId(projectId);
   const clientId = (req.query.clientId as string) || uuid();
 
-  // Register session
+  // Register session with authenticated userId
   const session = syncManager.registerSession({
     projectId: sanitizedProjectId,
-    userId: 'anonymous', // In production, extract from auth token
+    userId: authSession.userId,
     clientId,
   });
 
@@ -6093,6 +6275,10 @@ app.get('/api/debug/stats', authenticateRequest, (req: AuthenticatedRequest, res
 
 // WebSocket endpoint for real-time debug events
 app.ws('/api/debug/:projectId/events', async (ws, req) => {
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return;
+
   const projectId = sanitizeProjectId(req.params.projectId);
   const entry = containers.get(projectId);
 
@@ -6101,7 +6287,7 @@ app.ws('/api/debug/:projectId/events', async (ws, req) => {
     return;
   }
 
-  console.log(`[Debug] WebSocket connected for ${projectId}`);
+  console.log(`[Debug] WebSocket connected for ${projectId} [user: ${authSession.userId}]`);
 
   // Add client to event listeners
   if (!debugEventClients.has(projectId)) {
@@ -6175,8 +6361,13 @@ const fileWatchClients = new Map<string, Set<WebSocket>>();
 
 app.ws('/watch/:projectId', async (ws, req) => {
   const { projectId } = req.params;
+
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return;
+
   const entry = containers.get(projectId);
-  
+
   if (!entry) {
     ws.close(1008, 'Container not found');
     return;
@@ -6191,7 +6382,7 @@ app.ws('/watch/:projectId', async (ws, req) => {
   // Start file watcher for this project if not already running
   fileWatcher.startWatching(entry.id, projectId);
 
-  console.log(`[FileWatch] Client connected for ${projectId}`);
+  console.log(`[FileWatch] Client connected for ${projectId} [user: ${authSession.userId}]`);
 
   ws.on('close', () => {
     const clients = fileWatchClients.get(projectId);

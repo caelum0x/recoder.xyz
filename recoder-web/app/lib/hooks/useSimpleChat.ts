@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { getActionsInProgress } from '~/lib/runtime/action-runner';
 
 export interface Message {
   id: string;
@@ -78,74 +79,122 @@ export function useSimpleChat(options: UseChatOptions) {
 
     try {
       abortControllerRef.current = new AbortController();
-      
+
+      // Initial connection timeout (60s - server proxy handles Cloudflare limits)
+      // This is for the initial connection only, streaming has its own timeout below
+      let timeoutId = setTimeout(() => {
+        abortControllerRef.current?.abort();
+      }, 60000);
+
       // Include all messages including the new user message
       const allMessages = [...messages, userMessage];
-      
-      const response = await fetch(api, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: allMessages, ...extraBody }),
-        signal: abortControllerRef.current.signal,
-      });
 
-      if (onResponse) {
-        onResponse(response);
-      }
+      try {
+        const response = await fetch(api, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: allMessages, ...extraBody }),
+          signal: abortControllerRef.current.signal,
+        });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+        clearTimeout(timeoutId);
 
-      if (!response.body) {
-        throw new Error('No response body');
-      }
+        if (onResponse) {
+          onResponse(response);
+        }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        if (!response.body) {
+          throw new Error('No response body');
+        }
 
-        const text = decoder.decode(value);
-        
-        // 🔧 FIX: Accumulate content in ref (not mutating state)
-        accumulatedContentRef.current += text;
-        const currentContent = accumulatedContentRef.current;
-        
-        // 🔧 FIX: Use immutable update - create new message object
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        // Streaming timeout - reset whenever data is received (30s idle timeout)
+        // 🔒 FIX 0B: Don't abort if actions are still executing
+        let streamingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+        const resetStreamingTimeout = () => {
+          if (streamingTimeoutId) clearTimeout(streamingTimeoutId);
+          streamingTimeoutId = setTimeout(() => {
+            // Don't abort if actions are still executing
+            const actionsInProgress = getActionsInProgress();
+            if (actionsInProgress > 0) {
+              console.log(`[useSimpleChat] ${actionsInProgress} action(s) in progress, extending timeout...`);
+              resetStreamingTimeout(); // Reset and try again
+              return;
+            }
+            abortControllerRef.current?.abort();
+          }, 30000); // 30s idle timeout during streaming
+        };
+
+        while (true) {
+          resetStreamingTimeout(); // Reset timeout on each chunk
+          const { done, value } = await reader.read();
+          if (done) {
+            if (streamingTimeoutId) clearTimeout(streamingTimeoutId);
+            break;
+          }
+
+          const text = decoder.decode(value);
+
+          // 🔧 FIX: Accumulate content in ref (not mutating state)
+          accumulatedContentRef.current += text;
+          const currentContent = accumulatedContentRef.current;
+
+          // 🔧 FIX: Use immutable update - create new message object
+          setMessages(prev => {
+            return prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, content: currentContent }
+                : msg
+            );
+          });
+        }
+
+        // 🔧 FIX: Create final message with complete content for persistence
+        const finalAssistantMessage: Message = {
+          id: assistantId,
+          role: 'assistant',
+          content: accumulatedContentRef.current,
+          createdAt: new Date(),
+        };
+
+        // Final update to ensure complete message is in state
         setMessages(prev => {
-          return prev.map(msg => 
-            msg.id === assistantId 
-              ? { ...msg, content: currentContent }
+          return prev.map(msg =>
+            msg.id === assistantId
+              ? finalAssistantMessage
               : msg
           );
         });
-      }
 
-      // 🔧 FIX: Create final message with complete content for persistence
-      const finalAssistantMessage: Message = {
-        id: assistantId,
-        role: 'assistant',
-        content: accumulatedContentRef.current,
-        createdAt: new Date(),
-      };
-
-      // Final update to ensure complete message is in state
-      setMessages(prev => {
-        return prev.map(msg => 
-          msg.id === assistantId 
-            ? finalAssistantMessage
-            : msg
-        );
-      });
-
-      if (onFinish) {
-        onFinish(finalAssistantMessage);
+        if (onFinish) {
+          onFinish(finalAssistantMessage);
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        throw fetchError;
       }
     } catch (error: any) {
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        const timeoutError = new Error('Request timed out. The response is taking too long. Please try a shorter message or simpler request.');
+        console.error('Chat timeout:', timeoutError);
+        if (onError) {
+          onError(timeoutError);
+        }
+        // Update the assistant message to show timeout error
+        setMessages(prev => {
+          return prev.map(msg =>
+            msg.id === assistantId
+              ? { ...msg, content: '⚠️ Request timed out. Please try a shorter message or simpler request.' }
+              : msg
+          );
+        });
+      } else {
         console.error('Chat error:', error);
         if (onError) {
           onError(error);

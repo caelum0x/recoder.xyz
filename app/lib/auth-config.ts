@@ -64,6 +64,11 @@ export const auth = betterAuth({
       domain: process.env.NODE_ENV === 'production' ? '.recoder.xyz' : undefined, // Leading dot for subdomain sharing
     },
     useSecureCookies: process.env.NODE_ENV === 'production',
+    // SameSite=None is required for cross-origin requests (web.recoder.xyz -> docker.recoder.xyz)
+    // Must be paired with Secure=true (handled by useSecureCookies in production)
+    defaultCookieAttributes: {
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    },
     generateId: () => crypto.randomUUID(),
   },
   trustedOrigins: process.env.NODE_ENV === 'production'
@@ -72,6 +77,7 @@ export const auth = betterAuth({
         "https://recoder.xyz",
         "https://www.recoder.xyz",
         "https://web.recoder.xyz",
+        "https://docker.recoder.xyz", // Docker backend for cross-origin API calls
       ]
     : [
         "http://localhost:3000",
@@ -82,6 +88,7 @@ export const auth = betterAuth({
         "https://recoder.xyz",
         "https://www.recoder.xyz",
         "https://web.recoder.xyz",
+        "https://docker.recoder.xyz",
       ],
   pages: {
     signIn: "/auth/signin",
