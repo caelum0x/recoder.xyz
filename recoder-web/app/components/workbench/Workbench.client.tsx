@@ -17,11 +17,12 @@ import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import { GitHubSyncModal } from './GitHubSyncModal';
+import { VersionHistoryPanel } from './VersionHistoryPanel';
 import { BuildProgressIndicator } from './BuildProgressIndicator';
-import { SnapshotBar } from './SnapshotBar';
+import { CompactActionStatus } from './ActionStatusPanel';
 import { useLSPDiagnostics } from '~/lib/hooks/useLSPDiagnostics';
-import { initializeSnapshots } from '~/lib/stores/snapshots';
 import { useFileWatcher } from '~/lib/hooks/useFileWatcher';
+import { useAutoErrorFix } from '~/lib/hooks/useAutoErrorFix';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -92,14 +93,51 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     },
   });
 
-  // Initialize snapshots only when container is ready (not just when projectId is set)
-  // This prevents 404 errors from calling snapshot APIs before container exists
+  // Auto-fix build errors - automatically sends errors to AI for fixing (no UI)
+  useAutoErrorFix({
+    enabled: !!projectId && containerReady,
+    isStreaming: !!isStreaming,
+    debounceMs: 3000,
+    maxAttempts: 10,
+  });
+
+  // Kill container on tab close to prevent container leaks
   useEffect(() => {
-    if (projectId && containerReady) {
-      console.log('🔄 [Workbench] Container ready, initializing snapshots...');
-      initializeSnapshots(projectId, true).catch(console.error);
-    }
+    if (!projectId || !containerReady) return;
+
+    const handleBeforeUnload = () => {
+      const blob = new Blob(
+        [JSON.stringify({ projectId })],
+        { type: 'application/json' }
+      );
+      navigator.sendBeacon('/api/kill-sandbox', blob);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, [projectId, containerReady]);
+
+  // Listen for action execution errors and container errors, show toast
+  useEffect(() => {
+    const actionErrorHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const filePath = detail?.filePath ? ` (${detail.filePath})` : '';
+      toast.error(`Action failed${filePath}: ${detail?.error || 'Unknown error'}`);
+    };
+    const containerErrorHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      toast.error(detail?.message || 'Container creation failed. File operations may not work.');
+    };
+
+    window.addEventListener('recoder:action-error', actionErrorHandler);
+    window.addEventListener('recoder:container-error', containerErrorHandler);
+    return () => {
+      window.removeEventListener('recoder:action-error', actionErrorHandler);
+      window.removeEventListener('recoder:container-error', containerErrorHandler);
+    };
+  }, []);
 
   const setSelectedView = (view: WorkbenchViewType) => {
     workbenchStore.currentView.set(view);
@@ -137,131 +175,8 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     workbenchStore.resetCurrentDocument();
   }, []);
 
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [isPushing, setIsPushing] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
-
-  const handleDownloadCode = useCallback(async () => {
-    setIsDownloading(true);
-    try {
-      // console.log('📥 Downloading code...');
-
-      // Convert files to plain object
-      const filesToDownload: Record<string, string> = {};
-      Object.entries(files).forEach(([path, file]) => {
-        if (file && file.type === 'file' && 'content' in file) {
-          filesToDownload[path] = file.content;
-        }
-      });
-
-      if (Object.keys(filesToDownload).length === 0) {
-        toast.error('No files to download');
-        return;
-      }
-
-      const response = await fetch('/api/download-code', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          files: filesToDownload,
-          projectName: 'recoder-project',
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to download code');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'recoder-project.zip';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      toast.success('Code downloaded successfully!');
-    } catch (error) {
-      console.error('❌ Download failed:', error);
-      toast.error('Failed to download code');
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [files]);
-
-  const handlePushToGitHub = useCallback(async () => {
-    setIsPushing(true);
-    try {
-      // Convert files to plain object
-      const filesToPush: Record<string, string> = {};
-      Object.entries(files).forEach(([path, file]) => {
-        if (file && file.type === 'file' && 'content' in file) {
-          filesToPush[path] = file.content;
-        }
-      });
-
-      if (Object.keys(filesToPush).length === 0) {
-        toast.error('No files to push');
-        return;
-      }
-
-      // Prompt for repository name
-      const repoName = prompt('Enter repository name:', 'my-recoder-project');
-      if (!repoName) {
-        toast.info('GitHub push cancelled');
-        return;
-      }
-
-      // Prompt for GitHub token
-      const accessToken = prompt('Enter your GitHub Personal Access Token:\n(Create one at: https://github.com/settings/tokens)');
-      if (!accessToken) {
-        toast.info('GitHub push cancelled - token required');
-        return;
-      }
-
-      // console.log('📤 Pushing to GitHub...');
-      toast.info('Pushing to GitHub...');
-
-      const response = await fetch('/api/github/push', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          files: filesToPush,
-          repoName,
-          description: 'Created with Recoder.xyz',
-          isPrivate: false,
-          accessToken,
-        }),
-      });
-
-      const result = await response.json() as { error?: string; repoUrl?: string };
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to push to GitHub');
-      }
-
-      toast.success(
-        <div>
-          Successfully pushed to GitHub!
-          <br />
-          <a href={result.repoUrl || '#'} target="_blank" rel="noopener noreferrer" className="underline">
-            View Repository
-          </a>
-        </div>
-      );
-    } catch (error: any) {
-      console.error('❌ GitHub push failed:', error);
-      toast.error(`Failed to push to GitHub: ${error.message}`);
-    } finally {
-      setIsPushing(false);
-    }
-  }, [files]);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   const handleFilesUpdate = useCallback((newFiles: Record<string, string>) => {
     // console.log('📥 Updating files from GitHub:', Object.keys(newFiles).length, 'files');
@@ -316,31 +231,27 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                     </PanelHeaderButton>
                     <PanelHeaderButton
                       className="mr-1 text-sm"
-                      onClick={() => setShowGitHubModal(true)}
+                      onClick={() => setShowVersionHistory(true)}
+                      title="Version History"
                     >
-                      <div className="i-ph:git-branch" />
-                      GitHub Sync
+                      <div className="i-ph:clock-counter-clockwise" />
                     </PanelHeaderButton>
                     <PanelHeaderButton
                       className="mr-1 text-sm"
-                      onClick={handleDownloadCode}
-                      disabled={isDownloading || Object.keys(files).length === 0}
+                      onClick={() => setShowGitHubModal(true)}
+                      title="GitHub Sync"
                     >
-                      <div className={isDownloading ? "i-ph:spinner animate-spin" : "i-ph:download-simple"} />
-                      {isDownloading ? 'Downloading...' : 'Download'}
+                      <div className="i-ph:git-branch" />
                     </PanelHeaderButton>
                     <PanelHeaderButton
                       className="mr-1 text-sm"
                       onClick={() => {
                         workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
                       }}
+                      title="Toggle Terminal"
                     >
                       <div className="i-ph:terminal" />
-                      Toggle Terminal
                     </PanelHeaderButton>
-                    {projectId && (
-                      <SnapshotBar projectId={projectId} className="mr-1" />
-                    )}
                   </>
                 )}
                 <IconButton
@@ -357,18 +268,24 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                   initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
                   animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
                 >
-                  <EditorPanel
-                    editorDocument={currentDocument}
-                    isStreaming={isStreaming}
-                    selectedFile={selectedFile}
-                    files={files}
-                    unsavedFiles={unsavedFiles}
-                    onFileSelect={onFileSelect}
-                    onEditorScroll={onEditorScroll}
-                    onEditorChange={onEditorChange}
-                    onFileSave={onFileSave}
-                    onFileReset={onFileReset}
-                  />
+                  <div className="relative h-full">
+                    <EditorPanel
+                      editorDocument={currentDocument}
+                      isStreaming={isStreaming}
+                      selectedFile={selectedFile}
+                      files={files}
+                      unsavedFiles={unsavedFiles}
+                      onFileSelect={onFileSelect}
+                      onEditorScroll={onEditorScroll}
+                      onEditorChange={onEditorChange}
+                      onFileSave={onFileSave}
+                      onFileReset={onFileReset}
+                    />
+                    {/* Compact action progress indicator - floats at bottom-right of editor */}
+                    <div className="absolute bottom-2 right-3 z-10">
+                      <CompactActionStatus />
+                    </div>
+                  </div>
                 </View>
                 <View
                   initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
@@ -385,6 +302,10 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
           onClose={() => setShowGitHubModal(false)}
           files={files}
           onFilesUpdate={handleFilesUpdate}
+        />
+        <VersionHistoryPanel
+          isOpen={showVersionHistory}
+          onClose={() => setShowVersionHistory(false)}
         />
         <BuildProgressIndicator />
       </motion.div>

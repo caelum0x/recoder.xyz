@@ -65,8 +65,8 @@ export function ModeSelector({ compact = false }: ModeSelectorProps) {
               <button
                 key={m.id}
                 onClick={() => handleModeSelect(m.id)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/5 ${
-                  m.id === mode ? 'bg-white/10' : ''
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-bolt-elements-background-depth-2 ${
+                  m.id === mode ? 'bg-bolt-elements-background-depth-3' : ''
                 }`}
               >
                 <div className={`${m.icon} ${getModeColor(m).split(' ')[0]}`} />

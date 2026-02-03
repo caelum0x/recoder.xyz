@@ -102,7 +102,7 @@ export default function MCPToolsPanel() {
       case 'error':
         return <XCircle className="w-4 h-4 text-red-500" />;
       default:
-        return <div className="w-4 h-4 rounded-full bg-gray-500" />;
+        return <div className="w-4 h-4 rounded-full bg-bolt-elements-background-depth-3" />;
     }
   };
 
@@ -151,7 +151,7 @@ export default function MCPToolsPanel() {
                 <div className={`text-xs px-2 py-1 rounded ${
                   server.enabled 
                     ? 'bg-green-500/20 text-green-400' 
-                    : 'bg-gray-500/20 text-gray-400'
+                    : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary'
                 }`}>
                   {server.enabled ? 'Enabled' : 'Disabled'}
                 </div>

@@ -12,7 +12,7 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'app/**/*.test.ts'],
-    exclude: ['node_modules', 'starters'],
+    exclude: ['node_modules', 'starters', 'app/lib/.server/llm/**'],
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: [

@@ -119,4 +119,14 @@ export const COMMON_SHORTCUTS: Record<string, Omit<KeyboardShortcut, 'action'>> 
     ctrlKey: true,
     description: 'Focus input',
   },
+  OPEN_SETTINGS: {
+    key: ',',
+    metaKey: true,
+    description: 'Open settings',
+  },
+  OPEN_SETTINGS_CTRL: {
+    key: ',',
+    ctrlKey: true,
+    description: 'Open settings',
+  },
 };

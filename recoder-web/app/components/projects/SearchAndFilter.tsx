@@ -41,7 +41,7 @@ export function SearchAndFilter({
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as any)}
-            className="px-3 py-2 bg-black border border-bolt-elements-borderColor rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent"
+            className="px-3 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent"
           >
             <option value="updated">Last Updated</option>
             <option value="created">Date Created</option>

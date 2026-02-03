@@ -42,6 +42,10 @@ describe('OpenRouterAudioGenerator', () => {
       const generator = new OpenRouterAudioGenerator();
       vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
+        headers: new Headers({
+          'x-openrouter-generation-id': 'gen-1',
+          'x-openrouter-cost': '0.01',
+        }),
         json: async () => ({
           text: 'Transcribed text',
           language: 'en',
@@ -49,7 +53,7 @@ describe('OpenRouterAudioGenerator', () => {
       } as Response);
 
       const options: TranscriptionOptions = {
-        audioFile: 'test.mp3',
+        audioFile: Buffer.from('fake audio data'),
       };
 
       const result = await generator.transcribe(options);
@@ -72,6 +76,10 @@ describe('OpenRouterAudioGenerator', () => {
       
       vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
+        headers: new Headers({
+          'x-openrouter-generation-id': 'gen-tts-1',
+          'x-openrouter-cost': '0.02',
+        }),
         arrayBuffer: async () => mockAudio.buffer,
       } as Response);
 
@@ -89,13 +97,17 @@ describe('OpenRouterAudioGenerator', () => {
       const generator = new OpenRouterAudioGenerator();
       vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
+        headers: new Headers({
+          'x-openrouter-generation-id': 'gen-translate-1',
+          'x-openrouter-cost': '0.01',
+        }),
         json: async () => ({
           text: 'Translated to English',
         }),
       } as Response);
 
       const result = await generator.translate({
-        audioFile: 'spanish.mp3',
+        audioFile: Buffer.from('fake audio data'),
       });
 
       expect(result.text).toBe('Translated to English');

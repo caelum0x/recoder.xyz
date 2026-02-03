@@ -176,10 +176,10 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+      <div className="bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-gradient-to-r from-purple-900/30 to-orange-900/30">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-bolt-elements-borderColor bg-gradient-to-r from-purple-900/30 to-orange-900/30">
+          <h2 className="text-lg font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
             <span className="i-ph:github-logo text-xl" />
             GitHub Sync
           </h2>
@@ -190,7 +190,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
         <div className="p-6 space-y-6">
           {/* Mode Selection */}
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-300">Action</label>
+            <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">Action</label>
             <div className="grid grid-cols-4 gap-2">
               {(['clone', 'pull', 'push', 'sync'] as const).map((m) => (
                 <button
@@ -200,7 +200,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                     'px-4 py-2 rounded text-sm font-medium transition-colors',
                     mode === m
                       ? 'bg-orange-500 text-white'
-                      : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                      : 'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'
                   )}
                 >
                   {m.charAt(0).toUpperCase() + m.slice(1)}
@@ -213,7 +213,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
           {mode === 'clone' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">Repository URL</label>
+                <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">Repository URL</label>
                 <input
                   type="text"
                   value={repoUrl}
@@ -222,11 +222,11 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                     parseRepoUrl(e.target.value);
                   }}
                   placeholder="https://github.com/owner/repo"
-                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                  className="w-full px-3 py-2 text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded placeholder:text-bolt-elements-textTertiary focus:border-orange-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">
+                <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">
                   Access Token (optional for public repos)
                 </label>
                 <input
@@ -234,7 +234,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                   value={accessToken}
                   onChange={(e) => setAccessToken(e.target.value)}
                   placeholder="ghp_..."
-                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                  className="w-full px-3 py-2 text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded placeholder:text-bolt-elements-textTertiary focus:border-orange-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -245,46 +245,46 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">Owner</label>
+                  <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">Owner</label>
                   <input
                     type="text"
                     value={owner}
                     onChange={(e) => setOwner(e.target.value)}
                     placeholder="username"
-                    className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                    className="w-full px-3 py-2 text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded placeholder:text-bolt-elements-textTertiary focus:border-orange-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">Repository</label>
+                  <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">Repository</label>
                   <input
                     type="text"
                     value={repo}
                     onChange={(e) => setRepo(e.target.value)}
                     placeholder="repo-name"
-                    className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                    className="w-full px-3 py-2 text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded placeholder:text-bolt-elements-textTertiary focus:border-orange-500 focus:outline-none"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">Branch</label>
+                <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">Branch</label>
                 <input
                   type="text"
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
                   placeholder="main"
-                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                  className="w-full px-3 py-2 text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded placeholder:text-bolt-elements-textTertiary focus:border-orange-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">Access Token</label>
+                <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">Access Token</label>
                 <input
                   type="password"
                   value={accessToken}
                   onChange={(e) => setAccessToken(e.target.value)}
                   placeholder="ghp_..."
-                  className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                  className="w-full px-3 py-2 text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded placeholder:text-bolt-elements-textTertiary focus:border-orange-500 focus:outline-none"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-bolt-elements-textTertiary mt-1">
                   Create at:{' '}
                   <a
                     href="https://github.com/settings/tokens"
@@ -298,13 +298,13 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
               </div>
               {(mode === 'push' || mode === 'sync') && (
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">Commit Message</label>
+                  <label className="block text-sm font-medium mb-2 text-bolt-elements-textSecondary">Commit Message</label>
                   <input
                     type="text"
                     value={commitMessage}
                     onChange={(e) => setCommitMessage(e.target.value)}
                     placeholder="Update from Recoder"
-                    className="w-full px-3 py-2 text-white bg-gray-800 border border-gray-700 rounded placeholder:text-gray-500 focus:border-orange-500 focus:outline-none"
+                    className="w-full px-3 py-2 text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded placeholder:text-bolt-elements-textTertiary focus:border-orange-500 focus:outline-none"
                   />
                 </div>
               )}
@@ -313,17 +313,17 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
 
           {/* Repository Info */}
           {showInfo && repoInfo && (
-            <div className="p-4 bg-gray-800 border border-gray-700 rounded-lg space-y-2">
-              <h3 className="font-semibold text-white">{repoInfo.repository.fullName}</h3>
-              <p className="text-sm text-gray-400">
+            <div className="p-4 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg space-y-2">
+              <h3 className="font-semibold text-bolt-elements-textPrimary">{repoInfo.repository.fullName}</h3>
+              <p className="text-sm text-bolt-elements-textSecondary">
                 {repoInfo.repository.description}
               </p>
-              <div className="flex gap-4 text-sm text-gray-300">
+              <div className="flex gap-4 text-sm text-bolt-elements-textSecondary">
                 <span>⭐ {repoInfo.repository.stars}</span>
                 <span>🍴 {repoInfo.repository.forks}</span>
                 <span><span className="i-ph:git-branch text-purple-400" /> {repoInfo.branches.length} branches</span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-bolt-elements-textTertiary">
                 Last updated: {new Date(repoInfo.repository.updatedAt).toLocaleDateString()}
               </div>
             </div>
@@ -353,7 +353,7 @@ export const GitHubSyncModal = memo(({ isOpen, onClose, files, onFilesUpdate }: 
                 <button
                   onClick={handleGetInfo}
                   disabled={isLoading || !owner || !repo || !accessToken}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded font-medium"
+                  className="px-4 py-2 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary rounded font-medium"
                 >
                   Get Info
                 </button>

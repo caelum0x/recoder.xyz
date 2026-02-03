@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '~/lib/contexts/AuthContext';
 
 interface Project {
   id: string;
@@ -8,6 +9,7 @@ interface Project {
   color: string;
   chat_count: number;
   file_count: number;
+  updatedAt?: string;
 }
 
 interface ProjectsApiResponse {
@@ -16,22 +18,25 @@ interface ProjectsApiResponse {
 }
 
 export function ProjectsList() {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
 
-  useEffect(() => {
-    // In dev mode, use the dev user ID that exists in database
-    const devUserId = 'dev-user-123';
-    let id = localStorage.getItem('recoder_userId');
-    
-    if (!id || id !== devUserId) {
-      id = devUserId;
-      localStorage.setItem('recoder_userId', id);
-    }
-    setUserId(id);
-  }, []);
+  // Use authenticated user ID
+  const userId = user?.id ?? null;
+
+  // Filter projects based on search query
+  const filteredProjects = useMemo(() => {
+    if (!searchQuery.trim()) return projects;
+    const query = searchQuery.toLowerCase();
+    return projects.filter(project =>
+      project.name.toLowerCase().includes(query) ||
+      (project.description && project.description.toLowerCase().includes(query))
+    );
+  }, [projects, searchQuery]);
 
   useEffect(() => {
     if (userId) loadProjects();
@@ -74,34 +79,75 @@ export function ProjectsList() {
     <div className="projects-list mb-4">
       <div className="flex items-center justify-between mb-2 px-2">
         <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Projects</h3>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="p-1 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors"
-          title="Create project"
-        >
-          <span className="i-ph:plus text-bolt-elements-textSecondary text-base" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowSearch(!showSearch)}
+            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded transition-colors"
+            title="Search projects"
+          >
+            <span className="i-ph:magnifying-glass text-bolt-elements-textTertiary text-base" />
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded transition-colors"
+            title="Create project"
+          >
+            <span className="i-ph:plus text-bolt-elements-textTertiary text-base" />
+          </button>
+        </div>
       </div>
 
+      {/* Search input */}
+      {showSearch && (
+        <div className="px-2 mb-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filter projects..."
+            className="w-full px-2 py-1 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-orange-500"
+            autoFocus
+          />
+        </div>
+      )}
+
       <div className="space-y-1">
-        {projects.map(project => (
+        {filteredProjects.length === 0 && searchQuery && (
+          <div className="px-2 py-2 text-xs text-bolt-elements-textTertiary text-center">
+            No projects match "{searchQuery}"
+          </div>
+        )}
+        {filteredProjects.map(project => (
           <div key={project.id} className="group">
-            <button
-              onClick={() => toggleProject(project.id)}
-              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-bolt-elements-item-backgroundActive rounded transition-colors text-left"
-            >
-              <span className={`text-sm ${expandedProjects.has(project.id) ? 'i-ph:caret-down' : 'i-ph:caret-right'}`} />
-              <span className="text-base">{project.icon}</span>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">{project.name}</div>
-                <div className="text-xs text-bolt-elements-textSecondary">
-                  {project.chat_count} chats · {project.file_count} files
+            <div className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-bolt-elements-background-depth-3 rounded transition-colors">
+              <button
+                onClick={() => toggleProject(project.id)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left"
+              >
+                <span className={`text-sm ${expandedProjects.has(project.id) ? 'i-ph:caret-down' : 'i-ph:caret-right'}`} />
+                <span className="text-base">{project.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">{project.name}</div>
+                  <div className="text-xs text-bolt-elements-textTertiary">
+                    {project.chat_count} chats · {project.file_count} files
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              {/* Quick open button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.location.href = `/?projectId=${project.id}`;
+                }}
+                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-bolt-elements-background-depth-2 rounded transition-all"
+                title="Open project"
+              >
+                <span className="i-ph:arrow-square-out text-bolt-elements-textTertiary text-sm" />
+              </button>
+            </div>
 
             {expandedProjects.has(project.id) && (
-              <div className="ml-6 mt-1 text-xs text-bolt-elements-textSecondary">
+              <div className="ml-6 mt-1 text-xs text-bolt-elements-textTertiary">
                 {project.description || 'No description'}
               </div>
             )}
@@ -116,13 +162,14 @@ export function ProjectsList() {
             loadProjects();
             setShowCreateModal(false);
           }}
+          userId={userId}
         />
       )}
     </div>
   );
 }
 
-function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateProjectModal({ onClose, onCreated, userId }: { onClose: () => void; onCreated: () => void; userId: string | null }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [icon, setIcon] = useState('i-ph:folder');
@@ -130,23 +177,27 @@ function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCre
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !userId) return;
 
     setSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append('action', 'create');
-      formData.append('name', name);
-      formData.append('description', description);
-      formData.append('icon', icon);
-
       const response = await fetch('/api/projects', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description,
+          icon,
+          userId,
+        })
       });
 
       if (response.ok) {
         onCreated();
+      } else {
+        const result = await response.json() as { error?: string };
+        console.error('Failed to create project:', result.error);
+        alert(result.error || 'Failed to create project');
       }
     } catch (error) {
       console.error('Failed to create project:', error);
@@ -195,14 +246,14 @@ function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCre
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive rounded"
+              className="px-4 py-2 text-sm text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3 rounded"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !name.trim()}
-              className="px-4 py-2 text-sm bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded hover:bg-bolt-elements-button-primary-backgroundHover disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-orange-500 text-white rounded hover:bg-orange-500Hover disabled:opacity-50"
             >
               {submitting ? 'Creating...' : 'Create'}
             </button>

@@ -135,7 +135,7 @@ export const GitBranchList = memo(({
                   value={newBranchName}
                   onChange={(e) => setNewBranchName(e.target.value)}
                   placeholder="New branch name"
-                  className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-white placeholder:text-gray-500"
+                  className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleCreate();
                     if (e.key === 'Escape') setShowCreateForm(false);
@@ -150,7 +150,7 @@ export const GitBranchList = memo(({
                 </button>
                 <button
                   onClick={() => setShowCreateForm(false)}
-                  className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 rounded text-white"
+                  className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 rounded text-bolt-elements-textSecondary"
                 >
                   Cancel
                 </button>

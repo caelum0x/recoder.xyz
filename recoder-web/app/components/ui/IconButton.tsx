@@ -11,6 +11,12 @@ interface BaseIconButtonProps {
   title?: string;
   disabled?: boolean;
   onClick?: (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+  /** Accessible label for screen readers */
+  'aria-label'?: string;
+  /** Whether the button is pressed (for toggle buttons) */
+  'aria-pressed'?: boolean;
+  /** Whether the button controls an expanded element */
+  'aria-expanded'?: boolean;
 }
 
 type IconButtonWithoutChildrenProps = {
@@ -36,11 +42,14 @@ export const IconButton = memo(
     title,
     onClick,
     children,
+    'aria-label': ariaLabel,
+    'aria-pressed': ariaPressed,
+    'aria-expanded': ariaExpanded,
   }: IconButtonProps) => {
     return (
       <button
         className={classNames(
-          'flex items-center text-bolt-elements-item-contentDefault bg-transparent enabled:hover:text-bolt-elements-item-contentActive rounded-md p-1 enabled:hover:bg-bolt-elements-item-backgroundActive disabled:cursor-not-allowed',
+          'flex items-center text-bolt-elements-textSecondary bg-transparent enabled:hover:text-bolt-elements-textPrimary rounded-md p-1 enabled:hover:bg-bolt-elements-background-depth-3 disabled:cursor-not-allowed',
           {
             [classNames('opacity-30', disabledClassName)]: disabled,
           },
@@ -48,6 +57,10 @@ export const IconButton = memo(
         )}
         title={title}
         disabled={disabled}
+        aria-label={ariaLabel || title}
+        aria-pressed={ariaPressed}
+        aria-expanded={ariaExpanded}
+        aria-disabled={disabled}
         onClick={(event) => {
           if (disabled) {
             return;
@@ -56,7 +69,7 @@ export const IconButton = memo(
           onClick?.(event);
         }}
       >
-        {children ? children : <div className={classNames(icon, getIconSize(size), iconClassName)}></div>}
+        {children ? children : <div className={classNames(icon, getIconSize(size), iconClassName)} aria-hidden="true"></div>}
       </button>
     );
   },

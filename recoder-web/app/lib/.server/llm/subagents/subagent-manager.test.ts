@@ -7,16 +7,17 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import * as os from 'os';
+import * as os from 'node:os';
 import { SubagentManager } from './subagent-manager.js';
 import { type SubagentConfig, SubagentError } from './types.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { Config } from '../config/config.js';
 import { makeFakeConfig } from '../test-utils/config.js';
+import { BuiltinAgentRegistry } from './builtin-agents.js';
 
 // Mock file system operations
 vi.mock('fs/promises');
-vi.mock('os');
+vi.mock('node:os');
 
 // Mock yaml parser - use vi.hoisted for proper hoisting
 const mockParseYaml = vi.hoisted(() => vi.fn());
@@ -46,6 +47,9 @@ describe('SubagentManager', () => {
   let mockConfig: Config;
 
   beforeEach(() => {
+    // Mock os.homedir before Config initialization
+    vi.mocked(os.homedir).mockReturnValue('/home/user');
+
     mockToolRegistry = {
       getAllTools: vi.fn().mockReturnValue([
         { name: 'read_file', displayName: 'Read File' },
@@ -62,9 +66,6 @@ describe('SubagentManager', () => {
     // Mock the tool registry and project root methods
     vi.spyOn(mockConfig, 'getToolRegistry').mockReturnValue(mockToolRegistry);
     vi.spyOn(mockConfig, 'getProjectRoot').mockReturnValue('/test/project');
-
-    // Mock os.homedir
-    vi.mocked(os.homedir).mockReturnValue('/home/user');
 
     // Reset and setup mocks
     vi.clearAllMocks();
@@ -169,7 +170,7 @@ describe('SubagentManager', () => {
     description: 'A test subagent',
     systemPrompt: 'You are a helpful assistant.',
     level: 'project',
-    filePath: '/test/project/.qwen/agents/test-agent.md',
+    filePath: '/test/project/.recoder/agents/test-agent.md',
   };
 
   const validMarkdown = `---
@@ -301,8 +302,8 @@ You are a helpful assistant.
     });
 
     it('should determine level from file path', () => {
-      const projectPath = '/test/project/.qwen/agents/test-agent.md';
-      const userPath = '/home/user/.qwen/agents/test-agent.md';
+      const projectPath = '/test/project/.recoder/agents/test-agent.md';
+      const userPath = '/home/user/.recoder/agents/test-agent.md';
 
       const projectConfig = manager.parseSubagentContent(
         validMarkdown,
@@ -368,7 +369,7 @@ You are a helpful assistant.
 
     it('should not warn when filename matches subagent name', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const matchingPath = '/test/project/.qwen/agents/test-agent.md';
+      const matchingPath = '/test/project/.recoder/agents/test-agent.md';
 
       const config = manager.parseSubagentContent(
         validMarkdown,
@@ -512,10 +513,10 @@ You are a helpful assistant.
       expect(config).toBeDefined();
       expect(config!.name).toBe('test-agent');
       expect(fs.readdir).toHaveBeenCalledWith(
-        path.normalize('/test/project/.qwen/agents'),
+        path.normalize('/test/project/.recoder/agents'),
       );
       expect(fs.readFile).toHaveBeenCalledWith(
-        path.normalize('/test/project/.qwen/agents/test-agent.md'),
+        path.normalize('/test/project/.recoder/agents/test-agent.md'),
         'utf8',
       );
     });
@@ -532,10 +533,10 @@ You are a helpful assistant.
       expect(config).toBeDefined();
       expect(config!.name).toBe('test-agent');
       expect(fs.readdir).toHaveBeenCalledWith(
-        path.normalize('/home/user/.qwen/agents'),
+        path.normalize('/home/user/.recoder/agents'),
       );
       expect(fs.readFile).toHaveBeenCalledWith(
-        path.normalize('/home/user/.qwen/agents/test-agent.md'),
+        path.normalize('/home/user/.recoder/agents/test-agent.md'),
         'utf8',
       );
     });
@@ -591,12 +592,12 @@ You are another assistant.`;
       expect(config).toBeDefined();
       expect(config!.name).toBe('correct-agent-name');
       expect(config!.filePath).toBe(
-        path.normalize('/test/project/.qwen/agents/wrong-filename.md'),
+        path.normalize('/test/project/.recoder/agents/wrong-filename.md'),
       );
 
       // Verify it scanned the directory instead of using direct path
       expect(fs.readdir).toHaveBeenCalledWith(
-        path.normalize('/test/project/.qwen/agents'),
+        path.normalize('/test/project/.recoder/agents'),
       );
     });
 
@@ -642,7 +643,7 @@ You are a helpful assistant.`;
       expect(config).toBeDefined();
       expect(config!.name).toBe('target-agent');
       expect(config!.filePath).toBe(
-        path.normalize('/home/user/.qwen/agents/user-agent.md'),
+        path.normalize('/home/user/.recoder/agents/user-agent.md'),
       );
       expect(config!.level).toBe('user');
     });
@@ -670,7 +671,7 @@ You are a helpful assistant.`;
       expect(config).toBeDefined();
       expect(config!.name).toBe('specific-agent');
       expect(config!.filePath).toBe(
-        path.normalize('/test/project/.qwen/agents/misnamed-file.md'),
+        path.normalize('/test/project/.recoder/agents/misnamed-file.md'),
       );
     });
   });
@@ -730,7 +731,7 @@ You are a helpful assistant.`;
       await manager.deleteSubagent('test-agent', 'project');
 
       expect(fs.unlink).toHaveBeenCalledWith(
-        path.normalize('/test/project/.qwen/agents/test-agent.md'),
+        path.normalize('/test/project/.recoder/agents/test-agent.md'),
       );
     });
 
@@ -747,10 +748,10 @@ You are a helpful assistant.`;
 
       expect(fs.unlink).toHaveBeenCalledTimes(2);
       expect(fs.unlink).toHaveBeenCalledWith(
-        path.normalize('/test/project/.qwen/agents/test-agent.md'),
+        path.normalize('/test/project/.recoder/agents/test-agent.md'),
       );
       expect(fs.unlink).toHaveBeenCalledWith(
-        path.normalize('/home/user/.qwen/agents/test-agent.md'),
+        path.normalize('/home/user/.recoder/agents/test-agent.md'),
       );
     });
 
@@ -801,7 +802,7 @@ You are a helpful assistant.`;
 
       // Should delete the actual file, not the expected filename
       expect(fs.unlink).toHaveBeenCalledWith(
-        path.normalize('/test/project/.qwen/agents/wrong-name.md'),
+        path.normalize('/test/project/.recoder/agents/wrong-name.md'),
       );
     });
 
@@ -858,7 +859,7 @@ Target content`,
       // Should only delete the matching file
       expect(fs.unlink).toHaveBeenCalledTimes(1);
       expect(fs.unlink).toHaveBeenCalledWith(
-        path.normalize('/test/project/.qwen/agents/target-file.md'),
+        path.normalize('/test/project/.recoder/agents/target-file.md'),
       );
     });
   });
@@ -901,13 +902,13 @@ System prompt 3`);
     it('should list subagents from both levels', async () => {
       const subagents = await manager.listSubagents();
 
-      expect(subagents).toHaveLength(4); // agent1 (project takes precedence), agent2, agent3, general-purpose (built-in)
-      expect(subagents.map((s) => s.name)).toEqual([
-        'agent1',
-        'agent2',
-        'agent3',
-        'general-purpose',
-      ]);
+      const builtinNames = BuiltinAgentRegistry.getBuiltinAgentNames();
+      const expectedNames = ['agent1', 'agent2', 'agent3', ...builtinNames];
+
+      expect(subagents).toHaveLength(expectedNames.length);
+      expect(subagents.map((s) => s.name).sort()).toEqual(
+        expectedNames.sort(),
+      );
     });
 
     it('should prioritize project level over user level', async () => {
@@ -933,7 +934,13 @@ System prompt 3`);
       });
 
       const names = subagents.map((s) => s.name);
-      expect(names).toEqual(['agent1', 'agent2', 'agent3', 'general-purpose']);
+      const expectedNames = [
+        'agent1',
+        'agent2',
+        'agent3',
+        ...BuiltinAgentRegistry.getBuiltinAgentNames(),
+      ].sort();
+      expect(names).toEqual(expectedNames);
     });
 
     it('should handle empty directories', async () => {
@@ -944,9 +951,9 @@ System prompt 3`);
 
       const subagents = await manager.listSubagents();
 
-      expect(subagents).toHaveLength(1); // Only built-in agents remain
-      expect(subagents[0].name).toBe('general-purpose');
-      expect(subagents[0].level).toBe('builtin');
+      const builtinNames = BuiltinAgentRegistry.getBuiltinAgentNames();
+      expect(subagents).toHaveLength(builtinNames.length);
+      expect(subagents.every((s) => s.level === 'builtin')).toBe(true);
     });
 
     it('should handle directory read errors', async () => {
@@ -956,9 +963,9 @@ System prompt 3`);
 
       const subagents = await manager.listSubagents();
 
-      expect(subagents).toHaveLength(1); // Only built-in agents remain
-      expect(subagents[0].name).toBe('general-purpose');
-      expect(subagents[0].level).toBe('builtin');
+      const builtinNames = BuiltinAgentRegistry.getBuiltinAgentNames();
+      expect(subagents).toHaveLength(builtinNames.length);
+      expect(subagents.every((s) => s.level === 'builtin')).toBe(true);
     });
   });
 

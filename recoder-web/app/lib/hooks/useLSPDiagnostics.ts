@@ -1,12 +1,20 @@
 /**
  * Hook to connect to LSP diagnostics WebSocket
  * Receives real-time TypeScript errors from language server
+ *
+ * NOTE: The /diagnostics/ WebSocket endpoint is not yet implemented.
+ * This hook is disabled until the endpoint is added to docker-backend.
+ * For now, errors are captured from terminal output and build logs.
  */
 
 import { useEffect, useRef } from 'react';
 import { errorsAtom, type BuildError } from '~/lib/stores/errors';
+import { getSessionToken } from '~/lib/services/docker-api';
 
 const WS_URL = import.meta.env.VITE_DOCKER_BACKEND_URL?.replace('http', 'ws') || 'ws://localhost:3100';
+
+// Feature flag - disable until /diagnostics/ endpoint is implemented
+const LSP_DIAGNOSTICS_ENABLED = false;
 
 interface Diagnostic {
   file: string;
@@ -22,11 +30,24 @@ interface Diagnostic {
 
 export function useLSPDiagnostics(projectId: string | null) {
   const wsRef = useRef<WebSocket | null>(null);
+  const connectionAttemptedRef = useRef(false);
 
   useEffect(() => {
-    if (!projectId) return;
+    // Skip if disabled or no projectId
+    if (!LSP_DIAGNOSTICS_ENABLED || !projectId) {
+      return;
+    }
 
-    const ws = new WebSocket(`${WS_URL}/diagnostics/${projectId}`);
+    // Only attempt connection once per mount to avoid spam
+    if (connectionAttemptedRef.current) {
+      return;
+    }
+    connectionAttemptedRef.current = true;
+
+    // Include auth token for cross-origin authentication
+    const token = getSessionToken();
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    const ws = new WebSocket(`${WS_URL}/diagnostics/${projectId}${tokenParam}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -59,21 +80,29 @@ export function useLSPDiagnostics(projectId: string | null) {
           errorsAtom.set(errors);
         }
       } catch (error) {
-        console.error('[LSP] Failed to parse message:', error);
+        // Silently ignore parse errors
       }
     };
 
-    ws.onerror = (error) => {
-      console.error('[LSP] WebSocket error:', error);
+    ws.onerror = () => {
+      // Silently ignore connection errors - endpoint not implemented yet
+      // The /diagnostics/ endpoint will be added in a future update
     };
 
     ws.onclose = () => {
-      console.log('[LSP] Disconnected from diagnostics stream');
+      // Silently handle disconnect
     };
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
+  }, [projectId]);
+
+  // Reset connection flag when projectId changes
+  useEffect(() => {
+    connectionAttemptedRef.current = false;
   }, [projectId]);
 }

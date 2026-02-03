@@ -1,27 +1,47 @@
 import { useStore } from '@nanostores/react';
 import { useAnimate } from 'framer-motion';
-import { memo, useEffect, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useLoaderData } from '@remix-run/react';
-import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
+import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll, useContextPaths } from '~/lib/hooks';
 import { useSimpleChat, type Message } from '~/lib/hooks/useSimpleChat';
 import { useKeyboardShortcuts, COMMON_SHORTCUTS } from '~/lib/hooks/useKeyboardShortcuts';
+import { useCommandPalette } from '~/lib/hooks/useCommandPalette';
+import { useEditIntent, getIntentSummary, intentRequiresCodeChanges } from '~/lib/hooks/useEditIntent';
 import { useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { getToolsForAI, initCustomTools } from '~/lib/stores/custom-tools';
 import { currentMode } from '~/lib/stores/mode';
+import { currentChatMode } from '~/lib/stores/chat-mode';
+import { startHealthCheckPolling, stopHealthCheckPolling } from '~/lib/stores/connection';
+import { inferenceParamsStore } from '~/lib/stores/inference-params';
+import { preferencesStore } from '~/lib/stores/settings';
 import { fileModificationsToHTML } from '~/utils/diff';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { showSmartError } from '~/lib/errors/toast-error';
 import { BaseChat } from './BaseChat';
-import { QuickActions } from './QuickActions';
+// import { QuickActions } from './QuickActions'; // Removed - orange lightning button
 import { CloneUrlModal } from './CloneUrlModal';
-import { GitHubImporter } from '~/components/github/GitHubImporter';
-import { DeploymentModal } from '~/components/deployment/DeploymentModal';
-import { KeyboardShortcutsDialog } from '~/components/ui/KeyboardShortcutsDialog';
+import { commandPaletteOpen } from '~/lib/stores/command-palette';
+
+// Lazy-loaded modal/dialog components -- only fetched when their toggle flag is true
+const GitHubImporter = lazy(() =>
+  import('~/components/github/GitHubImporter').then((m) => ({ default: m.GitHubImporter })),
+);
+const DeploymentModal = lazy(() =>
+  import('~/components/deployment/DeploymentModal').then((m) => ({ default: m.DeploymentModal })),
+);
+const KeyboardShortcutsDialog = lazy(() =>
+  import('~/components/ui/KeyboardShortcutsDialog').then((m) => ({ default: m.KeyboardShortcutsDialog })),
+);
+const CommandPalette = lazy(() =>
+  import('~/components/ui/CommandPalette').then((m) => ({ default: m.CommandPalette })),
+);
 import { SaveIndicator } from './SaveIndicator';
+import { EditIntentPreview } from './EditIntentPreview';
+import type { FileAttachment } from '~/lib/hooks/useAttachments';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -34,11 +54,17 @@ export function Chat() {
   renderLogger.trace('Chat');
 
   const { ready, initialMessages, storeMessageHistory } = useChatHistory();
-  const { id: chatId, projectId, projectName } = useLoaderData<{ id?: string; projectId?: string; projectName?: string }>();
+  const { id: chatId, projectId, projectName, projectFramework, projectTemplateId } = useLoaderData<{
+    id?: string;
+    projectId?: string;
+    projectName?: string;
+    projectFramework?: string;
+    projectTemplateId?: string;
+  }>();
 
   return (
     <>
-      {ready && <ChatImpl key={chatId || 'new'} chatId={chatId} projectId={projectId} projectName={projectName} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
+      {ready && <ChatImpl key={chatId || 'new'} chatId={chatId} projectId={projectId} projectName={projectName} projectFramework={projectFramework} projectTemplateId={projectTemplateId} initialMessages={initialMessages} storeMessageHistory={storeMessageHistory} />}
       <ToastContainer
         closeButton={({ closeToast }) => {
           return (
@@ -74,11 +100,13 @@ interface ChatProps {
   chatId?: string;
   projectId?: string;
   projectName?: string;
+  projectFramework?: string;
+  projectTemplateId?: string;
   initialMessages: Message[];
   storeMessageHistory: (messages: Message[]) => Promise<void>;
 }
 
-export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages, storeMessageHistory }: ChatProps) => {
+export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework, projectTemplateId, initialMessages, storeMessageHistory }: ChatProps) => {
   useShortcuts();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -92,16 +120,32 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | undefined>();
 
+  // Initialize command palette with callbacks
+  useCommandPalette({
+    onClearChat: () => {
+      if (confirm('Clear chat history?')) {
+        window.location.href = '/';
+      }
+    },
+    onOpenSettings: () => {
+      if (typeof window !== 'undefined') {
+        const mainAppUrl = window.location.hostname.includes('localhost')
+          ? 'http://localhost:3000'
+          : 'https://recoder.xyz';
+        window.open(`${mainAppUrl}/settings/ai-providers`, '_blank');
+      }
+    },
+    onDeploy: () => setShowDeployModal(true),
+    onImportGitHub: () => setShowGitHubModal(true),
+  });
+
   // AI Mode (architect, code, ask, debug, orchestrator)
   const mode = useStore(currentMode);
 
-  // Max tokens control
-  const [maxTokens, setMaxTokens] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return parseInt(localStorage.getItem('maxTokens') || '4000', 10);
-    }
-    return 4000;
-  });
+  // Chat Mode (build, ask, agent)
+  const chatMode = useStore(currentChatMode);
+
+  // Max tokens is managed by inference params store directly
 
   // Provider and Model Selection
   const [selectedProvider, setSelectedProvider] = useState(() => {
@@ -122,11 +166,11 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedProvider', selectedProvider);
       localStorage.setItem('selectedModel', selectedModel);
-      localStorage.setItem('maxTokens', String(maxTokens));
     }
-  }, [selectedProvider, selectedModel, maxTokens]);
+  }, [selectedProvider, selectedModel]);
 
   const { showChat } = useStore(chatStore);
+  const isCommandPaletteOpen = useStore(commandPaletteOpen);
 
   const [animationScope, animate] = useAnimate();
 
@@ -134,15 +178,36 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
   const [projectIdForDocker] = useState(() => chatId || `project-${Date.now()}`);
 
   // Set project ID for Docker backend and initialize project state
+  // Pass framework/templateId so the backend can configure the container appropriately
+  // (e.g., Expo projects need different dev server setup)
   useEffect(() => {
+    // Build container creation options from project metadata
+    const containerOptions: { framework?: string; templateId?: string } = {};
+    if (projectFramework) {
+      containerOptions.framework = projectFramework;
+    }
+    if (projectTemplateId) {
+      containerOptions.templateId = projectTemplateId;
+    }
+
     // Always set project ID (use chatId if available, otherwise generated ID)
-    workbenchStore.setProjectId(projectIdForDocker).catch(() => {});
-    
+    workbenchStore.setProjectId(
+      projectIdForDocker,
+      Object.keys(containerOptions).length > 0 ? containerOptions : undefined
+    ).catch(() => {});
+
     // Initialize project state for context tracking
     import('~/lib/stores/project-state').then(({ initProject }) => {
       initProject({ projectId: projectIdForDocker });
     });
-  }, [projectIdForDocker]);
+
+    // Start connection health monitoring
+    startHealthCheckPolling(30000); // Check every 30 seconds
+
+    return () => {
+      stopHealthCheckPolling();
+    };
+  }, [projectIdForDocker, projectFramework, projectTemplateId]);
 
   // Get project context for AI
   const [projectContext, setProjectContext] = useState<string>('');
@@ -178,17 +243,78 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
   const pendingSaveRef = useRef<NodeJS.Timeout | null>(null);
   // 🔧 FIX: Use ref to track latest messages for the onFinish callback
   const messagesRef = useRef<Message[]>([]);
-  
+  // 🔧 FIX: Track if onFinish already triggered a save to prevent double saves
+  const onFinishSavedRef = useRef<boolean>(false);
+
+  // Code context for AI awareness
+  const [codeContext, setCodeContext] = useState<string>('');
+
+  // Edit intent analyzer - analyzes user input to predict affected files
+  const {
+    intent: editIntent,
+    isAnalyzing: isAnalyzingIntent,
+    preview: editPreview,
+    focusedContext,
+    error: intentError,
+    analyzePromptDebounced,
+    clearAnalysis,
+    isReady: isIntentReady,
+  } = useEditIntent({
+    projectId: projectIdForDocker,
+    debounceMs: 400,
+    minPromptLength: 10,
+    maxContextTokens: 4000,
+    enabled: chatStarted, // Only enable after chat has started
+  });
+
+  // Load code context when project changes or before sending messages
+  // Now uses focused context from edit intent analyzer when available
+  const loadCodeContext = async (userMessage: string) => {
+    try {
+      // If we have focused context from edit intent, prefer that (more efficient)
+      if (focusedContext && editIntent && intentRequiresCodeChanges(editIntent)) {
+        logger.debug('Using focused context from edit intent analyzer');
+        setCodeContext(focusedContext);
+        return focusedContext;
+      }
+
+      // Fallback to full context loading
+      const { generateContextPrompt, parseFileReferences } = await import('~/lib/services/code-context');
+      const context = await workbenchStore.loadProjectContext();
+      if (context) {
+        const contextPrompt = generateContextPrompt(context, userMessage, 4000);
+        setCodeContext(contextPrompt);
+        return contextPrompt;
+      }
+    } catch (error) {
+      console.warn('Failed to load code context:', error);
+    }
+    return '';
+  };
+
+  // Get inference parameters from store
+  const inferenceParams = useStore(inferenceParamsStore);
+  const preferences = useStore(preferencesStore);
+
   const { messages, isLoading, input, handleInputChange, setInput, stop, append } = useSimpleChat({
     api: '/api/chat',
     body: {
       provider: selectedProvider,
       model: selectedModel,
-      maxTokens,
+      maxTokens: inferenceParams.maxTokens,
+      temperature: inferenceParams.temperature,
+      topP: inferenceParams.topP,
+      topK: inferenceParams.topK,
+      frequencyPenalty: inferenceParams.frequencyPenalty,
+      presencePenalty: inferenceParams.presencePenalty,
+      thinkingBudget: preferences.ai.thinkingBudget, // Thinking budget (low/medium/high)
       mode, // AI mode (architect, code, ask, debug, orchestrator)
+      chatMode, // Chat mode (build, ask, agent)
       projectContext, // Pass project context to server
       customTools, // Pass custom tools to server
       mcpTools, // Pass MCP tools to server
+      projectId: projectIdForDocker, // Project ID for context loading
+      codeContext, // Pre-loaded code context
     },
     onError: (error) => {
       logger.error('Request failed\n\n', error);
@@ -214,9 +340,11 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       if (pendingSaveRef.current) {
         clearTimeout(pendingSaveRef.current);
       }
+      // 🔧 FIX: Mark that onFinish is handling the save to prevent double saves from useEffect
+      onFinishSavedRef.current = true;
       // Small delay to let React state settle, but save quickly
       pendingSaveRef.current = setTimeout(() => {
-        logger.info('💾 Saving chat after AI response completed');
+        logger.info('💾 Saving chat after AI response completed (onFinish)');
         // Use the ref to get the latest messages (not stale closure)
         const currentMessages = messagesRef.current;
         if (currentMessages.length === 0) {
@@ -228,7 +356,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
           .then(() => {
             setIsSaving(false);
             setLastSaved(new Date());
-            logger.info('✅ Chat saved successfully after AI response');
+            logger.info('✅ Chat saved successfully after AI response (onFinish)');
           })
           .catch((error) => {
             setIsSaving(false);
@@ -249,6 +377,18 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
 
   const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
   const { parsedMessages, parseMessages } = useMessageParser();
+
+  // State for edit intent preview visibility
+  const [showEditIntentPreview, setShowEditIntentPreview] = useState(true);
+
+  // Enhanced input change handler that also triggers intent analysis
+  const handleInputChangeWithIntent = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleInputChange(e);
+    // Trigger intent analysis on input change
+    if (isIntentReady && chatStarted) {
+      analyzePromptDebounced(e.target.value);
+    }
+  }, [handleInputChange, analyzePromptDebounced, isIntentReady, chatStarted]);
 
   const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
@@ -361,15 +501,33 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         // Don't save during streaming - wait for onFinish
         return;
       }
-      
+
+      // 🔧 FIX: If streaming just finished and onFinish already saved, skip this save
+      // This prevents the double save issue
+      if (streamingJustFinished && onFinishSavedRef.current) {
+        logger.debug('Skipping useEffect save - onFinish already handled it');
+        // Reset the flag after a delay to allow future manual saves
+        setTimeout(() => {
+          onFinishSavedRef.current = false;
+        }, 3000);
+        return;
+      }
+
       const saveDelay = streamingJustFinished ? 2000 : 2000;
 
       saveTimeoutRef.current = setTimeout(() => {
+        // 🔧 FIX: Double-check the flag right before saving
+        if (onFinishSavedRef.current) {
+          logger.debug('Skipping save - onFinish already handled it');
+          return;
+        }
         setIsSaving(true);
+        logger.info('💾 Saving chat from useEffect');
         storeMessageHistory(messages)
           .then(() => {
             setIsSaving(false);
             setLastSaved(new Date());
+            logger.info('✅ Chat saved successfully from useEffect');
           })
           .catch((error) => {
             setIsSaving(false);
@@ -435,13 +593,19 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     setChatStarted(true);
   };
 
-  const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+  const sendMessage = async (_event: React.UIEvent, messageInput?: string, attachments?: FileAttachment[]) => {
     const _input = messageInput || input;
 
     // console.log('📤 Sending message:', _input.substring(0, 100));
 
-    if (_input.length === 0 || isLoading) {
-      console.warn('⚠️ Message not sent - empty input or already loading');
+    // Allow sending with just attachments (no text required)
+    if (_input.length === 0 && (!attachments || attachments.length === 0)) {
+      console.warn('⚠️ Message not sent - empty input and no attachments');
+      return;
+    }
+
+    if (isLoading) {
+      console.warn('⚠️ Message not sent - already loading');
       return;
     }
 
@@ -454,11 +618,58 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
      */
     await workbenchStore.saveAllFiles();
 
+    // Load code context for AI awareness before sending
+    // This helps AI understand existing code when modifying files
+    const contextPrompt = await loadCodeContext(_input);
+    if (contextPrompt) {
+      logger.debug('Loaded code context for AI');
+    }
+
     const fileModifications = workbenchStore.getFileModifcations();
 
     chatStore.setKey('aborted', false);
 
     runAnimation();
+
+    // Build message content with attachments
+    let messageContent = '';
+
+    // Add attachment information if present
+    if (attachments && attachments.length > 0) {
+      const imageAttachments = attachments.filter(a => a.file.type.startsWith('image/'));
+      const otherAttachments = attachments.filter(a => !a.file.type.startsWith('image/'));
+
+      // For images, include base64 data for vision models
+      if (imageAttachments.length > 0) {
+        messageContent += '[Attached Images]\n';
+        for (const attachment of imageAttachments) {
+          if (attachment.base64) {
+            // Format as data URL for vision models
+            messageContent += `![${attachment.file.name}](data:${attachment.file.type};base64,${attachment.base64})\n`;
+          } else {
+            messageContent += `- Image: ${attachment.file.name} (${(attachment.file.size / 1024).toFixed(1)}KB)\n`;
+          }
+        }
+        messageContent += '\n';
+      }
+
+      // For other files, just list them with metadata
+      if (otherAttachments.length > 0) {
+        messageContent += '[Attached Files]\n';
+        for (const attachment of otherAttachments) {
+          messageContent += `- ${attachment.file.name} (${attachment.file.type}, ${(attachment.file.size / 1024).toFixed(1)}KB)\n`;
+        }
+        messageContent += '\n';
+      }
+    }
+
+    // Add the user's text input
+    if (_input.length > 0) {
+      messageContent += _input;
+    } else if (attachments && attachments.length > 0) {
+      // If only attachments, add a prompt about them
+      messageContent += 'Please analyze the attached files.';
+    }
 
     if (fileModifications !== undefined) {
       const diff = fileModificationsToHTML(fileModifications);
@@ -471,7 +682,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
        * aren't relevant here.
        */
       // console.log('📤 Sending with file modifications');
-      append({ role: 'user', content: `${diff}\n\n${_input}` });
+      append({ role: 'user', content: `${diff}\n\n${messageContent}` });
 
       /**
        * After sending a new message we reset all modifications since the model
@@ -480,12 +691,13 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
       workbenchStore.resetAllFileModifications();
     } else {
       // console.log('📤 Sending without file modifications');
-      append({ role: 'user', content: _input });
+      append({ role: 'user', content: messageContent });
     }
 
     setInput('');
 
     resetEnhancer();
+    clearAnalysis(); // Clear edit intent analysis after sending
 
     textareaRef.current?.blur();
   };
@@ -520,13 +732,21 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
     setShowGitHubModal(false);
   };
 
-  // Listen for "Fix with AI" events from Problems panel
+  // Listen for "Fix with AI" events from Problems panel and auto-fix feature
   useEffect(() => {
     const handleFixErrors = async (event: CustomEvent) => {
-      const { prompt } = event.detail;
+      const { prompt, auto } = event.detail || {};
 
+      // Only proceed if we have a prompt and are not currently loading
       if (prompt && !isLoading) {
+        if (auto) {
+          console.log('[Chat] Auto-fix triggered, sending error fix request to AI');
+        }
         sendMessage({} as React.UIEvent, prompt);
+      } else if (!prompt) {
+        console.warn('[Chat] recoder:fix-errors event received without prompt');
+      } else if (isLoading) {
+        console.log('[Chat] Fix request skipped - AI is currently responding');
       }
     };
 
@@ -669,10 +889,8 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         promptEnhanced={promptEnhanced}
         selectedProvider={selectedProvider}
         selectedModel={selectedModel}
-        maxTokens={maxTokens}
         onProviderChange={setSelectedProvider}
         onModelChange={setSelectedModel}
-        onMaxTokensChange={setMaxTokens}
         onSettingsClick={() => {
           // Navigate to API key management page
           if (typeof window !== 'undefined') {
@@ -685,8 +903,20 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         sendMessage={sendMessage}
         messageRef={messageRef}
         scrollRef={scrollRef}
-        handleInputChange={handleInputChange}
+        handleInputChange={handleInputChangeWithIntent}
         handleStop={abort}
+        editIntentPreview={
+          chatStarted && showEditIntentPreview ? (
+            <EditIntentPreview
+              intent={editIntent}
+              isAnalyzing={isAnalyzingIntent}
+              preview={editPreview}
+              error={intentError}
+              expanded={false}
+              onToggle={() => setShowEditIntentPreview(!showEditIntentPreview)}
+            />
+          ) : null
+        }
         messages={messages.map((message, i) => {
           if (message.role === 'user') {
             return message;
@@ -707,16 +937,20 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         }}
       />
 
-      {/* Keyboard Shortcuts Dialog */}
-      <KeyboardShortcutsDialog
-        open={showShortcutsDialog}
-        onClose={() => setShowShortcutsDialog(false)}
-      />
+      {/* Keyboard Shortcuts Dialog (lazy-loaded) */}
+      {showShortcutsDialog && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsDialog
+            open={showShortcutsDialog}
+            onClose={() => setShowShortcutsDialog(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Save Indicator */}
       <SaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
 
-      {/* Quick Actions FAB */}
+      {/* Quick Actions FAB - Removed
       <QuickActions
         onSelectAction={(prompt) => sendMessage({} as React.UIEvent, prompt)}
         disabled={isLoading}
@@ -724,6 +958,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         onImportGitHub={() => setShowGitHubModal(true)}
         onDeploy={() => setShowDeployModal(true)}
       />
+      */}
 
       {/* Clone Website Modal */}
       <CloneUrlModal
@@ -732,19 +967,32 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, initialMessages,
         onCloneComplete={handleCloneComplete}
       />
 
-      {/* GitHub Import Modal */}
+      {/* GitHub Import Modal (lazy-loaded) */}
       {showGitHubModal && (
-        <GitHubImporter
-          onImport={handleGitHubImport}
-          onClose={() => setShowGitHubModal(false)}
-        />
+        <Suspense fallback={null}>
+          <GitHubImporter
+            onImport={handleGitHubImport}
+            onClose={() => setShowGitHubModal(false)}
+          />
+        </Suspense>
       )}
 
-      {/* Deploy Modal */}
-      <DeploymentModal
-        open={showDeployModal}
-        onClose={() => setShowDeployModal(false)}
-      />
+      {/* Deploy Modal (lazy-loaded) */}
+      {showDeployModal && (
+        <Suspense fallback={null}>
+          <DeploymentModal
+            open={showDeployModal}
+            onClose={() => setShowDeployModal(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* VS Code-style Command Palette (lazy-loaded) */}
+      {isCommandPaletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette />
+        </Suspense>
+      )}
     </>
   );
 });

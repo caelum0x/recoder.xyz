@@ -251,7 +251,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
             onClick={() => setShowSearch(!showSearch)}
             className={classNames(
               'p-1.5 rounded transition-colors',
-              showSearch ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-bolt-elements-background-depth-3'
+              showSearch ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-bolt-elements-background-depth-2'
             )}
             title="Add Package"
           >
@@ -260,7 +260,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
           <button
             onClick={loadPackages}
             disabled={isLoading}
-            className="p-1.5 hover:bg-bolt-elements-background-depth-3 rounded"
+            className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded"
             title="Refresh"
           >
             <span className={classNames('i-ph:arrows-clockwise', isLoading ? 'animate-spin' : '')} />
@@ -277,7 +277,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Search ${detectedManager} packages...`}
-              className="w-full px-3 py-1.5 pr-8 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-white placeholder:text-gray-500"
+              className="w-full px-3 py-1.5 pr-8 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
               autoFocus
             />
             {isSearching && (
@@ -291,7 +291,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
               {searchResults.map((result) => (
                 <div
                   key={result.name}
-                  className="flex items-center justify-between px-3 py-2 hover:bg-bolt-elements-background-depth-3 border-b border-bolt-elements-borderColor last:border-b-0"
+                  className="flex items-center justify-between px-3 py-2 hover:bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor last:border-b-0"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -324,7 +324,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
                     <button
                       onClick={() => installPackage(result.name, true)}
                       disabled={installingPackage === result.name}
-                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 disabled:opacity-50 rounded text-white"
+                      className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 disabled:opacity-50 rounded text-bolt-elements-textPrimary"
                       title="Install as dev dependency"
                     >
                       Dev
@@ -464,7 +464,7 @@ const PackageItem = memo(({ package: pkg, isInstalling, onUpdate, onUninstall }:
             {pkg.isOutdated && (
               <button
                 onClick={onUpdate}
-                className="p-1 hover:bg-bolt-elements-background-depth-3 rounded text-yellow-400"
+                className="p-1 hover:bg-bolt-elements-background-depth-2 rounded text-yellow-400"
                 title="Update"
               >
                 <span className="i-ph:arrow-circle-up" />
@@ -472,7 +472,7 @@ const PackageItem = memo(({ package: pkg, isInstalling, onUpdate, onUninstall }:
             )}
             <button
               onClick={onUninstall}
-              className="p-1 hover:bg-bolt-elements-background-depth-3 rounded text-red-400"
+              className="p-1 hover:bg-bolt-elements-background-depth-2 rounded text-red-400"
               title="Remove"
             >
               <span className="i-ph:trash" />

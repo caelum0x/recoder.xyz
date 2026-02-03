@@ -170,7 +170,7 @@ describe('LLM Optimization Integration Tests', () => {
   describe('Quality Validation System', () => {
     it('should validate React component quality', async () => {
       const reactArtifact = `
-        <boltAction type="file" filePath="src/App.tsx">
+        <recoderAction type="file" filePath="src/App.tsx">
           import React from 'react';
 
           function App() {
@@ -178,15 +178,15 @@ describe('LLM Optimization Integration Tests', () => {
           }
 
           export default App;
-        </boltAction>
-        <boltAction type="file" filePath="package.json">
+        </recoderAction>
+        <recoderAction type="file" filePath="package.json">
           {
             "name": "react-app",
             "dependencies": {
               "react": "^18.0.0"
             }
           }
-        </boltAction>
+        </recoderAction>
       `;
 
       const metrics = await qualityValidator.validateArtifact(reactArtifact);
@@ -198,13 +198,13 @@ describe('LLM Optimization Integration Tests', () => {
 
     it('should detect framework-specific issues', async () => {
       const poorQualityArtifact = `
-        <boltAction type="file" filePath="app.js">
+        <recoderAction type="file" filePath="app.js">
           console.log("hardcoded localhost:3000")
           function badFunction() {
             // missing semicolon above
             var oldStyle = true
           }
-        </boltAction>
+        </recoderAction>
       `;
 
       const metrics = await qualityValidator.validateArtifact(poorQualityArtifact);
@@ -271,12 +271,12 @@ describe('LLM Optimization Integration Tests', () => {
 
       // 5. Quality validation
       const artifact = `
-        <boltAction type="file" filePath="src/Dashboard.tsx">
+        <recoderAction type="file" filePath="src/Dashboard.tsx">
           import React from 'react';
           export default function Dashboard() {
             return <div>Dashboard</div>;
           }
-        </boltAction>
+        </recoderAction>
       `;
 
       const quality = await qualityValidator.validateArtifact(artifact);
@@ -310,10 +310,10 @@ describe('LLM Optimization Integration Tests', () => {
 
       // Invalid artifact should not crash validation
       const invalidArtifact = `
-        <boltAction type="file" filePath="broken.js">
+        <recoderAction type="file" filePath="broken.js">
           console.log("missing quote);
           var unclosed = {
-        </boltAction>
+        </recoderAction>
       `;
       const metrics = await qualityValidator.validateArtifact(invalidArtifact);
       expect(metrics).toBeDefined();

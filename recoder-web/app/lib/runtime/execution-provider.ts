@@ -3,6 +3,8 @@
  * Switches between WebContainer (free) and Docker (production)
  */
 
+import { getSessionToken } from '~/lib/services/docker-api';
+
 export interface ExecutionProvider {
   init(): Promise<void>;
   writeFile(path: string, content: string): Promise<void>;
@@ -35,17 +37,10 @@ export class DockerProvider implements ExecutionProvider {
   }
 
   async init(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/api/container`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        projectId: this.projectId,
-        userId: this.userId, // Pass userId for Claude Code token injection
-      }),
-    });
-    if (!res.ok) {
-      const errData = await res.json() as { error?: string };
-      throw new Error(errData.error || 'Init failed');
+    const { ensureContainerExists } = await import('~/lib/stores/workbench');
+    const ready = await ensureContainerExists(this.projectId);
+    if (!ready) {
+      throw new Error('Init failed');
     }
   }
 
@@ -106,7 +101,10 @@ export class DockerProvider implements ExecutionProvider {
 
   connectTerminal(onData: (data: string) => void) {
     const wsUrl = this.baseUrl.replace('http', 'ws');
-    this.terminalWs = new WebSocket(`${wsUrl}/terminal/${this.projectId}`);
+    // Include auth token for cross-origin authentication
+    const token = getSessionToken();
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    this.terminalWs = new WebSocket(`${wsUrl}/terminal/${this.projectId}${tokenParam}`);
     
     this.terminalWs.onmessage = (e) => onData(e.data);
     this.terminalWs.onerror = (e) => console.error('Terminal error:', e);

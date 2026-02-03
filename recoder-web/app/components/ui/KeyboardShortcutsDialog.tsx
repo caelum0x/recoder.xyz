@@ -16,6 +16,20 @@ const SHORTCUTS = [
       { keys: ['Ctrl', 'L'], description: 'Clear chat', windows: true },
       { keys: ['⌘', 'I'], description: 'Focus input', mac: true },
       { keys: ['Ctrl', 'I'], description: 'Focus input', windows: true },
+      { keys: ['/'], description: 'Slash commands (type in input)' },
+    ],
+  },
+  {
+    category: 'Editor',
+    items: [
+      { keys: ['⌘', 'S'], description: 'Save file', mac: true },
+      { keys: ['Ctrl', 'S'], description: 'Save file', windows: true },
+      { keys: ['⌘', 'Z'], description: 'Undo', mac: true },
+      { keys: ['Ctrl', 'Z'], description: 'Undo', windows: true },
+      { keys: ['⌘', 'Shift', 'Z'], description: 'Redo', mac: true },
+      { keys: ['Ctrl', 'Shift', 'Z'], description: 'Redo', windows: true },
+      { keys: ['⌘', 'F'], description: 'Find in file', mac: true },
+      { keys: ['Ctrl', 'F'], description: 'Find in file', windows: true },
     ],
   },
   {
@@ -23,6 +37,8 @@ const SHORTCUTS = [
     items: [
       { keys: ['⌘', 'K'], description: 'Quick actions', mac: true },
       { keys: ['Ctrl', 'K'], description: 'Quick actions', windows: true },
+      { keys: ['⌘', 'Shift', 'P'], description: 'Command palette', mac: true },
+      { keys: ['Ctrl', 'Shift', 'P'], description: 'Command palette', windows: true },
       { keys: ['Esc'], description: 'Cancel/Close' },
     ],
   },
@@ -31,6 +47,27 @@ const SHORTCUTS = [
     items: [
       { keys: ['⌘', 'B'], description: 'Toggle sidebar', mac: true },
       { keys: ['Ctrl', 'B'], description: 'Toggle sidebar', windows: true },
+      { keys: ['⌘', '`'], description: 'Toggle terminal', mac: true },
+      { keys: ['Ctrl', '`'], description: 'Toggle terminal', windows: true },
+      { keys: ['⌘', 'Shift', 'E'], description: 'File explorer', mac: true },
+      { keys: ['Ctrl', 'Shift', 'E'], description: 'File explorer', windows: true },
+      { keys: ['⌘', 'Shift', 'F'], description: 'Search in files', mac: true },
+      { keys: ['Ctrl', 'Shift', 'F'], description: 'Search in files', windows: true },
+      { keys: ['⌘', 'Shift', 'G'], description: 'Git panel', mac: true },
+      { keys: ['Ctrl', 'Shift', 'G'], description: 'Git panel', windows: true },
+    ],
+  },
+  {
+    category: 'Panels',
+    items: [
+      { keys: ['⌘', '1'], description: 'Terminal tab', mac: true },
+      { keys: ['Ctrl', '1'], description: 'Terminal tab', windows: true },
+      { keys: ['⌘', '2'], description: 'Logs tab', mac: true },
+      { keys: ['Ctrl', '2'], description: 'Logs tab', windows: true },
+      { keys: ['⌘', '3'], description: 'Problems tab', mac: true },
+      { keys: ['Ctrl', '3'], description: 'Problems tab', windows: true },
+      { keys: ['⌘', '4'], description: 'Secrets tab', mac: true },
+      { keys: ['Ctrl', '4'], description: 'Secrets tab', windows: true },
     ],
   },
   {
@@ -48,7 +85,7 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
 
   return (
     <DialogRoot open={open}>
-      <Dialog onClose={onClose} className="max-w-2xl">
+      <Dialog onClose={onClose} className="max-w-2xl" aria-label="Keyboard shortcuts">
         <DialogTitle>
           <div className="flex items-center gap-2">
             <span className="text-2xl"><div className="i-ph:keyboard" /></span>
@@ -116,6 +153,7 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-lg bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text transition-colors"
+              aria-label="Close keyboard shortcuts dialog"
             >
               Got it!
             </button>

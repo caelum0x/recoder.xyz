@@ -3,7 +3,8 @@ import React, { useEffect, useRef } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { LoadingIndicator } from './LoadingIndicator';
+import { StreamingIndicator, InlineStreamingStatus } from './StreamingIndicator';
+import { MessageActions } from './MessageActions';
 import { useAuth } from '~/lib/contexts/AuthContext';
 
 interface MessagesProps {
@@ -11,6 +12,7 @@ interface MessagesProps {
   className?: string;
   isStreaming?: boolean;
   messages?: Message[];
+  onRegenerate?: (messageIndex: number) => void;
 }
 
 /**
@@ -50,7 +52,7 @@ function UserAvatar({ name, image }: { name?: string | null; image?: string | nu
 }
 
 export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: MessagesProps, ref) => {
-  const { id, isStreaming = false, messages = [] } = props;
+  const { id, isStreaming = false, messages = [], onRegenerate } = props;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
@@ -67,11 +69,15 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
             const isUserMessage = role === 'user';
             const isFirst = index === 0;
             const isLast = index === messages.length - 1;
+            const isLastAssistantMessage = !isUserMessage && (
+              index === messages.length - 1 ||
+              !messages.slice(index + 1).some(m => m.role === 'assistant')
+            );
 
             return (
               <div
                 key={index}
-                className={classNames('flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
+                className={classNames('group flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
                   'bg-bolt-elements-messages-background': isUserMessage || !isStreaming || (isStreaming && !isLast),
                   'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent pointer-events-none':
                     isStreaming && isLast,
@@ -85,14 +91,21 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
                 )}
                 <div className="grid grid-col-1 w-full">
                   {isUserMessage ? <UserMessage content={content} /> : <AssistantMessage content={content} />}
+                  {/* Message actions - show on hover */}
+                  <MessageActions
+                    content={content}
+                    role={isUserMessage ? 'user' : 'assistant'}
+                    onRegenerate={isLastAssistantMessage && onRegenerate ? () => onRegenerate(index) : undefined}
+                    isStreaming={isStreaming && isLast}
+                  />
                 </div>
               </div>
             );
           })
         : null}
       {isStreaming && (
-        <div className="mt-4">
-          <LoadingIndicator />
+        <div className="mt-4 flex justify-center">
+          <StreamingIndicator showDetails={true} />
         </div>
       )}
       <div ref={messagesEndRef} />

@@ -7,9 +7,9 @@
  * For new code, consider using the enhanced client from '~/lib/lsp' directly.
  */
 
-import { hoverTooltip, EditorView, type Tooltip } from '@codemirror/view';
+import { hoverTooltip, EditorView, keymap, Decoration, type DecorationSet, type Tooltip } from '@codemirror/view';
 import { autocompletion, type CompletionContext, type CompletionResult, type Completion } from '@codemirror/autocomplete';
-import type { Extension } from '@codemirror/state';
+import { StateField, StateEffect, type Extension } from '@codemirror/state';
 import {
   getLSPClient,
   getEnhancedLSPClient,
@@ -20,6 +20,7 @@ import {
   type LSPCompletionItem,
   lspDiagnostics as diagnosticsExtension,
 } from '~/lib/lsp';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 // ============================================
 // Types
@@ -181,6 +182,50 @@ function formatHoverContents(contents: LSPHoverContents): string {
 // ============================================
 
 /**
+ * Perform go-to-definition lookup at the current cursor position
+ */
+async function performGotoDefinition(
+  view: EditorView,
+  projectId: string,
+  filePath: string,
+  onGoto: (file: string, line: number, character?: number) => void
+): Promise<boolean> {
+  // Check if file type is supported
+  if (!isLSPSupported(filePath)) return false;
+
+  const pos = view.state.selection.main.head;
+  const line = view.state.doc.lineAt(pos);
+  const lineNumber = line.number - 1;
+  const character = pos - line.from;
+  const content = view.state.doc.toString();
+
+  try {
+    const client = getLSPClient(projectId);
+
+    if (!client.isReady()) {
+      const initialized = await client.initialize();
+      if (!initialized) return false;
+    }
+
+    const locations = await client.getDefinition(
+      filePath,
+      { line: lineNumber, character },
+      content
+    );
+
+    if (locations.length > 0) {
+      const location = locations[0];
+      const targetFile = normalizeUri(location.uri);
+      onGoto(targetFile, location.range.start.line + 1, location.range.start.character);
+      return true;
+    }
+  } catch (err) {
+    console.error('[LSP Definition] Error:', err);
+  }
+  return false;
+}
+
+/**
  * Create a go-to-definition extension
  * Ctrl+Click (Windows/Linux) or Cmd+Click (Mac) to jump to definition
  */
@@ -236,6 +281,329 @@ export function gotoDefinition(
       return true;
     },
   });
+}
+
+/**
+ * Create F12 keyboard shortcut for go-to-definition
+ */
+export function gotoDefinitionKeymap(
+  projectId: string,
+  filePath: string,
+  onGoto: (file: string, line: number, character?: number) => void
+) {
+  return keymap.of([
+    {
+      key: 'F12',
+      run: (view) => {
+        performGotoDefinition(view, projectId, filePath, onGoto);
+        return true;
+      },
+    },
+  ]);
+}
+
+// ============================================
+// Cmd/Ctrl Hover Underline
+// ============================================
+
+/** State effect to update hover underline position */
+const setHoverUnderline = StateEffect.define<{ from: number; to: number } | null>();
+
+/** Decoration for the hover underline */
+const hoverUnderlineMark = Decoration.mark({
+  class: 'cm-definition-underline',
+});
+
+/** State field to track hover underline decorations */
+const hoverUnderlineField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(underlines, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setHoverUnderline)) {
+        if (effect.value === null) {
+          return Decoration.none;
+        }
+        return Decoration.set([
+          hoverUnderlineMark.range(effect.value.from, effect.value.to),
+        ]);
+      }
+    }
+    return underlines;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+/** CSS styles for the hover underline */
+const hoverUnderlineStyles = EditorView.baseTheme({
+  '.cm-definition-underline': {
+    textDecoration: 'underline',
+    textDecorationColor: 'var(--bolt-elements-textLink, #60a5fa)',
+    textUnderlineOffset: '2px',
+    cursor: 'pointer',
+  },
+});
+
+/**
+ * Get the word boundaries at a position
+ */
+function getWordAtPosition(view: EditorView, pos: number): { from: number; to: number } | null {
+  const line = view.state.doc.lineAt(pos);
+  const text = line.text;
+  const offset = pos - line.from;
+
+  // Find word start
+  let start = offset;
+  while (start > 0 && /[\w$]/.test(text[start - 1])) {
+    start--;
+  }
+
+  // Find word end
+  let end = offset;
+  while (end < text.length && /[\w$]/.test(text[end])) {
+    end++;
+  }
+
+  // If we're not on a word, return null
+  if (start === end) {
+    return null;
+  }
+
+  return { from: line.from + start, to: line.from + end };
+}
+
+/**
+ * Create Cmd/Ctrl hover underline extension
+ * Shows a subtle underline when hovering over a symbol while holding Cmd/Ctrl
+ */
+export function cmdHoverUnderline(filePath: string) {
+  let modifierPressed = false;
+  let lastHoverPos: number | null = null;
+
+  return [
+    hoverUnderlineField,
+    hoverUnderlineStyles,
+    EditorView.domEventHandlers({
+      keydown(event, view) {
+        if ((event.metaKey || event.ctrlKey) && !modifierPressed) {
+          modifierPressed = true;
+          // If we have a last hover position, show underline
+          if (lastHoverPos !== null && isLSPSupported(filePath)) {
+            const word = getWordAtPosition(view, lastHoverPos);
+            if (word) {
+              view.dispatch({ effects: setHoverUnderline.of(word) });
+            }
+          }
+        }
+        return false;
+      },
+      keyup(event, view) {
+        if (!event.metaKey && !event.ctrlKey && modifierPressed) {
+          modifierPressed = false;
+          view.dispatch({ effects: setHoverUnderline.of(null) });
+        }
+        return false;
+      },
+      mousemove(event, view) {
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        lastHoverPos = pos;
+
+        if (modifierPressed && pos !== null && isLSPSupported(filePath)) {
+          const word = getWordAtPosition(view, pos);
+          if (word) {
+            view.dispatch({ effects: setHoverUnderline.of(word) });
+          } else {
+            view.dispatch({ effects: setHoverUnderline.of(null) });
+          }
+        } else if (!modifierPressed) {
+          // Clear underline when modifier is not pressed
+          const currentUnderlines = view.state.field(hoverUnderlineField);
+          if (currentUnderlines.size > 0) {
+            view.dispatch({ effects: setHoverUnderline.of(null) });
+          }
+        }
+        return false;
+      },
+      mouseleave(_event, view) {
+        lastHoverPos = null;
+        view.dispatch({ effects: setHoverUnderline.of(null) });
+        return false;
+      },
+      blur(_event, view) {
+        modifierPressed = false;
+        lastHoverPos = null;
+        view.dispatch({ effects: setHoverUnderline.of(null) });
+        return false;
+      },
+    }),
+  ];
+}
+
+// ============================================
+// Context Menu
+// ============================================
+
+/**
+ * Create a context menu extension for Go to Definition
+ */
+export function gotoDefinitionContextMenu(
+  projectId: string,
+  filePath: string,
+  onGoto: (file: string, line: number, character?: number) => void
+) {
+  return EditorView.domEventHandlers({
+    contextmenu(event, view) {
+      // Only handle if LSP is supported
+      if (!isLSPSupported(filePath)) return false;
+
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      if (pos === null) return false;
+
+      // Check if we're on a word
+      const word = getWordAtPosition(view, pos);
+      if (!word) return false;
+
+      // Prevent default context menu
+      event.preventDefault();
+
+      // Move cursor to clicked position
+      view.dispatch({
+        selection: { anchor: pos },
+      });
+
+      // Create and show custom context menu
+      showContextMenu(event.clientX, event.clientY, view, projectId, filePath, onGoto);
+      return true;
+    },
+  });
+}
+
+/**
+ * Show the custom context menu
+ */
+function showContextMenu(
+  x: number,
+  y: number,
+  view: EditorView,
+  projectId: string,
+  filePath: string,
+  onGoto: (file: string, line: number, character?: number) => void
+) {
+  // Remove any existing context menu
+  const existingMenu = document.querySelector('.cm-context-menu');
+  if (existingMenu) {
+    existingMenu.remove();
+  }
+
+  // Create context menu
+  const menu = document.createElement('div');
+  menu.className = 'cm-context-menu';
+  menu.style.cssText = `
+    position: fixed;
+    left: ${x}px;
+    top: ${y}px;
+    z-index: 9999;
+    background: var(--bolt-elements-background-depth-3, #1e1e1e);
+    border: 1px solid var(--bolt-elements-borderColor, #333);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    padding: 4px 0;
+    min-width: 180px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+  `;
+
+  // Helper to create menu items
+  const createMenuItem = (label: string, shortcut: string, onClick: () => void) => {
+    const item = document.createElement('div');
+    item.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      cursor: pointer;
+      color: var(--bolt-elements-textPrimary, #e1e1e1);
+      transition: background-color 0.1s;
+    `;
+    item.innerHTML = `
+      <span>${label}</span>
+      <span style="color: var(--bolt-elements-textTertiary, #888); font-size: 11px; margin-left: 24px;">${shortcut}</span>
+    `;
+    item.addEventListener('mouseenter', () => {
+      item.style.backgroundColor = 'var(--bolt-elements-background-depth-4, #333)';
+    });
+    item.addEventListener('mouseleave', () => {
+      item.style.backgroundColor = 'transparent';
+    });
+    item.addEventListener('click', () => {
+      menu.remove();
+      onClick();
+    });
+    return item;
+  };
+
+  // Add "Go to Definition" item
+  const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  const gotoDefItem = createMenuItem('Go to Definition', 'F12', () => {
+    performGotoDefinition(view, projectId, filePath, onGoto);
+  });
+  menu.appendChild(gotoDefItem);
+
+  // Add separator
+  const separator = document.createElement('div');
+  separator.style.cssText = `
+    height: 1px;
+    background: var(--bolt-elements-borderColor, #333);
+    margin: 4px 0;
+  `;
+  menu.appendChild(separator);
+
+  // Add "Find All References" item
+  const findRefsItem = createMenuItem('Find All References', 'Shift+F12', () => {
+    // This will trigger the find references functionality
+    const customEvent = new KeyboardEvent('keydown', {
+      key: 'F12',
+      shiftKey: true,
+      bubbles: true,
+    });
+    view.dom.dispatchEvent(customEvent);
+  });
+  menu.appendChild(findRefsItem);
+
+  // Add "Peek Definition" info item (future feature)
+  const peekItem = createMenuItem('Peek Definition', `${isMac ? '⌥' : 'Alt'}+F12`, () => {
+    // For now, just do go to definition
+    performGotoDefinition(view, projectId, filePath, onGoto);
+  });
+  menu.appendChild(peekItem);
+
+  // Append to body
+  document.body.appendChild(menu);
+
+  // Adjust position if menu goes off screen
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    menu.style.left = `${window.innerWidth - rect.width - 8}px`;
+  }
+  if (rect.bottom > window.innerHeight) {
+    menu.style.top = `${window.innerHeight - rect.height - 8}px`;
+  }
+
+  // Close menu on click outside or escape
+  const closeMenu = (e: MouseEvent | KeyboardEvent) => {
+    if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+    if (e instanceof MouseEvent && menu.contains(e.target as Node)) return;
+    menu.remove();
+    document.removeEventListener('click', closeMenu);
+    document.removeEventListener('keydown', closeMenu);
+  };
+
+  // Delay adding listeners to prevent immediate close
+  setTimeout(() => {
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', closeMenu);
+  }, 0);
 }
 
 // ============================================
@@ -429,8 +797,10 @@ function getCompletionBoost(item: LSPCompletionItem): number {
  *
  * Features:
  * - Hover tooltips (show type info on hover)
- * - Go to definition (Ctrl/Cmd+Click)
+ * - Go to definition (Ctrl/Cmd+Click, F12)
  * - Find references (Shift+F12)
+ * - Context menu with "Go to Definition" option
+ * - Cmd/Ctrl hover underline effect
  * - Diagnostics (error/warning markers and gutters)
  *
  * Note: Completions should be integrated via lspCompletionSource()
@@ -453,8 +823,8 @@ export function lspExtension(
 
   const extensions: Extension[] = [];
 
-  // Initialize enhanced client if requested
-  if (useEnhancedClient) {
+  // Initialize enhanced client if requested (only when container is ready)
+  if (useEnhancedClient && workbenchStore.containerReady.get()) {
     const client = getEnhancedLSPClient(projectId);
     client.connect().catch((err) => {
       console.warn('[LSP] Failed to connect enhanced client:', err);
@@ -466,9 +836,16 @@ export function lspExtension(
     extensions.push(lspHoverTooltip(projectId, filePath));
   }
 
-  // Add go-to-definition
+  // Add go-to-definition features
   if (enableDefinition && onGotoDefinition) {
+    // Cmd/Ctrl+Click
     extensions.push(gotoDefinition(projectId, filePath, onGotoDefinition));
+    // F12 keyboard shortcut
+    extensions.push(gotoDefinitionKeymap(projectId, filePath, onGotoDefinition));
+    // Right-click context menu
+    extensions.push(gotoDefinitionContextMenu(projectId, filePath, onGotoDefinition));
+    // Cmd/Ctrl hover underline
+    extensions.push(...cmdHoverUnderline(filePath));
   }
 
   // Add find references
@@ -522,6 +899,11 @@ export function lspAutoInit(projectId: string, filePath: string) {
 
     // Check if file type is supported
     if (!isLSPSupported(filePath)) {
+      return;
+    }
+
+    // Don't start LSP until container is ready
+    if (!workbenchStore.containerReady.get()) {
       return;
     }
 

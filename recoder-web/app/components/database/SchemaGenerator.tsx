@@ -243,7 +243,7 @@ Please create all these files in the project and set up the database configurati
       {result && (
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 z-50 p-2.5 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 border-2 border-bolt-elements-borderColor hover:border-red-500 rounded-lg transition-all shadow-xl group"
+          className="absolute top-4 right-4 z-50 p-2.5 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-2 border-2 border-bolt-elements-borderColor hover:border-red-500 rounded-lg transition-all shadow-xl group"
           title="Close schema view"
         >
           <span className="i-ph:x w-5 h-5 text-bolt-elements-textPrimary group-hover:text-red-500" />
@@ -260,7 +260,7 @@ Please create all these files in the project and set up the database configurati
             <h1 className="text-2xl font-bold text-bolt-elements-textPrimary">
               Database Schema Generator
             </h1>
-            <p className="text-sm text-bolt-elements-textSecondary">
+            <p className="text-sm text-bolt-elements-textTertiary">
               Generate complete database schemas from natural language descriptions
             </p>
           </div>
@@ -279,7 +279,7 @@ Please create all these files in the project and set up the database configurati
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., Create a blog with users, posts, and comments. Users can write multiple posts, and each post can have many comments."
-                className="w-full h-32 px-4 py-3 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full h-32 px-4 py-3 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
 
@@ -291,7 +291,7 @@ Please create all these files in the project and set up the database configurati
                 <select
                   value={dbType}
                   onChange={(e) => setDbType(e.target.value as any)}
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="sqlite">SQLite</option>
                   <option value="postgresql">PostgreSQL</option>
@@ -331,12 +331,12 @@ Please create all these files in the project and set up the database configurati
                     <button
                       key={index}
                       onClick={() => handleExampleClick(example)}
-                      className="text-left px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
+                      className="text-left px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
                     >
                       <div className="text-sm font-medium text-bolt-elements-textPrimary">
                         {example.name}
                       </div>
-                      <div className="text-xs text-bolt-elements-textSecondary mt-1">
+                      <div className="text-xs text-bolt-elements-textTertiary mt-1">
                         {example.category}
                       </div>
                     </button>
@@ -362,25 +362,25 @@ Please create all these files in the project and set up the database configurati
                   <div className="text-2xl font-bold text-bolt-elements-textPrimary">
                     {result.summary.entityCount}
                   </div>
-                  <div className="text-sm text-bolt-elements-textSecondary">Entities</div>
+                  <div className="text-sm text-bolt-elements-textTertiary">Entities</div>
                 </div>
                 <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
                   <div className="text-2xl font-bold text-bolt-elements-textPrimary">
                     {result.summary.totalFields}
                   </div>
-                  <div className="text-sm text-bolt-elements-textSecondary">Total Fields</div>
+                  <div className="text-sm text-bolt-elements-textTertiary">Total Fields</div>
                 </div>
                 <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
                   <div className="text-2xl font-bold text-bolt-elements-textPrimary">
                     {result.summary.relationshipCount}
                   </div>
-                  <div className="text-sm text-bolt-elements-textSecondary">Relationships</div>
+                  <div className="text-sm text-bolt-elements-textTertiary">Relationships</div>
                 </div>
                 <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
                   <div className="text-2xl font-bold text-bolt-elements-textPrimary">
                     {result.summary.indexCount}
                   </div>
-                  <div className="text-sm text-bolt-elements-textSecondary">Indexes</div>
+                  <div className="text-sm text-bolt-elements-textTertiary">Indexes</div>
                 </div>
               </div>
 
@@ -394,18 +394,18 @@ Please create all these files in the project and set up the database configurati
                   {result.entities.map((entity, index) => (
                     <div
                       key={index}
-                      className="bg-bolt-elements-background-depth-3 rounded-lg p-4 border border-bolt-elements-borderColor"
+                      className="bg-bolt-elements-background-depth-2 rounded-lg p-4 border border-bolt-elements-borderColor"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <h3 className="font-semibold text-bolt-elements-textPrimary">
                             {entity.name}
                           </h3>
-                          <p className="text-sm text-bolt-elements-textSecondary">
+                          <p className="text-sm text-bolt-elements-textTertiary">
                             Table: {entity.tableName}
                           </p>
                         </div>
-                        <div className="text-sm text-bolt-elements-textSecondary">
+                        <div className="text-sm text-bolt-elements-textTertiary">
                           {entity.fields.length} fields • {entity.relationships.length} relationships
                         </div>
                       </div>
@@ -413,7 +413,7 @@ Please create all these files in the project and set up the database configurati
                         {entity.fields.slice(0, 6).map((field, fIndex) => (
                           <div
                             key={fIndex}
-                            className="flex items-center gap-2 text-bolt-elements-textSecondary"
+                            className="flex items-center gap-2 text-bolt-elements-textTertiary"
                           >
                             <span className="text-bolt-elements-textTertiary">•</span>
                             <span className="font-mono text-xs">{field.name}</span>
@@ -450,8 +450,8 @@ Please create all these files in the project and set up the database configurati
                     onClick={() => setActiveTab('sql')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === 'sql'
-                        ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                        : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
+                        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
                     }`}
                   >
                     <span className="i-ph:file-code w-4 h-4 inline mr-2" />
@@ -461,8 +461,8 @@ Please create all these files in the project and set up the database configurati
                     onClick={() => setActiveTab('typescript')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === 'typescript'
-                        ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                        : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
+                        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
                     }`}
                   >
                     <span className="i-ph:file-code w-4 h-4 inline mr-2" />
@@ -473,8 +473,8 @@ Please create all these files in the project and set up the database configurati
                       onClick={() => setActiveTab('prisma')}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                         activeTab === 'prisma'
-                          ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                          : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                          ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
+                          : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
                       }`}
                     >
                       <span className="i-ph:file-code w-4 h-4 inline mr-2" />
@@ -485,8 +485,8 @@ Please create all these files in the project and set up the database configurati
                     onClick={() => setActiveTab('seed')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === 'seed'
-                        ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                        : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
+                        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
                     }`}
                   >
                     <span className="i-ph:database w-4 h-4 inline mr-2" />
@@ -496,7 +496,7 @@ Please create all these files in the project and set up the database configurati
                   <div className="ml-auto flex items-center gap-2">
                     <button
                       onClick={() => handleCopy(getCurrentContent())}
-                      className="px-3 py-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                      className="px-3 py-2 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
                     >
                       {copied ? (
                         <span className="i-ph:check w-4 h-4" />
@@ -506,7 +506,7 @@ Please create all these files in the project and set up the database configurati
                     </button>
                     <button
                       onClick={() => downloadFile(getCurrentFilename(), getCurrentContent())}
-                      className="px-3 py-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                      className="px-3 py-2 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
                       title="Download file"
                     >
                       <span className="i-ph:download-simple w-4 h-4" />
@@ -523,7 +523,7 @@ Please create all these files in the project and set up the database configurati
                 </div>
 
                 {/* Code Content */}
-                <div className="p-4 bg-bolt-elements-background-depth-3">
+                <div className="p-4 bg-bolt-elements-background-depth-2">
                   <pre className="text-sm text-bolt-elements-textPrimary overflow-x-auto">
                     <code>{getCurrentContent()}</code>
                   </pre>

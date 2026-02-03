@@ -78,10 +78,67 @@ export function clearHistory(projectId: string): void {
 export function searchHistory(projectId: string, query: string): HistoryEntry[] {
   const history = getHistory(projectId);
   const lowerQuery = query.toLowerCase();
-  
-  return history.filter(entry => 
+
+  return history.filter(entry =>
     entry.command.toLowerCase().includes(lowerQuery)
   );
+}
+
+/**
+ * Search history with reverse index (for Ctrl+R style search)
+ * Returns matches in reverse order (most recent first) with their original index
+ */
+export function searchHistoryReverse(projectId: string, query: string): Array<HistoryEntry & { index: number }> {
+  const history = getHistory(projectId);
+  const lowerQuery = query.toLowerCase();
+
+  const results: Array<HistoryEntry & { index: number }> = [];
+
+  // Search from end to beginning (most recent first)
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].command.toLowerCase().includes(lowerQuery)) {
+      results.push({ ...history[i], index: i });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Get unique commands from history (deduped, most recent first)
+ */
+export function getUniqueCommands(projectId: string, limit: number = 50): string[] {
+  const history = getHistory(projectId);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  // Start from most recent
+  for (let i = history.length - 1; i >= 0 && unique.length < limit; i--) {
+    const cmd = history[i].command;
+    if (!seen.has(cmd)) {
+      seen.add(cmd);
+      unique.push(cmd);
+    }
+  }
+
+  return unique;
+}
+
+/**
+ * Get frequently used commands
+ */
+export function getFrequentCommands(projectId: string, limit: number = 10): Array<{ command: string; count: number }> {
+  const history = getHistory(projectId);
+  const counts = new Map<string, number>();
+
+  for (const entry of history) {
+    counts.set(entry.command, (counts.get(entry.command) || 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([command, count]) => ({ command, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 }
 
 /**

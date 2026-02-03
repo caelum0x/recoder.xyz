@@ -6,6 +6,58 @@
 import { atom, map } from 'nanostores';
 import { dockerGet, dockerPost } from '~/lib/services/docker-api';
 
+// ============================================
+// Failure Rate-Limiting
+// ============================================
+
+/** Timestamp of the last failed snapshot API call */
+let _lastFailureTimestamp = 0;
+
+/** Number of consecutive failures (for exponential backoff) */
+let _consecutiveFailures = 0;
+
+/** Minimum cooldown after a failure (in ms) */
+const FAILURE_COOLDOWN_MS = 10_000; // 10 seconds base cooldown
+
+/** Maximum cooldown cap (in ms) */
+const MAX_COOLDOWN_MS = 120_000; // 2 minutes max
+
+/**
+ * Check if we should skip a snapshot API call due to recent failures.
+ * Uses exponential backoff: 10s, 20s, 40s, 80s, 120s (capped).
+ */
+function shouldSkipDueToRecentFailure(): boolean {
+  if (_consecutiveFailures === 0) return false;
+
+  const cooldown = Math.min(
+    FAILURE_COOLDOWN_MS * Math.pow(2, _consecutiveFailures - 1),
+    MAX_COOLDOWN_MS,
+  );
+  const elapsed = Date.now() - _lastFailureTimestamp;
+
+  if (elapsed < cooldown) {
+    console.log(
+      `[Snapshot] Skipping API call — last failure was ${(elapsed / 1000).toFixed(1)}s ago ` +
+      `(cooldown: ${(cooldown / 1000).toFixed(0)}s, consecutive failures: ${_consecutiveFailures})`,
+    );
+    return true;
+  }
+
+  return false;
+}
+
+/** Record a snapshot API failure */
+function recordFailure() {
+  _lastFailureTimestamp = Date.now();
+  _consecutiveFailures++;
+}
+
+/** Record a snapshot API success — resets failure tracking */
+function recordSuccess() {
+  _consecutiveFailures = 0;
+  _lastFailureTimestamp = 0;
+}
+
 export interface Snapshot {
   id: string;           // Git commit hash (short)
   fullHash: string;     // Full commit hash
@@ -120,12 +172,25 @@ export const isLoadingAtom = atom<boolean>(false);
 export const hasUnsavedChangesAtom = atom<boolean>(false);
 
 /**
- * Check if container is ready before snapshot operations
+ * Check if container is ready before snapshot operations.
+ * Also checks failure rate-limiting to avoid spamming when the container
+ * is in a bad state (e.g., "Container not found" errors).
  */
 async function isContainerReady(): Promise<boolean> {
+  // First: check failure rate-limiting
+  if (shouldSkipDueToRecentFailure()) {
+    return false;
+  }
+
   try {
     const { workbenchStore } = await import('./workbench');
-    return workbenchStore.containerReady.get();
+    const ready = workbenchStore.containerReady.get();
+
+    if (!ready) {
+      return false;
+    }
+
+    return true;
   } catch {
     return false;
   }
@@ -139,17 +204,19 @@ export async function createSnapshot(
   message: string,
   author: 'user' | 'ai' | 'auto' = 'user'
 ): Promise<Snapshot | null> {
-  // Don't call snapshot API if container isn't ready yet
+  // Don't call snapshot API if container isn't ready or we're in a failure cooldown
   if (!await isContainerReady()) {
-    console.log('[Snapshot] Skipping create - container not ready');
+    console.log('[Snapshot] Skipping create — container not ready or in failure cooldown');
     return null;
   }
 
   try {
     const snapshot = await dockerPost<CreateSnapshotResponse>(`/api/snapshot/${projectId}`, { message, author });
+    recordSuccess();
     return snapshot;
   } catch (error: any) {
-    console.error('[Snapshot] Create error:', error);
+    recordFailure();
+    console.warn('[Snapshot] Create error:', error?.message || error);
     return null;
   }
 }
@@ -158,9 +225,9 @@ export async function createSnapshot(
  * Load all snapshots for a project
  */
 export async function loadSnapshots(projectId: string, limit: number = 50): Promise<void> {
-  // Don't call snapshot API if container isn't ready yet
+  // Don't call snapshot API if container isn't ready or we're in a failure cooldown
   if (!await isContainerReady()) {
-    console.log('[Snapshot] Skipping load - container not ready');
+    console.log('[Snapshot] Skipping load — container not ready or in failure cooldown');
     return;
   }
 
@@ -175,10 +242,12 @@ export async function loadSnapshots(projectId: string, limit: number = 50): Prom
       snapshotStore.setKey('currentSnapshot', data.snapshots[0]);
     }
     snapshotStore.setKey('isLoading', false);
+    recordSuccess();
   } catch (error: any) {
     snapshotStore.setKey('error', error.message);
     snapshotStore.setKey('isLoading', false);
-    console.error('[Snapshot] Load error:', error);
+    recordFailure();
+    console.warn('[Snapshot] Load error:', error?.message || error);
   }
 }
 
@@ -186,6 +255,11 @@ export async function loadSnapshots(projectId: string, limit: number = 50): Prom
  * Get current snapshot status
  */
 export async function checkSnapshotStatus(projectId: string): Promise<void> {
+  // Don't call snapshot API if container isn't ready or we're in a failure cooldown
+  if (!await isContainerReady()) {
+    return; // Silent skip — this is called on a timer, no need to log every time
+  }
+
   try {
     const data = await dockerGet<SnapshotStatusResponse>(`/api/snapshot/${projectId}/status`);
 
@@ -193,8 +267,10 @@ export async function checkSnapshotStatus(projectId: string): Promise<void> {
     if (data.current) {
       snapshotStore.setKey('currentSnapshot', data.current);
     }
-  } catch (error) {
-    console.error('[Snapshot] Status check error:', error);
+    recordSuccess();
+  } catch (error: any) {
+    recordFailure();
+    console.warn('[Snapshot] Status check error:', error?.message || error);
   }
 }
 
@@ -202,6 +278,13 @@ export async function checkSnapshotStatus(projectId: string): Promise<void> {
  * Restore to a specific snapshot
  */
 export async function restoreSnapshot(projectId: string, snapshotId: string): Promise<boolean> {
+  // Don't call snapshot API if container isn't ready or we're in a failure cooldown
+  if (!await isContainerReady()) {
+    console.warn('[Snapshot] Skipping restore — container not ready or in failure cooldown');
+    snapshotStore.setKey('error', 'Container is not ready');
+    return false;
+  }
+
   snapshotStore.setKey('isLoading', true);
   snapshotStore.setKey('error', null);
 
@@ -211,11 +294,13 @@ export async function restoreSnapshot(projectId: string, snapshotId: string): Pr
     // Reload snapshots to get updated list
     await loadSnapshots(projectId);
 
+    recordSuccess();
     return true;
   } catch (error: any) {
     snapshotStore.setKey('error', error.message);
     snapshotStore.setKey('isLoading', false);
-    console.error('[Snapshot] Restore error:', error);
+    recordFailure();
+    console.warn('[Snapshot] Restore error:', error?.message || error);
     return false;
   }
 }
@@ -235,15 +320,22 @@ export async function getDiff(
     return diffCache.get(cacheKey)!;
   }
 
+  // Don't call snapshot API if container isn't ready or we're in a failure cooldown
+  if (!await isContainerReady()) {
+    return null;
+  }
+
   try {
     const diff = await dockerGet<DiffResponse>(`/api/snapshot/${projectId}/diff?from=${from}&to=${to}`);
 
     // Cache the result
     diffCache.set(cacheKey, diff);
 
+    recordSuccess();
     return diff;
   } catch (error: any) {
-    console.error('[Snapshot] Diff error:', error);
+    recordFailure();
+    console.warn('[Snapshot] Diff error:', error?.message || error);
     return null;
   }
 }
@@ -257,13 +349,19 @@ export async function getFileDiff(
   from: string,
   to: string = 'HEAD'
 ): Promise<string | null> {
+  if (!await isContainerReady()) {
+    return null;
+  }
+
   try {
     const data = await dockerGet<FileDiffResponse>(
       `/api/snapshot/${projectId}/file-diff?path=${encodeURIComponent(filePath)}&from=${from}&to=${to}`
     );
+    recordSuccess();
     return data.diff;
-  } catch (error) {
-    console.error('[Snapshot] File diff error:', error);
+  } catch (error: any) {
+    recordFailure();
+    console.warn('[Snapshot] File diff error:', error?.message || error);
     return null;
   }
 }
@@ -276,13 +374,19 @@ export async function getFileAtSnapshot(
   filePath: string,
   snapshotId: string
 ): Promise<string | null> {
+  if (!await isContainerReady()) {
+    return null;
+  }
+
   try {
     const data = await dockerGet<FileContentResponse>(
       `/api/snapshot/${projectId}/file?path=${encodeURIComponent(filePath)}&snapshotId=${snapshotId}`
     );
+    recordSuccess();
     return data.content;
-  } catch (error) {
-    console.error('[Snapshot] Get file error:', error);
+  } catch (error: any) {
+    recordFailure();
+    console.warn('[Snapshot] Get file error:', error?.message || error);
     return null;
   }
 }
@@ -295,11 +399,18 @@ export async function setAutoSave(
   enabled: boolean,
   intervalMs: number = 5 * 60 * 1000
 ): Promise<void> {
+  if (!await isContainerReady()) {
+    console.log('[Snapshot] Skipping auto-save toggle — container not ready');
+    return;
+  }
+
   try {
     await dockerPost<AutoSaveResponse>(`/api/snapshot/${projectId}/auto-save`, { enabled, intervalMs });
     snapshotStore.setKey('autoSaveEnabled', enabled);
-  } catch (error) {
-    console.error('[Snapshot] Auto-save toggle error:', error);
+    recordSuccess();
+  } catch (error: any) {
+    recordFailure();
+    console.warn('[Snapshot] Auto-save toggle error:', error?.message || error);
   }
 }
 
@@ -328,6 +439,8 @@ export function setCompareSnapshots(from: string | null, to: string | null): voi
 export function clearSnapshots(): void {
   snapshotStore.set(initialState);
   diffCache.clear();
+  // Reset failure tracking so the new project gets a clean slate
+  recordSuccess();
 }
 
 /**
@@ -357,8 +470,10 @@ export function startAIChangesBatch(projectId: string, description: string = 'AI
       startTime: Date.now(),
       description
     };
-    // Create a "before" snapshot
-    snapshotBeforeAI(projectId).catch(console.error);
+    // Create a "before" snapshot (isContainerReady check is inside createSnapshot)
+    snapshotBeforeAI(projectId).catch(() => {
+      // Silently swallow — createSnapshot already logs the error
+    });
   }
 }
 
@@ -375,9 +490,13 @@ export async function endAIChangesBatch(description?: string): Promise<Snapshot 
 }
 
 /**
- * Initialize snapshots for a project - call when container is ready
+ * Initialize snapshots for a project - call when container is ready.
+ * Also resets failure tracking since this is typically called after container becomes ready.
  */
 export async function initializeSnapshots(projectId: string, enableAutoSave: boolean = true): Promise<void> {
+  // Reset failure tracking — container just became ready, give it a fresh start
+  recordSuccess();
+
   await loadSnapshots(projectId);
   if (enableAutoSave) {
     await setAutoSave(projectId, true);

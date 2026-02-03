@@ -55,15 +55,6 @@ interface CloudflareDeployment {
   };
 }
 
-interface UploadToken {
-  jwt: string;
-}
-
-interface UploadResult {
-  id: string;
-  hashes: string[];
-}
-
 export class CloudflareDeployer {
   private apiUrl = 'https://api.cloudflare.com/client/v4';
   private token: string;
@@ -101,20 +92,12 @@ export class CloudflareDeployer {
         console.log(`[Cloudflare] Environment variables set`);
       }
 
-      // Step 3: Get upload token and prepare files
-      const uploadToken = await this.getUploadToken(project.name);
-      console.log(`[Cloudflare] Got upload token`);
-
-      // Step 4: Upload files with hashing
+      // Step 3: Prepare and upload files (creates deployment via Direct Upload API)
       const preparedFiles = await this.prepareFiles(files, config);
-      const uploadResult = await this.uploadFiles(project.name, preparedFiles, uploadToken);
-      console.log(`[Cloudflare] Uploaded ${preparedFiles.length} files`);
+      const deployment = await this.uploadFilesAndDeploy(project.name, preparedFiles);
+      console.log(`[Cloudflare] Uploaded ${preparedFiles.length} files, deployment created: ${deployment.id}`);
 
-      // Step 5: Create deployment
-      const deployment = await this.createDeployment(project.name, uploadResult.hashes);
-      console.log(`[Cloudflare] Deployment created: ${deployment.id}`);
-
-      // Step 6: Wait for deployment to complete
+      // Step 4: Wait for deployment to complete
       const finalDeployment = await this.waitForDeployment(project.name, deployment.id);
 
       const endTime = Date.now();
@@ -267,15 +250,6 @@ export class CloudflareDeployer {
   }
 
   /**
-   * Get upload token for direct uploads
-   */
-  private async getUploadToken(projectName: string): Promise<UploadToken> {
-    return await this.apiRequest<UploadToken>(
-      `/pages/projects/${projectName}/upload-token`
-    );
-  }
-
-  /**
    * Prepare files for upload with hashing
    */
   private async prepareFiles(
@@ -350,14 +324,19 @@ export class CloudflareDeployer {
   }
 
   /**
-   * Upload files to Cloudflare Pages
+   * Upload files and create deployment via Cloudflare Pages Direct Upload API
+   *
+   * This uses the single-step flow: POST to the deployments endpoint with multipart
+   * form data containing a manifest (file paths to hashes) and each file keyed by hash.
+   * The response is the created deployment object.
+   *
+   * See: https://developers.cloudflare.com/pages/configuration/api/#direct-upload
    */
-  private async uploadFiles(
+  private async uploadFilesAndDeploy(
     projectName: string,
-    files: Array<{ path: string; content: string; hash: string }>,
-    uploadToken: UploadToken
-  ): Promise<UploadResult> {
-    // Build manifest
+    files: Array<{ path: string; content: string; hash: string }>
+  ): Promise<CloudflareDeployment> {
+    // Build manifest mapping file paths to their hashes
     const manifest: Record<string, string> = {};
     for (const file of files) {
       manifest[`/${file.path}`] = file.hash;
@@ -383,37 +362,18 @@ export class CloudflareDeployer {
       }
     );
 
-    const data = await response.json() as { success: boolean; result?: any; errors?: Array<{ message: string }> };
+    const data = await response.json() as { success: boolean; result?: CloudflareDeployment; errors?: Array<{ message: string }> };
 
     if (!data.success) {
       const errorMessage = data.errors?.map(e => e.message).join(', ') || 'Unknown error';
       throw new Error(`File upload failed: ${errorMessage}`);
     }
 
-    return {
-      id: data.result.id,
-      hashes: files.map(f => f.hash),
-    };
-  }
-
-  /**
-   * Create a deployment from uploaded files
-   */
-  private async createDeployment(
-    projectName: string,
-    hashes: string[]
-  ): Promise<CloudflareDeployment> {
-    // Note: The deployment is created automatically by the upload
-    // This method returns the latest deployment
-    const deployments = await this.apiRequest<CloudflareDeployment[]>(
-      `/pages/projects/${projectName}/deployments?per_page=1`
-    );
-
-    if (!deployments || deployments.length === 0) {
-      throw new Error('No deployment found after upload');
+    if (!data.result) {
+      throw new Error('No deployment returned from upload');
     }
 
-    return deployments[0];
+    return data.result;
   }
 
   /**

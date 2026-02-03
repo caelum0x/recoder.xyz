@@ -175,7 +175,7 @@ export default function MCPServerManager() {
       case 'connected':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'disconnected':
-        return <PowerOff className="w-4 h-4 text-gray-400" />;
+        return <PowerOff className="w-4 h-4 text-bolt-elements-textTertiary" />;
       case 'error':
         return <AlertCircle className="w-4 h-4 text-red-500" />;
     }
@@ -228,7 +228,7 @@ export default function MCPServerManager() {
                     <button
                       key={preset.name}
                       onClick={() => handlePresetSelect(preset)}
-                      className="text-left p-4 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
+                      className="text-left p-4 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
                     >
                       <div className="font-medium text-bolt-elements-textPrimary mb-1">
                         {preset.name}
@@ -240,9 +240,9 @@ export default function MCPServerManager() {
                   ))}
                 </div>
                 <div className="my-4 flex items-center gap-2">
-                  <div className="flex-1 h-px bg-bolt-elements-borderColor"></div>
+                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}></div>
                   <span className="text-sm text-bolt-elements-textTertiary">or custom</span>
-                  <div className="flex-1 h-px bg-bolt-elements-borderColor"></div>
+                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}></div>
                 </div>
               </div>
             )}
@@ -258,7 +258,7 @@ export default function MCPServerManager() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="My MCP Server"
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -272,7 +272,7 @@ export default function MCPServerManager() {
                     value={formData.command}
                     onChange={(e) => setFormData({ ...formData, command: e.target.value })}
                     placeholder="npx"
-                    className="w-full px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -283,7 +283,7 @@ export default function MCPServerManager() {
                   <select
                     value={formData.type}
                     onChange={(e) => setFormData({ ...formData, type: e.target.value as 'filesystem' | 'git' | 'database' | 'custom' })}
-                    className="w-full px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="custom">Custom</option>
                     <option value="filesystem">Filesystem</option>
@@ -302,7 +302,7 @@ export default function MCPServerManager() {
                   value={formData.args}
                   onChange={(e) => setFormData({ ...formData, args: e.target.value })}
                   placeholder="-y @modelcontextprotocol/server-filesystem ./"
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -315,7 +315,7 @@ export default function MCPServerManager() {
                   onChange={(e) => setFormData({ ...formData, env: e.target.value })}
                   placeholder='{"KEY": "value"}'
                   rows={3}
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm resize-none"
+                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm resize-none"
                 />
               </div>
 
@@ -325,7 +325,7 @@ export default function MCPServerManager() {
                     setShowAddForm(false);
                     setSelectedPreset(null);
                   }}
-                  className="px-4 py-2 bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-4 transition-colors"
+                  className="px-4 py-2 bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-3 transition-colors"
                 >
                   Cancel
                 </button>
@@ -370,7 +370,7 @@ export default function MCPServerManager() {
                         <h3 className="font-medium text-bolt-elements-textPrimary">
                           {server.name}
                         </h3>
-                        <span className="px-2 py-0.5 text-xs bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary rounded">
+                        <span className="px-2 py-0.5 text-xs bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary rounded">
                           {server.type}
                         </span>
                       </div>

@@ -130,6 +130,7 @@ export class VercelDeployer {
       files: Object.entries(files).map(([path, file]) => ({
         file: path,
         data: file.content || file,
+        encoding: 'utf-8',
       })),
       projectSettings: {
         framework: this.mapFrameworkToVercel(config.framework),
@@ -242,10 +243,14 @@ export class VercelDeployer {
   private mapFrameworkToVercel(framework?: string): string | null {
     const mapping: Record<string, string> = {
       nextjs: 'nextjs',
-      react: 'create-react-app',
+      react: 'vite',
       vue: 'vue',
       svelte: 'svelte',
       angular: 'angular',
+      remix: 'remix',
+      astro: 'astro',
+      nuxt: 'nuxtjs',
+      gatsby: 'gatsby',
       static: 'static',
     };
 

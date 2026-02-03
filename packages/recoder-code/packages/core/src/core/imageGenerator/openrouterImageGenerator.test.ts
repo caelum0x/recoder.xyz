@@ -48,6 +48,13 @@ describe('OpenRouterImageGenerator', () => {
       const generator = new OpenRouterImageGenerator();
       const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
+        headers: {
+          get: (name: string) => {
+            if (name === 'x-openrouter-generation-id') return 'gen-img-1';
+            if (name === 'x-openrouter-cost') return '0.03';
+            return null;
+          },
+        },
         json: async () => ({
           data: [{ url: 'https://example.com/image.png' }],
         }),
@@ -90,11 +97,11 @@ describe('OpenRouterImageGenerator', () => {
       expect(dalleModels.length).toBeGreaterThan(0);
     });
 
-    it('should include Stable Diffusion models', () => {
+    it('should include Gemini image models', () => {
       const models = OpenRouterImageGenerator.listModels();
-      const sdModels = models.filter(m => m.id.includes('stable-diffusion'));
+      const geminiModels = models.filter(m => m.id.includes('gemini-2.5-flash-image'));
       
-      expect(sdModels.length).toBeGreaterThan(0);
+      expect(geminiModels.length).toBeGreaterThan(0);
     });
   });
 
@@ -102,15 +109,15 @@ describe('OpenRouterImageGenerator', () => {
     it('should list models with different capabilities', () => {
       const models = OpenRouterImageGenerator.listModels();
       
-      // Check for models with different size support
-      const has1024 = models.some(m => 
-        m.capabilities.some(c => c.includes('1024x1024'))
+      // Check for models with known capability flags
+      const hasQuality = models.some(m =>
+        m.capabilities.some(c => c.includes('quality'))
       );
-      const has1792 = models.some(m => 
-        m.capabilities.some(c => c.includes('1792x1024'))
+      const hasStyle = models.some(m =>
+        m.capabilities.some(c => c.includes('style'))
       );
-      
-      expect(has1024 || has1792).toBe(true);
+
+      expect(hasQuality || hasStyle).toBe(true);
     });
   });
 

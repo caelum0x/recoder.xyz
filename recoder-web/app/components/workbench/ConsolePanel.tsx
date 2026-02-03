@@ -270,13 +270,13 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
         {/* Input */}
         <div className="flex">
           <span className="text-green-400 select-none">{command.isMultiline ? multilinePrompt : prompt}</span>
-          <span className="text-white whitespace-pre-wrap break-all">{command.input}</span>
+          <span className="text-bolt-elements-textPrimary whitespace-pre-wrap break-all">{command.input}</span>
         </div>
         {/* Output */}
         {command.output && (
           <div
             className={`whitespace-pre-wrap break-all pl-4 ${
-              command.isError ? 'text-red-400' : 'text-gray-300'
+              command.isError ? 'text-red-400' : 'text-bolt-elements-textSecondary'
             }`}
           >
             {command.output}
@@ -440,7 +440,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
                 <div className="text-yellow-400/70 text-xs mb-1">
                   <span className="i-ph:dots-three-vertical mr-1" />
                   Multi-line mode (Shift+Enter to add line, Enter to execute, Esc to cancel)
-                  <pre className="mt-1 pl-4 text-gray-400">{multilineBuffer}</pre>
+                  <pre className="mt-1 pl-4 text-bolt-elements-textSecondary">{multilineBuffer}</pre>
                 </div>
               )}
             </>
@@ -481,7 +481,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
             onKeyDown={handleKeyDown}
             placeholder="Enter code..."
             disabled={isLoading}
-            className="flex-1 bg-transparent border-none outline-none resize-none font-mono text-xs text-white placeholder-gray-500 min-h-[20px] max-h-[100px]"
+            className="flex-1 bg-transparent border-none outline-none resize-none font-mono text-xs text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary min-h-[20px] max-h-[100px]"
             rows={1}
             style={{
               height: 'auto',

@@ -58,7 +58,12 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-black text-white hover:bg-gray-900 rounded-lg transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-colors"
+        style={{
+          backgroundColor: 'var(--bolt-elements-bg-depth-2)',
+          color: 'var(--bolt-elements-textPrimary)',
+          border: '1px solid var(--bolt-elements-bg-depth-3)',
+        }}
         title="Save to project"
       >
         {saved ? <span className="i-ph:check text-green-500" /> : <span className="i-ph:folder-plus" />}
@@ -68,13 +73,25 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
       {showDropdown && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
-          <div className="absolute top-full right-0 mt-2 w-64 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+          <div
+            className="absolute top-full right-0 mt-2 w-64 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
+            style={{
+              backgroundColor: 'var(--bolt-elements-bg-depth-2)',
+              border: '1px solid var(--bolt-elements-bg-depth-3)',
+            }}
+          >
             <div className="p-2">
-              <div className="text-xs font-semibold text-bolt-elements-textSecondary px-2 py-1">
+              <div
+                className="text-xs font-semibold px-2 py-1"
+                style={{ color: 'var(--bolt-elements-textSecondary)' }}
+              >
                 Select Project
               </div>
               {projects.length === 0 ? (
-                <div className="px-2 py-4 text-sm text-bolt-elements-textSecondary text-center">
+                <div
+                  className="px-2 py-4 text-sm text-center"
+                  style={{ color: 'var(--bolt-elements-textSecondary)' }}
+                >
                   No projects yet. Create one first.
                 </div>
               ) : (
@@ -83,7 +100,8 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
                     key={project.id}
                     onClick={() => saveToProject(project.id)}
                     disabled={saving}
-                    className="w-full flex items-center gap-2 px-2 py-2 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive rounded transition-colors disabled:opacity-50"
+                    className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded transition-colors disabled:opacity-50 hover:bg-bolt-elements-background-depth-3"
+                    style={{ color: 'var(--bolt-elements-textPrimary)' }}
                   >
                     <span className="text-base">{project.icon}</span>
                     <span className="flex-1 text-left truncate">{project.name}</span>

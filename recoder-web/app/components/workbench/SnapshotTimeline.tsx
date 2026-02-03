@@ -73,7 +73,7 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
   const getAuthorColor = (author: string) => {
     switch (author) {
       case 'ai': return 'text-purple-400';
-      case 'auto': return 'text-gray-400';
+      case 'auto': return 'text-bolt-elements-textSecondary';
       default: return 'text-blue-400';
     }
   };
@@ -122,7 +122,7 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
         {/* Quick snapshot button */}
         <button
           onClick={() => createSnapshot(projectId, 'Quick save', 'user')}
-          className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 
+          className="flex items-center gap-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3
                      rounded transition-colors"
           title="Create snapshot"
         >
@@ -131,7 +131,7 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
 
         {/* Snapshot count */}
         {state.snapshots.length > 0 && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-bolt-elements-textSecondary">
             {state.snapshots.length} snapshots
           </span>
         )}
@@ -145,11 +145,11 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
   }
 
   return (
-    <div className={`flex flex-col h-full bg-gray-900 ${className}`}>
+    <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-700">
+      <div className="flex items-center justify-between p-3 border-b border-bolt-elements-borderColor">
         <div className="flex items-center gap-2">
-          <h3 className="font-medium text-white">Snapshots</h3>
+          <h3 className="font-medium text-bolt-elements-textPrimary">Snapshots</h3>
           {state.hasUnsavedChanges && (
             <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded">
               Unsaved changes
@@ -161,8 +161,8 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
             onClick={handleToggleAutoSave}
             className={`px-2 py-1 text-xs rounded transition-colors ${
               state.autoSaveEnabled 
-                ? 'bg-green-500/20 text-green-400' 
-                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
             }`}
             title={state.autoSaveEnabled ? 'Auto-save enabled' : 'Enable auto-save'}
           >
@@ -172,7 +172,7 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
       </div>
 
       {/* Create new snapshot */}
-      <div className="p-3 border-b border-gray-700">
+      <div className="p-3 border-b border-bolt-elements-borderColor">
         <div className="flex gap-2">
           <input
             type="text"
@@ -180,14 +180,14 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
             onChange={(e) => setSnapshotMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreateSnapshot()}
             placeholder="Snapshot message..."
-            className="flex-1 px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded 
-                       focus:outline-none focus:border-blue-500 text-white placeholder-gray-500"
+            className="flex-1 px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded
+                       focus:outline-none focus:border-blue-500 text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary"
           />
           <button
             onClick={handleCreateSnapshot}
             disabled={!snapshotMessage.trim() || isCreating}
             className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-500 
-                       disabled:bg-gray-700 disabled:text-gray-500 rounded transition-colors"
+                       disabled:bg-bolt-elements-background-depth-3 disabled:text-bolt-elements-textTertiary rounded transition-colors"
           >
             {isCreating ? '...' : 'Save'}
           </button>
@@ -204,18 +204,18 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
       {/* Timeline */}
       <div className="flex-1 overflow-auto p-3">
         {state.isLoading && state.snapshots.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-gray-500">
+          <div className="flex items-center justify-center h-32 text-bolt-elements-textTertiary">
             Loading snapshots...
           </div>
         ) : state.snapshots.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+          <div className="flex flex-col items-center justify-center h-32 text-bolt-elements-textTertiary">
             <span>No snapshots yet</span>
             <span className="text-xs mt-1">Create your first snapshot above</span>
           </div>
         ) : (
           <div className="relative">
             {/* Timeline line */}
-            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-700" />
+            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-bolt-elements-borderColor" />
 
             {/* Snapshot items */}
             {state.snapshots.map((snapshot, index) => (
@@ -230,7 +230,7 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
                   className={`absolute left-2.5 w-3 h-3 rounded-full border-2 ${
                     index === 0
                       ? 'bg-blue-500 border-blue-400'
-                      : 'bg-gray-800 border-gray-600'
+                      : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor'
                   }`}
                 />
 
@@ -238,8 +238,8 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
                 <div
                   className={`p-3 rounded-lg border transition-colors cursor-pointer ${
                     state.selectedSnapshot === snapshot.id
-                      ? 'bg-gray-800 border-blue-500'
-                      : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                      ? 'bg-bolt-elements-background-depth-2 border-blue-500'
+                      : 'bg-bolt-elements-background-depth-2/50 border-bolt-elements-borderColor hover:border-bolt-elements-borderColor'
                   }`}
                   onClick={() => selectSnapshot(snapshot.id)}
                 >
@@ -249,23 +249,23 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
                       <span className={`text-xs ${getAuthorColor(snapshot.author)}`}>
                         {getAuthorLabel(snapshot.author)}
                       </span>
-                      <span className="font-mono text-xs text-gray-500">
+                      <span className="font-mono text-xs text-bolt-elements-textTertiary">
                         {snapshot.id}
                       </span>
                     </div>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-bolt-elements-textTertiary">
                       {formatTime(snapshot.timestamp)}
                     </span>
                   </div>
 
                   {/* Message */}
-                  <p className="text-sm text-white mb-2 line-clamp-2">
+                  <p className="text-sm text-bolt-elements-textPrimary mb-2 line-clamp-2">
                     {snapshot.message}
                   </p>
 
                   {/* Stats */}
                   {snapshot.filesChanged !== undefined && (
-                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                    <div className="flex items-center gap-3 text-xs text-bolt-elements-textTertiary mb-2">
                       <span>{snapshot.filesChanged} files</span>
                       {snapshot.additions !== undefined && snapshot.additions > 0 && (
                         <span className="text-green-400">+{snapshot.additions}</span>
@@ -287,7 +287,7 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
                         className={`px-2 py-1 text-xs rounded transition-colors ${
                           confirmRestore === snapshot.id
                             ? 'bg-red-500 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                            : 'bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'
                         }`}
                       >
                         {confirmRestore === snapshot.id ? 'Confirm?' : 'Restore'}
@@ -299,8 +299,8 @@ export function SnapshotTimeline({ projectId, className = '', compact = false }:
                           e.stopPropagation();
                           handleViewDiff(snapshot);
                         }}
-                        className="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 
-                                   rounded transition-colors text-gray-300"
+                        className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3
+                                   rounded transition-colors text-bolt-elements-textSecondary"
                       >
                         Diff
                       </button>
@@ -341,12 +341,12 @@ interface DiffModalProps {
 function DiffModal({ diff, onClose }: DiffModalProps) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-hidden">
+      <div className="bg-bolt-elements-background-depth-1 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+        <div className="flex items-center justify-between p-4 border-b border-bolt-elements-borderColor">
           <div>
-            <h3 className="font-medium text-white">Changes</h3>
-            <p className="text-sm text-gray-400">
+            <h3 className="font-medium text-bolt-elements-textPrimary">Changes</h3>
+            <p className="text-sm text-bolt-elements-textSecondary">
               {diff.summary.filesChanged} files • 
               <span className="text-green-400"> +{diff.summary.additions}</span>
               <span className="text-red-400"> -{diff.summary.deletions}</span>
@@ -354,7 +354,7 @@ function DiffModal({ diff, onClose }: DiffModalProps) {
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-800 rounded"
+            className="p-2 hover:bg-bolt-elements-background-depth-2 rounded"
           >
             ✕
           </button>
@@ -363,13 +363,13 @@ function DiffModal({ diff, onClose }: DiffModalProps) {
         {/* File list */}
         <div className="overflow-auto max-h-[60vh] p-4">
           {diff.files.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No changes</p>
+            <p className="text-bolt-elements-textTertiary text-center py-8">No changes</p>
           ) : (
             <div className="space-y-2">
               {diff.files.map((file) => (
                 <div
                   key={file.path}
-                  className="flex items-center justify-between p-3 bg-gray-800 rounded"
+                  className="flex items-center justify-between p-3 bg-bolt-elements-background-depth-2 rounded"
                 >
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${
@@ -381,7 +381,7 @@ function DiffModal({ diff, onClose }: DiffModalProps) {
                     }`}>
                       {file.status === 'added' ? 'A' : file.status === 'deleted' ? 'D' : 'M'}
                     </span>
-                    <span className="text-sm text-white font-mono truncate max-w-md">
+                    <span className="text-sm text-bolt-elements-textPrimary font-mono truncate max-w-md">
                       {file.path}
                     </span>
                   </div>

@@ -36,7 +36,7 @@ describe('parseAndFormatApiError', () => {
     );
     expect(result).toContain('[API Error: Rate limit exceeded');
     expect(result).toContain(
-      'Possible quota limitations in place or slow response times detected. Switching to the gemini-2.5-flash model',
+      'Possible quota limitations in place or slow response times detected. Switching to the google/gemini-2.0-flash-exp:free model',
     );
   });
 
@@ -52,7 +52,7 @@ describe('parseAndFormatApiError', () => {
     );
     expect(result).toContain('[API Error: Rate limit exceeded');
     expect(result).toContain(
-      'Possible quota limitations in place or slow response times detected. Switching to the gemini-2.5-flash model',
+      'Possible quota limitations in place or slow response times detected. Switching to the google/gemini-2.0-flash-exp:free model',
     );
   });
 
@@ -166,7 +166,7 @@ describe('parseAndFormatApiError', () => {
     );
     expect(result).toContain('[API Error: Rate limit exceeded');
     expect(result).toContain(
-      'Possible quota limitations in place or slow response times detected. Switching to the gemini-2.5-flash model',
+      'Possible quota limitations in place or slow response times detected. Switching to the google/gemini-2.0-flash-exp:free model',
     );
     expect(result).not.toContain(
       'You have reached your daily gemini-2.5-pro quota limit',

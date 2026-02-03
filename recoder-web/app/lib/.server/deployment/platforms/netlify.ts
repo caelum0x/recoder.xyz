@@ -204,24 +204,30 @@ export class NetlifyDeployer {
 
   /**
    * Set environment variables for a site
+   *
+   * Uses the site update endpoint (PATCH /sites/{siteId}) with build_settings.env
+   * to set all environment variables in a single request at the site level.
    */
   private async setEnvironmentVariables(
     siteId: string,
     variables: Record<string, string>
   ): Promise<void> {
-    // Netlify uses individual env var endpoints
-    for (const [key, value] of Object.entries(variables)) {
-      await fetch(`${this.apiUrl}/sites/${siteId}/env/${key}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
+    const response = await fetch(`${this.apiUrl}/sites/${siteId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        build_settings: {
+          env: variables,
         },
-        body: JSON.stringify({
-          context: 'all',
-          value,
-        }),
-      });
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json() as any;
+      throw new Error(`Failed to set environment variables: ${error.message || JSON.stringify(error)}`);
     }
   }
 
@@ -344,7 +350,11 @@ export class NetlifyDeployer {
       },
       body: JSON.stringify({
         files: filesDigest,
-        // Skip build, deploy pre-built files
+        // Recoder builds projects inside Docker containers before deploying,
+        // so the files uploaded here are already build output (e.g. compiled JS,
+        // bundled CSS, optimized assets). We set skip_processing to true so
+        // Netlify deploys these pre-built files as-is rather than running its
+        // own build step, which would fail without the original source/deps.
         skip_processing: true,
       }),
     });

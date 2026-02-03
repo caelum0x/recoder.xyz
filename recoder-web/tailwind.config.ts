@@ -78,6 +78,8 @@ const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx,scss}",
   ],
+  // Enable dark mode with data-theme attribute
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
@@ -99,6 +101,57 @@ const config: Config = {
         'bolt-elements-textSecondary': 'var(--bolt-elements-textSecondary)',
         'bolt-elements-textTertiary': 'var(--bolt-elements-textTertiary)',
         'bolt-elements-borderColor': 'var(--bolt-elements-borderColor)',
+      },
+      animation: {
+        'fadeIn': 'fadeIn 0.2s ease-in-out',
+        'fadeOut': 'fadeOut 0.2s ease-in-out',
+        'slideIn': 'slideIn 0.2s ease-out',
+        'fade-in': 'fadeIn 0.2s ease-out',
+        'scale-in': 'scaleIn 0.2s ease-out',
+        'bounce-subtle': 'bounceSubtle 0.3s ease-out',
+        'ping-slow': 'pingSlow 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'pulse-subtle': 'pulseSubtle 2s ease-in-out infinite',
+        'shimmer': 'shimmer 2s linear infinite',
+        'grid-scroll': 'gridScroll 20s linear infinite',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(-4px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeOut: {
+          '0%': { opacity: '1', transform: 'translateY(0)' },
+          '100%': { opacity: '0', transform: 'translateY(-4px)' },
+        },
+        slideIn: {
+          '0%': { opacity: '0', transform: 'translateY(-8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        bounceSubtle: {
+          '0%': { transform: 'scale(0.95)' },
+          '50%': { transform: 'scale(1.02)' },
+          '100%': { transform: 'scale(1)' },
+        },
+        pingSlow: {
+          '0%': { transform: 'scale(1)', opacity: '0.5' },
+          '75%, 100%': { transform: 'scale(1.5)', opacity: '0' },
+        },
+        pulseSubtle: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.85' },
+        },
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+        gridScroll: {
+          '0%': { transform: 'translate(0, 0)' },
+          '100%': { transform: 'translate(20px, 20px)' },
+        },
       },
     },
   },

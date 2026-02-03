@@ -1,10 +1,11 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal as XTerm } from '@xterm/xterm';
-import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react';
 import type { Theme } from '~/lib/stores/theme';
 import { createScopedLogger } from '~/utils/logger';
 import { getTerminalTheme } from './theme';
+import { useCopyToClipboard } from '~/lib/hooks/useCopyToClipboard';
 
 const logger = createScopedLogger('Terminal');
 
@@ -32,6 +33,7 @@ export const Terminal = memo(
     const terminalRef = useRef<XTerm>();
     const [isDragging, setIsDragging] = useState(false);
     const [contextMenu, setContextMenu] = useState<ContextMenu>({ x: 0, y: 0, show: false });
+    const { copy, copied } = useCopyToClipboard();
 
     useEffect(() => {
       const element = terminalElementRef.current!;
@@ -94,13 +96,13 @@ export const Terminal = memo(
       setContextMenu({ x: e.clientX, y: e.clientY, show: true });
     };
 
-    const closeContextMenu = () => setContextMenu(prev => ({ ...prev, show: false }));
+    const closeContextMenu = useCallback(() => setContextMenu(prev => ({ ...prev, show: false })), []);
 
-    const handleCopy = async () => {
+    const handleCopy = useCallback(async () => {
       const selection = terminalRef.current?.getSelection();
-      if (selection) await navigator.clipboard.writeText(selection);
+      if (selection) await copy(selection);
       closeContextMenu();
-    };
+    }, [copy, closeContextMenu]);
 
     const handlePaste = async () => {
       const text = await navigator.clipboard.readText();
@@ -194,7 +196,12 @@ export const Terminal = memo(
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button onClick={handleCopy} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
-              <span className="text-xs text-bolt-elements-textTertiary">⌘C</span> Copy
+              <span className="text-xs text-bolt-elements-textTertiary">⌘C</span>
+              {copied ? (
+                <span className="text-green-400 flex items-center gap-1">
+                  <div className="i-ph:check-bold text-xs" /> Copied
+                </span>
+              ) : 'Copy'}
             </button>
             <button onClick={handlePaste} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
               <span className="text-xs text-bolt-elements-textTertiary">⌘V</span> Paste

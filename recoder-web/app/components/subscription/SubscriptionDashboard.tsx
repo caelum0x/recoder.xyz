@@ -146,21 +146,21 @@ export function SubscriptionDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto p-8">
-      <h1 className="text-3xl font-bold text-white mb-8">Subscription & Usage</h1>
+      <h1 className="text-3xl font-bold text-bolt-elements-textPrimary mb-8">Subscription & Usage</h1>
 
       <div className="grid md:grid-cols-2 gap-6 mb-8">
         {/* Current Plan */}
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
+        <div className="bg-bolt-elements-background-depth-2 backdrop-blur-sm border border-bolt-elements-borderColor rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <CreditCard className="w-6 h-6 text-blue-400" />
-            <h2 className="text-xl font-semibold text-white">Current Plan</h2>
+            <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">Current Plan</h2>
           </div>
 
           {subscription ? (
             <>
               <div className="mb-4">
-                <p className="text-3xl font-bold text-white capitalize">{subscription.plan_id}</p>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-3xl font-bold text-bolt-elements-textPrimary capitalize">{subscription.plan_id}</p>
+                <p className="text-bolt-elements-textTertiary text-sm mt-1">
                   Provider: {subscription.provider === 'paddle' ? 'Paddle' : 'DodoPay'}
                 </p>
               </div>
@@ -172,12 +172,12 @@ export function SubscriptionDashboard() {
                   ) : (
                     <AlertCircle className="w-4 h-4 text-yellow-400" />
                   )}
-                  <span className="text-gray-300 capitalize">Status: {subscription.status}</span>
+                  <span className="text-bolt-elements-textSecondary capitalize">Status: {subscription.status}</span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-300 text-sm">
+                  <Calendar className="w-4 h-4 text-bolt-elements-textTertiary" />
+                  <span className="text-bolt-elements-textSecondary text-sm">
                     Renews: {new Date(subscription.current_period_end).toLocaleDateString()}
                   </span>
                 </div>
@@ -194,7 +194,7 @@ export function SubscriptionDashboard() {
                 {!subscription.cancel_at_period_end && (
                   <button
                     onClick={handleCancelSubscription}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+                    className="flex-1 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary py-2 px-4 rounded-lg font-medium transition-colors"
                   >
                     Cancel Plan
                   </button>
@@ -211,7 +211,7 @@ export function SubscriptionDashboard() {
             </>
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-400 mb-4">No active subscription</p>
+              <p className="text-bolt-elements-textTertiary mb-4">No active subscription</p>
               <a
                 href="/pricing"
                 className="inline-block bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg font-medium transition-colors"
@@ -223,24 +223,24 @@ export function SubscriptionDashboard() {
         </div>
 
         {/* Usage Stats */}
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
+        <div className="bg-bolt-elements-background-depth-2 backdrop-blur-sm border border-bolt-elements-borderColor rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <TrendingUp className="w-6 h-6 text-green-400" />
-            <h2 className="text-xl font-semibold text-white">Usage This Month</h2>
+            <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">Usage This Month</h2>
           </div>
 
           {usage && (
             <>
               <div className="mb-4">
                 <div className="flex justify-between items-baseline mb-2">
-                  <span className="text-gray-400">AI Generations</span>
-                  <span className="text-2xl font-bold text-white">
+                  <span className="text-bolt-elements-textTertiary">AI Generations</span>
+                  <span className="text-2xl font-bold text-bolt-elements-textPrimary">
                     {usage.limit - usage.remaining} / {usage.limit}
                   </span>
                 </div>
 
                 {/* Progress bar */}
-                <div className="w-full h-3 bg-gray-700 rounded-full overflow-hidden">
+                <div className="w-full h-3 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
                       usagePercent > 80 ? 'bg-red-500' : usagePercent > 50 ? 'bg-yellow-500' : 'bg-green-500'
@@ -249,7 +249,7 @@ export function SubscriptionDashboard() {
                   />
                 </div>
 
-                <p className="text-gray-400 text-sm mt-2">
+                <p className="text-bolt-elements-textTertiary text-sm mt-2">
                   {usage.remaining} generations remaining
                 </p>
               </div>
@@ -276,20 +276,20 @@ export function SubscriptionDashboard() {
 
       {/* Additional Stats */}
       {stats && stats.totalGenerations > 0 && (
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-white mb-4">Usage Statistics (30 days)</h2>
+        <div className="bg-bolt-elements-background-depth-2 backdrop-blur-sm border border-bolt-elements-borderColor rounded-xl p-6">
+          <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-4">Usage Statistics (30 days)</h2>
 
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div>
-              <p className="text-gray-400 text-sm">Total Generations</p>
-              <p className="text-2xl font-bold text-white">{stats.totalGenerations}</p>
+              <p className="text-bolt-elements-textTertiary text-sm">Total Generations</p>
+              <p className="text-2xl font-bold text-bolt-elements-textPrimary">{stats.totalGenerations}</p>
             </div>
             <div>
-              <p className="text-gray-400 text-sm">Tokens Used</p>
-              <p className="text-2xl font-bold text-white">{stats.totalTokens.toLocaleString()}</p>
+              <p className="text-bolt-elements-textTertiary text-sm">Tokens Used</p>
+              <p className="text-2xl font-bold text-bolt-elements-textPrimary">{stats.totalTokens.toLocaleString()}</p>
             </div>
             <div>
-              <p className="text-gray-400 text-sm">Est. Cost Saved</p>
+              <p className="text-bolt-elements-textTertiary text-sm">Est. Cost Saved</p>
               <p className="text-2xl font-bold text-green-400">${stats.totalCost.toFixed(2)}</p>
             </div>
           </div>
@@ -297,12 +297,12 @@ export function SubscriptionDashboard() {
           {/* Model usage breakdown */}
           {Object.keys(stats.byModel).length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-white mb-3">By AI Model</h3>
+              <h3 className="text-lg font-semibold text-bolt-elements-textPrimary mb-3">By AI Model</h3>
               <div className="space-y-2">
                 {Object.entries(stats.byModel).map(([model, count]) => (
                   <div key={model} className="flex justify-between items-center">
-                    <span className="text-gray-300">{model}</span>
-                    <span className="text-white font-medium">{count} generations</span>
+                    <span className="text-bolt-elements-textSecondary">{model}</span>
+                    <span className="text-bolt-elements-textPrimary font-medium">{count} generations</span>
                   </div>
                 ))}
               </div>

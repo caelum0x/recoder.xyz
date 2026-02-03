@@ -78,7 +78,7 @@ export function UserMenu() {
   }
 
   function goToDashboard() {
-    window.location.href = `${getMainSiteUrl()}/dashboard`;
+    window.location.href = '/dashboard';
   }
 
   const getInitials = (name?: string) => {
@@ -114,7 +114,7 @@ export function UserMenu() {
     <div className="relative">
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors border border-gray-700 text-white"
+        className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-2 transition-colors border border-bolt-elements-borderColor text-bolt-elements-textPrimary"
       >
         {userProfile.image && !imageError ? (
           <img
@@ -130,7 +130,7 @@ export function UserMenu() {
             {getInitials(userProfile.name)}
           </div>
         )}
-        <div className="i-ph:caret-down text-gray-300" />
+        <div className="i-ph:caret-down text-bolt-elements-textSecondary" />
       </button>
 
       {/* Dropdown Menu */}
@@ -143,50 +143,41 @@ export function UserMenu() {
           />
 
           {/* Menu */}
-          <div className="absolute right-0 mt-2 w-64 rounded-lg border border-gray-800 shadow-2xl z-50 overflow-hidden" style={{ backgroundColor: '#000000', color: '#ffffff' }}>
+          <div className="absolute right-0 mt-2 w-64 rounded-lg border border-bolt-elements-borderColor shadow-2xl z-50 overflow-hidden bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
             {/* User Info */}
-            <div className="p-4 border-b border-gray-800" style={{ backgroundColor: '#000000', color: '#ffffff' }}>
-              <div className="font-medium truncate" style={{ color: '#ffffff' }}>
+            <div className="p-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+              <div className="font-medium truncate text-bolt-elements-textPrimary">
                 {userProfile.name || 'User'}
               </div>
-              <div className="text-sm truncate" style={{ color: '#9ca3af' }}>
+              <div className="text-sm truncate text-bolt-elements-textSecondary">
                 {userProfile.email}
               </div>
               {userProfile.subscription && (
-                <div className="mt-2 inline-flex px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: '#374151', color: '#d1d5db' }}>
+                <div className="mt-2 inline-flex px-2 py-0.5 rounded-full text-xs bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary">
                   {userProfile.subscription === 'free' ? 'Free Beta' : userProfile.subscription}
                 </div>
               )}
             </div>
 
             {/* Menu Items */}
-            <div className="p-2" style={{ backgroundColor: '#000000' }}>
+            <div className="p-2 bg-bolt-elements-background-depth-1">
               <button
                 onClick={goToDashboard}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors"
-                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1f2937'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3"
               >
                 <div className="i-ph:house text-lg" />
                 <span className="text-sm">Dashboard</span>
               </button>
               <button
                 onClick={goToAccount}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors"
-                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1f2937'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3"
               >
                 <div className="i-ph:user text-lg" />
                 <span className="text-sm">Account</span>
               </button>
               <button
                 onClick={goToSettings}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors"
-                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1f2937'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3"
               >
                 <div className="i-ph:gear text-lg" />
                 <span className="text-sm">Settings</span>
@@ -194,13 +185,10 @@ export function UserMenu() {
             </div>
 
             {/* Sign Out */}
-            <div className="p-2 border-t border-gray-800" style={{ backgroundColor: '#000000' }}>
+            <div className="p-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
               <button
                 onClick={handleSignOut}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group"
-                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group text-bolt-elements-textPrimary hover:bg-red-500/10"
               >
                 <div className="i-ph:sign-out text-lg group-hover:text-red-500" />
                 <span className="text-sm group-hover:text-red-500">Sign Out</span>
