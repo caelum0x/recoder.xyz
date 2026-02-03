@@ -1,6 +1,13 @@
 /**
  * Frontend Error Handler Utilities
  * Provides structured error handling, retry mechanisms, and WebSocket error handling
+ *
+ * Production-grade error handling for recoder.xyz
+ * - Unified error types with categorization
+ * - User-friendly messages with recovery actions
+ * - Smart retry with exponential backoff
+ * - WebSocket connection management
+ * - Error reporting and logging
  */
 
 // Error codes matching the backend
@@ -24,20 +31,29 @@ export enum ErrorCode {
   // File errors
   FILE_NOT_FOUND = 'FILE_NOT_FOUND',
   FILE_WRITE_FAILED = 'FILE_WRITE_FAILED',
+  FILE_READ_FAILED = 'FILE_READ_FAILED',
+  FILE_DELETE_FAILED = 'FILE_DELETE_FAILED',
+  FILE_PERMISSION_DENIED = 'FILE_PERMISSION_DENIED',
+  FILE_DISK_FULL = 'FILE_DISK_FULL',
 
   // Network errors
   NETWORK_ERROR = 'NETWORK_ERROR',
   CONNECTION_REFUSED = 'CONNECTION_REFUSED',
   WS_CONNECTION_FAILED = 'WS_CONNECTION_FAILED',
   WS_TIMEOUT = 'WS_TIMEOUT',
+  TIMEOUT_ERROR = 'TIMEOUT_ERROR',
+  DNS_ERROR = 'DNS_ERROR',
+  SSL_ERROR = 'SSL_ERROR',
 
   // Resource errors
   RATE_LIMITED = 'RATE_LIMITED',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
+  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
 
   // Generic errors
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
 }
 
 /**
@@ -130,17 +146,386 @@ function getMessageForCode(code: ErrorCode, fallback?: string): string {
   const messages: Partial<Record<ErrorCode, string>> = {
     [ErrorCode.AUTH_REQUIRED]: 'Please log in to continue.',
     [ErrorCode.AUTH_TOKEN_EXPIRED]: 'Your session has expired. Please log in again.',
+    [ErrorCode.AUTH_INVALID_TOKEN]: 'Your session is invalid. Please log in again.',
+    [ErrorCode.AUTH_SERVICE_ERROR]: 'Authentication service error. Please try again.',
     [ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED]: 'You do not have access to this project.',
+    [ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED]: 'Unable to verify project ownership.',
     [ErrorCode.CONTAINER_NOT_FOUND]: 'Workspace not found. It may have been stopped.',
     [ErrorCode.CONTAINER_NOT_RUNNING]: 'Starting your workspace...',
+    [ErrorCode.CONTAINER_CREATE_FAILED]: 'Failed to create workspace. Please try again.',
     [ErrorCode.CONTAINER_LIMIT_REACHED]: 'You have reached the maximum number of active projects. Please close some projects and try again.',
+    [ErrorCode.FILE_NOT_FOUND]: 'File not found.',
+    [ErrorCode.FILE_WRITE_FAILED]: 'Failed to save file. Please try again.',
+    [ErrorCode.FILE_READ_FAILED]: 'Failed to read file. Please try again.',
+    [ErrorCode.FILE_DELETE_FAILED]: 'Failed to delete file.',
+    [ErrorCode.FILE_PERMISSION_DENIED]: 'Permission denied. Cannot access this file.',
+    [ErrorCode.FILE_DISK_FULL]: 'Disk space is full. Please delete some files.',
     [ErrorCode.NETWORK_ERROR]: 'Network error. Please check your connection.',
+    [ErrorCode.CONNECTION_REFUSED]: 'Unable to connect to server.',
     [ErrorCode.WS_CONNECTION_FAILED]: 'Connection lost. Attempting to reconnect...',
+    [ErrorCode.WS_TIMEOUT]: 'Connection timed out.',
+    [ErrorCode.TIMEOUT_ERROR]: 'Request timed out. Please try again.',
+    [ErrorCode.DNS_ERROR]: 'Unable to resolve server address.',
+    [ErrorCode.SSL_ERROR]: 'Secure connection failed.',
     [ErrorCode.RATE_LIMITED]: 'Too many requests. Please wait a moment.',
     [ErrorCode.SERVICE_UNAVAILABLE]: 'Service temporarily unavailable. Please try again.',
+    [ErrorCode.QUOTA_EXCEEDED]: 'Usage limit exceeded.',
+    [ErrorCode.INTERNAL_ERROR]: 'An internal error occurred. Please try again.',
+    [ErrorCode.VALIDATION_ERROR]: 'Invalid input. Please check your data.',
   };
 
   return messages[code] || fallback || 'An error occurred';
+}
+
+/**
+ * Get recovery suggestions for an error code
+ * Returns user-friendly suggestions to help users recover from errors
+ */
+export function getRecoverySuggestions(code: ErrorCode): string[] {
+  const suggestions: Partial<Record<ErrorCode, string[]>> = {
+    // Authentication
+    [ErrorCode.AUTH_REQUIRED]: [
+      'Click the login button to sign in',
+      'Your work will be saved after you log in',
+    ],
+    [ErrorCode.AUTH_TOKEN_EXPIRED]: [
+      'Refresh the page to log in again',
+      'Your recent changes have been auto-saved',
+    ],
+    [ErrorCode.AUTH_INVALID_TOKEN]: [
+      'Clear your browser cookies and log in again',
+      'If the issue persists, try a different browser',
+    ],
+    [ErrorCode.AUTH_SERVICE_ERROR]: [
+      'Wait a few seconds and try again',
+      'Our authentication service may be experiencing issues',
+    ],
+
+    // Authorization
+    [ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED]: [
+      'Make sure you are logged in with the correct account',
+      'Contact the project owner to request access',
+    ],
+    [ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED]: [
+      'Try refreshing the page',
+      'If you should have access, contact support',
+    ],
+
+    // Container/Workspace
+    [ErrorCode.CONTAINER_NOT_FOUND]: [
+      'Reload the page to create a new workspace',
+      'Your code is saved and will be restored',
+    ],
+    [ErrorCode.CONTAINER_NOT_RUNNING]: [
+      'Wait a moment - the workspace is starting',
+      'If it takes too long, try refreshing the page',
+    ],
+    [ErrorCode.CONTAINER_CREATE_FAILED]: [
+      'Try refreshing the page',
+      'If the issue persists, try again in a few minutes',
+    ],
+    [ErrorCode.CONTAINER_LIMIT_REACHED]: [
+      'Close some of your other projects to free up resources',
+      'Upgrade your plan for more concurrent projects',
+    ],
+
+    // File operations
+    [ErrorCode.FILE_NOT_FOUND]: [
+      'The file may have been moved or deleted',
+      'Check the file tree to locate the file',
+    ],
+    [ErrorCode.FILE_WRITE_FAILED]: [
+      'Try saving again',
+      'Check if you have write permissions',
+      'The workspace may need to restart',
+    ],
+    [ErrorCode.FILE_READ_FAILED]: [
+      'Try refreshing the file',
+      'The file might be temporarily unavailable',
+    ],
+    [ErrorCode.FILE_DELETE_FAILED]: [
+      'Check if the file is currently open',
+      'Try closing any editors using this file first',
+    ],
+    [ErrorCode.FILE_PERMISSION_DENIED]: [
+      'You may not have permission to modify this file',
+      'Check if the file is read-only',
+    ],
+    [ErrorCode.FILE_DISK_FULL]: [
+      'Delete some unused files to free up space',
+      'Remove large files or dependencies you no longer need',
+    ],
+
+    // Network
+    [ErrorCode.NETWORK_ERROR]: [
+      'Check your internet connection',
+      'Try refreshing the page',
+      'Disable any VPN or proxy that might interfere',
+    ],
+    [ErrorCode.CONNECTION_REFUSED]: [
+      'The server may be temporarily unavailable',
+      'Check if you are behind a firewall blocking the connection',
+    ],
+    [ErrorCode.WS_CONNECTION_FAILED]: [
+      'The live connection was interrupted',
+      'The app will automatically try to reconnect',
+      'If reconnection fails, refresh the page',
+    ],
+    [ErrorCode.WS_TIMEOUT]: [
+      'The connection timed out due to inactivity',
+      'Check your internet speed',
+      'Try moving closer to your router',
+    ],
+    [ErrorCode.TIMEOUT_ERROR]: [
+      'The operation took too long',
+      'Try again - the server may have been busy',
+      'Consider breaking large operations into smaller parts',
+    ],
+    [ErrorCode.DNS_ERROR]: [
+      'Check your internet connection',
+      'Try using a different DNS server (like 8.8.8.8)',
+      'Clear your browser DNS cache',
+    ],
+    [ErrorCode.SSL_ERROR]: [
+      'Check your system date and time settings',
+      'Try using a different browser',
+      'Make sure your network is not intercepting HTTPS',
+    ],
+
+    // Server/Rate limiting
+    [ErrorCode.RATE_LIMITED]: [
+      'Wait a minute before trying again',
+      'Avoid making too many rapid requests',
+    ],
+    [ErrorCode.SERVICE_UNAVAILABLE]: [
+      'Our servers are experiencing high load',
+      'Try again in a few minutes',
+      'Check our status page for updates',
+    ],
+    [ErrorCode.QUOTA_EXCEEDED]: [
+      'You have reached your usage limit',
+      'Upgrade your plan for higher limits',
+      'Wait until your quota resets',
+    ],
+
+    // Generic
+    [ErrorCode.INTERNAL_ERROR]: [
+      'Try the operation again',
+      'If the problem persists, refresh the page',
+      'Report this issue if it keeps happening',
+    ],
+    [ErrorCode.VALIDATION_ERROR]: [
+      'Check your input for any mistakes',
+      'Make sure all required fields are filled',
+    ],
+    [ErrorCode.UNKNOWN_ERROR]: [
+      'Try the operation again',
+      'Refresh the page if the problem continues',
+      'Clear your browser cache and cookies',
+    ],
+  };
+
+  return suggestions[code] || [
+    'Try the operation again',
+    'Refresh the page if the problem continues',
+  ];
+}
+
+/**
+ * Error categories for better UX
+ */
+export type ErrorCategory = 'network' | 'auth' | 'file' | 'container' | 'server' | 'unknown';
+
+/**
+ * Get a helpful link based on error category
+ */
+export function getHelpLinkForCategory(category: ErrorCategory): { label: string; url: string } | null {
+  const helpLinks: Partial<Record<ErrorCategory, { label: string; url: string }>> = {
+    network: {
+      label: 'Troubleshooting connection issues',
+      url: 'https://docs.recoder.xyz/troubleshooting/connection',
+    },
+    auth: {
+      label: 'Authentication help',
+      url: 'https://docs.recoder.xyz/troubleshooting/auth',
+    },
+    container: {
+      label: 'Workspace troubleshooting',
+      url: 'https://docs.recoder.xyz/troubleshooting/workspace',
+    },
+  };
+
+  return helpLinks[category] || null;
+}
+
+/**
+ * Get error category from error code
+ */
+export function getErrorCategory(code: ErrorCode): ErrorCategory {
+  const categories: Record<ErrorCode, ErrorCategory> = {
+    [ErrorCode.AUTH_REQUIRED]: 'auth',
+    [ErrorCode.AUTH_INVALID_TOKEN]: 'auth',
+    [ErrorCode.AUTH_TOKEN_EXPIRED]: 'auth',
+    [ErrorCode.AUTH_SERVICE_ERROR]: 'auth',
+    [ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED]: 'auth',
+    [ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED]: 'auth',
+    [ErrorCode.CONTAINER_NOT_FOUND]: 'container',
+    [ErrorCode.CONTAINER_NOT_RUNNING]: 'container',
+    [ErrorCode.CONTAINER_CREATE_FAILED]: 'container',
+    [ErrorCode.CONTAINER_LIMIT_REACHED]: 'container',
+    [ErrorCode.FILE_NOT_FOUND]: 'file',
+    [ErrorCode.FILE_WRITE_FAILED]: 'file',
+    [ErrorCode.FILE_READ_FAILED]: 'file',
+    [ErrorCode.FILE_DELETE_FAILED]: 'file',
+    [ErrorCode.FILE_PERMISSION_DENIED]: 'file',
+    [ErrorCode.FILE_DISK_FULL]: 'file',
+    [ErrorCode.NETWORK_ERROR]: 'network',
+    [ErrorCode.CONNECTION_REFUSED]: 'network',
+    [ErrorCode.WS_CONNECTION_FAILED]: 'network',
+    [ErrorCode.WS_TIMEOUT]: 'network',
+    [ErrorCode.TIMEOUT_ERROR]: 'network',
+    [ErrorCode.DNS_ERROR]: 'network',
+    [ErrorCode.SSL_ERROR]: 'network',
+    [ErrorCode.RATE_LIMITED]: 'server',
+    [ErrorCode.SERVICE_UNAVAILABLE]: 'server',
+    [ErrorCode.QUOTA_EXCEEDED]: 'server',
+    [ErrorCode.INTERNAL_ERROR]: 'server',
+    [ErrorCode.VALIDATION_ERROR]: 'server',
+    [ErrorCode.UNKNOWN_ERROR]: 'unknown',
+  };
+  return categories[code] || 'unknown';
+}
+
+/**
+ * Recovery action types
+ */
+export interface RecoveryAction {
+  label: string;
+  action: () => void | Promise<void>;
+  primary?: boolean;
+}
+
+/**
+ * Extended error info with recovery options
+ */
+export interface ErrorInfo {
+  code: ErrorCode;
+  message: string;
+  userMessage: string;
+  category: ErrorCategory;
+  canRetry: boolean;
+  retryAfter?: number;
+  recoveryActions?: RecoveryAction[];
+  details?: Record<string, unknown>;
+}
+
+/**
+ * Create error info from any error
+ */
+export function createErrorInfo(
+  error: Error | ApiErrorException | string,
+  options?: {
+    recoveryActions?: RecoveryAction[];
+    details?: Record<string, unknown>;
+  }
+): ErrorInfo {
+  let code: ErrorCode;
+  let message: string;
+  let canRetry: boolean;
+  let retryAfter: number | undefined;
+  let details = options?.details;
+
+  if (error instanceof ApiErrorException) {
+    code = error.code;
+    message = error.message;
+    canRetry = error.canRetry;
+    retryAfter = error.retryAfter;
+    details = { ...error.details, ...details };
+  } else if (typeof error === 'string') {
+    code = ErrorCode.UNKNOWN_ERROR;
+    message = error;
+    canRetry = true;
+  } else {
+    code = detectErrorCode(error);
+    message = error.message;
+    canRetry = isRetryableError(code);
+  }
+
+  return {
+    code,
+    message,
+    userMessage: getUserFriendlyMessage({ code, message } as ApiError),
+    category: getErrorCategory(code),
+    canRetry,
+    retryAfter,
+    recoveryActions: options?.recoveryActions,
+    details,
+  };
+}
+
+/**
+ * Detect error code from error message/type
+ */
+function detectErrorCode(error: Error): ErrorCode {
+  const msg = error.message.toLowerCase();
+  const name = error.name.toLowerCase();
+
+  // Network errors
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch')) {
+    return ErrorCode.NETWORK_ERROR;
+  }
+  if (msg.includes('timeout') || name === 'aborterror') {
+    return ErrorCode.TIMEOUT_ERROR;
+  }
+  if (msg.includes('connection refused') || msg.includes('econnrefused')) {
+    return ErrorCode.CONNECTION_REFUSED;
+  }
+  if (msg.includes('dns') || msg.includes('enotfound')) {
+    return ErrorCode.DNS_ERROR;
+  }
+  if (msg.includes('ssl') || msg.includes('certificate')) {
+    return ErrorCode.SSL_ERROR;
+  }
+
+  // Auth errors
+  if (msg.includes('unauthorized') || msg.includes('401')) {
+    return ErrorCode.AUTH_REQUIRED;
+  }
+  if (msg.includes('forbidden') || msg.includes('403') || msg.includes('access denied')) {
+    return ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED;
+  }
+  if (msg.includes('session') || msg.includes('token') && msg.includes('expired')) {
+    return ErrorCode.AUTH_TOKEN_EXPIRED;
+  }
+
+  // File errors
+  if (msg.includes('file not found') || msg.includes('enoent')) {
+    return ErrorCode.FILE_NOT_FOUND;
+  }
+  if (msg.includes('permission denied') || msg.includes('eacces')) {
+    return ErrorCode.FILE_PERMISSION_DENIED;
+  }
+  if (msg.includes('disk full') || msg.includes('enospc')) {
+    return ErrorCode.FILE_DISK_FULL;
+  }
+
+  // Container errors
+  if (msg.includes('container') && msg.includes('not found')) {
+    return ErrorCode.CONTAINER_NOT_FOUND;
+  }
+  if (msg.includes('workspace') && (msg.includes('not found') || msg.includes('not running'))) {
+    return ErrorCode.CONTAINER_NOT_RUNNING;
+  }
+
+  // Server errors
+  if (msg.includes('rate limit') || msg.includes('429')) {
+    return ErrorCode.RATE_LIMITED;
+  }
+  if (msg.includes('503') || msg.includes('service unavailable')) {
+    return ErrorCode.SERVICE_UNAVAILABLE;
+  }
+
+  return ErrorCode.UNKNOWN_ERROR;
 }
 
 /**
@@ -455,10 +840,219 @@ export function createErrorReporter(
     }
 
     // Clean up old entries
-    for (const [k, timestamp] of reported) {
+    reported.forEach((timestamp, k) => {
       if (now - timestamp > debounceMs * 2) {
         reported.delete(k);
       }
+    });
+  };
+}
+
+/**
+ * File operation error with details
+ */
+export class FileOperationError extends ApiErrorException {
+  public readonly filePath: string;
+  public readonly operation: 'read' | 'write' | 'delete' | 'create' | 'move';
+
+  constructor(
+    operation: 'read' | 'write' | 'delete' | 'create' | 'move',
+    filePath: string,
+    message: string,
+    options?: { canRetry?: boolean }
+  ) {
+    const codeMap: Record<string, ErrorCode> = {
+      read: ErrorCode.FILE_READ_FAILED,
+      write: ErrorCode.FILE_WRITE_FAILED,
+      delete: ErrorCode.FILE_DELETE_FAILED,
+      create: ErrorCode.FILE_WRITE_FAILED,
+      move: ErrorCode.FILE_WRITE_FAILED,
+    };
+    super(
+      { code: codeMap[operation], message, details: { filePath, operation } },
+      { canRetry: options?.canRetry ?? true }
+    );
+    this.filePath = filePath;
+    this.operation = operation;
+    this.name = 'FileOperationError';
+  }
+}
+
+/**
+ * Network error with connection details
+ */
+export class NetworkError extends ApiErrorException {
+  public readonly url?: string;
+  public readonly statusCode?: number;
+
+  constructor(
+    message: string,
+    options?: { url?: string; statusCode?: number; canRetry?: boolean }
+  ) {
+    super(
+      { code: ErrorCode.NETWORK_ERROR, message, details: { url: options?.url } },
+      { canRetry: options?.canRetry ?? true }
+    );
+    this.url = options?.url;
+    this.statusCode = options?.statusCode;
+    this.name = 'NetworkError';
+  }
+}
+
+/**
+ * Authentication error
+ */
+export class AuthError extends ApiErrorException {
+  public readonly isExpired: boolean;
+
+  constructor(message: string, options?: { isExpired?: boolean }) {
+    super(
+      {
+        code: options?.isExpired ? ErrorCode.AUTH_TOKEN_EXPIRED : ErrorCode.AUTH_REQUIRED,
+        message,
+      },
+      { canRetry: false }
+    );
+    this.isExpired = options?.isExpired ?? false;
+    this.name = 'AuthError';
+  }
+}
+
+/**
+ * Timeout error
+ */
+export class TimeoutError extends ApiErrorException {
+  public readonly timeoutMs: number;
+
+  constructor(message: string, timeoutMs: number) {
+    super(
+      { code: ErrorCode.TIMEOUT_ERROR, message, details: { timeoutMs } },
+      { canRetry: true }
+    );
+    this.timeoutMs = timeoutMs;
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
+ * Server error (5xx)
+ */
+export class ServerError extends ApiErrorException {
+  public readonly statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(
+      { code: ErrorCode.SERVICE_UNAVAILABLE, message, details: { statusCode } },
+      { canRetry: true }
+    );
+    this.statusCode = statusCode;
+    this.name = 'ServerError';
+  }
+}
+
+/**
+ * Global error event system for centralized error handling
+ */
+export type ErrorEventListener = (error: ErrorInfo) => void;
+
+class ErrorEventEmitter {
+  private listeners: Set<ErrorEventListener> = new Set();
+
+  subscribe(listener: ErrorEventListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  emit(error: ErrorInfo): void {
+    this.listeners.forEach((listener) => {
+      try {
+        listener(error);
+      } catch (e) {
+        console.error('[ErrorEventEmitter] Listener error:', e);
+      }
+    });
+  }
+}
+
+export const errorEvents = new ErrorEventEmitter();
+
+/**
+ * Report an error to the global error system
+ */
+export function reportError(
+  error: Error | ApiErrorException | string,
+  options?: {
+    recoveryActions?: RecoveryAction[];
+    details?: Record<string, unknown>;
+  }
+): void {
+  const errorInfo = createErrorInfo(error, options);
+  errorEvents.emit(errorInfo);
+
+  // Log for debugging
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[ErrorHandler]', errorInfo);
+  }
+}
+
+/**
+ * Wrap an async function with error handling
+ */
+export function withErrorHandling<T>(
+  fn: () => Promise<T>,
+  options?: {
+    onError?: (error: ErrorInfo) => void;
+    recoveryActions?: RecoveryAction[];
+    rethrow?: boolean;
+  }
+): Promise<T> {
+  return fn().catch((error) => {
+    const errorInfo = createErrorInfo(error, {
+      recoveryActions: options?.recoveryActions,
+    });
+    options?.onError?.(errorInfo);
+    errorEvents.emit(errorInfo);
+
+    if (options?.rethrow !== false) {
+      throw error;
     }
+    return undefined as T;
+  });
+}
+
+/**
+ * Batch file operation error tracking
+ */
+export interface FileOperationResult {
+  path: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchOperationResult {
+  totalCount: number;
+  successCount: number;
+  failedCount: number;
+  results: FileOperationResult[];
+}
+
+export function createBatchOperationTracker(): {
+  track: (path: string, success: boolean, error?: string) => void;
+  getResult: () => BatchOperationResult;
+} {
+  const results: FileOperationResult[] = [];
+
+  return {
+    track(path: string, success: boolean, error?: string) {
+      results.push({ path, success, error });
+    },
+    getResult() {
+      return {
+        totalCount: results.length,
+        successCount: results.filter((r) => r.success).length,
+        failedCount: results.filter((r) => !r.success).length,
+        results,
+      };
+    },
   };
 }

@@ -127,7 +127,9 @@ describe('retryWithBackoff', () => {
     });
 
     // Attach the rejection expectation *before* running timers
-    const assertionPromise =
+    const assertionPromise = expect(promise).rejects.toThrow(
+      'Too Many Requests',
+    );
 
     // Run timers to trigger retries and eventual rejection
     await vi.runAllTimersAsync();

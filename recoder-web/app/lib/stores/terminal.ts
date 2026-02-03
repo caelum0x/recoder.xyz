@@ -4,8 +4,8 @@ import { newShellProcess, type ShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
 import { terminalSync } from '~/lib/terminal-sync';
 import { dockerPost } from '~/lib/services/docker-api';
-// NOTE: ensureContainerExists is imported dynamically to avoid circular dependency
-// terminal.ts -> useChatHistory.ts -> workbench.ts -> terminal.ts
+// NOTE: ensureContainerExists is now exported directly from workbench.ts
+// Import is done dynamically in #attachDockerTerminal to avoid circular dependency at module load time
 
 interface TerminalSession {
   terminal: ITerminal;
@@ -15,11 +15,15 @@ interface TerminalSession {
   name: string; // Display name for the terminal tab
 }
 
+/** Cooldown duration after a keep-alive failure (ms) */
+const KEEP_ALIVE_FAILURE_COOLDOWN_MS = 30_000;
+
 export class TerminalStore {
   #terminals: TerminalSession[] = [];
   #projectId: string | null = null;
   #pendingTerminals: ITerminal[] = [];
   #keepAliveInterval?: NodeJS.Timer;
+  #keepAliveFailedAt = 0;
   #terminalNameCounter = 0;
   // PERFORMANCE: Track subscription cleanup functions to prevent memory leaks
   #pendingSubscriptions = new Map<ITerminal, () => void>();
@@ -82,15 +86,35 @@ export class TerminalStore {
       clearInterval(this.#keepAliveInterval as NodeJS.Timeout);
     }
 
+    // Reset failure cooldown when starting fresh
+    this.#keepAliveFailedAt = 0;
+
     // Send keep-alive every 5 minutes
     this.#keepAliveInterval = setInterval(async () => {
-      if (this.#projectId) {
-        try {
-          await dockerPost(`/api/keep-alive/${this.#projectId}`);
-          console.log('[Terminal] Keep-alive sent');
-        } catch (error) {
-          console.warn('[Terminal] Keep-alive failed:', error);
+      if (!this.#projectId) return;
+
+      // Check if container is ready before sending keep-alive
+      try {
+        const { workbenchStore } = await import('./workbench');
+        const containerReady = workbenchStore.containerReady.get();
+        if (!containerReady) {
+          return;
         }
+      } catch {
+        return;
+      }
+
+      // Skip if still in failure cooldown
+      if (this.#keepAliveFailedAt > 0 && Date.now() - this.#keepAliveFailedAt < KEEP_ALIVE_FAILURE_COOLDOWN_MS) {
+        return;
+      }
+
+      try {
+        await dockerPost(`/api/keep-alive/${this.#projectId}`);
+        this.#keepAliveFailedAt = 0;
+      } catch (error) {
+        this.#keepAliveFailedAt = Date.now();
+        console.debug(`[Terminal] Keep-alive failed, cooling down for ${KEEP_ALIVE_FAILURE_COOLDOWN_MS / 1000}s`);
       }
     }, 5 * 60 * 1000);
   }
@@ -147,8 +171,9 @@ export class TerminalStore {
   async #attachDockerTerminal(terminal: ITerminal, existingTerminalId?: string, customName?: string) {
     // Use coordinated container creation to avoid race conditions
     try {
-      // Dynamic import to avoid circular dependency
-      const { ensureContainerExists } = await import('~/lib/persistence/useChatHistory');
+      // Dynamic import to avoid circular dependency at module load time
+      // ensureContainerExists is now the centralized function in workbench.ts
+      const { ensureContainerExists } = await import('./workbench');
       const containerReady = await ensureContainerExists(this.#projectId!);
       if (!containerReady) {
         throw new Error('Container creation failed');

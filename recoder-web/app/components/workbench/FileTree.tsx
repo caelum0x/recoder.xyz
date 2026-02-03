@@ -1,14 +1,126 @@
-import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '@nanostores/react';
 import type { FileMap } from '~/lib/stores/files';
 import { filesWithErrorsAtom, getFileErrorCount } from '~/lib/stores/errors';
 import { classNames } from '~/utils/classNames';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
+import { useContextPaths } from '~/lib/hooks/useContextPaths';
+import { MoveDialog } from './MoveDialog';
 
 const logger = createScopedLogger('FileTree');
 
 const NODE_PADDING_LEFT = 8;
 const DEFAULT_HIDDEN_FILES = [/\/node_modules\//, /\/\.next/, /\/\.astro/];
+
+// File extension to icon class mapping using Phosphor icons
+const FILE_ICON_MAP: Record<string, string> = {
+  // TypeScript/JavaScript
+  ts: 'i-ph:file-ts-duotone text-blue-400',
+  tsx: 'i-ph:file-tsx-duotone text-blue-500',
+  js: 'i-ph:file-js-duotone text-yellow-400',
+  jsx: 'i-ph:file-jsx-duotone text-yellow-500',
+  mjs: 'i-ph:file-js-duotone text-yellow-400',
+  cjs: 'i-ph:file-js-duotone text-yellow-400',
+  // Web
+  html: 'i-ph:file-html-duotone text-orange-400',
+  css: 'i-ph:file-css-duotone text-blue-300',
+  scss: 'i-ph:file-css-duotone text-pink-400',
+  sass: 'i-ph:file-css-duotone text-pink-400',
+  less: 'i-ph:file-css-duotone text-indigo-400',
+  // Data/Config
+  json: 'i-ph:file-duotone text-yellow-300',
+  yaml: 'i-ph:file-duotone text-red-400',
+  yml: 'i-ph:file-duotone text-red-400',
+  toml: 'i-ph:file-duotone text-bolt-elements-textSecondary',
+  xml: 'i-ph:file-duotone text-orange-300',
+  // Documentation
+  md: 'i-ph:file-md-duotone text-bolt-elements-textSecondary',
+  mdx: 'i-ph:file-md-duotone text-yellow-400',
+  txt: 'i-ph:file-text-duotone text-bolt-elements-textSecondary',
+  // Images
+  png: 'i-ph:file-image-duotone text-purple-400',
+  jpg: 'i-ph:file-image-duotone text-purple-400',
+  jpeg: 'i-ph:file-image-duotone text-purple-400',
+  gif: 'i-ph:file-image-duotone text-purple-400',
+  svg: 'i-ph:file-svg-duotone text-orange-400',
+  webp: 'i-ph:file-image-duotone text-purple-400',
+  ico: 'i-ph:file-image-duotone text-purple-400',
+  // Other languages
+  py: 'i-ph:file-py-duotone text-yellow-400',
+  rs: 'i-ph:file-rs-duotone text-orange-500',
+  go: 'i-ph:file-duotone text-cyan-400',
+  java: 'i-ph:file-duotone text-red-400',
+  c: 'i-ph:file-c-duotone text-blue-400',
+  cpp: 'i-ph:file-cpp-duotone text-blue-500',
+  h: 'i-ph:file-c-duotone text-blue-300',
+  hpp: 'i-ph:file-cpp-duotone text-blue-400',
+  // Database
+  sql: 'i-ph:file-sql-duotone text-blue-300',
+  prisma: 'i-ph:database-duotone text-teal-400',
+  // Config files
+  env: 'i-ph:gear-duotone text-yellow-500',
+  gitignore: 'i-ph:git-branch-duotone text-orange-400',
+  dockerignore: 'i-ph:cube-duotone text-blue-400',
+  eslintrc: 'i-ph:gear-duotone text-purple-400',
+  prettierrc: 'i-ph:gear-duotone text-pink-400',
+  // Lock files
+  lock: 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  // Shell
+  sh: 'i-ph:terminal-duotone text-green-400',
+  bash: 'i-ph:terminal-duotone text-green-400',
+  zsh: 'i-ph:terminal-duotone text-green-400',
+  // Vue
+  vue: 'i-ph:file-vue-duotone text-green-500',
+};
+
+// Special file name mappings (exact match)
+const SPECIAL_FILE_ICONS: Record<string, string> = {
+  'package.json': 'i-ph:package-duotone text-green-400',
+  'package-lock.json': 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  'yarn.lock': 'i-ph:lock-duotone text-blue-400',
+  'pnpm-lock.yaml': 'i-ph:lock-duotone text-orange-400',
+  'tsconfig.json': 'i-ph:gear-duotone text-blue-400',
+  'tailwind.config.js': 'i-ph:gear-duotone text-cyan-400',
+  'tailwind.config.ts': 'i-ph:gear-duotone text-cyan-400',
+  'vite.config.js': 'i-ph:lightning-duotone text-purple-400',
+  'vite.config.ts': 'i-ph:lightning-duotone text-purple-400',
+  'next.config.js': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
+  'next.config.mjs': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
+  '.gitignore': 'i-ph:git-branch-duotone text-orange-400',
+  '.env': 'i-ph:gear-duotone text-yellow-500',
+  '.env.local': 'i-ph:gear-duotone text-yellow-500',
+  '.env.development': 'i-ph:gear-duotone text-yellow-500',
+  '.env.production': 'i-ph:gear-duotone text-yellow-500',
+  'Dockerfile': 'i-ph:cube-duotone text-blue-400',
+  'docker-compose.yml': 'i-ph:cube-duotone text-blue-400',
+  'docker-compose.yaml': 'i-ph:cube-duotone text-blue-400',
+  'README.md': 'i-ph:book-open-duotone text-blue-300',
+  'LICENSE': 'i-ph:certificate-duotone text-yellow-400',
+};
+
+function getFileIcon(fileName: string): string {
+  // Check special file names first
+  if (SPECIAL_FILE_ICONS[fileName]) {
+    return SPECIAL_FILE_ICONS[fileName];
+  }
+
+  // Check for dotfiles without extension
+  if (fileName.startsWith('.')) {
+    const dotfileName = fileName.slice(1);
+    if (FILE_ICON_MAP[dotfileName]) {
+      return FILE_ICON_MAP[dotfileName];
+    }
+  }
+
+  // Get extension
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (ext && FILE_ICON_MAP[ext]) {
+    return FILE_ICON_MAP[ext];
+  }
+
+  // Default file icon
+  return 'i-ph:file-duotone';
+}
 
 interface ContextMenuState {
   x: number;
@@ -25,6 +137,7 @@ interface Props {
   onFolderCreate?: (folderPath: string, folderName: string) => void;
   onFileDelete?: (filePath: string) => void;
   onFileRename?: (oldPath: string, newPath: string) => void;
+  onFileMove?: (sourcePath: string, destinationFolder: string) => void;
   onFileCopy?: (filePath: string) => void;
   rootFolder?: string;
   hideRoot?: boolean;
@@ -33,7 +146,42 @@ interface Props {
   hiddenFiles?: Array<string | RegExp>;
   unsavedFiles?: Set<string>;
   className?: string;
+  searchQuery?: string;
 }
+
+// Drag state for drag-and-drop functionality
+interface DragState {
+  isDragging: boolean;
+  draggedPath: string | null;
+  draggedType: 'file' | 'folder' | null;
+  dropTargetPath: string | null;
+}
+
+// Highlight matching text in search results
+const highlightMatch = (text: string, query: string): React.ReactNode => {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return text;
+
+  const lowerText = text.toLowerCase();
+  const lowerQuery = trimmedQuery.toLowerCase();
+  const index = lowerText.indexOf(lowerQuery);
+
+  if (index === -1) {
+    return text;
+  }
+
+  const end = index + trimmedQuery.length;
+
+  return (
+    <>
+      {text.slice(0, index)}
+      <mark className="rounded-sm bg-bolt-elements-item-backgroundAccent/30 px-0.5 text-bolt-elements-textPrimary">
+        {text.slice(index, end)}
+      </mark>
+      {text.slice(end)}
+    </>
+  );
+};
 
 export const FileTree = memo(
   ({
@@ -43,6 +191,7 @@ export const FileTree = memo(
     onFolderCreate,
     onFileDelete,
     onFileRename,
+    onFileMove,
     onFileCopy,
     selectedFile,
     rootFolder,
@@ -52,15 +201,27 @@ export const FileTree = memo(
     hiddenFiles,
     className,
     unsavedFiles,
+    searchQuery = '',
   }: Props) => {
     renderLogger.trace('FileTree');
 
     const filesWithErrors = useStore(filesWithErrorsAtom);
+    const { addContextPath, removeContextPath, isInContext } = useContextPaths();
+
+    // Drag-and-drop state
+    const [dragState, setDragState] = useState<DragState>({
+      isDragging: false,
+      draggedPath: null,
+      draggedType: null,
+      dropTargetPath: null,
+    });
     const computedHiddenFiles = useMemo(() => [...DEFAULT_HIDDEN_FILES, ...(hiddenFiles ?? [])], [hiddenFiles]);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [renaming, setRenaming] = useState<string | null>(null);
     const [newItemName, setNewItemName] = useState('');
     const [creatingIn, setCreatingIn] = useState<{ path: string; type: 'file' | 'folder' } | null>(null);
+    const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const fileList = useMemo(() => {
       return buildFileList(files, rootFolder, hideRoot, computedHiddenFiles);
@@ -185,6 +346,119 @@ export const FileTree = memo(
       closeContextMenu();
     }, [contextMenu, onFileCopy, closeContextMenu]);
 
+    const handleToggleContext = useCallback(() => {
+      if (contextMenu && contextMenu.type === 'file') {
+        if (isInContext(contextMenu.path)) {
+          removeContextPath(contextMenu.path);
+        } else {
+          addContextPath(contextMenu.path);
+        }
+      }
+      closeContextMenu();
+    }, [contextMenu, isInContext, addContextPath, removeContextPath, closeContextMenu]);
+
+    // Handle move from context menu - opens move dialog
+    const [moveDialogPath, setMoveDialogPath] = useState<string | null>(null);
+
+    const handleMove = useCallback(() => {
+      if (contextMenu) {
+        setMoveDialogPath(contextMenu.path);
+      }
+      closeContextMenu();
+    }, [contextMenu, closeContextMenu]);
+
+    const handleMoveConfirm = useCallback((sourcePath: string, destinationFolder: string) => {
+      if (onFileMove) {
+        onFileMove(sourcePath, destinationFolder);
+      }
+      setMoveDialogPath(null);
+    }, [onFileMove]);
+
+    const handleMoveCancel = useCallback(() => {
+      setMoveDialogPath(null);
+    }, []);
+
+    // Start rename for the currently focused/selected item (for F2 shortcut)
+    const startRenameForFocused = useCallback(() => {
+      const focusedItem = filteredFileList[focusedIndex];
+      if (focusedItem) {
+        setRenaming(focusedItem.fullPath);
+        setNewItemName(focusedItem.name);
+      }
+    }, [filteredFileList, focusedIndex]);
+
+    // Drag and drop handlers
+    const handleDragStart = useCallback((e: React.DragEvent, path: string, type: 'file' | 'folder') => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', path);
+      e.dataTransfer.setData('application/x-filetree-item', JSON.stringify({ path, type }));
+      setDragState({
+        isDragging: true,
+        draggedPath: path,
+        draggedType: type,
+        dropTargetPath: null,
+      });
+    }, []);
+
+    const handleDragEnd = useCallback(() => {
+      setDragState({
+        isDragging: false,
+        draggedPath: null,
+        draggedType: null,
+        dropTargetPath: null,
+      });
+    }, []);
+
+    const handleDragOver = useCallback((e: React.DragEvent, folderPath: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Don't allow dropping on itself or inside itself
+      if (dragState.draggedPath === folderPath) return;
+      if (dragState.draggedPath && folderPath.startsWith(dragState.draggedPath + '/')) return;
+
+      e.dataTransfer.dropEffect = 'move';
+      setDragState(prev => ({
+        ...prev,
+        dropTargetPath: folderPath,
+      }));
+    }, [dragState.draggedPath]);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      // Only clear if leaving the actual element (not entering a child)
+      const relatedTarget = e.relatedTarget as unknown as HTMLElement;
+      const currentTarget = e.currentTarget as unknown as HTMLElement;
+      if (!currentTarget.contains(relatedTarget)) {
+        setDragState(prev => ({
+          ...prev,
+          dropTargetPath: null,
+        }));
+      }
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent, targetFolderPath: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const itemData = e.dataTransfer.getData('application/x-filetree-item');
+      if (itemData && onFileMove) {
+        const { path } = JSON.parse(itemData);
+        // Don't move to same location
+        const currentParent = path.substring(0, path.lastIndexOf('/'));
+        if (currentParent !== targetFolderPath && path !== targetFolderPath && !targetFolderPath.startsWith(path + '/')) {
+          onFileMove(path, targetFolderPath);
+        }
+      }
+
+      setDragState({
+        isDragging: false,
+        draggedPath: null,
+        draggedType: null,
+        dropTargetPath: null,
+      });
+    }, [onFileMove]);
+
     const submitNewItem = useCallback(() => {
       if (creatingIn && newItemName.trim()) {
         if (creatingIn.type === 'file' && onFileCreate) {
@@ -216,9 +490,108 @@ export const FileTree = memo(
       }
     }, [contextMenu, closeContextMenu]);
 
+    // Keyboard navigation handler
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+      // Skip if currently renaming or creating
+      if (renaming || creatingIn) return;
+
+      const totalItems = filteredFileList.length;
+      if (totalItems === 0) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setFocusedIndex((prev) => {
+            const next = prev < totalItems - 1 ? prev + 1 : 0;
+            return next;
+          });
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setFocusedIndex((prev) => {
+            const next = prev > 0 ? prev - 1 : totalItems - 1;
+            return next;
+          });
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < totalItems) {
+            const item = filteredFileList[focusedIndex];
+            if (item.kind === 'folder' && collapsedFolders.has(item.fullPath)) {
+              toggleCollapseState(item.fullPath);
+            }
+          }
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < totalItems) {
+            const item = filteredFileList[focusedIndex];
+            if (item.kind === 'folder' && !collapsedFolders.has(item.fullPath)) {
+              toggleCollapseState(item.fullPath);
+            }
+          }
+          break;
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < totalItems) {
+            const item = filteredFileList[focusedIndex];
+            if (item.kind === 'file') {
+              onFileSelect?.(item.fullPath);
+            } else {
+              toggleCollapseState(item.fullPath);
+            }
+          }
+          break;
+        case 'Home':
+          e.preventDefault();
+          setFocusedIndex(0);
+          break;
+        case 'End':
+          e.preventDefault();
+          setFocusedIndex(totalItems - 1);
+          break;
+        case 'F2':
+          // F2 to rename focused item
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < totalItems) {
+            startRenameForFocused();
+          }
+          break;
+        case 'Delete':
+        case 'Backspace':
+          // Delete key to delete focused item (with confirmation)
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            if (focusedIndex >= 0 && focusedIndex < totalItems && onFileDelete) {
+              const item = filteredFileList[focusedIndex];
+              onFileDelete(item.fullPath);
+            }
+          }
+          break;
+      }
+    }, [filteredFileList, focusedIndex, collapsedFolders, renaming, creatingIn, onFileSelect, onFileDelete, toggleCollapseState, startRenameForFocused]);
+
+    // Update focused index when selected file changes externally
+    useEffect(() => {
+      if (selectedFile) {
+        const index = filteredFileList.findIndex((item) => item.fullPath === selectedFile);
+        if (index >= 0) {
+          setFocusedIndex(index);
+        }
+      }
+    }, [selectedFile, filteredFileList]);
+
     return (
-      <div className={classNames('text-sm relative', className)}>
-        {filteredFileList.map((fileOrFolder) => {
+      <div
+        ref={containerRef}
+        className={classNames('text-sm relative outline-none', className)}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        role="tree"
+        aria-label="File tree"
+      >
+        {filteredFileList.map((fileOrFolder, index) => {
           switch (fileOrFolder.kind) {
             case 'file': {
               // Check if file has errors (try with and without /workspace prefix)
@@ -241,7 +614,7 @@ export const FileTree = memo(
                       }}
                       onBlur={submitRename}
                       autoFocus
-                      className="w-full px-1 py-0.5 text-sm text-white bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
+                      className="w-full px-1 py-0.5 text-sm text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
                     />
                   </div>
                 );
@@ -251,13 +624,20 @@ export const FileTree = memo(
                 <File
                   key={fileOrFolder.id}
                   selected={selectedFile === fileOrFolder.fullPath}
+                  focused={focusedIndex === index}
                   file={fileOrFolder}
                   unsavedChanges={unsavedFiles?.has(fileOrFolder.fullPath)}
                   errorCount={errorCount}
+                  searchQuery={searchQuery}
                   onClick={() => {
+                    setFocusedIndex(index);
                     onFileSelect?.(fileOrFolder.fullPath);
                   }}
                   onContextMenu={(e) => handleContextMenu(e, fileOrFolder.fullPath, 'file')}
+                  draggable={!!onFileMove}
+                  onDragStart={(e) => handleDragStart(e, fileOrFolder.fullPath, 'file')}
+                  onDragEnd={handleDragEnd}
+                  isDragging={dragState.draggedPath === fileOrFolder.fullPath}
                 />
               );
             }
@@ -276,7 +656,7 @@ export const FileTree = memo(
                       }}
                       onBlur={submitRename}
                       autoFocus
-                      className="w-full px-1 py-0.5 text-sm text-white bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
+                      className="w-full px-1 py-0.5 text-sm text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
                     />
                   </div>
                 );
@@ -287,11 +667,22 @@ export const FileTree = memo(
                   key={fileOrFolder.id}
                   folder={fileOrFolder}
                   selected={allowFolderSelection && selectedFile === fileOrFolder.fullPath}
+                  focused={focusedIndex === index}
                   collapsed={collapsedFolders.has(fileOrFolder.fullPath)}
+                  searchQuery={searchQuery}
                   onClick={() => {
+                    setFocusedIndex(index);
                     toggleCollapseState(fileOrFolder.fullPath);
                   }}
                   onContextMenu={(e) => handleContextMenu(e, fileOrFolder.fullPath, 'folder')}
+                  draggable={!!onFileMove}
+                  onDragStart={(e) => handleDragStart(e, fileOrFolder.fullPath, 'folder')}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, fileOrFolder.fullPath)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, fileOrFolder.fullPath)}
+                  isDragging={dragState.draggedPath === fileOrFolder.fullPath}
+                  isDropTarget={dragState.dropTargetPath === fileOrFolder.fullPath}
                 />
               );
             }
@@ -317,7 +708,7 @@ export const FileTree = memo(
                 onBlur={submitNewItem}
                 autoFocus
                 placeholder={creatingIn.type === 'file' ? 'filename.ts' : 'folder-name'}
-                className="flex-1 px-1 py-0.5 text-sm text-white bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none placeholder:text-gray-400"
+                className="flex-1 px-1 py-0.5 text-sm text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none placeholder:text-bolt-elements-textSecondary"
               />
             </div>
           </div>
@@ -348,13 +739,33 @@ export const FileTree = memo(
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
             >
               <span className="i-ph:pencil" /> Rename
+              <span className="ml-auto text-xs text-bolt-elements-textTertiary">F2</span>
             </button>
+            {onFileMove && (
+              <button
+                onClick={handleMove}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+              >
+                <span className="i-ph:arrows-out-cardinal" /> Move to...
+              </button>
+            )}
             <button
               onClick={handleCopy}
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
             >
               <span className="i-ph:copy" /> Copy Path
             </button>
+            {contextMenu.type === 'file' && (
+              <button
+                onClick={handleToggleContext}
+                className={`w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2 ${
+                  isInContext(contextMenu.path) ? 'text-blue-400' : ''
+                }`}
+              >
+                <span className={isInContext(contextMenu.path) ? 'i-ph:minus-circle' : 'i-ph:plus-circle'} />
+                {isInContext(contextMenu.path) ? 'Remove from Context' : 'Add to Context'}
+              </button>
+            )}
             <div className="border-t border-bolt-elements-borderColor my-1" />
             <button
               onClick={handleDelete}
@@ -363,6 +774,18 @@ export const FileTree = memo(
               <span className="i-ph:trash" /> Delete
             </button>
           </div>
+        )}
+
+        {/* Move Dialog */}
+        {moveDialogPath && (
+          <MoveDialog
+            isOpen={!!moveDialogPath}
+            sourcePath={moveDialogPath}
+            files={files}
+            rootFolder={rootFolder}
+            onMove={handleMoveConfirm}
+            onCancel={handleMoveCancel}
+          />
         )}
       </div>
     );
@@ -375,27 +798,116 @@ interface FolderProps {
   folder: FolderNode;
   collapsed: boolean;
   selected?: boolean;
+  focused?: boolean;
+  searchQuery?: string;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  // Drag-and-drop props
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
 }
 
-function Folder({ folder: { depth, name }, collapsed, selected = false, onClick, onContextMenu }: FolderProps) {
+// Folder name to icon/color mapping for special folders
+const FOLDER_ICONS: Record<string, string> = {
+  'src': 'text-blue-400',
+  'app': 'text-blue-400',
+  'pages': 'text-blue-400',
+  'components': 'text-green-400',
+  'hooks': 'text-purple-400',
+  'lib': 'text-yellow-400',
+  'utils': 'text-yellow-400',
+  'helpers': 'text-yellow-400',
+  'services': 'text-orange-400',
+  'api': 'text-red-400',
+  'routes': 'text-red-400',
+  'styles': 'text-pink-400',
+  'assets': 'text-purple-400',
+  'images': 'text-purple-400',
+  'public': 'text-green-400',
+  'tests': 'text-green-400',
+  '__tests__': 'text-green-400',
+  'test': 'text-green-400',
+  'spec': 'text-green-400',
+  'config': 'text-bolt-elements-textSecondary',
+  'types': 'text-blue-300',
+  'interfaces': 'text-blue-300',
+  'models': 'text-orange-400',
+  'store': 'text-purple-400',
+  'stores': 'text-purple-400',
+  'context': 'text-purple-400',
+  'providers': 'text-purple-400',
+  'middleware': 'text-yellow-400',
+  'server': 'text-red-400',
+  '.server': 'text-red-400',
+  'client': 'text-blue-400',
+  '.client': 'text-blue-400',
+  'layouts': 'text-cyan-400',
+};
+
+function getFolderColor(folderName: string): string {
+  return FOLDER_ICONS[folderName] || '';
+}
+
+function Folder({
+  folder: { depth, name, fullPath },
+  collapsed,
+  selected = false,
+  focused = false,
+  searchQuery = '',
+  onClick,
+  onContextMenu,
+  draggable = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  isDragging = false,
+  isDropTarget = false,
+}: FolderProps) {
+  const folderColor = getFolderColor(name);
+
   return (
     <NodeButton
-      className={classNames('group', {
+      className={classNames('group transition-all duration-150', {
         'bg-transparent text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive hover:bg-bolt-elements-item-backgroundActive':
-          !selected,
+          !selected && !focused && !isDropTarget,
         'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent': selected,
+        'bg-bolt-elements-item-backgroundActive/50 ring-1 ring-bolt-elements-borderColor ring-inset': focused && !selected && !isDropTarget,
+        'opacity-50': isDragging,
+        'bg-blue-500/20 ring-2 ring-blue-500 ring-inset': isDropTarget,
       })}
       depth={depth}
-      iconClasses={classNames({
-        'i-ph:caret-right scale-98': collapsed,
-        'i-ph:caret-down scale-98': !collapsed,
+      iconClasses={classNames('scale-98', {
+        'i-ph:caret-right': collapsed,
+        'i-ph:caret-down': !collapsed,
       })}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
-      {name}
+      <div className="flex items-center gap-1">
+        <span className={classNames('shrink-0', folderColor, {
+          'i-ph:folder-duotone': collapsed && !isDropTarget,
+          'i-ph:folder-open-duotone': !collapsed || isDropTarget,
+          'text-blue-400': isDropTarget,
+        })} />
+        {searchQuery ? highlightMatch(name, searchQuery) : name}
+        {isDropTarget && (
+          <span className="ml-auto text-xs text-blue-400">Drop here</span>
+        )}
+      </div>
     </NodeButton>
   );
 }
@@ -403,33 +915,62 @@ function Folder({ folder: { depth, name }, collapsed, selected = false, onClick,
 interface FileProps {
   file: FileNode;
   selected: boolean;
+  focused?: boolean;
   unsavedChanges?: boolean;
   errorCount?: number;
+  searchQuery?: string;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  // Drag-and-drop props
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: () => void;
+  isDragging?: boolean;
 }
 
-function File({ file: { depth, name }, onClick, selected, unsavedChanges = false, errorCount = 0, onContextMenu }: FileProps) {
+function File({
+  file: { depth, name },
+  onClick,
+  selected,
+  focused = false,
+  unsavedChanges = false,
+  errorCount = 0,
+  searchQuery = '',
+  onContextMenu,
+  draggable = false,
+  onDragStart,
+  onDragEnd,
+  isDragging = false,
+}: FileProps) {
+  const fileIconClass = getFileIcon(name);
+
   return (
     <NodeButton
-      className={classNames('group', {
-        'bg-transparent hover:bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentDefault': !selected,
+      className={classNames('group transition-opacity duration-150', {
+        'bg-transparent hover:bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentDefault': !selected && !focused,
         'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent': selected,
+        'bg-bolt-elements-item-backgroundActive/50 ring-1 ring-bolt-elements-borderColor ring-inset': focused && !selected,
+        'opacity-50': isDragging,
       })}
       depth={depth}
-      iconClasses={classNames('i-ph:file-duotone scale-98', {
-        'group-hover:text-bolt-elements-item-contentActive': !selected,
+      iconClasses={classNames(fileIconClass, 'scale-98', {
+        'group-hover:text-bolt-elements-item-contentActive': !selected && !fileIconClass.includes('text-'),
         'text-red-500': errorCount > 0,
       })}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       <div
         className={classNames('flex items-center', {
           'group-hover:text-bolt-elements-item-contentActive': !selected,
         })}
       >
-        <div className={classNames('flex-1 truncate pr-2', { 'text-red-400': errorCount > 0 })}>{name}</div>
+        <div className={classNames('flex-1 truncate pr-2', { 'text-red-400': errorCount > 0 })}>
+          {searchQuery ? highlightMatch(name, searchQuery) : name}
+        </div>
         {errorCount > 0 && (
           <span className="i-ph:x-circle-fill scale-75 shrink-0 text-red-500 mr-1" title={`${errorCount} error${errorCount > 1 ? 's' : ''}`} />
         )}
@@ -446,9 +987,29 @@ interface ButtonProps {
   className?: string;
   onClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  // Drag-and-drop props
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }
 
-function NodeButton({ depth, iconClasses, onClick, onContextMenu, className, children }: ButtonProps) {
+function NodeButton({
+  depth,
+  iconClasses,
+  onClick,
+  onContextMenu,
+  className,
+  children,
+  draggable = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: ButtonProps) {
   return (
     <button
       className={classNames(
@@ -458,6 +1019,12 @@ function NodeButton({ depth, iconClasses, onClick, onContextMenu, className, chi
       style={{ paddingLeft: `${6 + depth * NODE_PADDING_LEFT}px` }}
       onClick={() => onClick?.()}
       onContextMenu={onContextMenu}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <div className={classNames('scale-120 shrink-0', iconClasses)}></div>
       <div className="truncate w-full text-left">{children}</div>

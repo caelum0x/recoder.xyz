@@ -5,6 +5,7 @@
  */
 
 import { dockerPost, dockerGet } from '~/lib/services/docker-api';
+import { workbenchStore } from '~/lib/stores/workbench';
 import type {
   LSPPosition,
   LSPRange,
@@ -72,6 +73,14 @@ export class LSPClient {
   }
 
   private async doInitialize(): Promise<void> {
+    // Guard: don't start LSP until container is ready
+    if (!workbenchStore.containerReady.get()) {
+      console.log('[LSPClient] Skipping LSP start - container not ready');
+      this.isStarted = false;
+      this.initPromise = null;
+      return;
+    }
+
     try {
       const data = await dockerPost<{
         success: boolean;

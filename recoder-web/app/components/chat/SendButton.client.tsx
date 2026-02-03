@@ -10,6 +10,8 @@ interface SendButtonProps {
 const customEasingFn = cubicBezier(0.4, 0, 0.2, 1);
 
 export function SendButton({ show, disabled = false, isStreaming, onClick }: SendButtonProps) {
+  const buttonLabel = isStreaming ? "Stop generating" : disabled ? "Enter a message to send" : "Send message (Cmd+Enter)";
+
   return (
     <AnimatePresence>
       {show ? (
@@ -26,9 +28,11 @@ export function SendButton({ show, disabled = false, isStreaming, onClick }: Sen
               onClick?.(event);
             }
           }}
-          title={isStreaming ? "Stop generating" : disabled ? "Enter a message to send" : "Send message"}
+          title={buttonLabel}
+          aria-label={buttonLabel}
+          aria-disabled={disabled && !isStreaming}
         >
-          <div className="text-lg">
+          <div className="text-lg" aria-hidden="true">
             {!isStreaming ? <div className="i-ph:arrow-right"></div> : <div className="i-ph:stop-circle-bold"></div>}
           </div>
         </motion.button>

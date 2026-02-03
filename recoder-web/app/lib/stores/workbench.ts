@@ -9,7 +9,141 @@ import { EditorStore } from './editor';
 import { FilesStore, type FileMap } from './files';
 import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
-import { dockerGet } from '~/lib/services/docker-api';
+import { dockerGet, dockerPost, dockerDelete, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, getSessionToken } from '~/lib/services/docker-api';
+import { getCurrentUserId } from '~/lib/stores/user';
+import type { ProjectContext, RelatedFiles } from '~/lib/services/code-context';
+import type { ParsedError } from '~/lib/services/error-analyzer';
+import * as undoManager from '~/lib/services/undo-manager';
+import * as diffPreview from '~/lib/services/diff-preview';
+import type {
+  CodeProposal,
+  FileChange,
+  ProposalResult,
+  ProposalStatus,
+  ApproveProposalResult,
+} from '~/lib/types/proposals';
+import { createCodeProposal } from '~/lib/types/proposals';
+import * as workspace from './workspace';
+
+// 🔒 Global container creation coordination - prevents duplicate container creation
+// This is module-level to ensure coordination across all callers
+const containerCreationPromises = new Map<string, Promise<boolean>>();
+
+/**
+ * Options for container creation - passes template/framework context to the backend
+ * so it can configure the container appropriately (e.g., Expo projects get different setup).
+ */
+export interface ContainerCreationOptions {
+  /** Framework identifier (e.g., 'expo', 'nextjs', 'react', 'vue') */
+  framework?: string;
+  /** Template ID used when the project was created */
+  templateId?: string;
+}
+
+/**
+ * Ensure container exists with coordination to prevent race conditions.
+ * Multiple callers share the same promise - only one container creation request per project.
+ * This is the SINGLE SOURCE OF TRUTH for container creation.
+ */
+export async function ensureContainerExists(
+  projectId: string,
+  options?: ContainerCreationOptions
+): Promise<boolean> {
+  if (!DOCKER_URL) {
+    console.warn('[ensureContainerExists] DOCKER_URL not configured');
+    return false;
+  }
+
+  // If already creating this container, wait for the existing promise
+  const existingPromise = containerCreationPromises.get(projectId);
+  if (existingPromise) {
+    console.log('⏳ [ensureContainerExists] Waiting for existing container creation...');
+    return existingPromise;
+  }
+
+  // Create new promise for this container
+  const createPromise = (async (): Promise<boolean> => {
+    try {
+      const userId = getCurrentUserId();
+      console.log('🐳 [ensureContainerExists] Creating container for', projectId,
+        options?.framework ? `(framework: ${options.framework})` : '',
+        options?.templateId ? `(template: ${options.templateId})` : '');
+
+      const body: Record<string, unknown> = { projectId, userId };
+      if (options?.framework) {
+        body.framework = options.framework;
+      }
+      if (options?.templateId) {
+        body.templateId = options.templateId;
+      }
+
+      // Container creation can take 30-120s (Docker pull, pool acquire, env setup).
+      await dockerPost<{ success: boolean }>('/api/container', body, { timeout: CONTAINER_CREATE_TIMEOUT_MS });
+
+      console.log('✅ [ensureContainerExists] Container ready for', projectId);
+      return true;
+    } catch (error: any) {
+      // 409 Conflict means container already exists - that's OK
+      if (error?.statusCode === 409 || error?.message?.includes('already exists')) {
+        console.log('✅ [ensureContainerExists] Container already exists for', projectId);
+        return true;
+      }
+
+      // 429 Container limit — auto-evict oldest stale containers and retry
+      if (error?.statusCode === 429 && error?.message?.includes('Container limit')) {
+        console.log('⚠️ [ensureContainerExists] Container limit hit, attempting auto-eviction...');
+        try {
+          const { containers: userContainers, count, max } = await dockerGet<{
+            containers: { projectId: string; lastActive: number }[];
+            count: number;
+            max: number;
+          }>('/api/containers');
+
+          // Evict enough containers to get below the limit (need room for 1 new one)
+          const evictCandidates = userContainers.filter((c) => c.projectId !== projectId);
+          const numToEvict = Math.max(1, count - max + 1); // e.g. 6 - 5 + 1 = 2
+
+          console.log(`🗑️ [ensureContainerExists] Need to evict ${numToEvict} containers (have ${count}, max ${max})`);
+
+          for (let i = 0; i < numToEvict && i < evictCandidates.length; i++) {
+            console.log(`🗑️ [ensureContainerExists] Evicting container ${i + 1}/${numToEvict}: ${evictCandidates[i].projectId}`);
+            await dockerDelete(`/api/container/${evictCandidates[i].projectId}`);
+          }
+
+          // Retry container creation
+          const retryBody: Record<string, unknown> = { projectId, userId: getCurrentUserId() };
+          if (options?.framework) retryBody.framework = options.framework;
+          if (options?.templateId) retryBody.templateId = options.templateId;
+
+          await dockerPost<{ success: boolean }>('/api/container', retryBody, { timeout: CONTAINER_CREATE_TIMEOUT_MS });
+          console.log('✅ [ensureContainerExists] Container created after eviction for', projectId);
+          return true;
+        } catch (retryError: any) {
+          console.error('❌ [ensureContainerExists] Auto-eviction failed:', retryError.message);
+        }
+      }
+
+      console.error('❌ [ensureContainerExists] Error:', error.message);
+      return false;
+    } finally {
+      containerCreationPromises.delete(projectId);
+    }
+  })();
+
+  containerCreationPromises.set(projectId, createPromise);
+  return createPromise;
+}
+
+/**
+ * Clear container creation state for a project (call when navigating away)
+ */
+export function clearContainerState(projectId?: string) {
+  if (projectId) {
+    containerCreationPromises.delete(projectId);
+  } else {
+    containerCreationPromises.clear();
+  }
+}
 
 export interface ArtifactState {
   id: string;
@@ -46,6 +180,7 @@ export class WorkbenchStore {
   artifactIdList: string[] = [];
   #currentProjectId: string | null = null;
   #isRestoredChat: boolean = false;  // Track if this is a restored past chat
+  #restoredMessageIds: Set<string> = new Set();  // Track messageIds from restored chat
   
   // Stable atom for project ID (used by useStore in components)
   projectId: WritableAtom<string | null> = import.meta.hot?.data.projectId ?? atom<string | null>(null);
@@ -54,12 +189,30 @@ export class WorkbenchStore {
   // NOTE: Do NOT preserve via HMR - must always start false on page load
   containerReady: WritableAtom<boolean> = atom<boolean>(false);
 
+  // ❌ Container creation failed flag — lets ActionRunner fast-fail instead of waiting 120s
+  containerCreationFailed: WritableAtom<boolean> = atom<boolean>(false);
+
   // ✅ P1: Build progress feedback
   buildStatus: WritableAtom<BuildStatus> = import.meta.hot?.data.buildStatus ?? atom({
     phase: 'idle',
     message: '',
     progress: 0,
   });
+
+  // ==================== PROPOSAL SYSTEM ====================
+  // When enabled, AI actions are collected into proposals for user review
+
+  /** Whether proposal mode is enabled (actions require approval) */
+  proposalModeEnabled: WritableAtom<boolean> = import.meta.hot?.data.proposalModeEnabled ?? atom(false);
+
+  /** Current pending proposals awaiting user approval */
+  pendingProposals: WritableAtom<Map<string, ProposalResult>> = import.meta.hot?.data.pendingProposals ?? atom(new Map());
+
+  /** Actions that are queued while waiting for proposal approval */
+  #queuedActions: Map<string, ActionCallbackData[]> = new Map();
+
+  /** Track file changes being collected for current proposal */
+  #proposalFileChanges: Map<string, FileChange[]> = new Map();
 
   constructor() {
     if (import.meta.hot) {
@@ -69,6 +222,8 @@ export class WorkbenchStore {
       import.meta.hot.data.currentView = this.currentView;
       import.meta.hot.data.buildStatus = this.buildStatus;
       import.meta.hot.data.projectId = this.projectId;
+      import.meta.hot.data.proposalModeEnabled = this.proposalModeEnabled;
+      import.meta.hot.data.pendingProposals = this.pendingProposals;
       // NOTE: Do NOT preserve containerReady - must always start false
     }
   }
@@ -79,10 +234,13 @@ export class WorkbenchStore {
    * Mark this session as a restored past chat.
    * This tells ActionRunner to not auto-install since we handle it separately.
    * @param restoredFiles - Array of file paths that were restored from snapshot
+   * @param restoredMessageIds - Array of messageIds from the restored chat (artifacts that already exist)
    */
-  markAsRestoredChat(restoredFiles?: string[]) {
+  markAsRestoredChat(restoredFiles?: string[], restoredMessageIds?: string[]) {
     this.#isRestoredChat = true;
     this.#restoredFilePaths = restoredFiles || [];
+    this.#restoredMessageIds = new Set(restoredMessageIds || []);
+    console.log(`📂 [WorkbenchStore] Marked as restored chat with ${this.#restoredFilePaths.length} files, ${this.#restoredMessageIds.size} messageIds`);
   }
 
   /**
@@ -97,6 +255,8 @@ export class WorkbenchStore {
    */
   resetRestoredChatFlag() {
     this.#isRestoredChat = false;
+    this.#restoredMessageIds.clear();
+    console.log('🔄 [WorkbenchStore] Reset restored chat flag');
   }
 
   /**
@@ -121,6 +281,50 @@ export class WorkbenchStore {
    */
   resetContainerReady() {
     this.containerReady.set(false);
+    this.containerCreationFailed.set(false);
+  }
+
+  /**
+   * Retry container creation after a failure.
+   * Resets failure/ready flags and re-calls ensureContainerExists.
+   */
+  async retryContainerCreation(): Promise<boolean> {
+    const projectId = this.#currentProjectId;
+    if (!projectId) {
+      console.warn('[WorkbenchStore] Cannot retry container creation: no projectId');
+      return false;
+    }
+
+    console.log('[WorkbenchStore] Retrying container creation for', projectId);
+
+    // Reset both flags to enter the "creating" state
+    this.containerCreationFailed.set(false);
+    this.containerReady.set(false);
+
+    try {
+      const success = await ensureContainerExists(projectId);
+
+      if (success) {
+        this.containerCreationFailed.set(false);
+        this.setContainerReady(true);
+        console.log('[WorkbenchStore] Container retry succeeded for', projectId);
+
+        // Re-initialize dependent stores now that the container is back
+        await this.#terminalStore.setProjectId(projectId);
+        await this.#previewsStore.setProjectId(projectId);
+        this.#checkExistingDevServer(projectId);
+
+        return true;
+      } else {
+        this.containerCreationFailed.set(true);
+        console.error('[WorkbenchStore] Container retry failed for', projectId);
+        return false;
+      }
+    } catch (error) {
+      this.containerCreationFailed.set(true);
+      console.error('[WorkbenchStore] Container retry threw for', projectId, error);
+      return false;
+    }
   }
 
   get previews() {
@@ -141,6 +345,31 @@ export class WorkbenchStore {
 
   get openTabs(): ReadableAtom<string[]> {
     return this.#editorStore.openTabs;
+  }
+
+  // Split editor getters
+  get splitEnabled(): ReadableAtom<boolean> {
+    return this.#editorStore.splitEnabled;
+  }
+
+  get secondarySelectedFile(): ReadableAtom<string | undefined> {
+    return this.#editorStore.secondarySelectedFile;
+  }
+
+  get secondaryDocument(): ReadableAtom<EditorDocument | undefined> {
+    return this.#editorStore.secondaryDocument;
+  }
+
+  get syncScrolling(): ReadableAtom<boolean> {
+    return this.#editorStore.syncScrolling;
+  }
+
+  get splitRatio(): ReadableAtom<number> {
+    return this.#editorStore.splitRatio;
+  }
+
+  get pendingNavigation() {
+    return this.#editorStore.pendingNavigation;
   }
 
   get firstArtifact(): ArtifactState | undefined {
@@ -178,50 +407,210 @@ export class WorkbenchStore {
   }
 
   // Set project ID for Docker backend
-  async setProjectId(projectId: string) {
+  // CRITICAL: This ensures container exists BEFORE initializing other stores
+  // Pass optional framework/templateId so the backend can configure the container properly
+  async setProjectId(projectId: string, options?: ContainerCreationOptions) {
     this.#currentProjectId = projectId;
     this.projectId.set(projectId);
+
+    // 🔒 CRITICAL FIX: Ensure container exists FIRST before any other API calls
+    // This prevents 404 errors from terminal, preview, files, etc.
+    let containerExists = false;
+    if (DOCKER_URL) {
+      console.log('🔄 [WorkbenchStore] Ensuring container exists before initialization...');
+      containerExists = await ensureContainerExists(projectId, options);
+
+      if (containerExists) {
+        // Container exists — immediately mark ready for file operations.
+        // Don't wait for #checkExistingDevServer (which checks files + dev server health)
+        // because the action runner needs containerReady=true to start writing files.
+        this.containerCreationFailed.set(false);
+        this.setContainerReady(true);
+        console.log('✅ [WorkbenchStore] Container exists, marked ready, proceeding with initialization');
+      } else {
+        console.warn('⚠️ [WorkbenchStore] Container creation failed, proceeding anyway');
+        this.containerCreationFailed.set(true);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('recoder:container-error', {
+            detail: { projectId, message: 'Container creation failed. File operations may not work.' },
+          }));
+        }
+      }
+    }
+
+    // Now it's safe to initialize other stores - container exists
     await this.#terminalStore.setProjectId(projectId);
     await this.#previewsStore.setProjectId(projectId);
 
-    // Check if container already has a running dev server
-    this.#checkExistingDevServer(projectId);
+    // Initialize workspace and restore saved state
+    this.#initializeWorkspace(projectId);
+
+    // Only check for existing dev server if container was successfully created.
+    // If container creation failed, don't run this — it will incorrectly mark
+    // containerReady=true in its catch block when API calls 404.
+    if (containerExists) {
+      this.#checkExistingDevServer(projectId);
+    }
+  }
+
+  /**
+   * Initialize workspace for a project and restore saved state
+   */
+  #initializeWorkspace(projectId: string) {
+    const savedWorkspace = workspace.initWorkspace(projectId);
+
+    if (savedWorkspace) {
+      console.log('[WorkbenchStore] Restoring workspace state...');
+
+      // Restore open tabs
+      if (savedWorkspace.openTabs.length > 0) {
+        this.#editorStore.openTabs.set(savedWorkspace.openTabs);
+      }
+
+      // Restore pinned tabs
+      if (savedWorkspace.pinnedTabs && savedWorkspace.pinnedTabs.length > 0) {
+        this.#editorStore.pinnedTabs.set(new Set(savedWorkspace.pinnedTabs));
+      }
+
+      // Restore active file
+      if (savedWorkspace.activeFile) {
+        this.#editorStore.selectedFile.set(savedWorkspace.activeFile);
+      }
+
+      // Restore split view state
+      if (savedWorkspace.splitState) {
+        this.#editorStore.splitEnabled.set(savedWorkspace.splitState.enabled);
+        if (savedWorkspace.splitState.secondaryFile) {
+          this.#editorStore.secondarySelectedFile.set(savedWorkspace.splitState.secondaryFile);
+        }
+        this.#editorStore.splitRatio.set(savedWorkspace.splitState.ratio);
+        this.#editorStore.syncScrolling.set(savedWorkspace.splitState.syncScrolling);
+      }
+
+      // Restore panel state
+      if (savedWorkspace.panelState) {
+        this.#terminalStore.showTerminal.set(savedWorkspace.panelState.terminalVisible);
+      }
+
+      // Restore current view
+      if (savedWorkspace.currentView) {
+        this.currentView.set(savedWorkspace.currentView);
+      }
+
+      console.log('[WorkbenchStore] Workspace state restored');
+    }
+
+    // Subscribe to state changes to sync with workspace store
+    this.#setupWorkspaceSync();
+  }
+
+  /**
+   * Setup listeners to sync workbench state with workspace store
+   */
+  #setupWorkspaceSync() {
+    // Sync open tabs
+    this.#editorStore.openTabs.subscribe((tabs) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspaceOpenTabs([...tabs]);
+      }
+    });
+
+    // Sync pinned tabs
+    this.#editorStore.pinnedTabs.subscribe((pinnedSet) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspacePinnedTabs(Array.from(pinnedSet));
+      }
+    });
+
+    // Sync active file (triggers save immediately)
+    this.#editorStore.selectedFile.subscribe((file) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspaceActiveFile(file);
+      }
+    });
+
+    // Sync split state
+    this.#editorStore.splitEnabled.subscribe((enabled) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspaceSplitState({ enabled });
+      }
+    });
+
+    this.#editorStore.secondarySelectedFile.subscribe((file) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspaceSplitState({ secondaryFile: file });
+      }
+    });
+
+    this.#editorStore.splitRatio.subscribe((ratio) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspaceSplitState({ ratio });
+      }
+    });
+
+    this.#editorStore.syncScrolling.subscribe((sync) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspaceSplitState({ syncScrolling: sync });
+      }
+    });
+
+    // Sync terminal visibility
+    this.#terminalStore.showTerminal.subscribe((visible) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspacePanelState({ terminalVisible: visible });
+      }
+    });
+
+    // Sync current view
+    this.currentView.subscribe((view) => {
+      if (!workspace.isRestoringWorkspace.get()) {
+        workspace.updateWorkspaceCurrentView(view);
+      }
+    });
   }
 
   // Check if container already has a running dev server and set containerReady
+  // Uses the workspace-state endpoint for efficient checking
   async #checkExistingDevServer(projectId: string) {
-    try {
-      const res = await dockerGet(`/api/preview/${projectId}/health`) as Response;
-      if (res.ok) {
-        const data = await res.json() as { ports: Array<{ port: number; responding: boolean }> };
-        const respondingPort = data.ports?.find((p: { port: number; responding: boolean }) => p.responding);
+    let containerGone = false;
 
-        if (respondingPort) {
-          console.log(`✅ [WorkbenchStore] Container already has dev server on port ${respondingPort.port}`);
-          this.setContainerReady(true);
-          return;
+    try {
+      // Use dedicated workspace-state endpoint - single fast check
+      const state = await dockerGet<{ 
+        hasFiles: boolean; 
+        hasPackageJson: boolean; 
+        devServerRunning: boolean;
+        volumeMounted: boolean;
+      }>(`/api/workspace-state/${projectId}`, { timeout: 5000, skipRetry: true });
+      
+      if (state) {
+        // Container and workspace volume exist
+        this.setContainerReady(true);
+        
+        // If dev server is already running, we're fully operational
+        if (state.devServerRunning) {
+          // Emit event so preview can connect immediately
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('recoder:dev-server-ready', {
+              detail: { projectId, hasFiles: state.hasFiles, hasPackageJson: state.hasPackageJson },
+            }));
+          }
         }
+        return;
       }
-    } catch (e) {
-      // Ignore errors - container may not be ready yet
+    } catch (e: any) {
+      const is404 = e?.statusCode === 404 || e?.message?.includes('404') || e?.message?.includes('not found');
+      if (is404) {
+        containerGone = true;
+      }
     }
 
-    // Also check if container has files (package.json) as a secondary indicator
-    try {
-      const filesRes = await dockerGet(`/api/files/${projectId}`) as Response;
-      if (filesRes.ok) {
-        const filesData = await filesRes.json() as { files: Array<{ name: string }> };
-        const hasPackageJson = filesData.files?.some((f: { name: string }) => f.name === 'package.json');
-
-        if (hasPackageJson) {
-          console.log('📁 [WorkbenchStore] Container has package.json, marking as ready for search');
-          // Mark ready even without dev server - search should work
-          this.setContainerReady(true);
-        }
-      }
-    } catch {
-      // Ignore errors
+    if (containerGone) {
+      return;
     }
+
+    // Fallback: just mark ready since container exists
+    this.setContainerReady(true);
   }
 
   /**
@@ -345,6 +734,9 @@ export class WorkbenchStore {
     const { filePath } = editorDocument;
 
     this.#editorStore.updateScrollPosition(filePath, position);
+
+    // Also sync with workspace store
+    workspace.updateWorkspaceScrollPosition(filePath, position);
   }
 
   setSelectedFile(filePath: string | undefined) {
@@ -355,16 +747,116 @@ export class WorkbenchStore {
     }
   }
 
+  /**
+   * Navigate to a specific line in a file (for go-to-definition)
+   * Opens the file if not already open and sets cursor to the specified line
+   */
+  navigateToLine(filePath: string, line: number, character?: number) {
+    this.#editorStore.navigateToLine(filePath, line, character);
+  }
+
+  /**
+   * Consume pending navigation (called by CodeMirrorEditor after scrolling)
+   */
+  consumePendingNavigation() {
+    return this.#editorStore.consumePendingNavigation();
+  }
+
   closeTab(filePath: string) {
     this.#editorStore.closeTab(filePath);
+    // Also remove from workspace
+    workspace.removeFileFromWorkspace(filePath);
   }
 
   closeOtherTabs(filePath: string) {
     this.#editorStore.closeOtherTabs(filePath);
+    // Workspace will be synced via the openTabs subscription
   }
 
   closeAllTabs() {
     this.#editorStore.closeAllTabs();
+    // Workspace will be synced via the openTabs subscription
+  }
+
+  closeTabsToRight(filePath: string) {
+    this.#editorStore.closeTabsToRight(filePath);
+    // Workspace will be synced via the openTabs subscription
+  }
+
+  reorderTabs(fromIndex: number, toIndex: number) {
+    this.#editorStore.reorderTabs(fromIndex, toIndex);
+  }
+
+  pinTab(filePath: string) {
+    this.#editorStore.pinTab(filePath);
+  }
+
+  unpinTab(filePath: string) {
+    this.#editorStore.unpinTab(filePath);
+  }
+
+  togglePinTab(filePath: string) {
+    this.#editorStore.togglePinTab(filePath);
+  }
+
+  isPinned(filePath: string): boolean {
+    return this.#editorStore.isPinned(filePath);
+  }
+
+  get pinnedTabs(): ReadableAtom<Set<string>> {
+    return this.#editorStore.pinnedTabs;
+  }
+
+  /**
+   * Update file path in tabs and documents when a file is renamed/moved.
+   * This ensures open tabs continue to work after rename operations.
+   */
+  updateFilePath(oldPath: string, newPath: string) {
+    this.#editorStore.updateFilePath(oldPath, newPath);
+    // Also sync with workspace store
+    workspace.updateFilePathInWorkspace(oldPath, newPath);
+  }
+
+  /**
+   * Update all file paths under a folder when a folder is renamed/moved.
+   * This handles the case when a folder containing open files is renamed.
+   */
+  updateFolderPath(oldFolderPath: string, newFolderPath: string) {
+    this.#editorStore.updateFolderPath(oldFolderPath, newFolderPath);
+    // Note: Folder path updates are handled by the workspace through individual tab updates
+  }
+
+  // Split editor methods
+  toggleSplit() {
+    this.#editorStore.toggleSplit();
+  }
+
+  setSplitEnabled(enabled: boolean) {
+    this.#editorStore.setSplitEnabled(enabled);
+  }
+
+  setSecondarySelectedFile(filePath: string | undefined) {
+    this.#editorStore.setSecondarySelectedFile(filePath);
+  }
+
+  toggleSyncScrolling() {
+    this.#editorStore.toggleSyncScrolling();
+  }
+
+  setSyncScrolling(enabled: boolean) {
+    this.#editorStore.setSyncScrolling(enabled);
+  }
+
+  setSplitRatio(ratio: number) {
+    this.#editorStore.setSplitRatio(ratio);
+  }
+
+  swapSplitFiles() {
+    this.#editorStore.swapSplitFiles();
+  }
+
+  openInSecondaryPane(filePath: string) {
+    this.#editorStore.openInSecondaryPane(filePath);
   }
 
   async saveFile(filePath: string) {
@@ -425,7 +917,21 @@ export class WorkbenchStore {
   }
 
   abortAllActions() {
-    // TODO: what do we wanna do and how do we wanna recover from this?
+    const artifacts = this.artifacts.get();
+    let totalCancelled = 0;
+
+    for (const [id, artifact] of Object.entries(artifacts)) {
+      if (artifact?.runner) {
+        const cancelled = artifact.runner.cancelAllActions();
+        totalCancelled += cancelled;
+      }
+    }
+
+    if (totalCancelled > 0) {
+      console.log(`[WorkbenchStore] Aborted ${totalCancelled} action(s) across all artifacts`);
+    }
+
+    return totalCancelled;
   }
 
   addArtifact({ messageId, title, id }: ArtifactCallbackData) {
@@ -448,9 +954,16 @@ export class WorkbenchStore {
     const runner = new ActionRunner(projectIdToUse || undefined);
     console.log(`[WorkbenchStore] ActionRunner created with projectId: ${projectIdToUse}`);
     
-    // If this is a restored past chat, mark the runner with the restored file paths
-    if (this.#isRestoredChat) {
+    // 🔧 CRITICAL FIX: Only mark runner as restored if THIS messageId was part of the restored chat.
+    // This prevents NEW AI messages (after restoration) from being skipped.
+    // Before: ALL runners were marked as restored if #isRestoredChat was true
+    // After: Only runners for messageIds that existed in the restored chat are marked
+    const isRestoredMessage = this.#isRestoredChat && this.#restoredMessageIds.has(messageId);
+    if (isRestoredMessage) {
       runner.markAsRestoredChat(this.#restoredFilePaths);
+      console.log(`📂 [WorkbenchStore] Marked runner as restored for messageId: ${messageId}`);
+    } else if (this.#isRestoredChat) {
+      console.log(`✨ [WorkbenchStore] NEW message after restoration, runner NOT marked as restored: ${messageId}`);
     }
 
     this.artifacts.setKey(messageId, {
@@ -527,6 +1040,820 @@ export class WorkbenchStore {
         await artifact.runner.createAISnapshot(description);
       }
     }
+  }
+
+  // ==================== BULLETPROOF ACTION MANAGEMENT ====================
+
+  /**
+   * Cancel a running or pending action
+   */
+  cancelAction(messageId: string, actionId: string): boolean {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return false;
+    return artifact.runner.cancelAction(actionId);
+  }
+
+  /**
+   * Retry a failed action
+   */
+  async retryAction(messageId: string, actionId: string): Promise<boolean> {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return false;
+    return artifact.runner.retryAction(actionId);
+  }
+
+  /**
+   * Rollback a file action to its previous content
+   */
+  async rollbackAction(messageId: string, actionId: string): Promise<boolean> {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return false;
+    return artifact.runner.rollbackAction(actionId);
+  }
+
+  /**
+   * Get all action states for an artifact
+   */
+  getActionStates(messageId: string): Array<{
+    id: string;
+    type: string;
+    status: string;
+    filePath?: string;
+    error?: string;
+    canRetry: boolean;
+    canRollback: boolean;
+  }> {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return [];
+    return artifact.runner.getActionStates();
+  }
+
+  /**
+   * Get running actions for an artifact
+   */
+  getRunningActions(messageId: string): Array<{ id: string; type: string; filePath?: string }> {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return [];
+    return artifact.runner.getRunningActions();
+  }
+
+  /**
+   * Get failed actions for an artifact
+   */
+  getFailedActions(messageId: string): Array<{
+    id: string;
+    type: string;
+    filePath?: string;
+    error: string;
+  }> {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return [];
+    return artifact.runner.getFailedActions();
+  }
+
+  /**
+   * Cancel all running and pending actions for an artifact
+   */
+  cancelAllActions(messageId: string): number {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return 0;
+    return artifact.runner.cancelAllActions();
+  }
+
+  /**
+   * Retry all failed actions for an artifact
+   */
+  async retryAllFailed(messageId: string): Promise<number> {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return 0;
+    return artifact.runner.retryAllFailed();
+  }
+
+  /**
+   * Get queue statistics for an artifact
+   */
+  getQueueStats(messageId: string): {
+    total: number;
+    pending: number;
+    running: number;
+    completed: number;
+    failed: number;
+    aborted: number;
+  } | null {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return null;
+    return artifact.runner.getQueueStats();
+  }
+
+  /**
+   * Check if rollback is available for a file
+   */
+  canRollbackFile(messageId: string, filePath: string): boolean {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return false;
+    return artifact.runner.canRollbackFile(filePath);
+  }
+
+  // ==================== ORPHAN ACTION HANDLING ====================
+
+  /**
+   * Called when streaming ends for an artifact.
+   * Handles any orphaned actions that were opened but never closed.
+   *
+   * @param messageId - The message/artifact ID
+   * @param isTruncated - Whether the stream was truncated
+   */
+  onStreamEnd(messageId: string, isTruncated: boolean = false): void {
+    const artifact = this.#getArtifact(messageId);
+    if (artifact?.runner) {
+      artifact.runner.onStreamEnd(isTruncated);
+    }
+  }
+
+  /**
+   * Called when streaming ends for all active artifacts.
+   */
+  onStreamEndForAll(isTruncated: boolean = false): void {
+    const artifacts = this.artifacts.get();
+    for (const artifact of Object.values(artifacts)) {
+      if (artifact?.runner) {
+        artifact.runner.onStreamEnd(isTruncated);
+      }
+    }
+  }
+
+  /**
+   * Finalize any orphaned actions immediately for an artifact.
+   */
+  finalizeOrphanedActions(messageId: string, reason: string = 'stream_ended'): number {
+    const artifact = this.#getArtifact(messageId);
+    if (!artifact?.runner) return 0;
+    return artifact.runner.finalizeOrphanedActions(reason);
+  }
+
+  /**
+   * Finalize orphaned actions for all active artifacts.
+   */
+  finalizeOrphanedActionsForAll(reason: string = 'stream_ended'): number {
+    let total = 0;
+    const artifacts = this.artifacts.get();
+    for (const artifact of Object.values(artifacts)) {
+      if (artifact?.runner) {
+        total += artifact.runner.finalizeOrphanedActions(reason);
+      }
+    }
+    return total;
+  }
+
+  /**
+   * Check if any artifact has orphaned actions.
+   */
+  hasOrphanedActions(): boolean {
+    const artifacts = this.artifacts.get();
+    for (const artifact of Object.values(artifacts)) {
+      if (artifact?.runner?.hasOrphanedActions()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Get detailed status of all actions across all artifacts.
+   */
+  getAllDetailedActionStatus(): Array<{
+    messageId: string;
+    actions: Array<{
+      actionId: string;
+      type: string;
+      status: string;
+      executed: boolean;
+      filePath?: string;
+      error?: string;
+      isOrphaned: boolean;
+    }>;
+  }> {
+    const result: Array<{
+      messageId: string;
+      actions: Array<{
+        actionId: string;
+        type: string;
+        status: string;
+        executed: boolean;
+        filePath?: string;
+        error?: string;
+        isOrphaned: boolean;
+      }>;
+    }> = [];
+
+    const artifacts = this.artifacts.get();
+    for (const [messageId, artifact] of Object.entries(artifacts)) {
+      if (artifact?.runner) {
+        const actionStatus = artifact.runner.getDetailedActionStatus();
+        result.push({
+          messageId,
+          actions: actionStatus,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Clean up orphan timeouts for all artifacts (call on unmount).
+   */
+  cleanupOrphanTimeouts(): void {
+    const artifacts = this.artifacts.get();
+    for (const artifact of Object.values(artifacts)) {
+      if (artifact?.runner) {
+        artifact.runner.cleanupOrphanTimeouts();
+      }
+    }
+  }
+
+  // ==================== ADVANCED CODING FEATURES ====================
+
+  /**
+   * Load project context for AI awareness
+   * Returns context about project structure, dependencies, and files
+   */
+  async loadProjectContext(): Promise<ProjectContext | null> {
+    const projectId = this.#currentProjectId;
+    if (!projectId) return null;
+
+    try {
+      const { loadProjectContext } = await import('~/lib/services/code-context');
+      return await loadProjectContext(projectId);
+    } catch (error) {
+      console.warn('[WorkbenchStore] Failed to load project context:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get smart file selection based on user request
+   * Automatically determines which files are relevant to the request
+   */
+  async getSmartFileSelection(userMessage: string): Promise<string[]> {
+    const projectId = this.#currentProjectId;
+    if (!projectId) return [];
+
+    try {
+      const { getSmartFileSelection } = await import('~/lib/services/code-context');
+      return await getSmartFileSelection(projectId, userMessage);
+    } catch (error) {
+      console.warn('[WorkbenchStore] Failed to get smart file selection:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Find files related to a given file path
+   * Returns imports, files that import it, tests, and configs
+   */
+  async findRelatedFiles(filePath: string): Promise<RelatedFiles | null> {
+    const projectId = this.#currentProjectId;
+    if (!projectId) return null;
+
+    try {
+      const { loadProjectContext, findRelatedFiles } = await import('~/lib/services/code-context');
+      const context = await loadProjectContext(projectId);
+      if (!context) return null;
+      return await findRelatedFiles(projectId, filePath, context.files);
+    } catch (error) {
+      console.warn('[WorkbenchStore] Failed to find related files:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Read file content from Docker container
+   */
+  async readFileContent(filePath: string): Promise<string | null> {
+    const projectId = this.#currentProjectId;
+    if (!projectId) return null;
+
+    try {
+      const res = await fetch(`${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(filePath)}`, {
+        headers: {
+          'Authorization': `Bearer ${getSessionToken() || ''}`,
+        },
+      });
+      if (!res.ok) return null;
+      return await res.text();
+    } catch (error) {
+      console.warn('[WorkbenchStore] Failed to read file:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Read multiple files efficiently
+   */
+  async readMultipleFiles(filePaths: string[]): Promise<Map<string, string>> {
+    const results = new Map<string, string>();
+    const projectId = this.#currentProjectId;
+    if (!projectId) return results;
+
+    // Read files in parallel, up to 5 at a time
+    const chunks: string[][] = [];
+    for (let i = 0; i < filePaths.length; i += 5) {
+      chunks.push(filePaths.slice(i, i + 5));
+    }
+
+    for (const chunk of chunks) {
+      const promises = chunk.map(async (path) => {
+        const content = await this.readFileContent(path);
+        if (content !== null) {
+          results.set(path, content);
+        }
+      });
+      await Promise.all(promises);
+    }
+
+    return results;
+  }
+
+  // ==================== ERROR HANDLING ====================
+
+  /**
+   * Analyze errors from terminal output
+   */
+  async analyzeErrors(terminalOutput: string): Promise<{
+    hasErrors: boolean;
+    errors: ParsedError[];
+    summary: string;
+    autoFixAvailable: boolean;
+  }> {
+    try {
+      const { analyzeTerminalOutput } = await import('~/lib/services/error-analyzer');
+      return analyzeTerminalOutput(terminalOutput);
+    } catch (error) {
+      console.warn('[WorkbenchStore] Failed to analyze errors:', error);
+      return { hasErrors: false, errors: [], summary: '', autoFixAvailable: false };
+    }
+  }
+
+  /**
+   * Generate a fix prompt for an error
+   */
+  async generateFixPrompt(error: ParsedError): Promise<string> {
+    try {
+      const { generateFixPrompt } = await import('~/lib/services/error-analyzer');
+      let fileContent: string | undefined;
+
+      if (error.file) {
+        const content = await this.readFileContent(error.file);
+        if (content) fileContent = content;
+      }
+
+      return generateFixPrompt(error, fileContent);
+    } catch (err) {
+      console.warn('[WorkbenchStore] Failed to generate fix prompt:', err);
+      return `Fix error: ${error.message}`;
+    }
+  }
+
+  /**
+   * Create diagnostic report for debugging
+   */
+  async createDiagnosticReport(errors: ParsedError[]): Promise<string> {
+    try {
+      const { createDiagnosticReport } = await import('~/lib/services/error-analyzer');
+      return createDiagnosticReport(errors);
+    } catch (error) {
+      console.warn('[WorkbenchStore] Failed to create diagnostic report:', error);
+      return 'Unable to generate diagnostic report';
+    }
+  }
+
+  // ==================== DIFF PREVIEW ====================
+
+  /**
+   * Generate a diff preview for file changes
+   */
+  generateDiffPreview(
+    filePath: string,
+    oldContent: string,
+    newContent: string
+  ): diffPreview.FileDiff {
+    return diffPreview.generateDiff(filePath, oldContent, newContent);
+  }
+
+  /**
+   * Add a pending change for review
+   */
+  addPendingChange(
+    filePath: string,
+    oldContent: string,
+    newContent: string,
+    description?: string
+  ): diffPreview.PendingChange {
+    return diffPreview.addPendingChange(filePath, oldContent, newContent, description);
+  }
+
+  /**
+   * Get all pending changes
+   */
+  getPendingChanges(): diffPreview.PendingChange[] {
+    return diffPreview.getPendingChanges();
+  }
+
+  /**
+   * Accept a pending change
+   */
+  acceptChange(changeId: string): diffPreview.PendingChange | null {
+    return diffPreview.acceptChange(changeId);
+  }
+
+  /**
+   * Reject a pending change
+   */
+  rejectChange(changeId: string): diffPreview.PendingChange | null {
+    return diffPreview.rejectChange(changeId);
+  }
+
+  /**
+   * Accept specific hunks from a change
+   */
+  acceptPartialChange(
+    changeId: string,
+    hunkIds: string[]
+  ): { newContent: string; change: diffPreview.PendingChange } | null {
+    return diffPreview.acceptPartialChange(changeId, hunkIds);
+  }
+
+  // ==================== UNDO/REDO ====================
+
+  /**
+   * Save file state for undo
+   */
+  saveUndoState(
+    filePath: string,
+    content: string,
+    description?: string,
+    aiGenerated?: boolean
+  ): void {
+    undoManager.saveState(filePath, content, description, aiGenerated);
+  }
+
+  /**
+   * Save batch state for multiple files (AI changes)
+   */
+  saveBatchUndoState(
+    files: Array<{ path: string; content: string }>,
+    description?: string,
+    snapshotId?: string
+  ): void {
+    undoManager.saveBatchState(files, description, snapshotId);
+  }
+
+  /**
+   * Undo last change for a file
+   */
+  undoFile(filePath: string): undoManager.FileState | null {
+    return undoManager.undo(filePath);
+  }
+
+  /**
+   * Redo last undone change for a file
+   */
+  redoFile(filePath: string): undoManager.FileState | null {
+    return undoManager.redo(filePath);
+  }
+
+  /**
+   * Check if undo is available
+   */
+  canUndo(filePath: string): boolean {
+    return undoManager.canUndo(filePath);
+  }
+
+  /**
+   * Check if redo is available
+   */
+  canRedo(filePath: string): boolean {
+    return undoManager.canRedo(filePath);
+  }
+
+  /**
+   * Undo last AI batch action
+   */
+  undoLastAIAction(): Array<{ path: string; content: string }> | null {
+    return undoManager.undoLastAIAction();
+  }
+
+  /**
+   * Get undo history for a file
+   */
+  getUndoHistory(filePath: string): undoManager.FileState[] {
+    return undoManager.getStateHistory(filePath);
+  }
+
+  /**
+   * Get AI action history
+   */
+  getAIActionHistory(): undoManager.UndoAction[] {
+    return undoManager.getActionHistory();
+  }
+
+  /**
+   * Get undo statistics
+   */
+  getUndoStats(): { totalFiles: number; totalStates: number; aiActions: number } {
+    return undoManager.getStats();
+  }
+
+  // ==================== PROPOSAL SYSTEM ====================
+
+  /**
+   * Enable or disable proposal mode.
+   * When enabled, AI file changes are collected into proposals for review.
+   */
+  setProposalMode(enabled: boolean): void {
+    this.proposalModeEnabled.set(enabled);
+    console.log(`[WorkbenchStore] Proposal mode ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Check if proposal mode is currently enabled
+   */
+  isProposalModeEnabled(): boolean {
+    return this.proposalModeEnabled.get();
+  }
+
+  /**
+   * Start collecting file changes for a new proposal
+   */
+  startProposal(messageId: string): void {
+    this.#proposalFileChanges.set(messageId, []);
+    this.#queuedActions.set(messageId, []);
+    console.log(`[WorkbenchStore] Started proposal collection for message: ${messageId}`);
+  }
+
+  /**
+   * Add a file change to the current proposal
+   */
+  addFileChangeToProposal(
+    messageId: string,
+    change: FileChange
+  ): void {
+    const changes = this.#proposalFileChanges.get(messageId) || [];
+
+    // Check if we already have a change for this file
+    const existingIndex = changes.findIndex(c => c.path === change.path);
+    if (existingIndex >= 0) {
+      // Update existing change
+      changes[existingIndex] = change;
+    } else {
+      changes.push(change);
+    }
+
+    this.#proposalFileChanges.set(messageId, changes);
+  }
+
+  /**
+   * Queue an action to be executed after proposal approval
+   */
+  queueActionForProposal(messageId: string, action: ActionCallbackData): void {
+    const actions = this.#queuedActions.get(messageId) || [];
+    actions.push(action);
+    this.#queuedActions.set(messageId, actions);
+  }
+
+  /**
+   * Finalize and create a proposal from collected file changes
+   */
+  finalizeProposal(
+    messageId: string,
+    title: string,
+    options: {
+      packagesAdded?: string[];
+      shellCommands?: string[];
+    } = {}
+  ): CodeProposal | null {
+    const fileChanges = this.#proposalFileChanges.get(messageId);
+
+    if (!fileChanges || fileChanges.length === 0) {
+      console.log(`[WorkbenchStore] No file changes for proposal: ${messageId}`);
+      return null;
+    }
+
+    const proposal = createCodeProposal(title, fileChanges, options);
+
+    const proposalResult: ProposalResult = {
+      proposal,
+      status: 'pending',
+      messageId,
+    };
+
+    const proposals = new Map(this.pendingProposals.get());
+    proposals.set(messageId, proposalResult);
+    this.pendingProposals.set(proposals);
+
+    console.log(`[WorkbenchStore] Created proposal: ${proposal.id} with ${fileChanges.length} file changes`);
+    return proposal;
+  }
+
+  /**
+   * Get a pending proposal by message ID
+   */
+  getProposal(messageId: string): ProposalResult | undefined {
+    return this.pendingProposals.get().get(messageId);
+  }
+
+  /**
+   * Get all pending proposals
+   */
+  getAllPendingProposals(): ProposalResult[] {
+    return Array.from(this.pendingProposals.get().values())
+      .filter(p => p.status === 'pending');
+  }
+
+  /**
+   * Approve a proposal and execute the queued actions
+   */
+  async approveProposal(
+    messageId: string,
+    selectedFiles?: string[]
+  ): Promise<ApproveProposalResult> {
+    const proposalResult = this.pendingProposals.get().get(messageId);
+
+    if (!proposalResult) {
+      return { success: false, error: 'Proposal not found' };
+    }
+
+    const proposal = proposalResult.proposal;
+    const queuedActions = this.#queuedActions.get(messageId) || [];
+
+    // Filter actions if partial approval
+    const actionsToRun = selectedFiles
+      ? queuedActions.filter(a => {
+          const action = a.action;
+          const filePath = action && 'filePath' in action ? (action as { filePath: string }).filePath : undefined;
+          return !filePath || selectedFiles.includes(filePath);
+        })
+      : queuedActions;
+
+    const appliedFiles: string[] = [];
+    const failedFiles: string[] = [];
+
+    // Execute the queued actions
+    for (const actionData of actionsToRun) {
+      try {
+        const artifact = this.artifacts.get()[actionData.messageId];
+        if (artifact?.runner) {
+          artifact.runner.runAction(actionData);
+          if (actionData.action && 'filePath' in actionData.action) {
+            appliedFiles.push((actionData.action as { filePath: string }).filePath);
+          }
+        }
+      } catch (error) {
+        console.error(`[WorkbenchStore] Failed to run action:`, error);
+        if (actionData.action && 'filePath' in actionData.action) {
+          failedFiles.push((actionData.action as { filePath: string }).filePath);
+        }
+      }
+    }
+
+    // Update proposal status
+    const proposals = new Map(this.pendingProposals.get());
+    const updatedResult: ProposalResult = {
+      ...proposalResult,
+      status: selectedFiles ? 'partial' : 'approved',
+      approvedChanges: selectedFiles || proposal.filesChanged.map(f => f.path),
+    };
+    proposals.set(messageId, updatedResult);
+    this.pendingProposals.set(proposals);
+
+    // Clean up
+    this.#proposalFileChanges.delete(messageId);
+    this.#queuedActions.delete(messageId);
+
+    console.log(`[WorkbenchStore] Approved proposal: ${messageId}, applied ${appliedFiles.length} files`);
+
+    return {
+      success: true,
+      appliedFiles,
+      failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
+    };
+  }
+
+  /**
+   * Reject a proposal and discard the queued actions
+   */
+  rejectProposal(messageId: string): void {
+    const proposalResult = this.pendingProposals.get().get(messageId);
+
+    if (!proposalResult) {
+      console.warn(`[WorkbenchStore] Proposal not found for rejection: ${messageId}`);
+      return;
+    }
+
+    // Update proposal status
+    const proposals = new Map(this.pendingProposals.get());
+    const updatedResult: ProposalResult = {
+      ...proposalResult,
+      status: 'rejected',
+    };
+    proposals.set(messageId, updatedResult);
+    this.pendingProposals.set(proposals);
+
+    // Clean up
+    this.#proposalFileChanges.delete(messageId);
+    this.#queuedActions.delete(messageId);
+
+    console.log(`[WorkbenchStore] Rejected proposal: ${messageId}`);
+  }
+
+  /**
+   * Clear all proposals (e.g., when starting a new conversation)
+   */
+  clearProposals(): void {
+    this.pendingProposals.set(new Map());
+    this.#proposalFileChanges.clear();
+    this.#queuedActions.clear();
+    console.log('[WorkbenchStore] Cleared all proposals');
+  }
+
+  /**
+   * Check if there are any pending proposals
+   */
+  hasPendingProposals(): boolean {
+    return this.getAllPendingProposals().length > 0;
+  }
+
+  /**
+   * Get the count of pending proposals
+   */
+  getPendingProposalCount(): number {
+    return this.getAllPendingProposals().length;
+  }
+
+  // ==================== WORKSPACE SESSION MANAGEMENT ====================
+
+  /**
+   * Get the workspace settings store for external access
+   */
+  get workspaceSettings() {
+    return workspace.workspaceSettingsStore;
+  }
+
+  /**
+   * Get the current workspace state store
+   */
+  get workspaceState() {
+    return workspace.workspaceStateStore;
+  }
+
+  /**
+   * Check if workspace is being restored
+   */
+  get isRestoringWorkspace() {
+    return workspace.isRestoringWorkspace;
+  }
+
+  /**
+   * Save current workspace state immediately
+   */
+  saveWorkspace(): void {
+    workspace.saveCurrentWorkspace();
+  }
+
+  /**
+   * Set workspace restore enabled/disabled
+   */
+  setWorkspaceRestoreEnabled(enabled: boolean): void {
+    workspace.setWorkspaceRestoreEnabled(enabled);
+  }
+
+  /**
+   * Get saved scroll position for a file from workspace
+   */
+  getWorkspaceScrollPosition(filePath: string): ScrollPosition | undefined {
+    return workspace.getWorkspaceScrollPosition(filePath);
+  }
+
+  /**
+   * Clean up workspace management (call on project close)
+   */
+  cleanupWorkspace(): void {
+    workspace.cleanupWorkspace();
+  }
+
+  /**
+   * Check if a project has saved workspace state
+   */
+  hasWorkspaceState(projectId: string): boolean {
+    return workspace.hasWorkspaceState(projectId);
+  }
+
+  /**
+   * Delete workspace state for a project
+   */
+  deleteWorkspaceState(projectId: string): void {
+    workspace.deleteWorkspaceState(projectId);
   }
 }
 

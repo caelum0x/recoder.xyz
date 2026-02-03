@@ -41,19 +41,16 @@ describe('File Management Commands', () => {
   describe('/files command', () => {
     it('should have correct command metadata', () => {
       expect(filesCommand.name).toBe('files');
-      expect(filesCommand.description).toBe('List and explore project files');
+      expect(filesCommand.description).toBe('List and explore project files with filters');
       expect(filesCommand.action).toBeDefined();
     });
 
-    it('should list files in current directory by default', () => {
-      const result = filesCommand.action?.(mockContext, '') as ToolActionReturn;
+    it('should show help when no args provided', () => {
+      const result = filesCommand.action?.(mockContext, '') as MessageActionReturn;
 
-      expect(result.type).toBe('tool');
-      expect(result.toolName).toBe('ls');
-      expect(result.toolArgs).toEqual({
-        path: '.',
-        recursive: 'false',
-      });
+      expect(result.type).toBe('message');
+      expect(result.messageType).toBe('info');
+      expect(result.content).toContain('File Explorer');
     });
 
     it('should list files in specified directory', () => {
@@ -75,6 +72,7 @@ describe('File Management Commands', () => {
       expect(result.toolArgs).toEqual({
         path: 'src',
         recursive: 'true',
+        ignore_pattern: 'node_modules,.git,dist,build,.next,coverage',
       });
     });
 
@@ -86,6 +84,7 @@ describe('File Management Commands', () => {
       expect(result.toolArgs).toEqual({
         path: 'src',
         recursive: 'true',
+        ignore_pattern: 'node_modules,.git,dist,build,.next,coverage',
       });
     });
 
@@ -115,7 +114,7 @@ describe('File Management Commands', () => {
   describe('/search command', () => {
     it('should have correct command metadata', () => {
       expect(searchCommand.name).toBe('search');
-      expect(searchCommand.description).toBe('Search codebase content');
+      expect(searchCommand.description).toBe('Search codebase content with context preview');
       expect(searchCommand.action).toBeDefined();
     });
 
@@ -142,7 +141,7 @@ describe('File Management Commands', () => {
     it('should support file pattern filter', () => {
       const result = searchCommand.action?.(
         mockContext,
-        '"class User" --file-pattern "*.ts"'
+        '"class User" --ext ts'
       ) as ToolActionReturn;
 
       expect(result.type).toBe('tool');
@@ -170,7 +169,7 @@ describe('File Management Commands', () => {
     it('should support both file pattern and path filters', () => {
       const result = searchCommand.action?.(
         mockContext,
-        '"export" --file-pattern "*.js" --path lib'
+        '"export" --ext js --path lib'
       ) as ToolActionReturn;
 
       expect(result.type).toBe('tool');
@@ -199,8 +198,8 @@ describe('File Management Commands', () => {
       const result = searchCommand.action?.(mockContext, '') as MessageActionReturn;
 
       expect(result.type).toBe('message');
-      expect(result.messageType).toBe('error');
-      expect(result.content).toContain('Please provide a search pattern');
+      expect(result.messageType).toBe('info');
+      expect(result.content).toContain('Smart Code Search');
     });
 
     it('should return error when search tool is not available', () => {
@@ -217,7 +216,7 @@ describe('File Management Commands', () => {
   describe('/find command', () => {
     it('should have correct command metadata', () => {
       expect(findCommand.name).toBe('find');
-      expect(findCommand.description).toBe('Find files by name or pattern');
+      expect(findCommand.description).toBe('Find files by name with fuzzy matching');
       expect(findCommand.action).toBeDefined();
     });
 
@@ -258,8 +257,8 @@ describe('File Management Commands', () => {
       const result = findCommand.action?.(mockContext, '') as MessageActionReturn;
 
       expect(result.type).toBe('message');
-      expect(result.messageType).toBe('error');
-      expect(result.content).toContain('Please provide a file pattern');
+      expect(result.messageType).toBe('info');
+      expect(result.content).toContain('Smart File Finder');
     });
 
     it('should return error when glob tool is not available', () => {
@@ -276,19 +275,16 @@ describe('File Management Commands', () => {
   describe('/tree command', () => {
     it('should have correct command metadata', () => {
       expect(treeCommand.name).toBe('tree');
-      expect(treeCommand.description).toBe('Show directory tree structure');
+      expect(treeCommand.description).toBe('Show directory tree structure with filtering');
       expect(treeCommand.action).toBeDefined();
     });
 
-    it('should show tree of current directory by default', () => {
-      const result = treeCommand.action?.(mockContext, '') as ToolActionReturn;
+    it('should show help when no args provided', () => {
+      const result = treeCommand.action?.(mockContext, '') as MessageActionReturn;
 
-      expect(result.type).toBe('tool');
-      expect(result.toolName).toBe('ls');
-      expect(result.toolArgs).toEqual({
-        path: '.',
-        recursive: 'true',
-      });
+      expect(result.type).toBe('message');
+      expect(result.messageType).toBe('info');
+      expect(result.content).toContain('Directory Tree Viewer');
     });
 
     it('should show tree of specified directory', () => {
@@ -299,6 +295,7 @@ describe('File Management Commands', () => {
       expect(result.toolArgs).toEqual({
         path: 'src',
         recursive: 'true',
+        ignore_pattern: 'node_modules,.git,dist,build,.next,coverage',
       });
     });
 
@@ -311,6 +308,7 @@ describe('File Management Commands', () => {
         path: '.',
         recursive: 'true',
         depth: '2',
+        ignore_pattern: 'node_modules,.git,dist,build,.next,coverage',
       });
     });
 
@@ -323,6 +321,7 @@ describe('File Management Commands', () => {
         path: 'src',
         recursive: 'true',
         depth: '3',
+        ignore_pattern: 'node_modules,.git,dist,build,.next,coverage',
       });
     });
 
@@ -374,8 +373,8 @@ describe('File Management Commands', () => {
       const result = webCommand.action?.(mockContext, '') as MessageActionReturn;
 
       expect(result.type).toBe('message');
-      expect(result.messageType).toBe('error');
-      expect(result.content).toContain('Please provide a search query');
+      expect(result.messageType).toBe('info');
+      expect(result.content).toContain('Web Search');
     });
 
     it('should return error when web-search tool is not available', () => {
@@ -438,7 +437,7 @@ describe('File Management Commands', () => {
     });
 
     it('should support codebase analysis workflow', () => {
-      // User flow: /tree src --depth 2 → /files src --recursive → /search "export" --file-pattern "*.ts"
+      // User flow: /tree src --depth 2 → /files src --recursive → /search "export" --ext ts
       
       // Step 1: See high-level structure
       const treeResult = treeCommand.action?.(
@@ -457,7 +456,7 @@ describe('File Management Commands', () => {
       // Step 3: Find all exports
       const searchResult = searchCommand.action?.(
         mockContext,
-        '"export" --file-pattern "*.ts"'
+        '"export" --ext ts'
       ) as ToolActionReturn;
       expect(searchResult.toolArgs).toHaveProperty('file_pattern', '*.ts');
     });

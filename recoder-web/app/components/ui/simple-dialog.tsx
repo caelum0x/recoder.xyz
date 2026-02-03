@@ -44,7 +44,7 @@ const DialogContent = ({ className, children }: DialogContentProps) => {
   return (
     <div
       className={classNames(
-        "w-full max-w-lg rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl border border-gray-200 dark:border-gray-700",
+        "w-full max-w-lg rounded-lg bg-bolt-elements-background-depth-2 p-6 shadow-xl border border-bolt-elements-borderColor",
         className
       )}
     >
@@ -70,7 +70,7 @@ const DialogTitle = ({ className, children }: DialogTitleProps) => {
   return (
     <h3
       className={classNames(
-        "text-lg font-semibold leading-none tracking-tight text-gray-900 dark:text-gray-100",
+        "text-lg font-semibold leading-none tracking-tight text-bolt-elements-textPrimary",
         className
       )}
     >

@@ -57,7 +57,7 @@ export function OptimizationDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading analytics...</div>
+        <div className="text-bolt-elements-textTertiary">Loading analytics...</div>
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function OptimizationDashboard() {
   if (!stats || !metrics) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">No data available</div>
+        <div className="text-bolt-elements-textTertiary">No data available</div>
       </div>
     );
   }
@@ -75,11 +75,11 @@ export function OptimizationDashboard() {
   const monthlySavings = metrics.totalSavings * 30; // Estimate monthly
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="p-6 bg-bolt-elements-background-depth-1 min-h-screen">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Cost Optimization Dashboard</h1>
-        <p className="text-gray-600 mt-2">Real-time analytics and savings metrics</p>
+        <h1 className="text-3xl font-bold text-bolt-elements-textPrimary">Cost Optimization Dashboard</h1>
+        <p className="text-bolt-elements-textTertiary mt-2">Real-time analytics and savings metrics</p>
       </div>
 
       {/* Time Range Selector */}
@@ -89,7 +89,7 @@ export function OptimizationDashboard() {
           className={`px-4 py-2 rounded-lg font-medium ${
             timeRange === '24h'
               ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 hover:bg-gray-100'
+              : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
           }`}
         >
           Last 24 Hours
@@ -99,7 +99,7 @@ export function OptimizationDashboard() {
           className={`px-4 py-2 rounded-lg font-medium ${
             timeRange === '7d'
               ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 hover:bg-gray-100'
+              : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
           }`}
         >
           Last 7 Days
@@ -109,7 +109,7 @@ export function OptimizationDashboard() {
           className={`px-4 py-2 rounded-lg font-medium ${
             timeRange === '30d'
               ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 hover:bg-gray-100'
+              : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
           }`}
         >
           Last 30 Days
@@ -157,7 +157,7 @@ export function OptimizationDashboard() {
       {/* Strategy Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Requests by Strategy */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold mb-4">Requests by Strategy</h2>
           <div className="space-y-4">
             <StrategyBar
@@ -185,7 +185,7 @@ export function OptimizationDashboard() {
         </div>
 
         {/* Cost Comparison */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold mb-4">Cost Comparison</h2>
           <div className="space-y-4">
             <CostBar
@@ -212,21 +212,21 @@ export function OptimizationDashboard() {
       </div>
 
       {/* Top Templates */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Top Templates Used</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Template</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">Uses</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg Savings</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-700">% of Total</th>
+              <tr className="border-b border-bolt-elements-borderColor">
+                <th className="text-left py-3 px-4 font-semibold text-bolt-elements-textSecondary">Template</th>
+                <th className="text-right py-3 px-4 font-semibold text-bolt-elements-textSecondary">Uses</th>
+                <th className="text-right py-3 px-4 font-semibold text-bolt-elements-textSecondary">Avg Savings</th>
+                <th className="text-right py-3 px-4 font-semibold text-bolt-elements-textSecondary">% of Total</th>
               </tr>
             </thead>
             <tbody>
               {stats.topTemplates.slice(0, 10).map((template, index) => (
-                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                <tr key={index} className="border-b border-bolt-elements-borderColor hover:bg-bolt-elements-background-depth-3">
                   <td className="py-3 px-4">
                     <div className="flex items-center">
                       <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold mr-3">
@@ -239,7 +239,7 @@ export function OptimizationDashboard() {
                   <td className="py-3 px-4 text-right text-green-600 font-semibold">
                     {template.avgSavings.toFixed(1)}%
                   </td>
-                  <td className="py-3 px-4 text-right text-gray-600">
+                  <td className="py-3 px-4 text-right text-bolt-elements-textTertiary">
                     {((template.uses / stats.templateUsageCount) * 100).toFixed(1)}%
                   </td>
                 </tr>
@@ -250,7 +250,7 @@ export function OptimizationDashboard() {
       </div>
 
       {/* Cost by Model */}
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold mb-4">Cost by Model</h2>
         <div className="space-y-3">
           {Object.entries(metrics.costByModel)
@@ -259,14 +259,14 @@ export function OptimizationDashboard() {
             .map(([model, data]) => (
               <div key={model} className="flex items-center justify-between">
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-900">{model}</div>
-                  <div className="text-xs text-gray-500">{data.requests} requests</div>
+                  <div className="text-sm font-medium text-bolt-elements-textPrimary">{model}</div>
+                  <div className="text-xs text-bolt-elements-textTertiary">{data.requests} requests</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-semibold text-gray-900">
+                  <div className="text-sm font-semibold text-bolt-elements-textPrimary">
                     ${data.cost.toFixed(4)}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-bolt-elements-textTertiary">
                     ${(data.cost / data.requests).toFixed(4)}/req
                   </div>
                 </div>
@@ -331,12 +331,12 @@ function StrategyBar({
   return (
     <div>
       <div className="flex justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className="text-sm text-gray-600">
+        <span className="text-sm font-medium text-bolt-elements-textSecondary">{label}</span>
+        <span className="text-sm text-bolt-elements-textTertiary">
           {count} ({percent.toFixed(1)}%)
         </span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+      <div className="w-full bg-bolt-elements-background-depth-3 rounded-full h-4 overflow-hidden">
         <div className={`${color} h-full rounded-full`} style={{ width: `${percent}%` }} />
       </div>
       {savings > 0 && (
@@ -361,10 +361,10 @@ function CostBar({
   return (
     <div>
       <div className="flex justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className="text-sm font-semibold text-gray-900">${amount.toFixed(2)}</span>
+        <span className="text-sm font-medium text-bolt-elements-textSecondary">{label}</span>
+        <span className="text-sm font-semibold text-bolt-elements-textPrimary">${amount.toFixed(2)}</span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+      <div className="w-full bg-bolt-elements-background-depth-3 rounded-full h-4 overflow-hidden">
         <div
           className={`${color} h-full rounded-full ${isBaseline ? 'opacity-50' : ''}`}
           style={{ width: '100%' }}

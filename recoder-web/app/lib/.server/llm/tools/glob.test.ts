@@ -17,7 +17,13 @@ import { createMockWorkspaceContext } from '../test-utils/mockWorkspaceContext.j
 import { ToolErrorType } from './tool-error.js';
 import * as glob from 'glob';
 
-vi.mock('glob', { spy: true });
+vi.mock('glob', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('glob')>();
+  return {
+    ...actual,
+    glob: vi.fn(actual.glob),
+  };
+});
 
 describe('GlobTool', () => {
   let tempRootDir: string; // This will be the rootDirectory for the GlobTool instance
@@ -226,7 +232,7 @@ describe('GlobTool', () => {
     });
 
     it('should return a GLOB_EXECUTION_ERROR on glob failure', async () => {
-      vi.mocked(glob.glob).mockRejectedValue(new Error('Glob failed'));
+      vi.mocked(glob.glob).mockRejectedValueOnce(new Error('Glob failed'));
       const params: GlobToolParams = { pattern: '*.txt' };
       const invocation = globTool.build(params);
       const result = await invocation.execute(abortSignal);
@@ -234,8 +240,6 @@ describe('GlobTool', () => {
       expect(result.llmContent).toContain(
         'Error during glob search operation: Glob failed',
       );
-      // Reset glob.
-      vi.mocked(glob.glob).mockReset();
     });
   });
 

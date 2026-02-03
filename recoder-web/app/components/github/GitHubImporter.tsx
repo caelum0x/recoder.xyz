@@ -85,9 +85,15 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-bolt-elements-background-depth-1 rounded-lg shadow-xl w-full max-w-2xl">
+      <div
+        className="rounded-lg shadow-xl w-full max-w-2xl"
+        style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-bolt-elements-borderColor">
+        <div
+          className="flex items-center justify-between p-6"
+          style={{ borderBottom: '1px solid var(--bolt-elements-borderColor)' }}
+        >
           <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">
             Import from GitHub
           </h2>
@@ -114,17 +120,22 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
                     setRepoInfo(null);
                     setError(null);
                   }}
-                  className="flex-1 px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent"
+                  className="flex-1 px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  style={{
+                    backgroundColor: 'var(--bolt-elements-bg-depth-2)',
+                    border: '1px solid var(--bolt-elements-borderColor)',
+                    color: 'var(--bolt-elements-textPrimary)',
+                  }}
                 />
                 <button
                   onClick={handleAnalyzeRepo}
                   disabled={loading || !repoUrl.trim()}
-                  className="px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-md hover:bg-bolt-elements-button-primary-backgroundHover disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-opacity hover:opacity-80 bg-blue-600 text-white"
                 >
                   {loading ? 'Analyzing...' : 'Analyze'}
                 </button>
               </div>
-              <p className="text-xs text-bolt-elements-textTertiary mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--bolt-elements-textTertiary)' }}>
                 Enter a public GitHub repository URL
               </p>
             </div>
@@ -139,25 +150,33 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
                 placeholder="examples/basic-app"
                 value={subPath}
                 onChange={(e) => setSubPath(e.target.value)}
-                className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent"
+                className="w-full px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                style={{
+                  backgroundColor: 'var(--bolt-elements-bg-depth-2)',
+                  border: '1px solid var(--bolt-elements-borderColor)',
+                  color: 'var(--bolt-elements-textPrimary)',
+                }}
               />
-              <p className="text-xs text-bolt-elements-textTertiary mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--bolt-elements-textTertiary)' }}>
                 Import only files from a specific directory
               </p>
             </div>
 
             {/* Repository Info */}
             {repoInfo && (
-              <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
+              <div
+                className="rounded-lg p-4"
+                style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+              >
                 <h3 className="font-semibold text-bolt-elements-textPrimary mb-2">
                   {repoInfo.name}
                 </h3>
                 {repoInfo.description && (
-                  <p className="text-bolt-elements-textSecondary text-sm mb-3">
+                  <p className="text-sm mb-3" style={{ color: 'var(--bolt-elements-textSecondary)' }}>
                     {repoInfo.description}
                   </p>
                 )}
-                <div className="flex items-center gap-4 text-xs text-bolt-elements-textTertiary">
+                <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--bolt-elements-textTertiary)' }}>
                   {repoInfo.language && (
                     <span className="flex items-center gap-1">
                       <div className="i-ph:code text-sm" />
@@ -173,7 +192,8 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
                       {repoInfo.topics.slice(0, 3).map((topic: string) => (
                         <span
                           key={topic}
-                          className="bg-bolt-elements-background-depth-3 px-2 py-0.5 rounded text-xs"
+                          className="px-2 py-0.5 rounded text-xs"
+                          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}
                         >
                           {topic}
                         </span>
@@ -186,25 +206,31 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+              <div
+                className="rounded-lg p-3"
+                style={{ backgroundColor: 'rgba(220, 38, 38, 0.1)', border: '1px solid rgba(220, 38, 38, 0.3)' }}
+              >
+                <p className="text-red-400 text-sm">{error}</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 p-6 border-t border-bolt-elements-borderColor">
+        <div
+          className="flex items-center justify-end gap-2 p-6"
+          style={{ borderTop: '1px solid var(--bolt-elements-borderColor)' }}
+        >
           <button
             onClick={onClose}
-            className="px-4 py-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+            className="px-4 py-2 transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
           >
             Cancel
           </button>
           <button
             onClick={handleImportRepo}
             disabled={loading || !repoUrl.trim()}
-            className="px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-md hover:bg-bolt-elements-button-primary-backgroundHover disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-opacity hover:opacity-80 bg-blue-600 text-white"
           >
             {loading ? 'Importing...' : 'Import Repository'}
           </button>

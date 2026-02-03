@@ -20,9 +20,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve static files with smart caching
+// Files with content hashes (e.g., /assets/index-abc123.js) get long cache
+// Non-hashed files get short cache to ensure updates are seen
 app.use(express.static(join(BUILD_DIR, 'client'), {
-  immutable: true,
-  maxAge: '1y',
+  setHeaders: (res, filePath) => {
+    // Check if the file has a content hash in its name
+    // Remix/Vite typically creates files like: assets/index-[hash].js, assets/style-[hash].css
+    const hasContentHash = /\.[a-f0-9]{8,}\.(js|css|woff2?|ttf|eot|otf)$/i.test(filePath) ||
+                           /[-_][a-f0-9]{8,}\.(js|css)$/i.test(filePath) ||
+                           filePath.includes('/assets/');
+
+    if (hasContentHash) {
+      // Content-hashed files are immutable - cache for 1 year
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (/\.(html|htm)$/i.test(filePath) || filePath.endsWith('/')) {
+      // HTML files should always be revalidated
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else if (/\.(png|jpg|jpeg|gif|ico|svg|webp)$/i.test(filePath)) {
+      // Images without hashes: cache for 1 day, but revalidate
+      res.setHeader('Cache-Control', 'public, max-age=86400, must-revalidate');
+    } else {
+      // Other files: short cache, must revalidate
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
+  }
 }));
 
 const buildPath = pathToFileURL(join(BUILD_DIR, 'server', 'index.js')).href;

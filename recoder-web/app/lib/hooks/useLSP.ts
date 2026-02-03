@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   LSPClient,
   getLSPClient,
@@ -15,6 +16,7 @@ import {
   type LSPSignatureHelp,
   type LSPServerStatus,
 } from '~/lib/lsp/lsp-client';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 // ============================================
 // Types
@@ -90,6 +92,7 @@ export function useLSP(
   options: UseLSPOptions = {}
 ): UseLSPResult {
   const { autoStart = true, onReady, onError } = options;
+  const containerReady = useStore(workbenchStore.containerReady);
 
   const [isReady, setIsReady] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -265,12 +268,12 @@ export function useLSP(
     }
   }, []);
 
-  // Auto-start effect
+  // Auto-start effect - wait for container to be ready before initializing
   useEffect(() => {
-    if (autoStart && projectId && !isReady && !isInitializing) {
+    if (autoStart && projectId && containerReady && !isReady && !isInitializing) {
       initialize();
     }
-  }, [autoStart, projectId, isReady, isInitializing, initialize]);
+  }, [autoStart, projectId, containerReady, isReady, isInitializing, initialize]);
 
   // Cleanup on unmount or projectId change
   useEffect(() => {

@@ -38,4 +38,7 @@ interface Env {
   SLACK_WEBHOOK_URL?: string;
   DISCORD_WEBHOOK_URL?: string;
   ALERT_WEBHOOK_URL?: string;
+
+  // Web Scraping
+  FIRECRAWL_API_KEY?: string;
 }

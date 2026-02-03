@@ -10,7 +10,7 @@ interface EnterpriseToolRequest {
  * This allows client-side code to use enterprise features without importing server modules
  * SECURITY: Requires authentication for all requests
  */
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request, context }: ActionFunctionArgs) {
   // SECURITY: Verify user is authenticated
   const { verifySession } = await import('~/lib/auth/session.server');
   const session = await verifySession(request);
@@ -44,9 +44,41 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       case 'discoverFiles': {
+        const query = (params.query as string) || '';
+        const workingDir = (params.workingDir as string) || '/workspace';
+        const projectId = params.projectId as string | undefined;
+
+        // If projectId is provided, prefer Docker backend file listing (container workspace)
+        if (projectId) {
+          const env = (context as any)?.cloudflare?.env || process.env || {};
+          const dockerBackendUrl =
+            (env as any).DOCKER_BACKEND_URL ||
+            (env as any).VITE_DOCKER_BACKEND_URL ||
+            process.env.DOCKER_BACKEND_URL ||
+            'http://localhost:3100';
+
+          try {
+            const response = await fetch(`${dockerBackendUrl}/api/files/${projectId}`, {
+              headers: { 'Content-Type': 'application/json' },
+            });
+            if (response.ok) {
+              const data = await response.json() as { files?: string[] };
+              const allFiles = (data.files || []).filter(Boolean);
+              const searchTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+              const filtered = searchTerms.length === 0
+                ? allFiles.slice(0, 20)
+                : allFiles.filter(f => {
+                    const lower = f.toLowerCase();
+                    return searchTerms.some(term => lower.includes(term));
+                  }).slice(0, 20);
+              return json(filtered);
+            }
+          } catch (error) {
+            console.warn('[EnterpriseTools] Docker file discovery failed:', error);
+          }
+        }
+
         const { discoverRelevantFiles } = await import('~/lib/.server/llm/enterprise-integration');
-        const query = params.query as string;
-        const workingDir = params.workingDir as string;
         const result = await discoverRelevantFiles(query, workingDir);
         return json(result);
       }

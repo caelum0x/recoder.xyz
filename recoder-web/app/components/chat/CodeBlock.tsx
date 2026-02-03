@@ -1,11 +1,63 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useState, useMemo } from 'react';
 import { bundledLanguages, codeToHtml, isSpecialLang, type BundledLanguage, type SpecialLanguage } from 'shiki';
 import { classNames } from '~/utils/classNames';
 import { createScopedLogger } from '~/utils/logger';
+import { CopyButton } from '~/components/ui/CopyButton';
 
 import styles from './CodeBlock.module.scss';
 
 const logger = createScopedLogger('CodeBlock');
+
+// Language display names for nicer labels
+const LANGUAGE_LABELS: Record<string, string> = {
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  python: 'Python',
+  java: 'Java',
+  cpp: 'C++',
+  c: 'C',
+  csharp: 'C#',
+  go: 'Go',
+  rust: 'Rust',
+  ruby: 'Ruby',
+  php: 'PHP',
+  swift: 'Swift',
+  kotlin: 'Kotlin',
+  scala: 'Scala',
+  html: 'HTML',
+  css: 'CSS',
+  scss: 'SCSS',
+  sass: 'Sass',
+  less: 'Less',
+  json: 'JSON',
+  yaml: 'YAML',
+  xml: 'XML',
+  markdown: 'Markdown',
+  md: 'Markdown',
+  sql: 'SQL',
+  bash: 'Bash',
+  shell: 'Shell',
+  sh: 'Shell',
+  zsh: 'Zsh',
+  powershell: 'PowerShell',
+  dockerfile: 'Dockerfile',
+  docker: 'Docker',
+  plaintext: 'Plain Text',
+  text: 'Plain Text',
+  jsx: 'JSX',
+  tsx: 'TSX',
+  vue: 'Vue',
+  svelte: 'Svelte',
+  graphql: 'GraphQL',
+  prisma: 'Prisma',
+  toml: 'TOML',
+  ini: 'INI',
+  nginx: 'Nginx',
+  apache: 'Apache',
+};
+
+// Threshold for collapsing code blocks (number of lines)
+const COLLAPSE_THRESHOLD = 15;
 
 interface CodeBlockProps {
   className?: string;
@@ -18,21 +70,22 @@ interface CodeBlockProps {
 export const CodeBlock = memo(
   ({ className, code, language = 'plaintext', theme = 'dark-plus', disableCopy = false }: CodeBlockProps) => {
     const [html, setHTML] = useState<string | undefined>(undefined);
-    const [copied, setCopied] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
 
-    const copyToClipboard = () => {
-      if (copied) {
-        return;
-      }
+    // Count lines and determine if collapsible
+    const { lineCount, isCollapsible } = useMemo(() => {
+      const lines = code.split('\n').length;
+      return {
+        lineCount: lines,
+        isCollapsible: lines > COLLAPSE_THRESHOLD,
+      };
+    }, [code]);
 
-      navigator.clipboard.writeText(code);
-
-      setCopied(true);
-
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-    };
+    // Get display label for language
+    const languageLabel = useMemo(() => {
+      const lang = String(language).toLowerCase();
+      return LANGUAGE_LABELS[lang] || lang.charAt(0).toUpperCase() + lang.slice(1);
+    }, [language]);
 
     useEffect(() => {
       if (language && !isSpecialLang(language) && !(language in bundledLanguages)) {
@@ -50,32 +103,77 @@ export const CodeBlock = memo(
 
     return (
       <div className={classNames('relative group text-left', className)}>
+        {/* Header bar with language label and actions */}
+        <div className={classNames(
+          styles.CodeBlockHeader,
+          'flex items-center justify-between px-3 py-2 bg-bolt-elements-background-depth-3 rounded-t-md border-b border-bolt-elements-borderColor'
+        )}>
+          {/* Language label */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-bolt-elements-textSecondary">
+              {languageLabel}
+            </span>
+            {isCollapsible && (
+              <span className="text-xs text-bolt-elements-textTertiary">
+                ({lineCount} lines)
+              </span>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1">
+            {/* Expand/Collapse button for long code */}
+            {isCollapsible && (
+              <button
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                onClick={() => setIsExpanded(!isExpanded)}
+                title={isExpanded ? 'Collapse code' : 'Expand code'}
+              >
+                <div className={classNames(
+                  'transition-transform duration-200',
+                  isExpanded ? 'i-ph:caret-up' : 'i-ph:caret-down'
+                )} />
+                <span>{isExpanded ? 'Collapse' : 'Expand'}</span>
+              </button>
+            )}
+
+            {/* Copy button */}
+            {!disableCopy && (
+              <CopyButton
+                text={code}
+                size="sm"
+                variant="ghost"
+                showLabel
+                label="Copy"
+                copiedLabel="Copied!"
+                tooltip="Copy code"
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Code content */}
         <div
           className={classNames(
-            styles.CopyButtonContainer,
-            'bg-white absolute top-[10px] right-[10px] rounded-md z-10 text-lg flex items-center justify-center opacity-0 group-hover:opacity-100',
+            styles.CodeBlockContent,
+            'transition-all duration-300 overflow-hidden',
             {
-              'rounded-l-0 opacity-100': copied,
-            },
+              [styles.Collapsed]: isCollapsible && !isExpanded,
+            }
           )}
+          style={{
+            maxHeight: isCollapsible && !isExpanded ? '300px' : 'none',
+          }}
         >
-          {!disableCopy && (
-            <button
-              className={classNames(
-                'flex items-center bg-transparent p-[6px] justify-center before:bg-white before:rounded-l-md before:text-gray-500 before:border-r before:border-gray-300',
-                {
-                  'before:opacity-0': !copied,
-                  'before:opacity-100': copied,
-                },
-              )}
-              title="Copy Code"
-              onClick={() => copyToClipboard()}
-            >
-              <div className="i-ph:clipboard-text-duotone"></div>
-            </button>
-          )}
+          <div dangerouslySetInnerHTML={{ __html: html ?? '' }} />
         </div>
-        <div dangerouslySetInnerHTML={{ __html: html ?? '' }}></div>
+
+        {/* Fade overlay for collapsed state */}
+        {isCollapsible && !isExpanded && (
+          <div
+            className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-bolt-elements-background-depth-2 to-transparent pointer-events-none rounded-b-md"
+          />
+        )}
       </div>
     );
   },

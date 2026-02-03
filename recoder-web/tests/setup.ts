@@ -3,10 +3,20 @@
  * Configures global test environment and mocks
  */
 
-import { vi } from 'vitest';
+import { vi, afterAll } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // Mock environment variables
 process.env.NODE_ENV = 'test';
+
+const testHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'recoder-test-home-'));
+process.env.HOME = testHomeDir;
+process.env.USERPROFILE = testHomeDir;
+process.env.XDG_CONFIG_HOME = testHomeDir;
+process.env.XDG_STATE_HOME = testHomeDir;
+process.env.XDG_DATA_HOME = testHomeDir;
 
 // Mock console methods to reduce noise in tests
 const originalConsoleLog = console.log;
@@ -48,6 +58,10 @@ global.Response = class MockResponse {
 // Clean up after each test
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+afterAll(() => {
+  fs.rmSync(testHomeDir, { recursive: true, force: true });
 });
 
 export {};

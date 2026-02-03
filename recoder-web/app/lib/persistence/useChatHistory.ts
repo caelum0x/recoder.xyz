@@ -1,9 +1,9 @@
 import { useLoaderData, useNavigate, useLocation } from '@remix-run/react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { atom } from 'nanostores';
 import type { Message } from 'ai';
 import { toast } from 'react-toastify';
-import { workbenchStore } from '~/lib/stores/workbench';
+import { workbenchStore, ensureContainerExists, clearContainerState } from '~/lib/stores/workbench';
 import { getMessages, getNextId, getUrlId, openDatabase, setMessages } from './db';
 import { getCurrentUser, getCurrentUserAsync, initSession } from '~/utils/auth-utils';
 import { useAuth } from '~/lib/contexts/AuthContext';
@@ -14,6 +14,11 @@ import { fetchProjectErrors } from '~/lib/hooks/useErrors';
 import { formatErrorsForAI } from '~/lib/services/auto-fix';
 import { canAutoFix, setAutoFixing } from '~/lib/stores/errors';
 import { dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
+import * as chatSessions from '~/lib/stores/chat-sessions';
+import type { ChatSessionMetadata } from '~/lib/stores/chat-sessions';
+
+// Re-export ensureContainerExists for backward compatibility
+export { ensureContainerExists } from '~/lib/stores/workbench';
 
 // 🔒 Global flags to coordinate npm install across components
 // These are module-level to prevent race conditions between different instances
@@ -69,9 +74,6 @@ async function checkAndAutoFixErrors(projectId: string): Promise<void> {
   }
 }
 
-// 🔒 Global container creation coordination - prevents duplicate container creation
-const containerCreationPromises = new Map<string, Promise<boolean>>();
-
 // 🔒 Global file restoration coordination - prevents duplicate restoration on HMR
 const fileRestorationPromises = new Map<string, Promise<boolean>>();
 const restoredProjectIds = new Set<string>();
@@ -83,11 +85,13 @@ export function clearRestorationState(projectId?: string) {
   if (projectId) {
     restoredProjectIds.delete(projectId);
     fileRestorationPromises.delete(projectId);
-    containerCreationPromises.delete(projectId);
+    // Also clear container state from centralized location
+    clearContainerState(projectId);
   } else {
     restoredProjectIds.clear();
     fileRestorationPromises.clear();
-    containerCreationPromises.clear();
+    // Also clear container state from centralized location
+    clearContainerState();
   }
 }
 
@@ -137,6 +141,307 @@ export async function ensureDB() {
 
 export const chatId = atom<string | undefined>(undefined);
 export const description = atom<string | undefined>(undefined);
+
+// ==================== SESSION MANAGEMENT API ====================
+
+/**
+ * Load all chat sessions for the current user
+ * Populates the chat-sessions store
+ */
+export async function loadAllSessions(limit: number = 50): Promise<ChatSessionMetadata[]> {
+  chatSessions.setLoading(true);
+  chatSessions.setError(null);
+
+  try {
+    const user = getCurrentUser();
+    const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
+
+    const params = new URLSearchParams();
+    if (user?.id) params.set('userId', user.id);
+    if (anonymousId) params.set('anonymousId', anonymousId);
+    params.set('limit', String(limit));
+
+    const response = await fetch(`/api/chat-history?${params}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to load sessions: ${response.status}`);
+    }
+
+    const result = await response.json() as { success: boolean; data?: any[] };
+
+    if (!result.success || !result.data) {
+      return [];
+    }
+
+    // Convert to session metadata and update store
+    const sessions = result.data.map(chatSessions.apiResponseToMetadata);
+    chatSessions.setSessions(sessions);
+
+    return sessions;
+  } catch (error) {
+    console.error('Failed to load sessions:', error);
+    chatSessions.setError(error instanceof Error ? error.message : 'Failed to load sessions');
+    return [];
+  } finally {
+    chatSessions.setLoading(false);
+  }
+}
+
+/**
+ * Load sessions for a specific project
+ */
+export async function loadProjectSessions(projectId: string): Promise<ChatSessionMetadata[]> {
+  // First load all sessions, then filter
+  const allSessions = await loadAllSessions(100);
+  return allSessions.filter(s => s.projectId === projectId);
+}
+
+/**
+ * Create a new chat session
+ */
+export async function createNewSession(projectId?: string): Promise<string | null> {
+  try {
+    const user = getCurrentUser();
+    const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
+
+    // Generate new session ID
+    const newId = Date.now().toString();
+    const urlId = newId;
+
+    // Create session metadata
+    const metadata: ChatSessionMetadata = {
+      id: newId,
+      urlId,
+      projectId,
+      title: 'New Conversation',
+      messageCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isArchived: false,
+      isFavorite: false,
+      source: 'web',
+    };
+
+    // Add to store
+    chatSessions.setSession(metadata);
+    chatSessions.setActiveSession(newId);
+
+    // Clear current chat state for new session
+    clearSessionState();
+    chatId.set(newId);
+
+    return urlId;
+  } catch (error) {
+    console.error('Failed to create new session:', error);
+    return null;
+  }
+}
+
+/**
+ * Rename a chat session (persisted to database)
+ */
+export async function renameSessionPersistent(sessionId: string, newTitle: string): Promise<boolean> {
+  try {
+    // Update local store immediately
+    chatSessions.renameSession(sessionId, newTitle);
+
+    // Get session urlId for API call
+    const session = chatSessions.getSession(sessionId);
+    if (!session) return false;
+
+    // Persist to database - re-save with new title
+    const user = getCurrentUser();
+    const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
+
+    const response = await fetch('/api/chat-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user?.id,
+        anonymousId,
+        urlId: session.urlId,
+        title: newTitle,
+        description: newTitle,
+        messages: [], // Empty - just updating metadata
+      }),
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('Failed to rename session:', error);
+    return false;
+  }
+}
+
+/**
+ * Delete a chat session (persisted to database)
+ */
+export async function deleteSessionPersistent(sessionId: string): Promise<boolean> {
+  try {
+    // Delete from database
+    const response = await fetch('/api/chat-history', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (response.ok) {
+      // Remove from local store
+      chatSessions.removeSession(sessionId);
+
+      // Clear active session if deleted
+      if (chatSessions.activeSessionId.get() === sessionId) {
+        chatSessions.setActiveSession(null);
+      }
+
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Failed to delete session:', error);
+    return false;
+  }
+}
+
+/**
+ * Archive a chat session
+ */
+export async function archiveSessionPersistent(sessionId: string): Promise<boolean> {
+  try {
+    chatSessions.archiveSession(sessionId);
+    // Note: In a full implementation, this would persist to the database
+    // For now, archived state is local-only
+    return true;
+  } catch (error) {
+    console.error('Failed to archive session:', error);
+    return false;
+  }
+}
+
+/**
+ * Duplicate a chat session
+ */
+export async function duplicateSession(sessionId: string): Promise<string | null> {
+  try {
+    const session = chatSessions.getSession(sessionId);
+    if (!session) return null;
+
+    // Create a new session with same metadata
+    const newId = Date.now().toString();
+    const newMetadata: ChatSessionMetadata = {
+      ...session,
+      id: newId,
+      urlId: newId,
+      title: `${session.title} (Copy)`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    chatSessions.setSession(newMetadata);
+    return newId;
+  } catch (error) {
+    console.error('Failed to duplicate session:', error);
+    return null;
+  }
+}
+
+/**
+ * Search across all conversations
+ */
+export function searchConversations(
+  query: string,
+  options?: {
+    projectId?: string;
+    includeArchived?: boolean;
+    limit?: number;
+  }
+): Array<{ session: ChatSessionMetadata; score: number; matches: string[] }> {
+  return chatSessions.searchSessions(query, options);
+}
+
+/**
+ * Export a conversation as markdown
+ */
+export async function exportConversation(sessionId: string): Promise<void> {
+  const session = chatSessions.getSession(sessionId);
+  if (!session) {
+    toast.error('Session not found');
+    return;
+  }
+
+  try {
+    // Load full messages for export
+    const params = new URLSearchParams();
+    params.set('urlId', session.urlId);
+
+    const response = await fetch(`/api/chat-history?${params}`);
+    if (!response.ok) {
+      throw new Error('Failed to load conversation');
+    }
+
+    const result = await response.json() as { success: boolean; data?: any[] };
+    const messages = result.data?.[0]?.messages || [];
+
+    // Export as markdown
+    chatSessions.exportSessionAsMarkdown(session, messages);
+    toast.success('Conversation exported successfully');
+  } catch (error) {
+    console.error('Failed to export conversation:', error);
+    toast.error('Failed to export conversation');
+  }
+}
+
+/**
+ * Export multiple conversations
+ */
+export async function exportMultipleConversations(sessionIds: string[]): Promise<void> {
+  const sessions: Array<{ metadata: ChatSessionMetadata; messages: Message[] }> = [];
+
+  for (const sessionId of sessionIds) {
+    const session = chatSessions.getSession(sessionId);
+    if (!session) continue;
+
+    try {
+      const params = new URLSearchParams();
+      params.set('urlId', session.urlId);
+
+      const response = await fetch(`/api/chat-history?${params}`);
+      if (!response.ok) continue;
+
+      const result = await response.json() as { success: boolean; data?: any[] };
+      const messages = result.data?.[0]?.messages || [];
+
+      sessions.push({ metadata: session, messages });
+    } catch (error) {
+      console.error(`Failed to load session ${sessionId}:`, error);
+    }
+  }
+
+  if (sessions.length === 0) {
+    toast.error('No conversations to export');
+    return;
+  }
+
+  chatSessions.exportMultipleSessionsAsMarkdown(sessions);
+  toast.success(`Exported ${sessions.length} conversations`);
+}
+
+/**
+ * Get all unique tags across sessions
+ */
+export function getAllTags(): string[] {
+  const sessions = Object.values(chatSessions.sessionsMap.get());
+  const tagSet = new Set<string>();
+
+  for (const session of sessions) {
+    if (session.tags) {
+      session.tags.forEach(tag => tagSet.add(tag));
+    }
+  }
+
+  return Array.from(tagSet).sort();
+}
 
 // Flag to enable/disable database saving
 // Database operations happen via API calls, so this should be enabled when persistence is enabled
@@ -312,6 +617,85 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
   }
 }
 
+async function markContainerReady(projectId: string) {
+  try {
+    const { workbenchStore } = await import('~/lib/stores/workbench');
+    workbenchStore.setContainerReady(true);
+    console.log('✅ [markContainerReady] Container marked as ready');
+
+    // 🔧 AUTO-FIX: Check for errors after dev server starts
+    // Run in background so we don't block the UI
+    checkAndAutoFixErrors(projectId).catch(err => {
+      console.warn('⚠️ [AutoFix] Background error check failed:', err);
+    });
+  } catch (e) {
+    console.warn('Could not set container ready:', e);
+  }
+}
+
+async function startDevServerOnly(projectId: string): Promise<boolean> {
+  try {
+    const state = await checkWorkspaceHasFiles(projectId);
+    if (state.devServerRunning) {
+      await markContainerReady(projectId);
+      return true;
+    }
+  } catch (e) {
+    // Ignore and try to start anyway
+  }
+
+  try {
+    // Mark install complete so ActionRunner doesn't re-trigger install on new messages
+    markNpmInstallComplete();
+
+    const devResult = await dockerPost<{ ready?: boolean; port?: number }>(`/api/exec/${projectId}`, {
+      command: 'bun run dev -- --port 5173 --host 0.0.0.0',
+      cwd: '/workspace',
+      background: true
+    });
+
+    console.log('✅ [startDevServerOnly] Dev server started in background');
+
+    if (devResult.ready) {
+      console.log(`✅ [startDevServerOnly] Dev server confirmed ready on port ${devResult.port}`);
+      await markContainerReady(projectId);
+      return true;
+    }
+
+    // Dev server started but not ready yet - poll the health endpoint
+    console.log('⏳ [startDevServerOnly] Dev server building, polling for ready state...');
+    const maxWaitMs = 45000;
+    const pollInterval = 2000;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitMs) {
+      try {
+        const health = await dockerGet<{ ports?: Array<{ port: number; responding: boolean }> }>(
+          `/api/preview/${projectId}/health`,
+          { timeout: 10000 }
+        );
+        const readyPort = health.ports?.find(p => p.responding);
+        if (readyPort) {
+          console.log(`✅ [startDevServerOnly] Dev server ready on port ${readyPort.port}`);
+          await markContainerReady(projectId);
+          return true;
+        }
+      } catch {
+        // Health check failed, continue polling
+      }
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    // Timeout - mark ready anyway so user can see error in preview
+    console.warn('⚠️ [startDevServerOnly] Health check timeout, marking ready anyway');
+    await markContainerReady(projectId);
+    return true;
+  } catch (err) {
+    console.warn('⚠️ [startDevServerOnly] Failed to start dev server:', err);
+    return false;
+  }
+}
+
 /**
  * Run bun install with coordination to prevent concurrent runs
  * 🚀 OPTIMIZED: Uses bun for faster installs (no peer dep issues)
@@ -381,21 +765,8 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
       // 🚀 OPTIMIZATION: Automatically start dev server after install
       console.log('🚀 [runInstallWithCoordination] Starting dev server...');
       
-      // Helper to mark container ready and trigger auto-fix
       const markReady = async () => {
-        try {
-          const { workbenchStore } = await import('~/lib/stores/workbench');
-          workbenchStore.setContainerReady(true);
-          console.log('✅ [runInstallWithCoordination] Container marked as ready');
-
-          // 🔧 AUTO-FIX: Check for errors after dev server starts
-          // Run in background so we don't block the UI
-          checkAndAutoFixErrors(projectId).catch(err => {
-            console.warn('⚠️ [AutoFix] Background error check failed:', err);
-          });
-        } catch (e) {
-          console.warn('Could not set container ready:', e);
-        }
+        await markContainerReady(projectId);
       };
       
       try {
@@ -419,7 +790,7 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
           
           while (Date.now() - startTime < maxWaitMs) {
             try {
-              const health = await dockerGet<{ ports?: Array<{ port: number; responding: boolean }> }>(`/api/preview/${projectId}/health`);
+              const health = await dockerGet<{ ports?: Array<{ port: number; responding: boolean }> }>(`/api/preview/${projectId}/health`, { timeout: 10000, skipRetry: true });
               const readyPort = health.ports?.find(p => p.responding);
               if (readyPort) {
                 console.log(`✅ [runInstallWithCoordination] Dev server ready on port ${readyPort.port}`);
@@ -453,44 +824,34 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
 }
 
 /**
- * Ensure container exists with coordination to prevent race conditions.
- * Multiple callers (terminal, file restore) share the same promise.
- * @exported for use by terminal.ts
+ * Check if container workspace already has files (persistent volume)
+ * Returns true if files exist, false if restoration is needed
  */
-export async function ensureContainerExists(projectId: string): Promise<boolean> {
-  // If already creating this container, wait for the existing promise
-  const existingPromise = containerCreationPromises.get(projectId);
-  if (existingPromise) {
-    console.log('⏳ [ensureContainerExists] Waiting for existing container creation...');
-    return existingPromise;
+async function checkWorkspaceHasFiles(projectId: string): Promise<{ hasFiles: boolean; hasPackageJson: boolean; devServerRunning: boolean }> {
+  try {
+    const result = await dockerGet<{
+      hasFiles: boolean;
+      fileCount: number;
+      hasPackageJson: boolean;
+      devServerRunning: boolean;
+    }>(`/api/workspace-state/${projectId}`, { timeout: 10000 });
+    
+    return {
+      hasFiles: result?.hasFiles || false,
+      hasPackageJson: result?.hasPackageJson || false,
+      devServerRunning: result?.devServerRunning || false,
+    };
+  } catch (e) {
+    // Container might not exist yet - needs restoration
+    return { hasFiles: false, hasPackageJson: false, devServerRunning: false };
   }
-
-  // Create new promise for this container
-  const createPromise = (async (): Promise<boolean> => {
-    try {
-      const userId = getCurrentUserId();
-      console.log('🐳 [ensureContainerExists] Creating container for', projectId);
-
-      await dockerPost<{ success: boolean }>('/api/container', { projectId, userId });
-
-      console.log('✅ [ensureContainerExists] Container ready');
-      return true;
-    } catch (error: any) {
-      console.error('❌ [ensureContainerExists] Error:', error.message);
-      return false;
-    } finally {
-      // Clean up after completion
-      containerCreationPromises.delete(projectId);
-    }
-  })();
-
-  containerCreationPromises.set(projectId, createPromise);
-  return createPromise;
 }
 
 /**
  * Restore files to Docker container when loading a past chat
- * 🚀 OPTIMIZED: Creates directories first, then writes files in parallel batches
+ * 🚀 OPTIMIZED: 
+ * - Checks if workspace already has files (persistent volume) - SKIPS restoration if so
+ * - Creates directories first, then writes files in parallel batches
  * NOTE: npm install is handled separately with coordination
  */
 async function restoreFilesToDocker(
@@ -520,76 +881,94 @@ async function restoreFilesToDocker(
       // Use coordinated container creation to avoid race conditions with terminal
       const containerReady = await ensureContainerExists(projectId);
       if (!containerReady) {
-        console.error('❌ [restoreFilesToDocker] Container not available');
         return false;
       }
-    
-    // Filter out node_modules and other generated files that shouldn't be restored
-    const filesToRestore = Object.entries(fileSnapshot).filter(([path]) => {
-      const lowerPath = path.toLowerCase();
-      return !lowerPath.includes('node_modules') && 
-             !lowerPath.includes('.git/') &&
-             !lowerPath.includes('package-lock.json') &&
-             !lowerPath.includes('yarn.lock') &&
-             !lowerPath.includes('pnpm-lock.yaml');
-    });
-    
-    console.log(`📦 [restoreFilesToDocker] Restoring ${filesToRestore.length} files to container...`);
-    
-    // 🚀 OPTIMIZATION: Collect all unique directories first
-    const directories = new Set<string>();
-    const normalizedFiles: Array<{ fullPath: string; content: string }> = [];
 
-    for (const [path, content] of filesToRestore) {
-      // Normalize path - remove leading /home/project if present
-      let normalizedPath = path;
-      if (path.startsWith('/home/project/')) {
-        normalizedPath = path.replace('/home/project/', '');
-      } else if (path.startsWith('/home/project')) {
-        normalizedPath = path.replace('/home/project', '');
-      }
-
-      const fullPath = normalizedPath.startsWith('/') ? `/workspace${normalizedPath}` : `/workspace/${normalizedPath}`;
-      normalizedFiles.push({ fullPath, content });
-
-      // Track directory
-      const dir = fullPath.split('/').slice(0, -1).join('/');
-      if (dir && dir !== '/workspace') {
-        directories.add(dir);
-      }
-    }
-
-    // 🚀 OPTIMIZATION: Create all directories in one command
-    if (directories.size > 0) {
-      const mkdirCmd = `mkdir -p ${Array.from(directories).map(d => `"${d}"`).join(' ')}`;
-      try {
-        await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: mkdirCmd });
-      } catch (e) {
-        console.warn('[restoreFilesToDocker] mkdir failed:', e);
-      }
-    }
-
-    // 🚀 OPTIMIZATION: Write files in parallel batches (5 at a time to avoid overwhelming)
-    const BATCH_SIZE = 5;
-    let filesWritten = 0;
-    for (let i = 0; i < normalizedFiles.length; i += BATCH_SIZE) {
-      const batch = normalizedFiles.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async ({ fullPath, content }) => {
-        try {
-          await dockerPost<{ success: boolean }>(`/api/file/${projectId}`, { path: fullPath, content });
-          filesWritten++;
-        } catch (e) {
-          console.warn(`Failed to write file: ${fullPath}`, e);
+      // 🚀 BULLETPROOF: Check if workspace volume already has files
+      // This prevents re-restoring files on every page refresh
+      const workspaceState = await checkWorkspaceHasFiles(projectId);
+      
+      if (workspaceState.hasFiles && workspaceState.hasPackageJson) {
+        // Files already exist in persistent volume - skip restoration
+        restoredProjectIds.add(projectId);
+        
+        // If dev server is already running, we're fully ready
+        if (workspaceState.devServerRunning) {
+          workbenchStore.setContainerReady(true);
         }
-      }));
-    }
-    console.log(`📁 [restoreFilesToDocker] Wrote ${filesWritten}/${normalizedFiles.length} files`);
+        
+        return true;
+      }
+
+      // Filter out node_modules and other generated files that shouldn't be restored
+      const filesToRestore = Object.entries(fileSnapshot).filter(([path]) => {
+        const lowerPath = path.toLowerCase();
+        return !lowerPath.includes('node_modules') && 
+               !lowerPath.includes('.git/') &&
+               !lowerPath.includes('package-lock.json') &&
+               !lowerPath.includes('yarn.lock') &&
+               !lowerPath.includes('pnpm-lock.yaml') &&
+               !lowerPath.includes('bun.lockb');
+      });
     
-      console.log(`✅ [restoreFilesToDocker] Files restored successfully`);
+      // 🚀 OPTIMIZATION: Collect all unique directories first
+      const directories = new Set<string>();
+      const normalizedFiles: Array<{ fullPath: string; content: string }> = [];
+
+      for (const [path, content] of filesToRestore) {
+        // Normalize path - remove leading /home/project if present
+        let normalizedPath = path;
+        if (path.startsWith('/home/project/')) {
+          normalizedPath = path.replace('/home/project/', '');
+        } else if (path.startsWith('/home/project')) {
+          normalizedPath = path.replace('/home/project', '');
+        }
+
+        // Normalize accidental workspace prefix (prevents /workspace/workspace/...)
+        if (normalizedPath.startsWith('/workspace/')) {
+          normalizedPath = normalizedPath.replace('/workspace/', '');
+        } else if (normalizedPath.startsWith('workspace/')) {
+          normalizedPath = normalizedPath.replace('workspace/', '');
+        }
+
+        const fullPath = normalizedPath.startsWith('/') ? `/workspace${normalizedPath}` : `/workspace/${normalizedPath}`;
+        normalizedFiles.push({ fullPath, content });
+
+        // Track directory
+        const dir = fullPath.split('/').slice(0, -1).join('/');
+        if (dir && dir !== '/workspace') {
+          directories.add(dir);
+        }
+      }
+
+      // 🚀 OPTIMIZATION: Create all directories in one command
+      if (directories.size > 0) {
+        const mkdirCmd = `mkdir -p ${Array.from(directories).map(d => `"${d}"`).join(' ')}`;
+        try {
+          await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: mkdirCmd });
+        } catch (e) {
+          // Directory creation failed - continue anyway
+        }
+      }
+
+      // 🚀 OPTIMIZATION: Write files in parallel batches (10 at a time for speed)
+      const BATCH_SIZE = 10;
+      let filesWritten = 0;
+      for (let i = 0; i < normalizedFiles.length; i += BATCH_SIZE) {
+        const batch = normalizedFiles.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async ({ fullPath, content }) => {
+          try {
+            await dockerPost<{ success: boolean }>(`/api/file/${projectId}`, { path: fullPath, content });
+            filesWritten++;
+          } catch (e) {
+            // File write failed - continue with other files
+          }
+        }));
+      }
+    
       restoredProjectIds.add(projectId);
       return true;
     } catch (error) {
-      console.error('❌ [restoreFilesToDocker] Failed:', error);
       return false;
     } finally {
       fileRestorationPromises.delete(projectId);
@@ -658,100 +1037,144 @@ export function useChatHistory() {
       }
 
       if (mixedId) {
+      const handleLoadedChat = async (chat: ChatHistoryItem): Promise<void> => {
+        // Mark workbench as restored chat with the file paths AND messageIds from snapshot
+        // This prevents ActionRunner from re-creating files that already exist
+        // But allows NEW messages (after restoration) to create files normally
+        const restoredFilePaths = chat.fileSnapshot ? Object.keys(chat.fileSnapshot) : [];
+        const restoredMessageIds = chat.messages
+          .filter(m => m.role === 'assistant')
+          .map(m => m.id);
+        workbenchStore.markAsRestoredChat(restoredFilePaths, restoredMessageIds);
+
+        // Set state first
+        setInitialMessages(chat.messages);
+        setUrlId(chat.urlId);
+        description.set(chat.description);
+        chatId.set(chat.id);
+
+        // Restore fileSnapshot to workbench AFTER state is set
+        // Use setTimeout to ensure component is fully mounted AND WebContainer is ready
+        if (chat.fileSnapshot && Object.keys(chat.fileSnapshot).length > 0) {
+          setTimeout(async () => {
+            try {
+              // Update files store directly with the file snapshot
+              const currentFiles = workbenchStore.files.get();
+              const updatedFiles = { ...currentFiles };
+
+              Object.entries(chat.fileSnapshot!).forEach(([path, content]) => {
+                updatedFiles[path] = {
+                  type: 'file',
+                  content: content as string,
+                  isBinary: false,
+                };
+              });
+
+              workbenchStore.files.set(updatedFiles);
+              workbenchStore.setDocuments(updatedFiles);
+              workbenchStore.showWorkbench.set(true);
+
+              // 🚀 OPTIMIZATION: Restore files FIRST, then run npm install
+              // Use the urlId as projectId for consistency
+              const projectId = chat.urlId || chat.id || mixedId;
+              console.log(`📂 [useChatHistory] Restoring past chat files to Docker, projectId: ${projectId}`);
+
+              // Check if package.json exists
+              const hasPackageJson = Object.keys(chat.fileSnapshot!).some(path =>
+                path.endsWith('package.json') || path === '/home/project/package.json'
+              );
+
+              // First restore files (this also creates the container)
+              const dockerRestored = await restoreFilesToDocker(projectId, chat.fileSnapshot!);
+
+              if (dockerRestored) {
+                console.log('✅ [useChatHistory] Files restored to Docker container');
+
+                // ✅ FIX: Reset restored chat flag AFTER restoration completes
+                // so that new user messages get fresh ActionRunners without
+                // the "skip npm install/dev" behavior.
+                workbenchStore.resetRestoredChatFlag();
+
+                // Check if install/dev server is needed BEFORE running it
+                if (hasPackageJson) {
+                  // If dev server is already running, just mark ready
+                  try {
+                    const state = await checkWorkspaceHasFiles(projectId);
+                    if (state.devServerRunning) {
+                      await markContainerReady(projectId);
+                      return;
+                    }
+                  } catch {
+                    // continue to install/dev start checks below
+                  }
+
+                  // Check if node_modules exists and is recent
+                  try {
+                    const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' });
+
+                    if (!checkResult.output?.trim()) {
+                      console.log('📦 [useChatHistory] Running bun install after file restoration...');
+                      runNpmInstallWithCoordination(projectId).catch(err => {
+                        console.warn('⚠️ [useChatHistory] bun install failed:', err);
+                      });
+                    } else {
+                      console.log('⚡ [useChatHistory] Skipping install - node_modules is recent');
+                      startDevServerOnly(projectId).catch(err => {
+                        console.warn('⚠️ [useChatHistory] start dev server failed:', err);
+                      });
+                    }
+                  } catch (e) {
+                    console.log('📦 [useChatHistory] Running bun install after file restoration...');
+                    runNpmInstallWithCoordination(projectId).catch(err => {
+                      console.warn('⚠️ [useChatHistory] bun install failed:', err);
+                    });
+                  }
+                }
+
+                // Trigger auto-fix after restoration
+                setTimeout(() => {
+                  checkAndAutoFixErrors(projectId).catch(err => {
+                    console.warn('⚠️ [useChatHistory] Auto-fix failed:', err);
+                  });
+                }, 2000);
+              } else {
+                console.warn('⚠️ [useChatHistory] File restoration failed, skipping bun install');
+                // Reset flag even on failure — don't poison new messages
+                workbenchStore.resetRestoredChatFlag();
+              }
+
+              // console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
+            } catch (error) {
+              console.error('❌ [useChatHistory] Failed to restore workbench files:', error);
+              // Reset flag on error so new messages aren't blocked
+              workbenchStore.resetRestoredChatFlag();
+              toast.error('Failed to restore project files');
+            }
+          }, 300); // 🚀 OPTIMIZATION: Reduced from 500ms to 300ms
+        } else {
+          // No fileSnapshot to restore — reset flag immediately
+          workbenchStore.resetRestoredChatFlag();
+        }
+
+        // Safety net: if the restored-chat flag is still true after 15s, force-reset it.
+        // This catches edge cases where restoration hangs or takes an unexpected path.
+        setTimeout(() => {
+          if (workbenchStore.isRestoredChat()) {
+            console.warn('⚠️ [useChatHistory] Restored chat flag still set after 15s, force-resetting');
+            workbenchStore.resetRestoredChatFlag();
+          }
+        }, 15000);
+
+        // Set ready LAST
+        setReady(true);
+      };
+
       // Try loading from database first, then fallback to IndexedDB
       loadChatFromDatabase(mixedId)
         .then(async (dbChat): Promise<ChatHistoryItem | { success: boolean } | null> => {
           if (dbChat && dbChat.messages.length > 0) {
             // console.log('✅ Loaded chat from database:', dbChat.id);
-
-            // Mark workbench as restored chat with the file paths from snapshot
-            // This prevents ActionRunner from re-creating files that already exist
-            const restoredFilePaths = dbChat.fileSnapshot ? Object.keys(dbChat.fileSnapshot) : [];
-            workbenchStore.markAsRestoredChat(restoredFilePaths);
-
-            // Set state first
-            setInitialMessages(dbChat.messages);
-            setUrlId(dbChat.urlId);
-            description.set(dbChat.description);
-            chatId.set(dbChat.id);
-
-            // Restore fileSnapshot to workbench AFTER state is set
-            // Use setTimeout to ensure component is fully mounted AND WebContainer is ready
-            if (dbChat.fileSnapshot && Object.keys(dbChat.fileSnapshot).length > 0) {
-              setTimeout(async () => {
-                try {
-                  // Update files store directly with the file snapshot
-                  const currentFiles = workbenchStore.files.get();
-                  const updatedFiles = { ...currentFiles };
-
-                  Object.entries(dbChat.fileSnapshot!).forEach(([path, content]) => {
-                    updatedFiles[path] = {
-                      type: 'file',
-                      content: content as string,
-                      isBinary: false,
-                    };
-                  });
-
-                  workbenchStore.files.set(updatedFiles);
-                  workbenchStore.setDocuments(updatedFiles);
-                  workbenchStore.showWorkbench.set(true);
-
-                  // 🚀 OPTIMIZATION: Restore files FIRST, then run npm install
-                  // Use the urlId as projectId for consistency
-                  const projectId = dbChat.urlId || dbChat.id || mixedId;
-                  console.log(`📂 [useChatHistory] Restoring past chat files to Docker, projectId: ${projectId}`);
-
-                  // Check if package.json exists
-                  const hasPackageJson = Object.keys(dbChat.fileSnapshot!).some(path =>
-                    path.endsWith('package.json') || path === '/home/project/package.json'
-                  );
-
-                  // First restore files (this also creates the container)
-                  const dockerRestored = await restoreFilesToDocker(projectId, dbChat.fileSnapshot!);
-
-                  if (dockerRestored) {
-                    console.log('✅ [useChatHistory] Files restored to Docker container');
-
-                    // Check if install is needed BEFORE running it
-                    if (hasPackageJson) {
-                      // Check if node_modules exists and is recent
-                      try {
-                        const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' });
-
-                        if (!checkResult.output?.trim()) {
-                          console.log('📦 [useChatHistory] Running bun install after file restoration...');
-                          runNpmInstallWithCoordination(projectId).catch(err => {
-                            console.warn('⚠️ [useChatHistory] bun install failed:', err);
-                          });
-                        } else {
-                          console.log('⚡ [useChatHistory] Skipping install - node_modules is recent');
-                        }
-                      } catch (e) {
-                        console.log('📦 [useChatHistory] Running bun install after file restoration...');
-                        runNpmInstallWithCoordination(projectId).catch(err => {
-                          console.warn('⚠️ [useChatHistory] bun install failed:', err);
-                        });
-                      }
-                    }
-
-                    // Trigger auto-fix after restoration
-                    setTimeout(() => {
-                      window.dispatchEvent(new CustomEvent('recoder:fix-errors'));
-                    }, 2000);
-                  } else {
-                    console.warn('⚠️ [useChatHistory] File restoration failed, skipping bun install');
-                  }
-
-                  // console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
-                } catch (error) {
-                  console.error('❌ [useChatHistory] Failed to restore workbench files:', error);
-                  toast.error('Failed to restore project files');
-                }
-              }, 300); // 🚀 OPTIMIZATION: Reduced from 500ms to 300ms
-            }
-
-            // Set ready LAST
-            setReady(true);
+            await handleLoadedChat(dbChat);
             return { success: true }; // ← FIXED: Return success marker to skip next .then()
           }
 
@@ -761,7 +1184,7 @@ export function useChatHistory() {
           }
           return null;
         })
-        .then((storedMessages: ChatHistoryItem | { success: boolean } | null) => {
+        .then(async (storedMessages: ChatHistoryItem | { success: boolean } | null) => {
           // Skip if database already loaded successfully
           if (storedMessages && typeof storedMessages === 'object' && 'success' in storedMessages) {
             // console.log('✅ Database load already handled, skipping IndexedDB fallback');
@@ -770,11 +1193,7 @@ export function useChatHistory() {
 
           if (storedMessages && typeof storedMessages === 'object' && 'messages' in storedMessages && storedMessages.messages && storedMessages.messages.length > 0) {
             // console.log('✅ Loaded chat from IndexedDB:', storedMessages.id);
-            setInitialMessages(storedMessages.messages);
-            setUrlId(storedMessages.urlId);
-            description.set(storedMessages.description);
-            chatId.set(storedMessages.id);
-            setReady(true);
+            await handleLoadedChat(storedMessages as ChatHistoryItem);
           } else {
             console.warn('No messages found for chat:', mixedId);
             navigate(`/`, { replace: true });
@@ -942,6 +1361,42 @@ export function useChatHistory() {
 
       if (dbSaved) {
         // console.log('✅ [useChatHistory] Chat history saved to database successfully!');
+
+        // Update session store with latest metadata
+        const firstUserMsg = messages.find(m => m.role === 'user');
+        const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+
+        const sessionMetadata: ChatSessionMetadata = {
+          id: finalChatId,
+          urlId: finalUrlId,
+          projectId: currentProjectId,
+          title: finalDescription || 'Untitled Chat',
+          description: finalDescription,
+          messageCount: messages.length,
+          createdAt: new Date().toISOString(), // Will be overwritten by existing session
+          updatedAt: new Date().toISOString(),
+          isArchived: false,
+          isFavorite: false,
+          source: 'web',
+          firstUserMessage: firstUserMsg?.content.substring(0, 100),
+          lastAssistantMessage: lastAssistantMsg?.content.substring(0, 100),
+        };
+
+        // Update or create session in store
+        const existingSession = chatSessions.getSession(finalChatId);
+        if (existingSession) {
+          // Preserve existing metadata, update counts and timestamps
+          chatSessions.updateSessionMetadata(finalChatId, {
+            messageCount: messages.length,
+            firstUserMessage: firstUserMsg?.content.substring(0, 100),
+            lastAssistantMessage: lastAssistantMsg?.content.substring(0, 100),
+          });
+        } else {
+          chatSessions.setSession(sessionMetadata);
+        }
+
+        // Set as active session
+        chatSessions.setActiveSession(finalChatId);
       }
 
       // Fallback to IndexedDB if database fails or not available

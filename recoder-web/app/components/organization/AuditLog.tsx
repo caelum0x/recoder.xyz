@@ -216,7 +216,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
           <button
             onClick={handleExport}
             disabled={exporting || filteredEntries.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 disabled:opacity-50 text-bolt-elements-textSecondary text-sm font-medium rounded-lg transition-colors border border-bolt-elements-borderColor"
+            className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 disabled:opacity-50 text-bolt-elements-textTertiary text-sm font-medium rounded-lg transition-colors border border-bolt-elements-borderColor"
           >
             {exporting ? (
               <span className="i-ph:spinner animate-spin" />
@@ -239,7 +239,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by actor, target, or action..."
-              className="w-full pl-10 pr-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
+              className="w-full pl-10 pr-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -250,7 +250,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
               'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border',
               showFilters || hasActiveFilters
                 ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                : 'bg-bolt-elements-background-depth-3 border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:border-bolt-elements-borderColorHover'
+                : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:border-bolt-elements-borderColorActive'
             )}
           >
             <span className="i-ph:funnel" />
@@ -280,11 +280,11 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
 
         {/* Expanded Filters */}
         {showFilters && (
-          <div className="mt-4 p-4 bg-bolt-elements-background-depth-3 rounded-lg">
+          <div className="mt-4 p-4 bg-bolt-elements-background-depth-2 rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Action Type Filter */}
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-bolt-elements-textSecondary mb-2">
+                <label className="block text-xs font-medium text-bolt-elements-textTertiary mb-2">
                   Action Types
                 </label>
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-auto">
@@ -300,7 +300,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
                               'px-2 py-1 text-xs rounded transition-colors',
                               selectedActionTypes.includes(action)
                                 ? 'bg-blue-500/30 text-blue-300'
-                                : 'bg-bolt-elements-background-depth-4 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+                                : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
                             )}
                           >
                             {ACTION_LABELS[action]}
@@ -314,13 +314,13 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
 
               {/* Actor Filter */}
               <div>
-                <label className="block text-xs font-medium text-bolt-elements-textSecondary mb-2">
+                <label className="block text-xs font-medium text-bolt-elements-textTertiary mb-2">
                   Actor
                 </label>
                 <select
                   value={selectedActorId}
                   onChange={(e) => setSelectedActorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-bolt-elements-background-depth-4 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">All members</option>
                   {members.map((member) => (
@@ -333,7 +333,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
 
               {/* Date Range */}
               <div>
-                <label className="block text-xs font-medium text-bolt-elements-textSecondary mb-2">
+                <label className="block text-xs font-medium text-bolt-elements-textTertiary mb-2">
                   Date Range
                 </label>
                 <div className="space-y-2">
@@ -341,14 +341,14 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-bolt-elements-background-depth-4 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
                     placeholder="Start date"
                   />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-bolt-elements-background-depth-4 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
                     placeholder="End date"
                   />
                 </div>
@@ -440,7 +440,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
                   <button
                     onClick={loadMoreAuditLog}
                     disabled={loading.auditLog}
-                    className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 text-bolt-elements-textSecondary text-sm rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary text-sm rounded-lg transition-colors"
                   >
                     {loading.auditLog ? (
                       <span className="i-ph:spinner animate-spin" />
@@ -498,7 +498,7 @@ const AuditLogRow = memo(({ entry, onClick, isSelected }: AuditLogRowProps) => {
   const actionPrefix = entry.action.split('.')[0];
   const actionSuffix = entry.action.split('.')[1];
   const icon = ACTION_ICONS[actionPrefix] || 'i-ph:info';
-  const color = ACTION_COLORS[actionSuffix] || 'text-bolt-elements-textSecondary';
+  const color = ACTION_COLORS[actionSuffix] || 'text-bolt-elements-textTertiary';
 
   return (
     <tr
@@ -530,7 +530,7 @@ const AuditLogRow = memo(({ entry, onClick, isSelected }: AuditLogRowProps) => {
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-bolt-elements-textSecondary">
+        <div className="text-sm text-bolt-elements-textTertiary">
           {entry.targetName || entry.targetId || '-'}
         </div>
         <div className="text-xs text-bolt-elements-textTertiary capitalize">
@@ -538,7 +538,7 @@ const AuditLogRow = memo(({ entry, onClick, isSelected }: AuditLogRowProps) => {
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-bolt-elements-textSecondary">
+        <div className="text-sm text-bolt-elements-textTertiary">
           {formatTime(entry.timestamp)}
         </div>
         <div className="text-xs text-bolt-elements-textTertiary">
@@ -567,7 +567,7 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
   const actionPrefix = entry.action.split('.')[0];
   const actionSuffix = entry.action.split('.')[1];
   const icon = ACTION_ICONS[actionPrefix] || 'i-ph:info';
-  const color = ACTION_COLORS[actionSuffix] || 'text-bolt-elements-textSecondary';
+  const color = ACTION_COLORS[actionSuffix] || 'text-bolt-elements-textTertiary';
 
   return (
     <div className="h-full flex flex-col">
@@ -587,7 +587,7 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
       {/* Content */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {/* Action */}
-        <div className="flex items-center gap-3 p-3 bg-bolt-elements-background-depth-3 rounded-lg">
+        <div className="flex items-center gap-3 p-3 bg-bolt-elements-background-depth-2 rounded-lg">
           <div className={classNames('w-10 h-10 rounded-lg flex items-center justify-center', color, 'bg-opacity-20')}>
             <span className={classNames(icon, 'text-xl')} />
           </div>
@@ -630,7 +630,7 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
             {entry.userAgent && (
               <div>
                 <span className="text-xs text-bolt-elements-textTertiary">User Agent</span>
-                <p className="text-xs text-bolt-elements-textSecondary mt-0.5 break-all">
+                <p className="text-xs text-bolt-elements-textTertiary mt-0.5 break-all">
                   {entry.userAgent}
                 </p>
               </div>
@@ -641,8 +641,8 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
         {/* Metadata */}
         {Object.keys(entry.metadata).length > 0 && (
           <DetailSection title="Additional Data">
-            <div className="bg-bolt-elements-background-depth-4 rounded-lg p-3 overflow-auto max-h-48">
-              <pre className="text-xs text-bolt-elements-textSecondary whitespace-pre-wrap">
+            <div className="bg-bolt-elements-background-depth-3 rounded-lg p-3 overflow-auto max-h-48">
+              <pre className="text-xs text-bolt-elements-textTertiary whitespace-pre-wrap">
                 {JSON.stringify(entry.metadata, null, 2)}
               </pre>
             </div>
@@ -651,7 +651,7 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
 
         {/* Event ID */}
         <DetailSection title="Event ID">
-          <code className="text-xs text-bolt-elements-textTertiary bg-bolt-elements-background-depth-4 px-2 py-1 rounded block break-all">
+          <code className="text-xs text-bolt-elements-textTertiary bg-bolt-elements-background-depth-3 px-2 py-1 rounded block break-all">
             {entry.id}
           </code>
         </DetailSection>
@@ -692,7 +692,7 @@ const DetailRow = memo(({ label, value, mono }: DetailRowProps) => (
   <div className="flex items-center justify-between">
     <span className="text-xs text-bolt-elements-textTertiary">{label}</span>
     <span className={classNames(
-      'text-sm text-bolt-elements-textSecondary',
+      'text-sm text-bolt-elements-textTertiary',
       mono && 'font-mono text-xs'
     )}>
       {value}
@@ -707,12 +707,12 @@ const AuditLogSkeleton = memo(() => (
     <div className="space-y-3">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="flex items-center gap-4 p-4 bg-bolt-elements-background-depth-2 rounded-lg animate-pulse">
-          <div className="w-8 h-8 bg-bolt-elements-background-depth-3 rounded" />
+          <div className="w-8 h-8 bg-bolt-elements-background-depth-2 rounded" />
           <div className="flex-1">
-            <div className="h-4 bg-bolt-elements-background-depth-3 rounded w-48 mb-2" />
-            <div className="h-3 bg-bolt-elements-background-depth-3 rounded w-32" />
+            <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-48 mb-2" />
+            <div className="h-3 bg-bolt-elements-background-depth-2 rounded w-32" />
           </div>
-          <div className="h-4 bg-bolt-elements-background-depth-3 rounded w-24" />
+          <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-24" />
         </div>
       ))}
     </div>

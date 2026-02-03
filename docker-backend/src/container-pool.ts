@@ -509,67 +509,115 @@ class ContainerPool extends EventEmitter {
    * Create a new Docker container
    */
   private async createContainer(): Promise<PooledContainer> {
-    console.log('[ContainerPool] Allocating ports...');
-    const ports = await this.allocatePorts();
-    console.log(`[ContainerPool] Ports allocated: preview=${ports.preview}, pty=${ports.pty}`);
+    const DOCKER_API_TIMEOUT_MS = 60000; // 60 seconds for Docker API calls
+    const MAX_ATTEMPTS = 3;
 
-    console.log(`[ContainerPool] Creating container with image: ${this.config.imageName}`);
-    const container = await docker.createContainer({
-      Image: this.config.imageName,
-      Tty: true,
-      OpenStdin: true,
-      WorkingDir: '/workspace',
-      Env: [
-        'TERM=xterm-256color',
-        'COLORTERM=truecolor',
-        'FORCE_COLOR=1',
-        `PORT=${ports.preview}`,
-        `PTY_PORT=${ports.pty}`,
-      ],
-      HostConfig: {
-        Memory: this.config.memoryLimit,
-        CpuQuota: this.config.cpuQuota,
-        CpuPeriod: 100000,
-        PortBindings: {
-          '3000/tcp': [{ HostPort: String(ports.preview) }],
-          '5173/tcp': [{ HostPort: String(ports.preview + 1) }],
-          '8080/tcp': [{ HostPort: String(ports.preview + 2) }],
-          '9999/tcp': [{ HostPort: String(ports.pty) }],
-        },
-        // Security hardening options
-        SecurityOpt: ['no-new-privileges', 'seccomp=unconfined'],
-        CapDrop: ['ALL'],
-        CapAdd: ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER', 'NET_BIND_SERVICE'],
-        ReadonlyRootfs: false,
-        PidsLimit: 256,
-        Ulimits: [
-          { Name: 'nofile', Soft: 4096, Hard: 8192 },
-          { Name: 'nproc', Soft: 128, Hard: 256 },
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      console.log('[ContainerPool] Allocating ports...');
+      const ports = await this.allocatePorts();
+      console.log(`[ContainerPool] Ports allocated: preview=${ports.preview}, pty=${ports.pty}`);
+
+      console.log(`[ContainerPool] Creating container with image: ${this.config.imageName}`);
+      const createStart = Date.now();
+
+      // Wrap Docker API calls with timeout to prevent infinite hangs
+      const containerPromise = (async () => {
+      const container = await docker.createContainer({
+        Image: this.config.imageName,
+        Tty: true,
+        OpenStdin: true,
+        WorkingDir: '/workspace',
+        Env: [
+          'TERM=xterm-256color',
+          'COLORTERM=truecolor',
+          'FORCE_COLOR=1',
+          `PORT=${ports.preview}`,
+          `PTY_PORT=${ports.pty}`,
         ],
-        Tmpfs: {
-          '/tmp': 'rw,noexec,nosuid,size=512m',
+        Labels: {
+          project: 'recoder',
+          assignedPort: String(ports.preview),
+          type: 'pool',
         },
-      },
-      ExposedPorts: {
-        '3000/tcp': {},
-        '5173/tcp': {},
-        '8080/tcp': {},
-        '9999/tcp': {},
-      },
-    });
+        HostConfig: {
+            Memory: this.config.memoryLimit,
+            CpuQuota: this.config.cpuQuota,
+            CpuPeriod: 100000,
+            PortBindings: {
+              '3000/tcp': [{ HostPort: String(ports.preview) }],
+              '5173/tcp': [{ HostPort: String(ports.preview + 1) }],
+              '8080/tcp': [{ HostPort: String(ports.preview + 2) }],
+              '9999/tcp': [{ HostPort: String(ports.pty) }],
+              '8081/tcp': [{ HostPort: String(ports.preview + 4) }],
+              '19006/tcp': [{ HostPort: String(ports.preview + 5) }],
+            },
+            // Security hardening options
+            SecurityOpt: ['no-new-privileges', 'seccomp=unconfined'],
+            CapDrop: ['ALL'],
+            CapAdd: ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER', 'NET_BIND_SERVICE'],
+            ReadonlyRootfs: false,
+            PidsLimit: 256,
+            Ulimits: [
+              { Name: 'nofile', Soft: 4096, Hard: 8192 },
+              { Name: 'nproc', Soft: 128, Hard: 256 },
+            ],
+            Tmpfs: {
+              '/tmp': 'rw,noexec,nosuid,size=512m',
+            },
+          },
+          ExposedPorts: {
+            '3000/tcp': {},
+            '5173/tcp': {},
+            '8080/tcp': {},
+            '9999/tcp': {},
+            '8081/tcp': {},
+            '19006/tcp': {},
+          },
+        });
 
-    console.log(`[ContainerPool] Container created: ${container.id.slice(0, 12)}, starting...`);
-    await container.start();
-    console.log(`[ContainerPool] Container started: ${container.id.slice(0, 12)}`);
+        const createDuration = Date.now() - createStart;
+        console.log(`[ContainerPool] Container created: ${container.id.slice(0, 12)} (${createDuration}ms), starting...`);
+        const startStart = Date.now();
+        await container.start();
+        const startDuration = Date.now() - startStart;
+        console.log(`[ContainerPool] Container started: ${container.id.slice(0, 12)} (${startDuration}ms)`);
+        return container;
+      })();
 
-    return {
-      id: container.id,
-      port: ports.preview,
-      ptyPort: ports.pty,
-      createdAt: Date.now(),
-      recycleCount: 0,
-      status: 'warming',
-    };
+      let timeoutId: NodeJS.Timeout;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`Docker API timed out after ${DOCKER_API_TIMEOUT_MS}ms`)), DOCKER_API_TIMEOUT_MS);
+      });
+
+      try {
+        const container = await Promise.race([containerPromise, timeoutPromise]);
+        return {
+          id: container.id,
+          port: ports.preview,
+          ptyPort: ports.pty,
+          createdAt: Date.now(),
+          recycleCount: 0,
+          status: 'warming',
+        };
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        const isPortConflict = /port is already allocated|Bind for 0\.0\.0\.0:\d+ failed/i.test(errMsg);
+
+        if (this.externalPortReleaser) {
+          this.externalPortReleaser(ports.preview, ports.pty);
+        }
+
+        if (isPortConflict && attempt < MAX_ATTEMPTS) {
+          console.warn(`[ContainerPool] Port conflict detected, retrying with new ports (attempt ${attempt}/${MAX_ATTEMPTS})`);
+          continue;
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId!);
+      }
+    }
+
+    throw new Error('Failed to create container after multiple attempts');
   }
 
   /**
@@ -637,9 +685,9 @@ class ContainerPool extends EventEmitter {
       }
     }
     
-    // Find free port range (need 4 consecutive ports)
-    for (let port = this.config.portRangeStart; port < this.config.portRangeEnd; port += 4) {
-      const portsNeeded = [port, port + 1, port + 2, port + 3];
+    // Find free port range (need 6 consecutive ports)
+    for (let port = this.config.portRangeStart; port < this.config.portRangeEnd; port += 6) {
+      const portsNeeded = [port, port + 1, port + 2, port + 3, port + 4, port + 5];
       const allFree = portsNeeded.every(p => !usedPorts.has(p));
       
       if (allFree) {

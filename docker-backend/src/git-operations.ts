@@ -755,6 +755,122 @@ export async function discardChanges(
   }
 }
 
+// ============================================
+// Auto-commit (init + stage all + commit)
+// Used after AI generates files so users can revert
+// ============================================
+
+/**
+ * Sanitize a commit message to prevent shell injection.
+ * Strips control characters and limits length.
+ */
+function sanitizeCommitMessage(message: string): string {
+  if (!message || typeof message !== 'string') return 'AI generation';
+  return message
+    .replace(/[\x00-\x1f\x7f]/g, '') // Remove control characters
+    .replace(/[`$\\]/g, '')           // Remove shell-dangerous chars
+    .substring(0, MAX_COMMIT_MESSAGE_LENGTH)
+    .trim() || 'AI generation';
+}
+
+export async function autoCommit(
+  containerId: string,
+  message?: string
+): Promise<{ committed: boolean; hash?: string; message?: string; error?: string }> {
+  try {
+    // Initialize git if not already initialized
+    const isRepo_ = await isGitRepo(containerId);
+    if (!isRepo_) {
+      const initResult = await initRepo(containerId);
+      if (!initResult.success) {
+        return { committed: false, error: `Git init failed: ${initResult.error}` };
+      }
+    }
+
+    // Stage all changes
+    await execInContainer(containerId, 'cd /workspace && git add -A');
+
+    // Check if there are changes to commit
+    try {
+      await execInContainer(containerId, 'cd /workspace && git diff --cached --quiet');
+      // If the command succeeds (exit 0), there are no staged changes
+      return { committed: false, message: 'No changes to commit' };
+    } catch {
+      // Exit code 1 means there ARE staged changes — proceed with commit
+    }
+
+    // Build and sanitize the commit message
+    const commitMessage = sanitizeCommitMessage(
+      message || `[recoder] AI generation ${new Date().toISOString()}`
+    );
+
+    // Commit using base64 encoding for safe message passing (matches existing commit() pattern)
+    const b64Message = Buffer.from(commitMessage).toString('base64');
+    await execInContainer(
+      containerId,
+      `cd /workspace && git commit -m "$(echo '${b64Message}' | base64 -d)"`
+    );
+
+    // Get commit hash
+    const hash = await execInContainer(containerId, 'cd /workspace && git rev-parse HEAD');
+
+    return {
+      committed: true,
+      hash: hash.trim(),
+      message: commitMessage,
+    };
+  } catch (error: any) {
+    console.error('[Git] Auto-commit error:', error);
+    return { committed: false, error: error.message };
+  }
+}
+
+// ============================================
+// Revert to a specific commit
+// Checks out all files from the given commit hash
+// ============================================
+
+/**
+ * Validates a git commit hash (short or full hex).
+ */
+function validateCommitHash(hash: string): { valid: boolean; error?: string } {
+  if (!hash || typeof hash !== 'string') {
+    return { valid: false, error: 'Commit hash is required' };
+  }
+  const trimmed = hash.trim();
+  // Git hashes are 4-40 hex characters
+  if (!/^[0-9a-f]{4,40}$/i.test(trimmed)) {
+    return { valid: false, error: 'Invalid commit hash format' };
+  }
+  return { valid: true };
+}
+
+export async function revertToCommit(
+  containerId: string,
+  commitHash: string
+): Promise<{ reverted: boolean; toCommit?: string; error?: string }> {
+  const validation = validateCommitHash(commitHash);
+  if (!validation.valid) {
+    console.warn(`[Git] Rejected invalid commit hash: ${commitHash}`);
+    return { reverted: false, error: validation.error };
+  }
+
+  const safeHash = commitHash.trim().toLowerCase();
+
+  try {
+    // Verify the commit exists
+    await execInContainer(containerId, `cd /workspace && git cat-file -t '${safeHash}'`);
+
+    // Checkout all files from that commit
+    await execInContainer(containerId, `cd /workspace && git checkout '${safeHash}' -- .`);
+
+    return { reverted: true, toCommit: safeHash };
+  } catch (error: any) {
+    console.error('[Git] Revert error:', error);
+    return { reverted: false, error: error.message };
+  }
+}
+
 export const gitOperations = {
   isGitRepo,
   initRepo,
@@ -769,4 +885,6 @@ export const gitOperations = {
   unstageFiles,
   commit,
   discardChanges,
+  autoCommit,
+  revertToCommit,
 };

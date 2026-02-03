@@ -8,8 +8,49 @@
  * - Comprehensive error handling
  */
 
-import { EventEmitter } from 'events';
+// Browser-compatible EventEmitter implementation
+class EventEmitter {
+  private events: Map<string, Function[]> = new Map();
+
+  on(event: string, listener: Function): this {
+    if (!this.events.has(event)) {
+      this.events.set(event, []);
+    }
+    this.events.get(event)!.push(listener);
+    return this;
+  }
+
+  off(event: string, listener: Function): this {
+    const listeners = this.events.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(listener);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
+    }
+    return this;
+  }
+
+  emit(event: string, ...args: any[]): boolean {
+    const listeners = this.events.get(event);
+    if (listeners && listeners.length > 0) {
+      listeners.forEach(listener => listener(...args));
+      return true;
+    }
+    return false;
+  }
+
+  removeAllListeners(event?: string): this {
+    if (event) {
+      this.events.delete(event);
+    } else {
+      this.events.clear();
+    }
+    return this;
+  }
+}
 import { dockerPost, dockerGet } from '~/lib/services/docker-api';
+import { workbenchStore } from '~/lib/stores/workbench';
 import type {
   LSPPosition,
   LSPLocation,
@@ -66,7 +107,7 @@ interface LSPClientConfig {
 const DEFAULT_CONFIG: LSPClientConfig = {
   reconnectDelay: 2000,
   maxReconnectAttempts: 5,
-  requestTimeout: 10000,
+  requestTimeout: 60000,
   completionDebounce: 150,
   hoverDebounce: 300,
   syncDebounce: 500,
@@ -293,6 +334,14 @@ export class EnhancedLSPClient extends EventEmitter {
   }
 
   private async doInitialize(): Promise<void> {
+    // Guard: don't start LSP until container is ready
+    if (!workbenchStore.containerReady.get()) {
+      this.log('Skipping LSP start - container not ready');
+      this.isStarted = false;
+      this.initPromise = null;
+      return;
+    }
+
     try {
       const response = await this.makeRequest<{
         success: boolean;

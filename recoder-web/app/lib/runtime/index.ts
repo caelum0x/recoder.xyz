@@ -4,7 +4,7 @@
 
 import { WebContainer } from '@webcontainer/api';
 import { WORK_DIR_NAME } from '~/utils/constants';
-import { getCurrentUserId } from '~/lib/stores/user';
+import { getSessionToken } from '~/lib/services/docker-api';
 
 export type RuntimeMode = 'webcontainer' | 'docker';
 
@@ -38,16 +38,10 @@ export async function initRuntime(projectId: string): Promise<void> {
   runtimeContext.projectId = projectId;
 
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
-    // Initialize Docker container (include userId for Claude Code token injection)
-    const userId = getCurrentUserId();
-    const res = await fetch(`${runtimeContext.dockerUrl}/api/container`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, userId }),
-    });
-    if (!res.ok) {
-      const errData = await res.json() as { error?: string };
-      throw new Error(errData.error || 'Docker init failed');
+    const { ensureContainerExists } = await import('~/lib/stores/workbench');
+    const ready = await ensureContainerExists(projectId);
+    if (!ready) {
+      throw new Error('Docker init failed');
     }
     runtimeContext.ready = true;
     // console.log('🐳 Docker runtime initialized');
@@ -232,7 +226,10 @@ export function connectTerminal(onData: (data: string) => void): {
 } {
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
     const wsUrl = runtimeContext.dockerUrl.replace('http', 'ws');
-    terminalWs = new WebSocket(`${wsUrl}/terminal/${runtimeContext.projectId}`);
+    // Include auth token for cross-origin authentication
+    const token = getSessionToken();
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+    terminalWs = new WebSocket(`${wsUrl}/terminal/${runtimeContext.projectId}${tokenParam}`);
 
     terminalWs.onmessage = (e) => onData(e.data);
     terminalWs.onerror = (e) => console.error('Terminal WS error:', e);

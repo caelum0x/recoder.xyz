@@ -1,6 +1,6 @@
 import { acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { bracketMatching, codeFolding, foldGutter, foldKeymap, indentOnInput, indentUnit } from '@codemirror/language';
+import { bracketMatching, codeFolding, foldAll, foldCode, foldGutter, foldKeymap, indentOnInput, indentUnit, unfoldAll, unfoldCode } from '@codemirror/language';
 import { lintGutter, lintKeymap, setDiagnostics } from '@codemirror/lint';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
@@ -25,19 +25,29 @@ import {
 } from '@codemirror/view';
 import { memo, useEffect, useRef, useState, useCallback, type MutableRefObject } from 'react';
 import { useStore } from '@nanostores/react';
-import { errorsAtom, type BuildError } from '~/lib/stores/errors';
+import { errorsAtom, selectedErrorAtom, selectError, type BuildError } from '~/lib/stores/errors';
+import { preferencesStore, updateEditorPreferences } from '~/lib/stores/settings';
+import { editorConfigStore, getEffectiveConfig, type EditorConfig } from '~/lib/stores/editor-config';
+import { workbenchStore } from '~/lib/stores/workbench';
+import { setCursorPosition } from '~/lib/stores/status-bar';
 import { createStaticDiagnostics } from './diagnostics';
 import type { Theme } from '~/types/theme';
 import { classNames } from '~/utils/classNames';
 import { debounce } from '~/utils/debounce';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BinaryContent } from './BinaryContent';
-import { getTheme, reconfigureTheme } from './cm-theme';
+import { getTheme, reconfigureTheme, reconfigureCleanMode } from './cm-theme';
 import { inlineCopilot } from './inline-copilot';
 import { indentKeyBinding } from './indent';
 import { getLanguage } from './languages';
 import { lspExtension, lspDocumentSync, lspAutoInit, type DefinitionLocation } from './lsp-extensions';
 import { getLSPClient } from '~/lib/lsp/lsp-client';
+import { getCompletionSources } from './combined-completions';
+import { Minimap } from './minimap';
+import { stickyScroll, toggleStickyScroll } from './sticky-scroll';
+import { rainbowBrackets } from './rainbow-brackets';
+import { errorHighlighting, updateErrors } from './error-highlighting';
+import { indentGuides, toggleIndentGuides } from './indent-guides';
 
 const logger = createScopedLogger('CodeMirrorEditor');
 
@@ -90,6 +100,8 @@ interface Props {
   settings?: EditorSettings;
   /** Enable LSP features (hover, completions, go-to-definition) */
   enableLSP?: boolean;
+  /** Override minimap visibility (uses settings store if not provided) */
+  showMinimap?: boolean;
 }
 
 type EditorStates = Map<string, EditorState>;
@@ -151,12 +163,29 @@ export const CodeMirrorEditor = memo(
     settings,
     className = '',
     enableLSP = true,
+    showMinimap: showMinimapProp,
   }: Props) => {
     renderLogger.trace('CodeMirrorEditor');
 
     const [languageCompartment] = useState(new Compartment());
     const [lspCompartment] = useState(new Compartment());
+    const [wordWrapCompartment] = useState(new Compartment());
+    const [rainbowBracketsCompartment] = useState(new Compartment());
+    const [indentGuidesCompartment] = useState(new Compartment());
+    const [cleanModeCompartment] = useState(new Compartment());
     const errors = useStore(errorsAtom);
+    const preferences = useStore(preferencesStore);
+    const editorConfig = useStore(editorConfigStore);
+    const effectiveConfig = getEffectiveConfig(editorConfig);
+
+    // Minimap visibility - use prop if provided, otherwise use settings
+    const showMinimap = showMinimapProp ?? preferences.editor.minimap;
+    const wordWrap = preferences.editor.wordWrap;
+    const bracketColorization = preferences.editor.bracketPairColorization;
+    const indentGuidesEnabled = preferences.editor.indentGuides;
+
+    // State to trigger re-render when view is ready
+    const [viewReady, setViewReady] = useState(false);
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewRef = useRef<EditorView>();
@@ -209,14 +238,45 @@ export const CodeMirrorEditor = memo(
 
             editorStatesRef.current!.set(docRef.current.filePath, view.state);
           }
+
+          // Update cursor position in status bar whenever selection changes
+          if (selectionChanged) {
+            const mainSelection = view.state.selection.main;
+            const lineInfo = view.state.doc.lineAt(mainSelection.head);
+            const line = lineInfo.number;
+            const column = mainSelection.head - lineInfo.from + 1;
+
+            // Check if there's a selection
+            if (mainSelection.from !== mainSelection.to) {
+              const startLine = view.state.doc.lineAt(mainSelection.from);
+              const endLine = view.state.doc.lineAt(mainSelection.to);
+              const selectedChars = mainSelection.to - mainSelection.from;
+              const selectedLines = endLine.number - startLine.number + 1;
+
+              setCursorPosition({
+                line,
+                column,
+                selection: {
+                  start: { line: startLine.number, column: mainSelection.from - startLine.from + 1 },
+                  end: { line: endLine.number, column: mainSelection.to - endLine.from + 1 },
+                  selectedChars,
+                  selectedLines,
+                },
+              });
+            } else {
+              setCursorPosition({ line, column });
+            }
+          }
         },
       });
 
       viewRef.current = view;
+      setViewReady(true);
 
       return () => {
         viewRef.current?.destroy();
         viewRef.current = undefined;
+        setViewReady(false);
       };
     }, []);
 
@@ -281,10 +341,25 @@ export const CodeMirrorEditor = memo(
       }
 
       if (!doc) {
-        const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
-          languageCompartment.of([]),
-          lspCompartment.of([]),
-        ]);
+        const state = newEditorState({
+          content: '',
+          theme,
+          settings,
+          editorConfig: effectiveConfig,
+          onScrollRef,
+          debounceScroll,
+          onFileSaveRef: onSaveRef,
+          extensions: [
+            languageCompartment.of([]),
+            lspCompartment.of([]),
+            wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
+            rainbowBracketsCompartment.of(bracketColorization ? rainbowBrackets() : []),
+            indentGuidesCompartment.of(indentGuidesEnabled ? indentGuides() : []),
+            cleanModeCompartment.of([]),
+          ],
+          enableCodeFolding: preferences.editor.codeFolding,
+          enableStickyScroll: preferences.editor.stickyScroll,
+        });
 
         view.setState(state);
 
@@ -304,10 +379,28 @@ export const CodeMirrorEditor = memo(
       let state = editorStates.get(doc.filePath);
 
       if (!state) {
-        state = newEditorState(doc.value, theme, settings, onScrollRef, debounceScroll, onSaveRef, [
-          languageCompartment.of([]),
-          lspCompartment.of(lspExtensions),
-        ]);
+        state = newEditorState({
+          content: doc.value,
+          theme,
+          settings,
+          editorConfig: effectiveConfig,
+          onScrollRef,
+          debounceScroll,
+          onFileSaveRef: onSaveRef,
+          extensions: [
+            languageCompartment.of([]),
+            lspCompartment.of(lspExtensions),
+            wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
+            rainbowBracketsCompartment.of(bracketColorization ? rainbowBrackets() : []),
+            indentGuidesCompartment.of(indentGuidesEnabled ? indentGuides() : []),
+            cleanModeCompartment.of([]),
+          ],
+          filePath: doc.filePath,
+          projectId,
+          enableLSP,
+          enableCodeFolding: preferences.editor.codeFolding,
+          enableStickyScroll: preferences.editor.stickyScroll,
+        });
 
         editorStates.set(doc.filePath, state);
       }
@@ -327,11 +420,18 @@ export const CodeMirrorEditor = memo(
       );
     }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange, projectId, enableLSP]);
 
-    // Update diagnostics (red underlines) when errors change
+    // Update diagnostics (red underlines) and error highlighting when errors change
     useEffect(() => {
       const view = viewRef.current;
 
       if (!view || !doc?.filePath) {
+        return;
+      }
+
+      // Skip diagnostics if showDiagnostics is disabled or cleanMode is enabled
+      if (!effectiveConfig.showDiagnostics) {
+        // Clear any existing diagnostics
+        view.dispatch(setDiagnostics(view.state, []));
         return;
       }
 
@@ -340,12 +440,182 @@ export const CodeMirrorEditor = memo(
 
       // Update the view with new diagnostics
       view.dispatch(setDiagnostics(view.state, diagnostics));
-    }, [errors, doc?.filePath]);
+
+      // Update error highlighting (line backgrounds, gutter icons)
+      updateErrors(view, errors, doc.filePath);
+    }, [errors, doc?.filePath, effectiveConfig.showDiagnostics]);
+
+    // Update sticky scroll when preference changes
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view) {
+        return;
+      }
+
+      toggleStickyScroll(view, preferences.editor.stickyScroll);
+    }, [preferences.editor.stickyScroll]);
+
+    // Update word wrap when preference changes
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view) {
+        return;
+      }
+
+      view.dispatch({
+        effects: wordWrapCompartment.reconfigure(wordWrap ? EditorView.lineWrapping : []),
+      });
+    }, [wordWrap, wordWrapCompartment]);
+
+    // Update rainbow brackets when preference changes
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view) {
+        return;
+      }
+
+      view.dispatch({
+        effects: rainbowBracketsCompartment.reconfigure(bracketColorization ? rainbowBrackets() : []),
+      });
+    }, [bracketColorization, rainbowBracketsCompartment]);
+
+    // Update indent guides when preference changes
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view) {
+        return;
+      }
+
+      view.dispatch({
+        effects: indentGuidesCompartment.reconfigure(indentGuidesEnabled ? indentGuides() : []),
+      });
+    }, [indentGuidesEnabled, indentGuidesCompartment]);
+
+    // Update clean mode when config changes
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view) {
+        return;
+      }
+
+      view.dispatch({
+        effects: [reconfigureCleanMode(effectiveConfig.cleanMode)],
+      });
+
+      // Add/remove clean-mode class for CSS targeting
+      if (effectiveConfig.cleanMode) {
+        view.dom.classList.add('clean-mode');
+      } else {
+        view.dom.classList.remove('clean-mode');
+      }
+    }, [effectiveConfig.cleanMode]);
+
+    // Handle selected error from Problems panel - scroll to error line
+    const selectedError = useStore(selectedErrorAtom);
+
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view || !doc?.filePath || !selectedError) {
+        return;
+      }
+
+      // Normalize paths for comparison
+      const normalizedFilePath = doc.filePath.replace(/^\/workspace/, '').replace(/^\//, '');
+      const errorFilePath = selectedError.filePath?.replace(/^\/workspace/, '').replace(/^\//, '');
+
+      // Only scroll if this is the file with the error
+      if (!errorFilePath || errorFilePath !== normalizedFilePath) {
+        return;
+      }
+
+      if (!selectedError.line) {
+        return;
+      }
+
+      // Wait a frame for stability
+      requestAnimationFrame(() => {
+        try {
+          const targetLine = Math.min(Math.max(1, selectedError.line!), view.state.doc.lines);
+          const lineInfo = view.state.doc.line(targetLine);
+          const pos = lineInfo.from + (selectedError.column ? selectedError.column - 1 : 0);
+
+          // Set cursor and scroll to the error line
+          view.dispatch({
+            selection: { anchor: pos },
+            scrollIntoView: true,
+          });
+
+          view.focus();
+        } catch (err) {
+          logger.warn('Failed to navigate to error line:', err);
+        }
+      });
+    }, [selectedError, doc?.filePath]);
+
+    // Handle pending navigation (go-to-definition) - scroll to line after file loads
+    const pendingNavigation = useStore(workbenchStore.pendingNavigation);
+
+    useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view || !doc?.filePath || !pendingNavigation) {
+        return;
+      }
+
+      // Only process if this is the file we're navigating to
+      if (doc.filePath !== pendingNavigation.filePath) {
+        return;
+      }
+
+      // Consume the navigation request
+      workbenchStore.consumePendingNavigation();
+
+      // Wait a frame for the document to be fully rendered
+      requestAnimationFrame(() => {
+        try {
+          const { line, character } = pendingNavigation;
+
+          // Convert 1-based line to position
+          const targetLine = Math.min(Math.max(1, line), view.state.doc.lines);
+          const lineInfo = view.state.doc.line(targetLine);
+          const pos = lineInfo.from + (character || 0);
+
+          // Set cursor position and scroll to it
+          view.dispatch({
+            selection: { anchor: pos },
+            scrollIntoView: true,
+          });
+
+          // Focus the editor
+          view.focus();
+
+          logger.debug(`Navigated to line ${line}, character ${character || 0}`);
+        } catch (err) {
+          logger.warn('Failed to navigate to line:', err);
+        }
+      });
+    }, [doc?.filePath, pendingNavigation]);
 
     return (
-      <div className={classNames('relative h-full', className)}>
-        {doc?.isBinary && <BinaryContent />}
-        <div className="h-full overflow-auto" ref={containerRef} />
+      <div className={classNames('relative h-full flex', className)}>
+        <div className="flex-1 h-full overflow-hidden relative">
+          {doc?.isBinary && <BinaryContent />}
+          <div className="h-full overflow-auto" ref={containerRef} />
+        </div>
+        {showMinimap && viewReady && !doc?.isBinary && (
+          <div className="h-full border-l border-bolt-elements-borderColor flex-shrink-0">
+            <Minimap
+              view={viewRef.current}
+              theme={theme}
+            />
+          </div>
+        )}
       </div>
     );
   },
@@ -355,15 +625,52 @@ export default CodeMirrorEditor;
 
 CodeMirrorEditor.displayName = 'CodeMirrorEditor';
 
-function newEditorState(
-  content: string,
-  theme: Theme,
-  settings: EditorSettings | undefined,
-  onScrollRef: MutableRefObject<OnScrollCallback | undefined>,
-  debounceScroll: number,
-  onFileSaveRef: MutableRefObject<OnSaveCallback | undefined>,
-  extensions: Extension[],
-) {
+interface EditorStateOptions {
+  content: string;
+  theme: Theme;
+  settings: EditorSettings | undefined;
+  editorConfig?: EditorConfig;
+  onScrollRef: MutableRefObject<OnScrollCallback | undefined>;
+  debounceScroll: number;
+  onFileSaveRef: MutableRefObject<OnSaveCallback | undefined>;
+  extensions: Extension[];
+  filePath?: string;
+  projectId?: string;
+  enableLSP?: boolean;
+  enableCodeFolding?: boolean;
+  enableStickyScroll?: boolean;
+}
+
+function newEditorState(options: EditorStateOptions) {
+  const {
+    content,
+    theme,
+    settings,
+    editorConfig,
+    onScrollRef,
+    debounceScroll,
+    onFileSaveRef,
+    extensions,
+    filePath = '',
+    projectId,
+    enableLSP = true,
+    enableCodeFolding = true,
+    enableStickyScroll = true,
+  } = options;
+
+  // Get effective config (applies cleanMode overrides)
+  const effectiveConfig = editorConfig ? getEffectiveConfig(editorConfig) : undefined;
+
+  // Build completion sources based on file type and LSP availability
+  const completionSources = filePath
+    ? getCompletionSources(filePath, {
+        enableSnippets: true,
+        enableImportCompletions: true,
+        enableLSP: enableLSP && !!projectId,
+        projectId,
+      })
+    : [];
+
   return EditorState.create({
     doc: content,
     extensions: [
@@ -387,7 +694,7 @@ function newEditorState(
           return false;
         },
       }),
-      getTheme(theme, settings),
+      getTheme(theme, settings, effectiveConfig),
       history(),
       keymap.of([
         ...defaultKeymap,
@@ -395,7 +702,7 @@ function newEditorState(
         ...searchKeymap,
         ...lintKeymap,
         ...closeBracketsKeymap,
-        ...foldKeymap,
+        ...(enableCodeFolding ? foldKeymap : []),
         ...completionKeymap,
         { key: 'Tab', run: acceptCompletion },
         {
@@ -407,6 +714,13 @@ function newEditorState(
           },
         },
         indentKeyBinding,
+        // Custom fold/unfold keyboard shortcuts
+        ...(enableCodeFolding ? [
+          { key: 'Mod-Shift-[', run: foldCode, preventDefault: true },
+          { key: 'Mod-Shift-]', run: unfoldCode, preventDefault: true },
+          { key: 'Mod-k Mod-0', run: foldAll, preventDefault: true },
+          { key: 'Mod-k Mod-j', run: unfoldAll, preventDefault: true },
+        ] : []),
       ]),
       search(),
       highlightSelectionMatches(),
@@ -417,6 +731,9 @@ function newEditorState(
       indentUnit.of('\t'),
       autocompletion({
         closeOnBlur: false,
+        override: completionSources.length > 0 ? completionSources : undefined,
+        maxRenderedOptions: 50,
+        icons: true,
       }),
       tooltips({
         position: 'absolute',
@@ -439,7 +756,7 @@ function newEditorState(
       dropCursor(),
       drawSelection(),
       bracketMatching(),
-      codeFolding(),
+      ...(enableCodeFolding ? [codeFolding()] : []),
       EditorState.tabSize.of(settings?.tabSize ?? 2),
       indentOnInput(),
       EditorState.allowMultipleSelections.of(true),
@@ -448,7 +765,7 @@ function newEditorState(
       EditorState.readOnly.from(editableStateField, (editable) => !editable),
       highlightActiveLineGutter(),
       highlightActiveLine(),
-      foldGutter({
+      ...(enableCodeFolding ? [foldGutter({
         markerDOM: (open) => {
           const icon = document.createElement('div');
 
@@ -456,7 +773,7 @@ function newEditorState(
 
           return icon;
         },
-      }),
+      })] : []),
       inlineCopilot(async (prefix, suffix) => {
         try {
           const res = await fetch('/api/completions', {
@@ -471,6 +788,15 @@ function newEditorState(
           return '';
         }
       }, 800),
+      // Sticky scroll - shows current scope context at top of editor
+      ...(enableStickyScroll ? [stickyScroll({ includeBlocks: false })] : []),
+      // Error highlighting - line backgrounds, gutter icons, hover tooltips
+      errorHighlighting({
+        onErrorClick: (error) => {
+          // Select the error when gutter icon is clicked
+          selectError(error);
+        },
+      }),
       ...extensions,
     ],
   });

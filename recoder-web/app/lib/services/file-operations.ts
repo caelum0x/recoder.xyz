@@ -74,6 +74,35 @@ export async function renameFile(
 }
 
 /**
+ * Extended result for move operations that includes the new path
+ */
+export interface MoveFileResult extends FileOperationResult {
+  newPath?: string;
+}
+
+/**
+ * Move a file or folder to a new location
+ * This is essentially a rename operation with a different destination folder
+ */
+export async function moveFile(
+  projectId: string,
+  sourcePath: string,
+  destinationFolder: string
+): Promise<MoveFileResult> {
+  // Extract the file/folder name from the source path
+  const name = sourcePath.split('/').pop() || '';
+  // Construct the new path
+  const newPath = destinationFolder === '/' ? `/${name}` : `${destinationFolder}/${name}`;
+
+  try {
+    await dockerPut<void>(`/api/file/${projectId}/rename`, { oldPath: sourcePath, newPath });
+    return { success: true, newPath };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Copy file path to clipboard
  */
 export async function copyFilePath(path: string): Promise<void> {

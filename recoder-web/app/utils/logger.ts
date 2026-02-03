@@ -11,6 +11,100 @@ interface Logger {
   setLevel: (level: DebugLevel) => void;
 }
 
+// ============================
+// DEBUG FLAG & TIMING UTILITIES
+// ============================
+
+/**
+ * Global DEBUG flag - enable verbose logging
+ * Set via VITE_DEBUG=true or localStorage.setItem('DEBUG', 'true')
+ */
+export const DEBUG = typeof window !== 'undefined'
+  ? (localStorage.getItem('DEBUG') === 'true' || import.meta.env.VITE_DEBUG === 'true')
+  : (import.meta.env.VITE_DEBUG === 'true');
+
+/**
+ * Enable/disable debug mode at runtime
+ */
+export function setDebugMode(enabled: boolean): void {
+  if (typeof window !== 'undefined') {
+    if (enabled) {
+      localStorage.setItem('DEBUG', 'true');
+    } else {
+      localStorage.removeItem('DEBUG');
+    }
+    console.log(`[Logger] Debug mode ${enabled ? 'ENABLED' : 'DISABLED'}. Refresh page for full effect.`);
+  }
+}
+
+/**
+ * Get current timestamp in ISO format
+ */
+export function getTimestamp(): string {
+  return new Date().toISOString();
+}
+
+/**
+ * Timer utility for measuring execution time
+ * Usage:
+ *   const timer = createTimer('operationName');
+ *   // ... do work ...
+ *   timer.end(); // logs "operationName completed in 123ms"
+ */
+export interface Timer {
+  /** End the timer and log the duration */
+  end: (additionalInfo?: string) => number;
+  /** Get elapsed time without ending */
+  elapsed: () => number;
+  /** Get the start time */
+  startTime: number;
+}
+
+export function createTimer(operationName: string, scope?: string): Timer {
+  const startTime = performance.now();
+  const scopePrefix = scope ? `[${scope}] ` : '';
+
+  return {
+    startTime,
+    elapsed: () => Math.round(performance.now() - startTime),
+    end: (additionalInfo?: string) => {
+      const duration = Math.round(performance.now() - startTime);
+      const info = additionalInfo ? ` - ${additionalInfo}` : '';
+      if (DEBUG) {
+        console.log(`${scopePrefix}${operationName} completed in ${duration}ms${info}`);
+      }
+      return duration;
+    }
+  };
+}
+
+/**
+ * Structured log entry for debugging
+ */
+export interface StructuredLogEntry {
+  timestamp: string;
+  level: DebugLevel;
+  scope?: string;
+  message: string;
+  data?: Record<string, unknown>;
+  duration?: number;
+}
+
+/**
+ * Format a structured log entry
+ */
+export function formatStructuredLog(entry: StructuredLogEntry): string {
+  const parts = [
+    `[${entry.timestamp}]`,
+    `[${entry.level.toUpperCase()}]`,
+    entry.scope ? `[${entry.scope}]` : '',
+    entry.message,
+    entry.duration !== undefined ? `(${entry.duration}ms)` : '',
+  ].filter(Boolean);
+
+  return parts.join(' ');
+}
+
 let currentLevel: DebugLevel = import.meta.env.VITE_LOG_LEVEL ?? import.meta.env.DEV ? 'debug' : 'info';
 
 // Scopes to suppress from console output
@@ -28,7 +122,19 @@ export const logger: Logger = {
   setLevel,
 };
 
-export function createScopedLogger(scope: string): Logger {
+/**
+ * Extended Logger with timing and structured logging support
+ */
+export interface ExtendedLogger extends Logger {
+  /** Create a timer for this scope */
+  time: (operationName: string) => Timer;
+  /** Log with timing information */
+  timed: (level: DebugLevel, message: string, duration: number, data?: Record<string, unknown>) => void;
+  /** Structured debug log (only when DEBUG=true) */
+  debugVerbose: (...messages: any[]) => void;
+}
+
+export function createScopedLogger(scope: string): ExtendedLogger {
   return {
     trace: (...messages: any[]) => log('trace', scope, messages),
     debug: (...messages: any[]) => log('debug', scope, messages),
@@ -36,6 +142,21 @@ export function createScopedLogger(scope: string): Logger {
     warn: (...messages: any[]) => log('warn', scope, messages),
     error: (...messages: any[]) => log('error', scope, messages),
     setLevel,
+    // Extended methods
+    time: (operationName: string) => createTimer(operationName, scope),
+    timed: (level: DebugLevel, message: string, duration: number, data?: Record<string, unknown>) => {
+      const timedMessage = `${message} (${duration}ms)`;
+      if (data && DEBUG) {
+        log(level, scope, [timedMessage, data]);
+      } else {
+        log(level, scope, [timedMessage]);
+      }
+    },
+    debugVerbose: (...messages: any[]) => {
+      if (DEBUG) {
+        log('debug', scope, messages);
+      }
+    },
   };
 }
 

@@ -133,6 +133,15 @@ function tokenizeTemplate(template: StarterTemplate): Set<string> {
     tokens.add('react');
     tokens.add('reactjs');
   }
+  if (template.framework === 'react-native') {
+    tokens.add('react-native');
+    tokens.add('react native');
+    tokens.add('expo');
+    tokens.add('mobile');
+    tokens.add('ios');
+    tokens.add('android');
+    tokens.add('native');
+  }
 
   return tokens;
 }
@@ -312,6 +321,20 @@ function detectPrimaryIntent(query: string): string | null {
   // FRAMEWORK INTENTS FIRST (highest priority)
   const intents = [
     {
+      name: 'mobile',
+      patterns: [
+        /\bmobile\s+(app|application)\b/i,  // "mobile app", "mobile application"
+        /\b(ios|android)\s+(app|application)\b/i,  // "ios app", "android app"
+        /\bios\b.*\bandroid\b/i,  // "iOS and Android"
+        /\breact\s+native\b/i,  // "react native"
+        /\bexpo\s+(app|project|starter)\b/i,  // "expo app", "expo project"
+        /\bphone\s+app\b/i,  // "phone app"
+        /\bnative\s+(mobile\s+)?app\b/i,  // "native app", "native mobile app"
+        /\bcross-?platform\s+(mobile\s+)?app\b/i,  // "cross-platform app"
+        /(create|build|make)\s+.*\b(mobile|phone|native)\s+(app|application)\b/i,
+      ]
+    },
+    {
       name: 'angular',
       patterns: [
         /\bangular\b/i,  // ANY mention of "angular" - will get massive boost later
@@ -322,7 +345,7 @@ function detectPrimaryIntent(query: string): string | null {
     {
       name: 'react',
       patterns: [
-        /\breact\s+(native|app|project|application|starter|template)\b/i,  // "react native", "react app"
+        /\breact\s+(app|project|application|starter|template)\b/i,  // "react app" but NOT "react native"
         /(create|build|make|setup|start)\s+(a|an|the)?\s*react/i,
         /\breact\b(?!\s*native)/i,  // "react" but NOT "react native" (that's different)
       ]
@@ -476,6 +499,7 @@ export function searchStarters(
           'dashboard': ['dashboard', 'admin', 'analytics', 'metrics'],
           'auth': ['auth', 'authentication', 'login', 'signup', 'user'],
           'api': ['api', 'backend', 'server', 'rest'],
+          'mobile': ['mobile', 'expo', 'react-native', 'ios', 'android', 'native', 'phone'],
         };
         
         const expectedKeywords = intentCategoryMap[primaryIntent];

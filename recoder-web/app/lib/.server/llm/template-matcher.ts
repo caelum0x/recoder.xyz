@@ -11,7 +11,7 @@ export interface TemplateInfo {
   description: string;
   keywords: string[];
   framework: string;
-  category: 'frontend' | 'backend' | 'fullstack' | 'animation' | 'utility' | 'ecommerce';
+  category: 'frontend' | 'backend' | 'fullstack' | 'animation' | 'utility' | 'ecommerce' | 'mobile';
   complexity: 'simple' | 'moderate' | 'advanced' | 'intermediate';
   features: string[];
   webContainerCompatible?: boolean;
@@ -319,12 +319,22 @@ export const STARTER_TEMPLATES: TemplateInfo[] = [
     id: 'recoder-expo',
     name: 'React Native Expo',
     path: '/starters/recoder-expo',
-    description: 'React Native mobile app with Expo',
-    keywords: ['react native', 'expo', 'mobile app', 'mobile application', 'ios', 'android', 'cross-platform'],
+    description: 'React Native mobile app with Expo SDK, file-based routing, tab navigation, and dark theme',
+    keywords: ['react native', 'expo', 'mobile app', 'mobile application', 'ios', 'android', 'cross-platform', 'phone app', 'native app', 'mobile', 'smartphone app', 'tablet app', 'app store'],
     framework: 'react-native',
-    category: 'frontend',
+    category: 'mobile',
     complexity: 'advanced',
-    features: ['React Native', 'Expo', 'Cross-platform mobile']
+    features: [
+      'Expo SDK 54 with New Architecture',
+      'Expo Router v6 file-based navigation',
+      'Bottom tab navigation with Ionicons',
+      'Dark theme with consistent styling',
+      'Cross-platform: iOS, Android, and Web',
+      'TypeScript strict mode',
+      'SafeAreaView for notch handling',
+      'Interactive counter demo component',
+      'Settings screen with platform info'
+    ]
   },
   {
     id: 'quasar',
@@ -437,7 +447,8 @@ export function matchTemplate(userMessage: string): TemplateMatch | null {
       fullstack: ['fullstack', 'full stack', 'full-stack', 'complete app'],
       animation: ['animation', 'animated', 'gsap', 'motion'],
       utility: ['presentation', 'slides', 'tool'],
-      ecommerce: ['ecommerce', 'e-commerce', 'shop', 'store', 'shopping', 'marketplace']
+      ecommerce: ['ecommerce', 'e-commerce', 'shop', 'store', 'shopping', 'marketplace'],
+      mobile: ['mobile', 'phone app', 'native app', 'ios app', 'android app', 'smartphone']
     };
 
     const categoryWords = categoryKeywords[template.category] || [];
@@ -610,7 +621,11 @@ export function isTemplateSuitable(userMessage: string): boolean {
     /set up (a |an )?(.+)?(project|app)/i,
     /start (a |an )?(new )?(.+)?(project|app)/i,
     /initialize|scaffold|bootstrap/i,
-    /(todo|blog|portfolio|dashboard|landing|crud|admin|saas|e-commerce)/i
+    /(todo|blog|portfolio|dashboard|landing|crud|admin|saas|e-commerce)/i,
+    /\b(mobile|ios|android|react.native|expo)\b.*\b(app|application)\b/i,
+    /\b(app|application)\b.*\b(mobile|ios|android|react.native|expo)\b/i,
+    /\bphone\s+app\b/i,
+    /\bnative\s+app\b/i
   ];
 
   return templateIndicators.some(pattern => pattern.test(userMessage));
@@ -630,7 +645,10 @@ export function getDefaultTemplateForFramework(framework: string): TemplateInfo 
     'express': 'express-simple',
     'node': 'express-simple',
     'static': 'static',
-    'html': 'static'
+    'html': 'static',
+    'expo': 'recoder-expo',
+    'react-native': 'recoder-expo',
+    'mobile': 'recoder-expo'
   };
 
   const templateId = frameworkMap[framework.toLowerCase()];

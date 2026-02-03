@@ -91,9 +91,7 @@ describe('OAuthPKCEClient', () => {
   describe('exchangeCodeForToken', () => {
     it('should exchange authorization code for access token', async () => {
       const mockResponse = {
-        access_token: 'test-access-token',
-        token_type: 'Bearer',
-        expires_in: 3600,
+        key: 'test-access-token',
       };
 
       vi.spyOn(global, 'fetch').mockResolvedValue({
@@ -111,7 +109,7 @@ describe('OAuthPKCEClient', () => {
     it('should include code verifier in request', async () => {
       const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
-        json: async () => ({ access_token: 'token' }),
+        json: async () => ({ key: 'token' }),
       } as Response);
 
       const tokens = client.generatePKCETokens();

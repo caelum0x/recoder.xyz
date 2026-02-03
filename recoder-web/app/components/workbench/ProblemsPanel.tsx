@@ -13,6 +13,8 @@ import {
   setAutoFixing,
   setErrors,
   canAutoFix,
+  selectError,
+  selectedErrorAtom,
   type BuildError,
 } from '~/lib/stores/errors';
 import {
@@ -38,6 +40,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
   const errors = useStore(errorsAtom);
   const errorsByFile = useStore(errorsByFileAtom);
   const isAutoFixing = useStore(isAutoFixingAtom);
+  const selectedError = useStore(selectedErrorAtom);
   const projectId = useStore(workbenchStore.projectId);
   const containerReady = useStore(workbenchStore.containerReady);
   
@@ -55,7 +58,8 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
   
   // Fetch errors when panel mounts or projectId changes
   useEffect(() => {
-    if (!projectId || !containerReady) return;
+    if (!projectId) return;
+    // Note: Removed containerReady check - errors can exist before dev server starts
     
     const fetchErrors = async () => {
       setIsLoading(true);
@@ -104,11 +108,22 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
     return filtered;
   }, [errors, filterSeverity, searchQuery, showFixableOnly]);
 
-  const errorCount = useMemo(() => errors.filter((e) => e.severity === 'error').length, [errors]);
-  const warningCount = useMemo(() => errors.filter((e) => e.severity === 'warning').length, [errors]);
+  // PERFORMANCE: Compute error/warning counts efficiently in a single pass
+  const { errorCount, warningCount } = useMemo(() => {
+    let errCount = 0;
+    let warnCount = 0;
+    for (const e of errors) {
+      if (e.severity === 'error') errCount++;
+      else if (e.severity === 'warning') warnCount++;
+    }
+    return { errorCount: errCount, warningCount: warnCount };
+  }, [errors]);
 
   const handleErrorClick = useCallback(
     (error: BuildError) => {
+      // Select the error to highlight it in the editor
+      selectError(error);
+      // Also call the callback if provided
       onErrorClick?.(error);
     },
     [onErrorClick]
@@ -206,19 +221,19 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
                 <h4 className="text-sm font-medium mb-2">Errors to Fix ({fixPlan.errors.length})</h4>
                 <div className="space-y-1 text-xs">
                   {fixPlan.errors.slice(0, 5).map((error) => (
-                    <div key={error.id} className="text-gray-300">
+                    <div key={error.id} className="text-bolt-elements-textSecondary">
                       - {error.filePath ? error.filePath.replace('/workspace/', '') : 'General'}: {error.shortMessage}
                     </div>
                   ))}
                   {fixPlan.errors.length > 5 && (
-                    <div className="text-gray-400">... and {fixPlan.errors.length - 5} more</div>
+                    <div className="text-bolt-elements-textSecondary">... and {fixPlan.errors.length - 5} more</div>
                   )}
                 </div>
               </div>
 
               <div>
                 <h4 className="text-sm font-medium mb-2">Files to Read ({fixPlan.filesToRead.length})</h4>
-                <div className="space-y-1 text-xs text-gray-300">
+                <div className="space-y-1 text-xs text-bolt-elements-textSecondary">
                   {fixPlan.filesToRead.map((file) => (
                     <div key={file}>- {file}</div>
                   ))}
@@ -230,7 +245,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
                   <h4 className="text-sm font-medium mb-2 text-yellow-400">
                     Missing Dependencies ({fixPlan.missingDependencies.length})
                   </h4>
-                  <div className="space-y-1 text-xs text-gray-300">
+                  <div className="space-y-1 text-xs text-bolt-elements-textSecondary">
                     {fixPlan.missingDependencies.map((dep) => (
                       <div key={dep}>- {dep}</div>
                     ))}
@@ -239,7 +254,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
               )}
 
               <div className="pt-2 border-t border-bolt-elements-borderColor">
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-bolt-elements-textSecondary">
                   Estimated steps: {fixPlan.estimatedSteps}
                 </div>
                 {fixPlan.requiresUserConfirmation && (
@@ -299,14 +314,14 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setRequireConfirmation(!requireConfirmation)}
-                  className="text-xs text-gray-400 hover:text-gray-300"
+                  className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textSecondary"
                   title={requireConfirmation ? "Confirmation required" : "Auto-fix without confirmation"}
                 >
                   <span className={requireConfirmation ? "i-ph:shield-check" : "i-ph:shield"} />
                 </button>
                 <button
                   onClick={() => setAutoFixEnabled(!autoFixEnabled)}
-                  className="text-xs text-gray-400 hover:text-gray-300"
+                  className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textSecondary"
                   title={autoFixEnabled ? "Enhanced auto-fix enabled" : "Basic mode"}
                 >
                   <span className={autoFixEnabled ? "i-ph:lightning-fill" : "i-ph:lightning"} />
@@ -317,7 +332,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
               <button
                 onClick={handleShowFixPlan}
                 disabled={isAutoFixing}
-                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded transition-colors bg-bolt-elements-background-depth-3 text-gray-300 hover:bg-bolt-elements-background-depth-4"
+                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded transition-colors bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4"
               >
                 <span className="i-ph:list-checks" />
                 Plan
@@ -332,7 +347,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
                     ? 'bg-blue-500/20 text-blue-300 cursor-wait'
                     : canAutoFix()
                     ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
-                    : 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                    : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary cursor-not-allowed'
                 }`}
               >
                 {isAutoFixing ? (
@@ -360,7 +375,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
               placeholder="Filter problems..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-2 py-1 text-xs text-white bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500 placeholder:text-gray-400"
+              className="w-full px-2 py-1 text-xs text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500 placeholder:text-bolt-elements-textSecondary"
             />
             {searchQuery && (
               <button
@@ -428,21 +443,27 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
           <div key={filePath} className="border-b border-bolt-elements-borderColor/50">
             {/* File header */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-bolt-elements-background-depth-2/50 text-xs">
-              <span className="i-ph:file-code text-gray-400" />
-              <span className="text-gray-200 font-medium truncate">
+              <span className="i-ph:file-code text-bolt-elements-textSecondary" />
+              <span className="text-bolt-elements-textPrimary font-medium truncate">
                 {filePath === '__no_file__' ? 'General' : filePath.replace('/workspace/', '')}
               </span>
-              <span className="text-gray-400">
+              <span className="text-bolt-elements-textSecondary">
                 ({fileErrors.length})
               </span>
             </div>
 
             {/* Errors in file */}
-            {fileErrors.map((error) => (
+            {fileErrors.map((error) => {
+              const isSelected = selectedError?.id === error.id;
+              return (
               <div
                 key={error.id}
                 onClick={() => handleErrorClick(error)}
-                className="flex items-start gap-2 px-3 py-1.5 pl-6 text-xs cursor-pointer hover:bg-bolt-elements-item-backgroundActive transition-colors"
+                className={`flex items-start gap-2 px-3 py-1.5 pl-6 text-xs cursor-pointer transition-colors ${
+                  isSelected
+                    ? 'bg-blue-500/20 border-l-2 border-blue-500'
+                    : 'hover:bg-bolt-elements-item-backgroundActive'
+                }`}
               >
                 {/* Severity icon */}
                 <span
@@ -455,10 +476,10 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
 
                 {/* Error details */}
                 <div className="flex-1 min-w-0">
-                  <div className="text-gray-100 truncate">
+                  <div className="text-bolt-elements-textPrimary truncate">
                     {error.shortMessage || error.message}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-gray-400">
+                  <div className="flex items-center gap-2 mt-0.5 text-bolt-elements-textSecondary">
                     {error.line && (
                       <span className="font-mono">
                         Ln {error.line}{error.column ? `, Col ${error.column}` : ''}
@@ -486,7 +507,8 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
                   Fix
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         ))}
       </div>

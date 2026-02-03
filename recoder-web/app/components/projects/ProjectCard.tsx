@@ -45,7 +45,7 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
     <div className="relative">
       <div
         onClick={handleCardClick}
-        className="group p-6 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-bolt-elements-borderColorHover transition-all cursor-pointer hover:bg-bolt-elements-background-depth-3"
+        className="group p-6 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-bolt-elements-borderColorActive transition-all cursor-pointer hover:bg-bolt-elements-background-depth-3"
       >
         {/* Project icon and menu button */}
         <div className="flex items-start justify-between mb-4">
@@ -69,10 +69,10 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
 
             {/* Context menu */}
             {showMenu && (
-              <div className="absolute right-0 top-8 w-32 bg-black border border-bolt-elements-borderColor rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 top-8 w-32 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-lg z-10">
                 <button
                   onClick={handleEdit}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-bolt-elements-background-depth-3 rounded-t-lg transition-colors flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded-t-lg transition-colors flex items-center gap-2"
                 >
                   <div className="i-ph:pencil text-sm" />
                   Edit
@@ -91,7 +91,7 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
 
         {/* Project details */}
         <div className="space-y-3">
-          <h3 className="font-semibold text-bolt-elements-textPrimary group-hover:text-bolt-elements-textPrimaryHover transition-colors">
+          <h3 className="font-semibold text-bolt-elements-textPrimary group-hover:text-bolt-elements-textPrimary transition-colors">
             {project.name}
           </h3>
           

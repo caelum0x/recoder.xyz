@@ -114,7 +114,7 @@ Please analyze the project structure, create all files, install dependencies, an
   return (
     <>
       <div className="flex items-center gap-2">
-        <div className="flex items-center border border-bolt-elements-borderColor rounded-md overflow-hidden">
+        <div className="flex items-center rounded-md overflow-hidden border border-bolt-elements-borderColor">
           <Button
             active={showChat}
             disabled={!canHideChat}
@@ -160,14 +160,16 @@ Please analyze the project structure, create all files, install dependencies, an
 
       {showGitHubIntegration && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-bolt-elements-background-depth-1 rounded-lg shadow-xl p-6">
+          <div
+            className="rounded-lg shadow-xl p-6 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor"
+          >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
                 Import from GitHub
               </h2>
               <button
                 onClick={() => setShowGitHubIntegration(false)}
-                className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+                className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
               >
                 <div className="i-ph:x text-lg" />
               </button>
@@ -189,15 +191,30 @@ interface ButtonProps {
 }
 
 function Button({ active = false, disabled = false, children, onClick, title }: ButtonProps) {
+  const getStyles = () => {
+    if (disabled) {
+      return {
+        backgroundColor: 'transparent',
+        color: 'var(--bolt-elements-textTertiary)',
+        cursor: 'not-allowed',
+      };
+    }
+    if (active) {
+      return {
+        backgroundColor: '#F79009',
+        color: '#ffffff',
+      };
+    }
+    return {
+      backgroundColor: 'transparent',
+      color: 'var(--bolt-elements-textSecondary)',
+    };
+  };
+
   return (
     <button
-      className={classNames('flex items-center p-1.5', {
-        'bg-bolt-elements-item-backgroundDefault hover:bg-bolt-elements-item-backgroundActive text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary':
-          !active,
-        'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent': active && !disabled,
-        'bg-bolt-elements-item-backgroundDefault text-alpha-gray-20 dark:text-alpha-white-20 cursor-not-allowed':
-          disabled,
-      })}
+      className="flex items-center p-1.5 transition-colors hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary"
+      style={getStyles()}
       onClick={onClick}
       title={title}
     >

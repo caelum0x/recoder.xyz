@@ -15,7 +15,7 @@ import * as process from 'node:process';
 
 import * as trustedFolders from '../../config/trustedFolders.js';
 
-vi.mock('process', () => ({
+vi.mock('node:process', () => ({
   cwd: vi.fn(),
   platform: 'linux',
 }));
@@ -44,7 +44,7 @@ describe('useFolderTrust', () => {
       .spyOn(trustedFolders, 'loadTrustedFolders')
       .mockReturnValue(mockTrustedFolders);
     isWorkspaceTrustedSpy = vi.spyOn(trustedFolders, 'isWorkspaceTrusted');
-    (process.cwd as vi.Mock).mockReturnValue('/test/path');
+    vi.mocked(process.cwd).mockReturnValue('/test/path');
     onTrustChange = vi.fn();
   });
 

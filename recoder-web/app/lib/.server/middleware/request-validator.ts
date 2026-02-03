@@ -62,8 +62,11 @@ export function validateChatMessages(messages: any): ValidationResult {
     }
 
     // Sanitize content length
-    if (msg.content.length > 50000) {
-      errors.push(`Message ${i} content too long (max 50000 characters)`);
+    // NOTE: Increased from 50000 to 500000 to accommodate AI responses with file contents
+    // AI coding assistants often generate large responses with complete file contents
+    // Previous limit caused "Message X content too long" errors on second messages
+    if (msg.content.length > 500000) {
+      errors.push(`Message ${i} content too long (max 500000 characters)`);
       continue;
     }
 

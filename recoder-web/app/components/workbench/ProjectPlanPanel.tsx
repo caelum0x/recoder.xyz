@@ -47,7 +47,7 @@ const TYPE_COLORS: Record<string, string> = {
   backend: 'text-green-400',
   database: 'text-purple-400',
   api: 'text-orange-400',
-  config: 'text-gray-400',
+  config: 'text-bolt-elements-textTertiary',
   test: 'text-yellow-400',
   docs: 'text-cyan-400',
 };

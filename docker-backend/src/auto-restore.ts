@@ -57,56 +57,119 @@ const ERROR_PATTERNS: ErrorPattern[] = [
 interface AutoRestoreConfig {
   enabled: boolean;
   maxRetries: number;
-  cooldownMs: number;
+  baseCooldownMs: number;
+  maxCooldownMs: number;
+}
+
+interface RetryState {
+  errorCount: number;
+  lastRestoreTime: number;
+  lastErrorMessages: string[];
+  isBlocked: boolean;
 }
 
 class AutoRestoreManager {
-  private errorCounts = new Map<string, number>();
-  private lastRestore = new Map<string, number>();
+  private retryStates = new Map<string, RetryState>();
   private config: AutoRestoreConfig = {
     enabled: true,
-    maxRetries: 3,
-    cooldownMs: 60000, // 1 minute cooldown
+    maxRetries: 5,
+    baseCooldownMs: 2000, // Start with 2 seconds
+    maxCooldownMs: 60000, // Max 60 seconds
   };
+
+  private getRetryState(projectId: string): RetryState {
+    let state = this.retryStates.get(projectId);
+    if (!state) {
+      state = {
+        errorCount: 0,
+        lastRestoreTime: 0,
+        lastErrorMessages: [],
+        isBlocked: false,
+      };
+      this.retryStates.set(projectId, state);
+    }
+    return state;
+  }
+
+  /**
+   * Get exponential backoff delay based on error count
+   */
+  private getBackoffDelay(errorCount: number): number {
+    // Exponential backoff: 2s, 4s, 8s, 16s, 32s, capped at maxCooldownMs
+    const delay = this.config.baseCooldownMs * Math.pow(2, errorCount);
+    return Math.min(delay, this.config.maxCooldownMs);
+  }
 
   /**
    * Analyze logs for critical errors
+   * Returns both generic descriptions and actual error context
    */
-  detectErrors(logs: string): { hasError: boolean; errors: string[] } {
+  detectErrors(logs: string): { hasError: boolean; errors: string[]; details: string[] } {
     const errors: string[] = [];
-    
+    const details: string[] = [];
+
     for (const { pattern, severity, description } of ERROR_PATTERNS) {
       if (severity === 'critical' && pattern.test(logs)) {
         errors.push(description);
+
+        // Extract actual error context (line containing the error + some context)
+        const lines = logs.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (pattern.test(lines[i])) {
+            // Get this line and up to 2 lines of context
+            const context = lines.slice(Math.max(0, i - 1), i + 3).join('\n').trim();
+            if (context && !details.includes(context)) {
+              details.push(context);
+            }
+          }
+        }
       }
     }
-    
+
     return {
       hasError: errors.length > 0,
       errors,
+      details: details.slice(0, 5), // Limit to 5 error details
     };
   }
 
   /**
    * Check if auto-restore should trigger
    */
-  shouldRestore(projectId: string): boolean {
-    if (!this.config.enabled) return false;
-    
-    const errorCount = this.errorCounts.get(projectId) || 0;
-    if (errorCount >= this.config.maxRetries) {
-      console.log(`[AutoRestore] Max retries reached for ${projectId}`);
-      return false;
+  shouldRestore(projectId: string): { allowed: boolean; reason?: string; nextRetryIn?: number } {
+    if (!this.config.enabled) {
+      return { allowed: false, reason: 'Auto-restore disabled' };
     }
-    
-    const lastRestore = this.lastRestore.get(projectId) || 0;
+
+    const state = this.getRetryState(projectId);
+
+    if (state.isBlocked) {
+      return { allowed: false, reason: 'Manual reset required' };
+    }
+
+    if (state.errorCount >= this.config.maxRetries) {
+      console.log(`[AutoRestore] Max retries (${this.config.maxRetries}) reached for ${projectId}`);
+      return {
+        allowed: false,
+        reason: `Max retries (${this.config.maxRetries}) reached. Make a file change or click retry to reset.`,
+      };
+    }
+
     const now = Date.now();
-    if (now - lastRestore < this.config.cooldownMs) {
-      console.log(`[AutoRestore] Cooldown active for ${projectId}`);
-      return false;
+    const cooldown = this.getBackoffDelay(state.errorCount);
+    const timeSinceLastRestore = now - state.lastRestoreTime;
+
+    if (timeSinceLastRestore < cooldown) {
+      const remaining = cooldown - timeSinceLastRestore;
+      console.log(`[AutoRestore] Cooldown active for ${projectId}, ${remaining}ms remaining`);
+      return {
+        allowed: false,
+        reason: 'Cooldown active',
+        nextRetryIn: remaining,
+      };
     }
-    
-    return true;
+
+    return { allowed: true };
   }
 
   /**
@@ -114,34 +177,63 @@ class AutoRestoreManager {
    */
   async attemptRestore(
     containerId: string,
-    projectId: string
-  ): Promise<{ success: boolean; restoredTo?: string; error?: string }> {
+    projectId: string,
+    force = false
+  ): Promise<{
+    success: boolean;
+    restoredTo?: string;
+    error?: string;
+    retryCount?: number;
+    nextRetryIn?: number;
+  }> {
     try {
-      if (!this.shouldRestore(projectId)) {
-        return { success: false, error: 'Restore not allowed (cooldown or max retries)' };
+      const state = this.getRetryState(projectId);
+
+      // If forcing, reset the blocked state
+      if (force) {
+        state.isBlocked = false;
+        state.errorCount = Math.max(0, state.errorCount - 1); // Give one more chance
+        console.log(`[AutoRestore] Force retry requested for ${projectId}, errorCount now: ${state.errorCount}`);
+      }
+
+      const check = this.shouldRestore(projectId);
+      if (!check.allowed) {
+        return {
+          success: false,
+          error: check.reason || 'Restore not allowed',
+          retryCount: state.errorCount,
+          nextRetryIn: check.nextRetryIn,
+        };
       }
 
       // Get snapshots
       const snapshots = await snapshotManager.listSnapshots(containerId, 10);
-      
+
       // Find last snapshot before AI changes (marked as 'user' or 'auto')
       const lastWorking = snapshots.find(s => s.author === 'user' || s.author === 'auto');
-      
+
       if (!lastWorking) {
-        return { success: false, error: 'No working snapshot found' };
+        return { success: false, error: 'No working snapshot found', retryCount: state.errorCount };
       }
 
-      console.log(`[AutoRestore] Restoring ${projectId} to ${lastWorking.id}`);
-      
+      console.log(`[AutoRestore] Restoring ${projectId} to ${lastWorking.id} (attempt ${state.errorCount + 1}/${this.config.maxRetries})`);
+
       // Restore
       await snapshotManager.restoreSnapshot(containerId, projectId, lastWorking.id);
-      
+
       // Update tracking
-      const errorCount = (this.errorCounts.get(projectId) || 0) + 1;
-      this.errorCounts.set(projectId, errorCount);
-      this.lastRestore.set(projectId, Date.now());
-      
-      return { success: true, restoredTo: lastWorking.id };
+      state.errorCount++;
+      state.lastRestoreTime = Date.now();
+
+      const nextDelay = this.getBackoffDelay(state.errorCount);
+      console.log(`[AutoRestore] Success. Next retry in ${nextDelay}ms if needed.`);
+
+      return {
+        success: true,
+        restoredTo: lastWorking.id,
+        retryCount: state.errorCount,
+        nextRetryIn: nextDelay,
+      };
     } catch (error: any) {
       console.error(`[AutoRestore] Failed for ${projectId}:`, error.message);
       return { success: false, error: error.message };
@@ -152,7 +244,65 @@ class AutoRestoreManager {
    * Reset error count (call when build succeeds)
    */
   resetErrors(projectId: string): void {
-    this.errorCounts.delete(projectId);
+    const state = this.retryStates.get(projectId);
+    if (state) {
+      state.errorCount = 0;
+      state.lastErrorMessages = [];
+      state.isBlocked = false;
+      console.log(`[AutoRestore] Errors reset for ${projectId} (build succeeded)`);
+    }
+  }
+
+  /**
+   * Reset on file change - gives more retry attempts
+   * Called when user makes a new file change, indicating they're trying to fix the issue
+   */
+  resetOnFileChange(projectId: string): void {
+    const state = this.retryStates.get(projectId);
+    if (state && state.errorCount > 0) {
+      // Don't fully reset, but give a few more retries
+      state.errorCount = Math.max(0, state.errorCount - 2);
+      state.isBlocked = false;
+      console.log(`[AutoRestore] Partial reset for ${projectId} on file change, errorCount now: ${state.errorCount}`);
+    }
+  }
+
+  /**
+   * Force reset all retry state (manual user action)
+   */
+  forceReset(projectId: string): void {
+    this.retryStates.delete(projectId);
+    console.log(`[AutoRestore] Force reset for ${projectId}`);
+  }
+
+  /**
+   * Get current retry state for a project
+   */
+  getState(projectId: string): {
+    errorCount: number;
+    maxRetries: number;
+    lastErrors: string[];
+    canRetry: boolean;
+    nextRetryIn?: number;
+  } {
+    const state = this.getRetryState(projectId);
+    const check = this.shouldRestore(projectId);
+
+    return {
+      errorCount: state.errorCount,
+      maxRetries: this.config.maxRetries,
+      lastErrors: state.lastErrorMessages,
+      canRetry: check.allowed,
+      nextRetryIn: check.nextRetryIn,
+    };
+  }
+
+  /**
+   * Store error messages for later retrieval
+   */
+  setLastErrors(projectId: string, errors: string[]): void {
+    const state = this.getRetryState(projectId);
+    state.lastErrorMessages = errors.slice(0, 5);
   }
 
   /**

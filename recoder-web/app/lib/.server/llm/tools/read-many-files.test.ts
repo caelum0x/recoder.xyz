@@ -5,9 +5,7 @@
  */
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { Mock } from 'vitest';
-// @ts-ignore - Mock file may not exist
-import { mockControl } from '../__mocks__/fs/promises.js';
+import type { MockInstance } from 'vitest';
 import { ReadManyFilesTool } from './read-many-files.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import path from 'node:path';
@@ -23,7 +21,13 @@ import {
 } from '../utils/ignorePatterns.js';
 import * as glob from 'glob';
 
-vi.mock('glob', { spy: true });
+vi.mock('glob', async () => {
+  const actual = await vi.importActual<typeof import('glob')>('glob');
+  return {
+    ...actual,
+    glob: vi.fn(actual.glob),
+  };
+});
 
 vi.mock('mime-types', () => {
   const lookup = (filename: string) => {
@@ -60,7 +64,7 @@ describe('ReadManyFilesTool', () => {
   let tool: ReadManyFilesTool;
   let tempRootDir: string;
   let tempDirOutsideRoot: string;
-  let mockReadFileFn: Mock;
+  let mockReadFileFn: MockInstance;
 
   beforeEach(async () => {
     tempRootDir = fs.realpathSync(
@@ -92,7 +96,8 @@ describe('ReadManyFilesTool', () => {
     } as Partial<Config> as Config;
     tool = new ReadManyFilesTool(mockConfig);
 
-    mockReadFileFn = mockControl.mockReadFile;
+    const realReadFile = fs.promises.readFile.bind(fs.promises);
+    mockReadFileFn = vi.spyOn(fs.promises, 'readFile');
     mockReadFileFn.mockReset();
 
     mockReadFileFn.mockImplementation(
@@ -103,8 +108,7 @@ describe('ReadManyFilesTool', () => {
             : (filePath as Buffer).toString();
 
         if (fs.existsSync(fp)) {
-          const originalFs = await vi.importActual<typeof fs>('fs');
-          return originalFs.promises.readFile(fp, options);
+          return realReadFile(fp, options);
         }
 
         if (fp.endsWith('nonexistent-file.txt')) {
@@ -613,7 +617,9 @@ Content of file[1]
     });
 
     it('should return a READ_MANY_FILES_SEARCH_ERROR on glob failure', async () => {
-      vi.mocked(glob.glob).mockRejectedValue(new Error('Glob failed'));
+      const globSpy = vi
+        .mocked(glob.glob)
+        .mockRejectedValueOnce(new Error('Glob failed'));
       const params = { paths: ['*.txt'] };
       const invocation = tool.build(params);
       const result = await invocation.execute(new AbortController().signal);
@@ -621,8 +627,7 @@ Content of file[1]
         ToolErrorType.READ_MANY_FILES_SEARCH_ERROR,
       );
       expect(result.llmContent).toBe('Error during file search: Glob failed');
-      // Reset glob.
-      vi.mocked(glob.glob).mockReset();
+      globSpy.mockRestore();
     });
   });
 

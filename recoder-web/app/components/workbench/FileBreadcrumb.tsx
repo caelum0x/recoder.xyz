@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { FileMap } from '~/lib/stores/files';
 import { classNames } from '~/utils/classNames';
 import { WORK_DIR } from '~/utils/constants';
@@ -43,9 +43,16 @@ export const FileBreadcrumb = memo<FileBreadcrumbProps>(({ files, pathSegments =
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
-  const handleSegmentClick = (index: number) => {
+  // PERFORMANCE: Memoize segment click handler
+  const handleSegmentClick = useCallback((index: number) => {
     setActiveIndex((prevIndex) => (prevIndex === index ? null : index));
-  };
+  }, []);
+
+  // PERFORMANCE: Memoize file select handler to prevent FileTree re-renders
+  const handleFileSelect = useCallback((filePath: string) => {
+    setActiveIndex(null);
+    onFileSelect?.(filePath);
+  }, [onFileSelect]);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -126,10 +133,7 @@ export const FileBreadcrumb = memo<FileBreadcrumbProps>(({ files, pathSegments =
                               collapsed
                               allowFolderSelection
                               selectedFile={`${path}/${segment}`}
-                              onFileSelect={(filePath) => {
-                                setActiveIndex(null);
-                                onFileSelect?.(filePath);
-                              }}
+                              onFileSelect={handleFileSelect}
                             />
                           </div>
                         </div>

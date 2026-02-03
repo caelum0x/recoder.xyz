@@ -6,8 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { webcontainer } from '~/lib/webcontainer';
 import type { WebContainer } from '@webcontainer/api';
-import { getCurrentUserId } from '~/lib/stores/user';
-import { dockerFetch, dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
+import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
 
 export type RuntimeMode = 'webcontainer' | 'docker';
 
@@ -45,11 +44,10 @@ export function useRuntime(projectId: string) {
           }).catch(() => null) as Response | null;
 
           if (health?.ok) {
-            // Include userId for Claude Code token injection
-            const userId = getCurrentUserId();
-            const res = await dockerPost('/api/container', { projectId, userId }) as Response;
-
-            if (res.ok && !cancelled) {
+            // Use centralized container creation to avoid duplicates
+            const { ensureContainerExists } = await import('~/lib/stores/workbench');
+            const containerReady = await ensureContainerExists(projectId);
+            if (containerReady && !cancelled) {
               setState({ mode: 'docker', ready: true, error: null });
               console.log('🐳 Docker runtime ready');
               return;
@@ -160,7 +158,10 @@ export function useRuntime(projectId: string) {
     (onData: (data: string) => void) => {
       if (state.mode === 'docker' && DOCKER_URL) {
         const wsUrl = DOCKER_URL.replace('http', 'ws');
-        terminalWsRef.current = new WebSocket(`${wsUrl}/terminal/${projectId}`);
+        // Include auth token for cross-origin authentication
+        const token = getSessionToken();
+        const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+        terminalWsRef.current = new WebSocket(`${wsUrl}/terminal/${projectId}${tokenParam}`);
         terminalWsRef.current.onmessage = (e) => onData(e.data);
 
         return {

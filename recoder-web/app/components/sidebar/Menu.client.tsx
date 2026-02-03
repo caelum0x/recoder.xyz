@@ -1,16 +1,36 @@
 import { motion, type Variants } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
+import { useStore } from '@nanostores/react';
 import { Dialog, DialogButton, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { IconButton } from '~/components/ui/IconButton';
 import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
 import { getDB, deleteById, getAll, chatId, type ChatHistoryItem } from '~/lib/persistence';
+import {
+  loadAllSessions,
+  renameSessionPersistent,
+  deleteSessionPersistent,
+  exportConversation,
+  searchConversations,
+} from '~/lib/persistence/useChatHistory';
+import {
+  filteredSessions,
+  searchQuery,
+  setSearchQuery,
+  isLoading as sessionsLoading,
+  toggleFavorite,
+  renamingSessionId,
+  startRenaming,
+  stopRenaming,
+  type ChatSessionMetadata,
+} from '~/lib/stores/chat-sessions';
 import { cubicEasingFn } from '~/utils/easings';
 import { logger } from '~/utils/logger';
 import { showSmartError, showQuickError } from '~/lib/errors/toast-error';
 import { getCurrentUser } from '~/utils/auth-utils';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import { HistoryItem } from './HistoryItem';
+import { EnhancedHistoryItem } from './EnhancedHistoryItem';
 import { binDates } from './date-binning';
 import { ProjectsList } from './ProjectsList';
 
@@ -37,70 +57,30 @@ const menuVariants = {
 
 type DialogContent = { type: 'delete'; item: ChatHistoryItem } | null;
 
-/**
- * Load chat history from database API
- */
-async function loadHistoryFromDatabase(): Promise<ChatHistoryItem[]> {
-  try {
-    const user = getCurrentUser();
-    const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
-
-    const params = new URLSearchParams();
-    if (user?.id) params.set('userId', user.id);
-    if (anonymousId) params.set('anonymousId', anonymousId);
-    params.set('limit', '50');
-
-    const url = `/api/chat-history?${params}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [loadHistoryFromDatabase] Failed to load:', errorText);
-      throw new Error(`Failed to load from database: ${response.status}`);
-    }
-
-    const result = await response.json() as { success: boolean; data?: any[]; error?: string };
-    const { data, success } = result;
-
-    if (!success || !data) {
-      return [];
-    }
-
-    // Convert database format to ChatHistoryItem format
-    return data.map((item: any) => ({
-      id: item.id,
-      urlId: item.urlId,
-      description: item.description || 'Untitled Chat',
-      messages: [], // Don't load messages until needed
-      timestamp: item.timestamp,
-    }));
-  } catch (error) {
-    console.error('❌ [loadHistoryFromDatabase] Failed to load from database:', error);
-    if (error instanceof Error) {
-      console.error('❌ [loadHistoryFromDatabase] Error details:', error.message);
-    }
-    return [];
-  }
-}
+// Use enhanced session management via chat-sessions store
+const USE_ENHANCED_SESSIONS = true;
 
 export function Menu() {
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [list, setList] = useState<ChatHistoryItem[]>([]);
   const [open, setOpen] = useState(false);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
   const [loadingFromDb, setLoadingFromDb] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Enhanced session management stores
+  const sessions = useStore(filteredSessions);
+  const query = useStore(searchQuery);
+  const loading = useStore(sessionsLoading);
+
   const loadEntries = useCallback(async () => {
     setLoadingFromDb(true);
 
     try {
-      // Try loading from database first
-      const dbChats = await loadHistoryFromDatabase();
-
-      if (dbChats.length > 0) {
-        const filtered = dbChats.filter((item) => item.urlId && item.description);
-        setList(filtered);
+      // Use enhanced session management
+      if (USE_ENHANCED_SESSIONS) {
+        await loadAllSessions(100);
         setLoadingFromDb(false);
         return;
       }
@@ -140,29 +120,39 @@ export function Menu() {
   const deleteItem = useCallback(async (event: React.UIEvent, item: ChatHistoryItem) => {
     event.preventDefault();
 
-    try {
-      // Try deleting from database first
-      await fetch('/api/chat-history', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: item.id }),
-      });
-    } catch (error) {
-      console.error('Failed to delete from database:', error);
-    }
-
-    // Also delete from IndexedDB if it exists there
-    const db = getDB();
-    if (db) {
-      try {
-        await deleteById(db, item.id);
-      } catch (error) {
-        console.error('Failed to delete from IndexedDB:', error);
+    if (USE_ENHANCED_SESSIONS) {
+      // Use enhanced delete with persistence
+      const success = await deleteSessionPersistent(item.id);
+      if (success) {
+        toast.success('Conversation deleted');
+      } else {
+        toast.error('Failed to delete conversation');
       }
-    }
+    } else {
+      try {
+        // Try deleting from database first
+        await fetch('/api/chat-history', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: item.id }),
+        });
+      } catch (error) {
+        console.error('Failed to delete from database:', error);
+      }
 
-    // Reload list
-    loadEntries();
+      // Also delete from IndexedDB if it exists there
+      const db = getDB();
+      if (db) {
+        try {
+          await deleteById(db, item.id);
+        } catch (error) {
+          console.error('Failed to delete from IndexedDB:', error);
+        }
+      }
+
+      // Reload list
+      loadEntries();
+    }
 
     // If this was the current chat, redirect to home
     if (chatId.get() === item.id) {
@@ -256,7 +246,7 @@ export function Menu() {
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}
-        className="flex flex-col side-menu fixed top-0 w-[350px] h-full bg-bolt-elements-background-depth-2 border-r rounded-r-3xl border-bolt-elements-borderColor z-sidebar shadow-xl shadow-bolt-elements-sidebar-dropdownShadow text-sm"
+        className="flex flex-col side-menu fixed top-0 w-[350px] h-full bg-bolt-elements-background-depth-2 border-r rounded-r-3xl border-bolt-elements-borderColor z-sidebar shadow-xl text-sm"
       >
         <div className="flex items-center justify-end h-[var(--header-height)] px-4">
           <IconButton
@@ -270,25 +260,101 @@ export function Menu() {
         <div className="p-4">
           <a
             href="/"
-            className="flex gap-2 items-center bg-bolt-elements-sidebar-buttonBackgroundDefault text-bolt-elements-sidebar-buttonText hover:bg-bolt-elements-sidebar-buttonBackgroundHover rounded-md p-2 transition-theme"
+            className="flex gap-2 items-center bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded-md p-2 transition-colors"
           >
             <span className="inline-block i-bolt:chat scale-110" />
             Start new chat
           </a>
         </div>
+
+        {/* Search input */}
+        {USE_ENHANCED_SESSIONS && (
+          <div className="px-4 pb-2">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-bolt-elements-textTertiary" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search chats..."
+                value={query}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-1.5 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              {query && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 i-ph:x text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                />
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="text-bolt-elements-textPrimary font-medium pl-6 pr-5 my-2">Your Chats</div>
         <div className="flex-1 overflow-scroll pl-4 pr-5 pb-5">
-          {loadingFromDb && (
+          {(loadingFromDb || loading) && (
             <div className="pl-2 text-bolt-elements-textTertiary flex items-center gap-2">
               <div className="i-ph:spinner animate-spin" />
               Loading...
             </div>
           )}
-          {!loadingFromDb && list.length === 0 && (
+
+          {/* Enhanced sessions view */}
+          {USE_ENHANCED_SESSIONS && !loading && sessions.length === 0 && (
+            <div className="pl-2 text-bolt-elements-textTertiary">
+              {query ? 'No conversations match your search' : 'No previous conversations'}
+            </div>
+          )}
+
+          {/* Legacy list view (fallback) */}
+          {!USE_ENHANCED_SESSIONS && !loadingFromDb && list.length === 0 && (
             <div className="pl-2 text-bolt-elements-textTertiary">No previous conversations</div>
           )}
+
           <DialogRoot open={dialogContent !== null}>
-            {binDates(list).map(({ category, items }) => (
+            {/* Enhanced sessions rendering */}
+            {USE_ENHANCED_SESSIONS && sessions.length > 0 && (
+              <>
+                {binDates(
+                  sessions.map(s => ({
+                    id: s.id,
+                    urlId: s.urlId,
+                    description: s.title,
+                    messages: [],
+                    timestamp: s.updatedAt,
+                  }))
+                ).map(({ category, items }) => (
+                  <div key={category} className="mt-4 first:mt-0 space-y-1">
+                    <div className="text-bolt-elements-textTertiary sticky top-0 z-1 bg-bolt-elements-background-depth-2 pl-2 pt-2 pb-1">
+                      {category}
+                    </div>
+                    {items.map((item) => {
+                      const session = sessions.find(s => s.id === item.id);
+                      if (!session) return null;
+                      return (
+                        <EnhancedHistoryItem
+                          key={session.id}
+                          session={session}
+                          onDelete={() => setDialogContent({
+                            type: 'delete',
+                            item: {
+                              id: session.id,
+                              urlId: session.urlId,
+                              description: session.title,
+                              messages: [],
+                              timestamp: session.updatedAt,
+                            }
+                          })}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Legacy rendering */}
+            {!USE_ENHANCED_SESSIONS && binDates(list).map(({ category, items }) => (
               <div key={category} className="mt-4 first:mt-0 space-y-1">
                 <div className="text-bolt-elements-textTertiary sticky top-0 z-1 bg-bolt-elements-background-depth-2 pl-2 pt-2 pb-1">
                   {category}
@@ -298,6 +364,7 @@ export function Menu() {
                 ))}
               </div>
             ))}
+
             <Dialog onBackdrop={closeDialog} onClose={closeDialog}>
               {dialogContent?.type === 'delete' && (
                 <>

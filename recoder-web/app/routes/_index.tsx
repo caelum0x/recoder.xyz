@@ -42,34 +42,36 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         const { neon } = await import('@neondatabase/serverless');
         const sql = neon(databaseUrl);
         
-        // Get project details
+        // Get project details including framework and templateId for container config
         const projects = await sql`
-          SELECT id, name, type, description FROM projects WHERE id = ${projectId}
+          SELECT id, name, type, description, framework, "templateId" FROM projects WHERE id = ${projectId}
         `;
         const project = projects[0];
-        
+
         if (!project) {
           return json({ error: 'Project not found' });
         }
-        
+
         // Find most recent chat for this project
         const chats = await sql`
-          SELECT id, "urlId" FROM chat_sessions 
+          SELECT id, "urlId" FROM chat_sessions
           WHERE "projectId" = ${projectId}
           ORDER BY "updatedAt" DESC
           LIMIT 1
         `;
-        
+
         if (chats.length > 0) {
           // Redirect to existing chat
           return redirect(`/chat/${chats[0].urlId || chats[0].id}`);
         }
-        
+
         // No existing chat - return project info for display
-        return json({ 
-          projectId, 
+        return json({
+          projectId,
           projectName: project.name,
-          projectType: project.type 
+          projectType: project.type,
+          projectFramework: project.framework || undefined,
+          projectTemplateId: project.templateId || undefined,
         });
       } catch (e) {
         console.error('Error loading project:', e);

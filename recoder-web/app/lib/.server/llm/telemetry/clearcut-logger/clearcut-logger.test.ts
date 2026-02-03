@@ -121,6 +121,7 @@ describe('ClearcutLogger', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   function setup({
@@ -128,8 +129,8 @@ describe('ClearcutLogger', () => {
     lifetimeGoogleAccounts = 1,
     cachedGoogleAccount = 'test@google.com',
   } = {}) {
-    server.resetHandlers(
-      http.post(CLEARCUT_URL, () => HttpResponse.text(EXAMPLE_RESPONSE)),
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(EXAMPLE_RESPONSE, { status: 200 }),
     );
 
     vi.useFakeTimers();
@@ -467,7 +468,9 @@ describe('ClearcutLogger', () => {
     it('should handle a network error and requeue events', async () => {
       const { logger } = setup();
 
-      server.resetHandlers(http.post(CLEARCUT_URL, () => HttpResponse.error()));
+      vi.mocked(global.fetch).mockRejectedValueOnce(
+        new Error('Network error'),
+      );
       logger!.enqueueLogEvent(logger!.createLogEvent(EventNames.API_REQUEST));
       logger!.enqueueLogEvent(logger!.createLogEvent(EventNames.API_ERROR));
       expect(getEventsSize(logger!)).toBe(2);
@@ -485,17 +488,11 @@ describe('ClearcutLogger', () => {
     it('should handle an HTTP error and requeue events', async () => {
       const { logger } = setup();
 
-      server.resetHandlers(
-        http.post(
-          CLEARCUT_URL,
-          () =>
-            new HttpResponse(
-              { 'the system is down': true },
-              {
-                status: 500,
-              },
-            ),
-        ),
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        new Response('server error', {
+          status: 500,
+          statusText: 'Server error',
+        }),
       );
 
       logger!.enqueueLogEvent(logger!.createLogEvent(EventNames.API_REQUEST));

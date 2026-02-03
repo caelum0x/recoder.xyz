@@ -13,8 +13,21 @@ import type { CommandContext } from '../../src/ui/commands/types.js';
 
 describe('File Operations Commands', () => {
   let mockContext: CommandContext;
+  let mockToolRegistry: any;
 
   beforeEach(() => {
+    mockToolRegistry = {
+      getTool: (name: string) => {
+        const tools: Record<string, any> = {
+          ls: { name: 'ls', execute: () => undefined },
+          ripgrep: { name: 'ripgrep', execute: () => undefined },
+          grep: { name: 'grep', execute: () => undefined },
+          glob: { name: 'glob', execute: () => undefined },
+        };
+        return tools[name];
+      },
+    };
+
     mockContext = {
       services: {
         config: {
@@ -23,6 +36,7 @@ describe('File Operations Commands', () => {
             if (key === 'workspaceDirectories') return ['/mock/workspace'];
             return undefined;
           },
+          getToolRegistry: () => mockToolRegistry,
         },
       },
       invocation: {
@@ -48,7 +62,7 @@ describe('File Operations Commands', () => {
     });
 
     it('should support listing files in current directory', async () => {
-      const result = await filesCommand.action?.();
+      const result = await filesCommand.action?.(mockContext, '');
       expect(result).toBeDefined();
     });
 
@@ -60,7 +74,7 @@ describe('File Operations Commands', () => {
           args: '/test/path',
         },
       };
-      const result = await filesCommand.action?.(contextWithPath);
+      const result = await filesCommand.action?.(contextWithPath, '/test/path');
       expect(result).toBeDefined();
     });
 
@@ -72,7 +86,10 @@ describe('File Operations Commands', () => {
           args: '/nonexistent/impossible/path/12345',
         },
       };
-      const result = await filesCommand.action?.(contextWithInvalidPath);
+      const result = await filesCommand.action?.(
+        contextWithInvalidPath,
+        '/nonexistent/impossible/path/12345',
+      );
       expect(result).toBeDefined();
       // Should return error or empty result, not throw
     });
@@ -86,7 +103,7 @@ describe('File Operations Commands', () => {
     });
 
     it('should require search query', async () => {
-      const result = await searchCommand.action?.(mockContext);
+      const result = await searchCommand.action?.(mockContext, '');
       expect(result).toBeDefined();
       if (result && 'type' in result && result.type === 'message') {
         // Should show usage or error
@@ -102,7 +119,7 @@ describe('File Operations Commands', () => {
           args: 'test query',
         },
       };
-      const result = await searchCommand.action?.(contextWithQuery);
+      const result = await searchCommand.action?.(contextWithQuery, 'test query');
       expect(result).toBeDefined();
     });
 
@@ -114,7 +131,7 @@ describe('File Operations Commands', () => {
           args: '-i test',
         },
       };
-      const result = await searchCommand.action?.(contextWithFlags);
+      const result = await searchCommand.action?.(contextWithFlags, '-i test');
       expect(result).toBeDefined();
     });
   });
@@ -127,7 +144,7 @@ describe('File Operations Commands', () => {
     });
 
     it('should require file pattern', async () => {
-      const result = await findCommand.action?.(mockContext);
+      const result = await findCommand.action?.(mockContext, '');
       expect(result).toBeDefined();
       if (result && 'type' in result && result.type === 'message') {
         // Should show usage or error
@@ -143,7 +160,7 @@ describe('File Operations Commands', () => {
           args: '*.ts',
         },
       };
-      const result = await findCommand.action?.(contextWithPattern);
+      const result = await findCommand.action?.(contextWithPattern, '*.ts');
       expect(result).toBeDefined();
     });
 
@@ -155,7 +172,10 @@ describe('File Operations Commands', () => {
           args: '*.ts *.js',
         },
       };
-      const result = await findCommand.action?.(contextWithMultiplePatterns);
+      const result = await findCommand.action?.(
+        contextWithMultiplePatterns,
+        '*.ts *.js',
+      );
       expect(result).toBeDefined();
     });
   });
@@ -168,7 +188,7 @@ describe('File Operations Commands', () => {
     });
 
     it('should support listing current directory tree', async () => {
-      const result = await treeCommand.action?.();
+      const result = await treeCommand.action?.(mockContext, '');
       expect(result).toBeDefined();
     });
 
@@ -180,7 +200,7 @@ describe('File Operations Commands', () => {
           args: '-L 2',
         },
       };
-      const result = await treeCommand.action?.(contextWithDepth);
+      const result = await treeCommand.action?.(contextWithDepth, '-L 2');
       expect(result).toBeDefined();
     });
 
@@ -192,7 +212,7 @@ describe('File Operations Commands', () => {
           args: '/test/path',
         },
       };
-      const result = await treeCommand.action?.(contextWithPath);
+      const result = await treeCommand.action?.(contextWithPath, '/test/path');
       expect(result).toBeDefined();
     });
   });

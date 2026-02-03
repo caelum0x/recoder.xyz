@@ -148,10 +148,15 @@ describe('subagentGenerator', () => {
       incompleteResponse,
     );
 
-    await expect(
-      subagentGenerator(userDescription, mockGeminiClient, abortSignal),
-    ).rejects.toThrow('Invalid response from LLM: missing required fields');
+    const result = await subagentGenerator(
+      userDescription,
+      mockGeminiClient,
+      abortSignal,
+    );
 
+    expect(result.name).toBe('doc-helper');
+    expect(result.description).toBe('Helps with documentation');
+    expect(result.systemPrompt).toContain('You are an expert assistant');
     expect(mockGeminiClient.generateJson).toHaveBeenCalledTimes(1);
   });
 
@@ -167,9 +172,14 @@ describe('subagentGenerator', () => {
       emptyFieldsResponse,
     );
 
-    await expect(
-      subagentGenerator(userDescription, mockGeminiClient, abortSignal),
-    ).rejects.toThrow('Invalid response from LLM: missing required fields');
+    const result = await subagentGenerator(
+      userDescription,
+      mockGeminiClient,
+      abortSignal,
+    );
+    expect(result.name).toBe('database-optimization');
+    expect(result.description).toBe('Helps with database optimization');
+    expect(result.systemPrompt).toBe('You are a database expert.');
   });
 
   it('should throw error when generateJson throws an error', async () => {
@@ -204,7 +214,7 @@ describe('subagentGenerator', () => {
           description: expect.objectContaining({ type: 'string' }),
           systemPrompt: expect.objectContaining({ type: 'string' }),
         }),
-        required: ['name', 'description', 'systemPrompt'],
+        required: ['name', 'systemPrompt'],
       }),
       abortSignal,
       DEFAULT_QWEN_MODEL,
@@ -256,7 +266,9 @@ describe('subagentGenerator', () => {
 
     await expect(
       subagentGenerator(userDescription, mockGeminiClient, abortSignal),
-    ).rejects.toThrow('Invalid response from LLM: missing required fields');
+    ).rejects.toThrow(
+      'Failed to generate subagent: LLM returned invalid response (not an object)',
+    );
   });
 
   it('should throw error for undefined response from generateJson', async () => {
@@ -265,6 +277,8 @@ describe('subagentGenerator', () => {
 
     await expect(
       subagentGenerator(userDescription, mockGeminiClient, abortSignal),
-    ).rejects.toThrow('Invalid response from LLM: missing required fields');
+    ).rejects.toThrow(
+      'Failed to generate subagent: LLM returned invalid response (not an object)',
+    );
   });
 });

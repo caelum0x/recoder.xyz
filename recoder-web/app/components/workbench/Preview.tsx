@@ -2,9 +2,41 @@ import { useStore } from '@nanostores/react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { streamingStore } from '~/lib/stores/streaming';
 import { PortDropdown } from './PortDropdown';
-import { dockerGet } from '~/lib/services/docker-api';
-import { classNames } from '~/utils/classNames';
+import { DeviceFrame } from './DeviceFrame';
+import { PreviewToolbar } from './PreviewToolbar';
+import { ExpoQRPanel } from './ExpoQRPanel';
+import { dockerGet, dockerPost } from '~/lib/services/docker-api';
+import {
+  previewDeviceState,
+  selectedDevice,
+  effectiveDimensions,
+  calculateFitScale,
+} from '~/lib/stores/preview-device';
+import {
+  visualEditingEnabled,
+  selectComponent,
+  clearSelection,
+  updateComponentStyles,
+  updateComponentCoordinates,
+  setHasStaticText,
+  setDynamicallyStyled,
+  type SelectedComponent,
+} from '~/lib/stores/visual-editing';
+import { VisualEditingToolbar, VisualEditingToggle } from './VisualEditingToolbar';
+import { ContainerCreationStatus } from './ContainerCreationStatus';
+import { ErrorBanner, type RuntimeError } from './ErrorBanner';
+
+// Maximum number of runtime errors to keep in state
+const MAX_RUNTIME_ERRORS = 10;
+
+// Coalesced refresh configuration
+const REFRESH_COALESCE_MS = 1200; // Combine refreshes within this window
+
+// Loading timeout thresholds (ms)
+const FORCE_REFRESH_VISIBLE_MS = 10_000; // Show force-refresh after 10s
+const LOADING_TIMEOUT_MS = 30_000; // Show timeout message after 30s
 
 export const Preview = memo(() => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -14,267 +46,652 @@ export const Preview = memo(() => {
   const hasSelectedPreview = useRef(false);
   const previews = useStore(workbenchStore.previews);
   const activePreview = previews[activePreviewIndex];
+  const isVisualEditing = useStore(visualEditingEnabled);
 
   const [url, setUrl] = useState('');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showLogsModal, setShowLogsModal] = useState(false);
-  const [logs, setLogs] = useState<string>('');
-  const [isFetchingLogs, setIsFetchingLogs] = useState(false);
 
-  // Tunnel state for public URL sharing
-  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
-  const [tunnelLoading, setTunnelLoading] = useState(false);
-  const [showTunnelCopied, setShowTunnelCopied] = useState(false);
+  // Runtime error state for ErrorBanner
+  const [runtimeErrors, setRuntimeErrors] = useState<RuntimeError[]>([]);
+  const streamingState = useStore(streamingStore);
 
-  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const healthTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
-  const healthPollInterval = 5000; // ms
-  const maxRetries = 10; // 10 retries total
-  const firstLoadTimeout = 45000; // First attempt: 45 seconds (matches backend health check)
-  const retryLoadTimeout = 10000; // Subsequent attempts: 10 seconds
+  // Loading / timeout state
+  const [isIframeLoaded, setIsIframeLoaded] = useState(false);
+  const [loadingElapsed, setLoadingElapsed] = useState(0);
+  const loadingStartRef = useRef<number | null>(null);
+  const loadingTimerRef = useRef<ReturnType<typeof setInterval>>();
 
-  // Set credentialless attribute on iframe (can't be done in JSX due to React warning)
+  // Project type detection for Expo mode switcher
+  const projectId = useStore(workbenchStore.projectId);
+  const containerReady = useStore(workbenchStore.containerReady);
+  const [projectType, setProjectType] = useState<string>('unknown');
+  const [previewMode, setPreviewMode] = useState<'web' | 'expo-go'>('web');
+
+  // Dev server restart state
+  const [isRestartingDevServer, setIsRestartingDevServer] = useState(false);
+  const [devServerStatus, setDevServerStatus] = useState<'unknown' | 'running' | 'stopped' | 'starting'>('unknown');
+
   useEffect(() => {
-    if (iframeRef.current) {
-      iframeRef.current.setAttribute('credentialless', 'true');
-    }
-  }, [iframeUrl, retryCount]);
+    // Don't detect project type until container is ready
+    if (!projectId || !containerReady) return;
 
-  // Clear timers on unmount
-  useEffect(() => {
+    let cancelled = false;
+
+    dockerGet<{ type: string }>(`/api/project-type/${projectId}`, { skipRetry: true, timeout: 10000 })
+      .then((data) => {
+        if (!cancelled && data?.type) {
+          setProjectType(data.type);
+        }
+      })
+      .catch(() => {
+        // Silently ignore - project type detection is best-effort
+        if (!cancelled) {
+          setProjectType('unknown');
+        }
+      });
+
     return () => {
-      if (retryTimerRef.current) {
-        clearTimeout(retryTimerRef.current);
+      cancelled = true;
+    };
+  }, [projectId, containerReady]);
+
+  // Device preview stores
+  const deviceState = useStore(previewDeviceState);
+  const device = useStore(selectedDevice);
+  const dims = useStore(effectiveDimensions);
+
+  // Container measurement for fit-scale calculation
+  const deviceContainerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = deviceContainerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setContainerSize({ width, height });
       }
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-      }
-      if (healthTimerRef.current) {
-        clearTimeout(healthTimerRef.current);
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // ---------- Loading timeout tracking ----------
+  // Start / reset the loading timer whenever the iframe URL changes
+  useEffect(() => {
+    if (iframeUrl && !previewError) {
+      setIsIframeLoaded(false);
+      setLoadingElapsed(0);
+      loadingStartRef.current = Date.now();
+
+      loadingTimerRef.current = setInterval(() => {
+        if (loadingStartRef.current) {
+          setLoadingElapsed(Date.now() - loadingStartRef.current);
+        }
+      }, 1_000);
+    }
+
+    return () => {
+      if (loadingTimerRef.current) {
+        clearInterval(loadingTimerRef.current);
+        loadingTimerRef.current = undefined;
       }
     };
-  }, []);
+  }, [iframeUrl, previewError]);
 
-  // Handle iframe successful load
-  const handleIframeLoad = useCallback(() => {
-    console.log('✅ [Preview] Iframe loaded successfully');
-
-    // Clear load timeout
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-      loadTimeoutRef.current = null;
+  // Stop the timer once the iframe reports it has loaded
+  useEffect(() => {
+    if (isIframeLoaded && loadingTimerRef.current) {
+      clearInterval(loadingTimerRef.current);
+      loadingTimerRef.current = undefined;
+      loadingStartRef.current = null;
+      setLoadingElapsed(0);
     }
-    // Clear health polling when iframe successfully loads
-    if (healthTimerRef.current) {
-      clearTimeout(healthTimerRef.current);
-      healthTimerRef.current = null;
-    }
-    setIsCheckingHealth(false);
+  }, [isIframeLoaded]);
 
-    setIsLoading(false);
+  const showForceRefresh = previewError || (!isIframeLoaded && loadingElapsed >= FORCE_REFRESH_VISIBLE_MS);
+  const hasTimedOut = !isIframeLoaded && loadingElapsed >= LOADING_TIMEOUT_MS;
+
+  /** Completely tear down and rebuild the iframe src for a hard refresh */
+  const forceRefreshPreview = useCallback(() => {
+    if (iframeRef.current && iframeUrl) {
+      setIsIframeLoaded(false);
+      setPreviewError(null);
+      setRuntimeErrors([]);
+      setLoadingElapsed(0);
+      loadingStartRef.current = Date.now();
+      iframeRef.current.src = '';
+      // Small delay so the browser actually clears the frame
+      requestAnimationFrame(() => {
+        if (iframeRef.current) {
+          iframeRef.current.src = iframeUrl;
+        }
+      });
+    }
+  }, [iframeUrl]);
+
+  /** Restart the dev server via backend API */
+  const restartDevServer = useCallback(async () => {
+    if (!projectId || isRestartingDevServer) return;
+    
+    setIsRestartingDevServer(true);
+    setDevServerStatus('starting');
     setPreviewError(null);
-    setRetryCount(0);
-  }, []);
-
-  // Handle iframe error or timeout with retry logic
-  const handleIframeError = useCallback((reason: any = 'error') => {
-    console.warn(`⚠️ [Preview] Iframe load ${typeof reason === 'string' ? reason : 'error'} (attempt ${retryCount + 1}/${maxRetries})`);
-
-    // Clear load timeout
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-      loadTimeoutRef.current = null;
-    }
-
-    if (retryCount < maxRetries) {
-      // Exponential backoff: 1s, 2s, 4s, 8s, then cap at 5s
-      const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
-
-      console.log(`🔄 [Preview] Retrying in ${delay}ms...`);
-      setIsLoading(true);
-
-      retryTimerRef.current = setTimeout(() => {
-        setRetryCount(prev => prev + 1);
-        // Force iframe reload - the iframe's onLoad/onError will be triggered naturally
-        if (iframeRef.current && activePreview) {
-          console.log(`🔄 [Preview] Reloading iframe (attempt ${retryCount + 2}/${maxRetries})`);
-          iframeRef.current.src = activePreview.baseUrl;
-        }
-      }, delay);
-    } else {
-      console.error('❌ [Preview] Max retries reached, attempting auto-fix');
-      setIsLoading(false);
-      setPreviewError('Dev server not responding after multiple retries. Check terminal for errors.');
+    
+    try {
+      await dockerPost('/api/dev-server/restart', { projectId });
+      console.log('[Preview] Dev server restart requested');
       
-      // Auto-fetch errors and trigger AI fix (inline to avoid hoisting issues)
-      (async () => {
-        if (!activePreview) return;
-        let pid: string | undefined = (activePreview as any).projectId;
-        if (!pid && activePreview.baseUrl) {
-          try {
-            const u = new URL(activePreview.baseUrl);
-            const parts = u.pathname.split('/').filter(Boolean);
-            const idx = parts.indexOf('preview');
-            if (idx >= 0 && parts.length > idx + 1) pid = parts[idx + 1];
-          } catch {}
-        }
-        if (!pid || pid === 'undefined' || pid === 'null') return;
-        
-        let errorPrompt = '';
-        
+      // Poll for dev server to become ready
+      let attempts = 0;
+      const maxAttempts = 30; // 30 seconds max
+      const pollInterval = setInterval(async () => {
+        attempts++;
         try {
-          // First try to get Vite error directly from preview response
-          const previewResp = await fetch(activePreview.baseUrl, { signal: AbortSignal.timeout(5000) });
-          const html = await previewResp.text();
+          const state = await dockerGet<{ devServerRunning: boolean }>(`/api/workspace-state/${projectId}`, { 
+            timeout: 2000, 
+            skipRetry: true 
+          });
           
-          // Extract missing package from Vite error
-          // Pattern: Failed to resolve import "package-name"
-          const importMatch = html.match(/Failed to resolve import "([^"]+)"/);
-          if (importMatch) {
-            const packageName = importMatch[1];
-            console.log('🔍 [Preview] Found missing package:', packageName);
-            errorPrompt = `Build error: Missing npm package "${packageName}". Please add it to package.json and run: bun add ${packageName}`;
-          } else {
-            // Try to find other Vite errors
-            const errorMatch = html.match(/"message":"([^"]{10,200})"/);
-            if (errorMatch && (errorMatch[1].includes('Failed') || errorMatch[1].includes('Error'))) {
-              console.log('🔍 [Preview] Found Vite error:', errorMatch[1]);
-              errorPrompt = `Build error: ${errorMatch[1]}`;
-            }
+          if (state?.devServerRunning) {
+            clearInterval(pollInterval);
+            setDevServerStatus('running');
+            setIsRestartingDevServer(false);
+            forceRefreshPreview();
+            console.log('[Preview] Dev server is now running');
+          } else if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setDevServerStatus('stopped');
+            setIsRestartingDevServer(false);
+            setPreviewError('Dev server failed to start. Check the terminal for errors.');
           }
         } catch (e) {
-          console.warn('[Preview] Failed to fetch preview for error parsing:', e);
-        }
-        
-        // If no Vite error found, try the errors API
-        if (!errorPrompt) {
-          try {
-            const data = await dockerGet<{ errors?: any[]; hasBlockingErrors?: boolean }>(`/api/errors/${pid}?tail=200`);
-            if (data.errors?.length || data.hasBlockingErrors) {
-              const { formatErrorsForAI } = await import('~/lib/services/auto-fix');
-              errorPrompt = formatErrorsForAI(data.errors || []) || '';
-            }
-          } catch (e) {
-            console.warn('[Preview] Auto-fix fetch failed:', e);
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setDevServerStatus('stopped');
+            setIsRestartingDevServer(false);
+            setPreviewError('Failed to check dev server status.');
           }
         }
-        
-        if (errorPrompt) {
-          console.log('🤖 [Preview] Auto-triggering AI fix for build errors');
-          window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
-            detail: { prompt: errorPrompt, auto: true }
-          }));
-        }
-      })();
+      }, 1000);
+      
+    } catch (err: any) {
+      console.error('[Preview] Failed to restart dev server:', err);
+      setIsRestartingDevServer(false);
+      setDevServerStatus('stopped');
+      setPreviewError(`Failed to restart dev server: ${err.message || 'Unknown error'}`);
     }
-  }, [retryCount, maxRetries, activePreview]);
+  }, [projectId, isRestartingDevServer, forceRefreshPreview]);
 
-  // Effect for initial load - only runs when activePreview changes
+  /** Clear error state and reload */
+  const retryPreview = useCallback(() => {
+    setPreviewError(null);
+    setRuntimeErrors([]);
+    setIsIframeLoaded(false);
+    setLoadingElapsed(0);
+    loadingStartRef.current = Date.now();
+
+    if (iframeRef.current && iframeUrl) {
+      iframeRef.current.src = '';
+      requestAnimationFrame(() => {
+        if (iframeRef.current) {
+          iframeRef.current.src = iframeUrl;
+        }
+      });
+    }
+  }, [iframeUrl]);
+
+  /** Called when the iframe fires its onLoad event */
+  const handleIframeLoad = useCallback(() => {
+    setIsIframeLoaded(true);
+  }, []);
+  // ---------- End loading timeout tracking ----------
+
+  // ---------- Runtime error capture ----------
+  // Clear runtime errors when iframe URL changes (new navigation / reload)
+  useEffect(() => {
+    setRuntimeErrors([]);
+  }, [iframeUrl]);
+
+  const dismissRuntimeErrors = useCallback(() => {
+    setRuntimeErrors([]);
+  }, []);
+
+  // Listen for runtime error messages posted from the preview iframe
+  useEffect(() => {
+    const handleRuntimeError = (event: MessageEvent) => {
+      // Accept both namespaced and generic error message types from the iframe
+      const type = event.data?.type;
+
+      if (
+        type !== 'recoder:runtime-error' &&
+        type !== 'error' &&
+        type !== 'unhandledrejection'
+      ) {
+        return;
+      }
+
+      const errorData = event.data.data || event.data;
+      const runtimeError: RuntimeError = {
+        message: errorData.message || errorData.error || String(errorData),
+        stack: errorData.stack,
+        filename: errorData.filename,
+        lineno: errorData.lineno,
+        colno: errorData.colno,
+        timestamp: Date.now(),
+      };
+
+      setRuntimeErrors((prev) => {
+        // Deduplicate: skip if the same message was recorded in the last 2 seconds
+        const isDuplicate = prev.some(
+          (e) =>
+            e.message === runtimeError.message &&
+            runtimeError.timestamp - e.timestamp < 2000,
+        );
+
+        if (isDuplicate) return prev;
+
+        const next = [...prev, runtimeError];
+
+        // Cap the list so we don't accumulate unbounded entries
+        return next.length > MAX_RUNTIME_ERRORS ? next.slice(-MAX_RUNTIME_ERRORS) : next;
+      });
+    };
+
+    window.addEventListener('message', handleRuntimeError);
+    return () => window.removeEventListener('message', handleRuntimeError);
+  }, []);
+  // ---------- End runtime error capture ----------
+
+  // ---------- Auto-fix for runtime errors ----------
+  // Trigger auto-fix when runtime errors are detected (debounced)
+  const runtimeErrorFixRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFixedRuntimeErrorRef = useRef<string>('');
+  
+  useEffect(() => {
+    // Only trigger if we have errors and not currently streaming
+    if (runtimeErrors.length === 0 || streamingState.isStreaming) {
+      return;
+    }
+
+    // Clear any pending fix
+    if (runtimeErrorFixRef.current) {
+      clearTimeout(runtimeErrorFixRef.current);
+    }
+
+    // Debounce the fix trigger
+    runtimeErrorFixRef.current = setTimeout(() => {
+      // Check if these are the same errors we already tried to fix
+      const errorHash = runtimeErrors.map(e => e.message).join('|');
+      if (errorHash === lastFixedRuntimeErrorRef.current) {
+        console.log('[Preview] Skipping auto-fix - same runtime errors as last attempt');
+        return;
+      }
+      
+      lastFixedRuntimeErrorRef.current = errorHash;
+      
+      // Format errors for AI
+      const errorDetails = runtimeErrors.map((error, index) => {
+        let detail = `Runtime Error ${index + 1}: ${error.message}`;
+        if (error.filename) {
+          detail += `\nFile: ${error.filename}`;
+          if (error.lineno) {
+            detail += `:${error.lineno}`;
+            if (error.colno) detail += `:${error.colno}`;
+          }
+        }
+        if (error.stack) {
+          detail += `\n\nStack trace:\n${error.stack}`;
+        }
+        return detail;
+      }).join('\n\n---\n\n');
+
+      const prompt = `[AUTO-FIX] Fix these runtime errors blocking the preview:\n\n${errorDetails}\n\nPlease fix all errors above. The app crashed with these errors at runtime.`;
+      
+      console.log('[Preview] Triggering auto-fix for runtime errors:', runtimeErrors.length);
+      
+      window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+        detail: {
+          prompt,
+          auto: true,
+          errors: runtimeErrors.map((e, i) => ({
+            id: `runtime-${Date.now()}-${i}`,
+            type: 'runtime' as const,
+            severity: 'error' as const,
+            message: e.message,
+            shortMessage: e.message.substring(0, 100),
+            filePath: e.filename,
+            line: e.lineno,
+            column: e.colno,
+            source: 'runtime' as const,
+            rawError: e.stack || e.message,
+            timestamp: e.timestamp,
+          })),
+        }
+      }));
+    }, 2000); // 2 second debounce
+    
+    return () => {
+      if (runtimeErrorFixRef.current) {
+        clearTimeout(runtimeErrorFixRef.current);
+      }
+    };
+  }, [runtimeErrors, streamingState.isStreaming]);
+  // ---------- End auto-fix for runtime errors ----------
+
+  // ---------- Visual editing ----------
+  // Listen for postMessage events from the iframe for visual editing
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.data?.type?.startsWith('recoder:')) return;
+
+      switch (event.data.type) {
+        case 'recoder:component-selected': {
+          const data = event.data.data as SelectedComponent;
+          selectComponent(data);
+          if (data.computedStyles) {
+            updateComponentStyles(data.computedStyles);
+          }
+          setHasStaticText(!!data.textContent);
+          break;
+        }
+        case 'recoder:component-deselected': {
+          clearSelection();
+          break;
+        }
+        case 'recoder:coordinates-updated': {
+          updateComponentCoordinates(event.data.data);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  /** Inject visual editing script into the preview iframe */
+  const injectVisualEditingScript = useCallback(() => {
+    if (!iframeRef.current?.contentWindow || !isVisualEditing) return;
+
+    try {
+      const iframeDoc = iframeRef.current.contentDocument;
+      if (!iframeDoc) return;
+
+      // Remove existing script if any
+      const existing = iframeDoc.getElementById('recoder-visual-editing');
+      if (existing) existing.remove();
+
+      const script = iframeDoc.createElement('script');
+      script.id = 'recoder-visual-editing';
+      script.textContent = `
+        (function() {
+          let overlay = null;
+          let selectedEl = null;
+
+          function createOverlay() {
+            if (overlay) return overlay;
+            overlay = document.createElement('div');
+            overlay.id = 'recoder-ve-overlay';
+            overlay.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;border:2px solid #6366f1;background:rgba(99,102,241,0.1);transition:all 0.15s ease;display:none;';
+            document.body.appendChild(overlay);
+            return overlay;
+          }
+
+          function positionOverlay(el) {
+            const ov = createOverlay();
+            const rect = el.getBoundingClientRect();
+            ov.style.top = rect.top + 'px';
+            ov.style.left = rect.left + 'px';
+            ov.style.width = rect.width + 'px';
+            ov.style.height = rect.height + 'px';
+            ov.style.display = 'block';
+          }
+
+          function getComputedStyleData(el) {
+            const cs = window.getComputedStyle(el);
+            return {
+              margin: { top: cs.marginTop, right: cs.marginRight, bottom: cs.marginBottom, left: cs.marginLeft },
+              padding: { top: cs.paddingTop, right: cs.paddingRight, bottom: cs.paddingBottom, left: cs.paddingLeft },
+              border: { width: cs.borderWidth, radius: cs.borderRadius, color: cs.borderColor, style: cs.borderStyle },
+              backgroundColor: cs.backgroundColor,
+              text: { fontSize: cs.fontSize, fontWeight: cs.fontWeight, fontFamily: cs.fontFamily, color: cs.color, lineHeight: cs.lineHeight },
+            };
+          }
+
+          function getComponentName(el) {
+            // Try React fiber
+            const key = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+            if (key) {
+              let fiber = el[key];
+              while (fiber) {
+                if (fiber.type && typeof fiber.type === 'function') {
+                  return fiber.type.displayName || fiber.type.name || 'Component';
+                }
+                fiber = fiber.return;
+              }
+            }
+            return el.tagName.toLowerCase();
+          }
+
+          document.addEventListener('mouseover', function(e) {
+            if (!document.body.dataset.veEnabled) return;
+            positionOverlay(e.target);
+          });
+
+          document.addEventListener('mouseout', function(e) {
+            if (!document.body.dataset.veEnabled) return;
+            if (!selectedEl) {
+              const ov = document.getElementById('recoder-ve-overlay');
+              if (ov) ov.style.display = 'none';
+            }
+          });
+
+          document.addEventListener('click', function(e) {
+            if (!document.body.dataset.veEnabled) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            const el = e.target;
+            selectedEl = el;
+            positionOverlay(el);
+
+            const rect = el.getBoundingClientRect();
+            const name = getComponentName(el);
+            const styles = getComputedStyleData(el);
+
+            window.parent.postMessage({
+              type: 'recoder:component-selected',
+              data: {
+                id: el.id || name + '-' + Math.random().toString(36).slice(2,8),
+                name: name,
+                filePath: '',
+                tagName: el.tagName.toLowerCase(),
+                textContent: el.childNodes.length === 1 && el.childNodes[0].nodeType === 3 ? el.textContent?.trim() : undefined,
+                computedStyles: styles,
+                bounds: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+              }
+            }, '*');
+          }, true);
+
+          // Listen for style modifications from parent
+          window.addEventListener('message', function(e) {
+            if (e.data?.type === 'recoder:modify-styles' && selectedEl) {
+              const s = e.data.data?.styles;
+              if (!s) return;
+              if (s.margin) { if (s.margin.top) selectedEl.style.marginTop = s.margin.top; if (s.margin.bottom) selectedEl.style.marginBottom = s.margin.bottom; if (s.margin.left) selectedEl.style.marginLeft = s.margin.left; if (s.margin.right) selectedEl.style.marginRight = s.margin.right; }
+              if (s.padding) { if (s.padding.top) selectedEl.style.paddingTop = s.padding.top; if (s.padding.bottom) selectedEl.style.paddingBottom = s.padding.bottom; if (s.padding.left) selectedEl.style.paddingLeft = s.padding.left; if (s.padding.right) selectedEl.style.paddingRight = s.padding.right; }
+              if (s.border) { if (s.border.width) selectedEl.style.borderWidth = s.border.width; if (s.border.radius) selectedEl.style.borderRadius = s.border.radius; if (s.border.color) selectedEl.style.borderColor = s.border.color; }
+              if (s.backgroundColor) selectedEl.style.backgroundColor = s.backgroundColor;
+              if (s.text) { if (s.text.fontSize) selectedEl.style.fontSize = s.text.fontSize; if (s.text.fontWeight) selectedEl.style.fontWeight = s.text.fontWeight; if (s.text.fontFamily) selectedEl.style.fontFamily = s.text.fontFamily; if (s.text.color) selectedEl.style.color = s.text.color; }
+              positionOverlay(selectedEl);
+            }
+            if (e.data?.type === 'recoder:remove-overlay') {
+              selectedEl = null;
+              const ov = document.getElementById('recoder-ve-overlay');
+              if (ov) ov.style.display = 'none';
+            }
+            if (e.data?.type === 'recoder:enable-ve') {
+              document.body.dataset.veEnabled = 'true';
+            }
+            if (e.data?.type === 'recoder:disable-ve') {
+              delete document.body.dataset.veEnabled;
+              selectedEl = null;
+              const ov = document.getElementById('recoder-ve-overlay');
+              if (ov) ov.style.display = 'none';
+            }
+          });
+        })();
+      `;
+      iframeDoc.head.appendChild(script);
+    } catch (e) {
+      // Cross-origin iframe - can't inject script, visual editing not available
+      console.warn('[Preview] Cannot inject visual editing script (cross-origin iframe)');
+    }
+  }, [isVisualEditing]);
+
+  // Inject or disable visual editing when toggled or when iframe loads
+  useEffect(() => {
+    if (isIframeLoaded) {
+      if (isVisualEditing) {
+        injectVisualEditingScript();
+        // Enable visual editing in iframe
+        iframeRef.current?.contentWindow?.postMessage({ type: 'recoder:enable-ve' }, '*');
+      } else {
+        // Disable visual editing in iframe
+        iframeRef.current?.contentWindow?.postMessage({ type: 'recoder:disable-ve' }, '*');
+        clearSelection();
+      }
+    }
+  }, [isVisualEditing, isIframeLoaded, injectVisualEditingScript]);
+  // ---------- End visual editing ----------
+
+  // Whether the preview should use a device frame (phone/tablet with non-responsive preset)
+  const isDeviceMode = !dims.isResponsive && (device.deviceType === 'phone' || device.deviceType === 'tablet');
+
+  // Compute the scale so the framed device fits inside the container
+  const fitScale = isDeviceMode
+    ? calculateFitScale(containerSize.width, containerSize.height, dims.width, dims.height, 40)
+    : 1;
+
+  // Use the smaller of fitScale and the user's chosen zoom so it always fits
+  const appliedScale = isDeviceMode ? Math.min(fitScale, deviceState.zoom) : 1;
+
+  // ---------- File-change coalesced refresh ----------
+  // Tracks pending file paths that will trigger a single refresh
+  const pendingRefreshPathsRef = useRef<Set<string>>(new Set());
+  const refreshTimerRef = useRef<NodeJS.Timeout>();
+
+  const executeRefresh = useCallback(() => {
+    if (iframeRef.current && iframeRef.current.src) {
+      const pathCount = pendingRefreshPathsRef.current.size;
+      if (pathCount > 0) {
+        console.log(`[Preview] Refreshing preview for ${pathCount} changed files`);
+      }
+      iframeRef.current.src = iframeRef.current.src;
+    }
+    pendingRefreshPathsRef.current.clear();
+  }, []);
+
+  const scheduleCoalescedRefresh = useCallback((changedPaths: string[]) => {
+    // Add new paths to the pending set (automatically deduplicates)
+    let newPathCount = 0;
+    for (const p of changedPaths) {
+      if (!pendingRefreshPathsRef.current.has(p)) {
+        pendingRefreshPathsRef.current.add(p);
+        newPathCount++;
+      }
+    }
+
+    // If all paths were already pending, skip rescheduling
+    if (newPathCount === 0) {
+      console.log('[Preview] All file paths already pending refresh, skipping');
+      return;
+    }
+
+    // Coalesce: reset the timer so rapid bursts are batched into one refresh
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = setTimeout(executeRefresh, REFRESH_COALESCE_MS);
+  }, [executeRefresh]);
+
+  // Listen for file change events and coalesce refreshes
+  useEffect(() => {
+    const handleFileChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        changes: Array<{ type: string; path: string }>;
+      }>;
+      const changes = customEvent.detail?.changes;
+      if (!changes || changes.length === 0) return;
+
+      const paths = changes.map((c) => c.path);
+      console.log(`[Preview] ${paths.length} file changes received, scheduling coalesced refresh`);
+      scheduleCoalescedRefresh(paths);
+    };
+
+    window.addEventListener('recoder:file-changed', handleFileChanged);
+    return () => {
+      window.removeEventListener('recoder:file-changed', handleFileChanged);
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, [scheduleCoalescedRefresh]);
+  // ---------- End file-change coalesced refresh ----------
+
+  // Listen for dev-server-ready event from workbench (container already had running server)
+  useEffect(() => {
+    const handleDevServerReady = () => {
+      // If we already have a preview URL, force refresh to pick up the running server
+      if (iframeUrl && iframeRef.current) {
+        forceRefreshPreview();
+      }
+    };
+
+    window.addEventListener('recoder:dev-server-ready', handleDevServerReady);
+    return () => window.removeEventListener('recoder:dev-server-ready', handleDevServerReady);
+  }, [iframeUrl, forceRefreshPreview]);
+
   useEffect(() => {
     if (!activePreview) {
       setUrl('');
       setIframeUrl(undefined);
       setPreviewError(null);
-      setRetryCount(0);
-      setIsLoading(false);
-
-      if (retryTimerRef.current) {
-        clearTimeout(retryTimerRef.current);
-      }
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
 
       return;
     }
 
-    const { baseUrl, ready } = activePreview;
+    const { baseUrl } = activePreview;
 
-    // Don't set iframe URL until dev server is ready
-    if (!ready) {
-      setUrl(baseUrl);
-      setIframeUrl(undefined); // Don't load iframe yet
-      setIsLoading(false);
-      console.log('🔄 [Preview] Waiting for dev server to be ready...');
-      return;
-    }
+    console.log('📺 [Preview] Active preview changed:', {
+      baseUrl,
+      port: activePreview.port,
+      ready: activePreview.ready,
+    });
 
-    // Preview is ready - load it
-    console.log('✅ [Preview] Dev server ready, loading preview:', baseUrl);
-    setRetryCount(0);
     setUrl(baseUrl);
     setIframeUrl(baseUrl);
     setPreviewError(null);
-    setIsLoading(true); // Show loading while iframe loads
-
-    if (retryTimerRef.current) {
-      clearTimeout(retryTimerRef.current);
-    }
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-      loadTimeoutRef.current = null;
-    }
-
-    // Verify preview URL is valid
+    
+    // Verify WebContainer is healthy
     if (!baseUrl || baseUrl === 'about:blank') {
       const errorMsg = 'Preview not ready. Make sure the development server is running.';
       setPreviewError(errorMsg);
-      setIsLoading(false);
       console.warn('⚠️ [Preview] Preview URL is not valid:', baseUrl);
       console.warn('⚠️ [Preview] This usually means:');
-      console.warn('  1. Docker container has not initialized');
+      console.warn('  1. WebContainer has not initialized');
       console.warn('  2. Dev server has not started');
       console.warn('  3. Port has not been exposed');
       console.warn('  Check workbench store for preview state');
     } else {
-      console.log(`🔍 [Preview] Starting preview for: ${baseUrl}`);
-
-      // Start load timeout - first load gets longer timeout
-      const timeout = firstLoadTimeout;
-      console.log(`⏱️ [Preview] Setting ${timeout}ms timeout for initial load`);
-
-      loadTimeoutRef.current = setTimeout(() => {
-        console.warn(`⏱️ [Preview] Load timeout after ${timeout}ms, triggering retry`);
-        handleIframeError('timeout');
-      }, timeout);
+      console.log('✅ [Preview] Preview URL is valid:', baseUrl);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePreview]); // Only re-run when activePreview changes
-
-  // Effect for retry timeouts - runs when retryCount changes
-  useEffect(() => {
-    // Skip if no active preview, initial load (retryCount=0), or error already shown
-    if (!activePreview || retryCount === 0 || previewError) {
-      return;
-    }
-
-    // Set timeout for this retry attempt
-    const timeout = retryLoadTimeout;
-    console.log(`⏱️ [Preview] Setting ${timeout}ms timeout for retry ${retryCount}`);
-
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
-    }
-
-    loadTimeoutRef.current = setTimeout(() => {
-      console.warn(`⏱️ [Preview] Retry ${retryCount} timeout after ${timeout}ms`);
-      handleIframeError('timeout');
-    }, timeout);
-
-    return () => {
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [retryCount]); // Run when retryCount changes (meaning a retry happened)
+  }, [activePreview, iframeUrl]);
 
   const validateUrl = useCallback(
     (value: string) => {
@@ -317,221 +734,49 @@ export const Preview = memo(() => {
     }
   };
 
-  // Listen for file changes from CLI tools (claude, recoder-code) to auto-refresh
-  useEffect(() => {
-    const handleFileChange = (event: CustomEvent) => {
-      console.log('[Preview] File changes detected from CLI, refreshing...');
-      // Small delay to let Vite hot reload process the changes
-      setTimeout(() => {
-        reloadPreview();
-      }, 500);
-    };
-
-    window.addEventListener('recoder:file-changed', handleFileChange as EventListener);
-    return () => {
-      window.removeEventListener('recoder:file-changed', handleFileChange as EventListener);
-    };
-  }, []);
-
-  // Resolve projectId helper (shared by logs and health checks)
-  const resolveProjectId = useCallback((): string | undefined => {
-    if (!activePreview) return undefined;
-    let pid: string | undefined = (activePreview as any).projectId;
-    if (!pid && activePreview.baseUrl) {
-      try {
-        const u = new URL(activePreview.baseUrl);
-        const parts = u.pathname.split('/').filter(Boolean);
-        const previewIndex = parts.indexOf('preview');
-        if (previewIndex >= 0 && parts.length > previewIndex + 1) {
-          pid = parts[previewIndex + 1];
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-    if (!pid || pid === 'undefined' || pid === 'null') return undefined;
-    return pid;
-  }, [activePreview]);
-
-  const fetchPreviewHealth = useCallback(async () => {
-    const pid = resolveProjectId();
-    if (!pid) return false;
-
-    try {
-      const resp = await fetch(`/api/preview/${encodeURIComponent(pid)}/health`);
-      if (!resp.ok) return false;
-      const json = await resp.json().catch(() => ({})) as { ports?: Array<{ responding?: boolean }> };
-      // If any port is responding, consider healthy
-      if (Array.isArray(json.ports)) {
-        return json.ports.some((p) => p.responding === true);
-      }
-      return false;
-    } catch (err) {
-      return false;
-    }
-  }, [resolveProjectId]);
-
-  // Poll health endpoint when previewError is present to perform heartbeat/reconnect
-  useEffect(() => {
-    let cancelled = false;
-    const startPolling = async () => {
-      if (!activePreview || !previewError) return;
-      setIsCheckingHealth(true);
-
-      const healthy = await fetchPreviewHealth();
-      if (cancelled) return;
-
-      if (healthy) {
-        console.log('💓 [Preview] Healthy again; reloading iframe');
-        setPreviewError(null);
-        setRetryCount(0);
-        setIsLoading(true);
-        if (iframeRef.current && activePreview) {
-          iframeRef.current.src = activePreview.baseUrl;
-        }
-        setIsCheckingHealth(false);
-        if (healthTimerRef.current) {
-          clearTimeout(healthTimerRef.current);
-          healthTimerRef.current = null;
-        }
-        return;
-      }
-
-      // schedule next poll
-      if (!cancelled) {
-        healthTimerRef.current = setTimeout(() => startPolling(), healthPollInterval);
-      }
-    };
-
-    if (previewError && activePreview) {
-      // start initial poll immediately
-      startPolling();
-    }
-
-    return () => {
-      cancelled = true;
-      if (healthTimerRef.current) {
-        clearTimeout(healthTimerRef.current);
-        healthTimerRef.current = null;
-      }
-      setIsCheckingHealth(false);
-    };
-  }, [previewError, activePreview, fetchPreviewHealth]);
-
-  const fetchLogs = useCallback(async (tail = 200) => {
-    if (!activePreview) return;
-    setIsFetchingLogs(true);
-    try {
-      // Resolve projectId robustly: prefer explicit projectId, fall back to parsing from baseUrl
-      let pid: string | undefined = (activePreview as any).projectId;
-      if (!pid && activePreview.baseUrl) {
-        try {
-          const u = new URL(activePreview.baseUrl);
-          const parts = u.pathname.split('/').filter(Boolean);
-          // expecting /preview/:projectId
-          const previewIndex = parts.indexOf('preview');
-          if (previewIndex >= 0 && parts.length > previewIndex + 1) {
-            pid = parts[previewIndex + 1];
-          }
-        } catch (e) {
-          // ignore URL parse errors
-        }
-      }
-
-      // Treat literal 'undefined' or 'null' as invalid
-      if (!pid || pid === 'undefined' || pid === 'null') {
-        setLogs('Failed to determine project id for logs');
-        setIsFetchingLogs(false);
-        return;
-      }
-
-      const resp = await fetch(`/api/preview/${encodeURIComponent(pid)}/logs?tail=${tail}`);
-      if (!resp.ok) {
-        const json = await resp.json().catch(() => ({})) as { message?: string };
-        setLogs(`Failed to fetch logs: ${resp.status} ${resp.statusText}\n${JSON.stringify(json)}`);
-      } else {
-        const json = await resp.json() as { logs?: string };
-        setLogs(json.logs || '');
-      }
-    } catch (err) {
-      setLogs(`Error fetching logs: ${String(err)}`);
-    } finally {
-      setIsFetchingLogs(false);
-    }
-  }, [activePreview]);
-
-  // Start tunnel for public URL sharing
-  const startTunnel = useCallback(async () => {
-    const pid = resolveProjectId();
-    if (!pid) {
-      console.warn('[Preview] Cannot start tunnel - no project ID');
-      return;
-    }
-
-    setTunnelLoading(true);
-    try {
-      const resp = await fetch('/api/deploy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'tunnel-start',
-          projectId: pid,
-          localPort: 5173,
-        }),
-      });
-
-      const data = await resp.json() as { success: boolean; error?: string; data?: { publicUrl: string; id: string } };
-
-      if (data.success && data.data?.publicUrl) {
-        setTunnelUrl(data.data.publicUrl);
-        console.log('[Preview] Tunnel started:', data.data.publicUrl);
-      } else {
-        console.error('[Preview] Failed to start tunnel:', data.error);
-      }
-    } catch (err) {
-      console.error('[Preview] Tunnel error:', err);
-    } finally {
-      setTunnelLoading(false);
-    }
-  }, [resolveProjectId]);
-
-  // Stop tunnel
-  const stopTunnel = useCallback(async () => {
-    const pid = resolveProjectId();
-    if (!pid) return;
-
-    try {
-      await fetch('/api/deploy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'tunnel-stop',
-          projectId: pid,
-        }),
-      });
-      setTunnelUrl(null);
-      console.log('[Preview] Tunnel stopped');
-    } catch (err) {
-      console.error('[Preview] Failed to stop tunnel:', err);
-    }
-  }, [resolveProjectId]);
-
-  // Copy tunnel URL to clipboard
-  const copyTunnelUrl = useCallback(() => {
-    if (tunnelUrl) {
-      navigator.clipboard.writeText(tunnelUrl);
-      setShowTunnelCopied(true);
-      setTimeout(() => setShowTunnelCopied(false), 2000);
-    }
-  }, [tunnelUrl]);
-
   return (
     <div className="w-full h-full flex flex-col">
+      <ContainerCreationStatus />
       {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
       <div className="bg-bolt-elements-background-depth-2 p-2 flex items-center gap-1.5">
-        <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
+        <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} title="Reload preview" />
+        {showForceRefresh && (
+          <button
+            onClick={forceRefreshPreview}
+            title="Force refresh (clear and reload)"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover transition-colors whitespace-nowrap"
+          >
+            <div className="i-ph:arrow-counter-clockwise text-sm" />
+            Force Refresh
+          </button>
+        )}
+        {/* Restart Dev Server button - shown when there's an error or timeout */}
+        {(previewError || hasTimedOut) && projectId && (
+          <button
+            onClick={restartDevServer}
+            disabled={isRestartingDevServer}
+            title="Restart development server"
+            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors whitespace-nowrap ${
+              isRestartingDevServer
+                ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed'
+                : 'bg-orange-600 text-white hover:bg-orange-500'
+            }`}
+          >
+            {isRestartingDevServer ? (
+              <>
+                <div className="i-ph:spinner-gap text-sm" style={{ animation: 'spin 1s linear infinite' }} />
+                Restarting...
+              </>
+            ) : (
+              <>
+                <div className="i-ph:power text-sm" />
+                Restart Server
+              </>
+            )}
+          </button>
+        )}
         <div
           className="flex items-center gap-1 flex-grow bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm hover:bg-bolt-elements-preview-addressBar-backgroundHover hover:focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within:bg-bolt-elements-preview-addressBar-backgroundActive
         focus-within-border-bolt-elements-borderColorActive focus-within:text-bolt-elements-preview-addressBar-textActive"
@@ -555,6 +800,7 @@ export const Preview = memo(() => {
             }}
           />
         </div>
+        <VisualEditingToggle />
         {previews.length > 1 && (
           <PortDropdown
             activePreviewIndex={activePreviewIndex}
@@ -565,176 +811,219 @@ export const Preview = memo(() => {
             previews={previews}
           />
         )}
-
-        {/* Public URL / Tunnel button */}
-        {activePreview && (
-          <div className="relative">
-            {tunnelUrl ? (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={copyTunnelUrl}
-                  className={classNames(
-                    'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                    'bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30'
-                  )}
-                  title={tunnelUrl}
-                >
-                  <div className="i-ph:link text-sm" />
-                  {showTunnelCopied ? 'Copied!' : 'Public URL'}
-                </button>
-                <button
-                  onClick={stopTunnel}
-                  className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                  title="Stop sharing"
-                >
-                  <div className="i-ph:x text-sm" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={startTunnel}
-                disabled={tunnelLoading || !activePreview.ready}
-                className={classNames(
-                  'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                  'bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover',
-                  'text-bolt-elements-button-secondary-text border border-bolt-elements-borderColor',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
-                title="Get a public URL to share your preview"
-              >
-                {tunnelLoading ? (
-                  <>
-                    <div className="i-ph:spinner animate-spin text-sm" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <div className="i-ph:share-network text-sm" />
-                    Share
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
       </div>
-      <div className="flex-1 border-t border-bolt-elements-borderColor relative">
-        {(activePreview && !activePreview.ready) || (activePreview && !iframeUrl) ? (
-          // ✅ Show loading state when preview URL is set but dev server not ready yet
-          <div className="flex w-full h-full justify-center items-center bg-white">
-            <div className="text-center p-6">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-              <div className="text-gray-700 text-lg mb-2">Waiting for dev server...</div>
-              <div className="text-gray-500 text-sm">Installing dependencies and starting server</div>
-              <div className="text-gray-400 text-xs mt-2">This usually takes 10-30 seconds</div>
-            </div>
+      <PreviewToolbar />
+      {/* ── Expo / Web mode switcher (only for Expo projects) ── */}
+      {projectType === 'expo' && (
+        <div className="flex items-center gap-0 bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor px-2">
+          <button
+            onClick={() => setPreviewMode('web')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
+              previewMode === 'web'
+                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
+                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+            }`}
+          >
+            Web Preview
+          </button>
+          <button
+            onClick={() => setPreviewMode('expo-go')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
+              previewMode === 'expo-go'
+                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
+                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+            }`}
+          >
+            Expo Go
+          </button>
+        </div>
+      )}
+      <div className="flex-1 border-t border-bolt-elements-borderColor overflow-hidden relative">
+        {/* ── Expo Go mode ── */}
+        {projectType === 'expo' && previewMode === 'expo-go' && projectId ? (
+          <div className="w-full h-full overflow-auto bg-bolt-elements-background-depth-1">
+            <ExpoQRPanel projectId={projectId} className="h-full" />
           </div>
         ) : previewError ? (
-          <div className="flex w-full h-full justify-center items-center bg-white">
-            <div className="text-center p-6 max-w-md">
-              <div className="flex items-center justify-center gap-2 text-red-500 text-lg mb-3">
-                <span className="i-ph:warning-circle text-2xl" />
-                <span>Preview Error</span>
+        /* ── Error card ── */
+          <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1">
+            <div className="max-w-md w-full mx-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="i-ph:warning text-2xl text-red-400 flex-shrink-0" />
+                <h3 className="text-bolt-elements-textPrimary text-base font-medium">Preview Error</h3>
               </div>
-              <div className="text-gray-600 mb-4">{previewError}</div>
-              {isCheckingHealth && (
-                <div className="flex items-center justify-center gap-2 text-gray-500 text-sm mb-4">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
-                  Checking server health...
-                </div>
-              )}
-              <div className="flex gap-2 justify-center">
+              <p className="text-bolt-elements-textSecondary text-sm mb-5 leading-relaxed">{previewError}</p>
+              <div className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={() => {
-                    setRetryCount(0);
-                    setPreviewError(null);
-                    setIsLoading(true);
-                    if (iframeRef.current && activePreview) {
-                      iframeRef.current.src = activePreview.baseUrl;
-                    }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  onClick={retryPreview}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover transition-colors"
                 >
-                  <span className="i-ph:arrow-clockwise" />
+                  <div className="i-ph:arrow-clockwise text-sm" />
                   Retry
                 </button>
+                {projectId && (
+                  <button
+                    onClick={restartDevServer}
+                    disabled={isRestartingDevServer}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isRestartingDevServer
+                        ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed'
+                        : 'bg-orange-600 text-white hover:bg-orange-500'
+                    }`}
+                  >
+                    {isRestartingDevServer ? (
+                      <>
+                        <div className="i-ph:spinner-gap text-sm" style={{ animation: 'spin 1s linear infinite' }} />
+                        Restarting...
+                      </>
+                    ) : (
+                      <>
+                        <div className="i-ph:power text-sm" />
+                        Restart Server
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
-                  onClick={() => {
-                    setShowLogsModal(true);
-                    fetchLogs();
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors"
+                  onClick={() => workbenchStore.toggleTerminal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors"
                 >
-                  <span className="i-ph:list text-gray-600" />
-                  View Logs
+                  <div className="i-ph:terminal-window text-sm" />
+                  View Console
                 </button>
               </div>
             </div>
           </div>
         ) : activePreview ? (
           <>
-            {isLoading && (
-              <div className="absolute inset-0 flex flex-col w-full h-full justify-center items-center bg-white z-10">
-                <div className="text-center p-6">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                  <div className="text-gray-700 text-lg mb-2">Starting dev server...</div>
-                  <div className="text-gray-500 text-sm">
-                    {retryCount > 0 ? `Retry ${retryCount}/${maxRetries}` : 'Building your project...'}
-                  </div>
-                  <div className="text-gray-400 text-xs mt-2">This usually takes 10-30 seconds</div>
-                  <div className="mt-4">
-                    <button
-                      onClick={() => {
-                        setShowLogsModal(true);
-                        fetchLogs();
+            {/* ── Iframe (device mode) ── */}
+            {isDeviceMode ? (
+              <div
+                ref={deviceContainerRef}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  height: '100%',
+                  overflow: 'hidden',
+                  backgroundColor: 'var(--bolt-elements-background-depth-3, #1a1a1a)',
+                }}
+              >
+                <div
+                  style={{
+                    transform: `scale(${appliedScale})`,
+                    transformOrigin: 'center center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <DeviceFrame
+                    frameStyle={device.frameStyle || 'none'}
+                    width={dims.width}
+                    height={dims.height}
+                    color={device.deviceColor}
+                    showFrame={deviceState.showFrame}
+                  >
+                    <iframe
+                      ref={iframeRef}
+                      className="border-none bg-white"
+                      src={iframeUrl}
+                      onLoad={handleIframeLoad}
+                      style={{
+                        width: `${dims.width}px`,
+                        height: `${dims.height}px`,
                       }}
-                      className="px-3 py-1 bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                    />
+                  </DeviceFrame>
+                </div>
+              </div>
+            ) : (
+              /* ── Iframe (normal mode) ── */
+              <iframe
+                ref={iframeRef}
+                className="border-none w-full h-full bg-white"
+                src={iframeUrl}
+                onLoad={handleIframeLoad}
+              />
+            )}
+
+            {/* ── Loading timeout overlay ── */}
+            {hasTimedOut && !isIframeLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-bolt-elements-background-depth-1/90 z-10">
+                <div className="max-w-sm w-full mx-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-6 shadow-sm text-center">
+                  <div className="i-ph:clock-countdown text-3xl text-bolt-elements-textTertiary mx-auto mb-3" />
+                  <h3 className="text-bolt-elements-textPrimary text-base font-medium mb-1">
+                    Preview is taking longer than expected
+                  </h3>
+                  <p className="text-bolt-elements-textTertiary text-sm mb-4">
+                    The development server may still be starting up.
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      onClick={retryPreview}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover transition-colors"
                     >
-                      Tail logs
+                      <div className="i-ph:arrow-clockwise text-sm" />
+                      Retry
+                    </button>
+                    <button
+                      onClick={() => workbenchStore.toggleTerminal(true)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors"
+                    >
+                      <div className="i-ph:terminal-window text-sm" />
+                      View Console
                     </button>
                   </div>
                 </div>
               </div>
             )}
-            <iframe
-              key={retryCount} // Force re-render on retry
-              ref={iframeRef}
-              className="border-none w-full h-full bg-white"
-              src={iframeUrl}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-              allow="cross-origin-isolated"
-              onLoad={handleIframeLoad}
-              onError={handleIframeError}
-            />
+
+            {/* ── Visual Editing Toolbar ── */}
+            {isVisualEditing && (
+              <VisualEditingToolbar
+                iframeRef={iframeRef}
+                onEditInChat={(prompt) => {
+                  // Dispatch event for chat to pick up
+                  window.dispatchEvent(new CustomEvent('recoder:edit-in-chat', { detail: { prompt } }));
+                }}
+              />
+            )}
+
+            {/* ── Runtime Error Banner (anchored to bottom of preview) ── */}
+            {runtimeErrors.length > 0 && (
+              <div className="absolute bottom-0 left-0 right-0 z-30">
+                <div className="relative">
+                  <ErrorBanner
+                    errors={runtimeErrors}
+                    onDismiss={dismissRuntimeErrors}
+                    onRetry={retryPreview}
+                    isStreaming={streamingState.isStreaming}
+                  />
+                </div>
+              </div>
+            )}
           </>
         ) : (
-          <div className="flex w-full h-full justify-center items-center bg-white">
+          /* ── No preview yet: environment setup state ── */
+          <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1">
             <div className="text-center p-6">
-              <div className="text-gray-500 text-lg mb-2">No preview available</div>
-              <div className="text-gray-400 text-sm">Start building your project to see a preview</div>
+              <div
+                className="i-ph:spinner-gap text-3xl text-bolt-elements-textTertiary mx-auto mb-3"
+                style={{ animation: 'spin 1s linear infinite' }}
+              />
+              <div className="text-bolt-elements-textSecondary text-base mb-1">
+                Setting up development environment...
+              </div>
+              <div className="text-bolt-elements-textTertiary text-sm">
+                This may take a moment while packages are installed
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Logs modal */}
-      {showLogsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg w-3/4 max-h-3/4 overflow-auto p-4">
-            <div className="flex justify-between items-center mb-2">
-              <div className="font-semibold">Preview Logs</div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => fetchLogs(200)}
-                  className="px-2 py-1 bg-gray-100 rounded"
-                >Refresh</button>
-                <button onClick={() => setShowLogsModal(false)} className="px-2 py-1 bg-red-100 rounded">Close</button>
-              </div>
-            </div>
-            <pre className="text-xs whitespace-pre-wrap bg-gray-100 p-2 rounded">{isFetchingLogs ? 'Loading logs...' : logs}</pre>
-          </div>
-        </div>
-      )}
+      {/* Spinner keyframes – injected once via inline style tag */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 });

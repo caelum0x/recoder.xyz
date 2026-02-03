@@ -1,14 +1,38 @@
 import { map, type MapStore } from 'nanostores';
 import type { RecoderAction } from '~/types/actions';
-import { createScopedLogger } from '~/utils/logger';
+import { createScopedLogger, DEBUG, createTimer } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { WORK_DIR } from '~/utils/constants';
-import { getCurrentUserId } from '~/lib/stores/user';
 import { snapshotBeforeAI, snapshotAfterAI, setAutoSave, createSnapshot } from '~/lib/stores/snapshots';
-import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, getSessionToken } from '~/lib/services/docker-api';
 import { isNonNodeFramework, getInstallCommand, getDevServerCommand } from './language-generators';
+import * as undoManager from '~/lib/services/undo-manager';
+import { validateCode, formatValidationResult, canWriteWithValidation, type ValidationResult } from '~/lib/services/code-validator';
+import * as actionQueue from './action-queue';
+import {
+  fileBatcher,
+  queueFileWrite,
+  flushFileWrites,
+  setFileBatcherProject,
+  configureFileBatcher,
+  waitForBatchCompletion,
+  batchStatus,
+  batchProgress,
+  type BatchResult,
+  type BatchProgress,
+} from '~/lib/services/file-batcher';
+import { signalBatchWriteStart, signalBatchWriteEnd } from '~/lib/hooks/useFileWatcher';
+import { isMorphConfigured, applyMorphEditToFile } from '~/lib/services/morph-fast-apply';
+import { classifyError } from '~/lib/services/error-classifier';
+import { 
+  runTypeCheck, 
+  formatTypeCheckErrors, 
+  hasBlockingErrors as hasBlockingTypeErrors,
+  generateAutoFixContext,
+  type TypeCheckResult,
+} from '~/lib/services/typecheck-service';
 
 // Import types and utilities from extracted modules
 import type {
@@ -156,12 +180,14 @@ export type BaseActionState = RecoderAction & {
   abort: () => void;
   executed: boolean;
   abortSignal: AbortSignal;
+  validation?: ValidationResult;  // Code validation result
 };
 
 export type FailedActionState = RecoderAction &
   Omit<BaseActionState, 'status'> & {
     status: Extract<ActionStatus, 'failed'>;
     error: string;
+    validation?: ValidationResult;  // Code validation result
   };
 
 export type ActionState = BaseActionState | FailedActionState;
@@ -173,6 +199,28 @@ export type ActionStateUpdate =
   | (Omit<BaseActionUpdate, 'status'> & { status: 'failed'; error: string });
 
 type ActionsMap = MapStore<Record<string, ActionState>>;
+
+/**
+ * Protected config files that should NOT be overwritten after initial generation.
+ * Uses exact basename matching for reliability.
+ */
+const PROTECTED_CONFIG_FILES = new Set([
+  'vite.config.ts', 'vite.config.js', 'vite.config.mjs',
+  'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json',
+  'tailwind.config.js', 'tailwind.config.ts', 'tailwind.config.cjs',
+  'postcss.config.js', 'postcss.config.cjs', 'postcss.config.mjs',
+  '.eslintrc.js', '.eslintrc.json', '.eslintrc.cjs', 'eslint.config.js', 'eslint.config.mjs',
+  '.prettierrc', '.prettierrc.js', '.prettierrc.json', '.prettierrc.cjs',
+  'prettier.config.js', 'prettier.config.cjs', 'prettier.config.mjs',
+  'next.config.js', 'next.config.mjs', 'next.config.ts',
+  'svelte.config.js', 'svelte.config.ts',
+  'astro.config.mjs', 'astro.config.ts',
+  'nuxt.config.ts', 'nuxt.config.js',
+  'vitest.config.ts', 'vitest.config.js',
+  'jest.config.js', 'jest.config.ts', 'jest.config.cjs',
+  'babel.config.js', 'babel.config.json', '.babelrc',
+  'webpack.config.js', 'webpack.config.ts',
+]);
 
 export class ActionRunner {
   #currentExecutionPromise: Promise<void> = Promise.resolve();
@@ -190,14 +238,81 @@ export class ActionRunner {
   #dockerReady: boolean = false;
   #isRestoredChat: boolean = false;  // True if this is a restored past chat
   #restoredFilePaths: Set<string> = new Set();  // Files that were restored from snapshot
+
+  #normalizeFilePath(filePath: string): string {
+    if (!filePath) return '';
+    let normalized = filePath.trim();
+    normalized = normalized.replace(/^\/+/, '');
+    if (normalized.startsWith('workspace/')) {
+      normalized = normalized.slice('workspace/'.length);
+    }
+    return normalized;
+  }
   #snapshotTaken: boolean = false;  // Track if snapshot was taken before AI changes
+  #cachedFramework: string | null = null;
   // Note: #npmInstallRunning and #autoInstallTriggered are now GLOBAL flags above
+
+  // Written file contents tracker — enables auto-package detection by keeping
+  // a Map<filePath, content> of every file written in this session.
+  #writtenFileContents: Map<string, string> = new Map();
+
+  // Action queue integration for bulletproof execution
+  #actionTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  #actionAbortControllers: Map<string, AbortController> = new Map();
+  #originalFileContents: Map<string, string> = new Map(); // For rollback support
+  #useQueueSystem: boolean = true; // Enable new queue system
+
+  // Orphan detection: track when actions are added to detect stream truncation
+  #orphanTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  #actionAddedTimestamps: Map<string, number> = new Map();
+  #streamingActive: boolean = false;
+  #firstArtifactComplete: boolean = false; // Stays false until first onStreamEnd() — allows config writes during first AI response
+  static ORPHAN_TIMEOUT_MS = 30000; // 30 seconds to wait for action to close after stream ends
+
+  // File batching for performance
+  #useBatchMode: boolean = true; // Enable file batching by default
+  #batchFlushTimer: NodeJS.Timeout | null = null;
+  #batchProgressCallback: ((progress: BatchProgress) => void) | null = null;
+
+  // Compile recheck listener for auto-fix verify cycle
+  #compileRecheckHandler: (() => void) | null = null;
+  #compileCheckRetryTimer: NodeJS.Timeout | null = null;
+  #compileCheckRetryCount: number = 0;
 
   actions: ActionsMap = map({});
 
   constructor(chatId?: string) {
     this.#chatId = chatId || null;
     this.#projectId = chatId || `project-${Date.now()}`;
+
+    // Configure file batcher with progress callback
+    configureFileBatcher({
+      debounceMs: 100,
+      maxBatchSize: 50,
+      maxWaitMs: 2000,
+      maxRetries: 2,
+      onProgress: (progress) => {
+        this.#batchProgressCallback?.(progress);
+        // Emit progress event for UI
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('file-batch-progress', {
+            detail: progress
+          }));
+        }
+      },
+      onComplete: (result) => {
+        logger.info(`File batch complete: ${result.successCount}/${result.totalFiles} files in ${result.duration}ms`);
+        if (result.failedCount > 0) {
+          logger.warn(`Failed files: ${result.failedFiles.map(f => f.path).join(', ')}`);
+        }
+        // Emit completion event for UI
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('file-batch-complete', {
+            detail: result
+          }));
+        }
+      },
+    });
   }
 
   /**
@@ -212,12 +327,53 @@ export class ActionRunner {
     // Wait for all pending actions to complete
     await this.#currentExecutionPromise;
 
+    // Flush any pending batched file writes
+    if (this.#useBatchMode) {
+      try {
+        signalBatchWriteStart();
+        await flushFileWrites();
+        signalBatchWriteEnd();
+        logger.debug('Flushed pending file batch before snapshot');
+      } catch (err) {
+        signalBatchWriteEnd();
+        logger.warn('Failed to flush file batch:', err);
+      }
+    }
+
     // Small delay to ensure file writes are flushed
     await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
       await snapshotAfterAI(this.#projectId, description);
       logger.info(`✅ Created AI snapshot: ${description}`);
+
+      // Record batch of AI changes for undo functionality
+      // The individual files have already been saved to undo history in #runFileAction
+      // Now we need to record a batch action to group them together for "Undo AI changes"
+      if (this.#modifiedFiles.length > 0) {
+        // Record the batch action (this also saves the states, but that's OK - it updates timestamps)
+        undoManager.saveBatchState(this.#modifiedFiles, description);
+
+        // Import refreshUndoState to update UI
+        const { refreshUndoState } = await import('~/lib/stores/undo-stack');
+        refreshUndoState();
+
+        logger.info(`📝 Recorded ${this.#modifiedFiles.length} files for undo: ${description}`);
+      }
+
+      // Auto-commit inside the container so users can revert via git history.
+      // Fire-and-forget: must not block snapshot or UI flow.
+      if (this.#projectId && this.#dockerReady) {
+        dockerPost(`/api/git/${encodeURIComponent(this.#projectId)}/auto-commit`, {
+          message: `[recoder] ${description}`,
+        }, { skipRetry: true, timeout: 10000 }).then((result: any) => {
+          if (result?.committed) {
+            logger.debug(`Auto-commit created: ${result.hash}`);
+          }
+        }).catch(() => {
+          // Best effort - don't log errors for auto-commit failures
+        });
+      }
     } catch (err) {
       logger.warn('Failed to create AI snapshot:', err);
     }
@@ -237,65 +393,297 @@ export class ActionRunner {
    */
   markAsRestoredChat(restoredFiles?: string[]) {
     this.#isRestoredChat = true;
-    globalAutoInstallTriggered = true; // Prevent auto-install globally
-    this.#packageJsonCreated = true; // Assume package.json exists from restored files
+    // NOTE: Do NOT set globalAutoInstallTriggered here — it's a module-level flag
+    // that poisons ALL runners (including ones for new user messages).
+    // useChatHistory handles its own npm install for restored chats independently.
 
     // Track which files were restored so we only skip those, not new files
     if (restoredFiles) {
-      this.#restoredFilePaths = new Set(restoredFiles);
-      logger.info(`📂 ActionRunner marked as restored chat with ${restoredFiles.length} files - auto-install disabled globally`);
+      this.#restoredFilePaths = new Set(restoredFiles.map((p) => this.#normalizeFilePath(p)));
+      logger.info(`📂 ActionRunner marked as restored chat with ${restoredFiles.length} files`);
     } else {
-      logger.info('📂 ActionRunner marked as restored chat - auto-install disabled globally');
+      logger.info('📂 ActionRunner marked as restored chat');
+    }
+  }
+
+  /**
+   * Check if a file path is a protected config file that should not be overwritten on edits.
+   * Uses exact basename matching against the PROTECTED_CONFIG_FILES set for reliability,
+   * with a fallback to substring matching for unusual paths.
+   */
+  #isConfigFile(filePath: string): boolean {
+    // Extract the basename (last segment of the path)
+    const basename = filePath.split('/').pop() || filePath;
+
+    // Primary check: exact basename match against the curated set
+    if (PROTECTED_CONFIG_FILES.has(basename)) {
+      return true;
+    }
+
+    // Fallback: substring matching for config files with non-standard names
+    const configPatterns = [
+      'vite.config', 'tsconfig', 'tailwind.config',
+      'postcss.config', '.eslintrc', 'eslint.config',
+      '.prettierrc', 'prettier.config',
+    ];
+    const normalized = filePath.toLowerCase();
+    return configPatterns.some(pattern => normalized.includes(pattern));
+  }
+
+  /**
+   * Try to use Morph intelligent merging for file edits on existing files.
+   * Returns { used: true, content } if Morph was used, or { used: false } if not.
+   * Falls back silently on any error.
+   */
+  async #tryMorphApply(
+    projectId: string,
+    filePath: string,
+    newContent: string
+  ): Promise<{ used: boolean; content?: string }> {
+    // Only use Morph for edits on existing files, not first generation
+    if (!isMorphConfigured() || this.#isFirstGeneration()) {
+      return { used: false };
+    }
+
+    try {
+      // Check if file exists by trying to read it
+      const { dockerReadFile } = await import('~/lib/services/docker-api');
+      let existingContent: string;
+      try {
+        existingContent = await dockerReadFile(projectId, filePath);
+      } catch {
+        // File doesn't exist yet - use normal write
+        return { used: false };
+      }
+
+      // Only use Morph if the file has significant content (not trivially small)
+      if (existingContent.length < 50) {
+        return { used: false };
+      }
+
+      // Skip if the new content is identical to existing
+      if (existingContent.trim() === newContent.trim()) {
+        return { used: true, content: existingContent };
+      }
+
+      // Use Morph for intelligent merging
+      const result = await applyMorphEditToFile(projectId, {
+        targetPath: filePath,
+        instructions: 'Merge the update into the existing code, preserving existing functionality while applying the changes.',
+        updateSnippet: newContent,
+      });
+
+      if (result.success && result.mergedCode) {
+        console.debug(`[ActionRunner] Morph applied to ${filePath} in ${result.duration}ms`);
+        return { used: true, content: result.mergedCode };
+      }
+
+      // Morph failed - fall back to normal write
+      console.warn(`[ActionRunner] Morph failed for ${filePath}: ${result.error}`);
+      return { used: false };
+    } catch (error) {
+      console.warn('[ActionRunner] Morph apply error (falling back to normal write):', error);
+      return { used: false };
+    }
+  }
+
+  /**
+   * Check if this is the first generation (no files have been previously created in this session).
+   * If it's the first generation, config files should be allowed (new project).
+   */
+  #isFirstGeneration(): boolean {
+    // During the first AI response (stream hasn't ended yet), treat as first generation
+    // so config files like vite.config.ts can be created alongside package.json.
+    // After the first stream ends, protect configs from overwrite.
+    return !this.#firstArtifactComplete;
+  }
+
+  /**
+   * Merge package.json: keep existing fields but add new dependencies from AI-generated version.
+   * Returns the merged content, or null if merge isn't needed (e.g., no existing file).
+   */
+  async #mergePackageJson(newContent: string): Promise<string | null> {
+    if (!this.#dockerReady || !this.#projectId) return null;
+
+    try {
+      // Read existing package.json from container
+      const existingRes = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=package.json`, {
+        headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
+      });
+      if (!existingRes.ok) return null; // No existing file, use new content as-is
+
+      const existingContent = await existingRes.text();
+      const existing = JSON.parse(existingContent);
+      const incoming = JSON.parse(newContent);
+
+      // Merge strategy: keep existing base, add new dependencies
+      const merged = { ...existing };
+
+      // Merge dependencies (add new, keep existing versions)
+      if (incoming.dependencies) {
+        merged.dependencies = merged.dependencies || {};
+        for (const [pkg, version] of Object.entries(incoming.dependencies)) {
+          if (!merged.dependencies[pkg]) {
+            merged.dependencies[pkg] = version;
+            logger.info(`📦 Merged new dependency: ${pkg}@${version}`);
+          }
+        }
+      }
+
+      // Merge devDependencies (add new, keep existing versions)
+      if (incoming.devDependencies) {
+        merged.devDependencies = merged.devDependencies || {};
+        for (const [pkg, version] of Object.entries(incoming.devDependencies)) {
+          if (!merged.devDependencies[pkg]) {
+            merged.devDependencies[pkg] = version;
+            logger.info(`📦 Merged new devDependency: ${pkg}@${version}`);
+          }
+        }
+      }
+
+      // Merge scripts (add new scripts, don't overwrite existing)
+      if (incoming.scripts) {
+        merged.scripts = merged.scripts || {};
+        for (const [name, cmd] of Object.entries(incoming.scripts)) {
+          if (!merged.scripts[name]) {
+            merged.scripts[name] = cmd;
+          }
+        }
+      }
+
+      return JSON.stringify(merged, null, 2);
+    } catch (err) {
+      logger.warn('package.json merge failed, using new content:', err);
+      return null; // Fall through to normal write
     }
   }
 
   async #ensureDockerReady(): Promise<boolean> {
     if (this.#dockerReady) return true;
-    
+
     if (!DOCKER_URL) {
       throw new Error('Docker backend not configured');
     }
-    
+
+    // Check if workbench store already created the container
+    // (setProjectId → ensureContainerExists runs on page load)
     try {
-      // Include userId for Claude Code token injection
-      const userId = getCurrentUserId();
-      const res = await fetch(`${DOCKER_URL}/api/container`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
-        },
-        body: JSON.stringify({ projectId: this.#projectId, userId }),
-        signal: AbortSignal.timeout(10000),
-      });
+      const { workbenchStore } = await import('~/lib/stores/workbench');
 
-      if (res.ok) {
+      // Fast-fail: if container creation already failed, don't wait 120s
+      if (workbenchStore.containerCreationFailed.get()) {
+        throw new Error('Container creation failed — cannot execute file/shell actions');
+      }
+
+      if (workbenchStore.containerReady.get()) {
         this.#dockerReady = true;
-        logger.info(`Docker container ready for project: ${this.#projectId}`);
+        if (this.#projectId) {
+          setFileBatcherProject(this.#projectId);
+        }
+        logger.info(`Docker container already ready (via workbench) for: ${this.#projectId}`);
+        return true;
+      }
+    } catch (e: any) {
+      // Re-throw container-failed errors, swallow workbench-not-available
+      if (e?.message?.includes('Container creation failed')) throw e;
+    }
 
-        // ✅ Notify workbench store about project ID for preview (non-blocking)
-        // Don't await this - it can run in background while file operations proceed
-        if (this.#projectId && typeof window !== 'undefined') {
-          const projectId = this.#projectId;
-          import('~/lib/stores/workbench').then(({ workbenchStore }) => {
-            workbenchStore.setProjectId(projectId).then(() => {
-              logger.info(`✅ Workbench store notified of project: ${projectId}`);
-            }).catch(err => {
-              logger.warn('Could not notify workbench store:', err);
-            });
-          }).catch(err => {
-            logger.warn('Could not import workbench store:', err);
-          });
+    // Container not ready yet — wait for workbench to finish creating it
+    // instead of making a redundant POST /api/container
+    try {
+      const { workbenchStore } = await import('~/lib/stores/workbench');
+      await new Promise<void>((resolve, reject) => {
+        // Declare unsubscribe before timeout so the timeout callback can reference it safely
+        let unsubscribe: (() => void) | undefined;
+        let unsubscribeFailed: (() => void) | undefined;
+
+        const cleanup = () => {
+          unsubscribe?.();
+          unsubscribeFailed?.();
+        };
+
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error('Container creation timed out'));
+        }, CONTAINER_CREATE_TIMEOUT_MS);
+
+        // If already ready, resolve immediately
+        if (workbenchStore.containerReady.get()) {
+          clearTimeout(timeout);
+          resolve();
+          return;
         }
 
-        return true;
-      } else {
-        const errText = await res.text();
-        throw new Error(`Container creation failed: ${errText}`);
+        // Fast-fail if creation already failed
+        if (workbenchStore.containerCreationFailed.get()) {
+          clearTimeout(timeout);
+          reject(new Error('Container creation failed — cannot execute file/shell actions'));
+          return;
+        }
+
+        // Subscribe to containerReady changes
+        // Note: nanostore subscribe fires synchronously with current value,
+        // but we already handled the "already true" case above
+        unsubscribe = workbenchStore.containerReady.subscribe((ready) => {
+          if (ready) {
+            clearTimeout(timeout);
+            cleanup();
+            resolve();
+          }
+        });
+
+        // Also subscribe to containerCreationFailed for fast-fail
+        unsubscribeFailed = workbenchStore.containerCreationFailed.subscribe((failed) => {
+          if (failed) {
+            clearTimeout(timeout);
+            cleanup();
+            reject(new Error('Container creation failed — cannot execute file/shell actions'));
+          }
+        });
+      });
+
+      this.#dockerReady = true;
+      if (this.#projectId) {
+        setFileBatcherProject(this.#projectId);
       }
+      logger.info(`Docker container ready for project: ${this.#projectId}`);
+      return true;
     } catch (e) {
-      logger.error('Failed to create Docker container:', e);
-      throw e;
+      // Check if container creation definitively failed — don't retry in that case
+      // (the workbench already tried and set containerCreationFailed = true)
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      const isDefiniteFail = errorMsg.includes('Container creation failed');
+
+      if (isDefiniteFail) {
+        logger.error('Container creation failed — not retrying:', errorMsg);
+        throw e;
+      }
+
+      // Only retry for transient errors (e.g., workbench not loaded yet)
+      logger.warn('Waiting for workbench container failed, trying direct creation:', e);
+      try {
+        const { ensureContainerExists } = await import('~/lib/stores/workbench');
+
+        // Check the failed flag before making another request
+        const { workbenchStore } = await import('~/lib/stores/workbench');
+        if (workbenchStore.containerCreationFailed.get()) {
+          throw new Error('Container creation already failed — not retrying');
+        }
+
+        const ready = await ensureContainerExists(this.#projectId!);
+        if (!ready) {
+          throw new Error('Container creation failed');
+        }
+        this.#dockerReady = true;
+        if (this.#projectId) {
+          setFileBatcherProject(this.#projectId);
+        }
+        logger.info(`Docker container created (fallback) for: ${this.#projectId}`);
+        return true;
+      } catch (fallbackErr) {
+        logger.error('Failed to create Docker container:', fallbackErr);
+        throw fallbackErr;
+      }
     }
   }
 
@@ -363,18 +751,22 @@ export class ActionRunner {
 
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
-    console.log('➕ [ActionRunner] addAction called:', data.action.type, actionId);
+    console.debug('➕ [ActionRunner] addAction called:', data.action.type, actionId);
 
     const actions = this.actions.get();
     const action = actions[actionId];
 
     if (action) {
       // action already added
-      console.log('⏭️  [ActionRunner] Action already added, skipping:', actionId);
+      console.debug('⏭️  [ActionRunner] Action already added, skipping:', actionId);
       return;
     }
 
     const abortController = new AbortController();
+
+    // Track when this action was added (for orphan detection)
+    this.#actionAddedTimestamps.set(actionId, Date.now());
+    this.#streamingActive = true;
 
     this.actions.setKey(actionId, {
       ...data.action,
@@ -394,12 +786,20 @@ export class ActionRunner {
 
   async runAction(data: ActionCallbackData) {
     const { actionId } = data;
-    console.log('▶️  [ActionRunner] runAction called:', data.action.type, actionId);
+    console.debug('▶️  [ActionRunner] runAction called:', data.action.type, actionId);
 
     // Validate actionId is a string
     if (typeof actionId !== 'string') {
       logger.error(`Invalid actionId type: ${typeof actionId}`, actionId);
       return;
+    }
+
+    // Action was closed properly, clear orphan tracking
+    this.#actionAddedTimestamps.delete(actionId);
+    const orphanTimeout = this.#orphanTimeouts.get(actionId);
+    if (orphanTimeout) {
+      clearTimeout(orphanTimeout);
+      this.#orphanTimeouts.delete(actionId);
     }
 
     const action = this.actions.get()[actionId];
@@ -410,7 +810,7 @@ export class ActionRunner {
     }
 
     if (action.executed) {
-      console.log('⏭️  [ActionRunner] Action already executed, skipping:', actionId);
+      console.debug('⏭️  [ActionRunner] Action already executed, skipping:', actionId);
       return;
     }
 
@@ -428,24 +828,45 @@ export class ActionRunner {
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: true });
 
-    console.log('🔗 [ActionRunner] Queueing action execution:', actionId, action.type);
+    console.debug('🔗 [ActionRunner] Queueing action execution:', actionId, action.type);
     this.#currentExecutionPromise = this.#currentExecutionPromise
       .then(() => {
-        console.log('⏩ [ActionRunner] Previous action done, executing:', actionId, action.type);
+        console.debug('⏩ [ActionRunner] Previous action done, executing:', actionId, action.type);
         return this.#executeAction(actionId);
       })
       .then(() => {
-        console.log('✅ [ActionRunner] Action execution complete:', actionId, action.type);
+        console.debug('✅ [ActionRunner] Action execution complete:', actionId, action.type);
       })
       .catch((error) => {
         console.error('❌ [ActionRunner] Action failed:', actionId, error);
+        // Surface action errors to the user via custom event
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('recoder:action-error', {
+            detail: {
+              actionId,
+              actionType: action.type,
+              filePath: (action as any).filePath,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }));
+        }
       });
   }
 
   async #executeAction(actionId: string) {
     const action = this.actions.get()[actionId];
+    const actionTimer = createTimer(`Action ${actionId}`, 'ActionRunner');
 
-    console.log('🚀 [ActionRunner] #executeAction called:', actionId, action?.type);
+    // Structured logging for action start
+    if (DEBUG) {
+      console.log(`[${new Date().toISOString()}] [ActionRunner] Starting action:`, {
+        actionId,
+        type: action?.type,
+        filePath: (action as any)?.filePath,
+      });
+    } else {
+      console.debug('🚀 [ActionRunner] #executeAction called:', actionId, action?.type);
+    }
 
     // Guard against undefined action
     if (!action) {
@@ -456,8 +877,31 @@ export class ActionRunner {
     // 🔒 FIX 0B: Track actions in progress for streaming timeout
     globalActionsInProgress++;
 
+    // ⏱️ Timeout config (started AFTER container is ready)
+    const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds default
+    const SHELL_TIMEOUT_MS = 300000; // 5 minutes for shell commands
+    const FILE_TIMEOUT_MS = 30000; // 30 seconds for file operations
+
+    const timeoutMs = action.type === 'shell' ? SHELL_TIMEOUT_MS :
+                      action.type === 'file' ? FILE_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
+
+    // Create abort controller for this action
+    const abortController = new AbortController();
+    this.#actionAbortControllers.set(actionId, abortController);
+
+    // 📊 Track in queue system for UI
+    if (this.#useQueueSystem) {
+      actionQueue.enqueueAction({
+        type: action.type,
+        filePath: (action as any).filePath,
+        description: `${action.type}: ${(action as any).filePath || 'command'}`,
+        timeoutMs,
+        originalContent: this.#originalFileContents.get((action as any).filePath),
+      });
+    }
+
     try {
-      // 🔒 FIX 0A: Wait for container to be ready before executing container-dependent actions
+      // Wait for container BEFORE starting the action timeout
       const containerDependentTypes = new Set([
         'file', 'shell', 'str_replace', 'multi_apply_diff',
         'readFile', 'listFiles', 'searchFiles', 'importStarter',
@@ -469,16 +913,34 @@ export class ActionRunner {
         await this.#waitForContainerReady();
       }
 
+      // NOW start the timeout — container is ready, clock starts for actual work
+      const timeoutHandle = setTimeout(() => {
+        logger.warn(`⏱️ Action ${actionId} (${action.type}) timed out after ${timeoutMs}ms`);
+        abortController.abort();
+        this.#updateAction(actionId, {
+          status: 'failed',
+          error: `Action timed out after ${Math.round(timeoutMs / 1000)}s. You can retry or cancel.`
+        });
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('action-timeout', {
+            detail: { actionId, type: action.type, filePath: (action as any).filePath }
+          }));
+        }
+      }, timeoutMs);
+
+      this.#actionTimeouts.set(actionId, timeoutHandle);
+
       this.#updateAction(actionId, { status: 'running' });
 
-      console.log('🔀 [ActionRunner] Executing action type:', action.type);
+      console.debug('🔀 [ActionRunner] Executing action type:', action.type);
       switch (action.type) {
         case 'shell': {
           await this.#runShellAction(action);
           break;
         }
         case 'file': {
-          console.log('📄 [ActionRunner] Calling #runFileAction');
+          console.debug('📄 [ActionRunner] Calling #runFileAction');
           await this.#runFileAction(action);
           break;
         }
@@ -557,13 +1019,96 @@ export class ActionRunner {
       }
 
       this.#updateAction(actionId, { status: action.abortSignal.aborted ? 'aborted' : 'complete' });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Action failed';
-      logger.error(`Action ${actionId} failed:`, error);
 
-      // Only update action if it exists
+      // Clear timeout on success
+      const timeout = this.#actionTimeouts.get(actionId);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.#actionTimeouts.delete(actionId);
+      }
+
+      // Log action completion with timing
+      const duration = actionTimer.end();
+      logger.timed('info', `Action ${actionId} (${action.type}) completed`, duration, {
+        filePath: (action as any).filePath,
+        status: 'complete',
+      });
+
+      // Emit success event for UI
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('action-complete', {
+          detail: { actionId, type: action.type, filePath: (action as any).filePath, duration }
+        }));
+      }
+
+    } catch (error) {
+      // Clear timeout on error
+      const timeout = this.#actionTimeouts.get(actionId);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.#actionTimeouts.delete(actionId);
+      }
+
+      const errorMessage = error instanceof Error ? error.message : 'Action failed';
+      const classified = classifyError(errorMessage);
+      const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('cancelled');
+      const duration = actionTimer.end();
+
+      // If the error indicates the container doesn't exist, reset #dockerReady
+      // so subsequent actions will re-attempt container creation instead of
+      // blindly failing with the same "Container not found" error.
+      const isContainerNotFound = errorMessage.includes('Container not found') || errorMessage.includes('container not found');
+      if (isContainerNotFound && this.#dockerReady) {
+        logger.warn('🔄 [ActionRunner] Container not found — resetting dockerReady to re-attempt creation');
+        this.#dockerReady = false;
+      }
+
+      // Log action failure with timing and structured data
+      logger.timed('error', `Action ${actionId} (${action.type}) failed [${classified.category}]`, duration, {
+        filePath: (action as any).filePath,
+        error: errorMessage,
+        errorCategory: classified.category,
+        retryable: classified.retryable,
+        isTimeout,
+      });
+      if (DEBUG) {
+        console.error(`[${new Date().toISOString()}] [ActionRunner] Action failed:`, {
+          actionId,
+          type: action.type,
+          error,
+          duration,
+        });
+      }
+
+      // Only update action if it exists and not already failed (timeout case)
       if (action) {
-        this.#updateAction(actionId, { status: 'failed', error: errorMessage });
+        const currentState = this.actions.get()[actionId];
+        if (currentState?.status !== 'failed') {
+          this.#updateAction(actionId, {
+            status: 'failed',
+            error: classified.suggestion
+              ? `${classified.userMessage} ${classified.suggestion}`
+              : classified.userMessage,
+          });
+        }
+      }
+
+      // Emit failure event for UI with retry option
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('action-failed', {
+          detail: {
+            actionId,
+            type: action.type,
+            filePath: (action as any).filePath,
+            error: errorMessage,
+            errorCategory: classified.category,
+            userMessage: classified.userMessage,
+            suggestion: classified.suggestion,
+            canRetry: classified.retryable || !isTimeout,
+            retryDelay: classified.retryDelay,
+            canRollback: this.#originalFileContents.has((action as any).filePath),
+          }
+        }));
       }
 
       // Don't re-throw to prevent stopping other actions
@@ -572,6 +1117,9 @@ export class ActionRunner {
     } finally {
       // 🔒 FIX 0B: Decrement actions in progress counter
       globalActionsInProgress--;
+
+      // Clean up abort controller
+      this.#actionAbortControllers.delete(actionId);
     }
   }
 
@@ -581,14 +1129,14 @@ export class ActionRunner {
    * The containerReady flag in workbenchStore is for the dev server preview, which
    * won't exist for new projects until files are created.
    */
-  async #waitForContainerReady(timeoutMs: number = 30000): Promise<void> {
-    console.log('⏳ [ActionRunner] #waitForContainerReady starting...');
+  async #waitForContainerReady(timeoutMs: number = 60000): Promise<void> {
+    console.debug('⏳ [ActionRunner] #waitForContainerReady starting...');
 
     try {
       // Ensure Docker container is created (this is all we need for file operations)
-      console.log('⏳ [ActionRunner] Calling #ensureDockerReady...');
+      console.debug('⏳ [ActionRunner] Calling #ensureDockerReady...');
       await this.#ensureDockerReady();
-      console.log('✅ [ActionRunner] Container created, ready for file operations');
+      console.debug('✅ [ActionRunner] Container created, ready for file operations');
 
       // NOTE: We do NOT wait for workbenchStore.containerReady here.
       // That flag tracks the dev server, which won't exist for new projects.
@@ -801,24 +1349,11 @@ export class ActionRunner {
           }
         }
 
-        // Extract and run dev part in background
+        // Start dev server via backend API (handles framework detection, port binding, health checks)
         const devMatch = action.content.match(/\b(npm|yarn|pnpm)\s+(run\s+)?dev\b/);
         if (devMatch) {
-          let devCmd = devMatch[0].trim();
-
-          // 🔧 FIX: Force Vite to use port 5173 (mapped to host)
-          if (devCmd.includes('npm') && !devCmd.includes('--port')) {
-            devCmd = `${devCmd} -- --port 5173 --host 0.0.0`;
-            logger.info('🔧 Forcing dev server to use port 5173');
-          }
-
-          logger.info('🚀 Starting dev server in background:', devCmd);
-          await this.#dockerExec(devCmd, '/workspace', true); // ✅ Background mode!
-          logger.info('✅ Dev server started in background');
-
-          // Wait a moment then check health
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          await this.#checkDevServerHealth(true);
+          logger.info('🚀 Starting dev server via backend API...');
+          await this.#startDevServerViaAPI();
         }
 
         globalNpmInstallRunning = false;
@@ -830,20 +1365,14 @@ export class ActionRunner {
       }
     }
 
-    // 🔧 FIX: If just a dev server command alone, run in background
+    // If just a dev server command alone, delegate to backend API
     if (isDevServer && !action.content.includes('&&')) {
-      logger.info('🚀 Running dev server command in background mode');
+      logger.info('🚀 Starting dev server via backend API (standalone dev command)');
       try {
-        await this.#dockerExec(action.content, '/workspace', true);
-        logger.info('✅ Dev server started in background');
-
-        // Wait a moment then check health
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        await this.#checkDevServerHealth(true);
-
+        await this.#startDevServerViaAPI();
         return;
       } catch (error: any) {
-        logger.error('❌ Dev server command failed:', error.message);
+        logger.error('❌ Dev server start failed:', error.message);
         throw error;
       }
     }
@@ -878,22 +1407,25 @@ export class ActionRunner {
   }
 
   async #runFileAction(action: ActionState) {
-    console.log('📁 [ActionRunner] #runFileAction called for:', (action as any).filePath);
+    console.debug('📁 [ActionRunner] #runFileAction called for:', (action as any).filePath);
     if (action.type !== 'file') {
       unreachable('Expected file action');
     }
 
     // FIX #3: Prevent file generation after repository clone
     if (this.#repositoryCloned) {
-      console.log(`⚠️ [ActionRunner] Skipping file - repository was cloned:`, action.filePath);
+      console.debug(`⚠️ [ActionRunner] Skipping file - repository was cloned:`, action.filePath);
       logger.warn(`⚠️ Skipping file action for '${action.filePath}' - Repository '${this.#clonedRepoUrl}' was already cloned. AI should not generate additional files after cloning.`);
       return;
     }
 
-    // 🔧 CRITICAL FIX: Skip file creation ONLY for files that were actually restored from snapshot
-    // New files generated after restoring should still be written
-    if (this.#isRestoredChat && this.#restoredFilePaths.has(action.filePath)) {
-      logger.debug(`⏭️ Skipping file action for '${action.filePath}' - file already restored from snapshot`);
+    // 🔧 CRITICAL FIX: Skip ALL file writes for restored chats.
+    // Each ActionRunner belongs to one artifact/message. Runners created during replay
+    // are marked #isRestoredChat=true — their files already exist on Docker from the snapshot.
+    // After replay completes, resetRestoredChatFlag() is called so new-message runners
+    // are NOT marked and will write files normally.
+    if (this.#isRestoredChat) {
+      logger.debug(`⏭️ Skipping file action for '${action.filePath}' - restored chat (files already on Docker)`);
       return;
     }
 
@@ -901,6 +1433,57 @@ export class ActionRunner {
     if (!action.filePath || action.filePath === 'undefined' || action.filePath === 'unknown-file.txt') {
       logger.error(`Invalid or missing file path: '${action.filePath}'. File content was:`, action.content.substring(0, 100) + '...');
       throw new Error(`Invalid path '${action.filePath}'`);
+    }
+
+    // 📦 PACKAGE.JSON MERGE: On subsequent generations, merge deps instead of overwriting
+    if (action.filePath === 'package.json' && !this.#isFirstGeneration()) {
+      const mergedContent = await this.#mergePackageJson(action.content);
+      if (mergedContent) {
+        action.content = mergedContent;
+        logger.info('📦 Merged package.json dependencies (preserved existing config)');
+      }
+    }
+
+    // 🔒 CONFIG FILE PROTECTION: Skip overwrites of config files on subsequent generations.
+    // Protected files are defined in the PROTECTED_CONFIG_FILES set at the top of this module.
+    // On first generation (new project), config files are allowed to be created.
+    // On subsequent generations (edits), existing config files are preserved to prevent
+    // the AI from accidentally breaking build tooling configuration.
+    if (this.#isConfigFile(action.filePath) && !this.#isFirstGeneration()) {
+      const basename = action.filePath.split('/').pop() || action.filePath;
+      // Check if file already exists in container
+      try {
+        const checkRes = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=${encodeURIComponent(action.filePath)}`, {
+          headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
+        });
+        if (checkRes.ok) {
+          logger.warn(`[config-protection] Skipping overwrite of "${basename}" at ${action.filePath} (protected config file already exists)`);
+
+          // Notify UI that a config file write was blocked
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('recoder:config-protected', {
+              detail: {
+                filePath: action.filePath,
+                basename,
+                reason: `Protected config file "${basename}" already exists and was shielded from AI overwrite`,
+                isProtectedSet: PROTECTED_CONFIG_FILES.has(basename),
+              }
+            }));
+          }
+
+          return;
+        }
+      } catch {
+        // File doesn't exist, allow creation
+      }
+    }
+
+    // 🔀 MORPH INTELLIGENT MERGE: Try Morph for edits on existing files
+    if (this.#projectId) {
+      const morphResult = await this.#tryMorphApply(this.#projectId, action.filePath, action.content);
+      if (morphResult.used && morphResult.content) {
+        action.content = morphResult.content;
+      }
     }
 
     // ✅ P1: Track that we're creating this file
@@ -929,73 +1512,147 @@ export class ActionRunner {
     // remove trailing slashes
     folder = folder.replace(/\/+$/g, '');
 
-    // Create folder with retry logic
+    // Create folder with retry logic (exponential backoff on rate limits)
     if (folder !== '.') {
-      let retries = 2;
+      let retries = 3;
+      let backoffMs = 200;
       while (retries >= 0) {
         try {
           await this.#dockerMkdir(folder);
           logger.debug('Created folder', folder);
           break;
-        } catch (error) {
+        } catch (error: any) {
           if (retries === 0) {
             logger.error('Failed to create folder after retries\n\n', error);
             throw error;
           }
           retries--;
-          await new Promise(resolve => setTimeout(resolve, 100));
+          const isRateLimit = error?.message?.includes('Too many requests') || error?.message?.includes('429');
+          const delay = isRateLimit ? backoffMs : 100;
+          if (isRateLimit) backoffMs = Math.min(backoffMs * 2, 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
     // Write file with retry logic
-    console.log('📝 [FileAction] Writing file:', action.filePath, 'content length:', action.content?.length || 0);
-    let retries = 2;
-    while (retries >= 0) {
-      try {
-        await this.#dockerWriteFile(action.filePath, action.content);
-        console.log('✅ [FileAction] File written:', action.filePath);
+    console.debug('📝 [FileAction] Writing file:', action.filePath, 'content length:', action.content?.length || 0);
 
-        // Update local file store so UI shows the file
-        const store = await getWorkbenchStore();
-        // Normalize path to include WORK_DIR so files appear in the file tree
-        const relativePath = action.filePath.startsWith('/') ? action.filePath.substring(1) : action.filePath;
-        const fullPath = `${WORK_DIR}/${relativePath}`;
-        const parts = fullPath.split('/').filter(Boolean);
-        // Create all parent folders in the file tree
-        for (let i = 1; i < parts.length; i++) {
-          const folderPath = '/' + parts.slice(0, i).join('/');
-          if (!store.files.get()[folderPath]) {
-            store.files.setKey(folderPath, { type: 'folder' });
+    // ✅ VALIDATION: Validate code before writing
+    const validationResult = await validateCode(action.content, action.filePath, this.#projectId || undefined);
+
+    // Find action ID and update with validation result
+    const validationActionId = Object.keys(this.actions.get()).find(k => {
+      const a = this.actions.get()[k];
+      return a && a.type === 'file' && (a as any).filePath === action.filePath;
+    });
+    if (validationActionId) {
+      const currentAction = this.actions.get()[validationActionId];
+      this.actions.setKey(validationActionId, { ...currentAction, validation: validationResult });
+    }
+
+    // Log validation results
+    if (!validationResult.valid) {
+      logger.warn(`⚠️ Code validation issues for ${action.filePath}:`);
+      validationResult.errors.forEach(e => logger.warn(`  - ${e.type}: ${e.message}`));
+      if (!canWriteWithValidation(validationResult)) {
+        logger.error(`❌ Validation errors for ${action.filePath}`);
+      }
+    } else if (validationResult.warnings.length > 0) {
+      logger.info(`⚠️ Validation warnings for ${action.filePath}`);
+    } else {
+      logger.debug(`✅ Validation passed for ${action.filePath}`);
+    }
+
+    // Save previous state for undo and rollback (if file exists)
+    let previousContent: string | null = null;
+    try {
+      const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=${encodeURIComponent(action.filePath)}`, {
+        headers: {
+          'Authorization': `Bearer ${getSessionToken() || ''}`,
+        },
+      });
+      if (res.ok) {
+        previousContent = await res.text();
+        // Store for rollback support (bulletproof action management)
+        this.storeOriginalContent(action.filePath, previousContent);
+      }
+    } catch {
+      // File doesn't exist yet, no previous content
+    }
+
+    // Streaming-aware file writes:
+    // During streaming: write DIRECTLY to Docker for immediate feedback (no batching delay)
+    // Non-streaming: use batch mode for efficiency (GitHub import, template loading, etc.)
+    const useDirectWrite = this.#streamingActive || !this.#useBatchMode;
+
+    if (useDirectWrite) {
+      // Direct write — file hits Docker container immediately as the action closes
+      let retries = 3;
+      let writeBackoff = 200;
+      while (retries >= 0) {
+        try {
+          await this.#dockerWriteFile(action.filePath, action.content);
+          console.debug('⚡ [FileAction] File written immediately:', action.filePath);
+          break;
+        } catch (error: any) {
+          if (retries === 0) {
+            logger.error(`Failed to write file ${action.filePath}:`, error);
+            throw error;
           }
+          retries--;
+          const isRateLimit = error?.message?.includes('Too many requests') || error?.message?.includes('429');
+          const delay = isRateLimit ? writeBackoff : 100;
+          if (isRateLimit) writeBackoff = Math.min(writeBackoff * 2, 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
-        store.files.setKey(fullPath, { type: 'file', content: action.content, isBinary: false });
-        
-        logger.info(`File created successfully: ${action.filePath} (${action.content.length} bytes)`);
-        
-        // Track modified file for GitHub sync
-        this.#modifiedFiles.push({ path: action.filePath, content: action.content });
-        
-        if (this.#chatId) {
-          setTimeout(() => {
-            if (this.#modifiedFiles.length > 0) {
-              const filesToSync = [...this.#modifiedFiles];
-              this.#modifiedFiles = [];
-              autoSyncToGitHub(this.#chatId!, filesToSync);
-            }
-          }, 2000);
-        }
-        
-        break;
-      } catch (error) {
-        if (retries === 0) {
-          logger.error(`Failed to write file ${action.filePath}:`, error);
-          throw error;
-        }
-        retries--;
-        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Emit per-file progress event so UI can show real-time write status
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('file-write-progress', {
+          detail: {
+            filePath: action.filePath,
+            status: 'written',
+            bytes: action.content.length,
+            streaming: this.#streamingActive,
+          },
+        }));
+      }
+    } else {
+      // Batch mode — queue for bulk write (used for non-streaming operations)
+      const opId = queueFileWrite(action.filePath, action.content);
+      console.debug('📦 [FileAction] File queued for batch:', action.filePath, 'opId:', opId);
+      logger.debug(`File queued for batch: ${action.filePath} (${action.content.length} bytes)`);
+
+      // Schedule flush if not already scheduled
+      this.#scheduleBatchFlush();
+    }
+
+    // Update local file store immediately so UI shows the file (both paths)
+    const store = await getWorkbenchStore();
+    const relativePath = action.filePath.startsWith('/') ? action.filePath.substring(1) : action.filePath;
+    const fullPath = `${WORK_DIR}/${relativePath}`;
+    const parts = fullPath.split('/').filter(Boolean);
+    for (let i = 1; i < parts.length; i++) {
+      const folderPath = '/' + parts.slice(0, i).join('/');
+      if (!store.files.get()[folderPath]) {
+        store.files.setKey(folderPath, { type: 'folder' });
       }
     }
+    store.files.setKey(fullPath, { type: 'file', content: action.content, isBinary: false });
+
+    // Save state for undo/redo
+    if (previousContent !== null) {
+      undoManager.saveState(action.filePath, previousContent, 'Before AI change', false);
+    }
+    undoManager.saveState(action.filePath, action.content, 'AI file change', true);
+
+    // Track modified file for GitHub sync
+    this.#modifiedFiles.push({ path: action.filePath, content: action.content });
+
+    // Track written file content for auto-package detection
+    this.#writtenFileContents.set(action.filePath, action.content);
 
     // ✅ P1: Check if package.json was created
     const isPackageJson = action.filePath === 'package.json' || action.filePath.endsWith('/package.json');
@@ -1028,6 +1685,101 @@ export class ActionRunner {
       // Schedule static file server start (debounced)
       this.#scheduleStaticServer();
     }
+  }
+
+  /**
+   * Schedule a batch flush after AI response completes or timeout
+   */
+  #scheduleBatchFlush(): void {
+    // Clear existing timer
+    if (this.#batchFlushTimer) {
+      clearTimeout(this.#batchFlushTimer);
+    }
+
+    // Schedule flush after 500ms of inactivity (reduced from 2s to prevent stacked delays)
+    this.#batchFlushTimer = setTimeout(async () => {
+      try {
+        signalBatchWriteStart();
+        const result = await flushFileWrites();
+        signalBatchWriteEnd();
+        if (result.totalFiles > 0) {
+          logger.info(`📦 Batch flush complete: ${result.successCount}/${result.totalFiles} files`);
+
+          // Trigger GitHub sync after batch completes
+          if (this.#chatId && this.#modifiedFiles.length > 0) {
+            const filesToSync = [...this.#modifiedFiles];
+            this.#modifiedFiles = [];
+            autoSyncToGitHub(this.#chatId, filesToSync);
+          }
+        }
+      } catch (error) {
+        signalBatchWriteEnd();
+        logger.error('Batch flush failed:', error);
+      }
+    }, 500);
+  }
+
+  /**
+   * Force flush all pending file batches immediately
+   * Call this when AI streaming ends or before critical operations
+   */
+  async flushFileBatch(): Promise<BatchResult> {
+    if (this.#batchFlushTimer) {
+      clearTimeout(this.#batchFlushTimer);
+      this.#batchFlushTimer = null;
+    }
+
+    signalBatchWriteStart();
+    let result: BatchResult;
+    try {
+      result = await flushFileWrites();
+    } finally {
+      signalBatchWriteEnd();
+    }
+
+    // Trigger GitHub sync after flush
+    if (this.#chatId && this.#modifiedFiles.length > 0) {
+      const filesToSync = [...this.#modifiedFiles];
+      this.#modifiedFiles = [];
+      autoSyncToGitHub(this.#chatId, filesToSync);
+    }
+
+    return result;
+  }
+
+  /**
+   * Wait for all pending file operations to complete
+   */
+  async waitForFileOperations(): Promise<void> {
+    // Wait for current execution chain
+    await this.#currentExecutionPromise;
+
+    // Wait for batch completion if batching is enabled
+    if (this.#useBatchMode) {
+      await waitForBatchCompletion();
+    }
+  }
+
+  /**
+   * Enable or disable batch mode for file operations
+   */
+  setBatchMode(enabled: boolean): void {
+    this.#useBatchMode = enabled;
+    logger.info(`File batch mode ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Check if batch mode is enabled
+   */
+  isBatchModeEnabled(): boolean {
+    return this.#useBatchMode;
+  }
+
+  /**
+   * Set callback for batch progress updates
+   */
+  onBatchProgress(callback: (progress: BatchProgress) => void): void {
+    this.#batchProgressCallback = callback;
   }
 
   async #runImportStarterAction(action: ActionState) {
@@ -1065,46 +1817,53 @@ export class ActionRunner {
       logger.info(`✅ Starter template loaded: ${fileCount} files`);
 
       // Write all files from the starter template using Docker
-      console.log('📦 [importStarter] Ensuring Docker is ready...');
+      console.debug('📦 [importStarter] Ensuring Docker is ready...');
       await this.#ensureDockerReady();
-      console.log('📦 [importStarter] Docker ready, writing', Object.keys(result.data.files).length, 'files...');
+      console.debug('📦 [importStarter] Docker ready, writing', Object.keys(result.data.files).length, 'files...');
       const files = result.data.files;
       const store = await getWorkbenchStore();
 
+      // Signal FileWatcher to buffer events during bulk writes
+      signalBatchWriteStart();
+
       // Files are in format: { "path/to/file.js": "content", ... }
       let filesWritten = 0;
-      for (const [filePath, content] of Object.entries(files)) {
-        const folder = nodePath.dirname(filePath);
+      try {
+        for (const [filePath, content] of Object.entries(files)) {
+          const folder = nodePath.dirname(filePath);
 
-        // Create folder if needed
-        if (folder !== '.') {
-          try {
-            await this.#dockerMkdir(folder);
-          } catch (error) {
-            // Folder might already exist, continue
+          // Create folder if needed
+          if (folder !== '.') {
+            try {
+              await this.#dockerMkdir(folder);
+            } catch (error) {
+              // Folder might already exist, continue
+            }
           }
-        }
 
-        // Write file
-        await this.#dockerWriteFile(filePath, content as string);
+          // Write file
+          await this.#dockerWriteFile(filePath, content as string);
 
-        // Update local file store so UI shows the file
-        const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-        const fullPath = `${WORK_DIR}/${relativePath}`;
-        const parts = fullPath.split('/').filter(Boolean);
-        // Create all parent folders in the file tree
-        for (let i = 1; i < parts.length; i++) {
-          const folderPath = '/' + parts.slice(0, i).join('/');
-          if (!store.files.get()[folderPath]) {
-            store.files.setKey(folderPath, { type: 'folder' });
+          // Update local file store so UI shows the file
+          const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+          const fullPath = `${WORK_DIR}/${relativePath}`;
+          const parts = fullPath.split('/').filter(Boolean);
+          // Create all parent folders in the file tree
+          for (let i = 1; i < parts.length; i++) {
+            const folderPath = '/' + parts.slice(0, i).join('/');
+            if (!store.files.get()[folderPath]) {
+              store.files.setKey(folderPath, { type: 'folder' });
+            }
           }
+          store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
+          filesWritten++;
+          console.debug(`📦 [importStarter] Written ${filesWritten}/${fileCount}: ${filePath}`);
         }
-        store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
-        filesWritten++;
-        console.log(`📦 [importStarter] Written ${filesWritten}/${fileCount}: ${filePath}`);
+      } finally {
+        signalBatchWriteEnd();
       }
 
-      console.log(`📦 [importStarter] All ${filesWritten} files written to Docker`);
+      console.debug(`📦 [importStarter] All ${filesWritten} files written to Docker`);
       logger.info(`✅ Starter template imported successfully: ${action.templateId}`);
     } catch (error) {
       logger.error(`❌ Failed to import starter template:`, error);
@@ -1151,35 +1910,42 @@ export class ActionRunner {
       const files = result.files;
       const store = await getWorkbenchStore();
 
+      // Signal FileWatcher to buffer events during bulk writes
+      signalBatchWriteStart();
+
       // Files are in format: { "path/to/file.js": "content", ... }
-      for (const [filePath, content] of Object.entries(files)) {
-        const folder = nodePath.dirname(filePath);
+      try {
+        for (const [filePath, content] of Object.entries(files)) {
+          const folder = nodePath.dirname(filePath);
 
-        // Create folder if needed
-        if (folder !== '.') {
-          try {
-            await this.#dockerMkdir(folder);
-          } catch (error) {
-            // Folder might already exist, continue
+          // Create folder if needed
+          if (folder !== '.') {
+            try {
+              await this.#dockerMkdir(folder);
+            } catch (error) {
+              // Folder might already exist, continue
+            }
           }
-        }
 
-        // Write file
-        await this.#dockerWriteFile(filePath, content as string);
+          // Write file
+          await this.#dockerWriteFile(filePath, content as string);
 
-        // Update local file store so UI shows the file
-        const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-        const fullPath = `${WORK_DIR}/${relativePath}`;
-        const parts = fullPath.split('/').filter(Boolean);
-        // Create all parent folders in the file tree
-        for (let i = 1; i < parts.length; i++) {
-          const folderPath = '/' + parts.slice(0, i).join('/');
-          if (!store.files.get()[folderPath]) {
-            store.files.setKey(folderPath, { type: 'folder' });
+          // Update local file store so UI shows the file
+          const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+          const fullPath = `${WORK_DIR}/${relativePath}`;
+          const parts = fullPath.split('/').filter(Boolean);
+          // Create all parent folders in the file tree
+          for (let i = 1; i < parts.length; i++) {
+            const folderPath = '/' + parts.slice(0, i).join('/');
+            if (!store.files.get()[folderPath]) {
+              store.files.setKey(folderPath, { type: 'folder' });
+            }
           }
+          store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
+          logger.debug(`Created: ${filePath}`);
         }
-        store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
-        logger.debug(`Created: ${filePath}`);
+      } finally {
+        signalBatchWriteEnd();
       }
 
       logger.info(`✅ Repository cloned successfully: ${action.repoUrl}`);
@@ -1371,14 +2137,14 @@ export class ActionRunner {
       clearTimeout(this.#autoInstallTimer);
     }
 
-    // 🔧 FIX: Increased debounce to 3s to ensure all files are created before starting dev server
-    // The AI often creates many files in sequence and we need to wait for ALL of them
-    // Previous 2s was still too short for complex projects like blog platforms with 20+ files
-    logger.info('Scheduling auto-install (debounced, 3000ms delay)...');
+    // During streaming with direct writes: files are already on Docker, use shorter debounce.
+    // Non-streaming: use longer debounce to ensure all batched files flush first.
+    const debounceMs = this.#streamingActive ? 1500 : 3000;
+    logger.info(`Scheduling auto-install (debounced, ${debounceMs}ms delay, streaming=${this.#streamingActive})...`);
 
     this.#autoInstallTimer = setTimeout(() => {
       this.#runAutoInstall();
-    }, 3000);
+    }, debounceMs);
   }
 
   /**
@@ -1458,6 +2224,14 @@ export class ActionRunner {
       return;
     }
 
+    // Don't start dev server while AI is still streaming files
+    // Skip this check for restored chats — there's no active stream, onStreamEnd() never fires
+    if (this.#streamingActive && !this.#isRestoredChat) {
+      logger.info('⏳ Streaming still active, deferring auto-install until stream ends...');
+      this.#scheduleAutoInstall();
+      return;
+    }
+
     globalAutoInstallTriggered = true;
     globalNpmInstallRunning = true;
     logger.info('⚡ Starting optimized auto-install and dev server...');
@@ -1488,22 +2262,34 @@ export class ActionRunner {
         logger.info('📦 Found existing node_modules, attempting incremental install...');
       }
 
-      // 🚀 Use bun for fast installs - --force handles peer dependency conflicts
-      logger.info('📦 Installing dependencies with bun...');
-      try {
-        await this.#dockerExec('bun install --force');
-        logger.info('✅ Dependencies installed successfully with bun');
-      } catch (bunError: any) {
-        // Fallback to npm with legacy peer deps if bun fails
-        logger.warn('⚠️ bun install failed, trying npm fallback...');
-        await this.#dockerExec('rm -rf node_modules bun.lockb');
-        await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
-        logger.info('✅ Dependencies installed successfully with npm');
+      if (hasValidNodeModules && globalNpmInstallComplete) {
+        logger.info('✅ Dependencies already installed, skipping reinstall');
+      } else {
+        // 🚀 Use bun for fast installs - --force handles peer dependency conflicts
+        logger.info('📦 Installing dependencies with bun...');
+        try {
+          await this.#dockerExec('bun install --force');
+          logger.info('✅ Dependencies installed successfully with bun');
+        } catch (bunError: any) {
+          // Fallback to npm with legacy peer deps if bun fails
+          logger.warn('⚠️ bun install failed, trying npm fallback...');
+          await this.#dockerExec('rm -rf node_modules bun.lockb');
+          await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+          logger.info('✅ Dependencies installed successfully with npm');
+        }
+
+        // Only mark as complete if we reach this point without exceptions
+        globalNpmInstallComplete = true; // ✅ Mark install as complete
       }
 
-      // Only mark as complete if we reach this point without exceptions
       globalNpmInstallRunning = false;
-      globalNpmInstallComplete = true; // ✅ Mark install as complete
+
+      // 🔍 AUTO-PACKAGE DETECTION: Scan created files for missing dependencies
+      try {
+        await this.#autoDetectMissingPackages();
+      } catch (pkgErr) {
+        logger.warn('Auto-package detection failed (non-critical):', pkgErr);
+      }
 
       // 🚀 CRITICAL FIX: Verify all imports can be resolved before starting dev server
       // This prevents Vite from crashing due to missing files (e.g., ./pages/Register)
@@ -1531,17 +2317,30 @@ export class ActionRunner {
         return;
       }
 
-      logger.info('🚀 Starting dev server...');
-      // Force Vite to use port 5173 (mapped to host 10001) and bind to all interfaces
-      await this.#dockerExec('npm run dev -- --port 5173 --host 0.0.0.0', '/workspace', true);
-      logger.info('✅ Dev server started in background');
+      logger.info('🚀 Starting dev server via backend API...');
 
-      // 🔧 AUTO-DETECT BACKEND: Check if there's a separate backend server that needs to be started
-      // This handles cases where the AI creates a backend but doesn't use concurrently
+      // Kill static file server if it was started before package.json existed
+      if (globalStaticServerStarted) {
+        try {
+          await this.#dockerExec('pkill -f "python3 -m http.server 5173" || true');
+          globalStaticServerStarted = false;
+        } catch {}
+      }
+
+      // Backend API handles: killing existing processes, framework-specific commands,
+      // port binding, daemonization, and health checking (waits up to 30s)
+      const result = await this.#startDevServerViaAPI(framework);
+
+      if (result.ready) {
+        logger.info(`✅ Dev server ready via backend API on port ${result.port}`);
+      }
+
+      // Auto-detect backend: check if there's a separate backend server
       await this.#autoStartBackendIfNeeded();
 
-      // Check health and mark container as ready
-      setTimeout(() => this.#checkDevServerHealth(true), 2000);
+      // Post-generation compile check
+      this.#registerCompileRecheckListener();
+      setTimeout(() => this.#postGenerationCompileCheck(), 5000);
     } catch (error: any) {
       globalNpmInstallRunning = false;
       logger.error('❌ Auto-install failed:', error.message);
@@ -1553,6 +2352,324 @@ export class ActionRunner {
     }
   }
 
+  /**
+   * Auto-detect missing packages by scanning created files for imports
+   * and comparing against package.json dependencies.
+   * Uses #writtenFileContents (Map) for complete coverage of all files
+   * written in this session, with fallback to #modifiedFiles array.
+   */
+  async #autoDetectMissingPackages(): Promise<void> {
+    if (!this.#dockerReady || !this.#projectId) return;
+
+    try {
+      // Dynamically import the package detector
+      const { detectMissingPackages, parsePackageJson } = await import('~/lib/services/package-detector');
+
+      // Build a comprehensive map of all file contents written in this session.
+      // Prefer #writtenFileContents (Map) which is the canonical source,
+      // but also merge in #modifiedFiles as a safety net.
+      const files: Record<string, string> = {};
+
+      // Primary source: writtenFileContents Map (tracks every file write)
+      for (const [path, content] of this.#writtenFileContents) {
+        files[path] = content;
+      }
+
+      // Secondary source: modifiedFiles array (in case any were missed)
+      for (const { path, content } of this.#modifiedFiles) {
+        if (!files[path]) {
+          files[path] = content;
+        }
+      }
+
+      // Also read package.json from the container if not in written files
+      if (!files['package.json']) {
+        try {
+          const pkgRes = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=package.json`, {
+            headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
+          });
+          if (pkgRes.ok) {
+            files['package.json'] = await pkgRes.text();
+          }
+        } catch { /* no package.json yet */ }
+      }
+
+      if (!files['package.json'] || Object.keys(files).length < 2) return;
+
+      const { missingPackages } = detectMissingPackages(files);
+
+      if (missingPackages.length > 0) {
+        logger.info(`📦 Auto-detected ${missingPackages.length} missing packages: ${missingPackages.join(', ')}`);
+
+        // Emit event for UI notification
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('recoder:packages-auto-detected', {
+            detail: { packages: missingPackages },
+          }));
+        }
+
+        // Read and update package.json
+        const pkgJson = parsePackageJson(files['package.json']);
+        if (pkgJson) {
+          const deps = pkgJson.dependencies || {};
+          for (const pkg of missingPackages) {
+            if (!deps[pkg]) {
+              deps[pkg] = 'latest';
+            }
+          }
+          pkgJson.dependencies = deps;
+
+          // Write updated package.json back to Docker and local stores
+          const updatedPkgJson = JSON.stringify(pkgJson, null, 2);
+          await this.#dockerWriteFile('package.json', updatedPkgJson);
+          this.#writtenFileContents.set('package.json', updatedPkgJson);
+          logger.info(`📝 Updated package.json with ${missingPackages.length} missing packages`);
+
+          // Update local file store so UI reflects the change
+          try {
+            const store = await getWorkbenchStore();
+            store.files.setKey(`${WORK_DIR}/package.json`, { type: 'file', content: updatedPkgJson, isBinary: false });
+          } catch { /* non-critical */ }
+
+          // Re-install with the new packages
+          try {
+            await this.#dockerExec('bun install --force');
+            logger.info('✅ Re-installed dependencies with auto-detected packages');
+          } catch {
+            await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+            logger.info('✅ Re-installed dependencies (npm fallback) with auto-detected packages');
+          }
+        }
+      } else {
+        logger.debug('✅ No missing packages detected');
+      }
+    } catch (err) {
+      logger.warn('Auto-package detection error:', err);
+    }
+  }
+
+  /**
+   * Post-generation compile check: reads Vite output logs and checks for errors.
+   * Non-blocking — emits events but doesn't stop the pipeline.
+   * De-duplicates errors, strips ANSI codes/noise, includes context lines,
+   * and directly triggers auto-fix when errors are found.
+   *
+   * Best-effort: wrapped in try/catch so failures never affect the pipeline.
+   */
+  async #postGenerationCompileCheck(): Promise<void> {
+    if (!this.#dockerReady || !this.#projectId) return;
+
+    try {
+      // Skip compile check while actions or batch writes are still in flight.
+      const queueStats = actionQueue.getQueueStats();
+      const batchState = batchStatus.get();
+      const queueBusy =
+        queueStats.pending > 0 ||
+        queueStats.running > 0 ||
+        actionQueue.queueStatus.get() === 'running';
+      const batchBusy = batchState === 'collecting' || batchState === 'sending';
+
+      if (queueBusy || batchBusy) {
+        // Avoid retry storms: cap retries and coalesce with a single timer.
+        if (this.#compileCheckRetryCount < 5 && !this.#compileCheckRetryTimer) {
+          this.#compileCheckRetryCount += 1;
+          this.#compileCheckRetryTimer = setTimeout(() => {
+            this.#compileCheckRetryTimer = null;
+            this.#postGenerationCompileCheck();
+          }, 3000);
+        }
+        return;
+      }
+
+      // Reset retry counter once the pipeline is idle
+      this.#compileCheckRetryCount = 0;
+
+      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`, {
+        headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
+      });
+      if (!res.ok) return;
+
+      const data = await res.json() as { logs?: string };
+      const logs = data.logs || '';
+
+      // Strip ANSI color codes and [vite] prefix decorations
+      const stripAnsi = (str: string) => str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+      const stripVitePrefix = (str: string) => str.replace(/^\s*\[vite\]\s*/i, '');
+      const cleanLine = (str: string) => stripVitePrefix(stripAnsi(str)).trim();
+
+      // Comprehensive compile error patterns
+      const errorPatterns = [
+        /ERROR\s+in\s+/i,            // webpack-style "ERROR in ./file.ts"
+        /error TS\d+/,               // TypeScript errors (error TS2304, etc.)
+        /Failed to resolve import/i,  // Vite import resolution failures
+        /Failed to resolve/i,         // General resolution failures
+        /SyntaxError/i,               // JavaScript/TypeScript syntax errors
+        /Module not found/i,          // Webpack/bundler module resolution
+        /Cannot find module/i,        // Node.js module resolution
+        /Unexpected token/i,          // Parser errors
+        /Build failed/i,              // General build failures
+        /ReferenceError/i,            // Undefined variable references
+        /TypeError.*is not/i,         // Type errors at compile time
+        /Could not resolve/i,         // esbuild/Vite resolution
+        /Pre-transform error/i,       // Vite pre-transform errors
+        /Internal server error/i,     // Dev server internal errors
+      ];
+
+      // Noise patterns to skip (false positives)
+      const noisePatterns = [
+        /error\.tsx?$/i,              // Files named "error.tsx" are not errors
+        /errorBoundary/i,             // ErrorBoundary components are not errors
+        /error-handler/i,             // Error handler modules are not errors
+        /console\.error/i,            // Code that calls console.error
+        /\.error\s*\(/i,              // Method calls like logger.error()
+      ];
+
+      const logLines = logs.split('\n');
+      const seenErrors = new Set<string>();
+      const detectedErrors: string[] = [];
+
+      for (let i = 0; i < logLines.length; i++) {
+        const cleaned = cleanLine(logLines[i]);
+        if (!cleaned) continue;
+
+        // Skip very short lines (e.g., single letters from partial logs)
+        if (cleaned.length < 5) continue;
+
+        // Skip noise patterns
+        if (noisePatterns.some(p => p.test(cleaned))) continue;
+
+        if (errorPatterns.some(p => p.test(cleaned))) {
+          // De-duplicate: skip if we've already seen this exact error
+          if (seenErrors.has(cleaned)) continue;
+          seenErrors.add(cleaned);
+
+          // Grab preceding and following lines for context (file paths, stack traces)
+          const prevLine = i > 0 ? cleanLine(logLines[i - 1]) : '';
+          const nextLine = i < logLines.length - 1 ? cleanLine(logLines[i + 1]) : '';
+
+          let errorWithContext = cleaned;
+          if (prevLine && !seenErrors.has(prevLine)) {
+            errorWithContext = `${prevLine}\n  ${errorWithContext}`;
+          }
+          if (nextLine && !seenErrors.has(nextLine) && nextLine.length < 200) {
+            errorWithContext = `${errorWithContext}\n  ${nextLine}`;
+          }
+
+          detectedErrors.push(errorWithContext);
+
+          // Stop at 10 unique errors to avoid overwhelming the AI
+          if (detectedErrors.length >= 10) break;
+        }
+      }
+
+      if (detectedErrors.length > 0) {
+        logger.warn(`[compile-check] ${detectedErrors.length} unique errors detected (${this.#writtenFileContents.size} files written this session)`);
+        detectedErrors.slice(0, 5).forEach(e => logger.warn(`  ${e}`));
+
+        // Emit event so UI can show errors
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('compile-errors-detected', {
+            detail: {
+              errors: detectedErrors,
+              projectId: this.#projectId,
+              filesWritten: this.#writtenFileContents.size,
+              output: logs.slice(-2000), // Include last 2000 chars for debugging
+            }
+          }));
+
+          // Also directly trigger auto-fix
+          window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+            detail: {
+              prompt: this.#formatCompileErrorsForAI(detectedErrors),
+              auto: true,
+              errors: detectedErrors,
+            }
+          }));
+        }    } else {
+      // Fallback: run TypeScript typecheck using our dedicated endpoint
+      // This catches errors that don't show up in dev server logs
+      try {
+        if (this.#projectId && this.#writtenFileContents.size > 0) {
+          const typeCheckResult = await runTypeCheck(this.#projectId);
+          
+          if (!typeCheckResult.success && typeCheckResult.errors.length > 0) {
+            const formatted = typeCheckResult.errors.map(
+              e => `${e.file}:${e.line}:${e.column} - ${e.code}: ${e.message}`
+            );
+            
+            logger.warn(`[compile-check] TypeScript check found ${typeCheckResult.errorCount} errors`);
+            
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('compile-errors-detected', {
+                detail: {
+                  errors: formatted,
+                  projectId: this.#projectId,
+                  filesWritten: this.#writtenFileContents.size,
+                  output: formatTypeCheckErrors(typeCheckResult.errors),
+                  source: 'typecheck',
+                }
+              }));
+
+              // Trigger auto-fix with structured context
+              window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+                detail: {
+                  prompt: generateAutoFixContext(typeCheckResult.errors),
+                  auto: true,
+                  errors: formatted,
+                  typeCheckResult,
+                }
+              }));
+            }
+            return;
+          } else if (typeCheckResult.message === 'TypeScript not installed in project') {
+            logger.info('[compile-check] TypeScript not installed, skipping type check');
+          } else {
+            logger.info('[compile-check] TypeScript check passed');
+          }
+        }
+      } catch (err) {
+        logger.debug('[compile-check] Typecheck fallback skipped:', err);
+      }
+
+        logger.info('[compile-check] Build appears clean — no errors detected in build output');
+      }
+    } catch (err) {
+      // Best-effort: never let compile check failures affect the pipeline
+      logger.debug('[compile-check] Compile check skipped:', err);
+    }
+  }
+
+  /**
+   * Format compile errors into a structured prompt for the AI auto-fixer.
+   */
+  #formatCompileErrorsForAI(errors: string[]): string {
+    const errorBlock = errors.slice(0, 10).map((e, i) => `${i + 1}. ${e}`).join('\n');
+    return `[AUTO-FIX] The app compiled with errors. Fix these build errors:\n\n${errorBlock}\n\nPlease fix all errors above. Read the affected files first, then make targeted fixes. Do NOT rewrite entire files.`;
+  }
+
+  /**
+   * Register listener for recheck requests from auto-fix verify cycle.
+   * When useAutoErrorFix applies a fix, it dispatches 'recoder:recheck-compile'
+   * so we can re-run the compile check and verify the fix worked.
+   */
+  #registerCompileRecheckListener(): void {
+    if (typeof window === 'undefined') return;
+
+    // Remove any previously registered handler to avoid duplicates
+    if (this.#compileRecheckHandler) {
+      window.removeEventListener('recoder:recheck-compile', this.#compileRecheckHandler);
+    }
+
+    const handler = () => {
+      if (this.#dockerReady && this.#projectId) {
+        this.#postGenerationCompileCheck();
+      }
+    };
+
+    window.addEventListener('recoder:recheck-compile', handler);
+    this.#compileRecheckHandler = handler;
+  }
+
   async #checkDevServerHealth(markContainerReady: boolean = false) {
     try {
       // Check preview health endpoint
@@ -1560,6 +2677,7 @@ export class ActionRunner {
         headers: {
           'Authorization': `Bearer ${getSessionToken() || ''}`,
         },
+        signal: AbortSignal.timeout(10000),
       });
       if (healthRes.ok) {
         const healthData = await healthRes.json() as DockerHealthCheckResponse;
@@ -1568,7 +2686,7 @@ export class ActionRunner {
         if (respondingPort) {
           logger.info(`✅ Dev server verified responding on port ${respondingPort.port} (${respondingPort.type})`);
 
-          // Mark container as ready if requested
+          // Mark container as ready and notify preview
           if (markContainerReady && typeof window !== 'undefined') {
             try {
               const { workbenchStore } = await import('~/lib/stores/workbench');
@@ -1576,6 +2694,10 @@ export class ActionRunner {
             } catch (e) {
               logger.warn('Could not set container ready:', e);
             }
+
+            window.dispatchEvent(new CustomEvent('recoder:dev-server-ready', {
+              detail: { projectId: this.#projectId, port: respondingPort.port },
+            }));
           }
         } else {
           logger.warn(`⚠️ Dev server not responding yet on any port`);
@@ -1631,8 +2753,9 @@ export class ActionRunner {
 
       // Check for common error patterns
       if (logs.includes('EADDRINUSE') || logs.includes('address already in use')) {
-        logger.warn('⚠️ Dev server port conflict detected. Restarting...');
-        await this.#dockerExec('npm run dev', '/workspace', true);
+        logger.warn('⚠️ Dev server port conflict detected. Restarting via backend API...');
+        globalStaticServerStarted = false;
+        await this.#restartDevServerViaAPI();
         return;
       }
 
@@ -1663,6 +2786,130 @@ export class ActionRunner {
   }
 
   /**
+   * Start dev server via backend API instead of client-side dockerExec.
+   * The backend's devServerManager handles:
+   * - Framework-specific start commands
+   * - Killing existing processes
+   * - Proper daemonization with setsid
+   * - Health checking (waits up to 30s)
+   * - Error detection and auto-restore
+   */
+  async #startDevServerViaAPI(framework?: string): Promise<{ ready: boolean; port?: number; logs?: string }> {
+    if (!this.#projectId) {
+      logger.error('Cannot start dev server: no projectId');
+      return { ready: false };
+    }
+
+    // Auto-detect framework via backend if not provided
+    if (!framework) {
+      try {
+        const detection = await dockerGet<{
+          framework: string;
+          installCommand?: string;
+          devCommand?: string;
+        }>(`/api/dev-server/detect-framework/${this.#projectId}`);
+        framework = detection.framework;
+        logger.info(`🔍 Backend detected framework: ${framework}`);
+      } catch (e) {
+        // Fallback to client-side detection
+        framework = await this.#detectFramework();
+        logger.info(`🔍 Client-side detected framework: ${framework}`);
+      }
+    }
+
+    logger.info(`🚀 Starting dev server via backend API (framework: ${framework})...`);
+
+    try {
+      // Backend waits up to 30s for health check + process startup overhead, so use 45s timeout
+      const result = await dockerPost<{ ready: boolean; port?: number; logs?: string }>(
+        '/api/dev-server/start',
+        { projectId: this.#projectId, framework },
+        { timeout: 45000 }
+      );
+
+      if (result.ready) {
+        logger.info(`✅ Dev server ready on port ${result.port}`);
+
+        // Mark container as ready and notify preview
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.setContainerReady(true);
+        } catch (e) {
+          logger.warn('Could not set container ready:', e);
+        }
+
+        // Notify preview iframe that dev server is ready so it can load
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('recoder:dev-server-ready', {
+            detail: { projectId: this.#projectId, port: result.port },
+          }));
+        }
+      } else {
+        logger.warn('⚠️ Dev server started but not responding yet');
+        if (result.logs) {
+          logger.info(`📋 Dev server logs:\n${result.logs}`);
+        }
+
+        // Schedule a health recheck - the backend may still be waiting
+        setTimeout(() => this.#checkDevServerHealth(true), 5000);
+      }
+
+      return result;
+    } catch (error: any) {
+      logger.error('❌ Backend dev server start failed:', error.message);
+      return { ready: false, logs: error.message };
+    }
+  }
+
+  /**
+   * Restart dev server via backend API.
+   * Handles stop + start atomically on the backend.
+   */
+  async #restartDevServerViaAPI(): Promise<{ ready: boolean; port?: number }> {
+    if (!this.#projectId) {
+      logger.error('Cannot restart dev server: no projectId');
+      return { ready: false };
+    }
+
+    logger.info('🔄 Restarting dev server via backend API...');
+
+    try {
+      // Restart includes stop + start, so allow extra time (45s)
+      const result = await dockerPost<{ ready: boolean; port?: number }>(
+        '/api/dev-server/restart',
+        { projectId: this.#projectId },
+        { timeout: 45000 }
+      );
+
+      if (result.ready) {
+        logger.info(`✅ Dev server restarted, ready on port ${result.port}`);
+
+        try {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+          workbenchStore.setContainerReady(true);
+        } catch (e) {
+          logger.warn('Could not set container ready:', e);
+        }
+
+        // Notify preview to reload with the restarted dev server
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('recoder:dev-server-ready', {
+            detail: { projectId: this.#projectId, port: result.port },
+          }));
+        }
+      } else {
+        logger.warn('⚠️ Dev server restarted but not responding yet');
+        setTimeout(() => this.#checkDevServerHealth(true), 5000);
+      }
+
+      return result;
+    } catch (error: any) {
+      logger.error('❌ Backend dev server restart failed:', error.message);
+      return { ready: false };
+    }
+  }
+
+  /**
    * Run install and dev server for non-Node.js languages (Python, Rust, Go, Java)
    */
   async #runNonNodeInstall(framework: string) {
@@ -1683,15 +2930,9 @@ export class ActionRunner {
       globalNpmInstallRunning = false;
       globalNpmInstallComplete = true;
 
-      // Start dev server
-      if (devCmd) {
-        logger.info(`🚀 Starting ${framework} dev server: ${devCmd}`);
-        await this.#dockerExec(devCmd, '/workspace', true);
-        logger.info(`✅ ${framework} dev server started on port ${port}`);
-      }
-
-      // Check health and mark ready
-      setTimeout(() => this.#checkDevServerHealth(true), 3000);
+      // Start dev server via backend API (handles framework-specific commands and health checking)
+      logger.info(`🚀 Starting ${framework} dev server via backend API...`);
+      await this.#startDevServerViaAPI(framework);
 
     } catch (error: any) {
       globalNpmInstallRunning = false;
@@ -1745,12 +2986,7 @@ export class ActionRunner {
       if (globalAutoInstallTriggered) {
         logger.info('🔄 Restarting dev server to apply tsconfig changes...');
         try {
-          // Kill existing dev server
-          await this.#dockerExec('pkill -f "npm run dev" || true');
-          // Wait a moment
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          // Start new one
-          await this.#dockerExec('npm run dev', '/workspace', true);
+          await this.#restartDevServerViaAPI();
           logger.info('✅ Dev server restarted with new tsconfig');
         } catch (error) {
           logger.warn('Failed to restart dev server:', error);
@@ -1867,7 +3103,8 @@ export class ActionRunner {
             tool: 'discoverFiles',
             params: {
               query: action.query || '',
-              workingDir: '/workspace'
+              workingDir: '/workspace',
+              projectId: this.#projectId
             }
           })
         });
@@ -1948,20 +3185,26 @@ export class ActionRunner {
         await new Promise(r => setTimeout(r, 200));
       }
 
-      // 🚨 CRITICAL: Return error if file doesn't exist
+      // If file doesn't exist, auto-create it with the newString content as a fallback
       if (!fileExists) {
-        const errorMessage = `ERROR: File "${action.filePath}" does not exist. Cannot use str_replace on a non-existent file.
+        logger.warn(`str_replace target file "${action.filePath}" does not exist, auto-creating with newString content`);
 
-To create a NEW file, use:
-<recoderAction type="file" filePath="${action.filePath}">
-[file contents here]
-</recoderAction>
+        // Create parent directories
+        const folder = nodePath.dirname(action.filePath);
+        if (folder && folder !== '.') {
+          try {
+            await this.#dockerMkdir(folder);
+          } catch (e) {
+            logger.warn(`Failed to create directory ${folder}:`, e);
+          }
+        }
 
-str_replace is ONLY for modifying EXISTING files.`;
+        // Write the file with the newString content
+        await this.#dockerWriteFile(action.filePath, action.newString);
+        action.content = `File "${action.filePath}" did not exist. Created it with the replacement content.`;
+        logger.info(`Auto-created file ${action.filePath} from str_replace newString`);
 
-        logger.error(`str_replace attempted on non-existent file: ${action.filePath}`);
-        action.content = errorMessage;
-        throw new Error(errorMessage);
+        return;
       }
 
       // Call enterprise tools API for search-replace
@@ -1983,6 +3226,28 @@ str_replace is ONLY for modifying EXISTING files.`;
       if (result.success) {
         action.content = (result.message || '') + (result.diff ? `\n\nDiff:\n${result.diff}` : '');
         logger.info(`Successfully replaced text in ${action.filePath}`);
+
+        // ✅ VALIDATION: Validate the modified file content
+        try {
+          const fileContent = await this.#dockerExec(`cat "${filePath}"`);
+          const validationResult = await validateCode(fileContent, action.filePath, this.#projectId || undefined);
+
+          // Store validation result in action state
+          const strReplaceActionId = Object.keys(this.actions.get()).find(k => {
+            const a = this.actions.get()[k];
+            return a && a.type === 'str_replace' && (a as any).filePath === action.filePath;
+          });
+          if (strReplaceActionId) {
+            const currentAction = this.actions.get()[strReplaceActionId];
+            this.actions.setKey(strReplaceActionId, { ...currentAction, validation: validationResult });
+          }
+
+          if (!validationResult.valid) {
+            logger.warn(`⚠️ Post-replace validation issues for ${action.filePath}`);
+          }
+        } catch (valError) {
+          logger.debug('Validation skipped for str_replace:', valError);
+        }
 
         // Enterprise enhancement: Auto-commit changes
         try {
@@ -2411,76 +3676,48 @@ str_replace is ONLY for modifying EXISTING files.`;
   }
 
   async #detectFramework(): Promise<string> {
+    if (this.#cachedFramework) return this.#cachedFramework;
+
+    let detected = 'vite';
     try {
       const files = await this.#dockerExec('find . -maxdepth 3 -type f -o -type d 2>/dev/null');
       const fileList = files.toLowerCase();
 
       // Next.js detection
       if (fileList.includes('app/page.') || fileList.includes('app/layout.') || fileList.includes('next.config')) {
-        return 'nextjs';
-      }
-
-      // Remix detection
-      if (fileList.includes('remix.config')) {
-        return 'remix';
-      }
-
-      // Astro detection
-      if (fileList.includes('astro.config')) {
-        return 'astro';
-      }
-
-      // SvelteKit detection
-      if (fileList.includes('svelte.config')) {
-        return 'sveltekit';
-      }
-
-      // Vue detection (Nuxt or plain Vue)
-      if (fileList.includes('nuxt.config')) {
-        return 'nuxt';
-      }
-
-      // Angular detection
-      if (fileList.includes('angular.json')) {
-        return 'angular';
-      }
-
-      // Python/Flask/Django detection
-      if (fileList.includes('requirements.txt') || fileList.includes('pyproject.toml')) {
-        if (fileList.includes('manage.py')) return 'django';
-        if (fileList.includes('app.py') || fileList.includes('wsgi.py')) return 'flask';
-        return 'python';
-      }
-
-      // Go detection
-      if (fileList.includes('go.mod')) {
-        return 'go';
-      }
-
-      // Rust detection
-      if (fileList.includes('cargo.toml')) {
-        return 'rust';
-      }
-
-      // Java detection
-      if (fileList.includes('pom.xml') || fileList.includes('build.gradle')) {
-        // Check for Spring Boot
+        detected = 'nextjs';
+      } else if (fileList.includes('remix.config')) {
+        detected = 'remix';
+      } else if (fileList.includes('astro.config')) {
+        detected = 'astro';
+      } else if (fileList.includes('svelte.config')) {
+        detected = 'sveltekit';
+      } else if (fileList.includes('nuxt.config')) {
+        detected = 'nuxt';
+      } else if (fileList.includes('angular.json')) {
+        detected = 'angular';
+      } else if (fileList.includes('requirements.txt') || fileList.includes('pyproject.toml')) {
+        if (fileList.includes('manage.py')) detected = 'django';
+        else if (fileList.includes('app.py') || fileList.includes('wsgi.py')) detected = 'flask';
+        else if (fileList.includes('main.py')) detected = 'fastapi';
+        else detected = 'python';
+      } else if (fileList.includes('go.mod')) {
+        detected = 'go';
+      } else if (fileList.includes('cargo.toml')) {
+        detected = 'rust';
+      } else if (fileList.includes('pom.xml') || fileList.includes('build.gradle')) {
         if (fileList.includes('spring-boot') || fileList.includes('application.properties') || fileList.includes('application.yml')) {
-          return 'java-spring';
+          detected = 'java-spring';
+        } else {
+          detected = 'java';
         }
-        return 'java';
       }
-
-      // FastAPI detection (Python with main.py containing FastAPI)
-      if (fileList.includes('main.py') && (fileList.includes('requirements.txt') || fileList.includes('pyproject.toml'))) {
-        return 'fastapi';
-      }
-
-      // Default to Vite for React/Vue/Svelte
-      return 'vite';
     } catch (e) {
-      return 'vite';
+      detected = this.#cachedFramework || 'vite';
     }
+
+    this.#cachedFramework = detected;
+    return detected;
   }
 
   #generatePackageJson(framework: string): any {
@@ -2791,5 +4028,477 @@ str_replace is ONLY for modifying EXISTING files.`;
       // Don't throw - mode switching is non-critical
       action.content = `Mode switch requested: ${action.targetMode}`;
     }
+  }
+
+  // ============================================================================
+  // BULLETPROOF ACTION MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Cancel a running or pending action
+   */
+  cancelAction(actionId: string): boolean {
+    const action = this.actions.get()[actionId];
+    if (!action) {
+      logger.warn(`Cannot cancel action ${actionId}: not found`);
+      return false;
+    }
+
+    if (action.status !== 'pending' && action.status !== 'running') {
+      logger.warn(`Cannot cancel action ${actionId}: status is ${action.status}`);
+      return false;
+    }
+
+    // Abort the action
+    const abortController = this.#actionAbortControllers.get(actionId);
+    if (abortController) {
+      abortController.abort();
+    }
+
+    // Clear timeout
+    const timeout = this.#actionTimeouts.get(actionId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.#actionTimeouts.delete(actionId);
+    }
+
+    // Update status
+    this.#updateAction(actionId, { status: 'aborted' });
+
+    logger.info(`Action ${actionId} cancelled`);
+    return true;
+  }
+
+  /**
+   * Retry a failed action
+   */
+  async retryAction(actionId: string): Promise<boolean> {
+    const action = this.actions.get()[actionId];
+    if (!action) {
+      logger.warn(`Cannot retry action ${actionId}: not found`);
+      return false;
+    }
+
+    if (action.status !== 'failed' && action.status !== 'aborted') {
+      logger.warn(`Cannot retry action ${actionId}: status is ${action.status}`);
+      return false;
+    }
+
+    logger.info(`Retrying action ${actionId}`);
+
+    // Reset status
+    this.#updateAction(actionId, { status: 'pending', executed: false });
+
+    // Re-queue the action
+    this.#currentExecutionPromise = this.#currentExecutionPromise
+      .then(() => this.#executeAction(actionId))
+      .catch((error) => {
+        logger.error(`Retry of action ${actionId} failed:`, error);
+      });
+
+    return true;
+  }
+
+  /**
+   * Rollback a file action to its previous content
+   */
+  async rollbackAction(actionId: string): Promise<boolean> {
+    const action = this.actions.get()[actionId];
+    if (!action) {
+      logger.warn(`Cannot rollback action ${actionId}: not found`);
+      return false;
+    }
+
+    const filePath = (action as any).filePath;
+    if (!filePath) {
+      logger.warn(`Cannot rollback action ${actionId}: no file path`);
+      return false;
+    }
+
+    const originalContent = this.#originalFileContents.get(filePath);
+    if (!originalContent) {
+      logger.warn(`Cannot rollback action ${actionId}: no original content saved`);
+      return false;
+    }
+
+    try {
+      logger.info(`Rolling back file: ${filePath}`);
+
+      // Write original content back
+      await this.#dockerWriteFile(filePath, originalContent);
+
+      // Update file store
+      const store = await getWorkbenchStore();
+      const relativePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+      const fullPath = `${WORK_DIR}/${relativePath}`;
+      store.files.setKey(fullPath, { type: 'file', content: originalContent, isBinary: false });
+
+      // Clear original content from cache
+      this.#originalFileContents.delete(filePath);
+
+      logger.info(`Successfully rolled back: ${filePath}`);
+
+      // Emit rollback event
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('action-rollback', {
+          detail: { actionId, filePath }
+        }));
+      }
+
+      return true;
+    } catch (error) {
+      logger.error(`Failed to rollback ${filePath}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get list of all action states with their statuses
+   */
+  getActionStates(): Array<{
+    id: string;
+    type: string;
+    status: ActionStatus;
+    filePath?: string;
+    error?: string;
+    canRetry: boolean;
+    canRollback: boolean;
+  }> {
+    const actions = this.actions.get();
+    return Object.entries(actions).map(([id, action]) => ({
+      id,
+      type: action.type,
+      status: action.status,
+      filePath: (action as any).filePath,
+      error: (action as FailedActionState).error,
+      canRetry: action.status === 'failed' || action.status === 'aborted',
+      canRollback: !!(action as any).filePath && this.#originalFileContents.has((action as any).filePath),
+    }));
+  }
+
+  /**
+   * Get actions that are currently in progress
+   */
+  getRunningActions(): Array<{ id: string; type: string; filePath?: string }> {
+    const actions = this.actions.get();
+    return Object.entries(actions)
+      .filter(([, action]) => action.status === 'running')
+      .map(([id, action]) => ({
+        id,
+        type: action.type,
+        filePath: (action as any).filePath,
+      }));
+  }
+
+  /**
+   * Get failed actions
+   */
+  getFailedActions(): Array<{
+    id: string;
+    type: string;
+    filePath?: string;
+    error: string;
+  }> {
+    const actions = this.actions.get();
+    return Object.entries(actions)
+      .filter(([, action]) => action.status === 'failed')
+      .map(([id, action]) => ({
+        id,
+        type: action.type,
+        filePath: (action as any).filePath,
+        error: (action as FailedActionState).error || 'Unknown error',
+      }));
+  }
+
+  /**
+   * Cancel all running and pending actions
+   */
+  cancelAllActions(): number {
+    let count = 0;
+    const actions = this.actions.get();
+
+    for (const [id, action] of Object.entries(actions)) {
+      if (action.status === 'pending' || action.status === 'running') {
+        if (this.cancelAction(id)) {
+          count++;
+        }
+      }
+    }
+
+    logger.info(`Cancelled ${count} actions`);
+    return count;
+  }
+
+  /**
+   * Retry all failed actions
+   */
+  async retryAllFailed(): Promise<number> {
+    let count = 0;
+    const actions = this.actions.get();
+
+    for (const [id, action] of Object.entries(actions)) {
+      if (action.status === 'failed' || action.status === 'aborted') {
+        if (await this.retryAction(id)) {
+          count++;
+        }
+      }
+    }
+
+    logger.info(`Retrying ${count} failed actions`);
+    return count;
+  }
+
+  /**
+   * Store original file content before modification (for rollback)
+   */
+  storeOriginalContent(filePath: string, content: string): void {
+    if (!this.#originalFileContents.has(filePath)) {
+      this.#originalFileContents.set(filePath, content);
+    }
+  }
+
+  /**
+   * Check if rollback is available for a file
+   */
+  canRollbackFile(filePath: string): boolean {
+    return this.#originalFileContents.has(filePath);
+  }
+
+  /**
+   * Get queue statistics
+   */
+  getQueueStats(): {
+    total: number;
+    pending: number;
+    running: number;
+    completed: number;
+    failed: number;
+    aborted: number;
+  } {
+    const actions = Object.values(this.actions.get());
+    return {
+      total: actions.length,
+      pending: actions.filter(a => a.status === 'pending').length,
+      running: actions.filter(a => a.status === 'running').length,
+      completed: actions.filter(a => a.status === 'complete').length,
+      failed: actions.filter(a => a.status === 'failed').length,
+      aborted: actions.filter(a => a.status === 'aborted').length,
+    };
+  }
+
+  // ==================== ORPHAN ACTION HANDLING ====================
+
+  /**
+   * Get actions that were added (opened) but never run (closed/executed).
+   * These are "orphaned" actions from a truncated or interrupted stream.
+   */
+  getOrphanedActions(): Array<{ actionId: string; action: ActionState; addedAt: number }> {
+    const orphans: Array<{ actionId: string; action: ActionState; addedAt: number }> = [];
+    const actions = this.actions.get();
+
+    for (const [actionId, action] of Object.entries(actions)) {
+      // An orphan is: status=pending, executed=false, and in the added timestamps map
+      if (action.status === 'pending' && !action.executed) {
+        const addedAt = this.#actionAddedTimestamps.get(actionId);
+        if (addedAt) {
+          orphans.push({ actionId, action, addedAt });
+        }
+      }
+    }
+
+    return orphans;
+  }
+
+  /**
+   * Check if there are any orphaned actions.
+   */
+  hasOrphanedActions(): boolean {
+    return this.getOrphanedActions().length > 0;
+  }
+
+  /**
+   * Finalize orphaned actions after streaming ends.
+   * Call this when the LLM stream completes to handle any actions that were
+   * opened but never closed (e.g., due to truncation).
+   *
+   * @param reason - The reason for finalization (e.g., "stream_ended", "truncated", "timeout")
+   * @returns Number of actions finalized
+   */
+  finalizeOrphanedActions(reason: string = 'stream_ended'): number {
+    const orphans = this.getOrphanedActions();
+
+    if (orphans.length === 0) {
+      logger.debug('No orphaned actions to finalize');
+      return 0;
+    }
+
+    logger.warn(`Finalizing ${orphans.length} orphaned action(s) - reason: ${reason}`);
+
+    for (const { actionId, action } of orphans) {
+      const filePath = (action as any).filePath || 'unknown';
+
+      // Mark as failed with descriptive error
+      this.#updateAction(actionId, {
+        status: 'failed',
+        error: `Action incomplete: ${reason}. The AI response was cut off before this ${action.type} action could be completed. File: ${filePath}`
+      });
+
+      // Clear orphan tracking
+      this.#actionAddedTimestamps.delete(actionId);
+      const orphanTimeout = this.#orphanTimeouts.get(actionId);
+      if (orphanTimeout) {
+        clearTimeout(orphanTimeout);
+        this.#orphanTimeouts.delete(actionId);
+      }
+
+      // Emit event for UI notification
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('action-orphaned', {
+          detail: {
+            actionId,
+            type: action.type,
+            filePath,
+            reason,
+          }
+        }));
+      }
+
+      logger.info(`Orphaned action finalized: ${actionId} (${action.type}: ${filePath})`);
+    }
+
+    // Mark streaming as inactive
+    this.#streamingActive = false;
+
+    return orphans.length;
+  }
+
+  /**
+   * Called when streaming ends (either normally or abnormally).
+   * Sets up a timeout to finalize any orphaned actions.
+   *
+   * @param isTruncated - Whether the stream was truncated
+   */
+  onStreamEnd(isTruncated: boolean = false): void {
+    logger.debug(`Stream ended, truncated: ${isTruncated}`);
+    this.#streamingActive = false;
+    this.#firstArtifactComplete = true;
+
+    // Trigger deferred auto-install now that streaming is done
+    if (this.#packageJsonCreated && !globalAutoInstallTriggered) {
+      logger.info('📦 Stream ended — triggering deferred auto-install');
+      this.#scheduleAutoInstall();
+    }
+
+    // Flush any remaining batched file writes and sync to GitHub
+    if (this.#useBatchMode) {
+      this.flushFileBatch().catch(err => {
+        logger.warn('Post-stream batch flush failed:', err);
+      });
+    }
+    if (this.#chatId && this.#modifiedFiles.length > 0) {
+      const filesToSync = [...this.#modifiedFiles];
+      this.#modifiedFiles = [];
+      autoSyncToGitHub(this.#chatId, filesToSync);
+    }
+
+    const orphans = this.getOrphanedActions();
+
+    if (orphans.length === 0) {
+      logger.debug('No orphaned actions after stream end');
+      return;
+    }
+
+    // If stream was truncated, finalize immediately
+    if (isTruncated) {
+      logger.warn(`Stream truncated with ${orphans.length} orphaned action(s), finalizing immediately`);
+      this.finalizeOrphanedActions('stream_truncated');
+      return;
+    }
+
+    // Otherwise, set up a timeout to wait for potential late closures
+    for (const { actionId, action } of orphans) {
+      // Don't set duplicate timeouts
+      if (this.#orphanTimeouts.has(actionId)) {
+        continue;
+      }
+
+      const timeout = setTimeout(() => {
+        const currentAction = this.actions.get()[actionId];
+        // Check if still orphaned (wasn't closed in the meantime)
+        if (currentAction && currentAction.status === 'pending' && !currentAction.executed) {
+          logger.warn(`Action ${actionId} still orphaned after timeout, finalizing`);
+          this.finalizeOrphanedActions('orphan_timeout');
+        }
+        this.#orphanTimeouts.delete(actionId);
+      }, ActionRunner.ORPHAN_TIMEOUT_MS);
+
+      this.#orphanTimeouts.set(actionId, timeout);
+      logger.debug(`Set orphan timeout for action ${actionId}: ${ActionRunner.ORPHAN_TIMEOUT_MS}ms`);
+    }
+  }
+
+  /**
+   * Check if streaming is currently active.
+   */
+  isStreamingActive(): boolean {
+    return this.#streamingActive;
+  }
+
+  /**
+   * Get detailed status of all actions for debugging/UI.
+   */
+  getDetailedActionStatus(): Array<{
+    actionId: string;
+    type: string;
+    status: ActionStatus;
+    executed: boolean;
+    filePath?: string;
+    error?: string;
+    isOrphaned: boolean;
+    addedAt?: number;
+  }> {
+    const actions = this.actions.get();
+    const result: Array<{
+      actionId: string;
+      type: string;
+      status: ActionStatus;
+      executed: boolean;
+      filePath?: string;
+      error?: string;
+      isOrphaned: boolean;
+      addedAt?: number;
+    }> = [];
+
+    for (const [actionId, action] of Object.entries(actions)) {
+      const addedAt = this.#actionAddedTimestamps.get(actionId);
+      const isOrphaned = action.status === 'pending' && !action.executed && !!addedAt;
+
+      result.push({
+        actionId,
+        type: action.type,
+        status: action.status,
+        executed: action.executed,
+        filePath: (action as any).filePath,
+        error: (action as FailedActionState).error,
+        isOrphaned,
+        addedAt,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Clean up all orphan timeouts (call on component unmount or chat reset).
+   */
+  cleanupOrphanTimeouts(): void {
+    for (const [actionId, timeout] of this.#orphanTimeouts) {
+      clearTimeout(timeout);
+    }
+    this.#orphanTimeouts.clear();
+    this.#actionAddedTimestamps.clear();
+    this.#streamingActive = false;
+    this.#firstArtifactComplete = false;
+    logger.debug('Cleaned up orphan timeouts');
   }
 }
