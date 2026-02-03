@@ -63,6 +63,9 @@ export const isErrorPanelDismissedAtom = atom<boolean>(false);
 /** Last time errors were updated */
 export const lastErrorUpdateAtom = atom<number>(0);
 
+/** Currently selected error (for highlighting in editor) */
+export const selectedErrorAtom = atom<BuildError | null>(null);
+
 // ============================================
 // Computed Values
 // ============================================
@@ -230,4 +233,18 @@ export function getErrorBgColor(severity: 'error' | 'warning'): string {
  */
 export function getErrorBorderColor(severity: 'error' | 'warning'): string {
   return severity === 'error' ? 'border-red-500/30' : 'border-yellow-500/30';
+}
+
+/**
+ * Select an error (for highlighting in editor and Problems panel sync)
+ */
+export function selectError(error: BuildError | null): void {
+  selectedErrorAtom.set(error);
+}
+
+/**
+ * Clear selected error
+ */
+export function clearSelectedError(): void {
+  selectedErrorAtom.set(null);
 }

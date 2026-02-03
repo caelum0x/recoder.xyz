@@ -6,8 +6,80 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import type { Express } from 'express';
 import http from 'http';
 import Docker from 'dockerode';
+import { devServerManager } from './dev-server.js';
 
 const docker = new Docker();
+const autoStartAttempts = new Map<string, number>();
+const autoInstallAttempts = new Map<string, number>();
+const AUTO_START_COOLDOWN_MS = 10000;
+const AUTO_INSTALL_COOLDOWN_MS = 60000;
+
+async function execInContainer(containerId: string, cmd: string): Promise<string> {
+  const container = docker.getContainer(containerId);
+  const exec = await container.exec({
+    Cmd: ['/bin/bash', '-c', cmd],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const stream = await exec.start({});
+  return await new Promise<string>((resolve, reject) => {
+    let out = '';
+    stream.on('data', (chunk: Buffer) => { out += chunk.slice(8).toString(); });
+    stream.on('end', () => resolve(out.trim()));
+    stream.on('error', reject);
+  });
+}
+
+async function detectFramework(containerId: string): Promise<string> {
+  try {
+    const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
+    if (!pkgRaw) return 'vite';
+    const pkg = JSON.parse(pkgRaw);
+    const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+    if (deps.next || pkg.scripts?.dev?.includes('next')) return 'next';
+    if (deps.vite || pkg.scripts?.dev?.includes('vite')) return 'vite';
+    if (deps.react) return 'react';
+  } catch {
+    // ignore
+  }
+  return 'vite';
+}
+
+async function ensureDependencies(containerId: string, projectId: string): Promise<void> {
+  const now = Date.now();
+  const lastInstall = autoInstallAttempts.get(projectId) || 0;
+  if (now - lastInstall < AUTO_INSTALL_COOLDOWN_MS) {
+    return;
+  }
+
+  const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
+  if (!pkgRaw) {
+    console.log(`⚠️ [Preview] package.json not found yet for ${projectId}, skipping install`);
+    return;
+  }
+
+  const hasNodeModules = await execInContainer(containerId, 'test -d /workspace/node_modules && echo "yes" || echo "no"');
+  if (hasNodeModules.includes('yes')) {
+    return;
+  }
+
+  autoInstallAttempts.set(projectId, now);
+  console.log(`📦 [Preview] Installing dependencies for ${projectId}...`);
+  await execInContainer(
+    containerId,
+    'cd /workspace && (bun install --force || npm install --legacy-peer-deps --no-audit --no-fund)'
+  );
+}
+
+// Helper to escape HTML entities
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 /**
  * Try to recover container info from Docker API if not in memory.
@@ -74,10 +146,19 @@ async function recoverContainerFromDocker(
 }
 
 // Friendly preview HTML for build/errors
-function friendlyPreviewPage(projectId: string, message: string, showLogs = false) {
+function friendlyPreviewPage(projectId: string, message: string, options: { showLogs?: boolean; errorDetails?: string[]; canRetry?: boolean } = {}) {
+  const { showLogs = false, errorDetails = [], canRetry = true } = options;
+
+  const errorSection = errorDetails.length > 0 ? `
+    <div class="error-details">
+      <p><strong>Error details:</strong></p>
+      <pre>${errorDetails.map(e => escapeHtml(e)).join('\n\n')}</pre>
+    </div>
+  ` : '';
+
   const logSection = showLogs ? `
     <div class="logs-hint">
-      <p><strong>💡 Tip:</strong> Check the terminal/logs for error details.</p>
+      <p><strong>Tip:</strong> Check the terminal/logs for more details.</p>
       <p>Common causes:</p>
       <ul>
         <li>Missing imported files (AI still generating)</li>
@@ -86,7 +167,10 @@ function friendlyPreviewPage(projectId: string, message: string, showLogs = fals
       </ul>
     </div>
   ` : '';
-  
+
+  const retryButton = canRetry ? `<a class="btn" href="#" onclick="window.location.reload();return false">Retry Now</a>` :
+    `<a class="btn btn-secondary" href="#" onclick="fetch('/api/dev-server/force-retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: '${projectId}' }) }).then(() => window.location.reload());return false">Force Retry</a>`;
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -105,6 +189,9 @@ function friendlyPreviewPage(projectId: string, message: string, showLogs = fals
     .logs-hint li { margin:4px 0 }
     .spinner { display:inline-block; width:16px; height:16px; border:2px solid #e2e8f0; border-top-color:#0ea5a4; border-radius:50%; animation:spin 1s linear infinite; margin-right:8px; vertical-align:middle }
     @keyframes spin { to { transform:rotate(360deg) } }
+    .error-details { margin-top:16px; padding:12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px }
+    .error-details pre { margin:8px 0 0 0; font-size:12px; color:#991b1b; white-space:pre-wrap; word-break:break-word; max-height:200px; overflow-y:auto }
+    .btn-secondary { background:#64748b }
   </style>
   <script>
     // Auto-refresh every 3 seconds while waiting for dev server
@@ -115,9 +202,10 @@ function friendlyPreviewPage(projectId: string, message: string, showLogs = fals
   <div class="card">
     <h1><span class="spinner"></span>Preview temporarily unavailable</h1>
     <p>${message}</p>
+    ${errorSection}
     ${logSection}
     <div class="meta">Project: <strong>${projectId}</strong></div>
-    <a class="btn" href="#" onclick="window.location.reload();return false">Retry Now</a>
+    ${retryButton}
   </div>
 </body>
 </html>`;
@@ -135,6 +223,84 @@ async function checkPort(port: number): Promise<boolean> {
 
 // Cache proxy instances to prevent recreation on every request
 const proxyCache = new Map<string, any>();
+
+// Runtime error capture script to inject into HTML pages
+// This captures unhandled errors and sends them to the parent frame
+const ERROR_CAPTURE_SCRIPT = `
+<script data-recoder-error-handler>
+(function() {
+  // Send error to parent frame
+  function reportError(error) {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'recoder:runtime-error',
+          message: error.message || String(error),
+          stack: error.stack,
+          filename: error.filename,
+          lineno: error.lineno,
+          colno: error.colno
+        }, '*');
+      }
+    } catch (e) {
+      console.error('[Recoder] Failed to report error:', e);
+    }
+  }
+
+  // Capture unhandled errors
+  window.onerror = function(message, source, lineno, colno, error) {
+    reportError({
+      message: message,
+      stack: error?.stack,
+      filename: source,
+      lineno: lineno,
+      colno: colno
+    });
+    // Don't prevent default handling
+    return false;
+  };
+
+  // Capture unhandled promise rejections
+  window.onunhandledrejection = function(event) {
+    const error = event.reason;
+    reportError({
+      message: error?.message || String(error),
+      stack: error?.stack
+    });
+  };
+
+  // Track navigation within the preview
+  function reportNavigation() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'recoder:navigate',
+          path: window.location.pathname + window.location.search + window.location.hash
+        }, '*');
+      }
+    } catch (e) {}
+  }
+
+  // Report initial navigation
+  reportNavigation();
+
+  // Listen for popstate (back/forward)
+  window.addEventListener('popstate', reportNavigation);
+
+  // Patch history methods to catch programmatic navigation
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  history.pushState = function() {
+    originalPushState.apply(this, arguments);
+    reportNavigation();
+  };
+  history.replaceState = function() {
+    originalReplaceState.apply(this, arguments);
+    reportNavigation();
+  };
+})();
+</script>
+`;
 
 export function setupPreviewProxy(app: Express, containers: Map<string, { id: string; lastActive: number; port: number }>) {
 
@@ -162,8 +328,8 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       entry.lastActive = Date.now();
     }
 
-    // Check ports in order: Vite (5173), Next.js (3000), Other (8080)
-    const basePorts = [entry.port + 1, entry.port, entry.port + 2];
+    // Check ports in order: Vite (5173), Next.js (3000), Expo (8081), Expo legacy (19006), Other (8080)
+    const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
     let targetPort = 0;
 
     console.log(`🔍 Checking ports for ${projectId}: ${basePorts.join(', ')}`);
@@ -178,11 +344,46 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
 
     if (!targetPort) {
       console.log(`❌ No dev server found on any port for ${projectId}`);
+
+      // Get error info from dev server manager
+      const errorInfo = devServerManager.getErrorInfo(projectId);
+      const { retryState } = errorInfo;
+
+      const now = Date.now();
+      const lastAttempt = autoStartAttempts.get(projectId) || 0;
+      if (now - lastAttempt > AUTO_START_COOLDOWN_MS && !devServerManager.isRunning(projectId)) {
+        autoStartAttempts.set(projectId, now);
+        try {
+          await ensureDependencies(entry.id, projectId);
+          const framework = await detectFramework(entry.id);
+          console.log(`🚀 [Preview] Auto-starting dev server for ${projectId} (${framework})`);
+          await devServerManager.start(entry.id, projectId, framework, basePorts);
+        } catch (err) {
+          console.warn(`⚠️ [Preview] Auto-start failed for ${projectId}:`, err);
+        }
+      }
+
+      // Determine the message based on retry state
+      let message = 'The preview server is starting. This page will auto-refresh when ready.';
+      if (errorInfo.hasErrors) {
+        if (!retryState.canRetry && retryState.errorCount >= retryState.maxRetries) {
+          message = `Build failed after ${retryState.maxRetries} attempts. Click "Force Retry" or make a file change to try again.`;
+        } else if (retryState.nextRetryIn) {
+          message = `Build error detected. Retrying in ${Math.ceil(retryState.nextRetryIn / 1000)}s...`;
+        } else {
+          message = 'Build error detected. Attempting to recover...';
+        }
+      }
+
       // Show a friendly building page with helpful hints - the page auto-refreshes
       return res.status(503).send(friendlyPreviewPage(
-        projectId, 
-        'The preview server is starting. This page will auto-refresh when ready.',
-        true  // Show logs hint
+        projectId,
+        message,
+        {
+          showLogs: true,
+          errorDetails: errorInfo.errors,
+          canRetry: retryState.canRetry,
+        }
       ));
     }
 
@@ -223,7 +424,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
                 errorMessage = 'Some files are missing. The AI may still be generating the project.';
               }
               
-              const html = friendlyPreviewPage(projectId, errorMessage, true);
+              const html = friendlyPreviewPage(projectId, errorMessage, { showLogs: true });
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
               res.setHeader('Content-Length', Buffer.byteLength(html));
               res.statusCode = 502;
@@ -267,6 +468,17 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
                   .replace(/(import\s+[^"']*["'])\/(?!preview\/)/gi, `$1/preview/${projectId}/`)
                   // Rewrite import.meta.url references
                   .replace(/(new\s+URL\s*\(\s*["'])\/(?!preview\/)/gi, `$1/preview/${projectId}/`);
+
+                // Inject error capture script right after <head> tag (if present)
+                // This captures runtime errors and navigation events and reports them to the parent frame
+                if (modifiedBody.includes('<head>') && !modifiedBody.includes('data-recoder-error-handler')) {
+                  modifiedBody = modifiedBody.replace('<head>', '<head>' + ERROR_CAPTURE_SCRIPT);
+                  console.log('🛡️ [HTML Rewrite] Injected error capture script');
+                } else if (modifiedBody.includes('<head ') && !modifiedBody.includes('data-recoder-error-handler')) {
+                  // Handle <head ...attributes> case
+                  modifiedBody = modifiedBody.replace(/<head[^>]*>/, (match) => match + ERROR_CAPTURE_SCRIPT);
+                  console.log('🛡️ [HTML Rewrite] Injected error capture script (with head attributes)');
+                }
               }
 
               if (isJavaScript) {
@@ -365,12 +577,16 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       return res.status(404).json({ error: 'Container not found' });
     }
 
-    const basePorts = [entry.port + 1, entry.port, entry.port + 2];
+    const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
     const portStatus = await Promise.all(
       basePorts.map(async (port) => ({
         port,
         responding: await checkPort(port),
-        type: port === entry.port + 1 ? 'Vite (5173)' : port === entry.port ? 'Next.js (3000)' : 'Other (8080)'
+        type: port === entry.port + 1 ? 'Vite (5173)' :
+              port === entry.port ? 'Next.js (3000)' :
+              port === entry.port + 4 ? 'Expo (8081)' :
+              port === entry.port + 5 ? 'Expo Web (19006)' :
+              'Other (8080)'
       }))
     );
 

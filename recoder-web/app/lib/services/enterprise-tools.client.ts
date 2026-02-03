@@ -59,8 +59,8 @@ export async function searchReplace(
 /**
  * Discover relevant files for a query
  */
-export async function discoverFiles(query: string, workingDir = '/workspace') {
-  return callTool<string[]>('discoverFiles', { query, workingDir });
+export async function discoverFiles(query: string, workingDir = '/workspace', projectId?: string) {
+  return callTool<string[]>('discoverFiles', { query, workingDir, projectId });
 }
 
 /**

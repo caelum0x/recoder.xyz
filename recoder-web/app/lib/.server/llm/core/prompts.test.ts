@@ -373,6 +373,9 @@ describe('Model-specific tool call formats', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.stubEnv('SANDBOX', undefined);
+    vi.stubEnv('GEMINI_SYSTEM_MD', undefined);
+    vi.stubEnv('GEMINI_WRITE_SYSTEM_MD', 'false');
+    vi.spyOn(os, 'homedir').mockReturnValue('/home/test');
   });
 
   it('should use XML format for qwen3-coder model', () => {

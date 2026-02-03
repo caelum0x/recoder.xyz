@@ -295,7 +295,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowConnectionModal(true)}
-            className="p-1.5 hover:bg-bolt-elements-background-depth-3 rounded text-green-400"
+            className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded text-green-400"
             title="New Connection"
           >
             <span className="i-ph:plus-circle" />
@@ -304,7 +304,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
             <button
               onClick={loadSchema}
               disabled={isLoadingSchema}
-              className="p-1.5 hover:bg-bolt-elements-background-depth-3 rounded"
+              className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded"
               title="Refresh"
             >
               <span className={classNames('i-ph:arrows-clockwise', isLoadingSchema ? 'animate-spin' : '')} />
@@ -319,7 +319,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
           <select
             value={activeConnectionId || ''}
             onChange={(e) => setActiveConnection(e.target.value || null)}
-            className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+            className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
           >
             <option value="">Select Connection</option>
             {connections.map((conn) => (
@@ -331,7 +331,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
           {activeConnectionId && (
             <button
               onClick={() => handleDisconnect(activeConnectionId)}
-              className="p-1 text-red-400 hover:bg-bolt-elements-background-depth-3 rounded"
+              className="p-1 text-red-400 hover:bg-bolt-elements-background-depth-2 rounded"
               title="Disconnect"
             >
               <span className="i-ph:plug" />
@@ -347,7 +347,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
           <select
             value={selectedSchema}
             onChange={(e) => setSelectedSchema(e.target.value)}
-            className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+            className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
           >
             {availableSchemas.map((schema) => (
               <option key={schema} value={schema}>
@@ -475,7 +475,7 @@ const TablesTab = memo(
                     'w-full px-2 py-1 text-xs text-left rounded transition-colors',
                     selectedTable === table.name
                       ? 'bg-blue-500/20 text-blue-400'
-                      : 'hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'
+                      : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
                   )}
                 >
                   <span className="i-ph:table mr-1" />
@@ -498,7 +498,7 @@ const TablesTab = memo(
                     'w-full px-2 py-1 text-xs text-left rounded transition-colors',
                     selectedTable === view.name
                       ? 'bg-blue-500/20 text-blue-400'
-                      : 'hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'
+                      : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
                   )}
                 >
                   <span className="i-ph:eye mr-1" />
@@ -625,7 +625,7 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
             className={classNames(
               'px-3 py-1 text-xs rounded',
               isExecuting || !query.trim()
-                ? 'bg-gray-600 opacity-50 cursor-not-allowed'
+                ? 'bg-bolt-elements-background-depth-3 opacity-50 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 text-white'
             )}
           >
@@ -638,7 +638,7 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
           onChange={(e) => onQueryChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="SELECT * FROM users LIMIT 10"
-          className="w-full h-32 px-3 py-2 text-xs font-mono bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-white placeholder:text-gray-500 resize-none"
+          className="w-full h-32 px-3 py-2 text-xs font-mono bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary resize-none"
         />
       </div>
 
@@ -836,7 +836,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
       <div className="bg-bolt-elements-background-depth-1 rounded-lg shadow-xl w-96 max-w-full m-4">
         <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor">
           <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Connect to Database</h3>
-          <button onClick={onClose} className="text-bolt-elements-textTertiary hover:text-white">
+          <button onClick={onClose} className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary">
             <span className="i-ph:x" />
           </button>
         </div>
@@ -848,7 +848,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
             <select
               value={dbType}
               onChange={(e) => setDbType(e.target.value as DatabaseType)}
-              className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+              className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
             >
               <option value="postgresql">PostgreSQL</option>
               <option value="sqlite">SQLite</option>
@@ -866,7 +866,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                     value={host}
                     onChange={(e) => setHost(e.target.value)}
                     placeholder="localhost"
-                    className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+                    className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
                   />
                 </div>
                 <div className="w-20">
@@ -876,7 +876,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                     value={port}
                     onChange={(e) => setPort(e.target.value)}
                     placeholder="5432"
-                    className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+                    className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
                   />
                 </div>
               </div>
@@ -889,7 +889,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                   value={database}
                   onChange={(e) => setDatabase(e.target.value)}
                   placeholder="mydb"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
                 />
               </div>
 
@@ -901,7 +901,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                   value={user}
                   onChange={(e) => setUser(e.target.value)}
                   placeholder="postgres"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
                 />
               </div>
 
@@ -913,7 +913,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="********"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
                 />
               </div>
 
@@ -943,7 +943,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
                   placeholder="data.db"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
                 />
               </div>
             </>
@@ -959,7 +959,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My Database"
-              className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-white"
+              className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
             />
           </div>
 
@@ -970,7 +970,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-bolt-elements-borderColor">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 rounded text-white"
+            className="px-3 py-1.5 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3/80 rounded text-bolt-elements-textPrimary"
           >
             Cancel
           </button>

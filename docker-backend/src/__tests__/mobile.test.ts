@@ -789,16 +789,17 @@ describe('Mobile API Integration Tests', () => {
       expect(removed).toBeUndefined();
     });
 
-    it('should update last seen on access', () => {
+    it('should update last seen on access', async () => {
       const device = deviceManager.registerDevice('user-1', 'iPhone', 'ios');
       const originalLastSeen = device.lastSeen;
 
-      // Wait a bit
-      setTimeout(() => {
-        deviceManager.getDevice(device.id);
-        const updated = deviceManager.getDevice(device.id);
-        expect(updated?.lastSeen.getTime()).toBeGreaterThanOrEqual(originalLastSeen.getTime());
-      }, 10);
+      // Wait a bit so the new Date() in getDevice produces a later timestamp
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      deviceManager.getDevice(device.id);
+      const updated = deviceManager.getDevice(device.id);
+      expect(updated).toBeDefined();
+      expect(updated!.lastSeen.getTime()).toBeGreaterThanOrEqual(originalLastSeen.getTime());
     });
 
     it('should track device statistics', () => {

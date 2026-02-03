@@ -41,7 +41,7 @@ export default async function handleRequest(
           );
 
           body.write(
-            `<!DOCTYPE html><html lang="en" data-theme="${themeStore.value}"><head>${head}</head><body><div id="root" class="w-full h-full">`,
+            `<!DOCTYPE html><html lang="en" data-theme="${themeStore.value}"><head>${head}</head><body style="background:#0A0A0A"><div id="root" class="w-full h-full">`,
           );
           pipe(body);
           body.write(`</div></body></html>`);
@@ -66,7 +66,7 @@ export default async function handleRequest(
           );
 
           body.write(
-            `<!DOCTYPE html><html lang="en" data-theme="${themeStore.value}"><head>${head}</head><body><div id="root" class="w-full h-full">`,
+            `<!DOCTYPE html><html lang="en" data-theme="${themeStore.value}"><head>${head}</head><body style="background:#0A0A0A"><div id="root" class="w-full h-full">`,
           );
           pipe(body);
           body.write(`</div></body></html>`);

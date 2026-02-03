@@ -1,42 +1,73 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import { IconButton } from '~/components/ui/IconButton';
 import { parseErrorsFromLogs } from '~/lib/errors/parse-logs';
 import { errorsAtom } from '~/lib/stores/errors';
 import { dockerGet } from '~/lib/services/docker-api';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 interface LogsPanelProps {
   projectId: string | null;
   className?: string;
 }
 
+/** Max consecutive fetch failures before we stop polling */
+const MAX_CONSECUTIVE_FAILURES = 3;
+/** How long to pause polling after hitting the failure threshold (ms) */
+const BACKOFF_PAUSE_MS = 30_000;
+
 export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
+  const containerReady = useStore(workbenchStore.containerReady);
+
   const [logs, setLogs] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const logsRef = useRef<HTMLPreElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const consecutiveFailuresRef = useRef(0);
+  const backoffUntilRef = useRef(0);
 
   const fetchLogs = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId || !containerReady) return;
+
+    // If we've hit the failure threshold, skip until backoff expires
+    if (Date.now() < backoffUntilRef.current) {
+      return;
+    }
 
     try {
       const data = await dockerGet<{ logs?: string }>(`/api/logs/${projectId}?tail=200`);
       const newLogs = data?.logs || 'No logs available';
       setLogs(newLogs);
       setError(null);
+      // Reset failure counter on success
+      consecutiveFailuresRef.current = 0;
 
       // Parse errors from logs and update error store
       const parsedErrors = parseErrorsFromLogs(newLogs);
       errorsAtom.set(parsedErrors);
     } catch (err: any) {
+      consecutiveFailuresRef.current++;
+      if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+        console.debug(`[LogsPanel] ${MAX_CONSECUTIVE_FAILURES} consecutive failures, pausing polling for ${BACKOFF_PAUSE_MS / 1000}s`);
+        backoffUntilRef.current = Date.now() + BACKOFF_PAUSE_MS;
+      }
       setError(err.message);
     }
-  }, [projectId]);
+  }, [projectId, containerReady]);
 
-  // Initial fetch and polling
+  // Reset failure tracking when container readiness changes
   useEffect(() => {
-    if (!projectId) {
+    if (containerReady) {
+      consecutiveFailuresRef.current = 0;
+      backoffUntilRef.current = 0;
+    }
+  }, [containerReady]);
+
+  // Initial fetch and polling - only when container is ready
+  useEffect(() => {
+    if (!projectId || !containerReady) {
       setLogs('');
       return;
     }
@@ -52,7 +83,7 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [projectId, fetchLogs]);
+  }, [projectId, containerReady, fetchLogs]);
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -94,9 +125,9 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
         '34': '<span class="text-blue-400">',
         '35': '<span class="text-purple-400">',
         '36': '<span class="text-cyan-400">',
-        '37': '<span class="text-gray-200">',
+        '37': '<span class="text-bolt-elements-textSecondary">',
         '39': '</span>',
-        '90': '<span class="text-gray-500">',
+        '90': '<span class="text-bolt-elements-textTertiary">',
       };
       return colorMap[code] || '';
     }
@@ -167,7 +198,7 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
       {/* Logs content */}
       <pre
         ref={logsRef}
-        className="flex-1 min-h-0 overflow-auto p-3 text-xs font-mono text-gray-100 whitespace-pre-wrap break-words"
+        className="flex-1 min-h-0 overflow-auto p-3 text-xs font-mono text-bolt-elements-textSecondary whitespace-pre-wrap break-words"
         style={{ tabSize: 2 }}
         dangerouslySetInnerHTML={{ __html: colorizedLogs || 'Waiting for logs...' }}
       />

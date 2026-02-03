@@ -75,7 +75,12 @@ export function GitHubIntegration({ onImportComplete }: GitHubIntegrationProps) 
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setShowImporter(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-bolt-elements-button-secondary-background text-bolt-elements-button-secondary-text rounded-lg hover:bg-bolt-elements-button-secondary-backgroundHover transition-all duration-200"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200 hover:bg-bolt-elements-background-depth-3"
+          style={{
+            backgroundColor: 'var(--bolt-elements-bg-depth-2)',
+            color: 'var(--bolt-elements-textPrimary)',
+            border: '1px solid var(--bolt-elements-borderColor)',
+          }}
         >
           <div className="i-ph:github-logo text-lg" />
           <span>Import from GitHub</span>

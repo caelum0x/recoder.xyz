@@ -112,6 +112,108 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     return customizationKeywords.some(keyword => lowerMessage.includes(keyword));
   }
 
+  /**
+   * Scan previous assistant messages for file actions to build conversation memory.
+   * This prevents the LLM from recreating files that already exist in the project.
+   */
+  function extractCreatedFiles(msgs: Messages): {
+    createdFiles: string[];
+    modifiedFiles: string[];
+    shellCommands: string[];
+  } {
+    const created = new Set<string>();
+    const modified = new Set<string>();
+    const shells: string[] = [];
+
+    for (const msg of msgs) {
+      if (msg.role !== 'assistant' || !msg.content) continue;
+      const content = typeof msg.content === 'string' ? msg.content : '';
+
+      // Match <recoderAction type="file" filePath="...">
+      const filePattern = /<recoderAction\s+type="file"\s+filePath="([^"]+)"/g;
+      let match: RegExpExecArray | null;
+      while ((match = filePattern.exec(content)) !== null) {
+        const filePath = match[1];
+        if (created.has(filePath)) {
+          // Seen before — second write counts as a modification
+          modified.add(filePath);
+        } else {
+          created.add(filePath);
+        }
+      }
+
+      // Also match the reversed attribute order: filePath before type
+      const filePatternAlt = /<recoderAction\s+filePath="([^"]+)"\s+type="file"/g;
+      while ((match = filePatternAlt.exec(content)) !== null) {
+        const filePath = match[1];
+        if (created.has(filePath)) {
+          modified.add(filePath);
+        } else {
+          created.add(filePath);
+        }
+      }
+
+      // Match shell commands
+      const shellPattern = /<recoderAction\s+type="shell"[^>]*>([\s\S]*?)<\/recoderAction>/g;
+      while ((match = shellPattern.exec(content)) !== null) {
+        const cmd = match[1].trim();
+        if (cmd) shells.push(cmd);
+      }
+    }
+
+    return {
+      createdFiles: Array.from(created),
+      modifiedFiles: Array.from(modified),
+      shellCommands: shells,
+    };
+  }
+
+  /**
+   * Build a concise system message that lists files already present in the project
+   * so the LLM avoids recreating them.
+   */
+  function buildFileTrackingContext(fileInfo: {
+    createdFiles: string[];
+    modifiedFiles: string[];
+    shellCommands: string[];
+  }): string {
+    // Group files by directory for readability
+    const dirMap: Record<string, string[]> = {};
+    for (const fp of fileInfo.createdFiles) {
+      const parts = fp.split('/');
+      const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
+      if (!dirMap[dir]) dirMap[dir] = [];
+      dirMap[dir].push(parts[parts.length - 1]);
+    }
+
+    let listing = '';
+    for (const [dir, files] of Object.entries(dirMap)) {
+      listing += `  ${dir}/\n`;
+      for (const f of files) {
+        listing += `    - ${f}\n`;
+      }
+    }
+
+    // Note any npm install commands already executed
+    const installs = fileInfo.shellCommands.filter(
+      c => c.includes('npm install') || c.includes('pnpm install') || c.includes('yarn add')
+    );
+
+    let ctx = `FILES ALREADY IN PROJECT:\n${listing}`;
+
+    if (fileInfo.modifiedFiles.length > 0) {
+      ctx += `\nPreviously modified files:\n  ${fileInfo.modifiedFiles.join('\n  ')}\n`;
+    }
+
+    if (installs.length > 0) {
+      ctx += `\nDependency installs already run:\n  ${installs.join('\n  ')}\n`;
+    }
+
+    ctx += `\nThese files already exist in the project. If the user asks to change them, use str_replace for targeted edits. Do NOT recreate files that already exist unless the user explicitly asks for a full rebuild.`;
+
+    return ctx;
+  }
+
   // CRITICAL: Verify user authentication FIRST
   const { verifySession } = await import('~/lib/auth/session.server');
 
@@ -154,7 +256,13 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   let provider: string = 'openrouter'; // Default provider
   let model: string | undefined;
   let requestBody: any;
-  let maxTokens: number = 8000;
+  let maxTokens: number = 16000; // Increased from 8000 for longer, complete responses
+  let temperature: number = 0.7;
+  let topP: number = 0.9;
+  let topK: number = 40;
+  let frequencyPenalty: number = 0;
+  let presencePenalty: number = 0;
+  let thinkingBudget: 'low' | 'medium' | 'high' = 'medium';
 
   try {
     requestBody = await request.json() as {
@@ -162,11 +270,20 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
       provider?: string;
       model?: string;
       maxTokens?: number;
+      temperature?: number;
+      topP?: number;
+      topK?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
       recoderContext?: string;
       projectContext?: string;
       mode?: string; // AI mode: architect, code, ask, debug, orchestrator
+      chatMode?: string; // Chat mode: build, ask, agent
       customTools?: string;
       mcpTools?: string;
+      projectId?: string; // Project ID for code context awareness
+      codeContext?: string; // Pre-loaded code context from client
+      thinkingBudget?: 'low' | 'medium' | 'high'; // Thinking budget for reasoning models
     };
 
     // Extract provider and model from request
@@ -177,7 +294,18 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
       model = requestBody.model;
     }
 
-    maxTokens = requestBody.maxTokens || 8000;
+    // Extract inference parameters with defaults
+    maxTokens = requestBody.maxTokens || 16000;
+    temperature = requestBody.temperature ?? 0.7;
+    topP = requestBody.topP ?? 0.9;
+    topK = requestBody.topK ?? 40;
+    frequencyPenalty = requestBody.frequencyPenalty ?? 0;
+    presencePenalty = requestBody.presencePenalty ?? 0;
+
+    // Extract thinking budget (low/medium/high) for reasoning models
+    if (requestBody.thinkingBudget && ['low', 'medium', 'high'].includes(requestBody.thinkingBudget)) {
+      thinkingBudget = requestBody.thinkingBudget;
+    }
 
     // console.log(`[Chat API] Provider: ${provider}, Model: ${model || 'default'}, MaxTokens: ${maxTokens}`);
 
@@ -201,7 +329,17 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
 
   // Extract the last user message for starter detection
   const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
-  
+
+  // Content security: detect prompt injection patterns in the last user message
+  const { detectInjectionPatterns } = await import('~/lib/services/content-security');
+  const lastUserMessageStr = typeof lastUserMessage === 'string'
+    ? lastUserMessage
+    : (lastUserMessage as any[]).map((c: any) => c.text || '').join('');
+  const injectionCheck = detectInjectionPatterns(lastUserMessageStr);
+  if (injectionCheck.risk === 'high') {
+    console.warn('[security] High-risk injection patterns detected:', injectionCheck.patterns);
+  }
+
   // Enterprise AI: Check for loops before processing
   const { checkForLoops, recordChatSession } = await import('~/lib/.server/llm/enterprise-integration');
   const loopCheck = await checkForLoops(messages);
@@ -223,7 +361,8 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
 
   // Enterprise AI: Try Google Cloud AI first (if available)
   const { generateWithCloudAI, initializeCloudAI } = await import('~/lib/.server/llm/cloud-ai-integration');
-  await initializeCloudAI(env).catch(() => {}); // Initialize if configured
+  // PERF: Cloud AI init removed — always fails and falls back to OpenRouter. Saves 1-3s per request.
+  // await initializeCloudAI(env).catch(() => {});
   
   // FIX #2: Detect GitHub URL BEFORE AI processing
   const githubUrl = detectGitHubUrl(lastUserMessage);
@@ -261,29 +400,39 @@ That's it. Nothing else. Just the clone action.`,
   }
   
   // CRITICAL FIX: Detect and prepare starter template BEFORE AI processing
-  // console.log('🔍 Checking if user request matches a starter template...');
-  const starterInjection = await detectAndPrepareStarter(lastUserMessage);
+  // PERF: Skip expensive template scan if the message doesn't contain creation-related keywords.
+  // Saves 200-500ms on non-creation requests (edits, questions, debugging, etc.).
+  const starterKeywords = /\b(build|create|make|start|new|generate|scaffold|bootstrap)\b.*\b(app|website|site|dashboard|project|tool|page|landing|portfolio|blog|store|shop)\b/i;
+  const mightNeedStarter = starterKeywords.test(lastUserMessage);
+  const starterInjection = mightNeedStarter
+    ? await detectAndPrepareStarter(lastUserMessage)
+    : { shouldInject: false as const, starterId: undefined, confidence: 0 };
   
-  // If we found a matching starter template, inject it as context for AI
+  // If we found a matching starter template, inject it as SYSTEM context for AI
+  // FIX: Previously we were injecting both an assistant message AND a follow-up user message,
+  // which caused the "double AI response" bug. Now we inject as a system message only.
   if (starterInjection.shouldInject && createDirectStarterResponse) {
     // console.log(`✅ Starter detected: ${starterInjection.starterId} (confidence: ${starterInjection.confidence?.toFixed(2)})`);
-    
+
     const directResponse = createDirectStarterResponse(starterInjection, lastUserMessage);
-    
+
     if (directResponse) {
-      // console.log('🚀 Injecting starter as base, AI will build on top');
-      
-      // ALWAYS have AI generate code based on user's request
-      // The starter is just a foundation - AI must implement what user asked for
+      // console.log('🚀 Injecting starter as context for AI to build upon');
+
+      // FIX: Inject as a SYSTEM message instead of assistant+user message pair
+      // This provides the starter template context without creating a fake conversation
       messages.push({
-        role: 'assistant',
-        content: directResponse,
-      });
-      messages.push({
-        role: 'user', 
-        content: `Great, the starter template is loaded. Now please implement what I originally asked for: "${lastUserMessage}". 
-        
-Create the actual application with all the features, components, and functionality needed. Don't just acknowledge the template - write the real code!`,
+        role: 'system',
+        content: `STARTER TEMPLATE CONTEXT:
+You have access to the following starter template that matches the user's request. Use this as a foundation and build upon it to implement what the user asked for.
+
+${directResponse}
+
+IMPORTANT:
+- Use this starter template as your base
+- Generate a complete implementation that fulfills the user's request: "${lastUserMessage}"
+- Create all necessary files, components, and functionality
+- Don't just acknowledge the template - write the actual code!`,
       });
     }
   } else {
@@ -316,19 +465,16 @@ Create the actual application with all the features, components, and functionali
       // console.log('   → No .recoder/ context provided');
     }
 
-    // Load MCP tools
-    // console.log('🔧 Loading MCP tools...');
-    const { loadMCPTools } = await import('~/lib/.server/mcp/tools-loader');
-    const mcpToolsPrompt = await loadMCPTools((env as any).DB);
-    
-    if (mcpToolsPrompt) {
-      // console.log('   ✅ MCP tools loaded');
-    }
-
     // Get project context from request (tracks what project is being built)
     const projectContext = requestBody.projectContext || '';
     if (projectContext) {
       // console.log('   ✅ Project context loaded');
+    }
+
+    // Get code context from client (pre-loaded file contents for context awareness)
+    const codeContext = requestBody.codeContext || '';
+    if (codeContext) {
+      console.log(`   ✅ Code context loaded (${codeContext.length} chars)`);
     }
 
     // Get custom tools from request
@@ -340,12 +486,103 @@ Create the actual application with all the features, components, and functionali
     // Get AI mode from request (default to 'code')
     const aiMode = requestBody.mode || 'code';
 
-    // Get system prompt and append all context (with mode)
-    const baseSystemPrompt = getSystemPrompt(undefined, customTools, aiMode);
-    const systemPrompt = baseSystemPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext;
+    // Get chat mode from request (default to 'build') - Build, Ask, Agent modes
+    const chatMode = requestBody.chatMode || 'build';
+
+    // PERF: Parallelize independent async operations — MCP tools, prompts module, and API key module.
+    // These three have no dependencies on each other. Saves 50-150ms from sequential imports.
+    const db = (env as any).DB;
+    const [mcpToolsPrompt, promptsModule, apiKeyModule] = await Promise.all([
+      // Load MCP tools (only if DB is available - Cloudflare D1)
+      db
+        ? import('~/lib/.server/mcp/tools-loader').then(m => m.loadMCPTools(db)).catch(() => '')
+        : Promise.resolve(''),
+      // Import prompts module
+      import('~/lib/.server/llm/prompts'),
+      // Import API key module
+      import('~/lib/.server/llm/api-key'),
+    ]);
+
+    if (mcpToolsPrompt) {
+      // console.log('   ✅ MCP tools loaded');
+    }
+
+    // Get enhanced system prompt with coding excellence guidelines and append all context (with mode)
+    const { getEnhancedSystemPrompt, CODING_EXCELLENCE_GUIDELINES, getChatModeSystemPrompt, getFrameworkPrompt } = promptsModule;
+    const baseSystemPrompt = getEnhancedSystemPrompt(undefined, customTools, aiMode);
+    const chatModePrompt = getChatModeSystemPrompt(chatMode as 'build' | 'ask' | 'agent');
+
+    // Detect project framework using smart skills system (package.json + file patterns)
+    let frameworkSkillsPrompt = '';
+    try {
+      const { getProjectSkills, tryExtractPackageJson } = await import('~/lib/services/framework-skills');
+      // Extract file list from code context
+      const fileList: string[] = [];
+      const filePathMatches = codeContext.match(/(?:filePath|path)="([^"]+)"/g);
+      if (filePathMatches) {
+        for (const m of filePathMatches) {
+          const fp = m.replace(/(?:filePath|path)="([^"]+)"/, '$1');
+          if (fp) fileList.push(fp);
+        }
+      }
+      const pkgJson = tryExtractPackageJson(codeContext);
+      const { framework, skills } = getProjectSkills(fileList, pkgJson);
+      if (skills) {
+        frameworkSkillsPrompt = skills;
+      }
+      // Fallback to legacy detection if smart detection found nothing
+      if (!frameworkSkillsPrompt) {
+        const detectedProjectType = detectProjectTypeLegacy(projectContext, messages);
+        frameworkSkillsPrompt = getFrameworkPrompt(detectedProjectType);
+      }
+    } catch {
+      // Fallback to legacy detection
+      const detectedProjectType = detectProjectTypeLegacy(projectContext, messages);
+      frameworkSkillsPrompt = getFrameworkPrompt(detectedProjectType);
+    }
+
+    // Legacy framework detection fallback
+    function detectProjectTypeLegacy(ctx: string, msgs: Messages): string {
+      const combined = ctx.toLowerCase();
+      if (combined.includes('expo') || combined.includes('react-native')) return 'expo';
+      if (combined.includes('next.js') || combined.includes('nextjs')) return 'nextjs';
+      if (combined.includes('vue')) return 'vue';
+      if (combined.includes('django')) return 'django';
+      if (combined.includes('flask')) return 'flask';
+      if (combined.includes('express')) return 'express';
+      for (const msg of msgs) {
+        const content = typeof msg.content === 'string' ? msg.content.toLowerCase() : '';
+        if (content.includes('expo') || content.includes('react-native')) return 'expo';
+        if (content.includes('next.js') || content.includes('nextjs')) return 'nextjs';
+      }
+      if (combined.includes('package.json')) return 'react';
+      return '';
+    }
+
+    // Load .recoder/ project config (best-effort)
+    let projectConfigPrompt = '';
+    try {
+      const { getProjectConfigPrompt } = await import('~/lib/services/project-config');
+      const dockerUrl = env.DOCKER_URL || env.DOCKER_BACKEND_URL || 'http://localhost:3001';
+      const containerId = requestBody.containerId || requestBody.projectId;
+      if (containerId) {
+        projectConfigPrompt = await getProjectConfigPrompt(async (path) => {
+          try {
+            const resp = await fetch(`${dockerUrl}/api/files/read?path=${encodeURIComponent(path)}&containerId=${encodeURIComponent(containerId)}`);
+            if (resp.ok) {
+              const data: any = await resp.json();
+              return data.content || null;
+            }
+          } catch {}
+          return null;
+        });
+      }
+    } catch {}
+
+    const systemPrompt = baseSystemPrompt + chatModePrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt;
 
     // Get API key (User's BYOK > Environment variable)
-    const { getAPIKey } = await import('~/lib/.server/llm/api-key');
+    const { getAPIKey } = apiKeyModule;
     const apiKey = await getAPIKey(env, request, provider);
 
     if (!apiKey) {
@@ -390,80 +627,346 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
       });
     }
 
-    // 🔧 AGENTIC BEHAVIOR: Inject few-shot examples and planning for error fixes
-    const { injectFewShotExamples } = await import('~/lib/.server/llm/few-shot-examples');
-    const { injectPlanningContext, isErrorFixRequest, isModificationRequest } = await import('~/lib/.server/llm/planning-enforcer');
-    
+    // 🔧 AGENTIC BEHAVIOR: Inject few-shot examples, planning, and quality enforcement
+    // PERF: Parallelize independent module imports. Saves 50-150ms.
+    const [fewShotModule, planningModule] = await Promise.all([
+      import('~/lib/.server/llm/few-shot-examples'),
+      import('~/lib/.server/llm/planning-enforcer'),
+    ]);
+    const { injectFewShotExamples, getFewShotExamples } = fewShotModule;
+    const {
+      injectPlanningContext,
+      isErrorFixRequest,
+      isModificationRequest,
+      isNewProjectRequest,
+      classifyRequest,
+      getQualityEnforcementPrompt,
+      getOneShotPrompt,
+    } = planningModule;
+
     // Check if there are existing files (from previous messages or context)
-    const hasExistingFiles = messages.some(m => 
-      m.content?.includes('type="file"') || 
-      m.content?.includes('Created') ||
-      m.content?.includes('package.json')
+    const hasExistingFiles = messages.some(
+      m =>
+        m.content?.includes('type="file"') ||
+        m.content?.includes('Created') ||
+        m.content?.includes('package.json')
     );
-    
+
     // Get the last user message
     const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
-    
-    // Inject few-shot examples for error fixes
+
+    // Conversation memory: track files created in earlier turns to prevent duplicates
+    const fileInfo = extractCreatedFiles(messages);
+    if (fileInfo.createdFiles.length > 0) {
+      const trackingContext = buildFileTrackingContext(fileInfo);
+      messages.push({
+        role: 'system',
+        content: trackingContext,
+      });
+    }
+
+    // Classify the request type
+    const requestType = classifyRequest(lastUserMsg);
+
+    // Always inject few-shot examples for quality (they now include quality guidance)
+    messages = injectFewShotExamples(messages, lastUserMsg) as Messages;
+
+    // For new projects: inject one-shot generation prompt
+    if (requestType === 'new_project' || requestType === 'new_project_complex') {
+      const oneShotPrompt = getOneShotPrompt(lastUserMsg, requestType === 'new_project_complex');
+      messages.push({
+        role: 'system',
+        content: oneShotPrompt,
+      });
+    }
+
+    // For edits on existing projects: wire in edit-intent analysis (best-effort)
+    if (hasExistingFiles && (requestType === 'feature_add' || requestType === 'ui_change' || requestType === 'bug_fix' || requestType === 'refactor')) {
+      try {
+        const projectId = requestBody.projectId;
+
+        // PERF: Start edit-intent module import and project context loading in parallel.
+        // Both are async I/O that can overlap. Saves 500-1000ms on edit requests with projectId.
+        const [editIntentModule, loadedProjectCtx] = await Promise.all([
+          import('~/lib/services/edit-intent'),
+          // Speculatively load project context — we may or may not need it depending on editIntent
+          projectId
+            ? import('~/lib/services/code-context')
+                .then(m => m.loadProjectContext(projectId))
+                .catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        const { analyzeEditIntent, analyzeEditIntentAsync, generateFocusedContext, EditType } = editIntentModule;
+
+        // Use async version with project context if projectId is available
+        let editIntent;
+        if (projectId) {
+          try {
+            editIntent = await analyzeEditIntentAsync(lastUserMsg, projectId);
+          } catch {
+            // Fall back to sync version if async fails (e.g., Docker API unavailable from server)
+            editIntent = analyzeEditIntent(lastUserMsg, null);
+          }
+        } else {
+          editIntent = analyzeEditIntent(lastUserMsg, null);
+        }
+
+        if (editIntent) {
+          // Route to different strategies based on intent type
+          let strategyPrompt = '';
+
+          switch (editIntent.type) {
+            case EditType.FULL_REBUILD:
+              strategyPrompt = `FULL REBUILD DETECTED:
+The user wants to rebuild the application. Generate all files from scratch.
+- Create package.json FIRST with every dependency
+- Include all config files
+- Build complete, working application`;
+              break;
+
+            case EditType.UPDATE_STYLE:
+              strategyPrompt = `STYLE UPDATE DETECTED:
+The user wants visual/styling changes only.
+- Focus ONLY on CSS/style-related changes
+- Do NOT modify component logic or structure
+- Prefer Tailwind classes over custom CSS
+- Maintain responsive design and dark mode support
+Target files: ${editIntent.targetFiles.join(', ') || 'auto-detect from styles'}`;
+              break;
+
+            case EditType.ADD_DEPENDENCY:
+              strategyPrompt = `DEPENDENCY ADDITION DETECTED:
+The user wants to add a new package/library.
+- Update package.json dependencies
+- Add necessary import statements
+- Create integration code if needed
+- Run npm install after`;
+              break;
+
+            case EditType.ADD_FEATURE:
+              strategyPrompt = `NEW FEATURE DETECTED:
+The user wants to add a new feature.
+- Read existing files first to understand the architecture
+- Create new component/page files as needed
+- Update routing if adding a new page
+- Update parent components to integrate the new feature
+Target files to modify: ${editIntent.targetFiles.join(', ') || 'auto-detect'}`;
+              break;
+
+            default:
+              // UPDATE_COMPONENT, FIX_ISSUE, REFACTOR, GENERAL_QUERY
+              strategyPrompt = `SURGICAL EDIT INSTRUCTIONS:
+You are a surgeon — make precise, targeted changes. Do NOT regenerate entire files.
+
+Edit type: ${editIntent.type}
+Confidence: ${editIntent.confidenceLevel} (${Math.round(editIntent.confidence * 100)}%)
+${editIntent.targetFiles.length > 0 ? `Predicted target files: ${editIntent.targetFiles.join(', ')}` : ''}
+${editIntent.suggestedContext.length > 0 ? `Related context files: ${editIntent.suggestedContext.join(', ')}` : ''}
+
+RULES:
+- Use str_replace for targeted edits on existing files
+- NEVER overwrite config files (vite.config, tsconfig, tailwind.config, postcss.config)
+- Read target files first with readFile before modifying
+- Only change what the user asked for — nothing else`;
+              break;
+          }
+
+          messages.push({
+            role: 'system',
+            content: strategyPrompt,
+          });
+
+          // Inject focused file context if we have project context and target files
+          // PERF: loadedProjectCtx was pre-fetched in parallel above — no extra await needed
+          if (editIntent.targetFiles.length > 0 && projectId && loadedProjectCtx) {
+            try {
+              const focusedContext = generateFocusedContext(editIntent, loadedProjectCtx, 6000);
+              if (focusedContext) {
+                messages.push({
+                  role: 'system',
+                  content: focusedContext,
+                });
+              }
+            } catch (ctxErr) {
+              console.warn('Failed to load focused context (non-critical):', ctxErr);
+            }
+          }
+        }
+      } catch (e) {
+        // Best-effort: edit-intent is optional, don't fail the request
+        console.warn('Edit intent analysis failed (non-critical):', e);
+      }
+    }
+
+    // Inject planning context for modifications/fixes
     if (isErrorFixRequest(lastUserMsg) || isModificationRequest(lastUserMsg)) {
-      messages = injectFewShotExamples(messages, lastUserMsg) as Messages;
       messages = injectPlanningContext(messages, hasExistingFiles) as Messages;
     }
 
-    // Route to the correct provider's streaming function
+    // Inject quality enforcement prompt for all requests
+    const qualityPrompt = getQualityEnforcementPrompt(requestType);
+    if (qualityPrompt) {
+      messages.push({
+        role: 'system',
+        content: qualityPrompt,
+      });
+    }
+
+    // For new projects, prepend one few-shot example conversation to teach the model by example.
+    // getFewShotExamples returns FewShotMessage[] — an array of { role, content } objects.
+    // We extract the first user+assistant pair and prepend it before the actual conversation.
+    if (requestType === 'new_project' || requestType === 'new_project_complex') {
+      const examples = getFewShotExamples(typeof lastUserMsg === 'string' ? lastUserMsg : '');
+      if (examples?.length >= 2) {
+        // Find the first user message and first assistant message to form an example pair
+        const exampleUser = examples.find(e => e.role === 'user');
+        const exampleAssistant = examples.find(e => e.role === 'assistant');
+        if (exampleUser && exampleAssistant) {
+          messages = [
+            { role: 'user' as const, content: exampleUser.content },
+            { role: 'assistant' as const, content: exampleAssistant.content },
+            ...messages,
+          ] as Messages;
+        }
+      }
+    }
+
+    // --- Context compaction: prevent context overflow on long conversations ---
+    // Runs after ALL prompt assembly is complete so it can measure the true
+    // token footprint and decide whether to compact.
+    try {
+      const { compactMessages } = await import('~/lib/services/context-compaction');
+      const { estimateTokens: estimateSystemTokens } = await import('~/lib/services/token-counter');
+      const selectedModel = model || 'default';
+      const systemPromptTokens = estimateSystemTokens(systemPrompt);
+      const compaction = compactMessages(messages, selectedModel, systemPromptTokens);
+
+      if (compaction.wasCompacted) {
+        console.log(
+          `[context-compaction] Compacted ${compaction.summarizedCount} messages: ` +
+          `${compaction.originalTokens} -> ${compaction.compactedTokens} tokens`,
+        );
+        messages = compaction.messages as Messages;
+      }
+    } catch (compactionError) {
+      // Non-critical: compaction failure must never break the chat request
+      console.warn('[context-compaction] Compaction failed (non-critical):', compactionError);
+    }
+
+    // Route to the correct provider's streaming function using the unified provider registry
+    // This supports: OpenAI, Anthropic, Google, Groq, DeepSeek, Ollama, and OpenRouter
+    const {
+      createProviderStream,
+      getProviderConfig,
+    } = await import('~/lib/.server/llm/provider-registry');
+
+    // Define supported provider types
+    type SupportedProvider = 'openai' | 'anthropic' | 'google' | 'groq' | 'deepseek' | 'ollama' | 'openrouter';
+    const supportedProviders: SupportedProvider[] = ['openai', 'anthropic', 'google', 'groq', 'deepseek', 'ollama', 'openrouter'];
+
     let aiStream: ReadableStream<Uint8Array>;
+    const normalizedProvider = provider.toLowerCase() as SupportedProvider;
 
-    const streamOptions = {
-      model,
-      temperature: 0.7,
-      max_tokens: maxTokens,
-    };
+    // Check if it's a supported provider in the new registry
+    if (supportedProviders.includes(normalizedProvider)) {
+      // Get default model for the provider if not specified
+      const providerConfig = getProviderConfig(normalizedProvider);
+      const modelToUse = model || providerConfig.defaultModel;
 
-    switch (provider.toLowerCase()) {
-      case 'openrouter': {
-        const { streamOpenRouterResponse } = await import('~/lib/.server/llm/openrouter-stream');
-        aiStream = await streamOpenRouterResponse(
-          systemPrompt,
-          messages,
-          apiKey,
-          {
-            ...streamOptions,
-            model: model || 'x-ai/grok-code-fast-1', // Default to #1 most used model
-          }
-        );
-        break;
+      // Build thinking/reasoning provider options (best-effort, null if unsupported)
+      let thinkingProviderOptions: Record<string, any> = {};
+      try {
+        const { getThinkingProviderOptions } = await import('~/lib/services/thinking-budget');
+        const opts = getThinkingProviderOptions(modelToUse, thinkingBudget);
+        if (opts) {
+          thinkingProviderOptions = opts;
+        }
+      } catch {
+        // Thinking budget is best-effort - if it fails, continue without it
       }
 
-      case 'anthropic': {
-        const { streamAnthropicResponse } = await import('~/lib/.server/llm/anthropic-stream');
-        aiStream = await streamAnthropicResponse(
-          systemPrompt,
-          messages,
-          apiKey,
-          {
-            ...streamOptions,
-            model: model || 'claude-sonnet-4-5-20250929', // Default to Claude Sonnet 4.5
-          }
-        );
-        break;
-      }
+      const streamOptions = {
+        model: modelToUse,
+        temperature,
+        top_p: topP,
+        top_k: topK,
+        frequency_penalty: frequencyPenalty,
+        presence_penalty: presencePenalty,
+        max_tokens: maxTokens,
+        // Pass env for OpenRouter API key rotation (ignored by other providers)
+        env: env as Record<string, string | undefined>,
+        // Provider-specific thinking/reasoning options (merged into API request body)
+        ...thinkingProviderOptions,
+      };
 
-      case 'openai': {
-        const { streamOpenAIResponse } = await import('~/lib/.server/llm/openai-stream');
-        aiStream = await streamOpenAIResponse(
-          systemPrompt,
-          messages,
-          apiKey,
-          {
-            ...streamOptions,
-            model: model || 'gpt-4-turbo-preview', // Default to GPT-4 Turbo
-          }
-        );
-        break;
-      }
+      // Use the unified provider registry for all supported providers
+      aiStream = await createProviderStream(
+        normalizedProvider,
+        systemPrompt,
+        messages,
+        apiKey,
+        streamOptions
+      );
+    } else {
+      // Fallback to legacy providers (for backward compatibility)
+      const streamOptions = {
+        model,
+        temperature,
+        top_p: topP,
+        top_k: topK,
+        frequency_penalty: frequencyPenalty,
+        presence_penalty: presencePenalty,
+        max_tokens: maxTokens,
+      };
 
-      default:
-        throw new Error(`Unsupported provider: ${provider}`);
+      switch (provider.toLowerCase()) {
+        case 'openrouter': {
+          const { streamOpenRouterResponse } = await import('~/lib/.server/llm/openrouter-stream');
+          aiStream = await streamOpenRouterResponse(
+            systemPrompt,
+            messages,
+            apiKey,
+            {
+              ...streamOptions,
+              model: model || 'x-ai/grok-code-fast-1',
+              env: env as Record<string, string | undefined>,
+            }
+          );
+          break;
+        }
+
+        case 'anthropic': {
+          const { streamAnthropicResponse } = await import('~/lib/.server/llm/anthropic-stream');
+          aiStream = await streamAnthropicResponse(
+            systemPrompt,
+            messages,
+            apiKey,
+            {
+              ...streamOptions,
+              model: model || 'claude-sonnet-4-5-20250929',
+            }
+          );
+          break;
+        }
+
+        case 'openai': {
+          const { streamOpenAIResponse } = await import('~/lib/.server/llm/openai-stream');
+          aiStream = await streamOpenAIResponse(
+            systemPrompt,
+            messages,
+            apiKey,
+            {
+              ...streamOptions,
+              model: model || 'gpt-4-turbo-preview',
+            }
+          );
+          break;
+        }
+
+        default:
+          throw new Error(`Unsupported provider: ${provider}`);
+      }
     }
 
     stream.switchSource(aiStream);

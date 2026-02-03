@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import expressWs from 'express-ws';
 import cors from 'cors';
@@ -5,14 +8,14 @@ import rateLimit from 'express-rate-limit';
 import { v4 as uuid } from 'uuid';
 import Docker from 'dockerode';
 import { Duplex } from 'stream';
-import dotenv from 'dotenv';
 import WebSocket from 'ws';
 import http from 'http';
 import { spawn, ChildProcess } from 'child_process';
 import { mountFiles } from './fileMount.js';
+import { fastWriteFile, fastWriteFiles } from './fast-file-writer.js';
 import * as pty from 'node-pty';
 import { WebSocketRPC } from './websocket-rpc.js';
-import { devServerManager } from './dev-server.js';
+import { devServerManager, detectFrameworkFromContainer, getInstallCommand, getDevCommand, getExpectedPorts } from './dev-server.js';
 import { ContainerLifecycleManager } from './container-lifecycle.js';
 import { snapshotManager } from './snapshot-manager.js';
 import { autoRestoreManager, parseAllErrors, hasBlockingErrors } from './auto-restore.js';
@@ -29,6 +32,64 @@ import { syncManager, diffFileSets, getDetailedDiff, getDiffStats, generateUnifi
 import { lspServerManager, getConfigForExtension, LSP_SERVER_CONFIGS } from './lsp/index.js';
 import { createCollaborationServer, getCollaborationStats, saveAllDocuments } from './collaboration/index.js';
 import { replManager, REPL_CONFIGS, type ReplLanguage } from './repl-manager.js';
+import { metricsCollector, metricsMiddleware } from './metrics.js';
+import { sandboxRouter, initSandboxRoutes, type SandboxDependencies } from './public-api/routes/sandboxes.js';
+import {
+  createWebhookHandler as createPolarWebhookHandler,
+  onWebhookEvent,
+  getSubscriptionsByUserId,
+  getActiveSubscriptionByUserId,
+  getWebhookLogs,
+} from './billing/polar-webhook.js';
+import { getMetricsCollector as getMeteringCollector } from './metering/metrics-collector.js';
+import { getUsageAggregator } from './metering/usage-aggregator.js';
+import { getQuotaEnforcer, EnforcementAction } from './metering/quota-enforcer.js';
+import { MetricType } from './metering/types.js';
+import {
+  createApiKey,
+  listUserApiKeys,
+  deleteApiKey,
+} from './public-api/api-keys.js';
+import { healthMonitor, type HealthStatus } from './health-monitor.js';
+import { resourceOptimizer } from './resource-optimizer.js';
+import { templateManager } from './templates/index.js';
+import { getProjectIdFromRequest, isStrictAuthMode } from './auth-utils.js';
+import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
+import * as vercelDeploy from './deployment/vercel.js';
+import * as netlifyDeploy from './deployment/netlify.js';
+import * as cloudflareDeploy from './deployment/cloudflare.js';
+import type { ProviderCredentials, DeploymentConfig } from './deployment/types.js';
+import {
+  authenticateApiKey,
+  rateLimitMiddleware,
+  sandboxLimitMiddleware,
+  requireScope,
+  requestLoggingMiddleware,
+  asyncApiHandler,
+  type AuthenticatedApiRequest,
+} from './public-api/middleware.js';
+import {
+  initPortManager,
+  findAvailablePort,
+  reservePort,
+  releasePort as releasePortFromManager,
+  releasePortsByContainer,
+  getContainerPort,
+  getContainerByPort,
+  allocatePortBlock,
+  allocatePortBlockWithVerification,
+  reassignPortForRestart,
+  syncWithDocker as syncPortsWithDocker,
+  getPortStats,
+  createPortLabels,
+  isPortAvailable,
+  markPortBlockUnavailable,
+  findAvailablePortWithVerification,
+  BASE_PORT,
+  MAX_PORT,
+  PORTS_PER_CONTAINER,
+  PROJECT_LABEL,
+} from './port-manager.js';
 import {
   // Organization
   OrganizationRole,
@@ -117,7 +178,37 @@ import {
   logWarning,
 } from './errors/index.js';
 
-dotenv.config();
+// dotenv.config() is called at the top of this file before other imports
+
+// ==================== Environment Validation ====================
+
+function validateEnvironment() {
+  const warnings: string[] = [];
+
+  if (!process.env.API_KEY_HASH_SALT) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ CRITICAL: API_KEY_HASH_SALT is required in production');
+      process.exit(1);
+    } else {
+      process.env.API_KEY_HASH_SALT = 'dev-salt-' + Math.random().toString(36).slice(2);
+      warnings.push('API_KEY_HASH_SALT not set - using random dev salt');
+    }
+  }
+
+  if (!process.env.INTERNAL_SERVICE_KEY) {
+    process.env.INTERNAL_SERVICE_KEY = 'dev-internal-key';
+    warnings.push('INTERNAL_SERVICE_KEY not set - using dev default');
+  }
+
+  if (!process.env.POLAR_WEBHOOK_SECRET) {
+    warnings.push('POLAR_WEBHOOK_SECRET not set - Polar.sh webhooks disabled');
+  }
+
+  if (warnings.length > 0) {
+    console.warn('⚠️ Environment warnings:');
+    warnings.forEach(w => console.warn(`  - ${w}`));
+  }
+}
 
 // ==================== SECURITY: Authentication & Authorization ====================
 
@@ -152,10 +243,15 @@ function getSessionTokenFromRequest(req: express.Request): string | null {
   const cookies = parseCookies(req.headers.cookie);
 
   // Try various cookie names that Better Auth might use
-  // With cookiePrefix: "recoder", the cookie is named "recoder.session_token"
-  return cookies['recoder.session_token']
-    || cookies['recoder_session_token']
-    || cookies['session_token']
+  // In production with useSecureCookies=true, cookies are prefixed with "__Secure-"
+  // With cookiePrefix: "recoder", the cookie is named:
+  //   - Development: "recoder.session_token"
+  //   - Production: "__Secure-recoder.session_token"
+  return cookies['__Secure-recoder.session_token']  // Production with Secure cookies
+    || cookies['recoder.session_token']              // Development
+    || cookies['__Secure-session_token']             // Production without prefix
+    || cookies['recoder_session_token']              // Alternative format
+    || cookies['session_token']                      // Fallback
     || null;
 }
 
@@ -171,15 +267,18 @@ async function authenticateWebSocket(
   // Fall back to cookies
   if (!token) {
     const cookies = parseCookies(req.headers.cookie);
-    token = cookies['recoder.session_token']
-      || cookies['recoder_session_token']
-      || cookies['session_token']
+    // In production with useSecureCookies=true, cookies are prefixed with "__Secure-"
+    token = cookies['__Secure-recoder.session_token']  // Production with Secure cookies
+      || cookies['recoder.session_token']              // Development
+      || cookies['__Secure-session_token']             // Production without prefix
+      || cookies['recoder_session_token']              // Alternative format
+      || cookies['session_token']                      // Fallback
       || '';
   }
 
   if (!token) {
     // In migration mode, allow anonymous access with warning
-    if (!REQUIRE_AUTH) {
+    if (!STRICT_AUTH) {
       console.warn(`[Auth] WARNING: Anonymous WebSocket connection to ${req.path}`);
       return { userId: 'anonymous', sessionId: 'anon' };
     }
@@ -190,7 +289,7 @@ async function authenticateWebSocket(
   const session = await verifySessionToken(token);
   if (!session) {
     // In migration mode, allow with warning
-    if (!REQUIRE_AUTH) {
+    if (!STRICT_AUTH) {
       console.warn(`[Auth] WARNING: Invalid token for WebSocket ${req.path}, allowing in migration mode`);
       return { userId: 'anonymous', sessionId: 'anon' };
     }
@@ -201,6 +300,24 @@ async function authenticateWebSocket(
   return session;
 }
 
+// Helper to add timeout to any promise
+function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${operation} timed out after ${ms}ms`)), ms)
+    )
+  ]);
+}
+
+// Auth cache - avoid repeated HTTP calls for the same session token
+const authCache = new Map<string, { userId: string; sessionId: string; expiresAt: number }>();
+const AUTH_CACHE_TTL = 60_000; // 60 seconds
+
+// Ownership cache - avoid repeated HTTP calls for the same user+project
+const ownershipCache = new Map<string, { isOwner: boolean; expiresAt: number }>();
+const OWNERSHIP_CACHE_TTL = 120_000; // 2 minutes
+
 // Verify Better Auth session token with the main app API
 // The token is the value of the 'recoder.session_token' cookie from Better Auth
 async function verifySessionToken(token: string): Promise<{ userId: string; sessionId: string } | null> {
@@ -208,30 +325,52 @@ async function verifySessionToken(token: string): Promise<{ userId: string; sess
     return null;
   }
 
+  // Check cache first
+  const cached = authCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { userId: cached.userId, sessionId: cached.sessionId };
+  }
+
   try {
-    // Use the existing Better Auth verify-token endpoint
-    const response = await fetch(`${APP_API_URL}/api/auth/verify-token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // Pass internal service key if configured (for rate limit bypass)
-        ...(INTERNAL_SERVICE_KEY ? { 'X-Internal-Service-Key': INTERNAL_SERVICE_KEY } : {}),
-      },
-      body: JSON.stringify({ token }),
-    });
+    // Use AbortController for fetch timeout (5 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    if (!response.ok) {
-      console.log(`[Auth] Better Auth session verification failed: ${response.status}`);
+    try {
+      // Use the existing Better Auth verify-token endpoint
+      const response = await fetch(`${APP_API_URL}/api/auth/verify-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Pass internal service key if configured (for rate limit bypass)
+          ...(INTERNAL_SERVICE_KEY ? { 'X-Internal-Service-Key': INTERNAL_SERVICE_KEY } : {}),
+        },
+        body: JSON.stringify({ token }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        console.log(`[Auth] Better Auth session verification failed: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json() as { success?: boolean; user?: { id: string; email?: string } };
+      if (data.success && data.user?.id) {
+        const result = { userId: data.user.id, sessionId: token.substring(0, 8) };
+        // Cache the successful result
+        authCache.set(token, { ...result, expiresAt: Date.now() + AUTH_CACHE_TTL });
+        return result;
+      }
       return null;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = await response.json() as { success?: boolean; user?: { id: string; email?: string } };
-    if (data.success && data.user?.id) {
-      return { userId: data.user.id, sessionId: token.substring(0, 8) }; // Use token prefix as session ID
-    }
-    return null;
   } catch (error: any) {
-    console.error(`[Auth] Error verifying Better Auth session: ${error.message}`);
+    if (error.name === 'AbortError') {
+      console.error('[Auth] Better Auth session verification timed out after 5s');
+    } else {
+      console.error(`[Auth] Error verifying Better Auth session: ${error.message}`);
+    }
     return null;
   }
 }
@@ -242,32 +381,55 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
     return false;
   }
 
+  // Check cache first
+  const cacheKey = `${userId}:${projectId}`;
+  const cached = ownershipCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.isOwner;
+  }
+
   try {
-    const response = await fetch(`${APP_API_URL}/api/project/verify-ownership`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Service-Key': INTERNAL_SERVICE_KEY,
-      },
-      body: JSON.stringify({ userId, projectId }),
-    });
+    // Use AbortController for fetch timeout (5 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    if (!response.ok) {
-      return false;
+    try {
+      const response = await fetch(`${APP_API_URL}/api/project/verify-ownership`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Service-Key': INTERNAL_SERVICE_KEY,
+        },
+        body: JSON.stringify({ userId, projectId }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json() as { isOwner: boolean };
+      const isOwner = data.isOwner === true;
+      // Cache the result
+      ownershipCache.set(cacheKey, { isOwner, expiresAt: Date.now() + OWNERSHIP_CACHE_TTL });
+      return isOwner;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = await response.json() as { isOwner: boolean };
-    return data.isOwner === true;
   } catch (error: any) {
-    console.error(`[Auth] Error checking ownership: ${error.message}`);
+    if (error.name === 'AbortError') {
+      console.error('[Auth] Project ownership check timed out after 5s');
+    } else {
+      console.error(`[Auth] Error checking ownership: ${error.message}`);
+    }
     return false;
   }
 }
 
 // Authentication middleware - verifies user token
-// During migration: allows requests from allowed origins without token (with warning)
-// In strict mode (REQUIRE_AUTH=true): always requires token
+// In strict mode (default in production): always requires token
 const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
+const STRICT_AUTH = isStrictAuthMode();
 
 function authenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   // Get token from Authorization header OR cookies (for cross-origin with httpOnly cookies)
@@ -279,7 +441,7 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
     // In development or if origin is allowed, permit without auth (migration mode)
     const isAllowedOrigin = ALLOWED_ORIGINS.includes(origin) || origin === '' || origin.includes('localhost');
 
-    if (!REQUIRE_AUTH && isAllowedOrigin) {
+    if (!STRICT_AUTH && isAllowedOrigin) {
       // Migration mode: allow but log warning
       console.warn(`[Auth] WARNING: Request without auth token from ${origin || 'same-origin'} - ${req.method} ${req.path}`);
       req.userId = 'anonymous'; // Set anonymous user for audit logging
@@ -294,7 +456,7 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
     if (!session) {
       // Token invalid but from allowed origin - allow in migration mode
       const isAllowedOrigin = ALLOWED_ORIGINS.includes(origin) || origin === '' || origin.includes('localhost');
-      if (!REQUIRE_AUTH && isAllowedOrigin) {
+      if (!STRICT_AUTH && isAllowedOrigin) {
         console.warn(`[Auth] WARNING: Invalid token from ${origin || 'same-origin'}, allowing in migration mode`);
         req.userId = 'anonymous';
         return next();
@@ -308,7 +470,7 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
   }).catch(err => {
     console.error(`[Auth] Authentication error: ${err.message}`);
     // Allow in migration mode
-    if (!REQUIRE_AUTH) {
+    if (!STRICT_AUTH) {
       console.warn(`[Auth] WARNING: Auth service error, allowing in migration mode`);
       req.userId = 'anonymous';
       return next();
@@ -320,14 +482,14 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
 // Authorization middleware - verifies project ownership
 // During migration: allows anonymous users to access projects (with warning)
 function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
-  const projectId = req.params.projectId || req.body?.projectId;
+  const projectId = getProjectIdFromRequest(req);
 
   if (!projectId) {
     return res.status(400).json({ error: 'Project ID required' });
   }
 
   // In migration mode, allow anonymous users
-  if (req.userId === 'anonymous' && !REQUIRE_AUTH) {
+  if (req.userId === 'anonymous' && !STRICT_AUTH) {
     console.warn(`[Auth] WARNING: Anonymous access to project ${projectId} - ${req.method} ${req.path}`);
     return next();
   }
@@ -339,7 +501,7 @@ function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response
   checkProjectOwnership(req.userId, projectId).then(isOwner => {
     if (!isOwner) {
       // In migration mode, allow but log
-      if (!REQUIRE_AUTH) {
+      if (!STRICT_AUTH) {
         console.warn(`[Auth] WARNING: User ${req.userId} accessing project ${projectId} without ownership verification`);
         return next();
       }
@@ -372,11 +534,16 @@ function auditLog(event: {
 function sanitizePath(path: string): string {
   if (!path || typeof path !== 'string') return '';
   // Remove shell metacharacters and path traversal
-  return path
+  let sanitized = path
     .replace(/\.\.\//g, '')  // No path traversal
     .replace(/[;&|`$(){}]/g, '')  // No shell metacharacters
     .replace(/[\r\n]/g, '')  // No newlines
     .replace(/^\/+/, '');  // No leading slashes (force relative to workspace)
+  // Normalize accidental workspace prefix (avoids /workspace/workspace/...)
+  if (sanitized.startsWith('workspace/')) {
+    sanitized = sanitized.slice('workspace/'.length);
+  }
+  return sanitized;
 }
 
 function sanitizeCommand(cmd: string): string {
@@ -390,6 +557,51 @@ function sanitizeProjectId(projectId: string): string {
   if (!projectId || typeof projectId !== 'string') return '';
   // Project IDs should be alphanumeric with dashes/underscores
   return projectId.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+/**
+ * Get the primary programming language for a detected framework
+ */
+function getLanguageFromFramework(framework: string): string {
+  const languageMap: Record<string, string> = {
+    // JavaScript/TypeScript
+    'node': 'javascript',
+    'vite': 'typescript',
+    'next': 'typescript',
+    'react': 'javascript',
+    'vue': 'javascript',
+    'svelte': 'javascript',
+    'sveltekit': 'typescript',
+    'angular': 'typescript',
+    'nuxt': 'typescript',
+    'expo': 'typescript',
+    'node-server': 'javascript',
+    
+    // Python
+    'python': 'python',
+    'flask': 'python',
+    'django': 'python',
+    'fastapi': 'python',
+    'streamlit': 'python',
+    'gradio': 'python',
+    
+    // Rust
+    'rust': 'rust',
+    'rust-web': 'rust',
+    
+    // Go
+    'go': 'go',
+    'go-web': 'go',
+    
+    // Java
+    'java': 'java',
+    'java-spring': 'java',
+    
+    // Static
+    'static': 'html',
+  };
+  
+  return languageMap[framework] || 'unknown';
 }
 
 // ==================== END SECURITY ====================
@@ -525,6 +737,297 @@ const fileCache = new FileCache();
 
 // ==================== END FILE CACHING ====================
 
+// ==================== WEBSOCKET KEEPALIVE ====================
+// Ping/pong keepalive for WebSocket connections with connection tracking
+
+interface WebSocketConnectionInfo {
+  ws: WebSocket;
+  projectId: string;
+  endpoint: string;  // e.g., 'terminal', 'watch', 'sync', 'cli-sync'
+  connectedAt: number;
+  lastPongAt: number;
+  userId?: string;
+  pingInterval?: NodeJS.Timeout;
+  pongTimeout?: NodeJS.Timeout;
+}
+
+class WebSocketKeepaliveManager {
+  private connections = new Map<WebSocket, WebSocketConnectionInfo>();
+  private pingIntervalMs: number;
+  private pongTimeoutMs: number;
+
+  // Statistics
+  private totalConnections = 0;
+  private totalDisconnections = 0;
+  private totalPingsSent = 0;
+  private totalPongsReceived = 0;
+  private totalTimeouts = 0;
+
+  constructor(pingIntervalMs = 30000, pongTimeoutMs = 60000) {
+    this.pingIntervalMs = pingIntervalMs;
+    this.pongTimeoutMs = pongTimeoutMs;
+  }
+
+  /**
+   * Register a WebSocket connection for keepalive management
+   */
+  register(ws: WebSocket, projectId: string, endpoint: string, userId?: string): void {
+    const now = Date.now();
+    const info: WebSocketConnectionInfo = {
+      ws,
+      projectId,
+      endpoint,
+      connectedAt: now,
+      lastPongAt: now,
+      userId,
+    };
+
+    // Set up ping interval
+    info.pingInterval = setInterval(() => this.sendPing(ws), this.pingIntervalMs);
+
+    // Set up pong handler
+    ws.on('pong', () => {
+      const connInfo = this.connections.get(ws);
+      if (connInfo) {
+        connInfo.lastPongAt = Date.now();
+        this.totalPongsReceived++;
+        // Clear pong timeout if exists
+        if (connInfo.pongTimeout) {
+          clearTimeout(connInfo.pongTimeout);
+          connInfo.pongTimeout = undefined;
+        }
+      }
+    });
+
+    // Handle close event
+    ws.on('close', (code, reason) => {
+      this.handleClose(ws, code, reason?.toString() || '');
+    });
+
+    this.connections.set(ws, info);
+    this.totalConnections++;
+
+    console.log(`[WS Keepalive] Registered ${endpoint}/${projectId} [user: ${userId || 'anonymous'}] (active: ${this.connections.size})`);
+  }
+
+  /**
+   * Send ping to a WebSocket connection
+   */
+  private sendPing(ws: WebSocket): void {
+    const info = this.connections.get(ws);
+    if (!info || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    try {
+      ws.ping();
+      this.totalPingsSent++;
+
+      // Set pong timeout
+      info.pongTimeout = setTimeout(() => {
+        this.handlePongTimeout(ws);
+      }, this.pongTimeoutMs);
+    } catch (err: any) {
+      console.error(`[WS Keepalive] Ping error for ${info.endpoint}/${info.projectId}: ${err.message}`);
+    }
+  }
+
+  /**
+   * Handle pong timeout - close the connection
+   */
+  private handlePongTimeout(ws: WebSocket): void {
+    const info = this.connections.get(ws);
+    if (!info) return;
+
+    this.totalTimeouts++;
+    const uptime = Math.round((Date.now() - info.connectedAt) / 1000);
+    console.log(`[WS Keepalive] Pong timeout for ${info.endpoint}/${info.projectId} after ${uptime}s uptime`);
+
+    // Send connection hint before closing
+    this.sendConnectionHint(ws, 'pong_timeout', 'No pong received within timeout period');
+
+    // Close the connection
+    try {
+      ws.close(1001, 'Pong timeout');
+    } catch (err) {
+      // Connection may already be closed
+    }
+  }
+
+  /**
+   * Handle WebSocket close event
+   */
+  private handleClose(ws: WebSocket, code: number, reason: string): void {
+    const info = this.connections.get(ws);
+    if (!info) return;
+
+    // Clear intervals and timeouts
+    if (info.pingInterval) {
+      clearInterval(info.pingInterval);
+    }
+    if (info.pongTimeout) {
+      clearTimeout(info.pongTimeout);
+    }
+
+    const uptime = Math.round((Date.now() - info.connectedAt) / 1000);
+    this.totalDisconnections++;
+
+    console.log(`[WS Keepalive] Closed ${info.endpoint}/${info.projectId} [code: ${code}, reason: ${reason || 'none'}] uptime: ${uptime}s (active: ${this.connections.size - 1})`);
+
+    this.connections.delete(ws);
+  }
+
+  /**
+   * Send connection hint message to client before closing
+   */
+  private sendConnectionHint(ws: WebSocket, reason: string, details?: string): void {
+    if (ws.readyState !== WebSocket.OPEN) return;
+
+    try {
+      const hint = {
+        type: 'connection_hint',
+        reason,
+        details,
+        reconnect: {
+          recommended: true,
+          delayMs: 1000,
+          maxRetries: 5,
+          backoffMultiplier: 2,
+        },
+        timestamp: new Date().toISOString(),
+      };
+      ws.send(JSON.stringify(hint));
+    } catch (err: any) {
+      // Ignore send errors when closing
+    }
+  }
+
+  /**
+   * Manually unregister a connection (e.g., on explicit close)
+   */
+  unregister(ws: WebSocket): void {
+    const info = this.connections.get(ws);
+    if (info) {
+      if (info.pingInterval) {
+        clearInterval(info.pingInterval);
+      }
+      if (info.pongTimeout) {
+        clearTimeout(info.pongTimeout);
+      }
+      this.connections.delete(ws);
+    }
+  }
+
+  /**
+   * Send a connection hint and close gracefully
+   */
+  closeWithHint(ws: WebSocket, reason: string, details?: string, code = 1000): void {
+    this.sendConnectionHint(ws, reason, details);
+    try {
+      ws.close(code, reason);
+    } catch (err) {
+      // Connection may already be closed
+    }
+  }
+
+  /**
+   * Get WebSocket statistics
+   */
+  getStats(): {
+    activeConnections: number;
+    byEndpoint: Record<string, number>;
+    byProject: Record<string, number>;
+    totalConnections: number;
+    totalDisconnections: number;
+    totalPingsSent: number;
+    totalPongsReceived: number;
+    totalTimeouts: number;
+    connectionDetails: Array<{
+      projectId: string;
+      endpoint: string;
+      userId?: string;
+      uptimeSeconds: number;
+      lastPongAgoSeconds: number;
+    }>;
+  } {
+    const now = Date.now();
+    const byEndpoint: Record<string, number> = {};
+    const byProject: Record<string, number> = {};
+    const connectionDetails: Array<{
+      projectId: string;
+      endpoint: string;
+      userId?: string;
+      uptimeSeconds: number;
+      lastPongAgoSeconds: number;
+    }> = [];
+
+    for (const info of this.connections.values()) {
+      // Count by endpoint
+      byEndpoint[info.endpoint] = (byEndpoint[info.endpoint] || 0) + 1;
+
+      // Count by project
+      byProject[info.projectId] = (byProject[info.projectId] || 0) + 1;
+
+      // Connection details
+      connectionDetails.push({
+        projectId: info.projectId,
+        endpoint: info.endpoint,
+        userId: info.userId,
+        uptimeSeconds: Math.round((now - info.connectedAt) / 1000),
+        lastPongAgoSeconds: Math.round((now - info.lastPongAt) / 1000),
+      });
+    }
+
+    return {
+      activeConnections: this.connections.size,
+      byEndpoint,
+      byProject,
+      totalConnections: this.totalConnections,
+      totalDisconnections: this.totalDisconnections,
+      totalPingsSent: this.totalPingsSent,
+      totalPongsReceived: this.totalPongsReceived,
+      totalTimeouts: this.totalTimeouts,
+      connectionDetails,
+    };
+  }
+
+  /**
+   * Shutdown all connections gracefully
+   */
+  shutdown(): void {
+    console.log(`[WS Keepalive] Shutting down ${this.connections.size} connections...`);
+    for (const [ws, info] of this.connections.entries()) {
+      if (info.pingInterval) {
+        clearInterval(info.pingInterval);
+      }
+      if (info.pongTimeout) {
+        clearTimeout(info.pongTimeout);
+      }
+      this.sendConnectionHint(ws, 'server_shutdown', 'Server is shutting down');
+      try {
+        ws.close(1001, 'Server shutdown');
+      } catch (err) {
+        // Ignore close errors during shutdown
+      }
+    }
+    this.connections.clear();
+  }
+}
+
+// Initialize WebSocket keepalive manager
+// Ping every 30 seconds, timeout after 60 seconds without pong
+const wsKeepalive = new WebSocketKeepaliveManager(30000, 60000);
+
+/**
+ * Get WebSocket connection statistics
+ * Can be used by other modules or exposed via API
+ */
+export function getWebSocketStats() {
+  return wsKeepalive.getStats();
+}
+
+// ==================== END WEBSOCKET KEEPALIVE ====================
+
 // Initialize Redis connection (non-blocking)
 sessionStore.connect().catch(() => {
   console.log('[Server] Redis not available, using memory fallback for sessions');
@@ -532,6 +1035,8 @@ sessionStore.connect().catch(() => {
 
 // Initialize container pool (non-blocking) - pre-warms containers for faster project creation
 const ENABLE_CONTAINER_POOL = process.env.ENABLE_CONTAINER_POOL !== 'false';
+// Always persist workspace volumes - files survive container restarts
+const PERSIST_WORKSPACE = true;
 
 const docker = new Docker();
 
@@ -546,6 +1051,9 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
     return null;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
     console.log(`[Claude Code] Fetching token for user ${userId} from ${APP_API_URL}`);
     const response = await fetch(`${APP_API_URL}/api/user/claude-code`, {
@@ -557,6 +1065,7 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
         userId,
         serviceKey: INTERNAL_SERVICE_KEY,
       }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -573,8 +1082,14 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
     console.log(`[Claude Code] No token found for user ${userId}`);
     return null;
   } catch (error: any) {
-    console.error(`[Claude Code] Error fetching token: ${error.message}`);
+    if (error.name === 'AbortError') {
+      console.error(`[Claude Code] Fetch token timed out after 5s for user ${userId}`);
+    } else {
+      console.error(`[Claude Code] Error fetching token: ${error.message}`);
+    }
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -592,6 +1107,9 @@ async function fetchAIProviderKeys(userId: string): Promise<AIProviderKeys> {
     return {};
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
     console.log(`[AI Provider Keys] Fetching keys for user ${userId} from ${APP_API_URL}`);
     const response = await fetch(`${APP_API_URL}/api/user/ai-provider-keys`, {
@@ -603,6 +1121,7 @@ async function fetchAIProviderKeys(userId: string): Promise<AIProviderKeys> {
         userId,
         serviceKey: INTERNAL_SERVICE_KEY,
       }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -615,12 +1134,25 @@ async function fetchAIProviderKeys(userId: string): Promise<AIProviderKeys> {
     console.log(`[AI Provider Keys] Retrieved ${keyCount} keys for user ${userId}`);
     return data.keys || {};
   } catch (error: any) {
-    console.error(`[AI Provider Keys] Error fetching keys: ${error.message}`);
+    if (error.name === 'AbortError') {
+      console.error(`[AI Provider Keys] Fetch keys timed out after 5s for user ${userId}`);
+    } else {
+      console.error(`[AI Provider Keys] Error fetching keys: ${error.message}`);
+    }
     return {};
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
-const { app } = expressWs(express());
+// Create base express app
+const baseApp = express();
+
+// Create HTTP server FIRST so express-ws can attach WebSocket upgrade handler
+const server = http.createServer(baseApp);
+
+// Initialize express-ws with the server so WebSocket routes work
+const { app } = expressWs(baseApp, server);
 
 // Trust proxy for rate limiting behind nginx
 app.set('trust proxy', 1);
@@ -628,7 +1160,7 @@ app.set('trust proxy', 1);
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute
+  max: 600, // 600 requests per minute (10 req/sec) — project restore can burst 200+ requests
   message: { error: 'Too many requests, slow down' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -647,7 +1179,8 @@ const ALLOWED_ORIGINS = [
   'https://web.recoder.xyz',
   'https://docker.recoder.xyz', // Self-reference for same-origin API calls
   'http://localhost:3000',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'http://localhost:3100'
 ];
 
 app.use(cors({
@@ -683,12 +1216,17 @@ app.use('/api/', apiLimiter);
 app.use(requestIdMiddleware);
 app.use(requestTimingMiddleware);
 
+// Add metrics collection middleware
+app.use(metricsMiddleware(metricsCollector));
+
 // Container registry: projectId -> containerId + port + ptyPort
 // Added backgroundDev flag so we can auto-tail dev server logs into the PTY when users attach
 const containers = new Map<string, { id: string; lastActive: number; port: number; ptyPort: number; backgroundDev?: boolean; userId?: string }>();
 
 // Track containers being created to prevent race conditions
-const creatingContainers = new Map<string, Promise<{ containerId: string; port: number; ptyPort: number }>>();
+type ContainerCreationResult = { containerId: string; port: number; ptyPort: number; fromPool?: boolean };
+const creatingContainers = new Map<string, ContainerCreationEntry<ContainerCreationResult>>();
+const CONTAINER_CREATE_TIMEOUT_MS = Number(process.env.CONTAINER_CREATE_TIMEOUT_MS || 120000);
 
 // Per-user container tracking for limits
 const userContainers = new Map<string, Set<string>>(); // userId -> Set of projectIds
@@ -742,48 +1280,39 @@ const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min
 const MEMORY_LIMIT = 2 * 1024 * 1024 * 1024; // 2GB (1GB caused OOM with bun install + vite)
 const CPU_QUOTA = 100000; // 100% of 1 CPU
 
-// Track allocated ports to prevent race conditions
+// Initialize port manager with Docker client
+initPortManager(docker);
+
+// Track allocated ports to prevent race conditions (kept for backward compatibility)
 const allocatedPorts = new Set<number>();
 
-// Port allocation - find free port by checking Docker + our tracking
-async function allocatePort(): Promise<{ preview: number; pty: number }> {
-  const dockerContainers = await docker.listContainers({ all: true });
-  const usedPorts = new Set<number>(allocatedPorts);
-  
-  for (const c of dockerContainers) {
-    for (const p of c.Ports || []) {
-      if (p.PublicPort) {
-        usedPorts.add(p.PublicPort);
-        usedPorts.add(p.PublicPort + 1);
-        usedPorts.add(p.PublicPort + 2);
-        usedPorts.add(p.PublicPort + 3);
-      }
-    }
-  }
-  
-  // Also add ports from our container registry
-  for (const entry of containers.values()) {
-    usedPorts.add(entry.port);
-    usedPorts.add(entry.port + 1);
-    usedPorts.add(entry.port + 2);
-    usedPorts.add(entry.ptyPort);
-  }
-  
-  // Find first free port in range 10000-20000
-  for (let port = 10000; port < 20000; port += 4) {
-    if (!usedPorts.has(port) && !usedPorts.has(port + 1) && !usedPorts.has(port + 2) && !usedPorts.has(port + 3)) {
-      allocatedPorts.add(port);
-      allocatedPorts.add(port + 1);
-      allocatedPorts.add(port + 2);
-      allocatedPorts.add(port + 3);
-      return { preview: port, pty: port + 3 };
-    }
-  }
-  throw new Error('No free ports available');
+/**
+ * Port allocation using the new port manager
+ * Uses lsof for system-level availability checking
+ * Supports smart port allocation with fallback logic
+ */
+async function allocatePort(containerId?: string): Promise<{ preview: number; pty: number }> {
+  // Use the new port manager with OS-level verification
+  const ports = await allocatePortBlockWithVerification(containerId);
+
+  // Also update local tracking for backward compatibility
+  allocatedPorts.add(ports.preview);
+  allocatedPorts.add(ports.preview + 1);
+  allocatedPorts.add(ports.preview + 2);
+  allocatedPorts.add(ports.pty);
+
+  return ports;
 }
 
-// Release ports when container is removed
+/**
+ * Release ports when container is removed
+ * Uses the port manager and updates local tracking
+ */
 function releasePorts(port: number, ptyPort: number) {
+  // Use the port manager
+  releasePortFromManager(port);
+
+  // Also update local tracking for backward compatibility
   allocatedPorts.delete(port);
   allocatedPorts.delete(port + 1);
   allocatedPorts.delete(port + 2);
@@ -881,6 +1410,9 @@ async function ensureContainerRunning(
     // If container not found, remove from registry so it can be recreated
     if (error.statusCode === 404) {
       console.log(`🗑️ [Container] Removing stale container entry for ${projectId}`);
+      try { getMeteringCollector().untrackContainer(entry.id); } catch (_) {}
+      try { healthMonitor.unregisterContainer(entry.id); } catch (_) {}
+      try { resourceOptimizer.unregisterContainer(entry.id); } catch (_) {}
       if (entry.userId) {
         unregisterUserContainer(entry.userId, projectId);
       }
@@ -921,10 +1453,222 @@ app.get('/api/cache/stats', (_, res) => {
   res.json(stats);
 });
 
+// WebSocket stats endpoint (PERFORMANCE monitoring)
+app.get('/api/websocket/stats', (_, res) => {
+  const stats = wsKeepalive.getStats();
+  res.json(stats);
+});
+
+// Port management stats endpoint (PERFORMANCE monitoring)
+app.get('/api/ports/stats', (_, res) => {
+  const stats = getPortStats();
+  res.json({
+    ...stats,
+    basePort: BASE_PORT,
+    maxPort: MAX_PORT,
+    portsPerContainer: PORTS_PER_CONTAINER,
+  });
+});
+
+// Check port availability endpoint
+app.get('/api/ports/check/:port', async (req, res) => {
+  const port = parseInt(req.params.port, 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    return res.status(400).json({ error: 'Invalid port number' });
+  }
+  const available = await isPortAvailable(port);
+  const assignedTo = getContainerByPort(port);
+  res.json({ port, available, assignedTo: assignedTo?.slice(0, 12) });
+});
+
+// Get container port info endpoint
+app.get('/api/ports/container/:containerId', (req, res) => {
+  const containerId = req.params.containerId;
+  const ports = getContainerPort(containerId);
+  if (!ports) {
+    return res.status(404).json({ error: 'Container not found or no ports assigned' });
+  }
+  res.json({ containerId: containerId.slice(0, 12), ...ports });
+});
+
+// ==================== COMPREHENSIVE METRICS ENDPOINT ====================
+// Aggregates all metrics into a single endpoint for monitoring dashboards
+
+app.get('/api/metrics', (_, res) => {
+  // Get metrics from all sources
+  const metricsSummary = metricsCollector.getSummary();
+  const containerPoolStats = ENABLE_CONTAINER_POOL ? containerPool.getStats() : null;
+  const containerPoolMetrics = ENABLE_CONTAINER_POOL ? containerPool.getMetrics() : null;
+  const wsStats = wsKeepalive.getStats();
+  const cacheStats = fileCache.getStats();
+  const portStats = getPortStats();
+
+  // Compile comprehensive metrics response
+  const metrics = {
+    timestamp: metricsSummary.timestamp,
+    uptime: metricsSummary.uptime,
+    uptimeHuman: metricsSummary.uptimeHuman,
+
+    // Container Pool
+    containerPool: containerPoolStats ? {
+      enabled: true,
+      size: containerPoolStats.total,
+      available: containerPoolStats.ready,
+      inUse: containerPoolStats.assigned,
+      warming: containerPoolStats.warming,
+      avgRecycleCount: containerPoolStats.avgRecycleCount,
+      avgAgeMinutes: containerPoolStats.avgAgeMinutes,
+      performance: containerPoolMetrics ? {
+        poolHitRate: containerPoolMetrics.poolHitRate,
+        avgAcquireTimeMs: containerPoolMetrics.avgAcquireTimeMs,
+        avgWarmTimeMs: containerPoolMetrics.avgWarmTimeMs,
+        totalAcquires: containerPoolMetrics.totalAcquires,
+        poolHits: containerPoolMetrics.poolHits,
+        poolMisses: containerPoolMetrics.poolMisses,
+      } : null,
+    } : { enabled: false },
+
+    // Active containers (not from pool)
+    activeContainers: {
+      total: containers.size,
+      byUser: userContainers.size,
+    },
+
+    // Port management
+    ports: {
+      usedCount: portStats.usedPortCount,
+      containerCount: portStats.containerCount,
+      range: portStats.portRange,
+      portsPerContainer: PORTS_PER_CONTAINER,
+    },
+
+    // WebSocket connections
+    websockets: {
+      active: wsStats.activeConnections,
+      byEndpoint: wsStats.byEndpoint,
+      byProject: wsStats.byProject,
+      totalConnections: wsStats.totalConnections,
+      totalDisconnections: wsStats.totalDisconnections,
+      totalTimeouts: wsStats.totalTimeouts,
+    },
+
+    // File operations (from metrics collector)
+    fileOperations: metricsSummary.fileOperations,
+
+    // File cache
+    fileCache: {
+      entries: cacheStats.entries,
+      sizeBytes: cacheStats.sizeBytes,
+      hitRate: cacheStats.hitRate,
+      hits: cacheStats.hits,
+      misses: cacheStats.misses,
+    },
+
+    // Memory usage
+    memory: metricsSummary.memory,
+
+    // Request metrics
+    requests: metricsSummary.requests,
+
+    // Errors
+    errors: metricsSummary.errors,
+  };
+
+  res.json(metrics);
+});
+
+// Prometheus-compatible metrics endpoint
+app.get('/api/metrics/prometheus', (_, res) => {
+  // Get base metrics
+  const prometheusMetrics = metricsCollector.getPrometheusFormat();
+
+  // Add additional metrics from other sources
+  const lines: string[] = [prometheusMetrics];
+
+  // Container pool metrics
+  if (ENABLE_CONTAINER_POOL) {
+    const poolStats = containerPool.getStats();
+    const poolMetrics = containerPool.getMetrics();
+
+    lines.push('');
+    lines.push('# HELP recoder_container_pool_size Total containers in pool');
+    lines.push('# TYPE recoder_container_pool_size gauge');
+    lines.push(`recoder_container_pool_size ${poolStats.total}`);
+
+    lines.push('# HELP recoder_container_pool_ready Ready containers in pool');
+    lines.push('# TYPE recoder_container_pool_ready gauge');
+    lines.push(`recoder_container_pool_ready ${poolStats.ready}`);
+
+    lines.push('# HELP recoder_container_pool_assigned Assigned containers from pool');
+    lines.push('# TYPE recoder_container_pool_assigned gauge');
+    lines.push(`recoder_container_pool_assigned ${poolStats.assigned}`);
+
+    lines.push('# HELP recoder_container_pool_hit_rate Pool hit rate percentage');
+    lines.push('# TYPE recoder_container_pool_hit_rate gauge');
+    lines.push(`recoder_container_pool_hit_rate ${poolMetrics.poolHitRate}`);
+  }
+
+  // Active containers
+  lines.push('');
+  lines.push('# HELP recoder_active_containers Currently active containers');
+  lines.push('# TYPE recoder_active_containers gauge');
+  lines.push(`recoder_active_containers ${containers.size}`);
+
+  // WebSocket connections
+  const wsStats = wsKeepalive.getStats();
+  lines.push('');
+  lines.push('# HELP recoder_websocket_connections Active WebSocket connections');
+  lines.push('# TYPE recoder_websocket_connections gauge');
+  lines.push(`recoder_websocket_connections ${wsStats.activeConnections}`);
+
+  for (const [endpoint, count] of Object.entries(wsStats.byEndpoint)) {
+    lines.push(`recoder_websocket_connections_by_endpoint{endpoint="${endpoint}"} ${count}`);
+  }
+
+  // File cache
+  const cacheStats = fileCache.getStats();
+  lines.push('');
+  lines.push('# HELP recoder_file_cache_entries Entries in file cache');
+  lines.push('# TYPE recoder_file_cache_entries gauge');
+  lines.push(`recoder_file_cache_entries ${cacheStats.entries}`);
+
+  lines.push('# HELP recoder_file_cache_size_bytes File cache size in bytes');
+  lines.push('# TYPE recoder_file_cache_size_bytes gauge');
+  lines.push(`recoder_file_cache_size_bytes ${cacheStats.sizeBytes}`);
+
+  lines.push('# HELP recoder_file_cache_hit_rate File cache hit rate percentage');
+  lines.push('# TYPE recoder_file_cache_hit_rate gauge');
+  lines.push(`recoder_file_cache_hit_rate ${cacheStats.hitRate}`);
+
+  // Port management metrics
+  const portStats = getPortStats();
+  lines.push('');
+  lines.push('# HELP recoder_ports_used Number of ports currently in use');
+  lines.push('# TYPE recoder_ports_used gauge');
+  lines.push(`recoder_ports_used ${portStats.usedPortCount}`);
+
+  lines.push('# HELP recoder_ports_containers Containers with port assignments');
+  lines.push('# TYPE recoder_ports_containers gauge');
+  lines.push(`recoder_ports_containers ${portStats.containerCount}`);
+
+  lines.push('# HELP recoder_ports_range_min Minimum port in allocation range');
+  lines.push('# TYPE recoder_ports_range_min gauge');
+  lines.push(`recoder_ports_range_min ${portStats.portRange.min}`);
+
+  lines.push('# HELP recoder_ports_range_max Maximum port in allocation range');
+  lines.push('# TYPE recoder_ports_range_max gauge');
+  lines.push(`recoder_ports_range_max ${portStats.portRange.max}`);
+
+  res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+  res.send(lines.join('\n'));
+});
+
+// ==================== END METRICS ENDPOINT ====================
+
 // Create or get container for project (SECURED: requires auth + ownership)
 app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
-    const { projectId } = req.body;
+    const { projectId, framework, templateId } = req.body;
     const userId = req.userId!; // Guaranteed by authenticateRequest middleware
 
     // Audit log
@@ -952,9 +1696,29 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
       }
     }
 
-    // Fetch user's Claude Code token and AI provider keys
-    const claudeCodeToken = await fetchClaudeCodeToken(userId);
-    const aiProviderKeys = await fetchAIProviderKeys(userId);
+    // Check quota before creating container
+    try {
+      const quotaEnforcer = getQuotaEnforcer();
+      const quotaCheck = quotaEnforcer.checkQuota(userId, MetricType.CONTAINER_HOURS);
+      if (quotaCheck.action === EnforcementAction.BLOCK) {
+        return res.status(429).json({
+          error: 'Quota exceeded',
+          message: `You have reached your sandbox limit. Please upgrade your plan or delete unused sandboxes.`,
+          quotaType: 'sandboxes',
+        });
+      }
+      if (quotaCheck.action === EnforcementAction.THROTTLE) {
+        console.warn(`[Quota] User ${userId} approaching sandbox limit`);
+      }
+    } catch (_) { /* quota system may not be initialized */ }
+
+    // Fetch user's Claude Code token and AI provider keys (in parallel)
+    const createStartTime = Date.now();
+    const [claudeCodeToken, aiProviderKeys] = await Promise.all([
+      fetchClaudeCodeToken(userId),
+      fetchAIProviderKeys(userId),
+    ]);
+    console.log(`⏱️ [Container] Fetched user credentials in ${Date.now() - createStartTime}ms for ${projectId}`);
 
     // Return existing container (after ensuring it's running)
     const existing = existingContainer;
@@ -970,7 +1734,24 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
         } else {
           console.log(`♻️ Reusing existing container: ${existing.id.slice(0, 12)} for ${projectId}`);
         }
-        return res.json({ containerId: existing.id, reused: true, port: existing.port, ptyPort: existing.ptyPort });
+        return res.json({
+          containerId: existing.id,
+          reused: true,
+          port: existing.port,
+          ptyPort: existing.ptyPort,
+          // Additional port info for client convenience
+          ports: {
+            preview: existing.port,         // Port 3000 (Next.js, etc.)
+            vite: existing.port + 1,        // Port 5173 (Vite)
+            other: existing.port + 2,       // Port 8080 (other servers)
+            pty: existing.ptyPort,          // PTY WebSocket
+          },
+          urls: {
+            preview: `http://localhost:${existing.port}`,
+            vite: `http://localhost:${existing.port + 1}`,
+            pty: `ws://localhost:${existing.ptyPort}`,
+          }
+        });
       }
 
       // Container couldn't be restarted, will be recreated below
@@ -980,20 +1761,47 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
     // 🔒 RACE CONDITION FIX: Check if container is already being created
     const inProgress = creatingContainers.get(projectId);
     if (inProgress) {
-      console.log(`⏳ Waiting for in-progress container creation: ${projectId}`);
-      try {
-        const result = await inProgress;
+      const ageMs = Date.now() - inProgress.startedAt;
+      if (isCreationStale(inProgress, CONTAINER_CREATE_TIMEOUT_MS)) {
+        console.warn(`⚠️ In-progress container creation stale (${ageMs}ms), dropping and retrying: ${projectId}`);
+        creatingContainers.delete(projectId);
+      } else {
+        console.log(`⏳ Waiting for in-progress container creation: ${projectId}`);
+        try {
+          const result = await withCreationTimeout(inProgress.promise, CONTAINER_CREATE_TIMEOUT_MS - ageMs, () => {
+            // Clear stale entry so a follow-up request can retry
+            creatingContainers.delete(projectId);
+          });
         console.log(`✅ Joined completed container creation: ${result.containerId.slice(0, 12)} for ${projectId}`);
-        return res.json({ containerId: result.containerId, reused: true, port: result.port, ptyPort: result.ptyPort });
-      } catch (err: any) {
-        // Creation failed, let this request retry
-        console.error(`❌ In-progress container creation failed: ${err.message}`);
-        return res.status(500).json({ error: err.message });
+        return res.json({
+          containerId: result.containerId,
+          reused: true,
+          port: result.port,
+          ptyPort: result.ptyPort,
+          // Additional port info for client convenience
+          ports: {
+            preview: result.port,         // Port 3000 (Next.js, etc.)
+            vite: result.port + 1,        // Port 5173 (Vite)
+            other: result.port + 2,       // Port 8080 (other servers)
+            pty: result.ptyPort,          // PTY WebSocket
+          },
+          urls: {
+            preview: `http://localhost:${result.port}`,
+            vite: `http://localhost:${result.port + 1}`,
+            pty: `ws://localhost:${result.ptyPort}`,
+          }
+        });
+        } catch (err: any) {
+          // Creation failed or timed out, let this request retry
+          console.error(`❌ In-progress container creation failed: ${err.message}`);
+          return res.status(500).json({ error: err.message });
+        }
       }
     }
 
     // Create the container creation promise and store it
-    const creationPromise = (async () => {
+    const creationPromise: Promise<ContainerCreationResult> = (async () => {
+      const totalStart = Date.now();
       let hostPort: number | undefined;
       let ptyPort: number | undefined;
       let containerId: string | undefined;
@@ -1001,10 +1809,11 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
 
       try {
         // 🚀 TRY POOL FIRST - instant container acquisition
-        if (ENABLE_CONTAINER_POOL) {
+        if (ENABLE_CONTAINER_POOL && !PERSIST_WORKSPACE) {
+          const poolAcquireStart = Date.now();
           const pooled = await containerPool.acquire();
           if (pooled) {
-            console.log(`🚀 [Pool] Acquired pre-warmed container ${pooled.id.slice(0, 12)} for ${projectId}`);
+            console.log(`🚀 [Pool] Acquired pre-warmed container ${pooled.id.slice(0, 12)} for ${projectId} (${Date.now() - poolAcquireStart}ms)`);
 
             // 🔧 FIX: Ensure pooled container is actually running before using it
             const pooledEntry = { id: pooled.id, lastActive: Date.now(), port: pooled.port, ptyPort: pooled.ptyPort };
@@ -1024,143 +1833,240 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
                 console.log(`🔄 [Pool] Restarted pooled container ${pooled.id.slice(0, 12)} for ${projectId}`);
               }
 
-              // Inject project-specific env vars into pooled container
+              // Inject ALL env vars into pooled container in a single exec call
+              // (Previous approach used 5-7 sequential docker exec calls, each ~200-500ms)
+              const envInjectStart = Date.now();
               const containerInstance = docker.getContainer(containerId);
-            const exec = await containerInstance.exec({
-              Cmd: ['sh', '-c', `export RECODER_PROJECT_ID=${projectId}`],
-              AttachStdout: false,
-              AttachStderr: false,
-            });
-            await exec.start({ Detach: true });
 
-            // Inject Claude Code token if available
-            if (claudeCodeToken) {
-              const tokenExec = await containerInstance.exec({
-                Cmd: ['sh', '-c', `export CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`],
-                AttachStdout: false,
-                AttachStderr: false,
-              });
-              await tokenExec.start({ Detach: true });
-              console.log(`[Claude Code] Injecting OAuth token into pooled container for project ${projectId}`);
-            }
+              // Build a single shell script with all env vars
+              const envLines: string[] = [
+                `export RECODER_PROJECT_ID=${projectId}`,
+                `export RECODER_CONTAINER=true`,
+                `export DOCKER_BACKEND_URL=https://docker.recoder.xyz`,
+                'export NODE_ENV=development',
+                'export TERM=xterm-256color',
+              ];
 
-            // Inject AI provider API keys if available
-            if (aiProviderKeys.openai) {
-              const keyExec = await containerInstance.exec({
-                Cmd: ['sh', '-c', `export OPENAI_API_KEY=${aiProviderKeys.openai}`],
+              if (claudeCodeToken) {
+                envLines.push(`export CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
+              }
+              if (aiProviderKeys.openai) {
+                envLines.push(`export OPENAI_API_KEY=${aiProviderKeys.openai}`);
+              }
+              if (aiProviderKeys.gemini) {
+                envLines.push(`export GEMINI_API_KEY=${aiProviderKeys.gemini}`);
+              }
+              if (aiProviderKeys.anthropic) {
+                envLines.push(`export ANTHROPIC_API_KEY=${aiProviderKeys.anthropic}`);
+              }
+
+              // Framework-specific env vars
+              const poolFw = (framework || templateId || '').toLowerCase();
+              if (poolFw.includes('expo') || poolFw.includes('react-native')) {
+                envLines.push(`export REACT_NATIVE_PACKAGER_HOSTNAME=${process.env.PUBLIC_HOSTNAME || 'localhost'}`);
+                envLines.push('export EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0');
+                envLines.push('export BROWSER=none');
+                envLines.push('export CI=1');
+              } else if (poolFw.includes('next')) {
+                envLines.push('export NEXT_TELEMETRY_DISABLED=1');
+              }
+
+              // Write all env vars to profile file in ONE exec call
+              const envScript = envLines.join('\\n');
+              const envExec = await containerInstance.exec({
+                Cmd: ['sh', '-c', `printf '${envScript}\\n' > /etc/profile.d/recoder-env.sh`],
                 AttachStdout: false,
                 AttachStderr: false,
               });
-              await keyExec.start({ Detach: true });
-              console.log(`[AI Tools] Injecting OpenAI API key into pooled container for project ${projectId}`);
-            }
-            if (aiProviderKeys.gemini) {
-              const keyExec = await containerInstance.exec({
-                Cmd: ['sh', '-c', `export GEMINI_API_KEY=${aiProviderKeys.gemini}`],
-                AttachStdout: false,
-                AttachStderr: false,
-              });
-              await keyExec.start({ Detach: true });
-              console.log(`[AI Tools] Injecting Gemini API key into pooled container for project ${projectId}`);
-            }
-            if (aiProviderKeys.anthropic) {
-              const keyExec = await containerInstance.exec({
-                Cmd: ['sh', '-c', `export ANTHROPIC_API_KEY=${aiProviderKeys.anthropic}`],
-                AttachStdout: false,
-                AttachStderr: false,
-              });
-              await keyExec.start({ Detach: true });
-              console.log(`[AI Tools] Injecting Anthropic API key into pooled container for project ${projectId}`);
-            }
+              await envExec.start({ Detach: true });
+              console.log(`⏱️ [Pool] Injected ${envLines.length} env vars in ${Date.now() - envInjectStart}ms for ${projectId}`);
             } // Close: if (pooledStatus.running)
           } // Close: if (pooled)
         } // Close: if (ENABLE_CONTAINER_POOL)
 
         // FALLBACK: Create new container if pool empty
         if (!containerId) {
-          // Allocate host ports for preview and PTY
-          const ports = await allocatePort();
-          hostPort = ports.preview;
-          ptyPort = ports.pty;
+          const onDemandStart = Date.now();
+          const MAX_ATTEMPTS = 3;
+          for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            // Allocate host ports for preview and PTY
+            const ports = await allocatePort();
+            hostPort = ports.preview;
+            ptyPort = ports.pty;
 
-          // Build environment variables for container
-          const containerEnv = [
-            'PTY_PORT=9999',
-            'RECODER_CONTAINER=true',
-            `RECODER_PROJECT_ID=${projectId}`,
-            `DOCKER_BACKEND_URL=https://docker.recoder.xyz`,
-          ];
+            // Build environment variables for container
+            const containerEnv = [
+              'PTY_PORT=9999',
+              'RECODER_CONTAINER=true',
+              `RECODER_PROJECT_ID=${projectId}`,
+              `DOCKER_BACKEND_URL=https://docker.recoder.xyz`,
+            ];
 
-          // Inject Claude Code OAuth token if user has one configured
-          if (claudeCodeToken) {
-            containerEnv.push(`CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
-            console.log(`[Claude Code] Injecting OAuth token into container for project ${projectId}`);
+            // Inject Claude Code OAuth token if user has one configured
+            if (claudeCodeToken) {
+              containerEnv.push(`CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
+              console.log(`[Claude Code] Injecting OAuth token into container for project ${projectId}`);
+            }
+
+            // Inject AI provider API keys (for Codex, Gemini CLI, OpenCode, etc.)
+            if (aiProviderKeys.openai) {
+              containerEnv.push(`OPENAI_API_KEY=${aiProviderKeys.openai}`);
+              console.log(`[AI Tools] Injecting OpenAI API key for project ${projectId}`);
+            }
+            if (aiProviderKeys.gemini) {
+              containerEnv.push(`GEMINI_API_KEY=${aiProviderKeys.gemini}`);
+              console.log(`[AI Tools] Injecting Gemini API key for project ${projectId}`);
+            }
+            if (aiProviderKeys.anthropic) {
+              containerEnv.push(`ANTHROPIC_API_KEY=${aiProviderKeys.anthropic}`);
+              console.log(`[AI Tools] Injecting Anthropic API key for project ${projectId}`);
+            }
+
+            // Add common env vars for all projects
+            containerEnv.push('NODE_ENV=development');
+            containerEnv.push('TERM=xterm-256color');
+
+            // Add framework-specific environment variables
+            const fw = (framework || templateId || '').toLowerCase();
+            if (fw.includes('expo') || fw.includes('react-native')) {
+              containerEnv.push(`REACT_NATIVE_PACKAGER_HOSTNAME=${process.env.PUBLIC_HOSTNAME || 'localhost'}`);
+              containerEnv.push('EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0');
+              containerEnv.push('BROWSER=none');
+              containerEnv.push('CI=1');
+              console.log(`[Framework] Setting Expo/React Native env vars for project ${projectId}`);
+            } else if (fw.includes('next')) {
+              containerEnv.push('NEXT_TELEMETRY_DISABLED=1');
+              console.log(`[Framework] Setting Next.js env vars for project ${projectId}`);
+            }
+
+            // Create new container with security sandbox and port mapping
+            // Include port labels for recovery after crashes
+            const portLabels = createPortLabels(hostPort!);
+            const createStart = Date.now();
+
+            // Add timeout for Docker API calls to prevent infinite hangs
+            const DOCKER_API_TIMEOUT_MS = 60000;
+            const dockerOpsPromise = (async () => {
+              const container = await docker.createContainer({
+                Image: IMAGE_NAME,
+                Tty: true,
+                OpenStdin: true,
+                WorkingDir: '/workspace',
+                Env: containerEnv,
+                Labels: {
+                  ...portLabels,
+                  projectId: projectId,
+                  userId: userId,
+                  type: 'workspace',
+                },
+                ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {}, '9999/tcp': {}, '8081/tcp': {}, '19006/tcp': {} },
+                HostConfig: {
+                  Memory: MEMORY_LIMIT,
+                  CpuPeriod: 100000,
+                  CpuQuota: CPU_QUOTA,
+                  NetworkMode: 'bridge',
+                  PortBindings: {
+                    '3000/tcp': [{ HostPort: String(hostPort) }],
+                    '5173/tcp': [{ HostPort: String(hostPort + 1) }],
+                    '8080/tcp': [{ HostPort: String(hostPort + 2) }],
+                    '9999/tcp': [{ HostPort: String(ptyPort) }],
+                    '8081/tcp': [{ HostPort: String(hostPort + 4) }],
+                    '19006/tcp': [{ HostPort: String(hostPort + 5) }],
+                  },
+                  // Named volumes for persistent workspace and node_modules
+                  Binds: [
+                    `recoder-${projectId}-workspace:/workspace`,
+                    `recoder-${projectId}-node_modules:/workspace/node_modules`,
+                    `recoder-pnpm-store:/pnpm-store`,
+                  ],
+                  // Security hardening options
+                  SecurityOpt: ['no-new-privileges', 'seccomp=unconfined'],
+                  CapDrop: ['ALL'],
+                  CapAdd: ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER', 'NET_BIND_SERVICE'],
+                  PidsLimit: 256,
+                  Ulimits: [
+                    { Name: 'nofile', Soft: 4096, Hard: 8192 },
+                    { Name: 'nproc', Soft: 128, Hard: 256 },
+                  ],
+                  Tmpfs: {
+                    '/tmp': 'rw,noexec,nosuid,size=512m',
+                  },
+                },
+              });
+
+              const containerInstance = await container;
+              const createDuration = Date.now() - createStart;
+              const startStart = Date.now();
+              await containerInstance.start();
+              const startDuration = Date.now() - startStart;
+              return { containerInstance, createDuration, startDuration };
+            })();
+
+            let dockerTimeoutId: NodeJS.Timeout;
+            const dockerTimeout = new Promise<never>((_, reject) => {
+              dockerTimeoutId = setTimeout(() => reject(new Error(`Docker API timed out after ${DOCKER_API_TIMEOUT_MS}ms`)), DOCKER_API_TIMEOUT_MS);
+            });
+
+            try {
+              const dockerRaceResult = await Promise.race([dockerOpsPromise, dockerTimeout]);
+              const { containerInstance: createdContainer, createDuration, startDuration } = dockerRaceResult;
+              containerId = createdContainer.id;
+              console.log(`⏱️ [Container] On-demand create=${createDuration}ms start=${startDuration}ms total=${Date.now() - onDemandStart}ms for ${projectId}`);
+              break;
+            } catch (err: any) {
+              const errMsg = err?.message || String(err);
+              const isPortConflict = /port is already allocated|Bind for 0\.0\.0\.0:\d+ failed/i.test(errMsg);
+              releasePorts(hostPort!, ptyPort!);
+              if (isPortConflict) {
+                // Mark the conflicting block so the next attempt doesn't reuse it
+                markPortBlockUnavailable(hostPort!);
+              }
+              if (isPortConflict && attempt < MAX_ATTEMPTS) {
+                console.warn(`[Container] Port conflict detected, retrying with new ports (attempt ${attempt}/${MAX_ATTEMPTS})`);
+                continue;
+              }
+              throw err;
+            } finally {
+              clearTimeout(dockerTimeoutId!);
+            }
           }
-
-          // Inject AI provider API keys (for Codex, Gemini CLI, OpenCode, etc.)
-          if (aiProviderKeys.openai) {
-            containerEnv.push(`OPENAI_API_KEY=${aiProviderKeys.openai}`);
-            console.log(`[AI Tools] Injecting OpenAI API key for project ${projectId}`);
-          }
-          if (aiProviderKeys.gemini) {
-            containerEnv.push(`GEMINI_API_KEY=${aiProviderKeys.gemini}`);
-            console.log(`[AI Tools] Injecting Gemini API key for project ${projectId}`);
-          }
-          if (aiProviderKeys.anthropic) {
-            containerEnv.push(`ANTHROPIC_API_KEY=${aiProviderKeys.anthropic}`);
-            console.log(`[AI Tools] Injecting Anthropic API key for project ${projectId}`);
-          }
-
-          // Create new container with security sandbox and port mapping
-          const container = await docker.createContainer({
-            Image: IMAGE_NAME,
-            Tty: true,
-            OpenStdin: true,
-            WorkingDir: '/workspace',
-            Env: containerEnv,
-            ExposedPorts: { '3000/tcp': {}, '5173/tcp': {}, '8080/tcp': {}, '9999/tcp': {} },
-            HostConfig: {
-              Memory: MEMORY_LIMIT,
-              CpuPeriod: 100000,
-              CpuQuota: CPU_QUOTA,
-              NetworkMode: 'bridge',
-              PortBindings: {
-                '3000/tcp': [{ HostPort: String(hostPort) }],
-                '5173/tcp': [{ HostPort: String(hostPort + 1) }],
-                '8080/tcp': [{ HostPort: String(hostPort + 2) }],
-                '9999/tcp': [{ HostPort: String(ptyPort) }],
-              },
-              // Named volume for node_modules persistence
-              Binds: [
-                `recoder-${projectId}-node_modules:/workspace/node_modules`,
-                `recoder-pnpm-store:/pnpm-store`,
-              ],
-              // Security hardening options
-              SecurityOpt: ['no-new-privileges', 'seccomp=unconfined'],
-              CapDrop: ['ALL'],
-              CapAdd: ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER', 'NET_BIND_SERVICE'],
-              PidsLimit: 256,
-              Ulimits: [
-                { Name: 'nofile', Soft: 4096, Hard: 8192 },
-                { Name: 'nproc', Soft: 128, Hard: 256 },
-              ],
-              Tmpfs: {
-                '/tmp': 'rw,noexec,nosuid,size=512m',
-              },
-            },
-          });
-
-          const containerInstance = await container;
-          await containerInstance.start();
-          containerId = containerInstance.id;
         }
 
+        if (!containerId || hostPort === undefined || ptyPort === undefined) {
+          throw new Error('Container creation failed: missing container or ports');
+        }
+
+        const resolvedContainerId = containerId;
+        const resolvedHostPort = hostPort;
+        const resolvedPtyPort = ptyPort;
+
         // Register container with user tracking
-        containers.set(projectId, { id: containerId, lastActive: Date.now(), port: hostPort!, ptyPort: ptyPort!, backgroundDev: false, userId });
+        containers.set(projectId, { id: resolvedContainerId, lastActive: Date.now(), port: resolvedHostPort, ptyPort: resolvedPtyPort, backgroundDev: false, userId });
         registerUserContainer(userId, projectId);
 
-        console.log(`✅ Container ${fromPool ? '(from pool)' : 'created'}: ${containerId.slice(0, 12)} for ${projectId} (preview: ${hostPort}, pty: ${ptyPort}) [user: ${userId}]`);
-        return { containerId, port: hostPort!, ptyPort: ptyPort!, fromPool };
+        // Track container in metering system
+        try {
+          getMeteringCollector().trackContainer(resolvedContainerId, projectId, userId);
+        } catch (_) { /* metering may not be initialized yet */ }
+
+        // Register with health monitor
+        try {
+          healthMonitor.registerContainer(resolvedContainerId, {
+            httpEndpoints: [{ name: 'preview', port: resolvedHostPort, path: '/' }],
+            tcpPorts: [
+              { name: 'preview-tcp', port: resolvedHostPort },
+              { name: 'pty-tcp', port: resolvedPtyPort },
+            ],
+          });
+        } catch (_) { /* health monitor may not accept this config format */ }
+
+        // Register with resource optimizer
+        try {
+          resourceOptimizer.registerContainer(resolvedContainerId);
+        } catch (_) { /* resource optimizer may not be initialized */ }
+
+        console.log(`✅ Container ${fromPool ? '(from pool)' : 'created'}: ${resolvedContainerId.slice(0, 12)} for ${projectId} (preview: ${resolvedHostPort}, pty: ${resolvedPtyPort}) [user: ${userId}] [total: ${Date.now() - totalStart}ms]`);
+        return { containerId: resolvedContainerId, port: resolvedHostPort, ptyPort: resolvedPtyPort, fromPool };
       } catch (err) {
         // Cleanup allocated ports on failure (only if not from pool)
         if (!fromPool && hostPort !== undefined && ptyPort !== undefined) {
@@ -1174,19 +2080,75 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
     })();
 
     // Store the creation promise
-    creatingContainers.set(projectId, creationPromise);
+    const creationEntry: ContainerCreationEntry<ContainerCreationResult> = { promise: creationPromise, startedAt: Date.now() };
+    if (Number.isFinite(CONTAINER_CREATE_TIMEOUT_MS) && CONTAINER_CREATE_TIMEOUT_MS > 0) {
+      creationEntry.timeoutId = setTimeout(() => {
+        const current = creatingContainers.get(projectId);
+        if (current && current.promise === creationPromise) {
+          console.error(`❌ Container creation timed out after ${CONTAINER_CREATE_TIMEOUT_MS}ms, clearing in-progress for ${projectId}`);
+          creatingContainers.delete(projectId);
+        }
+      }, CONTAINER_CREATE_TIMEOUT_MS + 1000);
+    }
+    creatingContainers.set(projectId, creationEntry);
 
     // Wait for creation to complete and return result
-    const result = await creationPromise;
-    res.json({ 
-      containerId: result.containerId, 
-      reused: false, 
+    let result: ContainerCreationResult;
+    try {
+      result = await withCreationTimeout(creationPromise, CONTAINER_CREATE_TIMEOUT_MS, () => {
+        creatingContainers.delete(projectId);
+      });
+    } finally {
+      if (creationEntry.timeoutId) clearTimeout(creationEntry.timeoutId);
+    }
+    res.json({
+      containerId: result.containerId,
+      reused: false,
       fromPool: result.fromPool,
-      port: result.port, 
-      ptyPort: result.ptyPort 
+      port: result.port,
+      ptyPort: result.ptyPort,
+      // Additional port info for client convenience
+      ports: {
+        preview: result.port,         // Port 3000 (Next.js, etc.)
+        vite: result.port + 1,        // Port 5173 (Vite)
+        other: result.port + 2,       // Port 8080 (other servers)
+        pty: result.ptyPort,          // PTY WebSocket
+      },
+      urls: {
+        preview: `http://localhost:${result.port}`,
+        vite: `http://localhost:${result.port + 1}`,
+        pty: `ws://localhost:${result.ptyPort}`,
+      }
     });
   } catch (err: any) {
     console.error('❌ Container create error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List user's active containers sorted by lastActive (oldest first)
+app.get('/api/containers', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const projectIds = userContainers.get(userId);
+
+    if (!projectIds || projectIds.size === 0) {
+      return res.json({ containers: [], count: 0, max: MAX_CONTAINERS_PER_USER });
+    }
+
+    const result: { projectId: string; lastActive: number }[] = [];
+    for (const pid of projectIds) {
+      const entry = containers.get(pid);
+      if (entry) {
+        result.push({ projectId: pid, lastActive: entry.lastActive });
+      }
+    }
+
+    // Sort oldest first (ascending by lastActive)
+    result.sort((a, b) => a.lastActive - b.lastActive);
+
+    res.json({ containers: result, count: result.length, max: MAX_CONTAINERS_PER_USER });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -1204,6 +2166,11 @@ app.delete('/api/container/:projectId', authenticateRequest, verifyProjectOwners
 
     const entry = containers.get(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    // Untrack from metering before removal
+    try { getMeteringCollector().untrackContainer(entry.id); } catch (_) {}
+    try { healthMonitor.unregisterContainer(entry.id); } catch (_) {}
+    try { resourceOptimizer.unregisterContainer(entry.id); } catch (_) {}
 
     const container = docker.getContainer(entry.id);
     await container.stop().catch(() => {});
@@ -1250,12 +2217,19 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
   const projectId = sanitizeProjectId(req.params.projectId);
   const rawPath = req.body?.path;
   const safePath = sanitizePath(rawPath);
+  const fileOpStartTime = Date.now();
 
   console.log('📝 File write request:', projectId, safePath);
   try {
     const { content } = req.body;
 
     if (!safePath) {
+      metricsCollector.recordFileOperation({
+        operation: 'write',
+        projectId,
+        success: false,
+        durationMs: Date.now() - fileOpStartTime,
+      });
       return res.status(400).json({ error: 'Invalid file path' });
     }
 
@@ -1268,7 +2242,15 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
     });
 
     const entry = containers.get(projectId);
-    if (!entry) return res.status(404).json({ error: 'Container not found' });
+    if (!entry) {
+      metricsCollector.recordFileOperation({
+        operation: 'write',
+        projectId,
+        success: false,
+        durationMs: Date.now() - fileOpStartTime,
+      });
+      return res.status(404).json({ error: 'Container not found' });
+    }
 
     // Ensure container is running before file operations
     const containerStatus = await ensureContainerRunning(entry, projectId);
@@ -1277,77 +2259,62 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
     }
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
 
-    // Helper to wait for exec stream with timeout (exec streams may emit 'close' instead of 'end')
-    const waitForExecStream = (stream: any, timeoutMs = 10000): Promise<void> => {
-      return Promise.race([
-        new Promise<void>((resolve) => {
-          stream.on('end', resolve);
-          stream.on('close', resolve);
-          stream.on('error', resolve); // Don't fail, just continue
-        }),
-        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
-      ]);
-    };
-
-    // Create directory if needed (using sanitized path)
-    const dir = safePath.substring(0, safePath.lastIndexOf('/'));
-    if (dir) {
-      // Use array-based exec to avoid shell injection
-      const mkdirExec = await container.exec({
-        Cmd: ['mkdir', '-p', `/workspace/${dir}`],
+    // FAST FILE WRITE: Use tar-based upload (10x faster than exec-based)
+    // This avoids process spawning, shell parsing, and base64 encoding overhead
+    try {
+      await fastWriteFile(entry.id, safePath, content);
+    } catch (tarError: any) {
+      // Fallback to exec-based write if tar fails (e.g., permission issues)
+      console.warn(`[FastWrite] tar-based write failed, falling back to exec: ${tarError.message}`);
+      const container = docker.getContainer(entry.id);
+      const b64 = Buffer.from(content).toString('base64');
+      const fullPath = `/workspace/${safePath}`;
+      const dir = safePath.substring(0, safePath.lastIndexOf('/'));
+      const mkdirCmd = dir ? `mkdir -p '/workspace/${dir.replace(/'/g, "'\\''")}' && ` : '';
+      const writeCmd = `${mkdirCmd}echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`;
+      
+      const writeExec = await container.exec({
+        Cmd: ['sh', '-c', writeCmd],
         AttachStdout: true,
         AttachStderr: true,
       });
-      const mkdirStream = await mkdirExec.start({});
-      await waitForExecStream(mkdirStream, 5000);
+      const writeStream = await writeExec.start({});
+      await new Promise<void>((resolve) => {
+        writeStream.on('end', resolve);
+        writeStream.on('close', resolve);
+        setTimeout(resolve, 5000);
+      });
     }
 
-    // Write file using base64 to handle special chars (sanitized path)
-    const b64 = Buffer.from(content).toString('base64');
-    const fullPath = `/workspace/${safePath}`;
+    console.log('✅ File write complete:', projectId, safePath, `(${Date.now() - fileOpStartTime}ms)`);
 
-    // Use sh -c but with properly escaped path
-    const writeExec = await container.exec({
-      Cmd: ['sh', '-c', `echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const writeStream = await writeExec.start({});
-    // Wait for file write with timeout (exec streams may not emit 'end')
-    await waitForExecStream(writeStream, 10000);
-
-    // Force filesystem sync to ensure file is written to disk
-    const syncExec = await container.exec({
-      Cmd: ['sync'],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const syncStream = await syncExec.start({});
-    await waitForExecStream(syncStream, 5000);
-
-    // Verify file exists before returning success
-    const verifyExec = await container.exec({
-      Cmd: ['test', '-f', fullPath],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const verifyStream = await verifyExec.start({});
-    await waitForExecStream(verifyStream, 5000);
-    const verifyResult = await verifyExec.inspect();
-    if (verifyResult.ExitCode !== 0) {
-      console.error('❌ File verification failed:', fullPath);
-      return res.status(500).json({ error: 'File write verification failed' });
-    }
-
-    console.log('✅ File write complete:', projectId, safePath);
+    // Tell FileWatcher to ignore this path on the next poll cycle
+    // (prevents sending a change event back to the client that just wrote the file)
+    fileWatcher.excludeWrittenPaths(projectId, [safePath]);
 
     // PERFORMANCE: Invalidate cache on write
     fileCache.invalidate(projectId, safePath);
 
+    // Notify auto-restore that user made a file change (gives more retry attempts)
+    devServerManager.onFileChange(projectId);
+
+    // Record successful file operation
+    metricsCollector.recordFileOperation({
+      operation: 'write',
+      projectId,
+      success: true,
+      durationMs: Date.now() - fileOpStartTime,
+    });
+
     res.json({ success: true });
   } catch (err: any) {
+    metricsCollector.recordFileOperation({
+      operation: 'write',
+      projectId,
+      success: false,
+      durationMs: Date.now() - fileOpStartTime,
+    });
     res.status(500).json({ error: err.message });
   }
 });
@@ -1355,10 +2322,20 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
 // Batch write multiple files at once (SECURED)
 app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const projectId = sanitizeProjectId(req.params.projectId);
+  const batchOpStartTime = Date.now();
   try {
     const { files } = req.body; // Array of { path, content }
     const entry = containers.get(projectId);
-    if (!entry) return res.status(404).json({ error: 'Container not found' });
+    if (!entry) {
+      metricsCollector.recordFileOperation({
+        operation: 'batch_write',
+        projectId,
+        success: false,
+        durationMs: Date.now() - batchOpStartTime,
+        fileCount: files?.length || 0,
+      });
+      return res.status(404).json({ error: 'Container not found' });
+    }
 
     auditLog({
       userId: req.userId,
@@ -1375,64 +2352,103 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
     }
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
 
-    // Sanitize all paths and collect directories
-    const dirs = new Set<string>();
+    // Sanitize all paths
     const sanitizedFiles = files.map((file: { path: string; content: string }) => {
       const safePath = sanitizePath(file.path);
-      const dir = safePath.substring(0, safePath.lastIndexOf('/'));
-      if (dir) dirs.add(dir);
       return { path: safePath, content: file.content };
     }).filter((f: { path: string }) => f.path); // Remove invalid paths
 
-    // Helper to wait for exec stream with timeout (exec streams may emit 'close' instead of 'end')
-    const waitForExecStream = (stream: any, timeoutMs = 10000): Promise<void> => {
-      return Promise.race([
-        new Promise<void>((resolve) => {
-          stream.on('end', resolve);
-          stream.on('close', resolve);
-          stream.on('error', resolve);
-        }),
-        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
-      ]);
-    };
+    const failedFiles: Array<{ path: string; error: string }> = [];
 
-    // Create all directories first using array-based exec
-    if (dirs.size > 0) {
-      const mkdirExec = await container.exec({
-        Cmd: ['mkdir', '-p', ...Array.from(dirs).map(d => `/workspace/${d}`)],
-        AttachStdout: true,
-        AttachStderr: true,
-      });
-      const mkdirStream = await mkdirExec.start({});
-      await waitForExecStream(mkdirStream, 5000);
-    }
-
-    // Write files in parallel batches of 10 (with sanitized paths)
-    const batchSize = 10;
-    for (let i = 0; i < sanitizedFiles.length; i += batchSize) {
-      const batch = sanitizedFiles.slice(i, i + batchSize);
-      await Promise.all(batch.map(async (file: { path: string; content: string }) => {
-        const b64 = Buffer.from(file.content).toString('base64');
-        const fullPath = `/workspace/${file.path}`;
-        const writeExec = await container.exec({
-          Cmd: ['sh', '-c', `echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`],
-          AttachStdout: true,
-          AttachStderr: true,
+    // FAST BATCH WRITE: Use tar-based upload (10x faster than exec-based)
+    // Single network round trip for all files
+    try {
+      await fastWriteFiles(entry.id, sanitizedFiles);
+      console.log(`✅ Batch write complete: ${projectId} ${sanitizedFiles.length} files (${Date.now() - batchOpStartTime}ms)`);
+    } catch (tarError: any) {
+      // Fallback to exec-based write if tar fails
+      console.warn(`[FastWrite] tar-based batch write failed, falling back to exec: ${tarError.message}`);
+      const container = docker.getContainer(entry.id);
+      
+      // Create all directories first
+      const dirs = new Set<string>();
+      for (const file of sanitizedFiles) {
+        const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+        if (dir) dirs.add(dir);
+      }
+      
+      if (dirs.size > 0) {
+        const mkdirExec = await container.exec({
+          Cmd: ['mkdir', '-p', ...Array.from(dirs).map(d => `/workspace/${d}`)],
+          AttachStdout: false,
+          AttachStderr: false,
         });
-        const writeStream = await writeExec.start({});
-        await waitForExecStream(writeStream, 10000);
-      }));
+        await mkdirExec.start({ Detach: true });
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Write files in parallel batches
+      const batchSize = 10;
+      for (let i = 0; i < sanitizedFiles.length; i += batchSize) {
+        const batch = sanitizedFiles.slice(i, i + batchSize);
+        const results = await Promise.all(batch.map(async (file: { path: string; content: string }) => {
+          try {
+            const b64 = Buffer.from(file.content).toString('base64');
+            const fullPath = `/workspace/${file.path}`;
+            const writeExec = await container.exec({
+              Cmd: ['sh', '-c', `echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`],
+              AttachStdout: true,
+              AttachStderr: true,
+            });
+            const writeStream = await writeExec.start({});
+            await new Promise<void>((resolve) => {
+              writeStream.on('end', resolve);
+              writeStream.on('close', resolve);
+              setTimeout(resolve, 10000);
+            });
+            return { path: file.path, success: true as const };
+          } catch (err: any) {
+            return { path: file.path, success: false as const, error: err?.message || 'Write failed' };
+          }
+        }));
+
+        for (const result of results) {
+          if (!result.success) {
+            failedFiles.push({ path: result.path, error: result.error });
+          }
+        }
+      }
     }
+
+    // Tell FileWatcher to ignore these paths on the next poll cycle
+    fileWatcher.excludeWrittenPaths(projectId, sanitizedFiles.map((f: { path: string }) => f.path));
 
     // PERFORMANCE: Invalidate cache for all written files
     for (const file of sanitizedFiles) {
       fileCache.invalidate(projectId, file.path);
     }
 
-    res.json({ success: true, count: sanitizedFiles.length });
+    // Notify auto-restore that user made file changes (gives more retry attempts)
+    devServerManager.onFileChange(projectId);
+
+    // Record successful batch write
+    metricsCollector.recordFileOperation({
+      operation: 'batch_write',
+      projectId,
+      success: failedFiles.length === 0,
+      durationMs: Date.now() - batchOpStartTime,
+      fileCount: sanitizedFiles.length,
+    });
+
+    res.json({ success: failedFiles.length === 0, count: sanitizedFiles.length, failedFiles });
   } catch (err: any) {
+    metricsCollector.recordFileOperation({
+      operation: 'batch_write',
+      projectId,
+      success: false,
+      durationMs: Date.now() - batchOpStartTime,
+    });
     res.status(500).json({ error: err.message });
   }
 });
@@ -1441,12 +2457,19 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
 // PERFORMANCE: Uses LRU cache for frequently read files
 app.get('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const projectId = sanitizeProjectId(req.params.projectId);
+  const readOpStartTime = Date.now();
   try {
     const rawPath = req.query.path as string;
     const safePath = sanitizePath(rawPath);
     const skipCache = req.query.skipCache === 'true';  // Allow cache bypass
 
     if (!safePath) {
+      metricsCollector.recordFileOperation({
+        operation: 'read',
+        projectId,
+        success: false,
+        durationMs: Date.now() - readOpStartTime,
+      });
       return res.status(400).json({ error: 'Invalid file path' });
     }
 
@@ -1454,12 +2477,27 @@ app.get('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, asy
     if (!skipCache) {
       const cached = fileCache.get(projectId, safePath);
       if (cached !== null) {
+        // Record cached read as successful
+        metricsCollector.recordFileOperation({
+          operation: 'read',
+          projectId,
+          success: true,
+          durationMs: Date.now() - readOpStartTime,
+        });
         return res.json({ content: cached, cached: true });
       }
     }
 
     const entry = containers.get(projectId);
-    if (!entry) return res.status(404).json({ error: 'Container not found' });
+    if (!entry) {
+      metricsCollector.recordFileOperation({
+        operation: 'read',
+        projectId,
+        success: false,
+        durationMs: Date.now() - readOpStartTime,
+      });
+      return res.status(404).json({ error: 'Container not found' });
+    }
 
     // Ensure container is running
     const containerStatus = await ensureContainerRunning(entry, projectId);
@@ -1635,6 +2673,196 @@ app.post('/api/folder/:projectId', authenticateRequest, verifyProjectOwnership, 
   }
 });
 
+// Read a single file from a container by projectId (used by api.chat for project config)
+app.get('/api/files/read', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  const filePath = req.query.path as string;
+  // Backward compat: containerId was previously used to pass projectId
+  const rawProjectId = (req.query.projectId as string) || (req.query.containerId as string);
+
+  if (!filePath || !rawProjectId) {
+    return res.status(400).json({ error: 'path and projectId query params required' });
+  }
+
+  try {
+    const projectId = sanitizeProjectId(rawProjectId);
+    // Find the container entry by projectId
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+    const safePath = `/workspace/${sanitizePath(filePath)}`;
+
+    const exec = await container.exec({
+      Cmd: ['cat', safePath],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = await exec.start({});
+    const chunks: Buffer[] = [];
+
+    await new Promise<void>((resolve) => {
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', resolve);
+    });
+
+    // Parse Docker multiplexed stream
+    const raw = Buffer.concat(chunks);
+    let content = '';
+    let i = 0;
+    while (i < raw.length) {
+      if (i + 8 <= raw.length) {
+        const size = raw.readUInt32BE(i + 4);
+        if (i + 8 + size <= raw.length) {
+          content += raw.slice(i + 8, i + 8 + size).toString();
+          i += 8 + size;
+        } else break;
+      } else break;
+    }
+
+    res.json({ content });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Workspace state - used to skip re-restoring files on refresh
+app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  const projectId = sanitizeProjectId(req.params.projectId);
+  const entry = containers.get(projectId);
+
+  if (!entry) {
+    return res.status(404).json({ hasFiles: false, fileCount: 0, hasPackageJson: false, devServerRunning: false });
+  }
+
+  try {
+    const container = docker.getContainer(entry.id);
+
+    const countExec = await container.exec({
+      Cmd: ['/bin/bash', '-c', 'find /workspace -type f -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | wc -l'],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const countStream = await countExec.start({});
+    const fileCountRaw = await new Promise<string>((resolve, reject) => {
+      let out = '';
+      countStream.on('data', (chunk: Buffer) => { out += chunk.slice(8).toString(); });
+      countStream.on('end', () => resolve(out.trim()));
+      countStream.on('error', reject);
+    });
+    const fileCount = Number(fileCountRaw) || 0;
+
+    const pkgExec = await container.exec({
+      Cmd: ['/bin/bash', '-c', 'test -f /workspace/package.json && echo "yes" || echo "no"'],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const pkgStream = await pkgExec.start({});
+    const pkgRaw = await new Promise<string>((resolve, reject) => {
+      let out = '';
+      pkgStream.on('data', (chunk: Buffer) => { out += chunk.slice(8).toString(); });
+      pkgStream.on('end', () => resolve(out.trim()));
+      pkgStream.on('error', reject);
+    });
+    const hasPackageJson = pkgRaw.includes('yes');
+
+    const candidatePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
+    let devServerRunning = false;
+    for (const port of candidatePorts) {
+      try {
+        const isReady = await new Promise<boolean>((resolve) => {
+          const req = http.get(`http://127.0.0.1:${port}`, { timeout: 1500 }, (resp) => {
+            resolve(resp.statusCode !== undefined && resp.statusCode < 500);
+          });
+          req.on('error', () => resolve(false));
+          req.on('timeout', () => { req.destroy(); resolve(false); });
+        });
+        if (isReady) {
+          devServerRunning = true;
+          break;
+        }
+      } catch {}
+    }
+
+    return res.json({
+      hasFiles: fileCount > 0,
+      fileCount,
+      hasPackageJson,
+      devServerRunning,
+    });
+  } catch (error: any) {
+    console.warn(`[WorkspaceState] Failed to inspect workspace for ${projectId}: ${error?.message || error}`);
+    return res.status(500).json({ hasFiles: false, fileCount: 0, hasPackageJson: false, devServerRunning: false });
+  }
+});
+
+// Type check a project workspace using tsc
+app.post('/api/typecheck/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  const projectId = sanitizeProjectId(req.params.projectId);
+  const entry = containers.get(projectId);
+  if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+  try {
+    const container = docker.getContainer(entry.id);
+    entry.lastActive = Date.now();
+
+    const tsconfig = await execCommand(
+      container,
+      'cd /workspace && (test -f tsconfig.app.json && echo "tsconfig.app.json" || (test -f tsconfig.json && echo "tsconfig.json" || echo ""))'
+    );
+
+    if (!tsconfig) {
+      return res.json({ problems: [], summary: 'No TypeScript config found' });
+    }
+
+    const rawOutput = await execCommand(
+      container,
+      `cd /workspace && tsc --noEmit --pretty false -p ${tsconfig} 2>&1 || true`
+    );
+
+    const stripAnsi = (str: string) => str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+    const lines = stripAnsi(rawOutput).split('\n').map(l => l.trim()).filter(Boolean);
+
+    const problems: Array<{
+      file: string;
+      line: number;
+      column: number;
+      message: string;
+      severity: 'error' | 'warning';
+      code?: string;
+    }> = [];
+
+    const tscRegex = /^(.+)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.*)$/i;
+    for (const line of lines) {
+      const match = line.match(tscRegex);
+      if (!match) continue;
+      const [, filePath, lineNum, colNum, severityRaw, code, message] = match;
+      const relativeFile = filePath.replace(/^\/workspace\//, '');
+      problems.push({
+        file: relativeFile,
+        line: Number(lineNum),
+        column: Number(colNum),
+        message: message.trim(),
+        severity: severityRaw.toLowerCase() === 'warning' ? 'warning' : 'error',
+        code,
+      });
+    }
+
+    const bodyPaths = Array.isArray(req.body?.paths) ? req.body.paths : undefined;
+    const paths = (bodyPaths?.map((p: string) => sanitizePath(p).replace(/^\/+/, '')).filter(Boolean) ?? undefined) as string[] | undefined;
+    const filtered = paths && paths.length > 0
+      ? problems.filter(p => paths.some(path => p.file === path || p.file.startsWith(`${path}/`)))
+      : problems;
+
+    return res.json({
+      problems: filtered,
+      summary: filtered.length > 0 ? `Found ${filtered.length} problem(s)` : 'No type errors found',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Typecheck failed' });
+  }
+});
+
 // List files in container (SECURED)
 app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const projectId = sanitizeProjectId(req.params.projectId);
@@ -1678,6 +2906,156 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
 
     res.json({ files: output.split('\n').filter(Boolean) });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export project files as ZIP (SECURED)
+// Returns file tree with content for export functionality
+app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  const projectId = sanitizeProjectId(req.params.projectId);
+  const exportStartTime = Date.now();
+
+  try {
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    // Ensure container is running
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({ error: 'Container not running', canRetry: true });
+    }
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+
+    // Get exclude patterns from query (comma-separated)
+    const excludePatterns = (req.query.exclude as string)?.split(',') || [
+      'node_modules',
+      '.next',
+      'dist',
+      'build',
+      '.git',
+      '.cache',
+      'coverage',
+      '*.log',
+    ];
+
+    // Build find command with exclusions
+    // Use find to get all files, excluding common build artifacts
+    const excludeArgs: string[] = [];
+    excludePatterns.forEach((pattern) => {
+      excludeArgs.push('-not', '-path', `*/${pattern}/*`, '-not', '-name', pattern);
+    });
+
+    const findExec = await container.exec({
+      Cmd: ['find', '/workspace', '-type', 'f', ...excludeArgs, '-size', '-1M'],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const findStream = await findExec.start({});
+    const findChunks: Buffer[] = [];
+
+    await new Promise<void>((resolve) => {
+      findStream.on('data', (chunk: Buffer) => findChunks.push(chunk));
+      findStream.on('end', resolve);
+    });
+
+    // Parse Docker multiplexed stream
+    const rawFind = Buffer.concat(findChunks);
+    let findOutput = '';
+    let idx = 0;
+    while (idx < rawFind.length) {
+      if (idx + 8 <= rawFind.length) {
+        const size = rawFind.readUInt32BE(idx + 4);
+        if (idx + 8 + size <= rawFind.length) {
+          findOutput += rawFind.slice(idx + 8, idx + 8 + size).toString();
+          idx += 8 + size;
+        } else break;
+      } else break;
+    }
+
+    const filePaths = findOutput.split('\n').filter(Boolean);
+
+    // Read file contents in batches
+    const files: Array<{ path: string; content: string; type: 'file' }> = [];
+    const failed: Array<{ path: string; error: string }> = [];
+
+    // Process files in batches of 20
+    const batchSize = 20;
+    for (let i = 0; i < filePaths.length; i += batchSize) {
+      const batch = filePaths.slice(i, i + batchSize);
+
+      const batchPromises = batch.map(async (fullPath) => {
+        const relativePath = fullPath.replace('/workspace/', '');
+
+        try {
+          const catExec = await container.exec({
+            Cmd: ['cat', fullPath],
+            AttachStdout: true,
+            AttachStderr: true,
+          });
+          const catStream = await catExec.start({});
+          const catChunks: Buffer[] = [];
+
+          await new Promise<void>((resolve) => {
+            catStream.on('data', (chunk: Buffer) => catChunks.push(chunk));
+            catStream.on('end', resolve);
+          });
+
+          // Parse Docker multiplexed stream
+          const rawCat = Buffer.concat(catChunks);
+          let content = '';
+          let j = 0;
+          while (j < rawCat.length) {
+            if (j + 8 <= rawCat.length) {
+              const size = rawCat.readUInt32BE(j + 4);
+              if (j + 8 + size <= rawCat.length) {
+                content += rawCat.slice(j + 8, j + 8 + size).toString();
+                j += 8 + size;
+              } else break;
+            } else break;
+          }
+
+          // Skip binary files (check for null bytes)
+          if (content.includes('\x00')) {
+            return null;
+          }
+
+          return {
+            path: '/' + relativePath,
+            content,
+            type: 'file' as const,
+          };
+        } catch (err: any) {
+          failed.push({ path: relativePath, error: err.message });
+          return null;
+        }
+      });
+
+      const results = await Promise.all(batchPromises);
+      files.push(...results.filter((f): f is NonNullable<typeof f> => f !== null));
+    }
+
+    const exportDuration = Date.now() - exportStartTime;
+    console.log(`[export] Project ${projectId}: ${files.length} files exported in ${exportDuration}ms`);
+
+    res.json({
+      success: true,
+      files,
+      directories: [], // Could be added if needed
+      failed,
+      stats: {
+        totalFiles: files.length,
+        failedFiles: failed.length,
+        durationMs: exportDuration,
+      },
+    });
+  } catch (err: any) {
+    console.error(`[export] Failed for project ${projectId}:`, err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1809,7 +3187,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       console.log('📝 Dev server process started, performing health check...');
 
       // 🔧 FIX: Wait for dev server to actually respond (up to 30 seconds)
-      const portsToCheck = [entry.port + 1, entry.port, entry.port + 2]; // Vite (5173), Next.js (3000), Other (8080)
+      const portsToCheck = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2]; // Vite (5173), Next.js (3000), Expo (8081), Expo legacy (19006), Other (8080)
       const healthCheck = await waitForDevServer(portsToCheck, 30000);
 
       if (healthCheck.ready) {
@@ -1847,6 +3225,9 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     res.json({ output, success: true, exitCode: 0 });
   } catch (err: any) {
     const errMsg = err.message || '';
+    const safeCommand = typeof req.body?.command === 'string' ? req.body.command.substring(0, 500) : '';
+    const safeCwd = typeof req.body?.cwd === 'string' ? req.body.cwd : '/workspace';
+    const isDockerUnavailable = /connect\s+econnrefused|enoent|socket hang up|no such container|container.*not found|is not running/i.test(errMsg);
 
     // Handle "file not found" errors gracefully - return 200 with empty output
     // This is expected for new projects when AI tries to read package.json
@@ -1866,12 +3247,18 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     const exitCodeMatch = errMsg.match(/exit code (\d+)/);
     const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 1;
 
-    console.error('❌ Command execution failed:', errMsg);
-    res.status(500).json({
+    console.error('❌ Command execution failed:', {
+      projectId: req.params.projectId,
+      command: safeCommand,
+      cwd: safeCwd,
+      error: errMsg || 'Unknown error',
+    });
+    res.status(isDockerUnavailable ? 503 : 500).json({
       error: errMsg,
       success: false,
       exitCode,
-      output: errMsg
+      output: errMsg,
+      canRetry: isDockerUnavailable
     });
   }
 });
@@ -1888,6 +3275,32 @@ app.get('/api/logs/:projectId', authenticateRequest, verifyProjectOwnership, asy
     const logs = await devServerManager.getLogs(entry.id, projectId, tail);
 
     res.json({ logs });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get dev server logs with parsed errors - used by auto-fix feature
+app.get('/api/logs/:projectId/parsed', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    entry.lastActive = Date.now();
+    const tail = Math.min(parseInt(req.query.tail as string) || 100, 1000);
+    const logs = await devServerManager.getLogs(entry.id, projectId, tail);
+
+    // Parse errors from logs
+    const errors = parseAllErrors(logs);
+    const blocking = hasBlockingErrors(logs);
+
+    res.json({
+      logs,
+      errors,
+      hasBlockingErrors: blocking,
+      timestamp: Date.now(),
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1917,7 +3330,8 @@ app.get('/api/errors/:projectId', authenticateRequest, verifyProjectOwnership, a
     let autoRestoreResult = null;
     if (blocking && req.query.autoRestore !== 'false') {
       const { hasError } = autoRestoreManager.detectErrors(logs);
-      if (hasError && autoRestoreManager.shouldRestore(projectId)) {
+      const restoreCheck = autoRestoreManager.shouldRestore(projectId);
+      if (hasError && restoreCheck.allowed) {
         console.log(`[AutoRestore] Blocking errors detected for ${projectId}, attempting restore...`);
         autoRestoreResult = await autoRestoreManager.attemptRestore(entry.id, projectId);
         if (autoRestoreResult.success) {
@@ -1929,6 +3343,9 @@ app.get('/api/errors/:projectId', authenticateRequest, verifyProjectOwnership, a
       autoRestoreManager.resetErrors(projectId);
     }
 
+    // Get retry state for frontend
+    const retryState = autoRestoreManager.getState(projectId);
+
     res.json({
       errors,
       hasBlockingErrors: blocking,
@@ -1936,6 +3353,12 @@ app.get('/api/errors/:projectId', authenticateRequest, verifyProjectOwnership, a
       errorCount: errors.length,
       lastLogTimestamp: Date.now(),
       autoRestore: autoRestoreResult,
+      retryState: {
+        errorCount: retryState.errorCount,
+        maxRetries: retryState.maxRetries,
+        canRetry: retryState.canRetry,
+        nextRetryIn: retryState.nextRetryIn,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1969,8 +3392,8 @@ app.post('/api/auto-restore/:projectId', authenticateRequest, verifyProjectOwner
       const snapshot = await snapshotManager.restoreSnapshot(entry.id, projectId, safeSnapshotId);
       res.json({ success: true, restoredTo: safeSnapshotId, snapshot });
     } else {
-      // Auto-restore to last working snapshot
-      const result = await autoRestoreManager.attemptRestore(entry.id, projectId);
+      // Auto-restore to last working snapshot (force if requested)
+      const result = await autoRestoreManager.attemptRestore(entry.id, projectId, force);
       res.json(result);
     }
   } catch (err: any) {
@@ -1994,7 +3417,7 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
-    const ports = [entry.port + 1, entry.port, entry.port + 2]; // Vite, Next.js, Other
+    const ports = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2]; // Vite, Next.js, Expo, Expo legacy, Other
 
     auditLog({
       userId: req.userId,
@@ -2061,7 +3484,7 @@ app.post('/api/dev-server/restart', authenticateRequest, async (req: Authenticat
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
-    const ports = [entry.port + 1, entry.port, entry.port + 2];
+    const ports = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
 
     auditLog({
       userId: req.userId,
@@ -2087,8 +3510,99 @@ app.get('/api/dev-server/status/:projectId', authenticateRequest, verifyProjectO
 
     const status = devServerManager.getStatus(projectId);
     const isRunning = devServerManager.isRunning(projectId);
+    const errorInfo = devServerManager.getErrorInfo(projectId);
 
-    res.json({ status, isRunning, backgroundDev: entry.backgroundDev });
+    res.json({
+      status,
+      isRunning,
+      backgroundDev: entry.backgroundDev,
+      errors: errorInfo.hasErrors ? errorInfo.errors : undefined,
+      retryState: errorInfo.retryState,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Auto-detect framework from project files
+app.get('/api/dev-server/detect-framework/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const entry = containers.get(projectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+
+    const framework = await detectFrameworkFromContainer(entry.id);
+    const installCommand = getInstallCommand(framework);
+    const devCommand = getDevCommand(framework);
+    const ports = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
+    const expectedPorts = getExpectedPorts(framework, ports);
+
+    res.json({
+      framework,
+      installCommand,
+      devCommand,
+      expectedPorts,
+      language: getLanguageFromFramework(framework),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Force retry dev server after max retries reached
+app.post('/api/dev-server/force-retry', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { projectId } = req.body;
+    const safeProjectId = sanitizeProjectId(projectId);
+
+    // Verify ownership
+    const entry = containers.get(safeProjectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+    if (entry.userId && entry.userId !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const ports = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
+
+    auditLog({
+      userId: req.userId,
+      action: 'DEV_SERVER_FORCE_RETRY',
+      projectId: safeProjectId,
+      ip: req.ip,
+    });
+
+    const result = await devServerManager.forceRetry(entry.id, safeProjectId, ports);
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('Force retry failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reset auto-restore state for a project (manual reset)
+app.post('/api/dev-server/reset-errors', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { projectId } = req.body;
+    const safeProjectId = sanitizeProjectId(projectId);
+
+    // Verify ownership
+    const entry = containers.get(safeProjectId);
+    if (!entry) return res.status(404).json({ error: 'Container not found' });
+    if (entry.userId && entry.userId !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'DEV_SERVER_RESET_ERRORS',
+      projectId: safeProjectId,
+      ip: req.ip,
+    });
+
+    autoRestoreManager.forceReset(safeProjectId);
+
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -2097,16 +3611,16 @@ app.get('/api/dev-server/status/:projectId', authenticateRequest, verifyProjectO
 // Configure auto-restore (admin only - requires auth)
 app.post('/api/auto-restore/config', authenticateRequest, async (req: AuthenticatedRequest, res) => {
   try {
-    const { enabled, maxRetries, cooldownMs } = req.body;
+    const { enabled, maxRetries, baseCooldownMs, maxCooldownMs } = req.body;
 
     auditLog({
       userId: req.userId,
       action: 'AUTO_RESTORE_CONFIG',
-      details: { enabled, maxRetries, cooldownMs },
+      details: { enabled, maxRetries, baseCooldownMs, maxCooldownMs },
       ip: req.ip,
     });
 
-    autoRestoreManager.configure({ enabled, maxRetries, cooldownMs });
+    autoRestoreManager.configure({ enabled, maxRetries, baseCooldownMs, maxCooldownMs });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -2487,6 +4001,11 @@ const terminalSessions = new Map<string, { pty: pty.IPty; projectId: string; rpc
 const lifecycleManager = new ContainerLifecycleManager(containers);
 lifecycleManager.setCleanupHandler(async (projectId, containerId) => {
   try {
+    // Untrack from metering before removal
+    try { getMeteringCollector().untrackContainer(containerId); } catch (_) {}
+    try { healthMonitor.unregisterContainer(containerId); } catch (_) {}
+    try { resourceOptimizer.unregisterContainer(containerId); } catch (_) {}
+
     const container = docker.getContainer(containerId);
     await container.stop().catch(() => {});
     await container.remove().catch(() => {});
@@ -2504,38 +4023,68 @@ lifecycleManager.setCleanupHandler(async (projectId, containerId) => {
   }
 });
 
+// Debug: HTTP test route to verify routing works
+app.get('/terminal-test/:projectId', (req, res) => {
+  console.log(`🔌 [Terminal-Test] HTTP request for project: ${req.params.projectId}`);
+  res.json({ status: 'ok', projectId: req.params.projectId });
+});
+
+// Log all upgrade attempts
+app.use((req, res, next) => {
+  if (req.headers.upgrade === 'websocket') {
+    console.log(`🔌 [WebSocket] Upgrade request: ${req.method} ${req.url} from ${req.headers.origin || 'unknown'}`);
+  }
+  next();
+});
+
 app.ws('/terminal/:projectId', async (ws, req) => {
   const { projectId } = req.params;
   const terminalId = req.query.terminalId as string || `term-${Date.now()}`;
 
+  console.log(`🔌 [Terminal] WebSocket connection attempt for project: ${projectId}, terminalId: ${terminalId}`);
+  console.log(`🔌 [Terminal] Origin: ${req.headers.origin}, IP: ${req.ip}`);
+
   // Authenticate WebSocket connection
+  console.log(`🔌 [Terminal] Authenticating...`);
   const authSession = await authenticateWebSocket(ws, req);
-  if (!authSession) return; // Connection closed by auth helper
+  if (!authSession) {
+    console.log(`🔌 [Terminal] Auth FAILED for project: ${projectId}`);
+    return; // Connection closed by auth helper
+  }
+  console.log(`🔌 [Terminal] Auth SUCCESS - userId: ${authSession.userId}`);
+
+  // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
+  wsKeepalive.register(ws as any, projectId, 'terminal', authSession.userId);
 
   let entry = containers.get(projectId);
-  
+
   // Try to recover container from Docker if not in memory (after backend restart)
   if (!entry) {
     console.log(`⚠️ [Terminal] Container not in memory for ${projectId}, attempting recovery...`);
     try {
-      const allContainers = await docker.listContainers({ all: false });
+      // Add timeout to listContainers (10 seconds) to prevent blocking
+      const allContainers = await withTimeout(
+        docker.listContainers({ all: false }),
+        10000,
+        'docker.listContainers'
+      );
       for (const containerInfo of allContainers) {
         const volumes = Object.keys(containerInfo.Mounts?.reduce((acc: any, m: any) => {
           if (m.Name) acc[m.Name] = true;
           return acc;
         }, {}) || {});
-        
+
         if (volumes.some(v => v.includes(`recoder-${projectId}`))) {
           const ports = containerInfo.Ports || [];
           let basePort = 0;
           let ptyPort = 0;
-          
+
           for (const p of ports) {
             if (p.PrivatePort === 3000 && p.PublicPort) basePort = p.PublicPort;
             if (p.PrivatePort === 5173 && p.PublicPort && !basePort) basePort = p.PublicPort - 1;
             if (p.PrivatePort === 9999 && p.PublicPort) ptyPort = p.PublicPort;
           }
-          
+
           if (basePort > 0) {
             entry = {
               id: containerInfo.Id,
@@ -2550,13 +4099,13 @@ app.ws('/terminal/:projectId', async (ws, req) => {
           }
         }
       }
-    } catch (err) {
-      console.error(`❌ [Terminal] Recovery failed for ${projectId}:`, err);
+    } catch (err: any) {
+      console.error(`❌ [Terminal] Recovery failed for ${projectId}:`, err.message || err);
     }
   }
-  
+
   if (!entry) {
-    ws.close(1008, 'Container not found');
+    wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
     return;
   }
 
@@ -2572,17 +4121,26 @@ app.ws('/terminal/:projectId', async (ws, req) => {
   if (!session) {
     // Create new independent PTY session via docker exec
     const container = docker.getContainer(entry.id);
-    
-    // Create exec instance for interactive shell
-    const exec = await container.exec({
-      Cmd: ['/bin/bash'],
-      AttachStdin: true,
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: true,
-    });
 
-    const stream = await exec.start({ hijack: true, stdin: true }) as Duplex;
+    // Create exec instance for interactive shell with timeout (10 seconds)
+    const exec = await withTimeout(
+      container.exec({
+        Cmd: ['/bin/bash'],
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+        Tty: true,
+      }),
+      10000,
+      'container.exec'
+    );
+
+    // Start exec with timeout (10 seconds)
+    const stream = await withTimeout(
+      exec.start({ hijack: true, stdin: true }),
+      10000,
+      'exec.start'
+    ) as Duplex;
     
     console.log(`✅ Terminal session created: ${terminalId} for ${projectId}`);
 
@@ -2670,8 +4228,18 @@ app.ws('/terminal/:projectId', async (ws, req) => {
       entry.lastActive = Date.now();
       lifecycleManager.resetTimer(projectId);
 
-      // Check if it's an RPC message
+      // Handle JSON messages (ping/pong, RPC) before piping to terminal
       if (typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          // Respond to heartbeat pings from the client
+          if (parsed.type === 'ping') {
+            ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+            return;
+          }
+        } catch {
+          // Not JSON — fall through to RPC check then terminal
+        }
         const handled = await rpc.handleMessage(data);
         if (handled) return;
       }
@@ -2730,7 +4298,17 @@ app.ws('/terminal/:projectId', async (ws, req) => {
       entry.lastActive = Date.now();
       lifecycleManager.resetTimer(projectId);
 
+      // Handle JSON messages (ping/pong, RPC) before piping to terminal
       if (typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'ping') {
+            ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+            return;
+          }
+        } catch {
+          // Not JSON — fall through to RPC check then terminal
+        }
         const handled = await rpc.handleMessage(data);
         if (handled) return;
       }
@@ -2744,46 +4322,8 @@ app.ws('/terminal/:projectId', async (ws, req) => {
   }
 });
 
-// WebSocket endpoint for file watching (CLI integration)
-// Used by recoder-code CLI to sync file changes with web editor
-app.ws('/watch/:projectId', async (ws, req) => {
-  const { projectId } = req.params;
-
-  // Authenticate WebSocket connection
-  const authSession = await authenticateWebSocket(ws, req);
-  if (!authSession) return;
-
-  const entry = containers.get(projectId);
-
-  if (!entry) {
-    ws.close(1008, 'Container not found');
-    return;
-  }
-
-  console.log(`[FileWatch] WebSocket connected for ${projectId} [user: ${authSession.userId}]`);
-
-  // Start file watcher for this project
-  fileWatcher.startWatching(entry.id, projectId);
-
-  // Listen for file changes and forward to client
-  const changeHandler = ({ projectId: pid, changes }: any) => {
-    if (pid === projectId && ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ type: 'file-changes', changes }));
-    }
-  };
-
-  fileWatcher.on('changes', changeHandler);
-
-  ws.on('close', () => {
-    fileWatcher.removeListener('changes', changeHandler);
-    fileWatcher.stopWatching(projectId);
-    console.log(`[FileWatch] WebSocket closed for ${projectId}`);
-  });
-
-  ws.on('error', (err) => {
-    console.error(`[FileWatch] Error for ${projectId}:`, err.message);
-  });
-});
+// NOTE: FileWatch WebSocket endpoint moved to end of file (after preview proxy setup)
+// to consolidate with the shared client management implementation
 
 // NOTE: LSP and Database Explorer APIs have been removed
 // LSP: Requires proper architecture with TCP-based communication
@@ -2806,7 +4346,11 @@ app.post('/api/search/:projectId', authenticateRequest, verifyProjectOwnership, 
     // Try to recover container from Docker if not in memory
     if (!entry) {
       console.log(`⚠️ [Search] Container not in memory for ${projectId}, attempting recovery...`);
-      const allContainers = await docker.listContainers({ all: false });
+      const allContainers = await withTimeout(
+        docker.listContainers({ all: false }),
+        10000,
+        'docker.listContainers'
+      );
       for (const containerInfo of allContainers) {
         const volumes = Object.keys(containerInfo.Mounts?.reduce((acc: any, m: any) => {
           if (m.Name) acc[m.Name] = true;
@@ -2868,6 +4412,126 @@ app.post('/api/replace/:projectId', authenticateRequest, verifyProjectOwnership,
     const result = await searchService.replace(entry.id, searchQuery, replaceText, files);
     res.json(result);
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== Project Type Detection API ====================
+
+// Detect project framework/type by inspecting container files
+app.get('/api/project-type/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    // Ensure container is running
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({ error: 'Container not running', canRetry: true });
+    }
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+
+    // Helper to read a file from the container, returns null if not found
+    async function readContainerFile(filePath: string): Promise<string | null> {
+      try {
+        return await execCommand(container, `cat ${filePath}`);
+      } catch {
+        return null;
+      }
+    }
+
+    // Read key config files in parallel
+    const [packageJsonRaw, appJsonRaw, requirementsTxt] = await Promise.all([
+      readContainerFile('/workspace/package.json'),
+      readContainerFile('/workspace/app.json'),
+      readContainerFile('/workspace/requirements.txt'),
+    ]);
+
+    // Check for various config files (Next.js, Vite)
+    const [nextConfigJs, nextConfigMjs, nextConfigTs, viteConfigTs, viteConfigJs] = await Promise.all([
+      readContainerFile('/workspace/next.config.js'),
+      readContainerFile('/workspace/next.config.mjs'),
+      readContainerFile('/workspace/next.config.ts'),
+      readContainerFile('/workspace/vite.config.ts'),
+      readContainerFile('/workspace/vite.config.js'),
+    ]);
+
+    let type = 'unknown';
+    let name = '';
+    let version = '';
+
+    // Parse package.json if it exists
+    let packageJson: any = null;
+    if (packageJsonRaw) {
+      try {
+        packageJson = JSON.parse(packageJsonRaw);
+        name = packageJson.name || '';
+        version = packageJson.version || '';
+      } catch {
+        // Invalid JSON, continue with detection
+      }
+    }
+
+    const deps = packageJson?.dependencies || {};
+    const devDeps = packageJson?.devDependencies || {};
+    const allDeps = { ...deps, ...devDeps };
+
+    // Detect Expo: has "expo" in dependencies + app.json with expo config
+    if (deps['expo'] && appJsonRaw) {
+      try {
+        const appJson = JSON.parse(appJsonRaw);
+        if (appJson.expo) {
+          type = 'expo';
+        }
+      } catch {
+        // If app.json isn't valid JSON but expo dep exists, still mark as expo
+        if (deps['expo']) {
+          type = 'expo';
+        }
+      }
+    }
+
+    // Detect Next.js: has "next" in dependencies or next.config file exists
+    if (type === 'unknown' && (deps['next'] || nextConfigJs || nextConfigMjs || nextConfigTs)) {
+      type = 'nextjs';
+    }
+
+    // Detect Vite + React
+    if (type === 'unknown' && (allDeps['vite'] || viteConfigTs || viteConfigJs) && allDeps['react']) {
+      type = 'vite-react';
+    }
+
+    // Detect Vite + Vue
+    if (type === 'unknown' && (allDeps['vite'] || viteConfigTs || viteConfigJs) && allDeps['vue']) {
+      type = 'vite-vue';
+    }
+
+    // Detect Express
+    if (type === 'unknown' && deps['express']) {
+      type = 'express';
+    }
+
+    // Detect Python frameworks from requirements.txt
+    if (type === 'unknown' && requirementsTxt) {
+      const reqLower = requirementsTxt.toLowerCase();
+      if (reqLower.includes('flask')) {
+        type = 'flask';
+        name = name || 'flask-app';
+      } else if (reqLower.includes('django')) {
+        type = 'django';
+        name = name || 'django-app';
+      }
+    }
+
+    res.json({ type, name, version });
+  } catch (err: any) {
+    console.error(`[ProjectType] Detection failed for project ${req.params.projectId}:`, err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3545,6 +5209,71 @@ app.post('/api/git/:projectId/init', authenticateRequest, verifyProjectOwnership
   }
 });
 
+// Auto-commit: init git + stage all + commit (used after AI generates files)
+app.post('/api/git/:projectId/auto-commit', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { message } = req.body;
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.autoCommit(entry.id, message);
+
+    if (result.error) {
+      console.error('[Git] Auto-commit error:', result.error);
+      return res.status(500).json({ error: result.error });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Git] Auto-commit error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Revert to a specific commit (checkout all files from that commit)
+app.post('/api/git/:projectId/revert', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { commitHash } = req.body;
+
+    if (!commitHash || typeof commitHash !== 'string') {
+      return res.status(400).json({ error: 'commitHash required' });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_REVERT',
+      projectId,
+      details: { commitHash: commitHash.substring(0, 40) },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.revertToCommit(entry.id, commitHash);
+
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Git] Revert error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== End Git API ====================
 
 // ==================== LSP API ====================
@@ -3782,9 +5511,12 @@ app.ws('/sync/:projectId', async (ws, req) => {
   const authSession = await authenticateWebSocket(ws, req);
   if (!authSession) return;
 
+  // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
+  wsKeepalive.register(ws as any, projectId, 'sync', authSession.userId);
+
   const entry = containers.get(projectId);
   if (!entry) {
-    ws.close(1008, 'Container not found');
+    wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
     return;
   }
 
@@ -4051,6 +5783,11 @@ setInterval(async () => {
   for (const [projectId, entry] of containers) {
     if (now - entry.lastActive > IDLE_TIMEOUT) {
       try {
+        // Untrack from metering before removal
+        try { getMeteringCollector().untrackContainer(entry.id); } catch (_) {}
+        try { healthMonitor.unregisterContainer(entry.id); } catch (_) {}
+        try { resourceOptimizer.unregisterContainer(entry.id); } catch (_) {}
+
         const container = docker.getContainer(entry.id);
         await container.stop().catch(() => {});
         await container.remove().catch(() => {});
@@ -4106,6 +5843,13 @@ async function startupSequence() {
 
     for (const c of recoderContainers) {
       try {
+        const projectIdLabel = c.Labels?.projectId;
+        const isRunning = c.State === 'running';
+        // Keep any running container to avoid breaking active workspaces or pool warmups
+        if (isRunning) {
+          console.log(`🧹 [Startup] Keeping running container ${c.Id.slice(0, 12)}${projectIdLabel ? ` (${projectIdLabel})` : ''}`);
+          continue;
+        }
         console.log(`🧹 [Startup] Removing container ${c.Id.slice(0, 12)}...`);
         const container = docker.getContainer(c.Id);
         await container.stop().catch(() => {});
@@ -4121,8 +5865,91 @@ async function startupSequence() {
     console.error('❌ [Startup] Full error:', e);
   }
 
+  // Step 1.5: Sync port manager with any remaining Docker containers
+  console.log('🔌 [Startup] Syncing port manager with Docker...');
+  try {
+    await syncPortsWithDocker();
+    const portStats = getPortStats();
+    console.log(`✅ [Startup] Port manager synced: ${portStats.containerCount} containers, ${portStats.usedPortCount} ports in use`);
+  } catch (e: any) {
+    console.error('❌ [Startup] Port sync failed:', e.message);
+  }
+
+  // Step 1.6: Restore running project containers into in-memory registry
+  console.log('📦 [Startup] Restoring running project containers...');
+  try {
+    const liveContainers = await docker.listContainers({ all: false });
+    let restored = 0;
+
+    const inferBasePort = (ports: number[]): number | undefined => {
+      if (ports.length < 6) return undefined;
+      const portSet = new Set(ports);
+      const sorted = Array.from(portSet).sort((a, b) => a - b);
+      for (const port of sorted) {
+        let blockOk = true;
+        for (let i = 0; i < 6; i++) {
+          if (!portSet.has(port + i)) {
+            blockOk = false;
+            break;
+          }
+        }
+        if (blockOk) return port;
+      }
+      return undefined;
+    };
+
+    for (const c of liveContainers) {
+      if (c.Image !== IMAGE_NAME) continue;
+      const projectId = c.Labels?.projectId;
+      if (!projectId) continue;
+
+      const assignedPortLabel = c.Labels?.assignedPort;
+      let basePort: number | undefined;
+      if (assignedPortLabel) {
+        const parsed = parseInt(assignedPortLabel, 10);
+        if (!isNaN(parsed)) basePort = parsed;
+      }
+
+      if (!basePort) {
+        const publicPorts = (c.Ports || [])
+          .map(p => p.PublicPort)
+          .filter((p): p is number => typeof p === 'number');
+        basePort = inferBasePort(publicPorts);
+      }
+
+      if (!basePort) continue;
+
+      const userId = c.Labels?.userId;
+      containers.set(projectId, {
+        id: c.Id,
+        lastActive: Date.now(),
+        port: basePort,
+        ptyPort: basePort + 3,
+        backgroundDev: false,
+        userId,
+      });
+      if (userId) registerUserContainer(userId, projectId);
+      try { getMeteringCollector().trackContainer(c.Id, projectId, userId); } catch (_) {}
+      try {
+        healthMonitor.registerContainer(c.Id, {
+          httpEndpoints: [{ name: 'preview', port: basePort, path: '/' }],
+          tcpPorts: [
+            { name: 'preview-tcp', port: basePort },
+            { name: 'pty-tcp', port: basePort + 3 },
+          ],
+        });
+      } catch (_) {}
+      try { resourceOptimizer.registerContainer(c.Id); } catch (_) {}
+      restored++;
+    }
+
+    console.log(`✅ [Startup] Restored ${restored} running project container(s)`);
+  } catch (e: any) {
+    console.error('❌ [Startup] Container restore failed:', e.message);
+  }
+
   // Step 2: THEN initialize container pool (after cleanup is done)
-  if (ENABLE_CONTAINER_POOL) {
+  if (ENABLE_CONTAINER_POOL && !PERSIST_WORKSPACE) {
     console.log('🚀 [Startup] Initializing container pool...');
     containerPool.setPortManager(allocatePort, releasePorts);
     try {
@@ -4131,6 +5958,108 @@ async function startupSequence() {
     } catch (err: any) {
       console.error('❌ [Startup] Container pool initialization failed:', err.message);
     }
+  }
+
+  // Step 3: Start health monitoring
+  console.log('💊 [Startup] Starting health monitor...');
+  try {
+    healthMonitor.start();
+    console.log('✅ [Startup] Health monitor started');
+  } catch (err: any) {
+    console.error('❌ [Startup] Health monitor failed to start:', err.message);
+  }
+
+  // Auto-restart unhealthy containers with cooldown and grace period
+  const restartCooldowns = new Map<string, number>();
+  const RESTART_COOLDOWN_MS = 120000; // 2 minutes between restarts
+  const CONTAINER_GRACE_PERIOD_MS = 60000; // 1 minute grace period after creation
+  
+  healthMonitor.on('unhealthy', async (status: HealthStatus) => {
+    const containerId = status.containerId;
+    const failedChecks = status.checks.filter(c => !c.passed).map(c => c.message).join('; ');
+    const reason = failedChecks || 'unknown';
+    
+    // Skip transient network errors during grace period
+    const isTransientError = reason.includes('ECONNRESET') || reason.includes('ETIMEDOUT') || reason.includes('ECONNREFUSED');
+    if (isTransientError && status.uptimeMs < CONTAINER_GRACE_PERIOD_MS) {
+      console.log(`🏥 [Health] Container ${containerId.slice(0, 12)} has transient error but within grace period (${Math.round(status.uptimeMs/1000)}s), skipping restart`);
+      return;
+    }
+    
+    // Check cooldown
+    const lastRestart = restartCooldowns.get(containerId);
+    if (lastRestart && Date.now() - lastRestart < RESTART_COOLDOWN_MS) {
+      const waitSecs = Math.round((RESTART_COOLDOWN_MS - (Date.now() - lastRestart)) / 1000);
+      console.log(`🏥 [Health] Container ${containerId.slice(0, 12)} in restart cooldown (${waitSecs}s remaining), skipping`);
+      return;
+    }
+    
+    console.warn(`🏥 [Health] Container ${containerId.slice(0, 12)} unhealthy: ${reason}`);
+
+    // Find the project using this container
+    let projectId: string | null = null;
+    for (const [pid, entry] of containers) {
+      if (entry.id === containerId) {
+        projectId = pid;
+        break;
+      }
+    }
+
+    if (!projectId) {
+      console.warn(`🏥 [Health] Container ${containerId.slice(0, 12)} not in registry, skipping restart`);
+      return;
+    }
+
+    try {
+      const container = docker.getContainer(containerId);
+      console.log(`🏥 [Health] Restarting container ${containerId.slice(0, 12)} for project ${projectId}...`);
+      
+      // Set cooldown BEFORE restart to prevent race conditions
+      restartCooldowns.set(containerId, Date.now());
+      
+      await container.restart({ t: 5 }); // 5 second graceful timeout
+
+      // Update last active time
+      const entry = containers.get(projectId);
+      if (entry) {
+        entry.lastActive = Date.now();
+      }
+
+      console.log(`🏥 [Health] Container ${containerId.slice(0, 12)} restarted successfully`);
+    } catch (err: any) {
+      console.error(`🏥 [Health] Failed to restart container ${containerId.slice(0, 12)}:`, err.message);
+    }
+  });
+
+  // Step 4: Start resource optimizer
+  console.log('📊 [Startup] Starting resource optimizer...');
+  try {
+    resourceOptimizer.start();
+    console.log('✅ [Startup] Resource optimizer started');
+  } catch (err: any) {
+    console.error('❌ [Startup] Resource optimizer failed to start:', err.message);
+  }
+
+  // Step 5: Initialize metering system (metrics collector -> usage aggregator -> quota enforcer)
+  console.log('📊 [Startup] Initializing metering system...');
+  try {
+    const meteringCollector = getMeteringCollector(docker);
+    const usageAggregator = getUsageAggregator();
+    const quotaEnforcer = getQuotaEnforcer();
+
+    // Wire metrics flush from collector into aggregator
+    meteringCollector.onMetricsFlush((metrics) => {
+      usageAggregator.ingestMetrics(metrics);
+    });
+
+    // Start collector and aggregator
+    meteringCollector.start();
+    usageAggregator.start();
+
+    console.log('✅ [Startup] Metering system initialized (collector + aggregator + quota enforcer)');
+  } catch (err: any) {
+    console.error('❌ [Startup] Metering system failed to initialize:', err.message);
+    // Non-fatal: server continues without metering
   }
 }
 
@@ -4475,6 +6404,9 @@ app.ws('/cli-sync/:projectId', async (ws, req) => {
 
   const sanitizedProjectId = sanitizeProjectId(projectId);
   const clientId = (req.query.clientId as string) || uuid();
+
+  // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
+  wsKeepalive.register(ws as any, sanitizedProjectId, 'cli-sync', authSession.userId);
 
   // Register session with authenticated userId
   const session = syncManager.registerSession({
@@ -5032,6 +6964,206 @@ app.get('/api/tunnel/status/:projectId', authenticateRequest, async (req: Authen
 });
 
 // ==================== END TUNNEL ====================
+
+// ==================== EXPO GO QR CODE ====================
+
+// Get Expo Metro URL and project info for QR code generation
+app.get('/api/expo-url/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  const projectId = sanitizeProjectId(req.params.projectId);
+
+  try {
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ isExpo: false, error: 'Container not found' });
+    }
+
+    // Ensure container is running
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.json({ isExpo: false, error: 'Container not running' });
+    }
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+
+    // Check if this is an Expo project by looking for app.json with "expo" key
+    let isExpo = false;
+    try {
+      const appJsonContent = await execCommand(container, 'cat /workspace/app.json 2>/dev/null || echo ""');
+      if (appJsonContent.trim()) {
+        try {
+          const appJson = JSON.parse(appJsonContent.trim());
+          isExpo = !!appJson.expo || !!appJson.name;
+        } catch {
+          // Not valid JSON, check for app.config.js/ts as fallback
+        }
+      }
+
+      if (!isExpo) {
+        // Also check for app.config.js or app.config.ts (Expo config file variants)
+        const configCheck = await execCommand(container, 'ls /workspace/app.config.js /workspace/app.config.ts 2>/dev/null || echo ""');
+        if (configCheck.trim()) {
+          isExpo = true;
+        }
+      }
+
+      if (!isExpo) {
+        // Check package.json for expo dependency
+        const pkgContent = await execCommand(container, 'cat /workspace/package.json 2>/dev/null || echo ""');
+        if (pkgContent.trim()) {
+          try {
+            const pkg = JSON.parse(pkgContent.trim());
+            const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+            isExpo = !!deps['expo'];
+          } catch {
+            // Not valid JSON
+          }
+        }
+      }
+    } catch {
+      // Commands failed, not an Expo project
+    }
+
+    if (!isExpo) {
+      return res.json({ isExpo: false });
+    }
+
+    // Determine the hostname for Metro bundler URL
+    const hostname = process.env.PUBLIC_HOSTNAME || req.hostname || (req.headers.host ? req.headers.host.split(':')[0] : 'localhost');
+
+    // Expo port: container's assigned port + 4 (maps to container port 8081)
+    const expoPort = entry.port + 4;
+
+    // Check if Metro bundler is actually running
+    let metroRunning = false;
+    try {
+      const psOutput = await execCommand(container, 'ps aux | grep -E "expo|metro" | grep -v grep || echo ""');
+      metroRunning = psOutput.trim().length > 0;
+    } catch {
+      // Process check failed
+    }
+
+    const metroUrl = `exp://${hostname}:${expoPort}`;
+    const webUrl = `http://${hostname}:${expoPort}`;
+
+    res.json({
+      isExpo: true,
+      metroUrl,
+      webUrl,
+      metroRunning,
+      expoPort,
+      hostname,
+    });
+  } catch (err: any) {
+    console.error(`[Expo] Failed to get Expo URL for project ${projectId}:`, err);
+    res.status(500).json({ isExpo: false, error: err.message });
+  }
+});
+
+// Start Expo dev server in a specific mode (web, tunnel, or lan)
+app.post('/api/expo-start/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  const projectId = sanitizeProjectId(req.params.projectId);
+  const { mode = 'lan' } = req.body;
+
+  if (!['web', 'tunnel', 'lan'].includes(mode)) {
+    return res.status(400).json({ error: 'Invalid mode. Must be "web", "tunnel", or "lan".' });
+  }
+
+  try {
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    // Ensure container is running
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({
+        error: 'Container not running',
+        message: containerStatus.error || 'Container could not be started',
+        canRetry: true,
+      });
+    }
+
+    entry.lastActive = Date.now();
+    const container = docker.getContainer(entry.id);
+
+    // Determine the public hostname for REACT_NATIVE_PACKAGER_HOSTNAME
+    const hostname = process.env.PUBLIC_HOSTNAME || req.hostname || (req.headers.host ? req.headers.host.split(':')[0] : 'localhost');
+
+    // Kill any existing Expo/Metro process first
+    await execCommand(container, 'pkill -f "expo start|metro" || true', true).catch(() => {});
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Build the start command based on mode
+    let startCmd: string;
+    switch (mode) {
+      case 'web':
+        startCmd = 'npx expo start --web --host 0.0.0.0 --port 8081';
+        break;
+      case 'tunnel':
+        // Install @expo/ngrok if not already present, then start with tunnel
+        startCmd = 'npx expo install @expo/ngrok@^4.1.0 2>/dev/null; npx expo start --tunnel --port 8081';
+        break;
+      case 'lan':
+      default:
+        startCmd = 'npx expo start --lan --host 0.0.0.0 --port 8081';
+        break;
+    }
+
+    // Start Expo with the correct env vars
+    const startScript = `cd /workspace && BROWSER=none REACT_NATIVE_PACKAGER_HOSTNAME=${hostname} exec setsid ${startCmd} > /tmp/expo-dev.log 2>&1 < /dev/null`;
+
+    const exec = await container.exec({
+      Cmd: ['/bin/bash', '-c', startScript],
+      AttachStdout: false,
+      AttachStderr: false,
+      Tty: false,
+    });
+
+    await exec.start({ Detach: true });
+    console.log(`[Expo] Started Expo dev server in ${mode} mode for project ${projectId}`);
+
+    // Wait for Expo to initialize
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Check if process is running
+    let running = false;
+    try {
+      const psCheck = await execCommand(container, 'ps aux | grep -E "expo|metro" | grep -v grep || echo ""');
+      running = psCheck.trim().length > 0;
+    } catch {
+      // Process check failed
+    }
+
+    const expoPort = entry.port + 4;
+    const metroUrl = `exp://${hostname}:${expoPort}`;
+    const webUrl = `http://${hostname}:${expoPort}`;
+
+    auditLog({
+      userId: req.userId,
+      action: 'EXPO_START',
+      projectId,
+      details: { mode, metroUrl },
+    });
+
+    res.json({
+      success: true,
+      mode,
+      metroUrl,
+      webUrl,
+      running,
+      message: running
+        ? `Expo started in ${mode} mode`
+        : 'Expo process started but may still be initializing. Check logs at /tmp/expo-dev.log',
+    });
+  } catch (err: any) {
+    console.error(`[Expo] Failed to start Expo for project ${projectId}:`, err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== END EXPO GO QR CODE ====================
 
 // ==================== URL CLONING ====================
 import { cloneWebsite } from './url-cloner.js';
@@ -6359,6 +8491,29 @@ setupPreviewProxy(app as any, containers);
 // File Watch WebSocket - notifies frontend of file changes from CLI tools
 const fileWatchClients = new Map<string, Set<WebSocket>>();
 
+// Grace period before stopping a watcher when last client disconnects.
+// Keeps lastCheck state alive so reconnecting clients don't get a full file replay.
+const WATCHER_STOP_GRACE_MS = 30000; // 30 seconds
+const fileWatchStopTimers = new Map<string, NodeJS.Timeout>();
+
+// Pending watch connections waiting for container to be ready
+const pendingWatchConnections = new Map<string, Set<{ ws: WebSocket; userId: string }>>();
+
+// Helper to wait for container with timeout
+async function waitForContainer(projectId: string, timeoutMs: number = 5000): Promise<{ id: string; lastActive: number; port: number; ptyPort: number; backgroundDev?: boolean; userId?: string } | undefined> {
+  const startTime = Date.now();
+  const checkInterval = 500; // Check every 500ms
+
+  while (Date.now() - startTime < timeoutMs) {
+    const entry = containers.get(projectId);
+    if (entry) {
+      return entry;
+    }
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+  }
+  return undefined;
+}
+
 app.ws('/watch/:projectId', async (ws, req) => {
   const { projectId } = req.params;
 
@@ -6366,11 +8521,35 @@ app.ws('/watch/:projectId', async (ws, req) => {
   const authSession = await authenticateWebSocket(ws, req);
   if (!authSession) return;
 
-  const entry = containers.get(projectId);
+  // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
+  wsKeepalive.register(ws as any, projectId, 'watch', authSession.userId);
 
+  let entry = containers.get(projectId);
+
+  // If container not found, wait briefly for it to be created
   if (!entry) {
-    ws.close(1008, 'Container not found');
-    return;
+    console.log(`[FileWatch] Container not ready for ${projectId}, waiting...`);
+
+    // Wait up to 5 seconds for the container
+    entry = await waitForContainer(projectId, 5000);
+
+    if (!entry) {
+      // Still not ready after waiting - close with 1008 code
+      // Client will handle this gracefully with exponential backoff
+      console.log(`[FileWatch] Container still not ready for ${projectId}, closing connection`);
+      wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
+      return;
+    }
+
+    console.log(`[FileWatch] Container became ready for ${projectId}`);
+  }
+
+  // Cancel any pending stop timer — a client is reconnecting
+  const pendingStop = fileWatchStopTimers.get(projectId);
+  if (pendingStop) {
+    clearTimeout(pendingStop);
+    fileWatchStopTimers.delete(projectId);
+    console.log(`[FileWatch] Cancelled pending stop for ${projectId} — client reconnected`);
   }
 
   // Add client to watch list
@@ -6384,16 +8563,45 @@ app.ws('/watch/:projectId', async (ws, req) => {
 
   console.log(`[FileWatch] Client connected for ${projectId} [user: ${authSession.userId}]`);
 
+  // Send initial connection confirmation
+  ws.send(JSON.stringify({ type: 'connected', projectId }));
+
+  // Handle incoming messages (heartbeat pings from client)
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(typeof data === 'string' ? data : data.toString());
+      if (msg.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+      }
+    } catch {
+      // Not JSON, ignore
+    }
+  });
+
   ws.on('close', () => {
     const clients = fileWatchClients.get(projectId);
     if (clients) {
       clients.delete(ws as any);
       if (clients.size === 0) {
-        fileWatcher.stopWatching(projectId);
+        // Don't stop watcher immediately — keep lastCheck state alive
+        // so reconnecting clients don't get a full file replay
         fileWatchClients.delete(projectId);
+        console.log(`[FileWatch] Last client gone for ${projectId}, stopping watcher in ${WATCHER_STOP_GRACE_MS / 1000}s`);
+        fileWatchStopTimers.set(projectId, setTimeout(() => {
+          fileWatchStopTimers.delete(projectId);
+          // Only stop if no clients reconnected during the grace period
+          if (!fileWatchClients.has(projectId) || fileWatchClients.get(projectId)!.size === 0) {
+            fileWatcher.stopWatching(projectId);
+            console.log(`[FileWatch] Watcher stopped for ${projectId} (grace period expired)`);
+          }
+        }, WATCHER_STOP_GRACE_MS));
       }
     }
     console.log(`[FileWatch] Client disconnected for ${projectId}`);
+  });
+
+  ws.on('error', (err) => {
+    console.error(`[FileWatch] Error for ${projectId}:`, err.message);
   });
 });
 
@@ -6408,6 +8616,172 @@ fileWatcher.on('changes', ({ projectId, changes }) => {
       }
     }
   }
+});
+
+// ==================== BUILD ERROR STREAMING ====================
+// WebSocket endpoint for real-time build error notifications
+// Used by the auto-fix feature to detect errors and trigger AI fixes
+
+const buildErrorClients = new Map<string, Set<WebSocket>>();
+const lastBuildErrors = new Map<string, string>(); // Track last error hash to avoid duplicates
+
+/**
+ * Hash errors to detect if they've changed
+ */
+function hashBuildErrors(errors: ReturnType<typeof parseAllErrors>): string {
+  return errors.map(e => `${e.type}:${e.filePath || ''}:${e.line || ''}:${e.shortMessage}`).sort().join('|');
+}
+
+/**
+ * Notify all connected clients about build errors for a project
+ */
+function notifyBuildErrors(projectId: string, errors: ReturnType<typeof parseAllErrors>, hasBlocking: boolean): void {
+  const clients = buildErrorClients.get(projectId);
+  if (!clients || clients.size === 0) return;
+
+  // Check if errors have changed
+  const errorHash = hashBuildErrors(errors);
+  const lastHash = lastBuildErrors.get(projectId);
+
+  if (errorHash === lastHash) {
+    return; // No change, don't notify
+  }
+  lastBuildErrors.set(projectId, errorHash);
+
+  const message = JSON.stringify({
+    type: hasBlocking && errors.length > 0 ? 'errors' : 'clear',
+    errors: errors,
+    hasBlockingErrors: hasBlocking,
+    timestamp: Date.now(),
+  });
+
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(message);
+      } catch (err) {
+        console.warn('[BuildErrors] Failed to send to client:', err);
+      }
+    }
+  }
+
+  if (hasBlocking && errors.length > 0) {
+    console.log(`[BuildErrors] Notified ${clients.size} clients of ${errors.length} errors for ${projectId}`);
+  }
+}
+
+// Build error polling - check logs periodically for errors
+const buildErrorPollers = new Map<string, NodeJS.Timeout>();
+
+function startBuildErrorPolling(containerId: string, projectId: string): void {
+  // Don't start if already polling
+  if (buildErrorPollers.has(projectId)) return;
+
+  const pollInterval = setInterval(async () => {
+    const clients = buildErrorClients.get(projectId);
+    if (!clients || clients.size === 0) {
+      // No clients, stop polling
+      clearInterval(pollInterval);
+      buildErrorPollers.delete(projectId);
+      return;
+    }
+
+    try {
+      const logs = await devServerManager.getLogs(containerId, projectId, 100);
+      const errors = parseAllErrors(logs);
+      const blocking = hasBlockingErrors(logs);
+
+      notifyBuildErrors(projectId, errors, blocking);
+    } catch (err) {
+      // Container might be gone, stop polling
+      console.warn(`[BuildErrors] Error polling for ${projectId}:`, err);
+    }
+  }, 3000); // Poll every 3 seconds
+
+  buildErrorPollers.set(projectId, pollInterval);
+  console.log(`[BuildErrors] Started polling for ${projectId}`);
+}
+
+function stopBuildErrorPolling(projectId: string): void {
+  const poller = buildErrorPollers.get(projectId);
+  if (poller) {
+    clearInterval(poller);
+    buildErrorPollers.delete(projectId);
+    lastBuildErrors.delete(projectId);
+    console.log(`[BuildErrors] Stopped polling for ${projectId}`);
+  }
+}
+
+// WebSocket endpoint for build errors
+app.ws('/build-errors/:projectId', async (ws, req) => {
+  const { projectId } = req.params;
+
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return;
+
+  // Register for WebSocket keepalive
+  wsKeepalive.register(ws as any, projectId, 'build-errors', authSession.userId);
+
+  // Check if container exists
+  const entry = containers.get(projectId);
+  if (!entry) {
+    console.log(`[BuildErrors] Container not found for ${projectId}`);
+    wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
+    return;
+  }
+
+  // Add client to build error watch list
+  if (!buildErrorClients.has(projectId)) {
+    buildErrorClients.set(projectId, new Set());
+  }
+  buildErrorClients.get(projectId)!.add(ws as any);
+
+  // Start polling for errors
+  startBuildErrorPolling(entry.id, projectId);
+
+  console.log(`[BuildErrors] Client connected for ${projectId} [user: ${authSession.userId}]`);
+
+  // Send initial state - check current logs for errors
+  try {
+    const logs = await devServerManager.getLogs(entry.id, projectId, 100);
+    const errors = parseAllErrors(logs);
+    const blocking = hasBlockingErrors(logs);
+
+    ws.send(JSON.stringify({
+      type: 'connected',
+      projectId,
+      errors: blocking ? errors : [],
+      hasBlockingErrors: blocking,
+    }));
+
+    if (blocking && errors.length > 0) {
+      lastBuildErrors.set(projectId, hashBuildErrors(errors));
+    }
+  } catch (err) {
+    ws.send(JSON.stringify({
+      type: 'connected',
+      projectId,
+      errors: [],
+      hasBlockingErrors: false,
+    }));
+  }
+
+  ws.on('close', () => {
+    const clients = buildErrorClients.get(projectId);
+    if (clients) {
+      clients.delete(ws as any);
+      if (clients.size === 0) {
+        buildErrorClients.delete(projectId);
+        stopBuildErrorPolling(projectId);
+      }
+    }
+    console.log(`[BuildErrors] Client disconnected for ${projectId}`);
+  });
+
+  ws.on('error', (err) => {
+    console.error(`[BuildErrors] Error for ${projectId}:`, err.message);
+  });
 });
 
 // ==================== MOBILE API ENDPOINTS ====================
@@ -7429,8 +9803,8 @@ process.on('uncaughtException', (error) => {
 
 const PORT = process.env.PORT || 3100;
 
-// Create HTTP server for both Express and Collaboration WebSocket
-const server = http.createServer(app);
+// NOTE: HTTP server is created at the top of the file along with express-ws initialization
+// This ensures WebSocket routes registered with app.ws() work properly
 
 // Initialize Yjs collaboration WebSocket server
 const collabWss = createCollaborationServer(server, '/collab');
@@ -7441,6 +9815,10 @@ async function gracefulShutdown(signal: string) {
   console.log(`\n${signal} received. Starting graceful shutdown...`);
 
   try {
+    // Shutdown WebSocket keepalive connections first (sends hints to clients)
+    console.log('🔌 Shutting down WebSocket keepalive connections...');
+    wsKeepalive.shutdown();
+
     // Save all collaboration documents
     console.log('💾 Saving collaboration documents...');
     await saveAllDocuments();
@@ -7456,6 +9834,34 @@ async function gracefulShutdown(signal: string) {
     // Close WebSocket server
     console.log('🔌 Closing collaboration WebSocket server...');
     collabWss.close();
+
+    // Stop metering system
+    console.log('📊 Stopping metering system...');
+    try {
+      const meteringCollector = getMeteringCollector();
+      meteringCollector.stop();
+      const usageAggregator = getUsageAggregator();
+      usageAggregator.stop();
+    } catch (_) {
+      // Metering may not have been initialized; ignore
+    }
+
+    // Stop health monitor and resource optimizer
+    console.log('💊 Stopping health monitor...');
+    healthMonitor.stop();
+    console.log('📊 Stopping resource optimizer...');
+    resourceOptimizer.stop();
+
+    // Shutdown container pool
+    console.log('⛔ Shutting down container pool...');
+    try {
+      await containerPool.shutdown();
+    } catch (err: any) {
+      console.error('Container pool shutdown error:', err.message);
+    }
+
+    // Wait for debounced file saves to flush
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     // Close HTTP server
     console.log('🌐 Closing HTTP server...');
@@ -7475,9 +9881,555 @@ async function gracefulShutdown(signal: string) {
   }
 }
 
+// ==================== Public Sandbox API ====================
+// Mount the public API for sandbox-as-a-service
+
+const sandboxDependencies: SandboxDependencies = {
+  createContainer: async (_options) => {
+    // Acquire container from the pool
+    const pooledContainer = await containerPool.acquire();
+    if (!pooledContainer) {
+      throw new Error('Failed to acquire container from pool');
+    }
+    return { containerId: pooledContainer.id, port: pooledContainer.port };
+  },
+  startContainer: async (containerId: string) => {
+    const container = docker.getContainer(containerId);
+    await container.start();
+  },
+  stopContainer: async (containerId: string) => {
+    const container = docker.getContainer(containerId);
+    await container.stop();
+  },
+  deleteContainer: async (containerId: string) => {
+    await docker.getContainer(containerId).remove({ force: true });
+  },
+  execInContainer: async (containerId: string, command: string, options?: {
+    cwd?: string;
+    env?: Record<string, string>;
+    timeoutMs?: number;
+  }) => {
+    const container = docker.getContainer(containerId);
+    const startTime = Date.now();
+
+    const exec = await container.exec({
+      Cmd: options?.cwd ? ['sh', '-c', `cd "${options.cwd}" && ${command}`] : ['sh', '-c', command],
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      Env: options?.env ? Object.entries(options.env).map(([k, v]) => `${k}=${v}`) : undefined,
+    });
+    const stream = await exec.start({ hijack: true, stdin: false });
+
+    return new Promise((resolve) => {
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+      let killed = false;
+
+      const timeoutId = options?.timeoutMs ? setTimeout(() => {
+        timedOut = true;
+        killed = true;
+        stream.destroy();
+      }, options.timeoutMs) : null;
+
+      stream.on('data', (chunk: Buffer) => {
+        // Docker multiplexed stream format
+        const header = chunk.slice(0, 8);
+        const type = header[0]; // 1 = stdout, 2 = stderr
+        const content = chunk.slice(8).toString();
+        if (type === 1) stdout += content;
+        else stderr += content;
+      });
+
+      stream.on('end', async () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        const result = await exec.inspect();
+        resolve({
+          exitCode: result.ExitCode ?? 0,
+          stdout,
+          stderr,
+          executionTimeMs: Date.now() - startTime,
+          timedOut,
+          killed,
+        });
+      });
+
+      stream.on('error', () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        resolve({
+          exitCode: -1,
+          stdout,
+          stderr,
+          executionTimeMs: Date.now() - startTime,
+          timedOut,
+          killed: true,
+        });
+      });
+    });
+  },
+  writeFile: async (containerId: string, filePath: string, content: string) => {
+    const container = docker.getContainer(containerId);
+    const exec = await container.exec({
+      Cmd: ['sh', '-c', `mkdir -p "$(dirname "${filePath}")" && cat > "${filePath}"`],
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = await exec.start({ hijack: true, stdin: true });
+    stream.write(content);
+    stream.end();
+  },
+  readFile: async (containerId: string, filePath: string) => {
+    const container = docker.getContainer(containerId);
+    const exec = await container.exec({
+      Cmd: ['cat', filePath],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = await exec.start({ hijack: true, stdin: false });
+
+    return new Promise((resolve, reject) => {
+      let content = '';
+      stream.on('data', (chunk: Buffer) => {
+        content += chunk.slice(8).toString();
+      });
+      stream.on('end', () => {
+        // Detect MIME type from extension
+        const ext = filePath.split('.').pop()?.toLowerCase() || '';
+        const mimeTypes: Record<string, string> = {
+          'js': 'application/javascript',
+          'ts': 'application/typescript',
+          'tsx': 'application/typescript',
+          'jsx': 'application/javascript',
+          'json': 'application/json',
+          'html': 'text/html',
+          'css': 'text/css',
+          'md': 'text/markdown',
+          'txt': 'text/plain',
+        };
+        resolve({
+          content,
+          size: Buffer.byteLength(content),
+          mimeType: mimeTypes[ext] || 'text/plain',
+        });
+      });
+      stream.on('error', reject);
+    });
+  },
+  deleteFile: async (containerId: string, filePath: string) => {
+    const container = docker.getContainer(containerId);
+    const exec = await container.exec({
+      Cmd: ['rm', '-f', filePath],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    await exec.start({ hijack: true, stdin: false });
+  },
+  listFiles: async (containerId: string, dirPath: string) => {
+    const container = docker.getContainer(containerId);
+    const exec = await container.exec({
+      Cmd: ['find', dirPath, '-maxdepth', '1', '-printf', '%y|%s|%T@|%f\\n'],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = await exec.start({ hijack: true, stdin: false });
+
+    return new Promise((resolve) => {
+      let output = '';
+      stream.on('data', (chunk: Buffer) => {
+        output += chunk.slice(8).toString();
+      });
+      stream.on('end', () => {
+        const files = output.trim().split('\n').filter(Boolean).map((line) => {
+          const [type, size, mtime, name] = line.split('|');
+          const isDir = type === 'd';
+          return {
+            name: name || '',
+            path: `${dirPath}/${name}`,
+            size: parseInt(size) || 0,
+            modifiedAt: Math.floor(parseFloat(mtime) * 1000),
+            isDirectory: isDir,
+          };
+        });
+        resolve(files);
+      });
+    });
+  },
+  getPreviewUrl: (port: number) => {
+    return `http://localhost:${port}`;
+  },
+  getTerminalUrl: (sandboxId: string) => {
+    return `ws://localhost:${PORT}/terminal/${sandboxId}`;
+  },
+};
+
+// Initialize sandbox routes with dependencies
+initSandboxRoutes(sandboxDependencies);
+
+// Public API CORS - allows external API consumers with API key auth
+app.use('/api/v1', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// Apply public API middleware BEFORE mounting routes (auth, rate limiting, logging)
+app.use('/api/v1', requestIdMiddleware, authenticateApiKey as any, rateLimitMiddleware as any, requestLoggingMiddleware as any);
+app.use('/api/v1', sandboxRouter);
+
+// Polar.sh webhook endpoint
+const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET || '';
+if (POLAR_WEBHOOK_SECRET) {
+  app.post('/api/webhooks/polar', express.raw({ type: 'application/json' }), createPolarWebhookHandler(POLAR_WEBHOOK_SECRET));
+  console.log('📦 Polar.sh webhook endpoint registered at /api/webhooks/polar');
+} else {
+  console.log('⚠️ POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
+}
+
+// Handle Polar webhook events
+onWebhookEvent('subscription.active', async (data: any) => {
+  console.log('📦 Subscription activated:', data.id);
+  // TODO: Provision resources for user
+});
+
+onWebhookEvent('subscription.canceled', async (data: any) => {
+  console.log('📦 Subscription canceled:', data.id);
+  // TODO: Deprovision resources
+});
+
+// ==================== API Key Management Endpoints ====================
+
+// GET /api/v1/api-keys - list keys for authenticated user
+app.get('/api/v1/api-keys', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  const keys = listUserApiKeys(userId);
+  sendSuccess(res, { keys });
+}));
+
+// POST /api/v1/api-keys - create a new API key
+app.post('/api/v1/api-keys', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  const { name, scopes, allowedIps, expiresAt, isTestKey, metadata } = req.body;
+  if (!name || !scopes || !Array.isArray(scopes) || scopes.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name and scopes[] are required'));
+  }
+
+  try {
+    const result = createApiKey(userId, { name, scopes, allowedIps, expiresAt, isTestKey, metadata });
+    sendSuccess(res, result);
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.VALIDATION_ERROR, err.message));
+  }
+}));
+
+// DELETE /api/v1/api-keys/:id - delete an API key
+app.delete('/api/v1/api-keys/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  const keyId = req.params.id;
+  const deleted = deleteApiKey(keyId, userId);
+  if (!deleted) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'API key not found or access denied'));
+  }
+
+  sendSuccess(res, { deleted: true, id: keyId });
+}));
+
+console.log('🔑 API key management endpoints registered');
+
+// ==================== Usage, Subscription & Invoice Endpoints ====================
+
+// GET /api/usage - return usage aggregator data for the authenticated user
+app.get('/api/usage', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  try {
+    const usageAggregator = getUsageAggregator();
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const summary = usageAggregator.getUserSummary(userId, monthStart, monthEnd);
+    const byProject = Object.fromEntries(usageAggregator.getCurrentMonthUsageByProject(userId));
+
+    let quotaStatus = null;
+    try {
+      const quotaEnforcer = getQuotaEnforcer();
+      quotaStatus = quotaEnforcer.getQuotaStatus(userId);
+    } catch (_) {
+      // Quota enforcer may not be initialized
+    }
+
+    sendSuccess(res, {
+      summary,
+      byProject,
+      quota: quotaStatus,
+    });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to fetch usage data: ${err.message}`));
+  }
+}));
+
+// GET /api/subscription - return subscription data from billing records
+app.get('/api/subscription', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  const active = getActiveSubscriptionByUserId(userId);
+  const all = getSubscriptionsByUserId(userId);
+
+  sendSuccess(res, {
+    active: active || null,
+    subscriptions: all,
+  });
+}));
+
+// GET /api/invoices - return invoice / webhook log data from billing records
+app.get('/api/invoices', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  const limit = parseInt(req.query.limit as string) || 50;
+
+  // Get subscription-related webhook logs as invoice proxy
+  // In production this would query a dedicated invoices table
+  const subscriptions = getSubscriptionsByUserId(userId);
+  const logs = getWebhookLogs(limit);
+
+  sendSuccess(res, {
+    subscriptions,
+    recentEvents: logs,
+  });
+}));
+
+console.log('📊 Usage, subscription, and invoice endpoints registered');
+
+// ==================== Deployment Routes ====================
+
+// Vercel deployment routes
+app.post('/api/deploy/vercel/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { token } = req.body;
+  if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token required'));
+  const result = await vercelDeploy.validateToken(token);
+  sendSuccess(res, result);
+}));
+
+app.get('/api/deploy/vercel/projects', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const token = req.headers['x-vercel-token'] as string;
+  const teamId = req.query.teamId as string | undefined;
+  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
+  const projects = await vercelDeploy.listProjects({ provider: 'vercel', token, teamId });
+  sendSuccess(res, { projects });
+}));
+
+app.post('/api/deploy/vercel', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { token, teamId, config, files } = req.body;
+  if (!token || !config || !files) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
+  const credentials: ProviderCredentials = { provider: 'vercel', token, teamId };
+  const deployment = await vercelDeploy.deploy(credentials, config, files);
+  sendSuccess(res, { deployment });
+}));
+
+app.get('/api/deploy/vercel/:deploymentId', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const token = req.headers['x-vercel-token'] as string;
+  const teamId = req.query.teamId as string | undefined;
+  const { deploymentId } = req.params;
+  const projectId = req.query.projectId as string || deploymentId;
+  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
+  const deployment = await vercelDeploy.getDeployment({ provider: 'vercel', token, teamId }, deploymentId, projectId);
+  sendSuccess(res, { deployment });
+}));
+
+app.get('/api/deploy/vercel/:projectId/deployments', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const token = req.headers['x-vercel-token'] as string;
+  const teamId = req.query.teamId as string | undefined;
+  const { projectId } = req.params;
+  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
+  const deployments = await vercelDeploy.listDeployments({ provider: 'vercel', token, teamId }, { projectId, limit: 20 });
+  sendSuccess(res, { deployments });
+}));
+
+app.post('/api/deploy/vercel/:projectId/rollback', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const token = req.headers['x-vercel-token'] as string;
+  const teamId = req.query.teamId as string | undefined;
+  const { projectId } = req.params;
+  const { deploymentId } = req.body;
+  if (!token || !deploymentId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
+  const deployment = await vercelDeploy.rollback({ provider: 'vercel', token, teamId }, projectId, deploymentId);
+  sendSuccess(res, { deployment });
+}));
+
+// Netlify deployment routes
+app.post('/api/deploy/netlify/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { token } = req.body;
+  if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token required'));
+  const result = await netlifyDeploy.validateToken(token);
+  sendSuccess(res, result);
+}));
+
+app.get('/api/deploy/netlify/sites', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const token = req.headers['x-netlify-token'] as string;
+  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
+  const sites = await netlifyDeploy.listSites({ provider: 'netlify', token });
+  sendSuccess(res, { sites });
+}));
+
+app.post('/api/deploy/netlify', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { token, config, files } = req.body;
+  if (!token || !config || !files) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
+  const credentials: ProviderCredentials = { provider: 'netlify', token };
+  const deployment = await netlifyDeploy.deploy(credentials, config, files);
+  sendSuccess(res, { deployment });
+}));
+
+app.get('/api/deploy/netlify/:siteId/deployments', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const token = req.headers['x-netlify-token'] as string;
+  const { siteId } = req.params;
+  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
+  const deployments = await netlifyDeploy.listDeployments({ provider: 'netlify', token }, siteId, { limit: 20 });
+  sendSuccess(res, { deployments });
+}));
+
+app.post('/api/deploy/netlify/:siteId/rollback', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const token = req.headers['x-netlify-token'] as string;
+  const { siteId } = req.params;
+  const { deploymentId, projectId } = req.body;
+  if (!token || !deploymentId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
+  const deployment = await netlifyDeploy.rollback({ provider: 'netlify', token }, siteId, deploymentId, projectId || siteId);
+  sendSuccess(res, { deployment });
+}));
+
+// Cloudflare Workers deployment routes
+app.post('/api/deploy/cloudflare/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { apiToken, accountId } = req.body;
+  if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
+  const result = await cloudflareDeploy.validateToken(apiToken, accountId);
+  sendSuccess(res, result);
+}));
+
+app.post('/api/deploy/cloudflare/deploy', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { apiToken, accountId, projectId, workerName, customDomain, config, files } = req.body;
+  if (!apiToken || !accountId || !workerName || !files) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token, account ID, worker name, and files are required'));
+  }
+  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
+  const deployConfig: DeploymentConfig = {
+    provider: 'cloudflare',
+    projectName: workerName,
+    projectId: projectId || workerName,
+    providerProjectId: workerName,
+    accountId,
+    ...(config || {}),
+  };
+  const deployment = await cloudflareDeploy.deploy(credentials, deployConfig, files);
+  sendSuccess(res, { success: true, url: deployment.url, workerId: deployment.id, deployment });
+}));
+
+app.get('/api/deploy/cloudflare/list', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const apiToken = req.query.apiToken as string || req.headers['x-cloudflare-token'] as string;
+  const accountId = req.query.accountId as string;
+  if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
+  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
+  const workers = await cloudflareDeploy.listWorkers(credentials);
+  sendSuccess(res, { workers });
+}));
+
+app.get('/api/deploy/cloudflare/:workerName/deployments', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const apiToken = req.headers['x-cloudflare-token'] as string;
+  const accountId = req.query.accountId as string;
+  const { workerName } = req.params;
+  if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token and account ID required'));
+  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
+  const deployments = await cloudflareDeploy.listDeployments(credentials, workerName);
+  sendSuccess(res, { deployments });
+}));
+
+app.post('/api/deploy/cloudflare/:workerName/rollback', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const apiToken = req.headers['x-cloudflare-token'] as string;
+  const accountId = req.query.accountId as string;
+  const { workerName } = req.params;
+  const { versionId, projectId } = req.body;
+  if (!apiToken || !accountId || !versionId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, account ID, and versionId required'));
+  }
+  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
+  const deployment = await cloudflareDeploy.rollback(credentials, workerName, versionId, projectId || workerName);
+  sendSuccess(res, { deployment });
+}));
+
+// Template routes
+app.get('/api/templates', (_req: express.Request, res: express.Response) => {
+  const templates = templateManager.getAllTemplates();
+  sendSuccess(res, { templates });
+});
+
+app.get('/api/templates/:templateId', (req: express.Request, res: express.Response) => {
+  const template = templateManager.getTemplate(req.params.templateId);
+  if (!template) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Template not found'));
+  sendSuccess(res, { template });
+});
+
+app.get('/api/templates/search/:query', (req: express.Request, res: express.Response) => {
+  const results = templateManager.searchTemplates(req.params.query);
+  sendSuccess(res, { templates: results });
+});
+
+// Health monitor routes
+app.get('/api/health/containers', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const statuses = healthMonitor.getAllStatuses();
+  sendSuccess(res, { containers: statuses });
+}));
+
+app.get('/api/health/containers/:containerId', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const status = healthMonitor.getHealthStatus(req.params.containerId);
+  if (!status) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+  sendSuccess(res, status);
+}));
+
+// Resource optimizer routes
+app.get('/api/resources/profiles', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const profiles = resourceOptimizer.getAllProfiles();
+  sendSuccess(res, { profiles });
+}));
+
+app.get('/api/resources/stats', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const stats = resourceOptimizer.getStats();
+  sendSuccess(res, stats);
+}));
+
+console.log('🚀 Deployment routes registered (Vercel, Netlify)');
+console.log('📦 Template routes registered');
+console.log('💊 Health monitor routes registered');
+console.log('📊 Resource optimizer routes registered');
+console.log('🔑 Public API middleware applied (auth, rate limiting, logging)');
+
 // Register shutdown handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Validate environment variables before starting
+validateEnvironment();
 
 server.listen(PORT, async () => {
   console.log(`🚀 Recoder Docker Backend running on port ${PORT}`);

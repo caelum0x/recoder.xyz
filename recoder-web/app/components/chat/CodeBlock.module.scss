@@ -8,3 +8,28 @@
     height: 30px;
   }
 }
+
+.CodeBlockHeader {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.CodeBlockContent {
+  position: relative;
+
+  // Ensure code inside has proper styling
+  :global(pre) {
+    margin: 0 !important;
+    border-radius: 0 0 6px 6px !important;
+  }
+
+  :global(.shiki) {
+    margin: 0 !important;
+    border-radius: 0 0 6px 6px !important;
+  }
+}
+
+.Collapsed {
+  overflow: hidden;
+}

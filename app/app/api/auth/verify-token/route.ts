@@ -13,9 +13,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the token is a valid session token
+    // In production with useSecureCookies=true, Better Auth expects __Secure-recoder.session_token
+    // In development, it expects recoder.session_token
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieName = isProduction ? '__Secure-recoder.session_token' : 'recoder.session_token';
+
     const session = await auth.api.getSession({
       headers: new Headers({
-        cookie: `recoder.session_token=${token}`
+        cookie: `${cookieName}=${token}`
       })
     });
 

@@ -176,8 +176,8 @@ describe('chatCommand', () => {
       const result = await saveCommand?.action?.(mockContext, '  ');
       expect(result).toEqual({
         type: 'message',
-        messageType: 'error',
-        content: 'Missing tag. Usage: /chat save <tag>',
+        messageType: 'info',
+        content: 'No conversation found to save.',
       });
     });
 

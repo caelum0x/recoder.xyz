@@ -642,7 +642,7 @@ describe('Server Config (config.ts)', () => {
     it('should register a tool if coreTools contains an argument-specific pattern', async () => {
       const params: ConfigParameters = {
         ...baseParams,
-        coreTools: ['ShellTool(git status)'],
+        coreTools: ['ReadFileTool(path)'],
       };
       const config = new Config(params);
       await config.initialize();
@@ -654,17 +654,17 @@ describe('Server Config (config.ts)', () => {
         }
       ).ToolRegistry.prototype.registerTool;
 
-      // Check that registerTool was called for ShellTool
-      const wasShellToolRegistered = (registerToolMock as Mock).mock.calls.some(
-        (call) => call[0] instanceof vi.mocked(ShellTool),
-      );
-      expect(wasShellToolRegistered).toBe(true);
-
-      // Check that registerTool was NOT called for ReadFileTool
+      // Check that registerTool was called for ReadFileTool
       const wasReadFileToolRegistered = (
         registerToolMock as Mock
       ).mock.calls.some((call) => call[0] instanceof vi.mocked(ReadFileTool));
-      expect(wasReadFileToolRegistered).toBe(false);
+      expect(wasReadFileToolRegistered).toBe(true);
+
+      // Check that registerTool was NOT called for ShellTool (disabled)
+      const wasShellToolRegistered = (registerToolMock as Mock).mock.calls.some(
+        (call) => call[0] instanceof vi.mocked(ShellTool),
+      );
+      expect(wasShellToolRegistered).toBe(false);
     });
   });
 });

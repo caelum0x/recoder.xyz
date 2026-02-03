@@ -53,7 +53,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     console.log('📝 Projects API action:', request.method, data);
 
     if (request.method === 'POST') {
-      const { name, description, type, framework, language, isPrivate, userId } = data as {
+      const { name, description, type, framework, language, isPrivate, userId, templateId, starterPath } = data as {
         name: string;
         description?: string;
         type?: string;
@@ -61,6 +61,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
         language?: string;
         isPrivate?: boolean;
         userId: string;
+        templateId?: string;
+        starterPath?: string;
       };
 
       if (!userId) {
@@ -73,7 +75,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return json({ error: 'Project name required' }, { status: 400 });
       }
 
-      console.log('✅ Creating project:', { name, userId, type });
+      console.log('✅ Creating project:', { name, userId, type, templateId });
 
       const project = await projectsDB.createProject({
         name,
@@ -83,6 +85,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
         language,
         isPrivate,
         userId,
+        templateId,
+        starterPath,
       });
 
       console.log('✅ Project created:', project.id);

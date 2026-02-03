@@ -154,7 +154,7 @@ export const InvitationModal = memo(({ isOpen, onClose, teams = [] }: Invitation
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-3 transition-colors"
+            className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-2 transition-colors"
           >
             <span className="i-ph:x text-lg" />
           </button>
@@ -281,7 +281,7 @@ const InviteForm = memo(({
               onChange={(e) => setBulkEmails(e.target.value)}
               placeholder="Enter multiple email addresses separated by commas, semicolons, or new lines..."
               rows={4}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
+              className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
             />
             <p className="text-xs text-bolt-elements-textTertiary mt-1">
               {getBulkEmailCount(bulkEmails)} valid email(s) detected
@@ -295,7 +295,7 @@ const InviteForm = memo(({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="colleague@company.com"
-              className="w-full pl-10 pr-3 py-2.5 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
+              className="w-full pl-10 pr-3 py-2.5 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
               autoFocus
             />
           </div>
@@ -350,7 +350,7 @@ const InviteForm = memo(({
                   'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors border',
                   selectedTeams.includes(team.id)
                     ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                    : 'bg-bolt-elements-background-depth-3 border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:border-bolt-elements-borderColorHover'
+                    : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:border-bolt-elements-borderColorActive'
                 )}
               >
                 <div
@@ -378,7 +378,7 @@ const InviteForm = memo(({
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Add a personal note to the invitation email..."
             rows={2}
-            className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
+            className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
           />
         </div>
       )}
@@ -437,7 +437,7 @@ const RoleOption = memo(({ role, currentRole, onSelect, icon, title, description
         'flex flex-col items-center gap-1 p-3 rounded-lg border transition-colors',
         isSelected
           ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-          : 'bg-bolt-elements-background-depth-3 border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:border-bolt-elements-borderColorHover'
+          : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:border-bolt-elements-borderColorActive'
       )}
     >
       <span className={classNames(icon, 'text-xl', isSelected && 'text-blue-400')} />
@@ -470,7 +470,7 @@ const RolePermissionsInfo = memo(({ role }: RolePermissionsInfoProps) => {
   const rolePermissions = permissions[role] || permissions.member;
 
   return (
-    <div className="p-3 bg-bolt-elements-background-depth-3 rounded-lg">
+    <div className="p-3 bg-bolt-elements-background-depth-2 rounded-lg">
       <div className="flex items-center gap-2 mb-2">
         <span className="i-ph:info text-blue-400" />
         <span className="text-sm font-medium text-bolt-elements-textPrimary capitalize">
@@ -515,11 +515,11 @@ const PendingInvitations = memo(({
       <div className="p-6">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="mb-3 animate-pulse">
-            <div className="flex items-center gap-3 p-4 bg-bolt-elements-background-depth-3 rounded-lg">
-              <div className="w-10 h-10 bg-bolt-elements-background-depth-4 rounded-full" />
+            <div className="flex items-center gap-3 p-4 bg-bolt-elements-background-depth-2 rounded-lg">
+              <div className="w-10 h-10 bg-bolt-elements-background-depth-3 rounded-full" />
               <div className="flex-1">
-                <div className="h-4 bg-bolt-elements-background-depth-4 rounded w-48 mb-1" />
-                <div className="h-3 bg-bolt-elements-background-depth-4 rounded w-32" />
+                <div className="h-4 bg-bolt-elements-background-depth-3 rounded w-48 mb-1" />
+                <div className="h-3 bg-bolt-elements-background-depth-3 rounded w-32" />
               </div>
             </div>
           </div>
@@ -590,7 +590,7 @@ const InvitationItem = memo(({ invitation, onResend, onRevoke }: InvitationItemP
 
   return (
     <div
-      className="flex items-center gap-3 p-4 bg-bolt-elements-background-depth-3 rounded-lg group"
+      className="flex items-center gap-3 p-4 bg-bolt-elements-background-depth-2 rounded-lg group"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -629,7 +629,7 @@ const InvitationItem = memo(({ invitation, onResend, onRevoke }: InvitationItemP
             {invitation.teams.map((teamId) => (
               <span
                 key={teamId}
-                className="px-1.5 py-0.5 bg-bolt-elements-background-depth-4 text-bolt-elements-textTertiary text-xs rounded"
+                className="px-1.5 py-0.5 bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary text-xs rounded"
               >
                 {teamId}
               </span>
@@ -701,7 +701,7 @@ const RoleBadge = memo(({ role }: RoleBadgeProps) => {
     owner: 'bg-yellow-500/20 text-yellow-400',
     admin: 'bg-purple-500/20 text-purple-400',
     member: 'bg-blue-500/20 text-blue-400',
-    viewer: 'bg-gray-500/20 text-gray-400',
+    viewer: 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary',
   };
 
   return (

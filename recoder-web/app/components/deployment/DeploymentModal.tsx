@@ -167,7 +167,8 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
               <div className="flex justify-end gap-2">
                 <button
                   onClick={handleClose}
-                  className="px-4 py-2 bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover text-bolt-elements-button-secondary-text rounded-lg transition-colors"
+                  className="px-4 py-2 rounded-lg transition-colors hover:opacity-80"
+                  style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)', color: 'var(--bolt-elements-textSecondary)' }}
                 >
                   Cancel
                 </button>
@@ -194,7 +195,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                     type="password"
                     value={userToken}
                     onChange={(e) => setUserToken(e.target.value)}
-                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary font-mono text-sm"
+                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary font-mono text-sm"
                     placeholder={`Enter your ${selectedPlatform} token...`}
                   />
                   <p className="mt-1 text-xs text-bolt-elements-textTertiary">
@@ -213,7 +214,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                     type="text"
                     value={projectName}
                     onChange={(e) => setProjectName(e.target.value)}
-                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary"
+                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary"
                     placeholder="my-awesome-project"
                   />
                 </div>
@@ -222,7 +223,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                   <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
                     Detected Framework
                   </label>
-                  <div className="px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textSecondary">
+                  <div className="px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textSecondary">
                     {detection?.framework || 'Unknown'} ({detection?.confidence ? `${Math.round(detection.confidence * 100)}% confidence` : 'detecting...'})
                   </div>
                 </div>
@@ -232,7 +233,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                     <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
                       Build Command
                     </label>
-                    <div className="px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textSecondary font-mono text-sm">
+                    <div className="px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textSecondary font-mono text-sm">
                       {detection.buildCommand}
                     </div>
                   </div>
@@ -257,7 +258,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                     }}
                     placeholder="KEY=value&#10;ANOTHER_KEY=another_value"
                     rows={3}
-                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary font-mono text-sm placeholder:text-gray-500"
+                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary font-mono text-sm placeholder:text-bolt-elements-textTertiary"
                   />
                   <p className="mt-1 text-xs text-bolt-elements-textTertiary">
                     One variable per line in KEY=value format
@@ -274,7 +275,8 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setStep('platform')}
-                  className="px-4 py-2 bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover text-bolt-elements-button-secondary-text rounded-lg transition-colors"
+                  className="px-4 py-2 rounded-lg transition-colors hover:opacity-80"
+                  style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)', color: 'var(--bolt-elements-textSecondary)' }}
                 >
                   Back
                 </button>
@@ -306,7 +308,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                   Your application is now live!
                 </p>
 
-                <div className="bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg p-4 mb-4">
+                <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4 mb-4">
                   <div className="text-sm text-bolt-elements-textSecondary mb-2">Your app is live at:</div>
                   <a
                     href={deploymentResult.url}
@@ -334,7 +336,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
                 </button>
                 <button
                   onClick={handleClose}
-                  className="px-4 py-2 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text rounded-lg transition-colors"
+                  className="px-4 py-2 rounded-lg transition-colors hover:opacity-80 bg-blue-600 text-white"
                 >
                   Close
                 </button>

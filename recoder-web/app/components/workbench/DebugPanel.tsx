@@ -382,7 +382,7 @@ const DebugToolbar = memo(({
               disabled={isLoading || !isConnected}
               className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded transition-colors ${
                 isLoading || !isConnected
-                  ? 'bg-gray-500/20 text-gray-400 cursor-not-allowed'
+                  ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary cursor-not-allowed'
                   : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
               }`}
             >
@@ -407,12 +407,12 @@ const DebugToolbar = memo(({
 
           {/* Launch Dropdown */}
           {showLaunchMenu && !hasSession && (
-            <div className="absolute top-full left-0 mt-1 w-48 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg shadow-lg z-50 py-1">
+            <div className="absolute top-full left-0 mt-1 w-48 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-lg z-50 py-1">
               {DEBUG_CONFIGS.map((config) => (
                 <button
                   key={config.type}
                   onClick={() => onLaunch(config.type)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-bolt-elements-background-depth-4 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-bolt-elements-background-depth-3 transition-colors"
                 >
                   <span className={config.icon} />
                   <span>{config.name}</span>
@@ -498,7 +498,7 @@ const SessionStatusBar = memo(({ session }: SessionStatusBarProps) => {
     starting: 'text-yellow-400 bg-yellow-500/10',
     running: 'text-green-400 bg-green-500/10',
     paused: 'text-orange-400 bg-orange-500/10',
-    stopped: 'text-gray-400 bg-gray-500/10',
+    stopped: 'text-bolt-elements-textSecondary bg-bolt-elements-background-depth-3',
     error: 'text-red-400 bg-red-500/10',
   };
 
@@ -598,7 +598,7 @@ const BreakpointsTab = memo(({
         {breakpoints.map((bp) => (
           <div
             key={bp.id}
-            className={`flex items-start gap-2 px-3 py-2 border-b border-bolt-elements-borderColor/30 hover:bg-bolt-elements-item-backgroundActive transition-colors ${
+            className={`flex items-start gap-2 px-3 py-2 border-b border-bolt-elements-borderColor/30 hover:bg-bolt-elements-background-depth-3 transition-colors ${
               !bp.enabled ? 'opacity-50' : ''
             }`}
           >
@@ -607,7 +607,7 @@ const BreakpointsTab = memo(({
               type="checkbox"
               checked={bp.enabled}
               onChange={(e) => onToggleEnabled(bp.filePath, bp.line, e.target.checked)}
-              className="mt-1 w-3.5 h-3.5 rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-3 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+              className="mt-1 w-3.5 h-3.5 rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
             />
 
             {/* Breakpoint Icon */}
@@ -626,7 +626,7 @@ const BreakpointsTab = memo(({
               className="flex-1 min-w-0 cursor-pointer"
               onClick={() => onNavigate(bp.filePath, bp.line)}
             >
-              <div className="text-xs text-gray-200 truncate font-mono">
+              <div className="text-xs text-bolt-elements-textSecondary truncate font-mono">
                 {bp.filePath.replace('/workspace/', '')}
               </div>
               <div className="text-xs text-bolt-elements-textTertiary mt-0.5">
@@ -699,7 +699,7 @@ const BreakpointsTab = memo(({
                   value={condition}
                   onChange={(e) => setCondition(e.target.value)}
                   placeholder="e.g., x > 10"
-                  className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -713,7 +713,7 @@ const BreakpointsTab = memo(({
                   value={hitCount}
                   onChange={(e) => setHitCount(e.target.value)}
                   placeholder="e.g., >= 5 or == 10"
-                  className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -727,7 +727,7 @@ const BreakpointsTab = memo(({
                   value={logMessage}
                   onChange={(e) => setLogMessage(e.target.value)}
                   placeholder="e.g., Value of x: {x}"
-                  className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
                 />
                 <p className="text-[10px] text-bolt-elements-textTertiary mt-1">
                   Use {'{expression}'} to interpolate values
@@ -802,12 +802,12 @@ const WatchTab = memo(({
           onChange={(e) => onNewExpressionChange(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="Add expression to watch..."
-          className="flex-1 bg-transparent text-xs text-white placeholder-gray-500 outline-none"
+          className="flex-1 bg-transparent text-xs text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary outline-none"
         />
         <button
           onClick={onAddExpression}
           disabled={!newExpression.trim()}
-          className="text-xs text-blue-400 hover:text-blue-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+          className="text-xs text-blue-400 hover:text-blue-300 disabled:text-bolt-elements-textTertiary disabled:cursor-not-allowed transition-colors"
         >
           Add
         </button>
@@ -825,7 +825,7 @@ const WatchTab = memo(({
           {watchExpressions.map((watch) => (
             <div
               key={watch.id}
-              className="flex items-start gap-2 px-3 py-2 border-b border-bolt-elements-borderColor/30 hover:bg-bolt-elements-item-backgroundActive transition-colors"
+              className="flex items-start gap-2 px-3 py-2 border-b border-bolt-elements-borderColor/30 hover:bg-bolt-elements-background-depth-3 transition-colors"
             >
               {/* Expand/Collapse for complex objects */}
               <div className="w-4 h-4 flex items-center justify-center shrink-0">
@@ -852,7 +852,7 @@ const WatchTab = memo(({
                 <div className="text-xs font-mono text-blue-400 truncate">
                   {watch.expression}
                 </div>
-                <div className={`text-xs font-mono mt-0.5 truncate ${watch.error ? 'text-red-400' : 'text-gray-300'}`}>
+                <div className={`text-xs font-mono mt-0.5 truncate ${watch.error ? 'text-red-400' : 'text-bolt-elements-textSecondary'}`}>
                   {watch.error ? watch.error : watch.result !== undefined ? watch.result : (isPaused ? 'Not available' : 'Run to evaluate')}
                   {watch.type && !watch.error && (
                     <span className="text-bolt-elements-textTertiary ml-2">: {watch.type}</span>
@@ -939,7 +939,7 @@ const CallStackTab = memo(({
           className={`flex items-start gap-2 px-3 py-2 border-b border-bolt-elements-borderColor/30 cursor-pointer transition-colors ${
             index === selectedFrameIndex
               ? 'bg-blue-500/20 border-l-2 border-l-blue-500'
-              : 'hover:bg-bolt-elements-item-backgroundActive'
+              : 'hover:bg-bolt-elements-background-depth-3'
           }`}
         >
           {/* Frame indicator */}
@@ -953,7 +953,7 @@ const CallStackTab = memo(({
 
           {/* Frame Details */}
           <div className="flex-1 min-w-0">
-            <div className="text-xs text-gray-200 font-mono truncate">
+            <div className="text-xs text-bolt-elements-textSecondary font-mono truncate">
               {frame.name}
             </div>
             <div className="text-xs text-bolt-elements-textTertiary mt-0.5 truncate">
@@ -1031,7 +1031,7 @@ const VariablesTab = memo(({
           {/* Scope Header */}
           <button
             onClick={() => onToggleScopeExpanded(index)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left hover:bg-bolt-elements-item-backgroundActive transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left hover:bg-bolt-elements-background-depth-3 transition-colors"
           >
             <span className={expandedScopes.has(index) ? 'i-ph:caret-down' : 'i-ph:caret-right'} />
             <span>{scope.name}</span>
@@ -1165,17 +1165,17 @@ const VariableRow = memo(({
     if (type.includes('string')) return 'text-green-400';
     if (type.includes('number') || type.includes('int') || type.includes('float')) return 'text-blue-400';
     if (type.includes('boolean') || type.includes('bool')) return 'text-purple-400';
-    if (type.includes('null') || type.includes('undefined') || type.includes('nil')) return 'text-gray-500';
+    if (type.includes('null') || type.includes('undefined') || type.includes('nil')) return 'text-bolt-elements-textTertiary';
     if (type.includes('function') || type.includes('method')) return 'text-yellow-400';
     if (type.includes('array') || type.includes('list')) return 'text-orange-400';
     if (type.includes('object') || type.includes('map') || type.includes('dict')) return 'text-cyan-400';
-    return 'text-gray-300';
+    return 'text-bolt-elements-textSecondary';
   };
 
   return (
     <div>
       <div
-        className={`flex items-start gap-1 px-3 py-1 hover:bg-bolt-elements-item-backgroundActive transition-colors ${
+        className={`flex items-start gap-1 px-3 py-1 hover:bg-bolt-elements-background-depth-3 transition-colors ${
           hasChildren ? 'cursor-pointer' : ''
         }`}
         style={{ paddingLeft: `${(depth + 1) * 12}px` }}

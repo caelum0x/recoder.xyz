@@ -3,6 +3,13 @@
  * Handles authenticated requests to the docker-backend service
  * Uses Better Auth session tokens for authentication
  * Includes robust error handling, retry logic, and connection status tracking
+ *
+ * Error Handling Features:
+ * - Unified error response format with specific error types
+ * - NetworkError, AuthError, TimeoutError, ServerError classes
+ * - User-friendly error messages with smart retry suggestions
+ * - Automatic retry with exponential backoff
+ * - Connection state management for WebSockets
  */
 
 import {
@@ -14,9 +21,25 @@ import {
   type ConnectionState,
   type ConnectionStatus,
   type RetryConfig,
+  NetworkError,
+  AuthError,
+  TimeoutError,
+  ServerError,
+  FileOperationError,
+  reportError,
+  createErrorInfo,
 } from '~/lib/utils/error-handler';
+import { createScopedLogger, DEBUG, createTimer } from '~/utils/logger';
 
+const logger = createScopedLogger('DockerAPI');
 const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+const CONTAINER_CREATE_TIMEOUT_MS = Number(import.meta.env.VITE_CONTAINER_CREATE_TIMEOUT_MS || 120000);
+
+// Request ID counter for tracing
+let requestIdCounter = 0;
+function getNextRequestId(): string {
+  return `req-${++requestIdCounter}-${Date.now().toString(36)}`;
+}
 
 /**
  * API Error Response from docker-backend
@@ -65,21 +88,56 @@ export class DockerApiError extends ApiErrorException {
   }
 }
 
+
 /**
  * Get the Better Auth session token from cookies
- * The cookie is named 'recoder.session_token' (with Better Auth prefix)
+ * In production with useSecureCookies=true, the cookie is named '__Secure-recoder.session_token'
+ * In development, it's 'recoder.session_token'
+ *
+ * NOTE: If the cookie is HttpOnly or blocked by 3rd party cookie restrictions,
+ * this function will return null. In that case, auth will fall back to anonymous mode
+ * on the server side (which is allowed in migration mode).
  */
 function getSessionToken(): string | null {
   if (typeof document === 'undefined') return null;
 
   const cookies = document.cookie.split(';');
+  // Priority order for cookie names (production secure cookies first)
+  const cookieNames = [
+    '__Secure-recoder.session_token',  // Production with Secure cookies
+    'recoder.session_token',            // Development
+    '__Secure-session_token',           // Production without prefix
+    'session_token',                    // Fallback
+    'recoder_session_token',            // Alternative format
+  ];
+
   for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    // Better Auth stores session as 'recoder.session_token' or 'session_token'
-    if (name === 'recoder.session_token' || name === 'session_token') {
+    const [name, ...valueParts] = cookie.trim().split('=');
+    const value = valueParts.join('='); // Handle cookies with = in value
+    if (cookieNames.includes(name) && value) {
+      // Token found - return it
       return decodeURIComponent(value);
     }
   }
+
+  // Token not found in cookies
+  // This can happen if:
+  // 1. User is not logged in
+  // 2. Cookie is HttpOnly (can't be read by JavaScript)
+  // 3. 3rd party cookies are blocked by browser
+  // 4. Cookie domain doesn't match current domain
+  //
+  // The docker-backend will allow anonymous access in migration mode (REQUIRE_AUTH=false)
+  // Log a warning in development to help debug
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    // Only log once per session to avoid spam
+    const logKey = 'token_warning_logged';
+    if (!sessionStorage.getItem(logKey)) {
+      console.debug('[docker-api] Session token not found in cookies. Auth will fall back to anonymous mode.');
+      sessionStorage.setItem(logKey, 'true');
+    }
+  }
+
   return null;
 }
 
@@ -102,6 +160,7 @@ function getAuthHeaders(): Record<string, string> {
 /**
  * Parse and handle API response
  * Throws DockerApiError for error responses
+ * Maps HTTP status codes to specific error types
  */
 async function parseResponse<T>(response: Response, endpoint: string): Promise<T> {
   let data: ApiResponse<T>;
@@ -111,12 +170,9 @@ async function parseResponse<T>(response: Response, endpoint: string): Promise<T
   } catch (e) {
     // Non-JSON response
     if (!response.ok) {
-      throw new DockerApiError(
-        `Request failed with status ${response.status}`,
-        endpoint,
-        response.status,
-        { canRetry: response.status >= 500 }
-      );
+      // Map status codes to specific error types
+      const error = createErrorFromStatus(response.status, endpoint);
+      throw error;
     }
     // Assume success for non-JSON OK responses
     return undefined as T;
@@ -143,6 +199,66 @@ async function parseResponse<T>(response: Response, endpoint: string): Promise<T
 }
 
 /**
+ * Create appropriate error type from HTTP status code
+ */
+function createErrorFromStatus(status: number, endpoint: string): DockerApiError {
+  switch (status) {
+    case 401:
+      return new DockerApiError(
+        { code: ErrorCode.AUTH_REQUIRED, message: 'Authentication required' },
+        endpoint,
+        status,
+        { canRetry: false }
+      );
+    case 403:
+      return new DockerApiError(
+        { code: ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, message: 'Access denied' },
+        endpoint,
+        status,
+        { canRetry: false }
+      );
+    case 404:
+      return new DockerApiError(
+        { code: ErrorCode.CONTAINER_NOT_FOUND, message: 'Resource not found' },
+        endpoint,
+        status,
+        { canRetry: false }
+      );
+    case 408:
+      return new DockerApiError(
+        { code: ErrorCode.TIMEOUT_ERROR, message: 'Request timeout' },
+        endpoint,
+        status,
+        { canRetry: true }
+      );
+    case 429:
+      return new DockerApiError(
+        { code: ErrorCode.RATE_LIMITED, message: 'Too many requests' },
+        endpoint,
+        status,
+        { canRetry: true, retryAfter: 60 }
+      );
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return new DockerApiError(
+        { code: ErrorCode.SERVICE_UNAVAILABLE, message: 'Server error' },
+        endpoint,
+        status,
+        { canRetry: true }
+      );
+    default:
+      return new DockerApiError(
+        `Request failed with status ${status}`,
+        endpoint,
+        status,
+        { canRetry: status >= 500 }
+      );
+  }
+}
+
+/**
  * Request options for docker API calls
  */
 interface DockerRequestOptions extends Omit<RequestInit, 'body'> {
@@ -166,13 +282,25 @@ export async function dockerFetch<T = unknown>(
 ): Promise<T> {
   const { body, retry, skipRetry, timeout = 30000, onRetry, ...fetchOptions } = options;
   const url = endpoint.startsWith('http') ? endpoint : `${DOCKER_URL}${endpoint}`;
+  const requestId = getNextRequestId();
+  const method = fetchOptions.method || 'GET';
 
   const headers = {
     ...getAuthHeaders(),
     ...(fetchOptions.headers || {}),
   };
 
+  // Log request start
+  if (DEBUG) {
+    logger.debug(`[${requestId}] ${method} ${endpoint}`, {
+      hasBody: !!body,
+      timeout,
+      skipRetry,
+    });
+  }
+
   const makeRequest = async (): Promise<T> => {
+    const requestTimer = createTimer(`${method} ${endpoint}`, 'DockerAPI');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -186,31 +314,100 @@ export async function dockerFetch<T = unknown>(
       });
 
       clearTimeout(timeoutId);
-      return await parseResponse<T>(response, endpoint);
+      const result = await parseResponse<T>(response, endpoint);
+
+      // Log successful response
+      const duration = requestTimer.end();
+      if (DEBUG) {
+        logger.debug(`[${requestId}] ${method} ${endpoint} -> ${response.status}`, {
+          duration,
+          status: response.status,
+        });
+      } else {
+        logger.debugVerbose(`${method} ${endpoint} completed in ${duration}ms`);
+      }
+
+      return result;
     } catch (error) {
       clearTimeout(timeoutId);
+      const duration = requestTimer.end();
 
       // Handle abort/timeout
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new DockerApiError(
-          'Request timed out',
+        logger.timed('warn', `[${requestId}] ${method} ${endpoint} timed out`, duration);
+        const timeoutError = new DockerApiError(
+          { code: ErrorCode.TIMEOUT_ERROR, message: `Request timed out after ${timeout}ms` },
           endpoint,
           0,
           { canRetry: true }
         );
+        throw timeoutError;
       }
 
-      // Handle network errors
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new DockerApiError(
-          'Network error. Please check your connection.',
-          endpoint,
-          0,
-          { canRetry: true }
-        );
+      // Handle network errors with more specific detection
+      if (error instanceof TypeError) {
+        const msg = error.message.toLowerCase();
+
+        // DNS resolution failure
+        if (msg.includes('not found') || msg.includes('enotfound')) {
+          throw new DockerApiError(
+            { code: ErrorCode.DNS_ERROR, message: 'Unable to resolve server address' },
+            endpoint,
+            0,
+            { canRetry: true }
+          );
+        }
+
+        // Connection refused
+        if (msg.includes('refused') || msg.includes('econnrefused')) {
+          throw new DockerApiError(
+            { code: ErrorCode.CONNECTION_REFUSED, message: 'Server is not responding' },
+            endpoint,
+            0,
+            { canRetry: true }
+          );
+        }
+
+        // SSL/TLS errors
+        if (msg.includes('ssl') || msg.includes('certificate') || msg.includes('https')) {
+          throw new DockerApiError(
+            { code: ErrorCode.SSL_ERROR, message: 'Secure connection failed' },
+            endpoint,
+            0,
+            { canRetry: false }
+          );
+        }
+
+        // General network error
+        if (msg.includes('fetch') || msg.includes('network')) {
+          throw new DockerApiError(
+            { code: ErrorCode.NETWORK_ERROR, message: 'Network error. Please check your connection.' },
+            endpoint,
+            0,
+            { canRetry: true }
+          );
+        }
       }
 
-      throw error;
+      // Re-throw DockerApiError as-is
+      if (error instanceof DockerApiError) {
+        logger.timed('error', `[${requestId}] ${method} ${endpoint} failed`, duration, {
+          code: error.code,
+          message: error.message,
+        });
+        throw error;
+      }
+
+      // Wrap unknown errors
+      logger.timed('error', `[${requestId}] ${method} ${endpoint} unknown error`, duration, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new DockerApiError(
+        error instanceof Error ? error.message : 'Unknown error occurred',
+        endpoint,
+        0,
+        { canRetry: true }
+      );
     }
   };
 
@@ -366,8 +563,310 @@ export function getConnectionStatusColor(status: ConnectionStatus): string {
   }
 }
 
-// Export the base URL for WebSocket connections
-export { DOCKER_URL };
+/**
+ * File operation with specific error handling
+ */
+export async function dockerWriteFile(
+  projectId: string,
+  path: string,
+  content: string,
+  options?: { timeout?: number; onRetry?: (attempt: number) => void }
+): Promise<void> {
+  const endpoint = `/api/file/${projectId}`;
+
+  try {
+    await dockerPost(endpoint, { path, content }, {
+      timeout: options?.timeout ?? 30000,
+      retry: {
+        maxRetries: 2,
+        onRetry: (error, attempt) => {
+          options?.onRetry?.(attempt);
+        },
+      },
+    });
+  } catch (error) {
+    // Convert to FileOperationError for better context
+    if (error instanceof DockerApiError) {
+      throw new FileOperationError('write', path, error.message, { canRetry: error.canRetry });
+    }
+    throw new FileOperationError('write', path, error instanceof Error ? error.message : 'Write failed');
+  }
+}
+
+/**
+ * Read file with specific error handling
+ */
+export async function dockerReadFile(
+  projectId: string,
+  path: string,
+  options?: { timeout?: number }
+): Promise<string> {
+  const endpoint = `/api/file/${projectId}?path=${encodeURIComponent(path)}`;
+
+  try {
+    const response = await dockerGet<{ content: string } | string>(endpoint, {
+      timeout: options?.timeout ?? 15000,
+    });
+    return typeof response === 'string' ? response : response.content;
+  } catch (error) {
+    // Handle file not found gracefully
+    if (error instanceof DockerApiError && error.statusCode === 404) {
+      throw new FileOperationError('read', path, 'File not found', { canRetry: false });
+    }
+    if (error instanceof DockerApiError) {
+      throw new FileOperationError('read', path, error.message, { canRetry: error.canRetry });
+    }
+    throw new FileOperationError('read', path, error instanceof Error ? error.message : 'Read failed');
+  }
+}
+
+/**
+ * Delete file with specific error handling
+ */
+export async function dockerDeleteFile(
+  projectId: string,
+  path: string
+): Promise<void> {
+  const endpoint = `/api/file/${projectId}`;
+
+  try {
+    await dockerDelete(endpoint, { path });
+  } catch (error) {
+    if (error instanceof DockerApiError) {
+      throw new FileOperationError('delete', path, error.message, { canRetry: error.canRetry });
+    }
+    throw new FileOperationError('delete', path, error instanceof Error ? error.message : 'Delete failed');
+  }
+}
+
+/**
+ * Batch file write with error tracking
+ */
+export async function dockerWriteFiles(
+  projectId: string,
+  files: Array<{ path: string; content: string }>,
+  options?: {
+    onProgress?: (completed: number, total: number, failed: string[]) => void;
+    continueOnError?: boolean;
+  }
+): Promise<{
+  success: boolean;
+  completed: number;
+  failed: Array<{ path: string; error: string }>;
+}> {
+  const failed: Array<{ path: string; error: string }> = [];
+  let completed = 0;
+
+  for (const file of files) {
+    try {
+      await dockerWriteFile(projectId, file.path, file.content);
+      completed++;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      failed.push({ path: file.path, error: errorMessage });
+
+      if (!options?.continueOnError) {
+        break;
+      }
+    }
+
+    options?.onProgress?.(completed, files.length, failed.map(f => f.path));
+  }
+
+  return {
+    success: failed.length === 0,
+    completed,
+    failed,
+  };
+}
+
+/**
+ * Batch read files with concurrency control
+ * Inspired by December's batch reading pattern
+ */
+export async function dockerReadFilesBatch(
+  projectId: string,
+  paths: string[],
+  options?: {
+    concurrency?: number;
+    timeout?: number;
+    onProgress?: (completed: number, total: number, failed: string[]) => void;
+    onFileRead?: (path: string, content: string) => void;
+    onFileError?: (path: string, error: string) => void;
+  }
+): Promise<{
+  success: boolean;
+  results: Map<string, string>;
+  failed: Array<{ path: string; error: string }>;
+  completed: number;
+}> {
+  const {
+    concurrency = 50,
+    timeout = 15000,
+    onProgress,
+    onFileRead,
+    onFileError,
+  } = options || {};
+
+  const results = new Map<string, string>();
+  const failed: Array<{ path: string; error: string }> = [];
+  let completed = 0;
+
+  // Process files in batches with controlled concurrency
+  for (let i = 0; i < paths.length; i += concurrency) {
+    const batch = paths.slice(i, i + concurrency);
+
+    const batchPromises = batch.map(async (path) => {
+      try {
+        const content = await dockerReadFile(projectId, path, { timeout });
+        results.set(path, content);
+        completed++;
+        onFileRead?.(path, content);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        failed.push({ path, error: errorMessage });
+        onFileError?.(path, errorMessage);
+      }
+    });
+
+    await Promise.all(batchPromises);
+    onProgress?.(completed, paths.length, failed.map(f => f.path));
+  }
+
+  return {
+    success: failed.length === 0,
+    results,
+    failed,
+    completed,
+  };
+}
+
+/**
+ * Read file tree with contents (batch read all files)
+ * Returns file tree structure with content for each file
+ */
+export async function dockerReadFileTree(
+  projectId: string,
+  options?: {
+    concurrency?: number;
+    filter?: (path: string) => boolean;
+    onProgress?: (loaded: number, total: number) => void;
+  }
+): Promise<{
+  files: Array<{ path: string; content: string; type: 'file' }>;
+  directories: Array<{ path: string; type: 'directory' }>;
+  failed: Array<{ path: string; error: string }>;
+}> {
+  const { concurrency = 50, filter, onProgress } = options || {};
+
+  // First, get the file tree structure
+  const treeEndpoint = `/api/files/${projectId}`;
+
+  try {
+    const treeResponse = await dockerGet<{
+      files: Array<{ path: string; type: 'file' | 'directory' }>
+    }>(treeEndpoint, { timeout: 30000 });
+
+    const allItems = treeResponse.files || [];
+    const directories = allItems.filter(f => f.type === 'directory').map(d => ({
+      path: d.path,
+      type: 'directory' as const
+    }));
+    const fileItems = allItems.filter(f => f.type === 'file');
+
+    // Apply filter if provided
+    const filesToRead = filter
+      ? fileItems.filter(f => filter(f.path))
+      : fileItems;
+
+    const filePaths = filesToRead.map(f => f.path);
+
+    // Batch read all files
+    const readResult = await dockerReadFilesBatch(projectId, filePaths, {
+      concurrency,
+      onProgress: (completed, total) => {
+        onProgress?.(completed, total);
+      },
+    });
+
+    const files = Array.from(readResult.results.entries()).map(([path, content]) => ({
+      path,
+      content,
+      type: 'file' as const,
+    }));
+
+    return {
+      files,
+      directories,
+      failed: readResult.failed,
+    };
+  } catch (error) {
+    throw new FileOperationError(
+      'read',
+      'file tree',
+      error instanceof Error ? error.message : 'Failed to read file tree'
+    );
+  }
+}
+
+/**
+ * Get retry suggestion based on error type
+ */
+export function getRetrySuggestion(error: Error | DockerApiError): {
+  canRetry: boolean;
+  message: string;
+  waitTime?: number;
+} {
+  if (error instanceof DockerApiError) {
+    switch (error.code) {
+      case ErrorCode.RATE_LIMITED:
+        return {
+          canRetry: true,
+          message: 'You\'ve made too many requests. Please wait before trying again.',
+          waitTime: error.retryAfter ? error.retryAfter * 1000 : 60000,
+        };
+      case ErrorCode.TIMEOUT_ERROR:
+        return {
+          canRetry: true,
+          message: 'The request took too long. Try again or check your connection.',
+          waitTime: 1000,
+        };
+      case ErrorCode.NETWORK_ERROR:
+      case ErrorCode.CONNECTION_REFUSED:
+        return {
+          canRetry: true,
+          message: 'Network issue detected. Check your connection and try again.',
+          waitTime: 2000,
+        };
+      case ErrorCode.AUTH_TOKEN_EXPIRED:
+      case ErrorCode.AUTH_REQUIRED:
+        return {
+          canRetry: false,
+          message: 'Please log in again to continue.',
+        };
+      case ErrorCode.SERVICE_UNAVAILABLE:
+        return {
+          canRetry: true,
+          message: 'The server is temporarily unavailable. Please try again in a moment.',
+          waitTime: 5000,
+        };
+      default:
+        return {
+          canRetry: error.canRetry,
+          message: error.canRetry ? 'An error occurred. You can try again.' : 'This error cannot be automatically resolved.',
+        };
+    }
+  }
+
+  return {
+    canRetry: true,
+    message: 'An unexpected error occurred. You can try again.',
+  };
+}
+
+// Export the base URL and shared timeouts for WebSocket connections
+export { DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS };
 export { getSessionToken };
 export { getUserFriendlyMessage };
+export { FileOperationError, NetworkError, AuthError, TimeoutError, ServerError };
 export type { ConnectionState, ConnectionStatus };

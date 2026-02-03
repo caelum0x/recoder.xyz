@@ -32,6 +32,11 @@ import {
   resetOauthClientForTesting,
 } from './oauth2.js';
 
+const runNetworkTests =
+  process.env['RUN_NETWORK_TESTS'] === 'true' ||
+  process.env['RUN_NETWORK_TESTS'] === '1';
+const itIfNetwork = runNetworkTests ? it : it.skip;
+
 vi.mock('os', async (importOriginal) => {
   const os = await importOriginal<typeof import('os')>();
   return {
@@ -74,7 +79,7 @@ describe('oauth2', () => {
     vi.unstubAllEnvs();
   });
 
-  it('should perform a web login', async () => {
+  itIfNetwork('should perform a web login', async () => {
     const mockAuthUrl = 'https://example.com/auth';
     const mockCode = 'test-code';
     const mockState = 'test-state';
@@ -195,7 +200,7 @@ describe('oauth2', () => {
     );
   });
 
-  it('should perform login with user code', async () => {
+  itIfNetwork('should perform login with user code', async () => {
     const mockConfigWithNoBrowser = {
       getNoBrowser: () => true,
       getProxy: () => 'http://test.proxy.com:8080',

@@ -27,6 +27,22 @@ export interface Project {
   icon?: string;
   chatCount?: number;
   fileCount?: number;
+  // Deployment properties
+  deploymentStatus?: 'idle' | 'preparing' | 'deploying' | 'deployed' | 'failed';
+  productionDeployUrl?: string;
+  deployedAt?: Date;
+  // Custom domain properties
+  customDomain?: string;
+  customDomainStatus?: 'pending' | 'verified' | 'active' | 'failed';
+  customDomainVerifiedAt?: string;
+  sslStatus?: 'pending' | 'pending_validation' | 'active' | 'failed';
+  ownershipVerification?: string;
+  // Starter template path
+  starterPath?: string;
+  // Knowledge base
+  knowledge?: string;
+  // Message history for AI context
+  messageHistory?: string;
 }
 
 export interface CreateProjectData {
@@ -38,6 +54,7 @@ export interface CreateProjectData {
   isPrivate?: boolean;
   userId: string;
   templateId?: string;
+  starterPath?: string;
   config?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
@@ -96,7 +113,7 @@ export class ProjectsDB {
       const result = await this.sql`
         INSERT INTO projects (
           id, name, type, description, status, config, framework, language,
-          "isPrivate", metadata, "userId", "templateId", "createdAt", "updatedAt"
+          "isPrivate", metadata, "userId", "templateId", "starterPath", "createdAt", "updatedAt"
         )
         VALUES (
           ${id},
@@ -111,6 +128,7 @@ export class ProjectsDB {
           ${JSON.stringify(data.metadata || {})}::jsonb,
           ${data.userId},
           ${data.templateId || null},
+          ${data.starterPath || null},
           ${now},
           ${now}
         )
@@ -144,6 +162,8 @@ export class ProjectsDB {
           framework = COALESCE(${data.framework || null}, framework),
           language = COALESCE(${data.language || null}, language),
           "isPrivate" = COALESCE(${data.isPrivate ?? null}, "isPrivate"),
+          "templateId" = COALESCE(${data.templateId || null}, "templateId"),
+          "starterPath" = COALESCE(${data.starterPath || null}, "starterPath"),
           "updatedAt" = NOW()
         WHERE id = ${projectId} AND "userId" = ${userId}
         RETURNING *
@@ -280,6 +300,177 @@ export class ProjectsDB {
     } catch (error: unknown) {
       console.error('❌ [ProjectsDB.getProjectChats] Database error:', error);
       return [];
+    }
+  }
+
+  /**
+   * Update project deployment status
+   */
+  async updateDeploymentStatus(
+    projectId: string,
+    status: Project['deploymentStatus'],
+    productionUrl?: string
+  ): Promise<Project | null> {
+    try {
+      const result = await this.sql`
+        UPDATE projects
+        SET
+          "deploymentStatus" = ${status},
+          "productionDeployUrl" = COALESCE(${productionUrl || null}, "productionDeployUrl"),
+          "deployedAt" = CASE WHEN ${status} = 'deployed' THEN NOW() ELSE "deployedAt" END,
+          "updatedAt" = NOW()
+        WHERE id = ${projectId}
+        RETURNING *
+      ` as unknown as Project[];
+
+      return result && result.length > 0 ? result[0] : null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.updateDeploymentStatus] Database error:', message);
+      throw new Error(`Failed to update deployment status: ${message}`);
+    }
+  }
+
+  /**
+   * Update project knowledge base
+   */
+  async updateKnowledge(projectId: string, knowledge: string, userId: string): Promise<Project | null> {
+    try {
+      const result = await this.sql`
+        UPDATE projects
+        SET
+          knowledge = ${knowledge},
+          "updatedAt" = NOW()
+        WHERE id = ${projectId} AND "userId" = ${userId}
+        RETURNING *
+      ` as unknown as Project[];
+
+      return result && result.length > 0 ? result[0] : null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.updateKnowledge] Database error:', message);
+      throw new Error(`Failed to update knowledge: ${message}`);
+    }
+  }
+
+  /**
+   * Update project custom domain settings
+   */
+  async updateCustomDomain(
+    projectId: string,
+    domain: string | null,
+    status: Project['customDomainStatus'] | null,
+    verification?: string
+  ): Promise<Project | null> {
+    try {
+      const result = await this.sql`
+        UPDATE projects
+        SET
+          "customDomain" = ${domain},
+          "customDomainStatus" = ${status},
+          "ownershipVerification" = ${verification || null},
+          "customDomainVerifiedAt" = CASE WHEN ${status} = 'verified' THEN NOW()::text ELSE "customDomainVerifiedAt" END,
+          "updatedAt" = NOW()
+        WHERE id = ${projectId}
+        RETURNING *
+      ` as unknown as Project[];
+
+      return result && result.length > 0 ? result[0] : null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.updateCustomDomain] Database error:', message);
+      throw new Error(`Failed to update custom domain: ${message}`);
+    }
+  }
+
+  /**
+   * Get project with all details including deployment and domain info
+   */
+  async getProjectWithDetails(projectId: string, userId?: string): Promise<Project | null> {
+    try {
+      let result: unknown;
+
+      if (userId) {
+        result = await this.sql`
+          SELECT *,
+            "deploymentStatus",
+            "productionDeployUrl",
+            "deployedAt",
+            "customDomain",
+            "customDomainStatus",
+            "customDomainVerifiedAt",
+            "sslStatus",
+            "ownershipVerification",
+            knowledge,
+            "messageHistory"
+          FROM projects
+          WHERE id = ${projectId} AND "userId" = ${userId}
+        `;
+      } else {
+        result = await this.sql`
+          SELECT *,
+            "deploymentStatus",
+            "productionDeployUrl",
+            "deployedAt",
+            "customDomain",
+            "customDomainStatus",
+            "customDomainVerifiedAt",
+            "sslStatus",
+            "ownershipVerification",
+            knowledge,
+            "messageHistory"
+          FROM projects
+          WHERE id = ${projectId}
+        `;
+      }
+
+      const projects = result as Project[];
+      return projects && projects.length > 0 ? projects[0] : null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.getProjectWithDetails] Database error:', message);
+      throw new Error(`Failed to get project details: ${message}`);
+    }
+  }
+
+  /**
+   * Search projects by name
+   */
+  async searchProjects(userId: string, query: string, limit: number = 10): Promise<Project[]> {
+    try {
+      const result = await this.sql`
+        SELECT * FROM projects
+        WHERE "userId" = ${userId}
+          AND (
+            LOWER(name) LIKE LOWER(${'%' + query + '%'})
+            OR LOWER(description) LIKE LOWER(${'%' + query + '%'})
+          )
+        ORDER BY "updatedAt" DESC
+        LIMIT ${limit}
+      ` as unknown as Project[];
+
+      return result;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [ProjectsDB.searchProjects] Database error:', message);
+      return [];
+    }
+  }
+
+  /**
+   * Get project count for user (for quota checking)
+   */
+  async getProjectCount(userId: string): Promise<number> {
+    try {
+      const result = await this.sql`
+        SELECT COUNT(*) as count FROM projects
+        WHERE "userId" = ${userId}
+      ` as unknown as { count: string }[];
+
+      return parseInt(result[0]?.count || '0', 10);
+    } catch (error: unknown) {
+      console.error('❌ [ProjectsDB.getProjectCount] Database error:', error);
+      return 0;
     }
   }
 }

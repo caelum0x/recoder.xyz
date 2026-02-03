@@ -3,7 +3,7 @@
  * Enhanced with local git support, branches, and commit history
  */
 
-import { memo, useState, useCallback, useEffect } from 'react';
+import { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerGet, dockerPost, dockerDelete } from '~/lib/services/docker-api';
@@ -36,6 +36,9 @@ interface GitStatus {
 
 type TabView = 'changes' | 'history';
 
+/** Max consecutive failures before pausing git operations */
+const MAX_GIT_FAILURES = 3;
+
 export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps) => {
   const projectId = useStore(workbenchStore.projectId);
   const containerReady = useStore(workbenchStore.containerReady);
@@ -48,6 +51,8 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<TabView>('changes');
   const [showGitHubConfig, setShowGitHubConfig] = useState(false);
+  const [gitSuspended, setGitSuspended] = useState(false);
+  const consecutiveFailuresRef = useRef(0);
   const [gitHubConfig, setGitHubConfig] = useState<{
     owner: string;
     repo: string;
@@ -65,6 +70,14 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
     }
   }, []);
 
+  // Reset failure tracking when container becomes ready
+  useEffect(() => {
+    if (containerReady) {
+      consecutiveFailuresRef.current = 0;
+      setGitSuspended(false);
+    }
+  }, [containerReady]);
+
   // Load git status when container is ready
   useEffect(() => {
     if (containerReady && projectId) {
@@ -72,9 +85,9 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
     }
   }, [containerReady, projectId]);
 
-  // Refresh git status
+  // Refresh git status - only when container is ready
   const refreshStatus = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId || !containerReady || gitSuspended) return;
 
     setIsLoading(true);
     try {
@@ -82,20 +95,28 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
       if (data) {
         setStatus(data);
         setIsGitRepo(!!data.branch);
+        // Reset failure counter on success
+        consecutiveFailuresRef.current = 0;
       } else {
         setIsGitRepo(false);
       }
     } catch (error) {
-      console.error('[Git] Status error:', error);
+      consecutiveFailuresRef.current++;
+      if (consecutiveFailuresRef.current >= MAX_GIT_FAILURES) {
+        console.debug(`[Git] ${MAX_GIT_FAILURES} consecutive failures, suspending git polling until container is ready`);
+        setGitSuspended(true);
+      } else {
+        console.debug('[Git] Status error:', error);
+      }
       setIsGitRepo(false);
     } finally {
       setIsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, containerReady, gitSuspended]);
 
-  // Load branches
+  // Load branches - only when container is ready
   const loadBranches = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId || !containerReady || gitSuspended) return;
 
     try {
       const data = await dockerGet<{ branches: GitBranch[] }>(`/api/git/${projectId}/branches`);
@@ -103,13 +124,13 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
         setBranches(data.branches || []);
       }
     } catch (error) {
-      console.error('[Git] Branches error:', error);
+      console.debug('[Git] Branches error:', error);
     }
-  }, [projectId]);
+  }, [projectId, containerReady, gitSuspended]);
 
-  // Load commit history
+  // Load commit history - only when container is ready
   const loadHistory = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId || !containerReady || gitSuspended) return;
 
     setIsLoading(true);
     try {
@@ -118,11 +139,11 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
         setCommits(data.commits || []);
       }
     } catch (error) {
-      console.error('[Git] History error:', error);
+      console.debug('[Git] History error:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, containerReady, gitSuspended]);
 
   // Load branches when tab changes or on mount
   useEffect(() => {
@@ -272,7 +293,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   // Not a git repo
   if (isGitRepo === false) {
     return (
-      <div className="flex flex-col h-full text-sm">
+      <div className="flex flex-col h-full text-sm bg-bolt-elements-background-depth-1">
         <div className="p-4 text-center">
           <span className="i-ph:git-branch text-4xl text-purple-400 mb-3 block" />
           <h3 className="text-bolt-elements-textPrimary font-medium mb-2">
@@ -303,7 +324,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   // Loading state
   if (!containerReady || isGitRepo === null) {
     return (
-      <div className="flex flex-col h-full justify-center items-center text-sm">
+      <div className="flex flex-col h-full justify-center items-center text-sm bg-bolt-elements-background-depth-1">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mb-2" />
         <span className="text-bolt-elements-textTertiary">
           {!containerReady ? 'Waiting for container...' : 'Loading git status...'}
@@ -312,12 +333,13 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
     );
   }
 
-  const stagedCount = status?.staged?.length || 0;
-  const unstagedCount = (status?.unstaged?.length || 0) + (status?.untracked?.length || 0);
-  const hasConflicts = (status?.conflicts?.length || 0) > 0;
+  // PERFORMANCE: Memoize derived state calculations
+  const stagedCount = useMemo(() => status?.staged?.length || 0, [status?.staged?.length]);
+  const unstagedCount = useMemo(() => (status?.unstaged?.length || 0) + (status?.untracked?.length || 0), [status?.unstaged?.length, status?.untracked?.length]);
+  const hasConflicts = useMemo(() => (status?.conflicts?.length || 0) > 0, [status?.conflicts?.length]);
 
   return (
-    <div className="flex flex-col h-full text-sm">
+    <div className="flex flex-col h-full text-sm bg-bolt-elements-background-depth-1">
       {/* Header with Branch Selector */}
       <div className="px-3 py-2 border-b border-bolt-elements-borderColor">
         <GitBranchList
@@ -408,13 +430,13 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
               onChange={(e) => setCommitMessage(e.target.value)}
               placeholder="Commit message"
               rows={2}
-              className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-purple-500 focus:outline-none text-white placeholder:text-gray-500 resize-none"
+              className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-purple-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary resize-none"
             />
             <div className="flex gap-1 mt-2">
               <button
                 onClick={commit}
                 disabled={isLoading || stagedCount === 0 || !commitMessage.trim()}
-                className="flex-1 px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:opacity-50 rounded text-white"
+                className="flex-1 px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-bolt-elements-background-depth-3 disabled:opacity-50 rounded text-white"
               >
                 {isLoading ? (
                   <span className="i-ph:spinner animate-spin" />
@@ -434,7 +456,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
                 </span>
                 <button
                   onClick={() => unstageFiles([])}
-                  className="text-xs text-bolt-elements-textTertiary hover:text-white"
+                  className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
                 >
                   Unstage All
                 </button>
@@ -464,7 +486,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => stageFiles([])}
-                    className="text-xs text-bolt-elements-textTertiary hover:text-white"
+                    className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
                   >
                     Stage All
                   </button>

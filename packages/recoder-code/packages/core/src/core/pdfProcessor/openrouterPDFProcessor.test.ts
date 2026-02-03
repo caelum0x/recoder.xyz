@@ -11,6 +11,7 @@ import type { PDFProcessOptions, PDFChatOptions } from './types.js';
 describe('OpenRouterPDFProcessor', () => {
   beforeEach(() => {
     process.env['OPENROUTER_API_KEY'] = 'test-api-key';
+    delete process.env['OPENAI_API_KEY'];
     vi.clearAllMocks();
   });
 
@@ -22,6 +23,7 @@ describe('OpenRouterPDFProcessor', () => {
 
     it('should throw error if no API key is provided', () => {
       delete process.env['OPENROUTER_API_KEY'];
+      delete process.env['OPENAI_API_KEY'];
       
       expect(() => new OpenRouterPDFProcessor()).toThrow(
         'API key is required'
@@ -41,16 +43,32 @@ describe('OpenRouterPDFProcessor', () => {
       const processor = new OpenRouterPDFProcessor();
       vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
-        json: async () => ({
-          text: 'Extracted PDF content',
-          metadata: {
-            pageCount: 5,
+        headers: {
+          get: (name: string) => {
+            if (name === 'x-openrouter-generation-id') return 'gen-pdf-1';
+            if (name === 'x-openrouter-cost') return '0.05';
+            return null;
           },
+        },
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  text: 'Extracted PDF content',
+                  metadata: {
+                    pageCount: 5,
+                  },
+                }),
+              },
+            },
+          ],
         }),
       } as Response);
 
       const options: PDFProcessOptions = {
-        pdfFile: 'test.pdf',
+        pdfFile: Buffer.from('%PDF-1.4 fake pdf data'),
+        outputFormat: 'json',
       };
 
       const result = await processor.process(options);
@@ -71,17 +89,29 @@ describe('OpenRouterPDFProcessor', () => {
       const processor = new OpenRouterPDFProcessor();
       vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
+        headers: {
+          get: (name: string) => {
+            if (name === 'x-openrouter-cost') return '0.02';
+            return null;
+          },
+        },
         json: async () => ({
-          response: 'The document is about testing',
-          metadata: {
-            inputTokens: 1000,
-            outputTokens: 50,
+          choices: [
+            {
+              message: {
+                content: 'The document is about testing',
+              },
+            },
+          ],
+          usage: {
+            prompt_tokens: 1000,
+            completion_tokens: 50,
           },
         }),
       } as Response);
 
       const options: PDFChatOptions = {
-        pdfFile: 'test.pdf',
+        pdfFile: Buffer.from('%PDF-1.4 fake pdf data'),
         instruction: 'What is this document about?',
       };
 

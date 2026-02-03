@@ -26,6 +26,11 @@ import { MCPOAuthProvider } from './oauth-provider.js';
 import type { OAuthToken } from './token-storage/types.js';
 import { MCPOAuthTokenStorage } from './oauth-token-storage.js';
 
+const runNetworkTests =
+  process.env['RUN_NETWORK_TESTS'] === 'true' ||
+  process.env['RUN_NETWORK_TESTS'] === '1';
+const describeIfNetwork = runNetworkTests ? describe : describe.skip;
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -89,7 +94,7 @@ vi.mock('node:http', () => ({
   createServer: vi.fn(() => mockHttpServer),
 }));
 
-describe('MCPOAuthProvider', () => {
+describeIfNetwork('MCPOAuthProvider', () => {
   const mockConfig: MCPOAuthConfig = {
     enabled: true,
     clientId: 'test-client-id',

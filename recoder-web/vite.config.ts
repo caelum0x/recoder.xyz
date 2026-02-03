@@ -30,7 +30,6 @@ export default defineConfig((config) => {
       alias: {
         // Do NOT alias React here - it breaks SSR (CJS vs ESM conflict)
         // Instead, rely on dedupe + correct node_modules resolution
-        'remix-island': resolve(__dirname, '../node_modules/.pnpm/remix-island@0.2.0_@remix-run+react@2.17.2_react-dom@18.3.1_react@18.3.1__react@18.3.1__1de70fbddf8fc2777d4dadc638f2e70d/node_modules/remix-island/dist/index.mjs'),
         // Skip ajv JSON schema files that cause build issues
         'ajv/dist/refs/json-schema-draft-07.json': resolve(__dirname, 'app/lib/empty-json.js'),
       },

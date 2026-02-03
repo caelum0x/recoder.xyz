@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { classNames } from '~/utils/classNames';
 import type { ParsedError, ErrorAction } from '~/lib/errors/error-handler';
 import { getSeverityColor, getSeverityIcon } from '~/lib/errors/error-handler';
+import { CopyButton } from '~/components/ui/CopyButton';
 
 interface ErrorMessageProps {
   error: ParsedError;
@@ -12,7 +13,6 @@ interface ErrorMessageProps {
 
 export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMessageProps) {
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const { solution } = error;
 
@@ -36,16 +36,6 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
 
   const severityColor = getSeverityColor(solution.severity);
   const severityIcon = getSeverityIcon(solution.severity);
-
-  const handleCopy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
 
   return (
     <div
@@ -97,8 +87,8 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
               onClick={() => onAction?.(action)}
               className={classNames(
                 'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-                'bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover',
-                'text-bolt-elements-button-primary-text',
+                'bg-[#2563eb] hover:bg-[#1d4ed8]',
+                'text-white',
                 'border border-bolt-elements-borderColor',
                 index === 0 && solution.autoFixable ? 'ring-2 ring-accent-500/50' : ''
               )}
@@ -121,20 +111,15 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
             <summary className="cursor-pointer text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary mb-2 font-medium">
               View error details
             </summary>
-            <div className="mt-2 p-3 bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor">
+            <div className="mt-2 p-3 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <code className="text-xs text-bolt-elements-textSecondary">Error Type: {error.type}</code>
-                <button
-                  onClick={() => handleCopy(error.rawError)}
-                  className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
-                  title="Copy error"
-                >
-                  {copied ? (
-                    <div className="i-ph:check text-green-500" />
-                  ) : (
-                    <div className="i-ph:copy" />
-                  )}
-                </button>
+                <CopyButton
+                  text={error.rawError}
+                  size="xs"
+                  variant="minimal"
+                  tooltip="Copy error"
+                />
               </div>
               <pre className="text-xs text-bolt-elements-textPrimary overflow-x-auto whitespace-pre-wrap break-words">
                 {error.rawError}

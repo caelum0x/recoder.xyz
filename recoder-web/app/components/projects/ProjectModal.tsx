@@ -144,7 +144,7 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
                   className={`w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center ${
                     formData.icon === icon
                       ? 'border-bolt-elements-focus bg-bolt-elements-focus/10'
-                      : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorHover'
+                      : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive'
                   }`}
                 >
                   <div className={`${icon} text-xl`} />

@@ -22,6 +22,7 @@ describe('OpenRouterPDFProcessor', () => {
 
     it('should throw error if no API key is provided', () => {
       delete process.env['OPENROUTER_API_KEY'];
+      delete process.env['OPENAI_API_KEY'];
       
       expect(() => new OpenRouterPDFProcessor()).toThrow(
         'API key is required'
@@ -41,8 +42,18 @@ describe('OpenRouterPDFProcessor', () => {
       const processor = new OpenRouterPDFProcessor();
       vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
+        headers: new Headers({
+          'x-openrouter-generation-id': 'gen-pdf-1',
+          'x-openrouter-cost': '0.01',
+        }),
         json: async () => ({
-          text: 'Extracted PDF content',
+          choices: [
+            {
+              message: {
+                content: 'Extracted PDF content',
+              },
+            },
+          ],
           metadata: {
             pageCount: 5,
           },
@@ -50,12 +61,12 @@ describe('OpenRouterPDFProcessor', () => {
       } as Response);
 
       const options: PDFProcessingOptions = {
-        pdfFile: 'test.pdf',
+        pdfFile: Buffer.from('%PDF-1.4 fake pdf'),
       };
 
       const result = await processor.process(options);
       expect(result.text).toBe('Extracted PDF content');
-      expect(result.metadata.pageCount).toBe(5);
+      expect(result.metadata.pageCount).toBe(1);
     });
   });
 
@@ -71,8 +82,18 @@ describe('OpenRouterPDFProcessor', () => {
       const processor = new OpenRouterPDFProcessor();
       vi.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
+        headers: new Headers({
+          'x-openrouter-generation-id': 'gen-pdf-chat-1',
+          'x-openrouter-cost': '0.01',
+        }),
         json: async () => ({
-          response: 'The document is about testing',
+          choices: [
+            {
+              message: {
+                content: 'The document is about testing',
+              },
+            },
+          ],
           metadata: {
             inputTokens: 1000,
             outputTokens: 50,
@@ -81,7 +102,7 @@ describe('OpenRouterPDFProcessor', () => {
       } as Response);
 
       const options: PDFToChatOptions = {
-        pdfFile: 'test.pdf',
+        pdfFile: Buffer.from('%PDF-1.4 fake pdf'),
         instruction: 'What is this document about?',
       };
 

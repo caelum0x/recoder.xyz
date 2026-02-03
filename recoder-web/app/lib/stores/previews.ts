@@ -27,10 +27,13 @@ export class PreviewsStore {
   }
 
   async setProjectId(projectId: string) {
+    console.log(`📺 [PreviewsStore] setProjectId called: ${projectId}`);
     this.#projectId = projectId;
     
     // Wait for init to complete first
     await this.#initPromise;
+    
+    console.log(`📺 [PreviewsStore] Init complete, useDocker: ${this.#useDocker}, DOCKER_URL: ${DOCKER_URL}`);
     
     if (this.#useDocker && DOCKER_URL) {
       this.#initDockerPreview();
@@ -40,13 +43,23 @@ export class PreviewsStore {
   async #init() {
     if (DOCKER_URL) {
       try {
-        const res = await dockerFetch('/health', { signal: AbortSignal.timeout(2000) }) as Response;
-        if (res.ok) {
+        // dockerFetch returns parsed JSON, check for success response
+        const res = await dockerFetch<{ status?: string }>('/health', { timeout: 2000, skipRetry: true });
+        // Health endpoint returns { status: 'ok' } on success
+        if (res && (res.status === 'ok' || res.status === 'healthy')) {
           this.#useDocker = true;
+          console.log('✅ [PreviewsStore] Docker backend health check passed, using Docker mode');
+        } else {
+          // Any successful response means Docker is available
+          this.#useDocker = true;
+          console.log('✅ [PreviewsStore] Docker backend responded, using Docker mode');
         }
-      } catch {
+      } catch (e) {
         this.#useDocker = false;
+        console.log('⚠️ [PreviewsStore] Docker backend health check failed, using WebContainer mode:', e);
       }
+    } else {
+      console.log('⚠️ [PreviewsStore] DOCKER_URL not set, using WebContainer mode');
     }
 
     // Don't init Docker preview yet - wait for projectId to be set
@@ -62,6 +75,8 @@ export class PreviewsStore {
       console.warn('⚠️ [PreviewsStore] Cannot init Docker preview without projectId');
       return;
     }
+
+    console.log(`📺 [PreviewsStore] Initializing Docker preview for ${this.#projectId}`);
 
     // Don't set ready: true immediately - wait for containerReady
     const previewInfo: PreviewInfo = {
@@ -79,26 +94,36 @@ export class PreviewsStore {
   }
 
   async #waitForContainerReady() {
-    if (!this.#projectId || !DOCKER_URL) return;
+    if (!this.#projectId || !DOCKER_URL) {
+      console.warn('⚠️ [PreviewsStore] Cannot wait for container ready - missing projectId or DOCKER_URL');
+      return;
+    }
+
+    console.log(`⏳ [PreviewsStore] Waiting for container ready: ${this.#projectId}`);
 
     try {
       // Import workbenchStore dynamically to avoid circular dependency
       const { workbenchStore } = await import('./workbench');
 
       // Check if already ready
-      if (workbenchStore.containerReady.get()) {
-        console.log('✅ [PreviewsStore] Container already ready, enabling preview');
-        this.#enablePreview();
+      const isReady = workbenchStore.containerReady.get();
+      console.log(`📺 [PreviewsStore] Container ready state: ${isReady}`);
+      
+      if (isReady) {
+        console.log('✅ [PreviewsStore] Container already ready, checking dev server health');
+        this.#pollForDevServer();
         return;
       }
 
       // PERFORMANCE: Subscribe to containerReady changes and track for cleanup
+      console.log('📺 [PreviewsStore] Subscribing to containerReady changes...');
       this.#containerReadyUnsubscribe = workbenchStore.containerReady.subscribe((ready) => {
+        console.log(`📺 [PreviewsStore] containerReady subscription fired: ${ready}`);
         if (ready) {
-          console.log('✅ [PreviewsStore] containerReady became true, enabling preview');
+          console.log('✅ [PreviewsStore] containerReady became true, checking dev server health');
           this.#containerReadyUnsubscribe?.();
           this.#containerReadyUnsubscribe = undefined;
-          this.#enablePreview();
+          this.#pollForDevServer();
         }
       });
     } catch (e) {
@@ -109,7 +134,10 @@ export class PreviewsStore {
   }
 
   #enablePreview() {
-    if (!this.#projectId) return;
+    if (!this.#projectId) {
+      console.warn('⚠️ [PreviewsStore] Cannot enable preview without projectId');
+      return;
+    }
 
     const previewInfo: PreviewInfo = {
       port: 3000,
@@ -119,7 +147,7 @@ export class PreviewsStore {
     };
     this.#availablePreviews.set(3000, previewInfo);
     this.previews.set([previewInfo]);
-    console.log('✅ [PreviewsStore] Preview enabled');
+    console.log('✅ [PreviewsStore] Preview enabled:', previewInfo.baseUrl);
   }
 
   async #pollForDevServer() {
@@ -128,20 +156,28 @@ export class PreviewsStore {
     const maxAttempts = 30; // 30 attempts * 2s = 60s max
     let attempts = 0;
 
+    console.log(`🔄 [PreviewsStore] Starting dev server health polling for ${this.#projectId}`);
+
     const checkHealth = async () => {
       attempts++;
       try {
-        const res = await dockerGet(`/api/preview/${this.#projectId}/health`) as Response;
-        if (res.ok) {
-          const data = await res.json() as { ports: Array<{ port: number; responding: boolean }> };
-          const respondingPort = data.ports.find((p: { port: number; responding: boolean }) => p.responding);
+        // dockerGet returns parsed JSON directly, not a Response object
+        const data = await dockerGet<{ ports: Array<{ port: number; responding: boolean }> }>(
+          `/api/preview/${this.#projectId}/health`, 
+          { timeout: 10000, skipRetry: true }
+        );
+        
+        console.log(`🔍 [PreviewsStore] Health check attempt ${attempts}:`, data);
+        
+        const respondingPort = data?.ports?.find((p) => p.responding);
 
-          if (respondingPort) {
-            this.#enablePreview();
-            return; // Stop polling
-          }
+        if (respondingPort) {
+          console.log(`✅ [PreviewsStore] Dev server responding on port ${respondingPort.port}`);
+          this.#enablePreview();
+          return; // Stop polling
         }
-      } catch {
+      } catch (e) {
+        console.log(`⚠️ [PreviewsStore] Health check attempt ${attempts} failed:`, e);
         // Ignore errors, keep polling
       }
 
@@ -149,7 +185,7 @@ export class PreviewsStore {
       if (attempts < maxAttempts) {
         setTimeout(checkHealth, 2000);
       } else {
-        console.warn('⚠️ [PreviewsStore] Dev server health check timed out');
+        console.warn('⚠️ [PreviewsStore] Dev server health check timed out after 30 attempts');
         this.#enablePreview(); // Allow manual refresh
       }
     };

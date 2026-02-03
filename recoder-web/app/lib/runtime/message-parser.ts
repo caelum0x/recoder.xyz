@@ -72,12 +72,63 @@ interface MessageState {
   currentAction: RecoderActionData;
   actionId: number;
   parseAttempts: number;
+  artifactsFound: number;
+  actionsFound: number;
 }
 
 export class StreamingMessageParser {
   #messages = new Map<string, MessageState>();
 
   constructor(private _options: StreamingMessageParserOptions = {}) {}
+
+  /**
+   * Sanitize LLM output to fix common XML issues:
+   * - Unquoted attributes: filePath=src/App.tsx → filePath="src/App.tsx"
+   * - Double-opening artifacts (AI outputs two <recoderArtifact> tags without closing)
+   * - Double-opening actions (AI outputs two <recoderAction> tags without closing)
+   */
+  #sanitizeInput(input: string): string {
+    let sanitized = input;
+
+    // Strip markdown code fences that some models wrap around XML tags
+    // e.g., ```xml\n<recoderArtifact...>\n``` → <recoderArtifact...>
+    sanitized = sanitized.replace(
+      /```(?:xml|html|jsx|tsx)?\s*\n?(<recoderArtifact[\s\S]*?<\/recoderArtifact>)\s*\n?```/g,
+      '$1'
+    );
+    sanitized = sanitized.replace(
+      /```(?:xml|html|jsx|tsx)?\s*\n?(<recoderAction[\s\S]*?<\/recoderAction>)\s*\n?```/g,
+      '$1'
+    );
+
+    // Fix unquoted attributes in recoderAction tags
+    // Match: attribute=value where value has no quotes and is not already quoted
+    sanitized = sanitized.replace(
+      /(<recoderAction[^>]*\s)(filePath|type|templateId|repoUrl|reason|url|query|filePattern|path|recursive|oldString|newString|targetMode|mode|taskDescription|context|commitMessage|agentType)=([^"'\s>][^\s>]*)/g,
+      '$1$2="$3"'
+    );
+
+    // Fix unquoted attributes in recoderArtifact tags
+    sanitized = sanitized.replace(
+      /(<recoderArtifact[^>]*\s)(id|title)=([^"'\s>][^\s>]*)/g,
+      '$1$2="$3"'
+    );
+
+    // Fix double-opening artifacts: two <recoderArtifact without a close between them
+    // Remove the duplicate opening tag (keep the first one)
+    sanitized = sanitized.replace(
+      /(<recoderArtifact\s[^>]*>)\s*<recoderArtifact\s[^>]*>/g,
+      '$1',
+    );
+
+    // Fix double-opening actions: two <recoderAction without a close between them
+    sanitized = sanitized.replace(
+      /(<recoderAction\s[^>]*>)\s*<recoderAction\s[^>]*>/g,
+      '$1',
+    );
+
+    return sanitized;
+  }
 
   parse(messageId: string, input: string) {
     let state = this.#messages.get(messageId);
@@ -90,8 +141,20 @@ export class StreamingMessageParser {
         currentAction: { content: '' },
         actionId: 0,
         parseAttempts: 0,
+        artifactsFound: 0,
+        actionsFound: 0,
       };
       this.#messages.set(messageId, state);
+    }
+
+    // Sanitize only the unparsed portion to avoid shifting already-parsed positions
+    if (state.position < input.length) {
+      const parsed = input.slice(0, state.position);
+      const unparsed = input.slice(state.position);
+      const sanitized = this.#sanitizeInput(unparsed);
+      if (sanitized !== unparsed) {
+        input = parsed + sanitized;
+      }
     }
 
     state.parseAttempts++;
@@ -163,6 +226,7 @@ export class StreamingMessageParser {
 
             if (actionEndIndex !== -1) {
               state.insideAction = true;
+              state.actionsFound++;
               state.currentAction = this.#parseActionTag(input, actionOpenIndex, actionEndIndex);
 
               this._options.callbacks?.onActionOpen?.({
@@ -195,7 +259,9 @@ export class StreamingMessageParser {
           if (potentialTag === ARTIFACT_TAG_OPEN) {
             const nextChar = input[j + 1];
 
-            if (nextChar && nextChar !== '>' && nextChar !== ' ') {
+            // Accept any whitespace (space, tab, newline) or '>' after tag name
+            // LLMs sometimes output multiline tags like <recoderArtifact\n  id="...">
+            if (nextChar && nextChar !== '>' && nextChar !== ' ' && nextChar !== '\n' && nextChar !== '\r' && nextChar !== '\t') {
               output += input.slice(i, j + 1);
               i = j + 1;
               break;
@@ -209,6 +275,7 @@ export class StreamingMessageParser {
               const artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
               state.insideArtifact = true;
+              state.artifactsFound++;
               const currentArtifact = { id: artifactId, title: artifactTitle } satisfies RecoderArtifactData;
               state.currentArtifact = currentArtifact;
 
@@ -244,6 +311,17 @@ export class StreamingMessageParser {
 
     state.position = i;
     return output;
+  }
+
+  getStats(messageId: string): { artifactsFound: number; actionsFound: number; position: number; inputLength: number } | null {
+    const state = this.#messages.get(messageId);
+    if (!state) return null;
+    return {
+      artifactsFound: state.artifactsFound,
+      actionsFound: state.actionsFound,
+      position: state.position,
+      inputLength: 0, // caller can compare with message length
+    };
   }
 
   reset() {
@@ -319,7 +397,7 @@ export class StreamingMessageParser {
       (actionAttributes as any).path = path || '.';
       if (recursive === 'true') (actionAttributes as any).recursive = true;
       if (query) (actionAttributes as any).query = query;
-    } else if (actionType === 'str_replace' || actionType === 'strReplace') {
+    } else if (actionType === 'str_replace' || (actionType as string) === 'strReplace') {
       // Parse str_replace action attributes (also accept camelCase alias)
       // Normalize to snake_case for action-runner
       (actionAttributes as any).type = 'str_replace';

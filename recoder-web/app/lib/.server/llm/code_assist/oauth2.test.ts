@@ -23,7 +23,6 @@ import {
 } from 'vitest';
 import type { Config } from '../config/config.js';
 import { AuthType } from '../core/contentGenerator.js';
-import { RECODER_DIR } from '../utils/paths.js';
 import { UserAccountManager } from '../utils/userAccountManager.js';
 import {
   clearCachedCredentialFile,
@@ -31,6 +30,7 @@ import {
   getOauthClient,
   resetOauthClientForTesting,
 } from './oauth2.js';
+import { Storage } from '../config/storage.js';
 
 vi.mock('os', async (importOriginal) => {
   const os = await importOriginal<typeof import('os')>();
@@ -41,7 +41,7 @@ vi.mock('os', async (importOriginal) => {
 });
 
 vi.mock('google-auth-library');
-vi.mock('http');
+vi.mock('node:http');
 vi.mock('open');
 vi.mock('crypto');
 vi.mock('node:readline');
@@ -55,6 +55,8 @@ const mockConfig = {
   isBrowserLaunchSuppressed: () => false,
 } as unknown as Config;
 
+const RUN_NETWORK_TESTS = process.env.RUN_NETWORK_TESTS === 'true';
+
 // Mock fetch globally
 global.fetch = vi.fn();
 
@@ -66,6 +68,7 @@ describe('oauth2', () => {
       path.join(os.tmpdir(), 'qwen-code-test-home-'),
     );
     (os.homedir as Mock).mockReturnValue(tempHomeDir);
+    (crypto.randomBytes as Mock).mockReturnValue(Buffer.from('test-state'));
   });
   afterEach(() => {
     fs.rmSync(tempHomeDir, { recursive: true, force: true });
@@ -74,7 +77,9 @@ describe('oauth2', () => {
     vi.unstubAllEnvs();
   });
 
-  it('should perform a web login', async () => {
+  const itIfNetwork = RUN_NETWORK_TESTS ? it : it.skip;
+
+  itIfNetwork('should perform a web login', async () => {
     const mockAuthUrl = 'https://example.com/auth';
     const mockCode = 'test-code';
     const mockState = 'test-state';
@@ -176,11 +181,7 @@ describe('oauth2', () => {
     expect(mockSetCredentials).toHaveBeenCalledWith(mockTokens);
 
     // Verify Google Account was cached
-    const googleAccountPath = path.join(
-      tempHomeDir,
-      RECODER_DIR,
-      'google_accounts.json',
-    );
+    const googleAccountPath = Storage.getGoogleAccountsPath();
     expect(fs.existsSync(googleAccountPath)).toBe(true);
     const cachedGoogleAccount = fs.readFileSync(googleAccountPath, 'utf-8');
     expect(JSON.parse(cachedGoogleAccount)).toEqual({
@@ -282,7 +283,7 @@ describe('oauth2', () => {
 
     it('should attempt to load cached credentials first', async () => {
       const cachedCreds = { refresh_token: 'cached-token' };
-      const credsPath = path.join(tempHomeDir, RECODER_DIR, 'oauth_creds.json');
+      const credsPath = Storage.getOAuthCredsPath();
       await fs.promises.mkdir(path.dirname(credsPath), { recursive: true });
       await fs.promises.writeFile(credsPath, JSON.stringify(cachedCreds));
 
@@ -320,7 +321,7 @@ describe('oauth2', () => {
 
       await getOauthClient(AuthType.CLOUD_SHELL, mockConfig);
 
-      const credsPath = path.join(tempHomeDir, RECODER_DIR, 'oauth_creds.json');
+      const credsPath = Storage.getOAuthCredsPath();
       expect(fs.existsSync(credsPath)).toBe(false);
     });
 
@@ -345,11 +346,7 @@ describe('oauth2', () => {
     it('should prioritize default cached credentials over GOOGLE_APPLICATION_CREDENTIALS', async () => {
       // Setup default cached credentials
       const defaultCreds = { refresh_token: 'default-cached-token' };
-      const defaultCredsPath = path.join(
-        tempHomeDir,
-        RECODER_DIR,
-        'oauth_creds.json',
-      );
+      const defaultCredsPath = Storage.getOAuthCredsPath();
       await fs.promises.mkdir(path.dirname(defaultCredsPath), {
         recursive: true,
       });
@@ -453,11 +450,7 @@ describe('oauth2', () => {
       );
 
       // Verify Google Account was cached
-      const googleAccountPath = path.join(
-        tempHomeDir,
-        RECODER_DIR,
-        'google_accounts.json',
-      );
+      const googleAccountPath = Storage.getGoogleAccountsPath();
       const cachedContent = fs.readFileSync(googleAccountPath, 'utf-8');
       expect(JSON.parse(cachedContent)).toEqual({
         active: 'test-gcp-account@gmail.com',
@@ -485,7 +478,7 @@ describe('oauth2', () => {
 
       // Make it fall through to cached credentials path
       const cachedCreds = { refresh_token: 'cached-token' };
-      const credsPath = path.join(tempHomeDir, RECODER_DIR, 'oauth_creds.json');
+      const credsPath = Storage.getOAuthCredsPath();
       await fs.promises.mkdir(path.dirname(credsPath), { recursive: true });
       await fs.promises.writeFile(credsPath, JSON.stringify(cachedCreds));
 
@@ -516,7 +509,7 @@ describe('oauth2', () => {
 
       // Make it fall through to cached credentials path
       const cachedCreds = { refresh_token: 'cached-token' };
-      const credsPath = path.join(tempHomeDir, RECODER_DIR, 'oauth_creds.json');
+      const credsPath = Storage.getOAuthCredsPath();
       await fs.promises.mkdir(path.dirname(credsPath), { recursive: true });
       await fs.promises.writeFile(credsPath, JSON.stringify(cachedCreds));
 
@@ -531,15 +524,11 @@ describe('oauth2', () => {
   describe('clearCachedCredentialFile', () => {
     it('should clear cached credentials and Google account', async () => {
       const cachedCreds = { refresh_token: 'test-token' };
-      const credsPath = path.join(tempHomeDir, RECODER_DIR, 'oauth_creds.json');
+      const credsPath = Storage.getOAuthCredsPath();
       await fs.promises.mkdir(path.dirname(credsPath), { recursive: true });
       await fs.promises.writeFile(credsPath, JSON.stringify(cachedCreds));
 
-      const googleAccountPath = path.join(
-        tempHomeDir,
-        RECODER_DIR,
-        'google_accounts.json',
-      );
+      const googleAccountPath = Storage.getGoogleAccountsPath();
       const accountData = { active: 'test@example.com', old: [] };
       await fs.promises.writeFile(
         googleAccountPath,
@@ -591,7 +580,7 @@ describe('oauth2', () => {
       );
 
       // Pre-populate credentials to make getOauthClient resolve quickly
-      const credsPath = path.join(tempHomeDir, RECODER_DIR, 'oauth_creds.json');
+      const credsPath = Storage.getOAuthCredsPath();
       await fs.promises.mkdir(path.dirname(credsPath), { recursive: true });
       await fs.promises.writeFile(
         credsPath,

@@ -47,12 +47,17 @@ ENV LC_ALL=en_US.UTF-8
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g pnpm yarn \
+    && npm config set registry https://registry.npmjs.org/ \
     && npm config set fetch-retries 5 \
     && npm config set fetch-retry-mintimeout 20000 \
-    && npm config set fetch-retry-maxtimeout 120000
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm config set fetch-timeout 120000 \
+    && npm config set network-timeout 120000 \
+    && npm config set prefer-online true
 
 # Install node-pty and ws for PTY server in /opt/pty
-RUN mkdir -p /opt/pty && cd /opt/pty && npm init -y && npm install node-pty ws
+RUN mkdir -p /opt/pty && cd /opt/pty && npm init -y \
+    && npm install --no-audit --no-fund node-pty ws
 
 # Python 3.11
 RUN add-apt-repository ppa:deadsnakes/ppa -y \

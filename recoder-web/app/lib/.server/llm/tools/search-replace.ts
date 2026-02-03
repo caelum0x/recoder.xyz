@@ -69,17 +69,29 @@ export async function searchReplace(params: SearchReplaceParams, projectPath: st
 
 		const absolutePath = path.resolve(projectPath, relPath)
 
-		// Enhanced file existence check
+		// Enhanced file existence check - auto-create if missing
 		let fileExists = false
 		try {
 			const stats = await fs.stat(absolutePath)
 			fileExists = stats.isFile()
 		} catch {
-			return { 
-				success: false, 
-				message: `File not found: ${relPath}. Cannot perform search and replace on a non-existent file.`,
-				consecutiveMistakeCount: 1,
-				errorType: 'file_not_found'
+			// File doesn't exist - auto-create it with new_string content
+			try {
+				await fs.mkdir(path.dirname(absolutePath), { recursive: true })
+				await fs.writeFile(absolutePath, new_string, 'utf8')
+				return {
+					success: true,
+					message: `File "${relPath}" did not exist. Created it with the replacement content.`,
+					diff: `+++ ${relPath} (new file)\n${new_string.split('\n').map(l => `+ ${l}`).join('\n')}`,
+					diffStats: { additions: new_string.split('\n').length, deletions: 0, changes: new_string.split('\n').length }
+				}
+			} catch (createError) {
+				return {
+					success: false,
+					message: `File not found: ${relPath}. Auto-create also failed: ${createError instanceof Error ? createError.message : 'Unknown error'}`,
+					consecutiveMistakeCount: 1,
+					errorType: 'file_not_found'
+				}
 			}
 		}
 

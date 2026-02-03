@@ -96,3 +96,79 @@
   z-index: 9999;
   background: var(--bolt-elements-background-depth-1);
 }
+
+/* ================================
+   CodeMirror Cursor Animations
+   ================================ */
+
+/* Smooth cursor blinking - fades in and out */
+@keyframes cm-cursor-smooth {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Phase cursor - partial fade (more subtle) */
+@keyframes cm-cursor-phase {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Expand cursor - shrinks and expands vertically */
+@keyframes cm-cursor-expand {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.2); }
+}
+
+/* Classic blink - instant on/off */
+@keyframes cm-cursor-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+/* ================================
+   CodeMirror Scrollbar Variables
+   ================================ */
+
+:root {
+  --cm-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --cm-scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
+  --cm-scrollbar-track: transparent;
+}
+
+/* Light theme scrollbar colors */
+[data-theme="light"] {
+  --cm-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --cm-scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
+}
+
+/* ================================
+   CodeMirror Clean Mode Styles
+   ================================ */
+
+/* Hide all lint indicators in clean mode */
+.cm-editor.clean-mode .cm-lintRange-error,
+.cm-editor.clean-mode .cm-lintRange-warning,
+.cm-editor.clean-mode .cm-lintRange-info,
+.cm-editor.clean-mode .cm-lintRange-hint {
+  background-image: none !important;
+  text-decoration: none !important;
+}
+
+.cm-editor.clean-mode .cm-lint-marker,
+.cm-editor.clean-mode .cm-lint-marker-error,
+.cm-editor.clean-mode .cm-lint-marker-warning {
+  display: none !important;
+}
+
+/* ================================
+   CodeMirror Performance Optimizations
+   ================================ */
+
+/* Optimize rendering for large files */
+.cm-editor.large-file-mode .cm-line {
+  contain: content;
+}
+
+.cm-editor.large-file-mode .cm-content {
+  will-change: transform;
+}

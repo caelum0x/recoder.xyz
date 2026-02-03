@@ -54,7 +54,7 @@ interface RailwayDomain {
 }
 
 export class RailwayDeployer {
-  private apiUrl = 'https://backboard.railway.app/graphql/v2';
+  private apiUrl = 'https://backboard.railway.com/graphql/v2';
   private token: string;
 
   constructor(token?: string) {
@@ -323,6 +323,10 @@ export class RailwayDeployer {
     });
   }
 
+  // NOTE: deploymentSourceUploadUrl is an undocumented internal mutation
+  // used by the Railway CLI (railway up). It is not part of the public API
+  // and may change without notice. Monitor Railway CLI releases for changes.
+  // See: https://github.com/railwayapp/cli
   /**
    * Create a deployment with files using Railway's upload API
    * Railway uses a tarball upload approach for CLI deployments
@@ -437,7 +441,10 @@ cmd = "npx serve -s ${config.outputDirectory || '.'}"
 
   /**
    * Create a gzipped tarball from files
-   * This is a simplified version - in production you'd use proper tar library
+   * This is a simplified tar implementation suitable for text source files.
+   * Limitations: does not handle binary files, symlinks, or very deep directory
+   * structures. Filenames longer than 100 chars are truncated with a warning.
+   * For production use with complex file trees, consider a proper tar library.
    */
   private async createTarball(files: FileTree): Promise<Uint8Array> {
     // Build a simple tar archive
@@ -450,11 +457,21 @@ cmd = "npx serve -s ${config.outputDirectory || '.'}"
 
       const contentBytes = encoder.encode(content);
 
+      // Check filename length - tar v7 format only supports 100 chars.
+      // Log a warning and truncate if necessary.
+      let filePath = path;
+      if (filePath.length > 100) {
+        console.warn(
+          `[Railway] Filename exceeds 100 chars and will be truncated in tarball: ${filePath} (${filePath.length} chars)`
+        );
+        filePath = filePath.slice(filePath.length - 100);
+      }
+
       // Create tar header (512 bytes)
       const header = new Uint8Array(512);
 
       // File name (100 bytes)
-      const nameBytes = encoder.encode(path.slice(0, 100));
+      const nameBytes = encoder.encode(filePath);
       header.set(nameBytes, 0);
 
       // File mode (8 bytes) - 0644 in octal
@@ -479,6 +496,12 @@ cmd = "npx serve -s ${config.outputDirectory || '.'}"
 
       // Type flag - '0' for regular file
       header[156] = 48; // '0'
+
+      // USTAR magic bytes at offset 257 so the tarball is properly identified
+      // as a POSIX-compliant (USTAR) archive by extraction tools.
+      // Format: "ustar\0" (6 bytes at 257) + "00" version (2 bytes at 263)
+      header.set(encoder.encode('ustar\0'), 257);
+      header.set(encoder.encode('00'), 263);
 
       // Calculate and set checksum
       let checksum = 0;

@@ -8,6 +8,7 @@ import { json } from '@remix-run/cloudflare';
 import { useLoaderData } from '@remix-run/react';
 import type { LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { getEditorSettings, updateEditorSettings, type EditorSettings } from '~/lib/api/settings';
+import { useAutoSaveSettings } from '~/lib/hooks/useAutoSave';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Load editor settings from API
@@ -42,6 +43,9 @@ export default function EditorSettingsPage() {
   const [settings, setSettings] = useState<EditorSettings>(initialSettings);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // Auto-save settings (local storage based)
+  const autoSaveSettings = useAutoSaveSettings();
 
   const handleSave = async () => {
     setSaving(true);
@@ -249,6 +253,80 @@ export default function EditorSettingsPage() {
               </button>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Auto-Save Settings */}
+      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+        <h2 className="text-xl font-bold mb-4">Auto-Save</h2>
+        <p className="text-sm text-bolt-elements-textSecondary mb-4">
+          Automatically save files after a period of inactivity. These settings are stored locally.
+        </p>
+        <div className="space-y-4">
+          {/* Enable Auto-Save */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">Enable Auto-Save</div>
+              <div className="text-sm text-bolt-elements-textSecondary">
+                Automatically save files after you stop typing
+              </div>
+            </div>
+            <button
+              onClick={autoSaveSettings.toggle}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                autoSaveSettings.isEnabled ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  autoSaveSettings.isEnabled ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Auto-Save Delay */}
+          <div className={autoSaveSettings.isEnabled ? '' : 'opacity-50 pointer-events-none'}>
+            <label className="block text-sm font-medium mb-2">
+              Auto-Save Delay: {(autoSaveSettings.delay / 1000).toFixed(1)}s
+            </label>
+            <input
+              type="range"
+              min="500"
+              max="10000"
+              step="500"
+              value={autoSaveSettings.delay}
+              onChange={(e) => autoSaveSettings.setDelay(parseInt(e.target.value))}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-bolt-elements-textTertiary mt-1">
+              <span>0.5s</span>
+              <span>5s</span>
+              <span>10s</span>
+            </div>
+          </div>
+
+          {/* Skip on Syntax Errors */}
+          <div className={`flex items-center justify-between ${autoSaveSettings.isEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
+            <div>
+              <div className="font-medium">Skip if File Has Errors</div>
+              <div className="text-sm text-bolt-elements-textSecondary">
+                Don't auto-save files with syntax errors
+              </div>
+            </div>
+            <button
+              onClick={() => autoSaveSettings.setSkipOnErrors(!autoSaveSettings.skipOnErrors)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                autoSaveSettings.skipOnErrors ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  autoSaveSettings.skipOnErrors ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </section>
 

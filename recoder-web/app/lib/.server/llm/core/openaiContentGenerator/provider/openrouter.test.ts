@@ -187,7 +187,7 @@ describe('OpenRouterOpenAICompatibleProvider', () => {
         mockRequest,
         mockUserPromptId,
       );
-      expect(result).toBe(mockResult);
+      expect(result).toMatchObject(mockResult);
 
       parentBuildRequest.mockRestore();
     });

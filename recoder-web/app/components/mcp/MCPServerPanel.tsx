@@ -89,7 +89,7 @@ export default function MCPServerPanel() {
       case 'error':
         return <XCircle className="w-4 h-4 text-red-500" />;
       default:
-        return <Circle className="w-4 h-4 text-gray-500" />;
+        return <Circle className="w-4 h-4 text-bolt-elements-textTertiary" />;
     }
   };
 
@@ -168,7 +168,7 @@ export default function MCPServerPanel() {
           servers.map((server) => (
             <div
               key={server.id}
-              className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4 hover:border-bolt-elements-borderColorHover transition-colors"
+              className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4 hover:border-bolt-elements-borderColorActive transition-colors"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-start gap-3 flex-1">
@@ -213,7 +213,7 @@ export default function MCPServerPanel() {
                       onChange={(e) => toggleServer(server.id, e.target.checked)}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-bolt-elements-background-depth-3 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <div className="w-11 h-6 bg-bolt-elements-background-depth-3 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-bolt-elements-borderColor after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   </label>
                 </div>
               </div>

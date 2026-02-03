@@ -43,6 +43,8 @@ export class DevServerManager {
 
     // Ensure workspace directory exists
     await this.execCommand(container, 'mkdir -p /workspace');
+    // Ensure log file exists so we can read errors even if startup fails early
+    await this.execCommand(container, 'mkdir -p /tmp && : > /tmp/dev.log');
 
     // Start the dev server using setsid for proper daemonization
     // BROWSER=none prevents Vite from trying to open xdg-open (which doesn't exist in Docker)
@@ -123,28 +125,90 @@ export class DevServerManager {
    */
   async getLogs(containerId: string, projectId: string, tail: number = 100): Promise<string> {
     const container = docker.getContainer(containerId);
-    
+
     try {
       const logs = await this.execCommand(container, `tail -n ${tail} /tmp/dev.log 2>/dev/null || echo "No logs found"`);
-      
+
       // Check for errors and trigger auto-restore if needed
-      const { hasError, errors } = autoRestoreManager.detectErrors(logs);
+      const { hasError, errors, details } = autoRestoreManager.detectErrors(logs);
       if (hasError) {
         console.log(`[DevServer] Errors detected in ${projectId}:`, errors);
-        
+        if (details.length > 0) {
+          console.log(`[DevServer] Error details:`, details[0]);
+        }
+
+        // Store error details for retrieval
+        autoRestoreManager.setLastErrors(projectId, details.length > 0 ? details : errors);
+
+        // Update dev server status to error state
+        const info = this.servers.get(projectId);
+        if (info) {
+          info.status = 'error';
+        }
+
         const result = await autoRestoreManager.attemptRestore(containerId, projectId);
         if (result.success) {
           console.log(`[DevServer] Auto-restored ${projectId} to ${result.restoredTo}`);
+        } else if (result.error) {
+          console.log(`[DevServer] Auto-restore failed: ${result.error}`);
         }
       } else {
         // Reset error count on successful build
         autoRestoreManager.resetErrors(projectId);
+
+        // Update status to running if server is responding
+        const info = this.servers.get(projectId);
+        if (info && info.status === 'error') {
+          info.status = 'running';
+        }
       }
-      
+
       return logs;
     } catch {
       return 'Failed to read logs';
     }
+  }
+
+  /**
+   * Get detailed error info for a project
+   */
+  getErrorInfo(projectId: string): {
+    hasErrors: boolean;
+    errors: string[];
+    retryState: {
+      errorCount: number;
+      maxRetries: number;
+      canRetry: boolean;
+      nextRetryIn?: number;
+    };
+  } {
+    const state = autoRestoreManager.getState(projectId);
+    return {
+      hasErrors: state.lastErrors.length > 0,
+      errors: state.lastErrors,
+      retryState: {
+        errorCount: state.errorCount,
+        maxRetries: state.maxRetries,
+        canRetry: state.canRetry,
+        nextRetryIn: state.nextRetryIn,
+      },
+    };
+  }
+
+  /**
+   * Force retry after max retries reached
+   */
+  async forceRetry(containerId: string, projectId: string, ports: number[]): Promise<{ ready: boolean; port?: number; error?: string }> {
+    console.log(`[DevServer] Force retry requested for ${projectId}`);
+    autoRestoreManager.forceReset(projectId);
+    return this.restart(containerId, projectId, ports);
+  }
+
+  /**
+   * Notify that user made a file change (gives more retry attempts)
+   */
+  onFileChange(projectId: string): void {
+    autoRestoreManager.resetOnFileChange(projectId);
   }
 
   /**
@@ -190,14 +254,20 @@ export class DevServerManager {
 
   private getStartCommand(framework: string): string {
     // Prefer bun for 10x faster startup for Node.js projects
+    const expoHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
     const commands: Record<string, string> = {
       // Node.js frameworks
       vite: 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
-      next: 'bun run dev 2>/dev/null || npm run dev',
+      next: 'bun run dev -- --hostname 0.0.0.0 2>/dev/null || npm run dev -- --hostname 0.0.0.0',
       react: 'bun start 2>/dev/null || npm start',
       vue: 'bun run serve 2>/dev/null || npm run serve',
       bun: 'bun run dev',
-      expo: 'bunx expo start --web 2>/dev/null || npx expo start --web',
+      // REACT_NATIVE_PACKAGER_HOSTNAME: hostname for QR codes/connection URLs (container IP is unreachable from phones)
+      // EXPO_DEVTOOLS_LISTEN_ADDRESS: allow connections from outside the container
+      // BROWSER=none: don't try to open a browser inside the container
+      // CI=1: prevent interactive prompts that would hang in a container
+      // NOTE: These env vars should also be set for Expo Go mode (expo start without --web)
+      expo: `REACT_NATIVE_PACKAGER_HOSTNAME=${expoHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --web --host 0.0.0.0 --port 8081`,
 
       // Python frameworks
       flask: 'python -m flask run --host=0.0.0.0 --port=5173',
@@ -228,6 +298,7 @@ export class DevServerManager {
       next: 'next dev',
       react: 'react-scripts start',
       vue: 'vue-cli-service serve',
+      expo: 'expo start|metro',
 
       // Python
       flask: 'flask run|python.*flask',
@@ -305,3 +376,214 @@ export class DevServerManager {
 
 // Export singleton instance
 export const devServerManager = new DevServerManager();
+
+/**
+ * Auto-detect framework from project files in a container
+ * Returns the detected framework name or 'unknown'
+ */
+export async function detectFrameworkFromContainer(containerId: string): Promise<string> {
+  const docker = new Docker();
+  const container = docker.getContainer(containerId);
+  
+  const execCommand = async (cmd: string): Promise<string> => {
+    try {
+      const exec = await container.exec({
+        Cmd: ['/bin/bash', '-c', cmd],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const stream = await exec.start({});
+      return new Promise((resolve) => {
+        let out = '';
+        stream.on('data', (chunk: Buffer) => { out += chunk.slice(8).toString(); });
+        stream.on('end', () => resolve(out.trim()));
+        stream.on('error', () => resolve(''));
+      });
+    } catch {
+      return '';
+    }
+  };
+  
+  // Check for package.json (Node.js projects)
+  const packageJson = await execCommand('cat /workspace/package.json 2>/dev/null');
+  if (packageJson) {
+    try {
+      const pkg = JSON.parse(packageJson);
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      
+      // Framework detection order matters - more specific first
+      if (deps['next']) return 'next';
+      if (deps['expo'] || deps['react-native']) return 'expo';
+      if (deps['nuxt']) return 'nuxt';
+      if (deps['@sveltejs/kit']) return 'sveltekit';
+      if (deps['svelte']) return 'svelte';
+      if (deps['@angular/core']) return 'angular';
+      if (deps['vue']) return 'vue';
+      if (deps['vite']) return 'vite';
+      if (deps['react']) return 'react';
+      if (deps['express'] || deps['fastify'] || deps['koa']) return 'node-server';
+      return 'node';
+    } catch {}
+  }
+  
+  // Check for Python projects
+  const requirements = await execCommand('cat /workspace/requirements.txt 2>/dev/null');
+  const pyproject = await execCommand('cat /workspace/pyproject.toml 2>/dev/null');
+  const pipfile = await execCommand('cat /workspace/Pipfile 2>/dev/null');
+  
+  if (requirements || pyproject || pipfile) {
+    const pythonDeps = (requirements + pyproject + pipfile).toLowerCase();
+    if (pythonDeps.includes('django')) return 'django';
+    if (pythonDeps.includes('flask')) return 'flask';
+    if (pythonDeps.includes('fastapi')) return 'fastapi';
+    if (pythonDeps.includes('streamlit')) return 'streamlit';
+    if (pythonDeps.includes('gradio')) return 'gradio';
+    return 'python';
+  }
+  
+  // Check for Rust projects
+  const cargoToml = await execCommand('cat /workspace/Cargo.toml 2>/dev/null');
+  if (cargoToml) {
+    if (cargoToml.includes('actix') || cargoToml.includes('rocket') || cargoToml.includes('axum')) {
+      return 'rust-web';
+    }
+    return 'rust';
+  }
+  
+  // Check for Go projects
+  const goMod = await execCommand('cat /workspace/go.mod 2>/dev/null');
+  if (goMod) {
+    if (goMod.includes('gin') || goMod.includes('echo') || goMod.includes('fiber')) {
+      return 'go-web';
+    }
+    return 'go';
+  }
+  
+  // Check for Java projects
+  const pomXml = await execCommand('cat /workspace/pom.xml 2>/dev/null');
+  const buildGradle = await execCommand('cat /workspace/build.gradle 2>/dev/null');
+  if (pomXml || buildGradle) {
+    const javaConfig = pomXml + buildGradle;
+    if (javaConfig.includes('spring-boot')) return 'java-spring';
+    return 'java';
+  }
+  
+  // Check for static HTML
+  const indexHtml = await execCommand('ls /workspace/index.html 2>/dev/null');
+  if (indexHtml) return 'static';
+  
+  return 'unknown';
+}
+
+/**
+ * Get the install command for a detected framework
+ */
+export function getInstallCommand(framework: string): string {
+  const commands: Record<string, string> = {
+    // Node.js - prefer bun for speed
+    'node': 'bun install 2>/dev/null || npm install',
+    'vite': 'bun install 2>/dev/null || npm install',
+    'next': 'bun install 2>/dev/null || npm install',
+    'react': 'bun install 2>/dev/null || npm install',
+    'vue': 'bun install 2>/dev/null || npm install',
+    'svelte': 'bun install 2>/dev/null || npm install',
+    'sveltekit': 'bun install 2>/dev/null || npm install',
+    'angular': 'npm install', // Angular has issues with bun
+    'nuxt': 'bun install 2>/dev/null || npm install',
+    'expo': 'bun install 2>/dev/null || npm install',
+    'node-server': 'bun install 2>/dev/null || npm install',
+    
+    // Python
+    'python': 'pip install -r requirements.txt 2>/dev/null || pip install -e . 2>/dev/null || echo "No deps"',
+    'flask': 'pip install -r requirements.txt 2>/dev/null || pip install flask',
+    'django': 'pip install -r requirements.txt 2>/dev/null || pip install django',
+    'fastapi': 'pip install -r requirements.txt 2>/dev/null || pip install fastapi uvicorn',
+    'streamlit': 'pip install -r requirements.txt 2>/dev/null || pip install streamlit',
+    'gradio': 'pip install -r requirements.txt 2>/dev/null || pip install gradio',
+    
+    // Rust
+    'rust': 'cargo build',
+    'rust-web': 'cargo build',
+    
+    // Go
+    'go': 'go mod download',
+    'go-web': 'go mod download',
+    
+    // Java
+    'java': 'mvn dependency:resolve 2>/dev/null || gradle dependencies 2>/dev/null || echo "No deps"',
+    'java-spring': 'mvn dependency:resolve 2>/dev/null || gradle dependencies 2>/dev/null || echo "No deps"',
+    
+    // Static - no install needed
+    'static': 'echo "Static site, no install needed"',
+  };
+  
+  return commands[framework] || commands['node'];
+}
+
+/**
+ * Get the dev server start command for a detected framework
+ */
+export function getDevCommand(framework: string): string {
+  const expoHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
+  
+  const commands: Record<string, string> = {
+    // Node.js frameworks
+    'node': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
+    'vite': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
+    'next': 'bun run dev 2>/dev/null || npm run dev',
+    'react': 'bun start 2>/dev/null || npm start',
+    'vue': 'bun run serve 2>/dev/null || npm run serve',
+    'svelte': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
+    'sveltekit': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
+    'angular': 'npm start -- --host 0.0.0.0',
+    'nuxt': 'bun run dev 2>/dev/null || npm run dev',
+    'expo': `REACT_NATIVE_PACKAGER_HOSTNAME=${expoHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --web --host 0.0.0.0 --port 8081`,
+    'node-server': 'bun run start 2>/dev/null || npm start || node index.js || node server.js',
+    
+    // Python frameworks
+    'python': 'python main.py 2>/dev/null || python app.py 2>/dev/null || python server.py',
+    'flask': 'flask run --host=0.0.0.0 --port=5173 2>/dev/null || python -m flask run --host=0.0.0.0 --port=5173',
+    'django': 'python manage.py runserver 0.0.0.0:5173',
+    'fastapi': 'uvicorn main:app --host 0.0.0.0 --port 5173 --reload 2>/dev/null || uvicorn app:app --host 0.0.0.0 --port 5173 --reload',
+    'streamlit': 'streamlit run app.py --server.address 0.0.0.0 --server.port 5173',
+    'gradio': 'python app.py',
+    
+    // Rust
+    'rust': 'cargo run',
+    'rust-web': 'cargo run',
+    
+    // Go
+    'go': 'go run .',
+    'go-web': 'go run .',
+    
+    // Java
+    'java': 'mvn exec:java 2>/dev/null || gradle run 2>/dev/null || java -jar target/*.jar',
+    'java-spring': 'mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=8080 2>/dev/null || gradle bootRun',
+    
+    // Static - use simple HTTP server
+    'static': 'npx serve -l 5173 2>/dev/null || python -m http.server 5173',
+  };
+  
+  return commands[framework] || commands['vite'];
+}
+
+/**
+ * Get expected ports for a framework
+ */
+export function getExpectedPorts(framework: string, basePorts: number[]): number[] {
+  // Some frameworks have specific default ports
+  const defaultPorts: Record<string, number[]> = {
+    'next': [3000],
+    'react': [3000],
+    'angular': [4200],
+    'expo': [8081, 19000, 19001],
+    'django': [5173, 8000],
+    'flask': [5173, 5000],
+    'fastapi': [5173, 8000],
+    'streamlit': [5173, 8501],
+    'java-spring': [8080],
+  };
+  
+  const frameworkPorts = defaultPorts[framework] || [];
+  return [...new Set([...basePorts, ...frameworkPorts])];
+}
