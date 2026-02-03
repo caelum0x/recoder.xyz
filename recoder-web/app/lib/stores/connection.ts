@@ -190,12 +190,8 @@ function checkAndNotify(service: string, status: ConnectionStatus, error?: strin
     return;
   }
 
-  // Show appropriate toast
-  if (status === 'reconnecting') {
-    showToast('info', `${service} reconnecting...`);
-    lastToastStatus = toastKey;
-    lastToastTime = now;
-  } else if (status === 'error' && error) {
+  // Show appropriate toast (skip reconnecting — it's noise, already visible in terminal/status bar)
+  if (status === 'error' && error) {
     showToast('error', `${service}: ${error}`);
     lastToastStatus = toastKey;
     lastToastTime = now;
