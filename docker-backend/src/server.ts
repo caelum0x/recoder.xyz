@@ -1364,7 +1364,19 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '50mb' }));
+// Tighter body-size limit for public API routes (2 MB vs 50 MB global)
+app.use('/api/v1', express.json({ limit: '2mb' }));
 app.use('/api/', apiLimiter);
+
+// Security headers (lightweight, no Helmet dependency)
+app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '0'); // modern browsers use CSP instead
+  res.removeHeader('X-Powered-By');
+  next();
+});
 
 // Add request ID and timing middleware for error tracking
 app.use(requestIdMiddleware);
