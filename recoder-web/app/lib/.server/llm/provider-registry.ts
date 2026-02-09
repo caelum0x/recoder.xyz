@@ -75,6 +75,20 @@ export interface StreamOptions {
   thinking?: Record<string, any>;
   /** Provider-specific reasoning options (e.g., OpenAI o1/o3 effort level) */
   reasoning?: Record<string, any>;
+  /** Provider-native tools (e.g., web search) injected by buildToolSet */
+  tools?: ProviderNativeTool[];
+}
+
+/**
+ * Provider-native tool definition.
+ * Each provider expects a different shape; the `raw` field carries the
+ * provider-specific JSON that gets merged into the API request body.
+ */
+export interface ProviderNativeTool {
+  /** Which provider this tool definition targets */
+  target: 'anthropic' | 'openai' | 'google';
+  /** Provider-specific tool object (merged into the request body's tools array) */
+  raw: Record<string, unknown>;
 }
 
 export interface Message {
@@ -798,6 +812,11 @@ class ProviderRegistry {
     options: StreamOptions,
     config: ProviderConfig
   ): Promise<ReadableStream<Uint8Array>> {
+    // Collect any OpenAI-targeted native tools (e.g., web_search_preview)
+    const nativeTools = (options.tools || [])
+      .filter(t => t.target === 'openai')
+      .map(t => t.raw);
+
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -819,6 +838,8 @@ class ProviderRegistry {
         stop: options.stop,
         // Reasoning options for o1/o3 models (best-effort)
         ...(options.reasoning ? { reasoning: options.reasoning } : {}),
+        // Provider-native tools (web search, etc.)
+        ...(nativeTools.length > 0 ? { tools: nativeTools } : {}),
       }),
     });
 
@@ -851,6 +872,11 @@ class ProviderRegistry {
         content: m.content
       }));
 
+    // Collect any Anthropic-targeted native tools (e.g., web_search_20250305)
+    const nativeTools = (options.tools || [])
+      .filter(t => t.target === 'anthropic')
+      .map(t => t.raw);
+
     const response = await fetch(`${config.baseUrl}/messages`, {
       method: 'POST',
       headers: {
@@ -867,6 +893,8 @@ class ProviderRegistry {
         max_tokens: options.max_tokens ?? 8000,
         // Thinking options for extended thinking models (best-effort)
         ...(options.thinking ? { thinking: options.thinking } : {}),
+        // Provider-native tools (web search, etc.)
+        ...(nativeTools.length > 0 ? { tools: nativeTools } : {}),
       }),
     });
 
@@ -899,6 +927,11 @@ class ProviderRegistry {
       parts: [{ text: m.content }]
     }));
 
+    // Collect any Google-targeted native tools (e.g., google_search_retrieval)
+    const nativeTools = (options.tools || [])
+      .filter(t => t.target === 'google')
+      .map(t => t.raw);
+
     const response = await fetch(
       `${config.baseUrl}/models/${model}:streamGenerateContent?key=${apiKey}`,
       {
@@ -918,6 +951,8 @@ class ProviderRegistry {
               ? { thinkingConfig: { thinkingBudget: options.thinking.budget_tokens } }
               : {}),
           },
+          // Provider-native tools (google_search_retrieval, etc.)
+          ...(nativeTools.length > 0 ? { tools: nativeTools } : {}),
         }),
       }
     );

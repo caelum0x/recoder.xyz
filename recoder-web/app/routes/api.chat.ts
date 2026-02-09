@@ -1,5 +1,22 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
+import { createDockerProxyHeaders, getDockerBackendUrl } from '~/lib/http/docker-server';
+import {
+  loadProjectConfigPromptFromDocker,
+  loadThemePromptFromDocker,
+  resolvePromptMentionsBestEffort,
+} from '~/lib/services/chat/docker-enrichment';
 import type { Messages } from '~/lib/types/chat';
+
+const DEBUG_CHAT = process.env.NODE_ENV !== 'production' && process.env.DEBUG_CHAT === 'true';
+
+function chatDebug(message: string, meta?: unknown) {
+  if (!DEBUG_CHAT) return;
+  if (typeof meta !== 'undefined') {
+    console.debug(`[chat] ${message}`, meta);
+    return;
+  }
+  console.debug(`[chat] ${message}`);
+}
 
 export async function action(args: ActionFunctionArgs) {
   // Dynamic imports for server-only modules
@@ -314,13 +331,15 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     const validation = validateChatMessages(requestBody.messages);
 
     if (!validation.valid) {
-      console.error('Message validation failed:', validation.errors);
+      console.error('Message validation failed');
+      chatDebug('validation errors', validation.errors);
       return createValidationErrorResponse(validation.errors);
     }
 
     messages = validation.sanitized as Messages;
   } catch (error) {
-    console.error('Failed to parse request:', error);
+    console.error('Failed to parse request');
+    chatDebug('parse request error', error instanceof Error ? error.message : String(error));
     throw new Response(JSON.stringify({ error: 'Invalid request format' }), {
       status: 400,
       statusText: 'Bad Request',
@@ -337,7 +356,8 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     : (lastUserMessage as any[]).map((c: any) => c.text || '').join('');
   const injectionCheck = detectInjectionPatterns(lastUserMessageStr);
   if (injectionCheck.risk === 'high') {
-    console.warn('[security] High-risk injection patterns detected:', injectionCheck.patterns);
+    console.warn('[security] High-risk injection patterns detected');
+    chatDebug('injection patterns', injectionCheck.patterns);
   }
 
   // Enterprise AI: Check for loops before processing
@@ -355,9 +375,10 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   }
 
   // Enterprise AI: Record chat session (non-blocking)
-  recordChatSession(`chat-${Date.now()}`, messages).catch(err => 
-    console.warn('Chat recording failed:', err)
-  );
+  recordChatSession(`chat-${Date.now()}`, messages).catch((err) => {
+    console.warn('Chat recording failed');
+    chatDebug('chat recording error', err instanceof Error ? err.message : String(err));
+  });
 
   // Enterprise AI: Try Google Cloud AI first (if available)
   const { generateWithCloudAI, initializeCloudAI } = await import('~/lib/.server/llm/cloud-ai-integration');
@@ -474,7 +495,7 @@ IMPORTANT:
     // Get code context from client (pre-loaded file contents for context awareness)
     const codeContext = requestBody.codeContext || '';
     if (codeContext) {
-      console.log(`   ✅ Code context loaded (${codeContext.length} chars)`);
+      chatDebug('code context loaded', { chars: codeContext.length });
     }
 
     // Get custom tools from request
@@ -492,7 +513,7 @@ IMPORTANT:
     // PERF: Parallelize independent async operations — MCP tools, prompts module, and API key module.
     // These three have no dependencies on each other. Saves 50-150ms from sequential imports.
     const db = (env as any).DB;
-    const [mcpToolsPrompt, promptsModule, apiKeyModule] = await Promise.all([
+    const [mcpToolsPrompt, promptsModule, apiKeyModule, modesModule] = await Promise.all([
       // Load MCP tools (only if DB is available - Cloudflare D1)
       db
         ? import('~/lib/.server/mcp/tools-loader').then(m => m.loadMCPTools(db)).catch(() => '')
@@ -501,6 +522,8 @@ IMPORTANT:
       import('~/lib/.server/llm/prompts'),
       // Import API key module
       import('~/lib/.server/llm/api-key'),
+      // Import mode/provider capability module
+      import('~/lib/modes/types'),
     ]);
 
     if (mcpToolsPrompt) {
@@ -559,27 +582,22 @@ IMPORTANT:
       return '';
     }
 
-    // Load .recoder/ project config (best-effort)
-    let projectConfigPrompt = '';
-    try {
-      const { getProjectConfigPrompt } = await import('~/lib/services/project-config');
-      const dockerUrl = env.DOCKER_URL || env.DOCKER_BACKEND_URL || 'http://localhost:3001';
-      const containerId = requestBody.containerId || requestBody.projectId;
-      if (containerId) {
-        projectConfigPrompt = await getProjectConfigPrompt(async (path) => {
-          try {
-            const resp = await fetch(`${dockerUrl}/api/files/read?path=${encodeURIComponent(path)}&containerId=${encodeURIComponent(containerId)}`);
-            if (resp.ok) {
-              const data: any = await resp.json();
-              return data.content || null;
-            }
-          } catch {}
-          return null;
-        });
-      }
-    } catch {}
+    const dockerUrl = getDockerBackendUrl(context);
+    const dockerHeaders = createDockerProxyHeaders(request);
 
-    const systemPrompt = baseSystemPrompt + chatModePrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt;
+    const projectConfigPrompt = await loadProjectConfigPromptFromDocker(
+      dockerUrl,
+      requestBody.containerId || requestBody.projectId,
+      dockerHeaders,
+    );
+
+    const themePrompt = await loadThemePromptFromDocker(dockerUrl, requestBody.projectId, dockerHeaders);
+
+    await resolvePromptMentionsBestEffort(messages, dockerUrl, dockerHeaders);
+
+    const { getWebToolCapabilityPrompt } = modesModule;
+    const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
+    const systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt;
 
     // Get API key (User's BYOK > Environment variable)
     const { getAPIKey } = apiKeyModule;
@@ -685,12 +703,17 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
       try {
         const projectId = requestBody.projectId;
 
+        // PERF: If the client already sent rich code context, skip the redundant
+        // server-side Docker fetch. The client-side ProjectContextCache already
+        // loaded and cached the project files.
+        const clientSentContext = !!codeContext && codeContext.length > 100;
+
         // PERF: Start edit-intent module import and project context loading in parallel.
         // Both are async I/O that can overlap. Saves 500-1000ms on edit requests with projectId.
         const [editIntentModule, loadedProjectCtx] = await Promise.all([
           import('~/lib/services/edit-intent'),
-          // Speculatively load project context — we may or may not need it depending on editIntent
-          projectId
+          // Speculatively load project context — skip if client already sent it
+          (projectId && !clientSentContext)
             ? import('~/lib/services/code-context')
                 .then(m => m.loadProjectContext(projectId))
                 .catch(() => null)
@@ -789,13 +812,15 @@ RULES:
                 });
               }
             } catch (ctxErr) {
-              console.warn('Failed to load focused context (non-critical):', ctxErr);
+              console.warn('Failed to load focused context (non-critical)');
+              chatDebug('focused context error', ctxErr instanceof Error ? ctxErr.message : String(ctxErr));
             }
           }
         }
       } catch (e) {
         // Best-effort: edit-intent is optional, don't fail the request
-        console.warn('Edit intent analysis failed (non-critical):', e);
+        console.warn('Edit intent analysis failed (non-critical)');
+        chatDebug('edit intent analysis error', e instanceof Error ? e.message : String(e));
       }
     }
 
@@ -843,7 +868,7 @@ RULES:
       const compaction = compactMessages(messages, selectedModel, systemPromptTokens);
 
       if (compaction.wasCompacted) {
-        console.log(
+        chatDebug(
           `[context-compaction] Compacted ${compaction.summarizedCount} messages: ` +
           `${compaction.originalTokens} -> ${compaction.compactedTokens} tokens`,
         );
@@ -851,7 +876,11 @@ RULES:
       }
     } catch (compactionError) {
       // Non-critical: compaction failure must never break the chat request
-      console.warn('[context-compaction] Compaction failed (non-critical):', compactionError);
+      console.warn('[context-compaction] Compaction failed (non-critical)');
+      chatDebug(
+        'context compaction error',
+        compactionError instanceof Error ? compactionError.message : String(compactionError),
+      );
     }
 
     // Route to the correct provider's streaming function using the unified provider registry
@@ -886,6 +915,17 @@ RULES:
         // Thinking budget is best-effort - if it fails, continue without it
       }
 
+      // Build provider-native tools (e.g., web search) when available
+      let nativeTools: import('~/lib/.server/llm/provider-registry').ProviderNativeTool[] = [];
+      try {
+        const { buildToolSet } = await import('~/lib/services/language-model-registry/tools/build-tool-set');
+        const { buildWebSearchTools } = await import('~/lib/.server/llm/web-tool-injector');
+        const toolSet = buildToolSet({ provider: normalizedProvider, model: modelToUse });
+        nativeTools = buildWebSearchTools(toolSet.webSearch);
+      } catch {
+        // Tool injection is best-effort — fall back to XML-based search
+      }
+
       const streamOptions = {
         model: modelToUse,
         temperature,
@@ -898,6 +938,8 @@ RULES:
         env: env as Record<string, string | undefined>,
         // Provider-specific thinking/reasoning options (merged into API request body)
         ...thinkingProviderOptions,
+        // Provider-native tools (web search, etc.) — empty array when unavailable
+        ...(nativeTools.length > 0 ? { tools: nativeTools } : {}),
       };
 
       // Use the unified provider registry for all supported providers
@@ -978,22 +1020,15 @@ RULES:
       },
     });
   } catch (error) {
-    console.error('Chat action error:', error);
-
-    // Log full error details for debugging
-    if (error instanceof Error) {
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
-
-    // Check if it's an API error with response body
-    if (error && typeof error === 'object' && 'responseBody' in error) {
-      console.error('API Response Body:', (error as any).responseBody);
-    }
-
     const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-    
+    console.error('Chat action error:', errorMessage);
+    if (DEBUG_CHAT && error instanceof Error) {
+      chatDebug('chat error details', {
+        name: error.name,
+        stack: error.stack,
+      });
+    }
+
     // Return user-friendly error as streamed text (so it shows in chat)
     const encoder = new TextEncoder();
     let userMessage = '❌ An error occurred while processing your request.';
