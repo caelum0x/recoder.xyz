@@ -1,0 +1,114 @@
+"use client";
+
+import clsx from "clsx/lite";
+import {
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+	useState,
+} from "react";
+
+export interface EditableTextRef {
+	triggerEdit: () => void;
+}
+
+interface EditableTextProps {
+	value?: string;
+	fallbackValue: string;
+	onChange?: (value?: string) => void;
+	size?: "medium" | "large";
+	ariaLabel?: string;
+	className?: string;
+	ref?: React.Ref<EditableTextRef>;
+}
+
+export function EditableText({
+	value,
+	fallbackValue,
+	onChange,
+	size = "medium",
+	ariaLabel,
+	className,
+	ref,
+}: EditableTextProps) {
+	const [edit, setEdit] = useState(false);
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (edit) {
+			inputRef.current?.select();
+			inputRef.current?.focus();
+		}
+	}, [edit]);
+
+	const updateValue = useCallback(() => {
+		if (!inputRef.current) {
+			return;
+		}
+		setEdit(false);
+		const currentValue =
+			inputRef.current.value.length === 0 ? undefined : inputRef.current.value;
+		if (fallbackValue === currentValue) {
+			return;
+		}
+		onChange?.(currentValue);
+		inputRef.current.value = currentValue ?? fallbackValue;
+	}, [onChange, fallbackValue]);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			triggerEdit: () => setEdit(true),
+		}),
+		[],
+	);
+
+	return (
+		<>
+			<input
+				type="text"
+				aria-label={ariaLabel}
+				className={clsx(
+					"w-full min-w-[300px] hidden data-[editing=true]:block",
+					"outline-none border border-[color-mix(in_srgb,var(--color-text-inverse,#fff)_20%,transparent)] focus:border-[color-mix(in_srgb,var(--color-text-inverse,#fff)_30%,transparent)]",
+					"rounded-[8px] bg-[color-mix(in_srgb,var(--color-text-inverse,#fff)_5%,transparent)]",
+					"!pt-[2px] !pr-[8px] !pb-[2px] !pl-[12px]",
+					"data-[size=medium]:text-[14px] data-[size=large]:text-[16px]",
+					!className && "text-inverse",
+					className,
+				)}
+				ref={inputRef}
+				data-editing={edit}
+				defaultValue={value ?? fallbackValue}
+				onBlur={() => updateValue()}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") {
+						e.preventDefault();
+						updateValue();
+					}
+				}}
+				data-size={size}
+			/>
+			<button
+				type="button"
+				aria-label={ariaLabel}
+				className={clsx(
+					"rounded-[8px] data-[editing=true]:hidden text-left",
+					"hover:bg-bg-900/20 group-hover:bg-bg-900/10",
+					"!pt-[2px] !pr-[8px] !pb-[2px] !pl-[12px]",
+					"data-[size=medium]:text-[14px] data-[size=large]:text-[16px]",
+					"cursor-default w-full overflow-hidden text-ellipsis whitespace-nowrap",
+					"font-medium",
+					!className && "text-inverse",
+					className,
+				)}
+				data-editing={edit}
+				onClick={() => setEdit(true)}
+				data-size={size}
+			>
+				{value ?? fallbackValue}
+			</button>
+		</>
+	);
+}

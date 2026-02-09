@@ -1,0 +1,1 @@
+This folder contains processes to be executed with trigger.dev. Trigger.dev defines processes at the granularity of "task", but Recoder Agency's essential elements also have "task", causing a name collision, so we use Trigger.dev by changing the name to "job".

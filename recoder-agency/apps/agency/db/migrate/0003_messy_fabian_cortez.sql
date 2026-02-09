@@ -1,0 +1,1 @@
+ALTER TABLE "agents" ALTER COLUMN "graphv2" SET DEFAULT '{"nodes":[],"connectors":[],"artifacts":[],"webSearches":[]}'::jsonb;

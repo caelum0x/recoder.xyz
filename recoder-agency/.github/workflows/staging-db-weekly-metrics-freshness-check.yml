@@ -1,0 +1,54 @@
+name: Staging DB Weekly Metrics Freshness Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"
+
+jobs:
+  check-weekly-metrics-freshness:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+      WEEKLY_METRICS_STALE_AFTER_DAYS: ${{ vars.WEEKLY_METRICS_STALE_AFTER_DAYS || '10' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Ensure staging database URL is configured
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "Missing secret: AGENCY_STAGING_DATABASE_URL"
+            exit 1
+          fi
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Print freshness report
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -v stale_days="$WEEKLY_METRICS_STALE_AFTER_DAYS" \
+            -f apps/agency/db/scripts/check_weekly_metrics_freshness.sql
+
+      - name: Fail when weekly metrics are stale
+        run: |
+          STATE=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            WITH cfg AS (
+              SELECT ${WEEKLY_METRICS_STALE_AFTER_DAYS}::int AS stale_days
+            ),
+            latest AS (
+              SELECT max(week_start) AS max_week_start
+              FROM public.weekly_delivery_metrics
+            )
+            SELECT CASE
+              WHEN latest.max_week_start IS NULL THEN 'no_data'
+              WHEN (current_date - latest.max_week_start::date) > cfg.stale_days THEN 'stale'
+              ELSE 'fresh'
+            END
+            FROM latest, cfg;
+          ")
+          echo "Freshness state: ${STATE}"
+          if [ "${STATE}" = "stale" ]; then
+            echo "weekly_delivery_metrics freshness is stale"
+            exit 1
+          fi

@@ -1,0 +1,178 @@
+{
+	"id": "wrks-tdXu6C15PBvpYrqh",
+	"name": "/today-news",
+	"schemaVersion": "20250221",
+	"nodes": [
+		{
+			"id": "nd-Q68VP2EDCXck0DZg",
+			"type": "operation",
+			"inputs": [
+				{
+					"id": "inp-Uav8K6sraVyiXlEv",
+					"label": "Input",
+					"accessor": "inp-Uav8K6sraVyiXlEv"
+				}
+			],
+			"outputs": [
+				{
+					"id": "otp-LIm3sLCQPqNcvWx4",
+					"label": "Output",
+					"accessor": "generated-text"
+				},
+				{
+					"id": "otp-U3Rqj2xdd9VJW0BK",
+					"label": "Source",
+					"accessor": "source"
+				}
+			],
+			"content": {
+				"type": "textGeneration",
+				"llm": {
+					"provider": "google",
+					"id": "gemini-2.5-flash-preview-05-20",
+					"configurations": {
+						"temperature": 0.7,
+						"topP": 1,
+						"searchGrounding": true
+					}
+				},
+				"prompt": "hello"
+			}
+		},
+		{
+			"id": "nd-9erM0USHKLZVTMsL",
+			"name": "Create Issue Comment",
+			"type": "operation",
+			"inputs": [
+				{
+					"id": "inp-zFs2DvWJxsjmnb73",
+					"label": "issueNumber",
+					"accessor": "issueNumber",
+					"isRequired": true
+				},
+				{
+					"id": "inp-rb16pSPDATd9NQTr",
+					"label": "body",
+					"accessor": "body",
+					"isRequired": true
+				}
+			],
+			"outputs": [
+				{
+					"id": "otp-eaNrDYzvCd0PlJmb",
+					"label": "output",
+					"accessor": "action-result"
+				}
+			],
+			"content": {
+				"type": "action",
+				"command": {
+					"provider": "github",
+					"state": {
+						"status": "configured",
+						"commandId": "github.create.issueComment",
+						"installationId": 65591132,
+						"repositoryNodeId": "R_kgDONoS6Cw"
+					}
+				}
+			}
+		},
+		{
+			"id": "nd-Z6YHBDO456UNY6N4",
+			"name": "On Issue Comment Created",
+			"type": "operation",
+			"inputs": [],
+			"outputs": [
+				{ "id": "otp-tm2CMQF2rB31TNzP", "label": "body", "accessor": "body" },
+				{
+					"id": "otp-BgMmkuUc58PRCKtz",
+					"label": "issueNumber",
+					"accessor": "issueNumber"
+				},
+				{
+					"id": "otp-dlip1srYIQjorxZu",
+					"label": "issueTitle",
+					"accessor": "issueTitle"
+				},
+				{
+					"id": "otp-MpgM6AAbSWH9Wc5e",
+					"label": "issueBody",
+					"accessor": "issueBody"
+				}
+			],
+			"content": {
+				"type": "trigger",
+				"provider": "github",
+				"state": {
+					"status": "configured",
+					"flowTriggerId": "fltg-UQVOzrDSwk13MTSG"
+				}
+			}
+		}
+	],
+	"connections": [
+		{
+			"id": "cnnc-4ZtPypOts5zUOp5E",
+			"outputNode": {
+				"id": "nd-Q68VP2EDCXck0DZg",
+				"type": "operation",
+				"content": { "type": "textGeneration" }
+			},
+			"outputId": "otp-LIm3sLCQPqNcvWx4",
+			"inputNode": {
+				"id": "nd-9erM0USHKLZVTMsL",
+				"type": "operation",
+				"content": { "type": "action" }
+			},
+			"inputId": "inp-rb16pSPDATd9NQTr"
+		},
+		{
+			"id": "cnnc-lWrL2aNIqywaoTTb",
+			"outputNode": {
+				"id": "nd-Z6YHBDO456UNY6N4",
+				"type": "operation",
+				"content": { "type": "trigger" }
+			},
+			"outputId": "otp-tm2CMQF2rB31TNzP",
+			"inputNode": {
+				"id": "nd-Q68VP2EDCXck0DZg",
+				"type": "operation",
+				"content": { "type": "textGeneration" }
+			},
+			"inputId": "inp-Uav8K6sraVyiXlEv"
+		},
+		{
+			"id": "cnnc-2ZaaHTDvkMyegOIQ",
+			"outputNode": {
+				"id": "nd-Z6YHBDO456UNY6N4",
+				"type": "operation",
+				"content": { "type": "trigger" }
+			},
+			"outputId": "otp-BgMmkuUc58PRCKtz",
+			"inputNode": {
+				"id": "nd-9erM0USHKLZVTMsL",
+				"type": "operation",
+				"content": { "type": "action" }
+			},
+			"inputId": "inp-zFs2DvWJxsjmnb73"
+		}
+	],
+	"ui": {
+		"nodeState": {
+			"nd-Q68VP2EDCXck0DZg": {
+				"position": { "x": 572, "y": 268 },
+				"selected": true,
+				"tab": "prompt"
+			},
+			"nd-9erM0USHKLZVTMsL": {
+				"position": { "x": 992, "y": 455 },
+				"selected": false
+			},
+			"nd-Z6YHBDO456UNY6N4": {
+				"position": { "x": 122, "y": 237 },
+				"selected": false
+			}
+		},
+		"viewport": { "x": -38, "y": 0, "zoom": 1 }
+	}
+}

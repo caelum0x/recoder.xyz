@@ -1,0 +1,112 @@
+name: License Compliance
+
+# ## Summary
+#
+# This workflow runs the license_finder CLI only when it detects an update to files related to the License Finder.
+# It also updates $LICENSE_REPORT and git commit.
+#
+# When triggered by a PR from a forked repository, $LICENSE_REPORT is not updated.
+# When triggered by a push to the default branch, $LICENSE_REPORT is not updated either.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  license_finder:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    timeout-minutes: 10
+    env:
+      LICENSE_REPORT: docs/packages-license.md
+    permissions:
+      contents: write
+    steps:
+      - name: Check if running in a fork
+        id: fork-check
+        run: echo "is_fork=${{ github.event.pull_request.head.repo.fork }}" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub App Token for non-fork PRs
+        uses: actions/create-github-app-token@v2
+        if: steps.fork-check.outputs.is_fork != 'true'
+        id: app-token
+        with:
+          app-id: ${{ vars.LICENSE_CI_TRIGGER_APP_ID }}
+          private-key: ${{ secrets.LICENSE_CI_TRIGGER_APP_PRIVATE_KEY }}
+      - name: Checkout code for non-fork PRs
+        if: steps.fork-check.outputs.is_fork != 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Checkout code for forked PRs
+        if: steps.fork-check.outputs.is_fork == 'true'
+        uses: actions/checkout@v6
+      # To make the success of this job a prerequisite for merging into the main branch,
+      # set a filter here instead of on: to determine whether or not to proceed to the next step.
+      - name: Cache dependency files
+        uses: actions/cache@v5
+        id: cache
+        with:
+          path: |
+            .github/workflows/license.yml
+            pnpm-lock.yaml
+            config/dependency_decisions.yml
+            config/license_finder.yml
+            package.json
+          key: license-${{ runner.os }}-${{ hashFiles('.github/workflows/license.yml', 'pnpm-lock.yaml', 'config/dependency_decisions.yml', 'config/license_finder.yml', 'package.json') }}
+      - name: Determine if files changed
+        id: determine
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" = 'true' ]; then
+            echo "files_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "files_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+        if: steps.determine.outputs.files_changed == 'true'
+      - run: pnpm install
+        if: steps.determine.outputs.files_changed == 'true'
+      - uses: ruby/setup-ruby@4c24fa5ec04b2e79eb40571b1cee2a0d2b705771 # v1.278.0
+        if: steps.determine.outputs.files_changed == 'true'
+        with:
+          ruby-version: '3.3'
+      - name: Install License Finder
+        if: steps.determine.outputs.files_changed == 'true'
+        run: gem install -N license_finder
+      - name: Run License Finder
+        if: steps.determine.outputs.files_changed == 'true'
+        run: license_finder
+
+      # Commit the License Finder report as docs/packages-license.md
+      - name: Generate license report
+        if: |
+          steps.fork-check.outputs.is_fork != 'true'
+          && steps.determine.outputs.files_changed == 'true'
+          && github.ref_name != github.event.repository.default_branch
+        run: |
+          mkdir -p "$(dirname "$LICENSE_REPORT")"
+          license_finder report --format=markdown | tail -n +2 > "$LICENSE_REPORT"
+          # Delete the timestamp line because there will be a difference even if there is no change in licenses
+          sed -e '/^As of /d' -i "$LICENSE_REPORT"
+      - name: Commit license report and push
+        if: |
+          steps.fork-check.outputs.is_fork != 'true'
+          && steps.determine.outputs.files_changed == 'true'
+          && github.ref_name != github.event.repository.default_branch
+        run: |
+          if git diff --quiet; then
+            echo 'No changes to commit'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "$LICENSE_REPORT"
+          git commit -m "Update $LICENSE_REPORT"
+          git push origin "$BRANCH_NAME"
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
