@@ -22,11 +22,11 @@ jobs:
           node-version: 24.x
       - run: pnpm install
       - name: Build SDK
-        run: pnpm build-sdk
+        run: pnpm run build-sdk
       - name: Type check
-        run: pnpm check-types
+        run: pnpm run check-types
       - name: Test
-        run: pnpm test
+        run: pnpm run test
 
   db-guardrails:
     runs-on: ubuntu-latest
@@ -78,8 +78,8 @@ jobs:
           node-version: 24.x
       - run: pnpm install
       - name: Install Playwright browsers (chromium only)
-        run: pnpm -C apps/agency exec playwright install --with-deps chromium
+        run: npx -y playwright install --with-deps chromium
       - name: Run smoke tests
-        run: pnpm -C apps/agency exec playwright test --project=chromium --grep @smoke
+        run: pnpm run --filter agency test:e2e -- --project=chromium --grep @smoke
         env:
           CI: true
