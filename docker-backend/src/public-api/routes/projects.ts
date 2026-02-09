@@ -466,12 +466,32 @@ function computePromptTaskBackoffDelayMs(attempt: number): number {
   return Math.min(PROMPT_TASK_BACKOFF_MAX_MS, exponential + jitter);
 }
 
+let zombieLockCheckCounter = 0;
+const ZOMBIE_LOCK_CHECK_INTERVAL = 30; // every 30 poll cycles (~30s)
+const ZOMBIE_LOCK_MAX_AGE_MS = PROMPT_TASK_QUEUE_LEASE_MS * 2;
+
 function startPromptTaskQueueWorker(): void {
   if (promptTaskQueueTimer) {
     return;
   }
   promptTaskQueueTimer = setInterval(() => {
     void drainPromptTaskQueue();
+    // Periodically release zombie locks
+    zombieLockCheckCounter += 1;
+    if (zombieLockCheckCounter >= ZOMBIE_LOCK_CHECK_INTERVAL) {
+      zombieLockCheckCounter = 0;
+      void promptTaskQueue.releaseZombieLocks(Date.now(), ZOMBIE_LOCK_MAX_AGE_MS).then((count) => {
+        if (count > 0) {
+          console.warn(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            type: 'ZOMBIE_LOCKS_RELEASED',
+            count,
+            maxAgeMs: ZOMBIE_LOCK_MAX_AGE_MS,
+          }));
+        }
+      }).catch(() => {});
+    }
   }, Math.max(250, PROMPT_TASK_QUEUE_POLL_MS));
   void drainPromptTaskQueue();
 }
@@ -518,7 +538,10 @@ async function processClaimedPromptTask(item: ClaimedPromptTask): Promise<void> 
       saveProjectsStore();
       publishTaskSnapshot(task);
       publishTaskTerminal(task);
-      await promptTaskQueue.ack(item.taskId);
+      await promptTaskQueue.deadLetter(item.taskId, {
+        attempts: nextAttempt,
+        lastError: result.error ?? null,
+      });
       return;
     }
 
