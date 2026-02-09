@@ -1,0 +1,4 @@
+---
+decisions_file: 'config/dependency_decisions.yml'
+enabled_package_managers:
+  - pnpm

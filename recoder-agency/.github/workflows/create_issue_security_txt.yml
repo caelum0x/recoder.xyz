@@ -1,0 +1,27 @@
+name: Create an issue to remind updating of security.txt
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 1 6,12 *" # Every year on 6/1 and 12/1 at 9:00am JST
+
+jobs:
+  get_date:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Get this month
+        id: get_this_month
+        run: |
+          echo "this_month=$(date +%Y/%m)" >> "$GITHUB_OUTPUT"
+    outputs:
+      this_month: ${{ steps.get_this_month.outputs.this_month }}
+  create_issue:
+    needs: get_date
+    uses: route06/actions/.github/workflows/create_gh_issue.yml@v2
+    permissions:
+      contents: read
+      issues: write
+    with:
+      title: "[Action Required] Update security.txt - ${{ needs.get_date.outputs.this_month }} Maintenance"
+      description_template_path: .github/workflows/templates/create_issue_security_txt.md

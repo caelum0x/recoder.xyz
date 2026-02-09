@@ -1,0 +1,307 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+@import "./styles/semantic.css";
+
+@theme {
+	/* v2 theme */
+
+	/* border */
+	--color-border: rgba(255, 255, 255, 0.1);
+	--color-light-border: rgba(255, 255, 255, 0.15);
+	--color-dark-border: rgba(0, 0, 0, 0.25);
+	--color-border-variant: #363c46;
+	--color-border-focused: #47679e;
+	--color-border-selected: #293b5b;
+	--color-border-transparent: #000000;
+	--color-border-disabled: #414754;
+
+	/* surface */
+	--color-elevated-surface-background: #2f343e;
+	--color-surface-background: #2f343e;
+	/* v4 utility alias */
+	--color-surface: var(--color-surface-background);
+	--color-background: #00020b;
+
+	/* element */
+	--color-element-background: #2e343e;
+	--color-element-hover: #363c46;
+	--color-element-active: #454a56;
+	--color-element-selected: #454a56;
+	--color-element-disabled: #2e343e;
+
+	/* tab */
+	--color-tabbar-background: #2f343e;
+	--color-tab-inactive-background: #2f343e;
+	--color-tab-active-background: #282c33;
+
+	/* text */
+	--color-text: #f7f9fd;
+	--color-text-inverse: #ffffff;
+	--color-text-muted: #a9afbc;
+	--color-text-placeholder: #878a98;
+	--color-text-disabled: #878a98;
+	--color-text-accent: #74ade8;
+	/* secondary / link-muted */
+	--color-link-muted: #505d7b;
+	/* Link accent (Vector Store link blue) */
+	--color-link-accent: #1663f3;
+	--color-link-accent-hover: #0f4cd1;
+	/* global accent (water blue) */
+	--color-accent: var(--color-primary-100, #0087f6);
+	--color-accent-muted: color-mix(in srgb, var(--color-accent) 60%, transparent);
+	--color-accent-foreground: var(--color-background, #00020b);
+	/* blue palette */
+	--color-blue-light: #b8e8f4;
+	--color-blue-pale: #c3dcf8;
+	--color-blue-muted: #839dc3;
+	--color-text-nav-active: #b5c0c9;
+	--color-text-nav-inactive: #515d7b;
+	/* derived thin levels (for white/80, white/60 equivalents) */
+	--color-text-80: color-mix(in srgb, var(--color-text), transparent 20%);
+	--color-text-60: color-mix(in srgb, var(--color-text), transparent 40%);
+	/* tabs */
+	--color-tabs-inactive-text: hsl(222, 21%, 40%);
+
+	/* layout */
+	--height-header: 50px;
+	--spacing-page-horizontal: 24px;
+	--width-logo: 70px;
+
+	/* interactive */
+	--color-icon-hover: #6b8ff0;
+	--color-destructive-hover-bg: rgba(255, 61, 113, 0.1);
+	/* focused outline color */
+	--color-focused: var(--color-info-500);
+
+	/* panel */
+	--color-panel-background: #2f343e;
+
+	/* stage */
+	--color-stage-background: #030610;
+	--color-stage-form-background: #101520;
+	--color-stage-sidebar-text: #7084ac;
+	--color-stage-sidebar-text-hover: #f7f9fd;
+	--color-stage-accent: #6b8ff0;
+	/* radial overlay for stage canvases (grid background overlay) */
+	--stage-radial-overlay: radial-gradient(
+		45% 45% at 50% 50%,
+		rgba(25, 35, 52, 0.3),
+		rgba(12, 18, 30, 0.8)
+	);
+
+	/* auth */
+	--color-auth-background: hsl(234, 91%, 5%);
+	--color-auth-ambient-light: hsl(218, 58%, 21%);
+	--color-auth-logo-watermark: hsl(207, 19%, 77%);
+	--color-auth-text-dark: hsl(0, 0%, 0%);
+	--color-auth-bg-dark: hsl(0, 0%, 0%);
+	/* v4 utility aliases for auth (used only on auth pages) */
+	--color-auth: hsl(234, 91%, 5%);
+	--color-auth-ambient: hsl(218, 58%, 21%);
+	--color-auth-watermark: hsl(207, 19%, 77%);
+	--color-auth-dark: hsl(0, 0%, 0%);
+	/* inverse for inputs like bg-inverse/10 */
+	--color-inverse: #ffffff;
+	--shadow-stage-form:
+		0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.1),
+		0 0 20px rgba(59, 130, 246, 0.15), 0 0 40px rgba(59, 130, 246, 0.1),
+		inset 0 -1px 0 rgba(59, 130, 246, 0.2);
+
+	/* editor */
+	--color-editor-foreground: #acb2be;
+	--color-editor-background: #00020b;
+	--color-editor-gutter-background: #282c33;
+	--color-editor-subheader-background: #2f343e;
+	--color-editor-active-line-background: #2f343e;
+	--color-editor-highlighted-line-background: #2f343e;
+	--color-editor-line-number: #4e5a5f;
+	--color-editor-active-line-number: #d0d4da;
+	--color-editor-hover-line-number: #acb0b4;
+	--color-editor-invisible: #878a98;
+	--color-editor-wrap-guide: #c8ccd4;
+	--color-editor-active-wrap-guide: #c8ccd4;
+	--color-editor-document-highlight-read-background: #74ade8;
+	--color-editor-document-highlight-write-background: #555a63;
+
+	/* ghost */
+	--color-ghost-element-background: #000000;
+	--color-ghost-element-hover: rgba(80, 93, 123, 0.2);
+	--color-ghost-element-active: #454a56;
+	--color-ghost-element-selected: #454a56;
+	--color-ghost-element-disabled: #2e343e;
+
+	/* status */
+	--color-conflict: #dec184;
+	--color-created: #a1c181;
+	--color-deleted: #ff5a5a;
+	--color-error: #ff3d71;
+	--color-hidden: #878a98;
+	--color-hint: #788ca6;
+	--color-ignored: #878a98;
+	--color-info: #367bfd;
+	--color-modified: #dec184;
+	--color-predictive: #5a6a87;
+	--color-renamed: #74ade8;
+	--color-success: #39ff7f;
+	--color-unreachable: #a9afbc;
+	--color-warning: #ffe551;
+
+	/* borders */
+	/* unify muted to main border unless overridden */
+	--color-border-muted: var(--color-border);
+
+	/* chat bubbles */
+	--color-chat-bubble-accent-bg: rgba(107, 143, 240, 0.2);
+	--color-chat-bubble-accent-border: rgba(107, 143, 240, 0.8);
+	--color-chat-bubble-user-bg: #4a6fd8;
+
+	/* RGB values for transparency */
+	--color-error-rgb: 255, 61, 113;
+	--color-success-rgb: 57, 255, 127;
+	--color-warning-rgb: 255, 229, 81;
+	--color-info-rgb: 54, 123, 253;
+	--color-ignored-rgb: 135, 138, 152;
+
+	/* glass common */
+	/* unified overlay (scrim) color for dialogs */
+	--color-dialog-overlay: rgba(0, 0, 0, 0.5);
+	--glass-highlight-bg: linear-gradient(
+		to right,
+		transparent,
+		rgba(255, 255, 255, 0.4),
+		transparent
+	);
+	--glass-bg: linear-gradient(
+		135deg,
+		rgba(150, 150, 150, 0) 0%,
+		rgba(60, 90, 160, 0) 100%
+	);
+	/* auth-specific glass background to stabilize across envs */
+	--auth-glass-bg: linear-gradient(
+		135deg,
+		rgba(150, 150, 150, 0.01) 0%,
+		rgba(60, 90, 160, 0.03) 100%
+	);
+	/* stroke gradient for glass borders */
+	--glass-stroke-gradient: linear-gradient(
+		180deg,
+		rgba(255, 255, 255, 0.25) 0%,
+		rgba(255, 255, 255, 0.06) 100%
+	);
+
+	/* glass button */
+	--shadow-glass:
+		0 8px 20px rgba(107, 143, 240, 0.2),
+		0 3px 10px rgba(107, 143, 240, 0.15),
+		inset 0 1px 0 rgba(255, 255, 255, 0.25),
+		inset 0 -1px 0 rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.08);
+	--color-glass-border: var(--color-white);
+	--color-glass-highlight: var(--color-white);
+
+	--glass-button-bg: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.15) 0%,
+		rgba(107, 143, 240, 0.1) 50%,
+		rgba(107, 143, 240, 0.2) 100%
+	);
+	--glass-button-bg-hover: linear-gradient(
+		to top,
+		transparent,
+		rgba(255, 255, 255, 0.1)
+	);
+
+	/* solid button */
+	--solid-button-bg: linear-gradient(180deg, #202530 0%, #12151f 100%);
+	--color-button-solid-border: rgba(0, 0, 0, 0.7);
+	--solid-button-shadow:
+		inset 0 1px 1px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(5, 10, 20, 0.4), 0
+		1px 2px rgba(0, 0, 0, 0.3);
+
+	/* outline button */
+	--shadow-outline-button:
+		0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 -1px 0 rgba(0, 0, 0, 0.2) inset,
+		0 0 0 1px rgba(255, 255, 255, 0.08);
+	--color-outline-button-bg: var(--color-black);
+}
+
+@layer base {
+	/* Normalize autofill colors across environments (dark theme) */
+	body {
+		background-color: var(--color-background);
+		color: var(--color-text);
+	}
+	input:-webkit-autofill,
+	input:-webkit-autofill:hover,
+	input:-webkit-autofill:focus {
+		-webkit-text-fill-color: var(--color-text);
+		box-shadow: 0 0 0px 1000px var(--color-editor-background) inset;
+		transition: background-color 9999s ease-out 0s;
+	}
+}
+
+@layer components {
+	/* Shared glow for auth titles based on primary token */
+	.auth-title-glow {
+		text-shadow: 0 0 20px var(--color-primary-100);
+	}
+
+	/* Thin gradient stroke border for glass surfaces (used by auth container) */
+	.auth-gradient-border {
+		position: absolute;
+		inset: 0;
+		border-radius: 1rem; /* matches rounded-2xl */
+		pointer-events: none;
+		background: var(--glass-stroke-gradient);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask-composite: xor;
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		padding: 1px;
+	}
+
+	.stage-running-icon {
+		box-shadow: 0 0 22px rgba(0, 135, 246, 0.8);
+		animation: stage-running-icon-pulse 2.2s ease-in-out infinite;
+	}
+}
+
+@keyframes stage-running-icon-pulse {
+	0% {
+		transform: scale(1);
+		box-shadow: 0 0 18px rgba(0, 135, 246, 0.7);
+	}
+	50% {
+		transform: scale(1.03);
+		box-shadow: 0 0 26px rgba(0, 135, 246, 0.95);
+	}
+	100% {
+		transform: scale(1);
+		box-shadow: 0 0 18px rgba(0, 135, 246, 0.7);
+	}
+}
+
+@keyframes ui-select-content-show {
+	0% {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes ui-select-content-hide {
+	0% {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	100% {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}

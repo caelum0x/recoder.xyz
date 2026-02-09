@@ -1,0 +1,47 @@
+{
+	"name": "@giselles-ai/github-tool",
+	"version": "0.0.0",
+	"private": true,
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsup",
+		"clean": "rm -rf dist",
+		"check-types": "tsc --noEmit",
+		"update-schema": "gql-tada generate schema https://api.github.com/graphql --header \"Authorization: Bearer ${GITHUB_TOKEN}\"",
+		"generate-output": "gql-tada generate-output",
+		"format": "biome check --write .",
+		"test": "vitest run"
+	},
+	"exports": {
+		"./package.json": "./package.json",
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"devDependencies": {
+		"@giselles-ai/tsconfig": "workspace:*",
+		"@octokit/openapi-types": "catalog:",
+		"@types/node": "catalog:",
+		"tsup": "catalog:",
+		"vitest": "catalog:"
+	},
+	"dependencies": {
+		"@giselles-ai/rag": "workspace:*",
+		"@octokit/auth-app": "catalog:",
+		"@octokit/core": "catalog:",
+		"@octokit/request-error": "catalog:",
+		"@octokit/webhooks": "catalog:",
+		"@urql/core": "catalog:",
+		"ai": "catalog:",
+		"gql.tada": "catalog:",
+		"tar": "catalog:",
+		"urql": "catalog:"
+	},
+	"peerDependencies": {
+		"zod": "catalog:"
+	}
+}

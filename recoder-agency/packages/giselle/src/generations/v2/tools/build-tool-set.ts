@@ -1,0 +1,188 @@
+import { anthropic } from "@ai-sdk/anthropic";
+import { google } from "@ai-sdk/google";
+import { openai } from "@ai-sdk/openai";
+import { octokit } from "@giselles-ai/github-tool";
+import { getLanguageModelTool } from "@giselles-ai/language-model-registry";
+import type { ContentGenerationContent } from "@giselles-ai/protocol";
+import { SecretId } from "@giselles-ai/protocol";
+import type { Tool, ToolSet } from "ai";
+import z from "zod/v4";
+import { decryptSecret } from "../../../secrets";
+import type { GiselleContext } from "../../../types";
+import { createGitHubTools } from "./github";
+import { createPostgresTool } from "./postgres";
+
+export async function buildToolSet({
+	context,
+	generationId,
+	nodeId,
+	tools,
+}: {
+	context: GiselleContext;
+	generationId: string;
+	nodeId: string;
+	tools: ContentGenerationContent["tools"];
+}): Promise<{
+	toolSet: ToolSet;
+	cleanupFunctions: Array<() => void | Promise<void>>;
+}> {
+	const toolSet: ToolSet = {};
+	const cleanupFunctions: Array<() => void | Promise<void>> = [];
+	for (const tool of tools) {
+		const languageModelTool = getLanguageModelTool(tool.name);
+		switch (languageModelTool.name) {
+			case "anthropic-web-search":
+				{
+					const configurationOptionSchema = z.object({
+						allowedDomains:
+							languageModelTool.configurationOptions.allowedDomains.schema,
+						blockedDomains:
+							languageModelTool.configurationOptions.blockedDomains.schema,
+						maxUses: languageModelTool.configurationOptions.maxUses.schema,
+					});
+					const result = configurationOptionSchema.safeParse(
+						tool.configuration,
+					);
+					if (!result.success) {
+						context.logger.warn(
+							`${generationId}, ${nodeId}, anthropic-web-search tool configuration is invalid: ${result.error.message}`,
+						);
+						continue;
+					}
+					const anthropicWebSearchConfiguration = result.data;
+					toolSet.web_search = anthropic.tools.webSearch_20250305({
+						maxUses: anthropicWebSearchConfiguration.maxUses,
+						allowedDomains: anthropicWebSearchConfiguration.allowedDomains,
+						blockedDomains: anthropicWebSearchConfiguration.blockedDomains,
+					});
+				}
+				break;
+			case "github-api": {
+				const unsafeSecretId =
+					tool.configuration[
+						languageModelTool.configurationOptions.secretId.name
+					];
+				const result = SecretId.safeParse(unsafeSecretId);
+				if (result.error) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, github-api tool secret id is undefined`,
+					);
+					continue;
+				}
+				const unsafeToken = await decryptSecret({
+					context,
+					secretId: result.data,
+				});
+				if (unsafeToken === undefined) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, github-api tool secret token is undefined`,
+					);
+					continue;
+				}
+				const token = unsafeToken;
+				const useTools =
+					tool.configuration[
+						languageModelTool.configurationOptions.useTools.name
+					];
+				if (!Array.isArray(useTools)) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, github-api tool use tools is not an array`,
+					);
+					continue;
+				}
+
+				const app = octokit({
+					strategy: "personal-access-token",
+					personalAccessToken: token,
+				});
+
+				const githubTools = createGitHubTools({
+					octokit: app,
+					toolDefs: languageModelTool.tools,
+					useTools,
+					context,
+				});
+				Object.assign(toolSet, githubTools);
+				break;
+			}
+			case "google-web-search":
+				// Cast needed: googleSearch returns Tool<{}, any> but ToolSet expects Tool<any, any>.
+				// This is a type mismatch in AI SDK where {} is not assignable to the ToolSet union type.
+				toolSet.google_search = google.tools.googleSearch({}) as Tool<
+					// biome-ignore lint/suspicious/noExplicitAny: AI SDK type compatibility workaround
+					any,
+					// biome-ignore lint/suspicious/noExplicitAny: AI SDK type compatibility workaround
+					any
+				>;
+				break;
+			case "openai-web-search": {
+				const configurationOptionSchema = z.object({
+					allowedDomains:
+						languageModelTool.configurationOptions.allowedDomains.schema,
+				});
+				const result = configurationOptionSchema.safeParse(tool.configuration);
+				if (!result.success) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, openai-web-search tool configuration is invalid: ${result.error.message}`,
+					);
+					continue;
+				}
+				toolSet.web_search = openai.tools.webSearch(
+					result.data.allowedDomains
+						? { filters: { allowedDomains: result.data.allowedDomains } }
+						: {},
+				);
+				break;
+			}
+			case "postgres": {
+				const unsafeSecretId =
+					tool.configuration[
+						languageModelTool.configurationOptions.secretId.name
+					];
+				const result = SecretId.safeParse(unsafeSecretId);
+				if (result.error) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, postgres tool secret id is undefined`,
+					);
+					continue;
+				}
+				const unsafeToken = await decryptSecret({
+					context,
+					secretId: result.data,
+				});
+				if (unsafeToken === undefined) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, postgres tool secret token is undefined`,
+					);
+					continue;
+				}
+				const connectionString = unsafeToken;
+				const useTools =
+					tool.configuration[
+						languageModelTool.configurationOptions.useTools.name
+					];
+				if (!Array.isArray(useTools)) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, postgres tool use tools is not an array`,
+					);
+					continue;
+				}
+				const postgresTools = createPostgresTool({
+					connectionString,
+					useTools,
+					toolDefs: languageModelTool.tools,
+					context,
+				});
+
+				Object.assign(toolSet, postgresTools.toolSet);
+				cleanupFunctions.push(postgresTools.cleanup);
+				break;
+			}
+			default: {
+				const _exhaustiveCheck: never = languageModelTool;
+				throw new Error(`Unknown tool: ${_exhaustiveCheck}`);
+			}
+		}
+	}
+	return { toolSet, cleanupFunctions };
+}

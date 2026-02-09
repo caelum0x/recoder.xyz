@@ -1,0 +1,239 @@
+@import "../../ui/style.css";
+@source "../node_modules/streamdown/dist/*.js";
+
+.mask-fill {
+	-webkit-mask-image: linear-gradient(#fff 0 0), linear-gradient(#fff 0 0);
+	-webkit-mask-clip: padding-box, border-box;
+	-webkit-mask-composite: destination-out;
+}
+
+.giselle-workflow-editor.react-flow {
+	background-color: transparent;
+}
+
+.giselle-workflow-editor-v3 .react-flow__pane {
+	border: 0.5px solid rgba(235, 235, 235, 0.15);
+	box-shadow: inset 0 0 40px rgba(200, 200, 200, 0.15);
+}
+
+.giselle-workflow-editor .react-flow__pane {
+	border: 0.5px solid rgba(235, 235, 235, 0.15);
+	border-radius: 16px;
+	box-shadow: inset 0 0 40px rgba(200, 200, 200, 0.15);
+}
+
+.giselle-workflow-editor .react-flow__pane.selection {
+	cursor: default;
+}
+.giselle-workflow-editor[data-floating-node="true"]
+	.react-flow__pane.selection {
+	cursor: crosshair;
+}
+.giselle-workflow-editor .react-flow__node.selectable {
+	cursor: default;
+}
+.giselle-workflow-editor .react-flow__node.draggable.dragging {
+	cursor: default;
+}
+.giselle-workflow-editor .react-flow__edge.selectable {
+	cursor: default;
+}
+
+/* for @giselles-ai/text-editor */
+.tiptap p.is-editor-empty:first-child::before {
+	color: var(--color-text-muted);
+	content: attr(data-placeholder);
+	float: left;
+	height: 0;
+	pointer-events: none;
+}
+
+@theme {
+	--animate-pop-pop-1: pop-pop 2.1s steps(1) infinite;
+	--animate-pop-pop-2: pop-pop 2.1s steps(1) 0.7s infinite;
+	--animate-pop-pop-3: pop-pop 2.1s steps(1) 1.4s infinite;
+
+	@keyframes pop-pop {
+		0% {
+			transform: translateY(0);
+		}
+		10% {
+			transform: translateY(-4px);
+			color: var(--color-white-900);
+		}
+		30% {
+			transform: translateY(0);
+			color: inherit;
+		}
+	}
+
+	--animate-follow-through-overlap-spin: follow-through-overlap-spin 1.75s
+		ease-out infinite;
+	@keyframes follow-through-overlap-spin {
+		0% {
+			transform: rotate(0deg);
+		}
+		40% {
+			transform: rotate(-400deg);
+		}
+		60% {
+			transform: rotate(-300deg);
+		}
+		80% {
+			transform: rotate(-370deg);
+		}
+		100% {
+			transform: rotate(-360deg);
+		}
+	}
+
+	@keyframes slideDown {
+		from {
+			height: 0px;
+		}
+		to {
+			height: var(--radix-accordion-content-height);
+		}
+	}
+	@keyframes slideUp {
+		from {
+			height: var(--radix-accordion-content-height);
+		}
+		to {
+			height: 0px;
+		}
+	}
+	--animate-slideDown: slideDown 300ms cubic-bezier(0.87, 0, 0.13, 1);
+	--animate-slideUp: slideUp 300ms cubic-bezier(0.87, 0, 0.13, 1);
+	@keyframes shimmer {
+		0% {
+			background-position: 200% 50%;
+		}
+		100% {
+			background-position: 0% 50%;
+		}
+	}
+	@keyframes twinkle-effect {
+		0% {
+			opacity: 1;
+			transform: rotate(0deg) scale(1);
+		}
+		0.32% {
+			opacity: 1;
+			transform: rotate(0deg) scale(1);
+		}
+		0.43% {
+			opacity: 1;
+			transform: rotate(720deg) scale(1);
+		}
+		0.86% {
+			opacity: 1;
+			transform: rotate(1440deg) scale(0.2);
+		}
+		0.88% {
+			opacity: 0;
+			transform: rotate(1440deg) scale(0);
+		}
+		0.90% {
+			opacity: 1;
+			transform: rotate(0deg) scale(1);
+		}
+		100% {
+			opacity: 1;
+			transform: rotate(0deg) scale(1);
+		}
+	}
+	--animate-shimmer: shimmer 2s infinite;
+}
+
+@property --button-gradient-angle {
+	syntax: "<angle>";
+	inherits: false;
+	initial-value: 15deg;
+}
+@theme {
+	--animate-rotate-button-gradient-angle: rotate-button-gradient-angle 3s linear
+		infinite;
+	@keyframes rotate-button-gradient-angle {
+		to {
+			--button-gradient-angle: 360deg;
+		}
+	}
+
+	--language-model-toggle-group-popover-width: 400px;
+	--language-model-detail-panel-width: 350px;
+}
+
+/* Chat panel utilities and animations */
+@keyframes slideUpFromLeft {
+	from {
+		opacity: 0;
+		transform: translateY(20px) translateX(-10px) scale(0.9);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) translateX(0) scale(1);
+	}
+}
+
+@layer utilities {
+	/* Apply a bottom fade mask for scroll areas */
+	.mask-fade-b {
+		/* WebKit prefix for Safari */
+		-webkit-mask-image: linear-gradient(
+			to bottom,
+			transparent 0%,
+			rgba(0, 0, 0, 0.5) 50%,
+			black 100%
+		);
+		mask-image: linear-gradient(
+			to bottom,
+			transparent 0%,
+			rgba(0, 0, 0, 0.5) 50%,
+			black 100%
+		);
+	}
+
+	/* Simple animation delay helpers */
+	.animate-delay-100 {
+		animation-delay: 0.1s;
+	}
+	.animate-delay-200 {
+		animation-delay: 0.2s;
+	}
+
+	/* Slide-up-from-left animation helper */
+	.animate-slide-up-left {
+		animation: slideUpFromLeft 0.4s ease-out both;
+	}
+
+	/* Fade in + slide up (for floating chat entrance) */
+	@keyframes fadeInUp {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+	.animate-fade-in-up {
+		animation: fadeInUp 0.2s ease-out both;
+	}
+
+	/* Thin scrollbar styling for WebKit */
+	.thin-scrollbar::-webkit-scrollbar {
+		width: 4px;
+	}
+	.thin-scrollbar::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.thin-scrollbar::-webkit-scrollbar-thumb {
+		background: #6b8ff0;
+		border-radius: 2px;
+	}
+	.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+		background: #5a7ee8;
+	}
+}
