@@ -1,0 +1,209 @@
+"use server";
+
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { db, type TeamRole, type UserId, users } from "@/db";
+import { getCurrentUser } from "@/lib/get-current-user";
+import { updateGiselleSession } from "@/lib/giselle-session";
+import { logger } from "@/lib/logger";
+import {
+	connectIdentity,
+	disconnectIdentity,
+	reconnectIdentity,
+} from "@/services/accounts";
+import { isTeamId } from "@/services/teams";
+import { deleteTeamMember } from "../team/actions";
+import {
+	deleteAvatar,
+	uploadAvatar,
+	validateImageFileWithMagicBytes,
+} from "../utils/avatar-upload";
+
+export async function connectGoogleIdentity() {
+	return await connectIdentity("google", "/settings/account/authentication");
+}
+
+type RedirectErrorLike = { digest: string };
+
+function isRedirectErrorLike(error: unknown): error is RedirectErrorLike {
+	if (
+		typeof error !== "object" ||
+		error === null ||
+		!("digest" in error) ||
+		typeof (error as RedirectErrorLike).digest !== "string"
+	) {
+		return false;
+	}
+	return (error as RedirectErrorLike).digest.startsWith("NEXT_REDIRECT");
+}
+
+export async function connectGitHubIdentity() {
+	try {
+		return await connectIdentity("github", "/settings/account/authentication");
+	} catch (e) {
+		if (isRedirectErrorLike(e)) throw e;
+		const msg = e instanceof Error ? e.message : String(e);
+		redirect(
+			`/settings/account/authentication?oauthError=${encodeURIComponent(msg)}`,
+		);
+	}
+}
+
+export async function reconnectGoogleIdentity() {
+	return await reconnectIdentity("google", "/settings/account/authentication");
+}
+
+export async function reconnectGitHubIdentity() {
+	try {
+		return await reconnectIdentity(
+			"github",
+			"/settings/account/authentication",
+		);
+	} catch (e) {
+		if (isRedirectErrorLike(e)) throw e;
+		const msg = e instanceof Error ? e.message : String(e);
+		redirect(
+			`/settings/account/authentication?oauthError=${encodeURIComponent(msg)}`,
+		);
+	}
+}
+
+export async function disconnectGoogleIdentity() {
+	return await disconnectIdentity("google", "/settings/account/authentication");
+}
+
+export async function disconnectGitHubIdentity() {
+	return await disconnectIdentity("github", "/settings/account/authentication");
+}
+
+export async function getAccountInfo() {
+	try {
+		const user = await getCurrentUser();
+		return {
+			displayName: user.displayName,
+			email: user.email,
+			avatarUrl: user.avatarUrl,
+		};
+	} catch (error) {
+		logger.error(error, "Failed to get account info:");
+		throw error;
+	}
+}
+
+export async function updateDisplayName(formData: FormData) {
+	try {
+		const user = await getCurrentUser();
+		const displayName = formData.get("displayName") as string;
+
+		await db
+			.update(users)
+			.set({ displayName })
+			.where(eq(users.dbId, user.dbId));
+
+		revalidatePath("/settings/account");
+		revalidatePath("/", "layout");
+
+		return { success: true };
+	} catch (error) {
+		logger.error(error, "Failed to update display name:");
+		return { success: false, error };
+	}
+}
+
+export async function navigateWithChangeTeam(rawTeamId: string, path: string) {
+	const teamId = isTeamId(rawTeamId) ? rawTeamId : null;
+	if (!teamId) {
+		throw new Error("Invalid team ID");
+	}
+	await updateGiselleSession({ teamId });
+	redirect(path);
+}
+
+export async function leaveTeam(
+	rawTeamId: string,
+	rawUserId: string,
+	rawRole: string,
+) {
+	const teamId = isTeamId(rawTeamId) ? rawTeamId : null;
+	if (!teamId) {
+		throw new Error("Invalid team ID");
+	}
+	const isUserId = (value: string): value is UserId => {
+		return value.length > 0 && value.startsWith("usr_");
+	};
+	const userId = isUserId(rawUserId) ? rawUserId : null;
+	if (!userId) {
+		throw new Error("Invalid user ID");
+	}
+
+	const isRole = (value: string): value is TeamRole => {
+		return value === "admin" || value === "member";
+	};
+	const role = isRole(rawRole.toLowerCase()) ? rawRole.toLowerCase() : null;
+	if (!role) {
+		console.error("Invalid role", rawRole);
+		throw new Error("Invalid role");
+	}
+
+	await updateGiselleSession({ teamId });
+	const formData = new FormData();
+	formData.set("userId", userId);
+	formData.set("role", role);
+	const result = await deleteTeamMember(formData);
+
+	if (result.success) {
+		revalidatePath("/settings/account");
+	}
+	return result;
+}
+
+export async function updateAvatar(formData: FormData) {
+	try {
+		const user = await getCurrentUser();
+
+		const file = formData.get("avatar") as File | null;
+		if (!file) {
+			throw new Error("Missing avatar file");
+		}
+
+		// Validate the image file by checking magic bytes
+		const validation = await validateImageFileWithMagicBytes(file);
+		if (!validation.valid) {
+			throw new Error(validation.error);
+		}
+
+		const avatarUrl = await uploadAvatar(
+			file,
+			"avatars",
+			user.id,
+			validation.mimeType,
+			validation.ext,
+		);
+
+		const oldAvatarUrl = user.avatarUrl;
+
+		await db.update(users).set({ avatarUrl }).where(eq(users.dbId, user.dbId));
+
+		// Delete old avatar after successful DB update (failure is acceptable)
+		if (oldAvatarUrl) {
+			try {
+				await deleteAvatar(oldAvatarUrl);
+			} catch (error) {
+				// Log error but don't fail the request
+				logger.error(error, "Failed to delete old avatar:");
+			}
+		}
+
+		revalidatePath("/settings/account");
+		revalidatePath("/", "layout");
+
+		return {
+			success: true,
+			avatarUrl,
+		};
+	} catch (error) {
+		logger.error(error, "Failed to update avatar:");
+		throw error;
+	}
+}

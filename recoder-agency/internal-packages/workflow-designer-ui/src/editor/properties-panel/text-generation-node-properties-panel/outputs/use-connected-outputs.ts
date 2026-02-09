@@ -1,0 +1,168 @@
+import {
+	type ActionNode,
+	type AppEntryNode,
+	type DataQueryNode,
+	isDataStoreNode,
+	type QueryNode,
+	type TextGenerationNode,
+	type TriggerNode,
+	VariableNode,
+} from "@giselles-ai/protocol";
+import type { UIConnection } from "@giselles-ai/react";
+import { useMemo } from "react";
+import { useAppDesignerStore } from "../../../../app-designer";
+import type { ConnectedOutputWithDetails } from "./types";
+
+export function useConnectedOutputs(node: TextGenerationNode) {
+	const { nodes, connections } = useAppDesignerStore((s) => ({
+		nodes: s.nodes,
+		connections: s.connections,
+	}));
+	return useMemo(() => {
+		const connectionsToThisNode = connections.filter(
+			(connection) => connection.inputNode.id === node.id,
+		);
+		const connectedGeneratedInputs: ConnectedOutputWithDetails<TextGenerationNode>[] =
+			[];
+		const connectedActionInputs: ConnectedOutputWithDetails<ActionNode>[] = [];
+		const connectedTriggerInputs: ConnectedOutputWithDetails<TriggerNode>[] =
+			[];
+		const connectedVariableInputs: ConnectedOutputWithDetails<VariableNode>[] =
+			[];
+		const connectedQueryInputs: ConnectedOutputWithDetails<QueryNode>[] = [];
+		const connectedDataQueryInputs: ConnectedOutputWithDetails<DataQueryNode>[] =
+			[];
+		const connectedAppEntryInputs: ConnectedOutputWithDetails<AppEntryNode>[] =
+			[];
+
+		const uiConnections: UIConnection[] = [];
+
+		for (const connection of connectionsToThisNode) {
+			const outputNode = nodes.find(
+				(node) => node.id === connection.outputNode.id,
+			);
+			if (outputNode === undefined) {
+				continue;
+			}
+			const output = outputNode.outputs.find(
+				(output) => output.id === connection.outputId,
+			);
+			if (output === undefined) {
+				continue;
+			}
+			// Skip Data Store "source" output - it's only for Data Query connections
+			if (isDataStoreNode(outputNode) && output.accessor === "source") {
+				continue;
+			}
+			const inputNode = nodes.find(
+				(node) => node.id === connection.inputNode.id,
+			);
+			if (inputNode === undefined) {
+				continue;
+			}
+			const input = inputNode.inputs.find(
+				(input) => input.id === connection.inputId,
+			);
+			if (input === undefined) {
+				continue;
+			}
+			uiConnections.push({
+				id: connection.id,
+				output,
+				outputNode,
+				input,
+				inputNode,
+			});
+
+			switch (outputNode.type) {
+				case "operation":
+					switch (outputNode.content.type) {
+						case "textGeneration":
+						case "contentGeneration":
+							connectedGeneratedInputs.push({
+								...output,
+								node: outputNode as TextGenerationNode,
+								connection,
+							});
+							break;
+						case "action":
+							connectedActionInputs.push({
+								...output,
+								node: outputNode as ActionNode,
+								connection,
+							});
+							break;
+						case "trigger":
+							connectedTriggerInputs.push({
+								...output,
+								node: outputNode as TriggerNode,
+								connection,
+							});
+							break;
+						case "imageGeneration":
+							break;
+						case "query":
+							connectedQueryInputs.push({
+								...output,
+								node: outputNode as QueryNode,
+								connection,
+							});
+							break;
+						case "appEntry":
+							connectedAppEntryInputs.push({
+								...output,
+								node: outputNode as AppEntryNode,
+								connection,
+							});
+							break;
+						case "end":
+							// End Node has no Output so do nothing
+							break;
+						case "dataQuery":
+							connectedDataQueryInputs.push({
+								...output,
+								node: outputNode as DataQueryNode,
+								connection,
+							});
+							break;
+						default: {
+							const _exhaustiveCheck: never = outputNode.content.type;
+							throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+						}
+					}
+					break;
+				case "variable":
+					connectedVariableInputs.push({
+						...output,
+						node: VariableNode.parse(outputNode),
+						connection,
+					});
+					break;
+				default: {
+					const _exhaustiveCheck: never = outputNode;
+					throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+				}
+			}
+		}
+
+		return {
+			all: [
+				...connectedTriggerInputs,
+				...connectedGeneratedInputs,
+				...connectedActionInputs,
+				...connectedVariableInputs,
+				...connectedQueryInputs,
+				...connectedDataQueryInputs,
+				...connectedAppEntryInputs,
+			],
+			generation: connectedGeneratedInputs,
+			variable: connectedVariableInputs,
+			action: connectedActionInputs,
+			trigger: connectedTriggerInputs,
+			query: connectedQueryInputs,
+			dataQuery: connectedDataQueryInputs,
+			appEntry: connectedAppEntryInputs,
+			connections: uiConnections,
+		};
+	}, [connections, node.id, nodes]);
+}

@@ -1,0 +1,17 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "ignoreFiles": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/out/**",
+    "**/coverage/**",
+    "internal-packages/ui/styles/tokens.css"
+  ],
+  "rules": {
+    "color-no-hex": [true, { "severity": "warning" }],
+    "function-disallowed-list": [["rgb", "rgba", "hsl", "hsla", "oklch"], { "severity": "warning" }]
+  }
+}
+

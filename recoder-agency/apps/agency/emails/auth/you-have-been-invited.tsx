@@ -1,0 +1,100 @@
+import {
+	Body,
+	Button,
+	Container,
+	Head,
+	Hr,
+	Html,
+	Link,
+	Preview,
+	Section,
+	Text,
+} from "@react-email/components";
+import {
+	button,
+	container,
+	EmailFonts,
+	EmailFooter,
+	EmailHeader,
+	h1,
+	link,
+	main,
+	section,
+	signatureText,
+	text,
+	topBorder,
+	topBorderSection,
+} from "../components";
+
+interface YouHaveBeenInvitedEmailProps {
+	siteUrl?: string;
+	confirmationUrl?: string;
+}
+
+const SUPABASE_SITE_URL_PLACEHOLDER = "{{ .SiteURL }}";
+const SUPABASE_CONFIRMATION_URL_PLACEHOLDER = "{{ .ConfirmationURL }}";
+
+export const YouHaveBeenInvitedEmail = ({
+	siteUrl,
+	confirmationUrl,
+}: YouHaveBeenInvitedEmailProps) => {
+	const displaySiteUrl = siteUrl ?? SUPABASE_SITE_URL_PLACEHOLDER;
+	const displayConfirmationUrl =
+		confirmationUrl ?? SUPABASE_CONFIRMATION_URL_PLACEHOLDER;
+
+	return (
+		<Html>
+			<Head>
+				<EmailFonts />
+			</Head>
+			<Preview>You have been invited</Preview>
+			<Body style={main}>
+				<Container style={container}>
+					<EmailHeader
+						heading="Welcome to Recoder Agency."
+						subheading="Your journey to build AI agents begins here."
+					/>
+					<Section style={topBorderSection}>
+						<Hr style={topBorder} />
+					</Section>
+					<Section style={section}>
+						<Text style={{ ...h1, marginBottom: "16px" }}>
+							You have been invited
+						</Text>
+						<Text style={text}>
+							You have been invited to create a user on{" "}
+							<strong>{displaySiteUrl}</strong>. Follow this link to accept the
+							invite:
+						</Text>
+						<Button href={displayConfirmationUrl} style={button}>
+							Accept the invite
+						</Button>
+						<Text style={text}>
+							If you didn&apos;t expect this invitation, you can safely ignore
+							this email.
+						</Text>
+						<Text style={signatureText}>
+							—<br />
+							The Recoder Agency Team
+							<br />
+							<Link href="https://recoder.xyz" style={link}>
+								https://recoder.xyz
+							</Link>
+						</Text>
+					</Section>
+					<Section style={topBorderSection}>
+						<Hr style={topBorder} />
+					</Section>
+				</Container>
+				<EmailFooter />
+			</Body>
+		</Html>
+	);
+};
+
+YouHaveBeenInvitedEmail.PreviewProps = {
+	siteUrl: "https://agency.recoder.xyz",
+	confirmationUrl: "https://example.com/confirm",
+} as YouHaveBeenInvitedEmailProps;
+
+export default YouHaveBeenInvitedEmail;

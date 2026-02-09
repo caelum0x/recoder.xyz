@@ -1,0 +1,49 @@
+name: Staging DB Delivery Release Gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * *"
+
+jobs:
+  delivery-release-gate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+      STALE_DAYS: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Ensure staging database URL is configured
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "Missing secret: AGENCY_STAGING_DATABASE_URL"
+            exit 1
+          fi
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Verify transition guardrails
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -f apps/agency/db/scripts/test_transition_guardrails.sql
+
+      - name: Verify weekly metrics fixture pipeline
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -f apps/agency/db/scripts/seed_weekly_delivery_metrics_fixture.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -f apps/agency/db/scripts/assert_weekly_delivery_metrics_fixture.sql
+
+      - name: Verify release readiness assertions
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v stale_days="${STALE_DAYS}" \
+            -f apps/agency/db/scripts/assert_delivery_release_readiness.sql
+
+      - name: Cleanup fixture records
+        if: always()
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -f apps/agency/db/scripts/cleanup_weekly_delivery_metrics_fixture.sql
+
