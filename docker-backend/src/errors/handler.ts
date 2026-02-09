@@ -92,12 +92,12 @@ export function requestTimingMiddleware(req: Request, res: Response, next: NextF
   res.on('finish', () => {
     const duration = Date.now() - startTime;
     if (duration > 5000) {
-      // Log slow requests
       console.warn(
         JSON.stringify({
           timestamp: new Date().toISOString(),
           level: 'warn',
           type: 'SLOW_REQUEST',
+          requestId: (req as any).requestId,
           method: req.method,
           path: req.path,
           duration,

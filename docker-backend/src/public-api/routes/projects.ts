@@ -32,7 +32,7 @@ import {
   RequestValidationError,
   requireNonEmptyString,
 } from '../request-validation.js';
-import { fetchUserByokProviderKeys, type AIProviderKeys } from '../byok-provider-keys.js';
+import { fetchUserByokProviderKeys, getAvailableProviders, SUPPORTED_PROVIDERS, type AIProviderKeys } from '../byok-provider-keys.js';
 import { type ClaimedPromptTask, promptTaskQueue } from '../prompt-task-queue.js';
 
 // ==================== Types ====================
@@ -92,6 +92,7 @@ interface PromptTaskRecord {
   userId: string;
   prompt: string;
   model?: string;
+  provider?: string;
   status: PromptTaskStatus;
   result?: string;
   error?: string;
@@ -290,6 +291,7 @@ function toPromptTaskResponse(record: PromptTaskRecord) {
     projectId: record.projectId,
     status: record.status,
     model: record.model,
+    provider: record.provider,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     result: record.result,
@@ -555,7 +557,7 @@ async function processPromptTask(taskId: string, options?: { allowRetry?: boolea
 
   try {
     const keys = await fetchUserAIProviderKeys(task.userId);
-    const content = await generatePromptCompletion(task.prompt, task.model, keys, abortController.signal);
+    const { content, provider } = await generatePromptCompletion(task.prompt, task.model, keys, abortController.signal);
 
     if (abortController.signal.aborted) {
       task.status = 'failed';
@@ -569,6 +571,7 @@ async function processPromptTask(taskId: string, options?: { allowRetry?: boolea
 
     task.status = 'completed';
     task.result = content;
+    task.provider = provider;
     task.error = undefined;
     task.updatedAt = Date.now();
     saveProjectsStore();
@@ -776,14 +779,19 @@ async function generateGoogleCompletion(
   return content;
 }
 
+interface PromptCompletionResult {
+  content: string;
+  provider: string;
+}
+
 async function generatePromptCompletion(
   prompt: string,
   requestedModel: string | undefined,
   keys: AIProviderKeys,
   signal?: AbortSignal
-): Promise<string> {
+): Promise<PromptCompletionResult> {
   if (keys.openrouter) {
-    return generateOpenAICompatibleCompletion({
+    const content = await generateOpenAICompatibleCompletion({
       url: 'https://openrouter.ai/api/v1/chat/completions',
       apiKey: keys.openrouter,
       model: requestedModel || process.env.PUBLIC_API_DEFAULT_MODEL || 'openai/gpt-4o-mini',
@@ -791,10 +799,11 @@ async function generatePromptCompletion(
       source: 'OpenRouter',
       signal,
     });
+    return { content, provider: 'openrouter' };
   }
 
   if (keys.openai) {
-    return generateOpenAICompatibleCompletion({
+    const content = await generateOpenAICompatibleCompletion({
       url: 'https://api.openai.com/v1/chat/completions',
       apiKey: keys.openai,
       model: requestedModel || 'gpt-4o-mini',
@@ -802,10 +811,11 @@ async function generatePromptCompletion(
       source: 'OpenAI',
       signal,
     });
+    return { content, provider: 'openai' };
   }
 
   if (keys.groq) {
-    return generateOpenAICompatibleCompletion({
+    const content = await generateOpenAICompatibleCompletion({
       url: 'https://api.groq.com/openai/v1/chat/completions',
       apiKey: keys.groq,
       model: requestedModel || 'llama-3.1-70b-versatile',
@@ -813,10 +823,11 @@ async function generatePromptCompletion(
       source: 'Groq',
       signal,
     });
+    return { content, provider: 'groq' };
   }
 
   if (keys.deepseek) {
-    return generateOpenAICompatibleCompletion({
+    const content = await generateOpenAICompatibleCompletion({
       url: 'https://api.deepseek.com/v1/chat/completions',
       apiKey: keys.deepseek,
       model: requestedModel || 'deepseek-chat',
@@ -824,27 +835,32 @@ async function generatePromptCompletion(
       source: 'DeepSeek',
       signal,
     });
+    return { content, provider: 'deepseek' };
   }
 
   if (keys.anthropic) {
-    return generateAnthropicCompletion(
+    const content = await generateAnthropicCompletion(
       keys.anthropic,
       requestedModel || 'claude-3-5-haiku-latest',
       prompt,
       signal
     );
+    return { content, provider: 'anthropic' };
   }
 
   if (keys.google) {
-    return generateGoogleCompletion(
+    const content = await generateGoogleCompletion(
       keys.google,
       requestedModel || 'gemini-2.0-flash',
       prompt,
       signal
     );
+    return { content, provider: 'google' };
   }
 
-  throw new Error('No BYOK provider key found for this user');
+  throw new Error(
+    `No BYOK provider key found. Configure at least one of: ${SUPPORTED_PROVIDERS.join(', ')}`
+  );
 }
 
 // ==================== Router ====================
