@@ -115,11 +115,8 @@ export function SubscriptionDashboard() {
 
   async function loadSubscriptionData() {
     try {
-      const userId = getUserId();
       const response = await fetch('/api/subscribe', {
-        headers: {
-          'x-user-id': userId || '',
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -141,12 +138,11 @@ export function SubscriptionDashboard() {
     setCancelling(true);
 
     try {
-      const userId = getUserId();
       const response = await fetch('/api/subscribe?action=cancel-subscription', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId || '',
         },
         body: JSON.stringify({
           subscriptionId: data.subscription.subscription_id,
@@ -173,12 +169,11 @@ export function SubscriptionDashboard() {
     if (!data?.subscription) return;
 
     try {
-      const userId = getUserId();
       const response = await fetch('/api/subscribe?action=create-portal', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId || '',
         },
         body: JSON.stringify({
           customerId: data.subscription.customer_id,
@@ -437,6 +432,3 @@ export function SubscriptionDashboard() {
   );
 }
 
-function getUserId(): string | null {
-  return localStorage.getItem('userId');
-}
