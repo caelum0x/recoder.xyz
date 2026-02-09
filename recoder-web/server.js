@@ -9,6 +9,23 @@ const __dirnameLocal = dirname(__filename);
 dotenv.config({ path: join(__dirnameLocal, '.env') });
 
 console.log('🔧 ENV - DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+console.log('🔧 ENV - INTERNAL_SERVICE_KEY:', process.env.INTERNAL_SERVICE_KEY ? 'SET' : 'NOT SET');
+
+if (process.env.NODE_ENV === 'production') {
+  const key = process.env.INTERNAL_SERVICE_KEY || '';
+  if (!key) {
+    console.error('❌ Missing INTERNAL_SERVICE_KEY in production. auth.verify cannot sign /api/auth/verify-token requests.');
+    process.exit(1);
+  }
+  if (key.length < 32) {
+    console.error('❌ INTERNAL_SERVICE_KEY must be at least 32 characters in production');
+    process.exit(1);
+  }
+  if (/^(changeme|placeholder|xxx|secret|password|test|dev-internal-key)/i.test(key)) {
+    console.error('❌ INTERNAL_SERVICE_KEY appears to be a placeholder value');
+    process.exit(1);
+  }
+}
 
 const BUILD_DIR = join(__dirnameLocal, 'build');
 const app = express();
