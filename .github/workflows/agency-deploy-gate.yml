@@ -20,8 +20,6 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: 24.x
-          cache: "pnpm"
-          cache-dependency-path: recoder-agency/pnpm-lock.yaml
       - run: pnpm install
       - name: Build SDK
         run: pnpm build-sdk
@@ -78,8 +76,6 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: 24.x
-          cache: "pnpm"
-          cache-dependency-path: recoder-agency/pnpm-lock.yaml
       - run: pnpm install
       - name: Install Playwright browsers (chromium only)
         run: pnpm -C apps/agency exec playwright install --with-deps chromium
