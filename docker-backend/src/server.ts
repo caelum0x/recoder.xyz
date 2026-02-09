@@ -11,13 +11,18 @@ import { Duplex } from 'stream';
 import WebSocket from 'ws';
 import http from 'http';
 import { spawn, ChildProcess } from 'child_process';
+import * as fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { mountFiles } from './fileMount.js';
 import { fastWriteFile, fastWriteFiles } from './fast-file-writer.js';
 import * as pty from 'node-pty';
 import { WebSocketRPC } from './websocket-rpc.js';
-import { devServerManager, detectFrameworkFromContainer, getInstallCommand, getDevCommand, getExpectedPorts } from './dev-server.js';
+import { devServerManager, detectFrameworkFromContainer, getInstallCommand, getDevCommand, getExpectedPorts, setExpoPublicHostname } from './dev-server.js';
 import { ContainerLifecycleManager } from './container-lifecycle.js';
 import { snapshotManager } from './snapshot-manager.js';
+import { contextCache, computeFileHash, computeFileHashes, type ContextDiff } from './context-cache.js';
 import { autoRestoreManager, parseAllErrors, hasBlockingErrors } from './auto-restore.js';
 import { languageServerManager } from './language-server.js';
 import { searchService } from './search.js';
@@ -28,12 +33,46 @@ import { mcpManager, PREINSTALLED_SERVERS, NPX_SERVERS } from './mcp-manager.js'
 import { packageManagerService } from './package-manager.js';
 import { secretsManager } from './secrets-manager.js';
 import { gitOperations } from './git-operations.js';
+import { getWsRateLimiter, getAllWsRateLimitStats } from './security/ws-rate-limiter.js';
+import {
+  abusePrevention,
+  sendAlert,
+  alertFromAbuseEvent,
+  alertWsRateLimitExceeded,
+  alertAuthFailure,
+  alertSuspiciousRequest,
+  alertSystemIssue,
+  getAlerts,
+  acknowledgeAlert,
+  getAlertCounts,
+} from './security/index.js';
+import {
+  validateProjectId,
+  validateFilePath,
+  validateBranchName,
+  validateCommitMessage,
+  validateCommitHash,
+  validateDomainName,
+  validatePositiveInt,
+} from './public-api/validation.js';
 import { syncManager, diffFileSets, getDetailedDiff, getDiffStats, generateUnifiedDiff } from './cli-sync/index.js';
 import { lspServerManager, getConfigForExtension, LSP_SERVER_CONFIGS } from './lsp/index.js';
 import { createCollaborationServer, getCollaborationStats, saveAllDocuments } from './collaboration/index.js';
 import { replManager, REPL_CONFIGS, type ReplLanguage } from './repl-manager.js';
 import { metricsCollector, metricsMiddleware } from './metrics.js';
 import { sandboxRouter, initSandboxRoutes, type SandboxDependencies } from './public-api/routes/sandboxes.js';
+import { projectRouter, initProjectRoutes, type ProjectDependencies } from './public-api/routes/projects.js';
+import openclawKeysRouter from './public-api/routes/openclaw-keys.js';
+import { identityRouter, setUserInfoProvider } from './public-api/routes/identity.js';
+import { moltbookAuthRouter } from './public-api/routes/auth-moltbook.js';
+import { appKeysRouter } from './public-api/routes/app-keys.js';
+import { domainRouter } from './public-api/routes/domains.js';
+import {
+  fetchUserByokProviderKeys,
+  buildInternalServiceHeaders,
+  type AIProviderKeys,
+} from './public-api/byok-provider-keys.js';
+import { startSslRenewalScheduler } from './domain-manager.js';
 import {
   createWebhookHandler as createPolarWebhookHandler,
   onWebhookEvent,
@@ -49,6 +88,8 @@ import {
   createApiKey,
   listUserApiKeys,
   deleteApiKey,
+  revokeApiKey,
+  getUsage,
 } from './public-api/api-keys.js';
 import { healthMonitor, type HealthStatus } from './health-monitor.js';
 import { resourceOptimizer } from './resource-optimizer.js';
@@ -196,12 +237,41 @@ function validateEnvironment() {
   }
 
   if (!process.env.INTERNAL_SERVICE_KEY) {
-    process.env.INTERNAL_SERVICE_KEY = 'dev-internal-key';
-    warnings.push('INTERNAL_SERVICE_KEY not set - using dev default');
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY is required in production');
+      process.exit(1);
+    } else {
+      process.env.INTERNAL_SERVICE_KEY = 'dev-internal-key';
+      warnings.push('INTERNAL_SERVICE_KEY not set - using dev default');
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    const key = process.env.INTERNAL_SERVICE_KEY;
+    if (key === 'dev-internal-key') {
+      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY cannot use dev default in production');
+      process.exit(1);
+    }
+    if (key.length < 32) {
+      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY must be at least 32 characters in production');
+      process.exit(1);
+    }
+    if (/^(changeme|placeholder|xxx|secret|password|test)/i.test(key)) {
+      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY appears to be a placeholder value');
+      process.exit(1);
+    }
   }
 
   if (!process.env.POLAR_WEBHOOK_SECRET) {
     warnings.push('POLAR_WEBHOOK_SECRET not set - Polar.sh webhooks disabled');
+  }
+
+  if (!process.env.IDENTITY_TOKEN_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ CRITICAL: IDENTITY_TOKEN_SECRET is required in production');
+      process.exit(1);
+    } else {
+      process.env.IDENTITY_TOKEN_SECRET = 'dev-identity-secret-' + Math.random().toString(36).slice(2);
+      warnings.push('IDENTITY_TOKEN_SECRET not set - using random dev secret');
+    }
   }
 
   if (warnings.length > 0) {
@@ -210,11 +280,41 @@ function validateEnvironment() {
   }
 }
 
+function startupInfo(component: string, message: string, details?: Record<string, unknown>): void {
+  console.info(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      type: 'STARTUP',
+      component,
+      message,
+      details,
+    }),
+  );
+}
+
 // ==================== SECURITY: Authentication & Authorization ====================
 
 interface AuthenticatedRequest extends express.Request {
   userId?: string;
   sessionId?: string;
+}
+
+const DEBUG_AUTH_LOGS = process.env.NODE_ENV !== 'production' && process.env.DEBUG_AUTH_LOGS === 'true';
+
+function maskIdentifier(value?: string): string {
+  if (!value) return 'unknown';
+  if (value.length <= 4) return '****';
+  return `${value.slice(0, 2)}***${value.slice(-2)}`;
+}
+
+function authDebug(message: string, meta?: Record<string, unknown>) {
+  if (!DEBUG_AUTH_LOGS) return;
+  if (meta) {
+    console.debug(`[Auth] ${message}`, meta);
+    return;
+  }
+  console.debug(`[Auth] ${message}`);
 }
 
 // Helper to parse cookies from request headers (no need for cookie-parser dependency)
@@ -279,7 +379,9 @@ async function authenticateWebSocket(
   if (!token) {
     // In migration mode, allow anonymous access with warning
     if (!STRICT_AUTH) {
-      console.warn(`[Auth] WARNING: Anonymous WebSocket connection to ${req.path}`);
+      logWarning(ErrorCode.AUTH_REQUIRED, 'Anonymous WebSocket connection in migration mode', {
+        path: req.path,
+      });
       return { userId: 'anonymous', sessionId: 'anon' };
     }
     ws.close(1008, 'Authentication required');
@@ -290,7 +392,9 @@ async function authenticateWebSocket(
   if (!session) {
     // In migration mode, allow with warning
     if (!STRICT_AUTH) {
-      console.warn(`[Auth] WARNING: Invalid token for WebSocket ${req.path}, allowing in migration mode`);
+      logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Invalid WebSocket token accepted in migration mode', {
+        path: req.path,
+      });
       return { userId: 'anonymous', sessionId: 'anon' };
     }
     ws.close(1008, 'Invalid or expired session');
@@ -338,19 +442,22 @@ async function verifySessionToken(token: string): Promise<{ userId: string; sess
 
     try {
       // Use the existing Better Auth verify-token endpoint
-      const response = await fetch(`${APP_API_URL}/api/auth/verify-token`, {
+      const pathname = '/api/auth/verify-token';
+      const body = JSON.stringify({ token });
+      const response = await fetch(`${APP_API_URL}${pathname}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Pass internal service key if configured (for rate limit bypass)
-          ...(INTERNAL_SERVICE_KEY ? { 'X-Internal-Service-Key': INTERNAL_SERVICE_KEY } : {}),
-        },
-        body: JSON.stringify({ token }),
+        headers: buildInternalServiceHeaders({
+          method: 'POST',
+          pathname,
+          body,
+          serviceKey: INTERNAL_SERVICE_KEY,
+        }),
+        body,
         signal: controller.signal,
       });
 
       if (!response.ok) {
-        console.log(`[Auth] Better Auth session verification failed: ${response.status}`);
+        authDebug('session verification failed', { status: response.status });
         return null;
       }
 
@@ -367,9 +474,17 @@ async function verifySessionToken(token: string): Promise<{ userId: string; sess
     }
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.error('[Auth] Better Auth session verification timed out after 5s');
+      logError({
+        errorCode: ErrorCode.AUTH_SERVICE_ERROR,
+        message: 'Better Auth session verification timed out',
+        details: { timeoutMs: 5000 },
+      });
     } else {
-      console.error(`[Auth] Error verifying Better Auth session: ${error.message}`);
+      logError({
+        errorCode: ErrorCode.AUTH_SERVICE_ERROR,
+        message: 'Error verifying Better Auth session',
+        details: { error: error.message },
+      });
     }
     return null;
   }
@@ -394,13 +509,17 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     try {
-      const response = await fetch(`${APP_API_URL}/api/project/verify-ownership`, {
+      const pathname = '/api/project/verify-ownership';
+      const body = JSON.stringify({ userId, projectId });
+      const response = await fetch(`${APP_API_URL}${pathname}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Service-Key': INTERNAL_SERVICE_KEY,
-        },
-        body: JSON.stringify({ userId, projectId }),
+        headers: buildInternalServiceHeaders({
+          method: 'POST',
+          pathname,
+          body,
+          serviceKey: INTERNAL_SERVICE_KEY,
+        }),
+        body,
         signal: controller.signal,
       });
 
@@ -418,9 +537,17 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
     }
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.error('[Auth] Project ownership check timed out after 5s');
+      logError({
+        errorCode: ErrorCode.AUTHZ_SERVICE_ERROR,
+        message: 'Project ownership check timed out',
+        details: { timeoutMs: 5000 },
+      });
     } else {
-      console.error(`[Auth] Error checking ownership: ${error.message}`);
+      logError({
+        errorCode: ErrorCode.AUTHZ_SERVICE_ERROR,
+        message: 'Error checking project ownership',
+        details: { error: error.message },
+      });
     }
     return false;
   }
@@ -443,7 +570,11 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
 
     if (!STRICT_AUTH && isAllowedOrigin) {
       // Migration mode: allow but log warning
-      console.warn(`[Auth] WARNING: Request without auth token from ${origin || 'same-origin'} - ${req.method} ${req.path}`);
+      logWarning(ErrorCode.AUTH_REQUIRED, 'Request without auth token accepted in migration mode', {
+        origin: origin || 'same-origin',
+        method: req.method,
+        path: req.path,
+      });
       req.userId = 'anonymous'; // Set anonymous user for audit logging
       return next();
     }
@@ -457,7 +588,11 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
       // Token invalid but from allowed origin - allow in migration mode
       const isAllowedOrigin = ALLOWED_ORIGINS.includes(origin) || origin === '' || origin.includes('localhost');
       if (!STRICT_AUTH && isAllowedOrigin) {
-        console.warn(`[Auth] WARNING: Invalid token from ${origin || 'same-origin'}, allowing in migration mode`);
+        logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Invalid token accepted in migration mode', {
+          origin: origin || 'same-origin',
+          method: req.method,
+          path: req.path,
+        });
         req.userId = 'anonymous';
         return next();
       }
@@ -467,11 +602,18 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
     req.userId = session.userId;
     req.sessionId = session.sessionId;
     next();
-  }).catch(err => {
-    console.error(`[Auth] Authentication error: ${err.message}`);
+  }).catch((err) => {
+    logError({
+      errorCode: ErrorCode.AUTH_SERVICE_ERROR,
+      message: 'Authentication middleware error',
+      details: { error: err.message },
+    });
     // Allow in migration mode
     if (!STRICT_AUTH) {
-      console.warn(`[Auth] WARNING: Auth service error, allowing in migration mode`);
+      logWarning(ErrorCode.AUTH_SERVICE_ERROR, 'Auth service error accepted in migration mode', {
+        method: req.method,
+        path: req.path,
+      });
       req.userId = 'anonymous';
       return next();
     }
@@ -490,7 +632,11 @@ function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response
 
   // In migration mode, allow anonymous users
   if (req.userId === 'anonymous' && !STRICT_AUTH) {
-    console.warn(`[Auth] WARNING: Anonymous access to project ${projectId} - ${req.method} ${req.path}`);
+    logWarning(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Anonymous project access accepted in migration mode', {
+      projectId: maskIdentifier(projectId),
+      method: req.method,
+      path: req.path,
+    });
     return next();
   }
 
@@ -502,15 +648,27 @@ function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response
     if (!isOwner) {
       // In migration mode, allow but log
       if (!STRICT_AUTH) {
-        console.warn(`[Auth] WARNING: User ${req.userId} accessing project ${projectId} without ownership verification`);
+        logWarning(ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED, 'Ownership check bypassed in migration mode', {
+          userId: maskIdentifier(req.userId),
+          projectId: maskIdentifier(projectId),
+          method: req.method,
+          path: req.path,
+        });
         return next();
       }
-      console.log(`[Auth] Access denied: User ${req.userId} is not owner of project ${projectId}`);
+      logWarning(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Project access denied', {
+        userId: maskIdentifier(req.userId),
+        projectId: maskIdentifier(projectId),
+      });
       return res.status(403).json({ error: 'Access denied: You do not own this project' });
     }
     next();
-  }).catch(err => {
-    console.error(`[Auth] Authorization error: ${err.message}`);
+  }).catch((err) => {
+    logError({
+      errorCode: ErrorCode.AUTHZ_SERVICE_ERROR,
+      message: 'Authorization middleware error',
+      details: { error: err.message },
+    });
     return res.status(500).json({ error: 'Authorization service error' });
   });
 }
@@ -1030,7 +1188,7 @@ export function getWebSocketStats() {
 
 // Initialize Redis connection (non-blocking)
 sessionStore.connect().catch(() => {
-  console.log('[Server] Redis not available, using memory fallback for sessions');
+  console.warn('[Server] Redis not available, using memory fallback for sessions');
 });
 
 // Initialize container pool (non-blocking) - pre-warms containers for faster project creation
@@ -1047,7 +1205,7 @@ const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
 // Fetch user's Claude Code OAuth token from app API
 async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
   if (!userId || !INTERNAL_SERVICE_KEY) {
-    console.log(`[Claude Code] Missing userId or serviceKey - userId: ${!!userId}, key: ${!!INTERNAL_SERVICE_KEY}`);
+    authDebug('claude token fetch skipped: missing userId or service key');
     return null;
   }
 
@@ -1055,37 +1213,39 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
-    console.log(`[Claude Code] Fetching token for user ${userId} from ${APP_API_URL}`);
-    const response = await fetch(`${APP_API_URL}/api/user/claude-code`, {
+    authDebug('fetching claude token', { userId: maskIdentifier(userId) });
+    const pathname = '/api/user/claude-code';
+    const body = JSON.stringify({ userId });
+    const response = await fetch(`${APP_API_URL}${pathname}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId,
+      headers: buildInternalServiceHeaders({
+        method: 'PUT',
+        pathname,
+        body,
         serviceKey: INTERNAL_SERVICE_KEY,
       }),
+      body,
       signal: controller.signal,
     });
 
     if (!response.ok) {
-      console.log(`[Claude Code] Failed to fetch token for user ${userId}: ${response.status}`);
+      authDebug('claude token fetch failed', { userId: maskIdentifier(userId), status: response.status });
       return null;
     }
 
     const data = await response.json() as { hasToken: boolean; token?: string };
     if (data.hasToken && data.token) {
-      console.log(`[Claude Code] Token retrieved for user ${userId}`);
+      authDebug('claude token present', { userId: maskIdentifier(userId) });
       return data.token;
     }
 
-    console.log(`[Claude Code] No token found for user ${userId}`);
+    authDebug('claude token absent', { userId: maskIdentifier(userId) });
     return null;
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.error(`[Claude Code] Fetch token timed out after 5s for user ${userId}`);
+      console.error(`[Claude Code] Fetch token timed out after 5s for user ${maskIdentifier(userId)}`);
     } else {
-      console.error(`[Claude Code] Error fetching token: ${error.message}`);
+      console.error(`[Claude Code] Error fetching token for user ${maskIdentifier(userId)}: ${error.message}`);
     }
     return null;
   } finally {
@@ -1093,17 +1253,9 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
   }
 }
 
-// Fetch user's AI provider API keys (OpenAI, Gemini, etc.) from app API
-interface AIProviderKeys {
-  openai?: string;
-  gemini?: string;
-  anthropic?: string;
-  [key: string]: string | undefined;
-}
-
 async function fetchAIProviderKeys(userId: string): Promise<AIProviderKeys> {
   if (!userId || !INTERNAL_SERVICE_KEY) {
-    console.log(`[AI Provider Keys] Missing userId or serviceKey - userId: ${!!userId}, key: ${!!INTERNAL_SERVICE_KEY}`);
+    authDebug('provider key fetch skipped: missing userId or service key');
     return {};
   }
 
@@ -1111,33 +1263,21 @@ async function fetchAIProviderKeys(userId: string): Promise<AIProviderKeys> {
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
-    console.log(`[AI Provider Keys] Fetching keys for user ${userId} from ${APP_API_URL}`);
-    const response = await fetch(`${APP_API_URL}/api/user/ai-provider-keys`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId,
-        serviceKey: INTERNAL_SERVICE_KEY,
-      }),
+    authDebug('fetching provider keys', { userId: maskIdentifier(userId) });
+    const keys = await fetchUserByokProviderKeys({
+      appApiUrl: APP_API_URL,
+      userId,
+      serviceKey: INTERNAL_SERVICE_KEY,
       signal: controller.signal,
     });
-
-    if (!response.ok) {
-      console.log(`[AI Provider Keys] Failed to fetch keys for user ${userId}: ${response.status}`);
-      return {};
-    }
-
-    const data = await response.json() as { keys: AIProviderKeys };
-    const keyCount = Object.keys(data.keys || {}).length;
-    console.log(`[AI Provider Keys] Retrieved ${keyCount} keys for user ${userId}`);
-    return data.keys || {};
+    const keyCount = Object.keys(keys || {}).length;
+    authDebug('provider keys retrieved', { userId: maskIdentifier(userId), keyCount });
+    return keys || {};
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.error(`[AI Provider Keys] Fetch keys timed out after 5s for user ${userId}`);
+      console.error(`[AI Provider Keys] Fetch keys timed out after 5s for user ${maskIdentifier(userId)}`);
     } else {
-      console.error(`[AI Provider Keys] Error fetching keys: ${error.message}`);
+      console.error(`[AI Provider Keys] Error fetching keys for user ${maskIdentifier(userId)}: ${error.message}`);
     }
     return {};
   } finally {
@@ -1154,8 +1294,22 @@ const server = http.createServer(baseApp);
 // Initialize express-ws with the server so WebSocket routes work
 const { app } = expressWs(baseApp, server);
 
-// Trust proxy for rate limiting behind nginx
-app.set('trust proxy', 1);
+function getTrustProxySetting(): boolean | number | string {
+  const raw = (process.env.TRUST_PROXY || '').trim();
+  if (!raw) {
+    // Default for typical single reverse-proxy deployments (nginx/ingress).
+    return 1;
+  }
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isNaN(parsed) && parsed >= 0) return parsed;
+  return raw;
+}
+
+const trustProxySetting = getTrustProxySetting();
+app.set('trust proxy', trustProxySetting);
+console.log(`[Server] trust proxy configured as: ${String(trustProxySetting)}`);
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -1218,6 +1372,22 @@ app.use(requestTimingMiddleware);
 
 // Add metrics collection middleware
 app.use(metricsMiddleware(metricsCollector));
+
+// Abuse prevention middleware — check IP blocklist on every request
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const ip = req.headers['x-forwarded-for']
+    ? (Array.isArray(req.headers['x-forwarded-for'])
+        ? req.headers['x-forwarded-for'][0]
+        : req.headers['x-forwarded-for'].split(',')[0].trim())
+    : req.ip || req.socket.remoteAddress || 'unknown';
+
+  const blockCheck = abusePrevention.isBlocked({ ip, userAgent: req.headers['user-agent'] });
+  if (blockCheck.blocked) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+  next();
+});
 
 // Container registry: projectId -> containerId + port + ptyPort
 // Added backgroundDev flag so we can auto-tail dev server logs into the PTY when users attach
@@ -1321,6 +1491,29 @@ function releasePorts(port: number, ptyPort: number) {
 
 // Initialize container pool with shared port management
 // NOTE: Actual initialization happens in startupSequence() below to avoid race with cleanup
+
+/**
+ * Run a host command and reject on non-zero exit.
+ */
+async function runHostCommand(cmd: string, args: string[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`${cmd} ${args.join(' ')} failed with code ${code}: ${stderr.trim()}`));
+    });
+  });
+}
 
 /**
  * Execute a command inside a container and return stdout
@@ -1452,6 +1645,262 @@ app.get('/api/cache/stats', (_, res) => {
   const stats = fileCache.getStats();
   res.json(stats);
 });
+
+// ==================== CONTEXT CACHE ENDPOINTS (S8-3) ====================
+// Server-side prompt/context caching for reduced latency and costs
+
+// Get context cache stats
+app.get('/api/context/cache/stats', (_, res) => {
+  const stats = contextCache.getStats();
+  res.json(stats);
+});
+
+// Create a new context cache for a project
+app.post('/api/context/cache', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { projectId, files, systemPrompt } = req.body;
+
+    if (!projectId || !files) {
+      return res.status(400).json({ error: 'projectId and files are required' });
+    }
+
+    // Convert files object to Map
+    const fileMap = new Map<string, string>(Object.entries(files));
+
+    const cacheId = contextCache.createCache(projectId, fileMap, systemPrompt);
+
+    res.json({
+      success: true,
+      cacheId,
+      fileCount: fileMap.size,
+      message: 'Context cached successfully',
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error creating cache:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get cached context by ID
+app.get('/api/context/cache/:cacheId', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { cacheId } = req.params;
+    const cache = contextCache.getCache(cacheId);
+
+    if (!cache) {
+      return res.status(404).json({ error: 'Cache not found or expired' });
+    }
+
+    // Return file list with hashes (not full content to save bandwidth)
+    const files: Record<string, { hash: string; size: number }> = {};
+    for (const [path, file] of cache.files) {
+      files[path] = { hash: file.hash, size: file.size };
+    }
+
+    res.json({
+      cacheId: cache.id,
+      projectId: cache.projectId,
+      files,
+      fileCount: cache.files.size,
+      totalSize: cache.totalSize,
+      createdAt: cache.createdAt,
+      lastAccessed: cache.lastAccessed,
+      accessCount: cache.accessCount,
+      hasSystemPrompt: !!cache.systemPromptHash,
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error getting cache:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get file hashes for a cached context (for client-side comparison)
+app.get('/api/context/cache/:cacheId/hashes', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { cacheId } = req.params;
+    const hashes = contextCache.getFileHashes(cacheId);
+
+    if (!hashes) {
+      return res.status(404).json({ error: 'Cache not found or expired' });
+    }
+
+    res.json({
+      cacheId,
+      hashes: Object.fromEntries(hashes),
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error getting hashes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Compute diff between client files and cached context
+app.post('/api/context/cache/:cacheId/diff', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { cacheId } = req.params;
+    const { files } = req.body;
+
+    if (!files) {
+      return res.status(400).json({ error: 'files are required' });
+    }
+
+    const fileMap = new Map<string, string>(Object.entries(files));
+    const diff = contextCache.computeDiff(cacheId, fileMap);
+
+    if (!diff) {
+      return res.status(404).json({ error: 'Cache not found or expired' });
+    }
+
+    res.json({
+      cacheId,
+      changedFiles: Object.fromEntries(diff.changedFiles),
+      deletedFiles: diff.deletedFiles,
+      unchangedCount: diff.unchangedHashes.size,
+      changedCount: diff.changedFiles.size,
+      deletedCount: diff.deletedFiles.length,
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error computing diff:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Apply diff and get reconstructed context
+app.post('/api/context/cache/:cacheId/apply', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { cacheId } = req.params;
+    const { changedFiles, deletedFiles } = req.body;
+
+    const diff: Partial<ContextDiff> = {
+      changedFiles: changedFiles ? new Map(Object.entries(changedFiles)) : undefined,
+      deletedFiles: deletedFiles || [],
+    };
+
+    const result = contextCache.applyDiff(cacheId, diff);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Cache not found or expired' });
+    }
+
+    res.json({
+      cacheId: result.cacheId,
+      filesUpdated: result.filesUpdated,
+      filesFromCache: result.filesFromCache,
+      bytesSaved: result.bytesSaved,
+      files: Object.fromEntries(result.reconstructedContext),
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error applying diff:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete cache for a specific project
+app.delete('/api/context/cache/project/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { projectId } = req.params;
+    const deleted = contextCache.deleteProjectCaches(projectId);
+
+    res.json({
+      success: true,
+      deletedCount: deleted,
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error deleting project caches:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a specific cache by ID
+app.delete('/api/context/cache/:cacheId', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { cacheId } = req.params;
+    const deleted = contextCache.deleteCache(cacheId);
+
+    res.json({
+      success: deleted,
+      message: deleted ? 'Cache deleted' : 'Cache not found',
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error deleting cache:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get latest cache for a project
+app.get('/api/context/cache/project/:projectId/latest', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { projectId } = req.params;
+    const cacheId = contextCache.getLatestCacheForProject(projectId);
+
+    if (!cacheId) {
+      return res.status(404).json({ error: 'No cache found for project' });
+    }
+
+    const cache = contextCache.getCache(cacheId);
+    if (!cache) {
+      return res.status(404).json({ error: 'Cache expired' });
+    }
+
+    // Return file hashes for client comparison
+    const hashes: Record<string, string> = {};
+    for (const [path, file] of cache.files) {
+      hashes[path] = file.hash;
+    }
+
+    res.json({
+      cacheId,
+      projectId,
+      hashes,
+      fileCount: cache.files.size,
+      totalSize: cache.totalSize,
+      lastAccessed: cache.lastAccessed,
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error getting latest cache:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Compute file hash (utility endpoint for client)
+app.post('/api/context/hash', (req, res) => {
+  try {
+    const { content } = req.body;
+
+    if (typeof content !== 'string') {
+      return res.status(400).json({ error: 'content must be a string' });
+    }
+
+    const hash = computeFileHash(content);
+    res.json({ hash });
+  } catch (error: any) {
+    console.error('[ContextCache] Error computing hash:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Compute hashes for multiple files
+app.post('/api/context/hashes', (req, res) => {
+  try {
+    const { files } = req.body;
+
+    if (!files || typeof files !== 'object') {
+      return res.status(400).json({ error: 'files must be an object' });
+    }
+
+    const fileMap = new Map<string, string>(Object.entries(files));
+    const hashes = computeFileHashes(fileMap);
+
+    res.json({
+      hashes: Object.fromEntries(hashes),
+    });
+  } catch (error: any) {
+    console.error('[ContextCache] Error computing hashes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== END CONTEXT CACHE ENDPOINTS ====================
 
 // WebSocket stats endpoint (PERFORMANCE monitoring)
 app.get('/api/websocket/stats', (_, res) => {
@@ -1905,21 +2354,21 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
             // Inject Claude Code OAuth token if user has one configured
             if (claudeCodeToken) {
               containerEnv.push(`CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
-              console.log(`[Claude Code] Injecting OAuth token into container for project ${projectId}`);
+              authDebug('injecting claude token into container', { projectId: maskIdentifier(projectId) });
             }
 
             // Inject AI provider API keys (for Codex, Gemini CLI, OpenCode, etc.)
             if (aiProviderKeys.openai) {
               containerEnv.push(`OPENAI_API_KEY=${aiProviderKeys.openai}`);
-              console.log(`[AI Tools] Injecting OpenAI API key for project ${projectId}`);
+              authDebug('injecting OpenAI key into container', { projectId: maskIdentifier(projectId) });
             }
             if (aiProviderKeys.gemini) {
               containerEnv.push(`GEMINI_API_KEY=${aiProviderKeys.gemini}`);
-              console.log(`[AI Tools] Injecting Gemini API key for project ${projectId}`);
+              authDebug('injecting Gemini key into container', { projectId: maskIdentifier(projectId) });
             }
             if (aiProviderKeys.anthropic) {
               containerEnv.push(`ANTHROPIC_API_KEY=${aiProviderKeys.anthropic}`);
-              console.log(`[AI Tools] Injecting Anthropic API key for project ${projectId}`);
+              authDebug('injecting Anthropic key into container', { projectId: maskIdentifier(projectId) });
             }
 
             // Add common env vars for all projects
@@ -2910,6 +3359,181 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
   }
 });
 
+// Copy workspace from one project container to another (SECURED)
+app.post('/api/workspace/copy', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  const sourceProjectId = sanitizeProjectId(req.body?.sourceProjectId || '');
+  const targetProjectId = sanitizeProjectId(req.body?.targetProjectId || '');
+  const includeGit = Boolean(req.body?.includeGit);
+  const includeGitRemotes = includeGit && Boolean(req.body?.includeGitRemotes);
+  const includeTriggers = Boolean(req.body?.includeTriggers);
+  const includeEnvFiles = Boolean(req.body?.includeEnvFiles);
+  const includeSecrets = Boolean(req.body?.includeSecrets);
+  const includeDeployConfig = Boolean(req.body?.includeDeployConfig);
+  const includeDomains = Boolean(req.body?.includeDomains);
+
+  if (!sourceProjectId || !targetProjectId) {
+    return res.status(400).json({ error: 'sourceProjectId and targetProjectId are required' });
+  }
+  if (sourceProjectId === targetProjectId) {
+    return res.status(400).json({ error: 'sourceProjectId and targetProjectId must be different' });
+  }
+
+  try {
+    // Enforce ownership for both projects when authenticated.
+    if (req.userId && req.userId !== 'anonymous') {
+      const [ownsSource, ownsTarget] = await Promise.all([
+        checkProjectOwnership(req.userId, sourceProjectId),
+        checkProjectOwnership(req.userId, targetProjectId),
+      ]);
+
+      if (!ownsSource || !ownsTarget) {
+        if (STRICT_AUTH) {
+          return res.status(403).json({ error: 'Access denied: You do not own one or both projects' });
+        }
+        logWarning(ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED, 'Workspace copy ownership verification bypassed in migration mode', {
+          userId: maskIdentifier(req.userId),
+          sourceProjectId: maskIdentifier(sourceProjectId),
+          targetProjectId: maskIdentifier(targetProjectId),
+        });
+      }
+    } else if (STRICT_AUTH) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const sourceEntry = containers.get(sourceProjectId);
+    const targetEntry = containers.get(targetProjectId);
+    if (!sourceEntry) {
+      return res.status(404).json({ error: 'Source container not found' });
+    }
+    if (!targetEntry) {
+      return res.status(404).json({ error: 'Target container not found' });
+    }
+
+    const sourceStatus = await ensureContainerRunning(sourceEntry, sourceProjectId);
+    const targetStatus = await ensureContainerRunning(targetEntry, targetProjectId);
+    if (!sourceStatus.running) {
+      return res.status(503).json({ error: 'Source container is not running', canRetry: true });
+    }
+    if (!targetStatus.running) {
+      return res.status(503).json({ error: 'Target container is not running', canRetry: true });
+    }
+
+    sourceEntry.lastActive = Date.now();
+    targetEntry.lastActive = Date.now();
+
+    const sourceContainer = docker.getContainer(sourceEntry.id);
+    const targetContainer = docker.getContainer(targetEntry.id);
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'recoder-copy-'));
+    const localTarPath = path.join(tempDir, 'workspace-copy.tar');
+    const archivePathInSource = '/tmp/recoder-workspace-copy.tar';
+    const tarExcludes: string[] = ["--exclude='node_modules'"];
+    if (!includeGit) {
+      tarExcludes.push("--exclude='.git'");
+    }
+    if (!includeEnvFiles) {
+      tarExcludes.push("--exclude='.env'");
+      tarExcludes.push("--exclude='.env.*'");
+    }
+    if (!includeSecrets) {
+      tarExcludes.push("--exclude='*.pem'");
+      tarExcludes.push("--exclude='*.key'");
+      tarExcludes.push("--exclude='*.p12'");
+      tarExcludes.push("--exclude='*.crt'");
+      tarExcludes.push("--exclude='*.cer'");
+      tarExcludes.push("--exclude='.npmrc'");
+      tarExcludes.push("--exclude='id_rsa'");
+      tarExcludes.push("--exclude='id_ed25519'");
+    }
+    if (!includeDeployConfig) {
+      tarExcludes.push("--exclude='.vercel'");
+      tarExcludes.push("--exclude='.netlify'");
+      tarExcludes.push("--exclude='.firebase'");
+      tarExcludes.push("--exclude='vercel.json'");
+      tarExcludes.push("--exclude='netlify.toml'");
+      tarExcludes.push("--exclude='render.yaml'");
+      tarExcludes.push("--exclude='docker-compose*.yml'");
+      tarExcludes.push("--exclude='docker-compose*.yaml'");
+    }
+    if (!includeDomains) {
+      tarExcludes.push("--exclude='CNAME'");
+    }
+
+    try {
+      // Create tar archive in source container, always excluding node_modules for speed/size.
+      await execInContainer(
+        sourceEntry.id,
+        `cd /workspace && tar ${tarExcludes.join(' ')} -cf ${archivePathInSource} .`,
+      );
+
+      // Copy archive source-container -> host temp.
+      await runHostCommand('docker', ['cp', `${sourceEntry.id}:${archivePathInSource}`, localTarPath]);
+
+      // Clear target workspace before extracting copied archive.
+      await execInContainer(
+        targetEntry.id,
+        `find /workspace -mindepth 1 -maxdepth 1 ! -name 'node_modules' -exec rm -rf {} +`,
+      );
+
+      // Copy archive host -> target container workspace.
+      await targetContainer.putArchive(createReadStream(localTarPath), { path: '/workspace' });
+
+      // By default, do not carry over git remotes from source project.
+      if (includeGit && !includeGitRemotes) {
+        await execInContainer(
+          targetEntry.id,
+          "cd /workspace && if [ -d .git ] && command -v git >/dev/null 2>&1; then for remote in $(git remote 2>/dev/null); do git remote remove \"$remote\" || true; done; fi",
+        );
+      }
+
+      // Best-effort cleanup in source container.
+      await execInContainer(
+        sourceEntry.id,
+        `rm -f ${archivePathInSource}`,
+      ).catch(() => {});
+    } finally {
+      // Clean temporary host files.
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+
+    // Invalidate project-level cache entries so copied files appear immediately.
+    fileCache.invalidate(sourceProjectId);
+    fileCache.invalidate(targetProjectId);
+
+    auditLog({
+      userId: req.userId,
+      action: 'WORKSPACE_COPY',
+      projectId: targetProjectId,
+      details: {
+        sourceProjectId,
+        includeGit,
+        includeGitRemotes,
+        includeTriggers,
+        includeEnvFiles,
+        includeSecrets,
+        includeDeployConfig,
+        includeDomains,
+      },
+      ip: req.ip,
+    });
+
+    return res.json({
+      success: true,
+      sourceProjectId,
+      targetProjectId,
+      includeGit,
+      includeGitRemotes,
+      includeTriggers,
+      includeEnvFiles,
+      includeSecrets,
+      includeDeployConfig,
+      includeDomains,
+    });
+  } catch (err: any) {
+    console.error(`[WorkspaceCopy] Failed ${sourceProjectId} -> ${targetProjectId}:`, err);
+    return res.status(500).json({ error: err?.message || 'Workspace copy failed' });
+  }
+});
+
 // Export project files as ZIP (SECURED)
 // Returns file tree with content for export functionality
 app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
@@ -3272,7 +3896,8 @@ app.get('/api/logs/:projectId', authenticateRequest, verifyProjectOwnership, asy
 
     entry.lastActive = Date.now();
     const tail = Math.min(parseInt(req.query.tail as string) || 100, 1000); // Cap at 1000 lines
-    const logs = await devServerManager.getLogs(entry.id, projectId, tail);
+    const source = req.query.source as string | undefined;
+    const logs = await devServerManager.getLogs(entry.id, projectId, tail, source);
 
     res.json({ logs });
   } catch (err: any) {
@@ -3289,7 +3914,8 @@ app.get('/api/logs/:projectId/parsed', authenticateRequest, verifyProjectOwnersh
 
     entry.lastActive = Date.now();
     const tail = Math.min(parseInt(req.query.tail as string) || 100, 1000);
-    const logs = await devServerManager.getLogs(entry.id, projectId, tail);
+    const source = req.query.source as string | undefined;
+    const logs = await devServerManager.getLogs(entry.id, projectId, tail, source);
 
     // Parse errors from logs
     const errors = parseAllErrors(logs);
@@ -3648,8 +4274,23 @@ app.post('/api/snapshot/:projectId', authenticateRequest, verifyProjectOwnership
       ip: req.ip,
     });
 
+    // Check if project has Neon linked — capture DB timestamp
+    let neonDbTimestamp: string | undefined;
+    try {
+      const links = integrationStore.getProjectLinks(projectId);
+      if (links.neon?.projectId && req.userId) {
+        const creds = integrationStore.getUserCredentials(req.userId);
+        if (creds.neon?.apiKey) {
+          neonDbTimestamp = new Date().toISOString();
+          console.log(`[Snapshot] Capturing Neon DB timestamp: ${neonDbTimestamp} for ${projectId}`);
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[Snapshot] Failed to capture DB timestamp: ${err.message}`);
+    }
+
     entry.lastActive = Date.now();
-    const snapshot = await snapshotManager.createSnapshot(entry.id, projectId, message, author);
+    const snapshot = await snapshotManager.createSnapshot(entry.id, projectId, message, author, { neonDbTimestamp });
 
     res.json(snapshot);
   } catch (err: any) {
@@ -3717,9 +4358,34 @@ app.post('/api/snapshot/:projectId/restore', authenticateRequest, verifyProjectO
     });
 
     entry.lastActive = Date.now();
+
+    // Restore Git files
     await snapshotManager.restoreSnapshot(entry.id, projectId, safeSnapshotId);
 
-    res.json({ success: true, restoredTo: safeSnapshotId });
+    // Check if snapshot has a Neon DB timestamp and restore DB state
+    let dbRestored = false;
+    try {
+      const neonDbTimestamp = await snapshotManager.getSnapshotDbTimestamp(entry.id, safeSnapshotId);
+      if (neonDbTimestamp && req.userId) {
+        const links = integrationStore.getProjectLinks(projectId);
+        const creds = integrationStore.getUserCredentials(req.userId);
+        if (links.neon?.projectId && links.neon?.developmentBranchId && creds.neon?.apiKey) {
+          console.log(`[Snapshot] Restoring Neon DB to ${neonDbTimestamp} for ${projectId}`);
+          await neonClient.restoreBranch(
+            creds.neon.apiKey,
+            links.neon.projectId,
+            links.neon.developmentBranchId,
+            neonDbTimestamp,
+          );
+          dbRestored = true;
+          console.log(`[Snapshot] Neon DB restored successfully for ${projectId}`);
+        }
+      }
+    } catch (dbErr: any) {
+      console.warn(`[Snapshot] DB restore failed (files still restored): ${dbErr.message}`);
+    }
+
+    res.json({ success: true, restoredTo: safeSnapshotId, dbRestored });
   } catch (err: any) {
     console.error('❌ Snapshot restore error:', err.message);
     res.status(500).json({ error: err.message });
@@ -4056,6 +4722,10 @@ app.ws('/terminal/:projectId', async (ws, req) => {
   // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
   wsKeepalive.register(ws as any, projectId, 'terminal', authSession.userId);
 
+  // Register for WebSocket rate limiting
+  const terminalRateLimiter = getWsRateLimiter('terminal');
+  terminalRateLimiter.track(ws as any);
+
   let entry = containers.get(projectId);
 
   // Try to recover container from Docker if not in memory (after backend restart)
@@ -4225,6 +4895,11 @@ app.ws('/terminal/:projectId', async (ws, req) => {
 
     // Handle data from client to container
     ws.on('message', async (data: Buffer | string) => {
+      // Rate limit check
+      if (!terminalRateLimiter.allowMessage(ws as any)) {
+        return; // Drop message silently
+      }
+
       entry.lastActive = Date.now();
       lifecycleManager.resetTimer(projectId);
 
@@ -4912,8 +5587,9 @@ app.post('/api/git/:projectId/branch', authenticateRequest, verifyProjectOwnersh
     const projectId = sanitizeProjectId(req.params.projectId);
     const { name, checkout } = req.body;
 
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({ error: 'Branch name required' });
+    const branchValidation = validateBranchName(name, 'name');
+    if (!branchValidation.valid) {
+      return res.status(400).json({ error: branchValidation.error });
     }
 
     const entry = containers.get(projectId);
@@ -4949,8 +5625,9 @@ app.post('/api/git/:projectId/checkout', authenticateRequest, verifyProjectOwner
     const projectId = sanitizeProjectId(req.params.projectId);
     const { branch } = req.body;
 
-    if (!branch || typeof branch !== 'string') {
-      return res.status(400).json({ error: 'Branch name required' });
+    const branchValidation = validateBranchName(branch, 'branch');
+    if (!branchValidation.valid) {
+      return res.status(400).json({ error: branchValidation.error });
     }
 
     const entry = containers.get(projectId);
@@ -4986,6 +5663,11 @@ app.delete('/api/git/:projectId/branch/:name', authenticateRequest, verifyProjec
     const projectId = sanitizeProjectId(req.params.projectId);
     const branchName = decodeURIComponent(req.params.name);
     const force = req.query.force === 'true';
+
+    const branchValidation = validateBranchName(branchName, 'name');
+    if (!branchValidation.valid) {
+      return res.status(400).json({ error: branchValidation.error });
+    }
 
     const entry = containers.get(projectId);
     if (!entry) {
@@ -5114,8 +5796,9 @@ app.post('/api/git/:projectId/commit', authenticateRequest, verifyProjectOwnersh
     const projectId = sanitizeProjectId(req.params.projectId);
     const { message } = req.body;
 
-    if (!message || typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'Commit message required' });
+    const msgValidation = validateCommitMessage(message);
+    if (!msgValidation.valid) {
+      return res.status(400).json({ error: msgValidation.error });
     }
 
     const entry = containers.get(projectId);
@@ -5242,8 +5925,9 @@ app.post('/api/git/:projectId/revert', authenticateRequest, verifyProjectOwnersh
     const projectId = sanitizeProjectId(req.params.projectId);
     const { commitHash } = req.body;
 
-    if (!commitHash || typeof commitHash !== 'string') {
-      return res.status(400).json({ error: 'commitHash required' });
+    const hashValidation = validateCommitHash(commitHash);
+    if (!hashValidation.valid) {
+      return res.status(400).json({ error: hashValidation.error });
     }
 
     const entry = containers.get(projectId);
@@ -5274,7 +5958,623 @@ app.post('/api/git/:projectId/revert', authenticateRequest, verifyProjectOwnersh
   }
 });
 
+// ── Remote Git Operations ──
+
+// Get remotes
+app.get('/api/git/:projectId/remotes', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+    entry.lastActive = Date.now();
+    const remotes = await gitOperations.getRemotes(entry.id);
+    res.json({ remotes });
+  } catch (err: any) {
+    console.error('[Git] Remotes error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Set remote
+app.post('/api/git/:projectId/remote', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { name, url } = req.body;
+
+    if (!name || !url) {
+      return res.status(400).json({ error: 'name and url are required' });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_SET_REMOTE',
+      projectId,
+      details: { name, url: url.replace(/ghp_[a-zA-Z0-9]+/, 'ghp_***') },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+    const result = await gitOperations.setRemote(entry.id, name, url);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Set remote error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete remote
+app.delete('/api/git/:projectId/remote/:name', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const name = decodeURIComponent(req.params.name);
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_REMOVE_REMOTE',
+      projectId,
+      details: { name },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+    const result = await gitOperations.removeRemote(entry.id, name);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Remove remote error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Push to remote
+app.post('/api/git/:projectId/push', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { remote, branch, force, setUpstream, token } = req.body;
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_PUSH',
+      projectId,
+      details: { remote: remote || 'origin', branch, force: !!force },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+    const result = await gitOperations.push(entry.id, remote || 'origin', branch, {
+      force,
+      setUpstream,
+      token,
+    });
+
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Push error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Pull from remote
+app.post('/api/git/:projectId/pull', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { remote, branch, rebase, token } = req.body;
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_PULL',
+      projectId,
+      details: { remote: remote || 'origin', branch, rebase: !!rebase },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+    const result = await gitOperations.pull(entry.id, remote || 'origin', branch, {
+      rebase,
+      token,
+    });
+
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(result.conflicts ? 409 : 400).json({
+        error: result.error,
+        conflicts: result.conflicts,
+      });
+    }
+  } catch (err: any) {
+    console.error('[Git] Pull error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Fetch from remote (no merge)
+app.post('/api/git/:projectId/fetch', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { remote, token } = req.body;
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    entry.lastActive = Date.now();
+    const result = await gitOperations.fetchRemote(entry.id, remote || 'origin', { token });
+
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clone a repository into the project's container
+app.post('/api/git/:projectId/clone', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { url, branch, token, depth } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_CLONE',
+      projectId,
+      details: { url: url.replace(/ghp_[a-zA-Z0-9]+/, 'ghp_***'), branch },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+    const result = await gitOperations.cloneRepo(entry.id, url, { branch, token, depth });
+
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Clone error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Enhanced Git Operations ──
+
+// Get git state (merging, rebasing, cherry-picking, or clean)
+app.get('/api/git/:projectId/state', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    entry.lastActive = Date.now();
+
+    const state = await gitOperations.getGitState(entry.id);
+    res.json(state);
+  } catch (err: any) {
+    console.error('[Git] State error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get conflict files
+app.get('/api/git/:projectId/conflicts', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    entry.lastActive = Date.now();
+
+    const conflicts = await gitOperations.getConflicts(entry.id);
+    res.json(conflicts);
+  } catch (err: any) {
+    console.error('[Git] Conflicts error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Merge branch into current
+app.post('/api/git/:projectId/merge', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { branch, noFf, squash } = req.body;
+
+    const branchValidation = validateBranchName(branch, 'branch');
+    if (!branchValidation.valid) {
+      return res.status(400).json({ error: branchValidation.error });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_MERGE',
+      projectId,
+      details: { branch, noFf: !!noFf, squash: !!squash },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.merge(entry.id, branch, { noFf, squash });
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(result.conflicts ? 409 : 400).json({
+        error: result.error,
+        conflicts: result.conflicts,
+      });
+    }
+  } catch (err: any) {
+    console.error('[Git] Merge error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rebase current onto branch
+app.post('/api/git/:projectId/rebase', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { branch } = req.body;
+
+    const branchValidation = validateBranchName(branch, 'branch');
+    if (!branchValidation.valid) {
+      return res.status(400).json({ error: branchValidation.error });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_REBASE',
+      projectId,
+      details: { branch },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.rebase(entry.id, branch);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(result.conflicts ? 409 : 400).json({
+        error: result.error,
+        conflicts: result.conflicts,
+      });
+    }
+  } catch (err: any) {
+    console.error('[Git] Rebase error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Abort rebase
+app.post('/api/git/:projectId/rebase-abort', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_REBASE_ABORT',
+      projectId,
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.rebaseAbort(entry.id);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Rebase abort error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Continue rebase
+app.post('/api/git/:projectId/rebase-continue', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_REBASE_CONTINUE',
+      projectId,
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.rebaseContinue(entry.id);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(result.conflicts ? 409 : 400).json({
+        error: result.error,
+        conflicts: result.conflicts,
+      });
+    }
+  } catch (err: any) {
+    console.error('[Git] Rebase continue error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rename branch
+app.post('/api/git/:projectId/branch-rename', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { oldName, newName } = req.body;
+
+    const oldValidation = validateBranchName(oldName, 'oldName');
+    if (!oldValidation.valid) {
+      return res.status(400).json({ error: oldValidation.error });
+    }
+
+    const newValidation = validateBranchName(newName, 'newName');
+    if (!newValidation.valid) {
+      return res.status(400).json({ error: newValidation.error });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_RENAME_BRANCH',
+      projectId,
+      details: { oldName, newName },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.renameBranch(entry.id, oldName, newName);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Branch rename error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Force push with lease (safe force push)
+app.post('/api/git/:projectId/force-push', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { remote, branch, token } = req.body;
+
+    if (!remote || !branch) {
+      return res.status(400).json({ error: 'remote and branch are required' });
+    }
+
+    const branchValidation = validateBranchName(branch, 'branch');
+    if (!branchValidation.valid) {
+      return res.status(400).json({ error: branchValidation.error });
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    auditLog({
+      userId: req.userId,
+      action: 'GIT_FORCE_PUSH',
+      projectId,
+      details: { remote, branch },
+      ip: req.ip,
+    });
+
+    entry.lastActive = Date.now();
+
+    const result = await gitOperations.pushForceWithLease(entry.id, remote, branch, token);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err: any) {
+    console.error('[Git] Force push error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== End Git API ====================
+
+// ==================== Visual Editing API ====================
+
+// Apply visual editing changes to source files
+app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { changes } = req.body;
+
+    if (!changes || !Array.isArray(changes) || changes.length === 0) {
+      return res.status(400).json({ error: 'changes array is required' });
+    }
+
+    // Validate each change
+    for (const change of changes) {
+      if (!change.filePath || typeof change.filePath !== 'string') {
+        return res.status(400).json({ error: 'Each change must have a filePath' });
+      }
+      if (!change.lineNumber || typeof change.lineNumber !== 'number') {
+        return res.status(400).json({ error: 'Each change must have a lineNumber' });
+      }
+      if (!change.styles || typeof change.styles !== 'object') {
+        return res.status(400).json({ error: 'Each change must have a styles object' });
+      }
+    }
+
+    const entry = containers.get(projectId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    entry.lastActive = Date.now();
+
+    // Dynamically import visual editing transform (avoid loading babel unless needed)
+    const { transformContent } = await import('./visual-editing-transform.js');
+
+    // Helper: read file from container
+    const readFileFromContainer = async (containerId: string, filePath: string): Promise<string> => {
+      const container = docker.getContainer(containerId);
+      const exec = await container.exec({
+        Cmd: ['cat', filePath],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const stream = await exec.start({ hijack: true, stdin: false });
+      return new Promise((resolve, reject) => {
+        let content = '';
+        stream.on('data', (chunk: Buffer) => { content += chunk.slice(8).toString(); });
+        stream.on('end', () => resolve(content));
+        stream.on('error', reject);
+      });
+    };
+
+    // Helper: write file to container
+    const writeFileToContainer = async (containerId: string, filePath: string, content: string): Promise<void> => {
+      const container = docker.getContainer(containerId);
+      const exec = await container.exec({
+        Cmd: ['sh', '-c', `mkdir -p "$(dirname "${filePath}")" && cat > "${filePath}"`],
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const stream = await exec.start({ hijack: true, stdin: true });
+      stream.write(content);
+      stream.end();
+    };
+
+    // Group changes by file
+    const changesByFile = new Map<string, typeof changes>();
+    for (const change of changes) {
+      const existing = changesByFile.get(change.filePath) || [];
+      existing.push(change);
+      changesByFile.set(change.filePath, existing);
+    }
+
+    const modifiedFiles: string[] = [];
+    const errors: string[] = [];
+
+    for (const [filePath, fileChanges] of changesByFile) {
+      try {
+        // Read file from container
+        const content = await readFileFromContainer(entry.id, `/workspace/${filePath}`);
+
+        // Transform the content
+        const result = transformContent(content, fileChanges);
+
+        if (result.success && result.content) {
+          // Write back to container
+          await writeFileToContainer(entry.id, `/workspace/${filePath}`, result.content);
+          modifiedFiles.push(filePath);
+        } else {
+          errors.push(`${filePath}: ${result.error}`);
+        }
+      } catch (fileErr: any) {
+        errors.push(`${filePath}: ${fileErr.message}`);
+      }
+    }
+
+    if (modifiedFiles.length > 0) {
+      res.json({
+        success: true,
+        modifiedFiles,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: errors.join('; ') || 'No files were modified',
+      });
+    }
+  } catch (err: any) {
+    console.error('[VisualEdit] Apply error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== End Visual Editing API ====================
 
 // ==================== LSP API ====================
 
@@ -5514,6 +6814,10 @@ app.ws('/sync/:projectId', async (ws, req) => {
   // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
   wsKeepalive.register(ws as any, projectId, 'sync', authSession.userId);
 
+  // Register for WebSocket rate limiting
+  const syncRateLimiter = getWsRateLimiter('sync');
+  syncRateLimiter.track(ws as any);
+
   const entry = containers.get(projectId);
   if (!entry) {
     wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
@@ -5523,6 +6827,12 @@ app.ws('/sync/:projectId', async (ws, req) => {
   const container = docker.getContainer(entry.id);
 
   ws.on('message', async (data) => {
+    // Rate limit check
+    if (!syncRateLimiter.allowMessage(ws as any)) {
+      ws.send(JSON.stringify({ action: 'error', error: 'Rate limit exceeded' }));
+      return;
+    }
+
     try {
       entry.lastActive = Date.now();
       const msg = JSON.parse(data.toString());
@@ -6026,6 +7336,18 @@ async function startupSequence() {
       }
 
       console.log(`🏥 [Health] Container ${containerId.slice(0, 12)} restarted successfully`);
+
+      // Re-launch dev server if it was running before the restart
+      if (entry?.backgroundDev) {
+        try {
+          console.log(`🏥 [Health] Re-launching dev server for ${projectId} after container restart...`);
+          const ports = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
+          await devServerManager.restart(entry.id, projectId, ports);
+          console.log(`🏥 [Health] Dev server re-launched for ${projectId}`);
+        } catch (devErr: any) {
+          console.warn(`🏥 [Health] Failed to re-launch dev server for ${projectId}:`, devErr.message);
+        }
+      }
     } catch (err: any) {
       console.error(`🏥 [Health] Failed to restart container ${containerId.slice(0, 12)}:`, err.message);
     }
@@ -6408,6 +7730,10 @@ app.ws('/cli-sync/:projectId', async (ws, req) => {
   // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
   wsKeepalive.register(ws as any, sanitizedProjectId, 'cli-sync', authSession.userId);
 
+  // Register for WebSocket rate limiting
+  const cliSyncRateLimiter = getWsRateLimiter('cli-sync');
+  cliSyncRateLimiter.track(ws as any);
+
   // Register session with authenticated userId
   const session = syncManager.registerSession({
     projectId: sanitizedProjectId,
@@ -6432,6 +7758,12 @@ app.ws('/cli-sync/:projectId', async (ws, req) => {
   }));
 
   ws.on('message', async (data) => {
+    // Rate limit check
+    if (!cliSyncRateLimiter.allowMessage(ws as any)) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Rate limit exceeded' }));
+      return;
+    }
+
     try {
       syncManager.updateSessionActivity(clientId);
       const msg = JSON.parse(data.toString());
@@ -7046,11 +8378,60 @@ app.get('/api/expo-url/:projectId', authenticateRequest, verifyProjectOwnership,
     const metroUrl = `exp://${hostname}:${expoPort}`;
     const webUrl = `http://${hostname}:${expoPort}`;
 
+    // Check for tunnel URL in Expo dev logs
+    let tunnelUrl: string | undefined;
+    if (metroRunning) {
+      try {
+        const logContent = await execCommand(container, 'cat /tmp/expo-dev.log 2>/dev/null || echo ""');
+        // Look for ngrok tunnel URL patterns in log output
+        const tunnelMatch = logContent.match(/exp:\/\/[^\s]*ngrok[^\s]*/);
+        if (tunnelMatch) {
+          tunnelUrl = tunnelMatch[0];
+        }
+        // Also check for Expo's tunnel output format
+        if (!tunnelUrl) {
+          const tunnelMatch2 = logContent.match(/Tunnel ready at (exp:\/\/[^\s]+)/);
+          if (tunnelMatch2) {
+            tunnelUrl = tunnelMatch2[1];
+          }
+        }
+      } catch {
+        // Log read failed — non-critical
+      }
+    }
+
+    // Parse Metro logs for build status
+    let metroBuildStatus: 'idle' | 'building' | 'ready' | 'error' = 'idle';
+    let metroError: string | undefined;
+
+    if (metroRunning) {
+      try {
+        const logs = await execCommand(container, 'tail -30 /tmp/expo-dev.log 2>/dev/null || echo ""');
+        if (logs.includes('error') || logs.includes('Error')) {
+          metroBuildStatus = 'error';
+          // Extract last error line
+          const errorLines = logs.split('\n').filter(l => /error/i.test(l));
+          metroError = errorLines[errorLines.length - 1]?.trim();
+        } else if (logs.includes('Bundling') || logs.includes('Building')) {
+          metroBuildStatus = 'building';
+        } else if (logs.includes('Bundled') || logs.includes('Metro waiting') || logs.includes('started')) {
+          metroBuildStatus = 'ready';
+        } else {
+          metroBuildStatus = 'ready'; // Default when running
+        }
+      } catch {
+        metroBuildStatus = 'ready'; // Fallback
+      }
+    }
+
     res.json({
       isExpo: true,
       metroUrl,
+      tunnelUrl,
       webUrl,
       metroRunning,
+      metroBuildStatus,
+      metroError,
       expoPort,
       hostname,
     });
@@ -7122,6 +8503,7 @@ app.post('/api/expo-start/:projectId', authenticateRequest, verifyProjectOwnersh
     });
 
     await exec.start({ Detach: true });
+    devServerManager.registerExternalServer(projectId, 'expo');
     console.log(`[Expo] Started Expo dev server in ${mode} mode for project ${projectId}`);
 
     // Wait for Expo to initialize
@@ -7164,6 +8546,1391 @@ app.post('/api/expo-start/:projectId', authenticateRequest, verifyProjectOwnersh
 });
 
 // ==================== END EXPO GO QR CODE ====================
+
+// ==================== EAS BUILD ====================
+
+interface EasBuildInfo {
+  buildId: string;
+  projectId: string;
+  platform: 'android' | 'ios';
+  status: string;
+  startedAt: string;
+  completedAt?: string;
+  artifactUrl?: string;
+  error?: string;
+  expoProjectUrl?: string;
+  profile?: string;
+  autoSubmit?: boolean;
+  submitStatus?: 'pending' | 'submitting' | 'submitted' | 'failed';
+  submitError?: string;
+}
+
+const easBuilds = new Map<string, EasBuildInfo>();
+
+/** Sanitize a token for safe shell interpolation — only allow alphanumeric, underscores, hyphens, dots */
+function sanitizeShellToken(token: string): string {
+  return token.replace(/[^a-zA-Z0-9_\-\.]/g, '');
+}
+
+// POST /api/eas-build/:projectId - Trigger an EAS build
+app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { platform, expoToken, profile = 'preview', autoSubmit = false } = req.body;
+
+  if (!platform || !['android', 'ios'].includes(platform)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
+  }
+  if (!expoToken || typeof expoToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+  }
+
+  const validProfiles = ['development', 'preview', 'production'];
+  const safeProfile = validProfiles.includes(profile) ? profile : 'preview';
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    // Ensure eas-cli is available
+    try {
+      await execInContainer(entry.id, 'which eas || npm install -g eas-cli 2>&1');
+    } catch {
+      await execInContainer(entry.id, 'npm install -g eas-cli 2>&1');
+    }
+
+    // Ensure eas.json exists with build profiles
+    try {
+      await execInContainer(entry.id, 'cat /workspace/eas.json 2>/dev/null');
+    } catch {
+      const easConfig = JSON.stringify({
+        cli: { version: ">= 3.0.0" },
+        build: {
+          development: {
+            developmentClient: true,
+            distribution: "internal",
+          },
+          preview: {
+            distribution: "internal",
+            ...(platform === 'android' ? { android: { buildType: "apk" } } : {}),
+          },
+          production: {}
+        },
+        submit: { production: {} }
+      }, null, 2);
+      await execInContainer(entry.id, `cat > /workspace/eas.json << 'EASEOF'\n${easConfig}\nEASEOF`);
+    }
+
+    // Run eas build
+    console.log(`[EAS] Starting ${platform} build for project ${projectId} (profile: ${safeProfile})`);
+    const safeToken = sanitizeShellToken(expoToken);
+    const buildOutput = await execInContainer(
+      entry.id,
+      `cd /workspace && EXPO_TOKEN=${safeToken} eas build --platform ${platform} --profile ${safeProfile} --non-interactive --json --no-wait 2>&1`,
+    );
+
+    // Parse the JSON output from eas build
+    // The output may contain non-JSON lines before the actual JSON array
+    let buildData: any;
+    try {
+      const jsonMatch = buildOutput.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        buildData = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(buildData)) buildData = buildData[0];
+      } else {
+        // Try parsing the whole output as JSON
+        buildData = JSON.parse(buildOutput);
+        if (Array.isArray(buildData)) buildData = buildData[0];
+      }
+    } catch {
+      console.error(`[EAS] Failed to parse build output:`, buildOutput);
+      return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS build submitted but failed to parse output. Raw: ${buildOutput.slice(0, 500)}`));
+    }
+
+    const buildId = buildData?.id || buildData?.buildId || `build-${Date.now()}`;
+    const expoProjectUrl = buildData?.projectUrl || buildData?.project?.url || null;
+
+    const buildInfo: EasBuildInfo = {
+      buildId,
+      projectId,
+      platform: platform as 'android' | 'ios',
+      status: buildData?.status || 'submitted',
+      startedAt: new Date().toISOString(),
+      expoProjectUrl,
+      profile: safeProfile,
+      autoSubmit: autoSubmit && safeProfile === 'production',
+    };
+
+    easBuilds.set(buildId, buildInfo);
+    console.log(`[EAS] Build ${buildId} submitted for project ${projectId} (${platform}, profile: ${safeProfile})`);
+
+    sendSuccess(res, {
+      buildId,
+      platform,
+      status: buildInfo.status,
+      expoProjectUrl,
+      profile: safeProfile,
+      autoSubmit: buildInfo.autoSubmit,
+    });
+  } catch (error: any) {
+    console.error(`[EAS] Failed to start build for project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS build failed: ${error.message}`));
+  }
+}));
+
+// GET /api/eas-build/:projectId/:buildId - Check build status
+app.get('/api/eas-build/:projectId/:buildId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId, buildId } = req.params;
+  const expoToken = req.query.expoToken as string;
+
+  const cached = easBuilds.get(buildId);
+  if (!cached || cached.projectId !== projectId) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Build not found'));
+  }
+
+  // If terminal status, return cached
+  const terminalStatuses = ['finished', 'errored', 'canceled'];
+  if (terminalStatuses.includes(cached.status)) {
+    return sendSuccess(res, cached);
+  }
+
+  // Poll EAS for updated status
+  if (expoToken) {
+    const entry = containers.get(projectId);
+    if (entry) {
+      try {
+        const safeToken = sanitizeShellToken(expoToken);
+        const statusOutput = await execInContainer(
+          entry.id,
+          `cd /workspace && EXPO_TOKEN=${safeToken} eas build:view ${cached.buildId} --json 2>&1`,
+        );
+
+        let statusData: any;
+        try {
+          const jsonMatch = statusOutput.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            statusData = JSON.parse(jsonMatch[0]);
+          }
+        } catch { /* ignore parse errors */ }
+
+        if (statusData) {
+          cached.status = statusData.status || cached.status;
+          if (statusData.artifacts?.buildUrl) {
+            cached.artifactUrl = statusData.artifacts.buildUrl;
+          }
+          if (statusData.error) {
+            cached.error = typeof statusData.error === 'string' ? statusData.error : statusData.error?.message || 'Build error';
+          }
+          if (terminalStatuses.includes(cached.status)) {
+            cached.completedAt = new Date().toISOString();
+          }
+          // Auto-submit to App Store / Play Store when build finishes
+          if (cached.autoSubmit && cached.status === 'finished' && !cached.submitStatus) {
+            cached.submitStatus = 'submitting';
+            easBuilds.set(buildId, cached);
+            // Fire and forget the submit
+            (async () => {
+              try {
+                const safeTokenSubmit = sanitizeShellToken(expoToken);
+                console.log(`[EAS] Auto-submitting ${cached.platform} build ${buildId} for project ${projectId}`);
+                await execInContainer(
+                  entry!.id,
+                  `cd /workspace && EXPO_TOKEN=${safeTokenSubmit} eas submit --platform ${cached.platform} --latest --non-interactive --json 2>&1`,
+                );
+                cached.submitStatus = 'submitted';
+                easBuilds.set(buildId, cached);
+                console.log(`[EAS] Auto-submit completed for build ${buildId}`);
+              } catch (submitErr: any) {
+                cached.submitStatus = 'failed';
+                cached.submitError = submitErr.message;
+                easBuilds.set(buildId, cached);
+                console.error(`[EAS] Auto-submit failed for build ${buildId}:`, submitErr.message);
+              }
+            })();
+          }
+          easBuilds.set(buildId, cached);
+        }
+      } catch (err: any) {
+        console.warn(`[EAS] Failed to poll build status for ${buildId}:`, err.message);
+      }
+    }
+  }
+
+  sendSuccess(res, cached);
+}));
+
+// GET /api/eas-builds/:projectId - List builds for a project
+app.get('/api/eas-builds/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+
+  const projectBuilds = Array.from(easBuilds.values())
+    .filter(b => b.projectId === projectId)
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    .slice(0, 10);
+
+  sendSuccess(res, projectBuilds);
+}));
+
+// ==================== END EAS BUILD ====================
+
+// ==================== EAS UPDATE (OTA) ====================
+
+interface EasUpdateInfo {
+  updateId: string;       // update group ID
+  projectId: string;
+  branch: string;
+  message: string;
+  platforms: string[];     // ['android', 'ios']
+  createdAt: string;
+  runtimeVersion?: string;
+}
+
+const easUpdates = new Map<string, EasUpdateInfo>();
+
+/** Sanitize a message for safe shell interpolation — strip shell metacharacters */
+function sanitizeShellMessage(msg: string): string {
+  return msg.replace(/["`$\\]/g, '');
+}
+
+// POST /api/eas-update/:projectId - Push an OTA update
+app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { expoToken, branch = 'preview', message = '' } = req.body;
+
+  if (!expoToken || typeof expoToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    // Ensure eas-cli is available
+    try {
+      await execInContainer(entry.id, 'which eas || npm install -g eas-cli 2>&1');
+    } catch {
+      await execInContainer(entry.id, 'npm install -g eas-cli 2>&1');
+    }
+
+    // Configure eas update (idempotent)
+    const safeToken = sanitizeShellToken(expoToken);
+    try {
+      await execInContainer(entry.id, `cd /workspace && EXPO_TOKEN=${safeToken} eas update:configure --non-interactive 2>&1`);
+    } catch {
+      // Configure may fail if already configured, that's fine
+    }
+
+    // Run eas update
+    const safeBranch = sanitizeShellToken(branch);
+    const safeMessage = sanitizeShellMessage(message || 'Update');
+    console.log(`[EAS Update] Pushing update for project ${projectId} on branch ${safeBranch}`);
+
+    const updateOutput = await execInContainer(
+      entry.id,
+      `cd /workspace && EXPO_TOKEN=${safeToken} eas update --branch ${safeBranch} --message "${safeMessage}" --json --non-interactive 2>&1`,
+    );
+
+    // Parse JSON output
+    let updateData: any;
+    try {
+      const jsonMatch = updateOutput.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        updateData = JSON.parse(jsonMatch[0]);
+      } else {
+        const objMatch = updateOutput.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          updateData = JSON.parse(objMatch[0]);
+        }
+      }
+    } catch {
+      console.error(`[EAS Update] Failed to parse update output:`, updateOutput);
+      return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS update pushed but failed to parse output. Raw: ${updateOutput.slice(0, 500)}`));
+    }
+
+    // Extract update group ID and platforms
+    let updateId: string;
+    let platforms: string[] = [];
+    let runtimeVersion: string | undefined;
+
+    if (Array.isArray(updateData)) {
+      updateId = updateData[0]?.group || updateData[0]?.id || `update-${Date.now()}`;
+      platforms = updateData.map((u: any) => u.platform).filter(Boolean);
+      runtimeVersion = updateData[0]?.runtimeVersion;
+    } else if (updateData) {
+      updateId = updateData.group || updateData.id || `update-${Date.now()}`;
+      platforms = updateData.platform ? [updateData.platform] : [];
+      runtimeVersion = updateData.runtimeVersion;
+    } else {
+      updateId = `update-${Date.now()}`;
+    }
+
+    const updateInfo: EasUpdateInfo = {
+      updateId,
+      projectId,
+      branch: safeBranch,
+      message: safeMessage,
+      platforms,
+      createdAt: new Date().toISOString(),
+      runtimeVersion,
+    };
+
+    easUpdates.set(updateId, updateInfo);
+    console.log(`[EAS Update] Update ${updateId} pushed for project ${projectId} (branch: ${safeBranch})`);
+
+    sendSuccess(res, {
+      updateId,
+      branch: safeBranch,
+      message: safeMessage,
+      platforms,
+      createdAt: updateInfo.createdAt,
+      runtimeVersion,
+    });
+  } catch (error: any) {
+    console.error(`[EAS Update] Failed to push update for project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS update failed: ${error.message}`));
+  }
+}));
+
+// GET /api/eas-updates/:projectId - List update history
+app.get('/api/eas-updates/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const expoToken = req.query.expoToken as string;
+  const branch = (req.query.branch as string) || 'preview';
+
+  const entry = containers.get(projectId);
+
+  let remoteUpdates: any[] = [];
+
+  if (expoToken && entry) {
+    try {
+      const safeToken = sanitizeShellToken(expoToken);
+      const safeBranch = sanitizeShellToken(branch);
+      const listOutput = await execInContainer(
+        entry.id,
+        `cd /workspace && EXPO_TOKEN=${safeToken} eas update:list --branch ${safeBranch} --json --non-interactive --limit 10 2>&1`,
+      );
+
+      try {
+        const jsonMatch = listOutput.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          remoteUpdates = JSON.parse(jsonMatch[0]);
+        } else {
+          const objMatch = listOutput.match(/\{[\s\S]*\}/);
+          if (objMatch) {
+            const parsed = JSON.parse(objMatch[0]);
+            // Some versions return { currentPage: [...] } or { updates: [...] }
+            remoteUpdates = parsed.currentPage || parsed.updates || (Array.isArray(parsed) ? parsed : [parsed]);
+          }
+        }
+      } catch {
+        console.warn(`[EAS Update] Failed to parse update list output:`, listOutput.slice(0, 300));
+      }
+    } catch (err: any) {
+      console.warn(`[EAS Update] Failed to list updates for project ${projectId}:`, err.message);
+    }
+  }
+
+  // Merge with in-memory updates we triggered
+  const localUpdates = Array.from(easUpdates.values())
+    .filter(u => u.projectId === projectId && u.branch === branch)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Combine: remote updates take precedence, supplement with local
+  const remoteIds = new Set(remoteUpdates.map((u: any) => u.group || u.id));
+  const mergedLocal = localUpdates.filter(u => !remoteIds.has(u.updateId));
+
+  sendSuccess(res, {
+    remote: remoteUpdates,
+    local: mergedLocal,
+  });
+}));
+
+// POST /api/eas-update/:projectId/rollback - Rollback to previous update
+app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { expoToken, branch = 'preview' } = req.body;
+
+  if (!expoToken || typeof expoToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    const safeToken = sanitizeShellToken(expoToken);
+    const safeBranch = sanitizeShellToken(branch);
+    console.log(`[EAS Update] Rolling back update on branch ${safeBranch} for project ${projectId}`);
+
+    const rollbackOutput = await execInContainer(
+      entry.id,
+      `cd /workspace && EXPO_TOKEN=${safeToken} eas update:rollback --channel ${safeBranch} --json --non-interactive 2>&1`,
+    );
+
+    // Try to parse the output
+    let rollbackData: any = null;
+    try {
+      const jsonMatch = rollbackOutput.match(/\{[\s\S]*\}/) || rollbackOutput.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        rollbackData = JSON.parse(jsonMatch[0]);
+      }
+    } catch {
+      // Not parseable as JSON — might be a message or error
+    }
+
+    console.log(`[EAS Update] Rollback completed for project ${projectId} on branch ${safeBranch}`);
+
+    sendSuccess(res, {
+      branch: safeBranch,
+      rolled_back: true,
+      details: rollbackData,
+      raw: rollbackData ? undefined : rollbackOutput.slice(0, 500),
+    });
+  } catch (error: any) {
+    console.error(`[EAS Update] Rollback failed for project ${projectId}:`, error.message);
+    // Could be that the command isn't available in this EAS CLI version
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS update rollback failed: ${error.message}. This may require a newer version of eas-cli.`));
+  }
+}));
+
+// ==================== END EAS UPDATE ====================
+
+// ==================== EAS SHARE (Tier 2: Share Link) ====================
+
+const easShares = new Map<string, { projectId: string; shareUrl: string; updateId: string; createdAt: string }>();
+
+// POST /api/eas-share/:projectId - Push EAS Update to 'shared' branch for sharing
+app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { expoToken, message = 'Shared from Recoder' } = req.body;
+
+  if (!expoToken || typeof expoToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    const safeToken = sanitizeShellToken(expoToken);
+    const safeMessage = sanitizeShellMessage(message);
+
+    // Ensure eas-cli and update configuration
+    try {
+      await execInContainer(entry.id, 'which eas || npm install -g eas-cli 2>&1');
+    } catch {
+      await execInContainer(entry.id, 'npm install -g eas-cli 2>&1');
+    }
+
+    try {
+      await execInContainer(entry.id, `cd /workspace && EXPO_TOKEN=${safeToken} eas update:configure --non-interactive 2>&1`);
+    } catch { /* already configured */ }
+
+    console.log(`[EAS Share] Pushing share update for project ${projectId}`);
+
+    const updateOutput = await execInContainer(
+      entry.id,
+      `cd /workspace && EXPO_TOKEN=${safeToken} eas update --branch shared --message "${safeMessage}" --json --non-interactive 2>&1`,
+    );
+
+    let updateData: any;
+    try {
+      const jsonMatch = updateOutput.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        updateData = JSON.parse(jsonMatch[0]);
+      } else {
+        const objMatch = updateOutput.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          updateData = JSON.parse(objMatch[0]);
+        }
+      }
+    } catch {
+      console.error(`[EAS Share] Failed to parse output:`, updateOutput);
+      return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Share update pushed but output parse failed. Raw: ${updateOutput.slice(0, 500)}`));
+    }
+
+    let updateId: string;
+    if (Array.isArray(updateData)) {
+      updateId = updateData[0]?.group || updateData[0]?.id || `share-${Date.now()}`;
+    } else if (updateData) {
+      updateId = updateData.group || updateData.id || `share-${Date.now()}`;
+    } else {
+      updateId = `share-${Date.now()}`;
+    }
+
+    // Construct a share URL (Expo Updates URL pattern)
+    const shareUrl = `exp+recoder-expo-starter://expo-development-client/?url=https://u.expo.dev/update/${updateId}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}&bgcolor=1a1a2e&color=ffffff&format=svg`;
+
+    easShares.set(projectId, { projectId, shareUrl, updateId, createdAt: new Date().toISOString() });
+    console.log(`[EAS Share] Share link created for project ${projectId}: ${updateId}`);
+
+    sendSuccess(res, { shareUrl, updateId, branch: 'shared', qrUrl });
+  } catch (error: any) {
+    console.error(`[EAS Share] Failed for project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS share failed: ${error.message}`));
+  }
+}));
+
+// GET /api/eas-share/:projectId - Get current share status
+app.get('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+
+  const share = easShares.get(projectId);
+  if (share) {
+    sendSuccess(res, { shared: true, shareUrl: share.shareUrl, updateId: share.updateId });
+  } else {
+    sendSuccess(res, { shared: false });
+  }
+}));
+
+startupInfo('routes.eas-share', 'registered');
+
+// ==================== END EAS SHARE ====================
+
+// ==================== EAS SUBMIT ====================
+
+// POST /api/eas-submit/:projectId - Submit build to App Store / Play Store
+app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { expoToken, platform, buildId, profile = 'production' } = req.body;
+
+  if (!expoToken || typeof expoToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+  }
+  if (!platform || !['android', 'ios'].includes(platform)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    const safeToken = sanitizeShellToken(expoToken);
+
+    // Ensure eas-cli is available
+    try {
+      await execInContainer(entry.id, 'which eas || npm install -g eas-cli 2>&1');
+    } catch {
+      await execInContainer(entry.id, 'npm install -g eas-cli 2>&1');
+    }
+
+    console.log(`[EAS Submit] Submitting ${platform} for project ${projectId}`);
+
+    const submitCmd = buildId
+      ? `cd /workspace && EXPO_TOKEN=${safeToken} eas submit --platform ${platform} --id ${sanitizeShellToken(buildId)} --non-interactive --json 2>&1`
+      : `cd /workspace && EXPO_TOKEN=${safeToken} eas submit --platform ${platform} --latest --non-interactive --json 2>&1`;
+
+    const submitOutput = await execInContainer(entry.id, submitCmd);
+
+    let submitData: any = null;
+    try {
+      const jsonMatch = submitOutput.match(/\{[\s\S]*\}/) || submitOutput.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        submitData = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(submitData)) submitData = submitData[0];
+      }
+    } catch { /* ignore parse errors */ }
+
+    const submitId = submitData?.id || `submit-${Date.now()}`;
+    console.log(`[EAS Submit] Submission ${submitId} completed for project ${projectId} (${platform})`);
+
+    sendSuccess(res, { submitId, status: submitData?.status || 'submitted', platform });
+  } catch (error: any) {
+    console.error(`[EAS Submit] Failed for project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS submit failed: ${error.message}`));
+  }
+}));
+
+startupInfo('routes.eas-submit', 'registered');
+
+// ==================== END EAS SUBMIT ====================
+
+// ==================== APP CONFIG MANAGEMENT ====================
+
+// GET /api/app-config/:projectId - Read app.json expo config from container
+app.get('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    const appJsonRaw = await execInContainer(entry.id, 'cat /workspace/app.json 2>/dev/null');
+    const appJson = JSON.parse(appJsonRaw);
+    sendSuccess(res, appJson.expo || appJson);
+  } catch (error: any) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to read app.json: ${error.message}`));
+  }
+}));
+
+// PUT /api/app-config/:projectId - Update app.json expo config
+app.put('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const updates = req.body; // { name?, slug?, version?, icon?, splash?, ios?, android?, scheme? }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    // Read existing app.json
+    const appJsonRaw = await execInContainer(entry.id, 'cat /workspace/app.json 2>/dev/null');
+    const appJson = JSON.parse(appJsonRaw);
+
+    // Merge updates into expo key
+    const expoConfig = appJson.expo || appJson;
+    const allowedKeys = ['name', 'slug', 'version', 'icon', 'splash', 'ios', 'android', 'scheme'];
+    for (const key of allowedKeys) {
+      if (updates[key] !== undefined) {
+        if (typeof updates[key] === 'object' && !Array.isArray(updates[key]) && expoConfig[key] && typeof expoConfig[key] === 'object') {
+          expoConfig[key] = { ...expoConfig[key], ...updates[key] };
+        } else {
+          expoConfig[key] = updates[key];
+        }
+      }
+    }
+
+    if (appJson.expo) {
+      appJson.expo = expoConfig;
+    }
+
+    // Write back
+    const newContent = JSON.stringify(appJson, null, 2);
+    await execInContainer(entry.id, `cat > /workspace/app.json << 'APPJSONEOF'\n${newContent}\nAPPJSONEOF`);
+
+    console.log(`[App Config] Updated app.json for project ${projectId}`);
+    sendSuccess(res, expoConfig);
+  } catch (error: any) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to update app.json: ${error.message}`));
+  }
+}));
+
+// PUT /api/eas-config/:projectId - Update eas.json submit config
+app.put('/api/eas-config/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const updates = req.body; // { submit?: { production?: { ios?, android? } } }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    let easJson: any;
+    try {
+      const easJsonRaw = await execInContainer(entry.id, 'cat /workspace/eas.json 2>/dev/null');
+      easJson = JSON.parse(easJsonRaw);
+    } catch {
+      easJson = { cli: { version: ">= 3.0.0" }, build: { preview: {}, production: {} }, submit: { production: {} } };
+    }
+
+    // Deep merge submit config
+    if (updates.submit) {
+      easJson.submit = easJson.submit || {};
+      for (const profile of Object.keys(updates.submit)) {
+        easJson.submit[profile] = easJson.submit[profile] || {};
+        const profileUpdate = updates.submit[profile];
+        for (const platform of Object.keys(profileUpdate)) {
+          if (typeof profileUpdate[platform] === 'object') {
+            easJson.submit[profile][platform] = { ...(easJson.submit[profile][platform] || {}), ...profileUpdate[platform] };
+          } else {
+            easJson.submit[profile][platform] = profileUpdate[platform];
+          }
+        }
+      }
+    }
+
+    const newContent = JSON.stringify(easJson, null, 2);
+    await execInContainer(entry.id, `cat > /workspace/eas.json << 'EASJSONEOF'\n${newContent}\nEASJSONEOF`);
+
+    console.log(`[EAS Config] Updated eas.json for project ${projectId}`);
+    sendSuccess(res, easJson);
+  } catch (error: any) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to update eas.json: ${error.message}`));
+  }
+}));
+
+startupInfo('routes.app-config', 'registered');
+
+// ==================== END APP CONFIG MANAGEMENT ====================
+
+// ==================== BUILT-IN BACKEND SERVICES ====================
+
+// POST /api/backend-db/:projectId/init - Initialize SQLite database in container
+app.post('/api/backend-db/:projectId/init', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { schema } = req.body; // optional initial SQL schema
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    // Create data directory
+    await execInContainer(entry.id, 'mkdir -p /workspace/data');
+
+    // Create database file
+    await execInContainer(entry.id, 'sqlite3 /workspace/data/app.db "SELECT 1;" 2>&1');
+
+    // Run initial schema if provided
+    if (schema && typeof schema === 'string') {
+      const safeSchema = schema.replace(/'/g, "'\\''");
+      await execInContainer(entry.id, `sqlite3 /workspace/data/app.db '${safeSchema}' 2>&1`);
+    }
+
+    console.log(`[Backend DB] Initialized SQLite for project ${projectId}`);
+    sendSuccess(res, { initialized: true, path: '/workspace/data/app.db' });
+  } catch (error: any) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to initialize database: ${error.message}`));
+  }
+}));
+
+// POST /api/backend-db/:projectId/query - Run SQL query
+app.post('/api/backend-db/:projectId/query', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { query, params } = req.body;
+
+  if (!query || typeof query !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing query.'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    const safeQuery = query.replace(/'/g, "'\\''");
+    const output = await execInContainer(entry.id, `sqlite3 /workspace/data/app.db -json '${safeQuery}' 2>&1`);
+
+    let rows: any[] = [];
+    try {
+      if (output.trim()) {
+        rows = JSON.parse(output);
+      }
+    } catch {
+      // Non-JSON output (e.g. INSERT/UPDATE/DELETE)
+    }
+
+    sendSuccess(res, { rows, rowCount: rows.length });
+  } catch (error: any) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Query failed: ${error.message}`));
+  }
+}));
+
+// POST /api/backend-db/:projectId/migrate - Run database migrations
+app.post('/api/backend-db/:projectId/migrate', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { migrations } = req.body; // [{ name: string, sql: string }]
+
+  if (!Array.isArray(migrations) || migrations.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing migrations array.'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    // Ensure migrations table exists
+    await execInContainer(entry.id, `sqlite3 /workspace/data/app.db 'CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT DEFAULT CURRENT_TIMESTAMP);' 2>&1`);
+
+    // Check which migrations have been applied
+    const appliedOutput = await execInContainer(entry.id, `sqlite3 /workspace/data/app.db -json 'SELECT name FROM _migrations;' 2>&1`);
+    let appliedSet = new Set<string>();
+    try {
+      if (appliedOutput.trim()) {
+        const applied = JSON.parse(appliedOutput);
+        appliedSet = new Set(applied.map((r: any) => r.name));
+      }
+    } catch { /* empty table */ }
+
+    let appliedCount = 0;
+    let skippedCount = 0;
+
+    for (const migration of migrations) {
+      if (!migration.name || !migration.sql) continue;
+
+      if (appliedSet.has(migration.name)) {
+        skippedCount++;
+        continue;
+      }
+
+      const safeSql = migration.sql.replace(/'/g, "'\\''");
+      const safeName = migration.name.replace(/'/g, "'\\''");
+
+      await execInContainer(entry.id, `sqlite3 /workspace/data/app.db '${safeSql}' 2>&1`);
+      await execInContainer(entry.id, `sqlite3 /workspace/data/app.db 'INSERT INTO _migrations (name) VALUES ("${safeName}");' 2>&1`);
+      appliedCount++;
+    }
+
+    console.log(`[Backend DB] Migrations for project ${projectId}: ${appliedCount} applied, ${skippedCount} skipped`);
+    sendSuccess(res, { applied: appliedCount, skipped: skippedCount });
+  } catch (error: any) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Migration failed: ${error.message}`));
+  }
+}));
+
+// POST /api/backend-scaffold/:projectId - Generate backend boilerplate
+app.post('/api/backend-scaffold/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { type, tableName } = req.body; // type: 'auth' | 'stripe' | 'crud'
+
+  if (!type || !['auth', 'stripe', 'crud'].includes(type)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid type. Must be "auth", "stripe", or "crud".'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    const files: string[] = [];
+
+    if (type === 'auth') {
+      const authCode = `// Auth module - JWT-based authentication with SQLite
+import Database from 'better-sqlite3';
+import crypto from 'crypto';
+
+const db = new Database('/workspace/data/app.db');
+
+// Initialize auth tables
+db.exec(\`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    user_id TEXT NOT NULL REFERENCES users(id),
+    token TEXT UNIQUE NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+\`);
+
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return salt + ':' + hash;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(':');
+  const verify = crypto.scryptSync(password, salt, 64).toString('hex');
+  return hash === verify;
+}
+
+export function register(email: string, password: string) {
+  const hash = hashPassword(password);
+  const stmt = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)');
+  return stmt.run(email, hash);
+}
+
+export function login(email: string, password: string) {
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+  if (!user || !verifyPassword(password, user.password_hash)) return null;
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  db.prepare('INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)').run(user.id, token, expires);
+  return { userId: user.id, token };
+}
+
+export function authenticate(token: string) {
+  const session = db.prepare('SELECT * FROM sessions WHERE token = ? AND expires_at > datetime("now")').get(token) as any;
+  return session ? { userId: session.user_id } : null;
+}
+`;
+      await execInContainer(entry.id, `mkdir -p /workspace/src/backend && cat > /workspace/src/backend/auth.ts << 'AUTHEOF'\n${authCode}\nAUTHEOF`);
+      files.push('src/backend/auth.ts');
+    } else if (type === 'stripe') {
+      const stripeCode = `// Stripe integration module
+// Requires: npm install stripe
+
+// Set STRIPE_SECRET_KEY in your environment
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+
+let stripe: any;
+try {
+  const Stripe = require('stripe');
+  stripe = new Stripe(STRIPE_SECRET_KEY);
+} catch {
+  console.warn('stripe package not installed. Run: npm install stripe');
+}
+
+export async function createCheckoutSession(priceId: string, successUrl: string, cancelUrl: string) {
+  if (!stripe) throw new Error('Stripe not configured');
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    payment_method_types: ['card'],
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+}
+
+export async function createPortalSession(customerId: string, returnUrl: string) {
+  if (!stripe) throw new Error('Stripe not configured');
+  return stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: returnUrl,
+  });
+}
+
+export function verifyWebhookSignature(body: string, signature: string, endpointSecret: string) {
+  if (!stripe) throw new Error('Stripe not configured');
+  return stripe.webhooks.constructEvent(body, signature, endpointSecret);
+}
+`;
+      await execInContainer(entry.id, `mkdir -p /workspace/src/backend && cat > /workspace/src/backend/stripe.ts << 'STRIPEEOF'\n${stripeCode}\nSTRIPEEOF`);
+      files.push('src/backend/stripe.ts');
+    } else if (type === 'crud') {
+      const name = (tableName || 'items').replace(/[^a-zA-Z0-9_]/g, '');
+      const crudCode = `// CRUD module for ${name}
+import Database from 'better-sqlite3';
+
+const db = new Database('/workspace/data/app.db');
+
+db.exec(\`
+  CREATE TABLE IF NOT EXISTS ${name} (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    data TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+\`);
+
+export function list(limit = 50, offset = 0) {
+  return db.prepare('SELECT * FROM ${name} ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
+}
+
+export function getById(id: string) {
+  return db.prepare('SELECT * FROM ${name} WHERE id = ?').get(id);
+}
+
+export function create(data: Record<string, any>) {
+  const stmt = db.prepare('INSERT INTO ${name} (data) VALUES (?)');
+  const result = stmt.run(JSON.stringify(data));
+  return { id: result.lastInsertRowid, data };
+}
+
+export function update(id: string, data: Record<string, any>) {
+  const stmt = db.prepare('UPDATE ${name} SET data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+  return stmt.run(JSON.stringify(data), id);
+}
+
+export function remove(id: string) {
+  return db.prepare('DELETE FROM ${name} WHERE id = ?').run(id);
+}
+`;
+      await execInContainer(entry.id, `mkdir -p /workspace/src/backend && cat > /workspace/src/backend/${name}.ts << 'CRUDEOF'\n${crudCode}\nCRUDEOF`);
+      files.push(`src/backend/${name}.ts`);
+    }
+
+    console.log(`[Backend Scaffold] Generated ${type} scaffold for project ${projectId}: ${files.join(', ')}`);
+    sendSuccess(res, { files, message: `${type} scaffold generated successfully` });
+  } catch (error: any) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Scaffold generation failed: ${error.message}`));
+  }
+}));
+
+startupInfo('routes.backend-services', 'registered');
+
+// ==================== END BUILT-IN BACKEND SERVICES ====================
+
+// ==================== FIGMA IMPORT ====================
+
+function parseFigmaUrl(url: string): { fileKey: string; nodeId?: string } | null {
+  // https://www.figma.com/file/XXXXX/Title?node-id=YYY
+  // https://www.figma.com/design/XXXXX/Title?node-id=YYY
+  const match = url.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
+  if (!match) return null;
+  const fileKey = match[1];
+  const nodeIdMatch = url.match(/node-id=([^&]+)/);
+  const nodeId = nodeIdMatch ? decodeURIComponent(nodeIdMatch[1]) : undefined;
+  return { fileKey, nodeId };
+}
+
+function figmaColorToRGBA(color: { r: number; g: number; b: number; a?: number }): string {
+  const r = Math.round((color.r || 0) * 255);
+  const g = Math.round((color.g || 0) * 255);
+  const b = Math.round((color.b || 0) * 255);
+  const a = color.a !== undefined ? color.a : 1;
+  if (a === 1) {
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+  return `rgba(${r}, ${g}, ${b}, ${a.toFixed(2)})`;
+}
+
+function figmaNodeToReactNative(node: any, indent = 2): string {
+  const pad = ' '.repeat(indent);
+  const name = (node.name || 'Component').replace(/[^a-zA-Z0-9]/g, '');
+
+  if (node.type === 'TEXT') {
+    const style: Record<string, any> = {};
+    if (node.style) {
+      if (node.style.fontSize) style.fontSize = node.style.fontSize;
+      if (node.style.fontWeight) style.fontWeight = String(node.style.fontWeight);
+      if (node.style.lineHeightPx) style.lineHeight = node.style.lineHeightPx;
+      if (node.style.letterSpacing) style.letterSpacing = node.style.letterSpacing;
+      if (node.style.textAlignHorizontal) style.textAlign = node.style.textAlignHorizontal.toLowerCase();
+    }
+    if (node.fills?.[0]?.color) {
+      style.color = figmaColorToRGBA(node.fills[0].color);
+    }
+    const styleStr = Object.keys(style).length > 0 ? ` style={${JSON.stringify(style)}}` : '';
+    const text = node.characters || '';
+    return `${pad}<Text${styleStr}>${text}</Text>`;
+  }
+
+  if (node.type === 'RECTANGLE' || node.type === 'ELLIPSE') {
+    const style: Record<string, any> = {};
+    if (node.absoluteBoundingBox) {
+      style.width = node.absoluteBoundingBox.width;
+      style.height = node.absoluteBoundingBox.height;
+    }
+    if (node.fills?.[0]?.color) {
+      style.backgroundColor = figmaColorToRGBA(node.fills[0].color);
+    }
+    if (node.cornerRadius) style.borderRadius = node.cornerRadius;
+    if (node.type === 'ELLIPSE') style.borderRadius = Math.max(style.width || 0, style.height || 0) / 2;
+    if (node.strokes?.[0]?.color) {
+      style.borderWidth = node.strokeWeight || 1;
+      style.borderColor = figmaColorToRGBA(node.strokes[0].color);
+    }
+    return `${pad}<View style={${JSON.stringify(style)}} />`;
+  }
+
+  // FRAME, GROUP, COMPONENT, INSTANCE → container View
+  const style: Record<string, any> = {};
+  if (node.absoluteBoundingBox) {
+    style.width = node.absoluteBoundingBox.width;
+    style.height = node.absoluteBoundingBox.height;
+  }
+  if (node.fills?.[0]?.color) {
+    style.backgroundColor = figmaColorToRGBA(node.fills[0].color);
+  }
+  if (node.cornerRadius) style.borderRadius = node.cornerRadius;
+
+  // Auto-layout → flexbox
+  if (node.layoutMode) {
+    style.flexDirection = node.layoutMode === 'HORIZONTAL' ? 'row' : 'column';
+    if (node.itemSpacing) style.gap = node.itemSpacing;
+    if (node.paddingTop) style.paddingTop = node.paddingTop;
+    if (node.paddingBottom) style.paddingBottom = node.paddingBottom;
+    if (node.paddingLeft) style.paddingLeft = node.paddingLeft;
+    if (node.paddingRight) style.paddingRight = node.paddingRight;
+    if (node.primaryAxisAlignItems) {
+      const alignMap: Record<string, string> = { MIN: 'flex-start', CENTER: 'center', MAX: 'flex-end', SPACE_BETWEEN: 'space-between' };
+      style.justifyContent = alignMap[node.primaryAxisAlignItems] || 'flex-start';
+    }
+    if (node.counterAxisAlignItems) {
+      const alignMap: Record<string, string> = { MIN: 'flex-start', CENTER: 'center', MAX: 'flex-end' };
+      style.alignItems = alignMap[node.counterAxisAlignItems] || 'flex-start';
+    }
+  }
+
+  // Check for image fills
+  const imageFill = node.fills?.find((f: any) => f.type === 'IMAGE');
+  if (imageFill) {
+    return `${pad}<Image source={{ uri: 'https://via.placeholder.com/${Math.round(style.width || 100)}x${Math.round(style.height || 100)}' }} style={${JSON.stringify(style)}} />`;
+  }
+
+  const children = (node.children || []).map((child: any) => figmaNodeToReactNative(child, indent + 2)).join('\n');
+
+  if (children) {
+    return `${pad}<View style={${JSON.stringify(style)}}>\n${children}\n${pad}</View>`;
+  }
+  return `${pad}<View style={${JSON.stringify(style)}} />`;
+}
+
+// POST /api/figma-import/:projectId - Import Figma design and convert to RN components
+app.post('/api/figma-import/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { figmaUrl, figmaToken, nodeIds } = req.body;
+
+  if (!figmaUrl || typeof figmaUrl !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing figmaUrl.'));
+  }
+  if (!figmaToken || typeof figmaToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing figmaToken.'));
+  }
+
+  const parsed = parseFigmaUrl(figmaUrl);
+  if (!parsed) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid Figma URL. Expected format: https://www.figma.com/file/XXXXX/...'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    // Fetch from Figma API
+    const targetNodeIds = nodeIds || (parsed.nodeId ? [parsed.nodeId] : undefined);
+    let apiUrl = `https://api.figma.com/v1/files/${parsed.fileKey}`;
+    if (targetNodeIds?.length) {
+      apiUrl += `/nodes?ids=${targetNodeIds.map((id: string) => encodeURIComponent(id)).join(',')}`;
+    }
+
+    const figmaResponse = await fetch(apiUrl, {
+      headers: { 'X-Figma-Token': figmaToken },
+    });
+
+    if (!figmaResponse.ok) {
+      const errText = await figmaResponse.text();
+      return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Figma API error (${figmaResponse.status}): ${errText.slice(0, 300)}`));
+    }
+
+    const figmaData = await figmaResponse.json() as any;
+
+    // Get nodes to convert
+    let nodesToConvert: any[] = [];
+    if (figmaData.nodes) {
+      // /nodes endpoint response
+      nodesToConvert = Object.values(figmaData.nodes).map((n: any) => n.document);
+    } else if (figmaData.document) {
+      // Full file response — get top-level frames from first page
+      const firstPage = figmaData.document.children?.[0];
+      if (firstPage?.children) {
+        nodesToConvert = firstPage.children.slice(0, 10); // Limit to first 10 frames
+      }
+    }
+
+    if (nodesToConvert.length === 0) {
+      return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No convertible nodes found in the Figma file.'));
+    }
+
+    // Convert each node to a React Native component file
+    const files: string[] = [];
+    for (const node of nodesToConvert) {
+      const componentName = (node.name || 'FigmaComponent').replace(/[^a-zA-Z0-9]/g, '') || 'FigmaComponent';
+      const jsxContent = figmaNodeToReactNative(node, 4);
+
+      const fileContent = `import React from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
+
+export default function ${componentName}() {
+  return (
+${jsxContent}
+  );
+}
+`;
+      const filePath = `app/components/figma/${componentName}.tsx`;
+      await execInContainer(entry.id, `mkdir -p /workspace/app/components/figma`);
+      await execInContainer(entry.id, `cat > /workspace/${filePath} << 'FIGMAEOF'\n${fileContent}\nFIGMAEOF`);
+      files.push(filePath);
+    }
+
+    console.log(`[Figma Import] Converted ${files.length} components for project ${projectId}`);
+    sendSuccess(res, { files, componentCount: files.length });
+  } catch (error: any) {
+    console.error(`[Figma Import] Failed for project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Figma import failed: ${error.message}`));
+  }
+}));
+
+startupInfo('routes.figma-import', 'registered');
+
+// ==================== END FIGMA IMPORT ====================
+
+// ==================== APPETIZE.IO DEVICE CLOUD ====================
+
+const appetizeSessions = new Map<string, { publicKey: string; appUrl: string; platform: string; projectId: string }>();
+
+// POST /api/appetize-upload/:projectId - Upload build to Appetize.io
+app.post('/api/appetize-upload/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { buildUrl, platform, appetizeApiToken } = req.body;
+
+  if (!buildUrl || typeof buildUrl !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing buildUrl.'));
+  }
+  if (!platform || !['android', 'ios'].includes(platform)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
+  }
+  if (!appetizeApiToken || typeof appetizeApiToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing appetizeApiToken.'));
+  }
+
+  try {
+    console.log(`[Appetize] Uploading ${platform} build for project ${projectId}`);
+
+    const appetizeResponse = await fetch('https://api.appetize.io/v2/apps', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${appetizeApiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: buildUrl,
+        platform: platform === 'ios' ? 'ios' : 'android',
+      }),
+    });
+
+    if (!appetizeResponse.ok) {
+      const errText = await appetizeResponse.text();
+      return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Appetize API error (${appetizeResponse.status}): ${errText.slice(0, 300)}`));
+    }
+
+    const appetizeData = await appetizeResponse.json() as any;
+    const publicKey = appetizeData.publicKey || appetizeData.appVersions?.[0]?.publicKey;
+
+    if (!publicKey) {
+      return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Appetize upload succeeded but no publicKey returned'));
+    }
+
+    const appUrl = `https://appetize.io/app/${publicKey}`;
+    const embedUrl = `https://appetize.io/embed/${publicKey}`;
+
+    appetizeSessions.set(projectId, { publicKey, appUrl, platform, projectId });
+    console.log(`[Appetize] Upload complete for project ${projectId}: ${publicKey}`);
+
+    sendSuccess(res, { publicKey, appUrl, embedUrl });
+  } catch (error: any) {
+    console.error(`[Appetize] Upload failed for project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Appetize upload failed: ${error.message}`));
+  }
+}));
+
+// GET /api/appetize-status/:projectId - Get current Appetize session
+app.get('/api/appetize-status/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+
+  const session = appetizeSessions.get(projectId);
+  if (session) {
+    sendSuccess(res, { active: true, ...session, embedUrl: `https://appetize.io/embed/${session.publicKey}` });
+  } else {
+    sendSuccess(res, { active: false });
+  }
+}));
+
+startupInfo('routes.appetize', 'registered');
+
+// ==================== END APPETIZE.IO ====================
+
+// ==================== OPENCLAW CANVAS ====================
+
+interface CanvasElement {
+  type: 'frame' | 'text' | 'image' | 'button' | 'input' | 'list';
+  id: string;
+  props: Record<string, any>;
+  style: Record<string, any>;
+  children?: CanvasElement[];
+}
+
+function canvasElementToReactNative(element: CanvasElement, indent = 4): string {
+  const pad = ' '.repeat(indent);
+  const styleStr = Object.keys(element.style).length > 0 ? ` style={${JSON.stringify(element.style)}}` : '';
+
+  switch (element.type) {
+    case 'text':
+      return `${pad}<Text${styleStr}>${element.props.text || ''}</Text>`;
+    case 'image':
+      return `${pad}<Image source={{ uri: '${element.props.src || 'https://via.placeholder.com/100'}' }}${styleStr} />`;
+    case 'button':
+      return `${pad}<TouchableOpacity${styleStr} onPress={() => {}}>\n${pad}  <Text style={{ color: '#fff', textAlign: 'center' }}>${element.props.label || 'Button'}</Text>\n${pad}</TouchableOpacity>`;
+    case 'input':
+      return `${pad}<TextInput${styleStr} placeholder="${element.props.placeholder || 'Enter text...'}" />`;
+    case 'list': {
+      const itemStr = element.children?.map(c => canvasElementToReactNative(c, indent + 4)).join('\n') || `${pad}    <Text>Item</Text>`;
+      return `${pad}<FlatList\n${pad}  data={[${(element.props.items || ['Item 1', 'Item 2']).map((i: string) => `'${i}'`).join(', ')}]}\n${pad}  renderItem={({ item }) => (\n${pad}    <View style={{ padding: 8 }}>\n${itemStr}\n${pad}    </View>\n${pad}  )}\n${pad}  keyExtractor={(item, index) => index.toString()}\n${pad}/>`;
+    }
+    case 'frame':
+    default: {
+      const children = (element.children || []).map(c => canvasElementToReactNative(c, indent + 2)).join('\n');
+      if (children) {
+        return `${pad}<View${styleStr}>\n${children}\n${pad}</View>`;
+      }
+      return `${pad}<View${styleStr} />`;
+    }
+  }
+}
+
+// POST /api/canvas-connect/:projectId - Check if OpenClaw Canvas is available
+app.post('/api/canvas-connect/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { canvasHostUrl } = req.body;
+
+  const gatewayUrl = canvasHostUrl || process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:18789';
+
+  try {
+    const healthCheck = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(3000) });
+    if (healthCheck.ok) {
+      sendSuccess(res, { connected: true, canvasUrl: gatewayUrl });
+    } else {
+      sendSuccess(res, { connected: false, error: 'Canvas health check failed' });
+    }
+  } catch {
+    sendSuccess(res, { connected: false, error: 'Canvas not reachable' });
+  }
+}));
+
+// POST /api/canvas-generate/:projectId - Convert canvas elements to React Native
+app.post('/api/canvas-generate/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { elements } = req.body as { elements: CanvasElement[] };
+
+  if (!Array.isArray(elements) || elements.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing elements array.'));
+  }
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    const files: string[] = [];
+
+    for (const element of elements) {
+      const componentName = (element.props?.name || element.id || 'CanvasComponent').replace(/[^a-zA-Z0-9]/g, '') || 'CanvasComponent';
+      const jsxContent = canvasElementToReactNative(element);
+
+      const fileContent = `import React from 'react';
+import { View, Text, Image, TouchableOpacity, TextInput, FlatList, StyleSheet } from 'react-native';
+
+export default function ${componentName}() {
+  return (
+${jsxContent}
+  );
+}
+`;
+      const filePath = `app/components/canvas/${componentName}.tsx`;
+      await execInContainer(entry.id, `mkdir -p /workspace/app/components/canvas`);
+      await execInContainer(entry.id, `cat > /workspace/${filePath} << 'CANVASEOF'\n${fileContent}\nCANVASEOF`);
+      files.push(filePath);
+    }
+
+    console.log(`[Canvas] Generated ${files.length} components for project ${projectId}`);
+    sendSuccess(res, { files });
+  } catch (error: any) {
+    console.error(`[Canvas] Generation failed for project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Canvas generation failed: ${error.message}`));
+  }
+}));
+
+startupInfo('routes.openclaw-canvas', 'registered');
+
+// ==================== END OPENCLAW CANVAS ====================
 
 // ==================== URL CLONING ====================
 import { cloneWebsite } from './url-cloner.js';
@@ -8524,6 +11291,10 @@ app.ws('/watch/:projectId', async (ws, req) => {
   // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
   wsKeepalive.register(ws as any, projectId, 'watch', authSession.userId);
 
+  // Register for WebSocket rate limiting
+  const watchRateLimiter = getWsRateLimiter('watch');
+  watchRateLimiter.track(ws as any);
+
   let entry = containers.get(projectId);
 
   // If container not found, wait briefly for it to be created
@@ -8568,6 +11339,9 @@ app.ws('/watch/:projectId', async (ws, req) => {
 
   // Handle incoming messages (heartbeat pings from client)
   ws.on('message', (data) => {
+    // Rate limit check
+    if (!watchRateLimiter.allowMessage(ws as any)) return;
+
     try {
       const msg = JSON.parse(typeof data === 'string' ? data : data.toString());
       if (msg.type === 'ping') {
@@ -8723,6 +11497,10 @@ app.ws('/build-errors/:projectId', async (ws, req) => {
   // Register for WebSocket keepalive
   wsKeepalive.register(ws as any, projectId, 'build-errors', authSession.userId);
 
+  // Register for WebSocket rate limiting
+  const buildErrorsRateLimiter = getWsRateLimiter('build-errors');
+  buildErrorsRateLimiter.track(ws as any);
+
   // Check if container exists
   const entry = containers.get(projectId);
   if (!entry) {
@@ -8794,13 +11572,17 @@ const mobileApiDependencies: MobileApiDependencies = {
     // For now, we return an empty list as projects are managed by the main app
     console.log(`[Mobile] Fetching projects for user ${userId}`, options);
     try {
-      const response = await fetch(`${APP_API_URL}/api/projects`, {
+      const pathname = '/api/projects';
+      const headers = buildInternalServiceHeaders({
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(INTERNAL_SERVICE_KEY ? { 'X-Internal-Service-Key': INTERNAL_SERVICE_KEY } : {}),
-          'X-User-Id': userId,
-        },
+        pathname,
+        body: '',
+        serviceKey: INTERNAL_SERVICE_KEY,
+      });
+      headers.set('X-User-Id', userId);
+      const response = await fetch(`${APP_API_URL}${pathname}`, {
+        method: 'GET',
+        headers,
       });
 
       if (!response.ok) {
@@ -8820,13 +11602,17 @@ const mobileApiDependencies: MobileApiDependencies = {
   fetchProjectDetail: async (userId, projectId) => {
     console.log(`[Mobile] Fetching project detail for ${projectId}`);
     try {
-      const response = await fetch(`${APP_API_URL}/api/projects/${projectId}`, {
+      const pathname = `/api/projects/${projectId}`;
+      const headers = buildInternalServiceHeaders({
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(INTERNAL_SERVICE_KEY ? { 'X-Internal-Service-Key': INTERNAL_SERVICE_KEY } : {}),
-          'X-User-Id': userId,
-        },
+        pathname,
+        body: '',
+        serviceKey: INTERNAL_SERVICE_KEY,
+      });
+      headers.set('X-User-Id', userId);
+      const response = await fetch(`${APP_API_URL}${pathname}`, {
+        method: 'GET',
+        headers,
       });
 
       if (!response.ok) {
@@ -8912,7 +11698,7 @@ initializeMobileApi(mobileApiConfig);
 const mobileRouter = createMobileApiRouter(mobileApiDependencies);
 app.use('/api/mobile', mobileRouter);
 
-console.log('[Mobile] API endpoints mounted at /api/mobile');
+startupInfo('routes.mobile', 'mounted', { basePath: '/api/mobile' });
 
 // Mobile API stats endpoint
 app.get('/api/mobile/stats', authenticateRequest, (req: AuthenticatedRequest, res) => {
@@ -9808,7 +12594,7 @@ const PORT = process.env.PORT || 3100;
 
 // Initialize Yjs collaboration WebSocket server
 const collabWss = createCollaborationServer(server, '/collab');
-console.log('🤝 Collaboration server ready on /collab');
+startupInfo('collaboration', 'server ready', { path: '/collab' });
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
@@ -10067,24 +12853,71 @@ const sandboxDependencies: SandboxDependencies = {
 // Initialize sandbox routes with dependencies
 initSandboxRoutes(sandboxDependencies);
 
+// Project dependencies for Public API
+const projectDependencies: ProjectDependencies = {
+  createContainer: async (options) => {
+    const pooledContainer = await containerPool.acquire();
+    if (!pooledContainer) {
+      throw new Error('Failed to acquire container from pool');
+    }
+    return { containerId: pooledContainer.id, port: pooledContainer.port };
+  },
+  startContainer: async (containerId: string) => {
+    const container = docker.getContainer(containerId);
+    await container.start();
+  },
+  stopContainer: async (containerId: string) => {
+    const container = docker.getContainer(containerId);
+    await container.stop();
+  },
+  deleteContainer: async (containerId: string) => {
+    await docker.getContainer(containerId).remove({ force: true });
+  },
+  getPreviewUrl: (port: number) => {
+    return `http://localhost:${port}`;
+  },
+  publishProject: async (_projectId: string, _containerId: string) => {
+    // TODO: Wire into existing Cloudflare/Vercel/Netlify deployment logic
+    throw new Error('Publish not yet implemented for public API projects');
+  },
+};
+
+// Initialize project routes with dependencies
+initProjectRoutes(projectDependencies);
+
 // Public API CORS - allows external API consumers with API key auth
 app.use('/api/v1', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, X-App-Key');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
+// OpenClaw API key registration - allows unauthenticated initial key creation
+// This MUST be mounted BEFORE the authenticated routes
+app.use('/api/v1/api-keys', openclawKeysRouter);
+
+// Moltbook authentication - allows unauthenticated (creates account/key)
+// This MUST be mounted BEFORE the authenticated routes
+app.use('/api/v1/auth', moltbookAuthRouter);
+
 // Apply public API middleware BEFORE mounting routes (auth, rate limiting, logging)
 app.use('/api/v1', requestIdMiddleware, authenticateApiKey as any, rateLimitMiddleware as any, requestLoggingMiddleware as any);
-app.use('/api/v1', sandboxRouter);
+app.use('/api/v1/sandboxes', sandboxRouter);
+app.use('/api/v1/projects', projectRouter);
+
+// Identity token endpoints (requires API key auth, but /verify uses app key auth internally)
+app.use('/api/v1/identity', identityRouter);
+
+// App key management endpoints (requires API key auth)
+app.use('/api/v1/app-keys', appKeysRouter);
 
 // Polar.sh webhook endpoint
 const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET || '';
 if (POLAR_WEBHOOK_SECRET) {
   app.post('/api/webhooks/polar', express.raw({ type: 'application/json' }), createPolarWebhookHandler(POLAR_WEBHOOK_SECRET));
-  console.log('📦 Polar.sh webhook endpoint registered at /api/webhooks/polar');
+  startupInfo('routes.polar-webhook', 'registered', { path: '/api/webhooks/polar' });
 } else {
   console.log('⚠️ POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
 }
@@ -10147,6 +12980,52 @@ app.delete('/api/v1/api-keys/:id', authenticateRequest, asyncHandler(async (req:
   }
 
   sendSuccess(res, { deleted: true, id: keyId });
+}));
+
+// PATCH /api/v1/api-keys/:id - revoke (deactivate) an API key without deleting
+app.patch('/api/v1/api-keys/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  const keyId = req.params.id;
+  const revoked = revokeApiKey(keyId, userId);
+  if (!revoked) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'API key not found or access denied'));
+  }
+
+  sendSuccess(res, { revoked: true, id: keyId, status: 'inactive' });
+}));
+
+// GET /api/v1/api-keys/usage - get aggregated usage stats for user's keys
+app.get('/api/v1/api-keys/usage', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const userId = req.userId;
+  if (!userId || userId === 'anonymous') {
+    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+  }
+
+  const keys = listUserApiKeys(userId);
+  const usageByKey: Record<string, { name: string; keyPrefix: string; usage: ReturnType<typeof getUsage>; totalRequests: number }> = {};
+  let totalRequests = 0;
+
+  for (const key of keys) {
+    const usage = getUsage(key.id);
+    usageByKey[key.id] = {
+      name: key.name,
+      keyPrefix: key.keyPrefix,
+      usage,
+      totalRequests: key.totalRequests,
+    };
+    totalRequests += key.totalRequests;
+  }
+
+  sendSuccess(res, {
+    totalKeys: keys.length,
+    activeKeys: keys.filter(k => k.isActive).length,
+    totalRequests,
+    keys: usageByKey,
+  });
 }));
 
 console.log('🔑 API key management endpoints registered');
@@ -10418,11 +13297,1572 @@ app.get('/api/resources/stats', asyncHandler(async (_req: express.Request, res: 
   sendSuccess(res, stats);
 }));
 
-console.log('🚀 Deployment routes registered (Vercel, Netlify)');
-console.log('📦 Template routes registered');
-console.log('💊 Health monitor routes registered');
-console.log('📊 Resource optimizer routes registered');
-console.log('🔑 Public API middleware applied (auth, rate limiting, logging)');
+// ==================== Publish (Go Live) Routes ====================
+
+import {
+  generateSlug,
+  registerSlug,
+  getSlugForProject,
+  unregisterSlug,
+  getPublishedPath,
+  getPublishMeta,
+  savePublishMeta,
+  changeSlug,
+} from './persistence.js';
+import { execSync } from 'child_process';
+
+/**
+ * Detect the build output directory based on framework/package.json
+ */
+async function detectBuildOutput(containerId: string): Promise<{ buildCmd: string; outputDir: string; framework: string }> {
+  // Read package.json to detect framework
+  let pkgJson: any = {};
+  try {
+    const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo "{}"');
+    pkgJson = JSON.parse(pkgRaw);
+  } catch {
+    // ignore
+  }
+
+  const deps = { ...(pkgJson.dependencies || {}), ...(pkgJson.devDependencies || {}) };
+  const scripts = pkgJson.scripts || {};
+
+  // Detect framework and set build command + output dir
+  if (deps['next']) {
+    return { buildCmd: 'npm run build', outputDir: '.next', framework: 'nextjs' };
+  }
+  if (deps['@remix-run/react'] || deps['@remix-run/dev']) {
+    return { buildCmd: 'npm run build', outputDir: 'build/client', framework: 'remix' };
+  }
+  if (deps['expo'] || deps['react-native']) {
+    return { buildCmd: 'npx expo export --platform web', outputDir: 'dist', framework: 'expo' };
+  }
+  if (deps['react-scripts']) {
+    return { buildCmd: 'npm run build', outputDir: 'build', framework: 'cra' };
+  }
+  if (deps['vite']) {
+    return { buildCmd: 'npm run build', outputDir: 'dist', framework: 'vite' };
+  }
+  // Fallback
+  return { buildCmd: 'npm run build', outputDir: 'dist', framework: 'unknown' };
+}
+
+// POST /api/publish/:projectId - Build and publish a project
+app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const userId = req.userId || 'anonymous';
+
+  const entry = containers.get(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+  }
+
+  try {
+    // 1. Detect framework
+    const { buildCmd, outputDir, framework } = await detectBuildOutput(entry.id);
+    console.log(`[Publish] Project ${projectId}: framework=${framework}, buildCmd=${buildCmd}, outputDir=${outputDir}`);
+
+    // 2. Install dependencies if needed
+    try {
+      await execInContainer(entry.id, 'cd /workspace && [ -d node_modules ] || npm install');
+    } catch {
+      // node_modules might already exist
+    }
+
+    // 2b. Install Expo web dependencies if needed
+    if (framework === 'expo') {
+      try {
+        await execInContainer(entry.id, 'cd /workspace && npx expo install react-dom react-native-web @expo/metro-runtime 2>&1');
+      } catch { /* may already be installed */ }
+    }
+
+    // 3. Run build
+    console.log(`[Publish] Building project ${projectId}...`);
+    const buildOutput = await execInContainer(entry.id, `cd /workspace && ${buildCmd} 2>&1`);
+    console.log(`[Publish] Build complete for ${projectId}`);
+
+    // 4. Verify build output exists
+    const checkOutput = await execInContainer(entry.id, `ls -la /workspace/${outputDir}/ 2>/dev/null | head -5 || echo "NOT_FOUND"`);
+    if (checkOutput.includes('NOT_FOUND')) {
+      // Try common fallbacks
+      const fallbackDirs = ['dist', 'build', 'out', '.next/static'];
+      let found = false;
+      for (const dir of fallbackDirs) {
+        const check = await execInContainer(entry.id, `[ -d /workspace/${dir} ] && echo "EXISTS" || echo "NOPE"`);
+        if (check.includes('EXISTS')) {
+          console.log(`[Publish] Using fallback output dir: ${dir}`);
+          // Continue with this dir
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Build output not found at /workspace/${outputDir}. Build may have failed.`));
+      }
+    }
+
+    // 5. Generate slug
+    const projectName = req.body?.name || projectId;
+    const slug = registerSlug(projectId, generateSlug(projectName));
+
+    // 6. Copy build output from container to host
+    const publishedDir = getPublishedPath(slug);
+    const fs = await import('fs');
+
+    // Clean existing published content (atomic update)
+    const tmpDir = publishedDir + '.tmp';
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+    fs.mkdirSync(tmpDir, { recursive: true });
+
+    // Use docker cp to extract build output
+    execSync(`docker cp ${entry.id}:/workspace/${outputDir}/. ${tmpDir}/`, { timeout: 30000 });
+
+    // Atomic swap
+    if (fs.existsSync(publishedDir)) {
+      const oldDir = publishedDir + '.old';
+      if (fs.existsSync(oldDir)) fs.rmSync(oldDir, { recursive: true });
+      fs.renameSync(publishedDir, oldDir);
+      fs.renameSync(tmpDir, publishedDir);
+      fs.rmSync(oldDir, { recursive: true });
+    } else {
+      fs.renameSync(tmpDir, publishedDir);
+    }
+
+    // 7. Save publish metadata
+    const publishedAt = new Date().toISOString();
+    savePublishMeta(slug, {
+      projectId,
+      userId,
+      slug,
+      publishedAt,
+      framework,
+      buildCommand: buildCmd,
+      outputDir,
+    });
+
+    const url = `https://web.recoder.xyz/${slug}`;
+    console.log(`[Publish] Project ${projectId} published at ${url}`);
+
+    sendSuccess(res, { url, slug, publishedAt });
+  } catch (error: any) {
+    console.error(`[Publish] Failed to publish project ${projectId}:`, error.message);
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Publish failed: ${error.message}`));
+  }
+}));
+
+// POST /api/unpublish/:projectId - Remove a published project
+app.post('/api/unpublish/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+
+  const slug = unregisterSlug(projectId);
+  if (!slug) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Project is not published'));
+  }
+
+  // Remove published files
+  const publishedDir = getPublishedPath(slug);
+  const fs = await import('fs');
+  if (fs.existsSync(publishedDir)) {
+    fs.rmSync(publishedDir, { recursive: true });
+  }
+
+  console.log(`[Publish] Project ${projectId} unpublished (slug: ${slug})`);
+  sendSuccess(res, { success: true });
+}));
+
+// GET /api/publish-status/:projectId - Check publish status
+app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+
+  const slug = getSlugForProject(projectId);
+  if (!slug) {
+    return sendSuccess(res, { published: false });
+  }
+
+  const meta = getPublishMeta(slug);
+  const { getDomainsForProject } = await import('./domain-manager.js');
+  const customDomains = getDomainsForProject(projectId);
+  sendSuccess(res, {
+    published: true,
+    url: `https://web.recoder.xyz/${slug}`,
+    slug,
+    publishedAt: meta?.publishedAt || null,
+    framework: meta?.framework || null,
+    customDomains: customDomains.map(d => ({
+      domain: d.domain,
+      status: d.status,
+      url: d.status === 'active' ? `https://${d.domain}` : null,
+    })),
+  });
+}));
+
+// POST /api/publish/:projectId/slug - Change the slug for a published project
+app.post('/api/publish/:projectId/slug', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const newSlug = req.body?.slug;
+
+  if (!newSlug || typeof newSlug !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing or invalid slug'));
+  }
+
+  const result = changeSlug(projectId, newSlug.trim());
+
+  if (!result.success) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.error || 'Failed to change slug'));
+  }
+
+  const url = `https://web.recoder.xyz/${result.slug}`;
+  console.log(`[Publish] Project ${projectId} slug changed to ${result.slug}`);
+  sendSuccess(res, { url, slug: result.slug, changed: true });
+}));
+
+startupInfo('routes.publish', 'registered');
+
+// ==================== Custom Domain Routes ====================
+
+app.use('/api/domains', authenticateRequest, domainRouter);
+startSslRenewalScheduler();
+startupInfo('routes.custom-domain', 'registered');
+
+// ==================== SPRINT 9: PRODUCTION HARDENING ====================
+
+// Import Sprint 9 services (abusePrevention already imported from ./security/index.js above)
+import { backupService } from './backup/backup-service.js';
+import { performanceProfiler, performanceMiddleware } from './monitoring/performance-profiler.js';
+
+// Apply performance middleware to all routes
+app.use(performanceMiddleware);
+
+// Start background services
+backupService.startScheduler();
+performanceProfiler.startMonitoring();
+
+// ── S9-1: Abuse Prevention Endpoints ──
+
+// GET /api/admin/abuse/stats - Get abuse prevention statistics
+app.get('/api/admin/abuse/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  // TODO: Add admin role check
+  const stats = abusePrevention.getStats();
+  sendSuccess(res, stats);
+}));
+
+// GET /api/admin/abuse/events - Get recent abuse events
+app.get('/api/admin/abuse/events', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const limit = parseInt(req.query.limit as string) || 100;
+  const events = abusePrevention.getRecentEvents(limit);
+  sendSuccess(res, { events, total: events.length });
+}));
+
+// GET /api/admin/abuse/blocklist - Get blocklist entries
+app.get('/api/admin/abuse/blocklist', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const blocklist = abusePrevention.getBlocklist();
+  sendSuccess(res, { blocklist, total: blocklist.length });
+}));
+
+// POST /api/admin/abuse/blocklist - Add to blocklist
+app.post('/api/admin/abuse/blocklist', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { type, value, reason, expiresAt } = req.body;
+
+  if (!type || !value || !reason) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'type, value, and reason are required'));
+  }
+
+  const entry = abusePrevention.addToBlocklist({
+    type,
+    value,
+    reason,
+    expiresAt: expiresAt ? new Date(expiresAt).getTime() : undefined,
+    createdBy: req.userId,
+  });
+
+  sendSuccess(res, { entry });
+}));
+
+// DELETE /api/admin/abuse/blocklist/:id - Remove from blocklist
+app.delete('/api/admin/abuse/blocklist/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { id } = req.params;
+  const deleted = abusePrevention.removeFromBlocklist(id);
+
+  if (!deleted) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Blocklist entry not found'));
+  }
+
+  sendSuccess(res, { deleted: true });
+}));
+
+console.log('🛡️ Abuse prevention endpoints registered');
+
+// ── S10-3: Admin Alert Endpoints ──
+
+// GET /api/admin/alerts - Get recent admin alerts
+app.get('/api/admin/alerts', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const limit = parseInt(req.query.limit as string) || 50;
+  const severity = req.query.severity as string | undefined;
+  const category = req.query.category as string | undefined;
+  const unacknowledgedOnly = req.query.unacknowledged === 'true';
+
+  const alerts = getAlerts({
+    limit,
+    severity: severity as any,
+    category: category as any,
+    unacknowledgedOnly,
+  });
+  const counts = getAlertCounts();
+
+  sendSuccess(res, { alerts, counts, total: alerts.length });
+}));
+
+// POST /api/admin/alerts/:id/acknowledge - Acknowledge an alert
+app.post('/api/admin/alerts/:id/acknowledge', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { id } = req.params;
+  const userId = req.userId || 'unknown';
+
+  const success = acknowledgeAlert(id, userId);
+  if (!success) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Alert not found'));
+  }
+
+  sendSuccess(res, { acknowledged: true });
+}));
+
+// GET /api/admin/security/stats - Combined security statistics
+app.get('/api/admin/security/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const abuseStats = abusePrevention.getStats();
+  const alertCounts = getAlertCounts();
+  const wsRateLimitStats = getAllWsRateLimitStats();
+  const wsStats = wsKeepalive.getStats();
+
+  sendSuccess(res, {
+    abuse: abuseStats,
+    alerts: alertCounts,
+    websocket: {
+      connections: wsStats,
+      rateLimits: wsRateLimitStats,
+    },
+  });
+}));
+
+console.log('🔔 Admin alert endpoints registered');
+
+// ── S9-3: Backup & Recovery Endpoints ──
+
+// GET /api/admin/backups - List backups
+app.get('/api/admin/backups', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const limit = parseInt(req.query.limit as string) || 50;
+  const jobs = backupService.getJobs(limit);
+  sendSuccess(res, { jobs, total: jobs.length });
+}));
+
+// GET /api/admin/backups/stats - Get backup statistics
+app.get('/api/admin/backups/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const stats = backupService.getStats();
+  sendSuccess(res, stats);
+}));
+
+// POST /api/admin/backups - Create a backup
+app.post('/api/admin/backups', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { type = 'full', scope = 'all' } = req.body;
+  const job = await backupService.createBackup(type, scope);
+  sendSuccess(res, { job });
+}));
+
+// POST /api/admin/backups/:id/restore - Restore from a backup
+app.post('/api/admin/backups/:id/restore', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { scope, targetDir, dryRun = true } = req.body;
+
+  const result = await backupService.restore({
+    backupId: id,
+    scope,
+    targetDir,
+    dryRun,
+  });
+
+  if (!result.success) {
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, result.errors.join(', ')));
+  }
+
+  sendSuccess(res, result);
+}));
+
+// DELETE /api/admin/backups/:id - Delete a backup
+app.delete('/api/admin/backups/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { id } = req.params;
+  const deleted = backupService.deleteBackup(id);
+
+  if (!deleted) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Backup not found'));
+  }
+
+  sendSuccess(res, { deleted: true });
+}));
+
+console.log('💾 Backup & recovery endpoints registered');
+
+// ── S9-4: Performance Profiling Endpoints ──
+
+// GET /api/admin/performance/metrics - Get performance metrics
+app.get('/api/admin/performance/metrics', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const metrics = performanceProfiler.getMetrics();
+  sendSuccess(res, metrics);
+}));
+
+// GET /api/admin/performance/slow-requests - Get slow requests
+app.get('/api/admin/performance/slow-requests', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const limit = parseInt(req.query.limit as string) || 50;
+  const slowRequests = performanceProfiler.getSlowRequests(limit);
+  sendSuccess(res, { slowRequests, total: slowRequests.length });
+}));
+
+// GET /api/admin/performance/alerts - Get performance alerts
+app.get('/api/admin/performance/alerts', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const limit = parseInt(req.query.limit as string) || 100;
+  const alerts = performanceProfiler.getAlerts(limit);
+  sendSuccess(res, { alerts, total: alerts.length });
+}));
+
+// GET /api/admin/performance/traces - Get recent traces
+app.get('/api/admin/performance/traces', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const limit = parseInt(req.query.limit as string) || 100;
+  const traces = performanceProfiler.getTraces(limit);
+  sendSuccess(res, { traces, total: traces.length });
+}));
+
+// GET /api/admin/performance/heap - Get V8 heap statistics
+app.get('/api/admin/performance/heap', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const heapStats = performanceProfiler.getHeapStats();
+  sendSuccess(res, heapStats);
+}));
+
+console.log('📈 Performance profiling endpoints registered');
+
+// ==================== END SPRINT 9 ====================
+
+startupInfo('routes.deployment', 'registered', { providers: ['vercel', 'netlify'] });
+startupInfo('routes.templates', 'registered');
+startupInfo('routes.health-monitor', 'registered');
+startupInfo('routes.resource-optimizer', 'registered');
+startupInfo('middleware.public-api', 'applied', { modules: ['auth', 'rate-limiting', 'logging'] });
+
+// ==================== SPRINT 12: Integrations & Themes ====================
+
+import * as supabaseClient from './integrations/supabase-client.js';
+import * as neonClient from './integrations/neon-client.js';
+import * as integrationStore from './integrations/integration-store.js';
+import * as themeStore from './integrations/theme-store.js';
+import { BUILTIN_THEMES } from './integrations/builtin-themes.js';
+import { generateThemePrompt, type Provider as ThemeProvider } from './integrations/theme-generator.js';
+import * as promptStore from './integrations/prompt-store.js';
+import * as vercelStore from './integrations/vercel-store.js';
+
+// ── Supabase Integration Routes ────────────────────────────────────
+
+// Connect Supabase (store access token)
+app.post('/api/integrations/supabase/connect', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { accessToken } = req.body;
+  if (!accessToken || typeof accessToken !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'accessToken is required'));
+  }
+
+  // Validate the token by listing organizations
+  const valid = await supabaseClient.validateAccessToken(accessToken);
+  if (!valid) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid Supabase access token'));
+  }
+
+  integrationStore.setUserCredentials(req.userId!, 'supabase', { accessToken });
+  const organizations = await supabaseClient.listOrganizations(accessToken);
+  sendSuccess(res, { organizations });
+}));
+
+// Disconnect Supabase
+app.delete('/api/integrations/supabase/disconnect', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  integrationStore.removeUserCredentials(req.userId!, 'supabase');
+  sendSuccess(res, { disconnected: true });
+}));
+
+// List Supabase organizations
+app.get('/api/integrations/supabase/organizations', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const organizations = await supabaseClient.listOrganizations(creds.supabase.accessToken);
+  sendSuccess(res, { organizations });
+}));
+
+// List Supabase projects
+app.get('/api/integrations/supabase/projects', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const projects = await supabaseClient.listProjects(creds.supabase.accessToken);
+  sendSuccess(res, { projects });
+}));
+
+// List Supabase project branches
+app.get('/api/integrations/supabase/projects/:supabaseProjectId/branches', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const branches = await supabaseClient.listBranches(creds.supabase.accessToken, req.params.supabaseProjectId);
+  sendSuccess(res, { branches });
+}));
+
+// Get Supabase project API keys
+app.get('/api/integrations/supabase/projects/:supabaseProjectId/api-keys', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const keys = await supabaseClient.getProjectApiKeys(creds.supabase.accessToken, req.params.supabaseProjectId);
+  sendSuccess(res, { keys });
+}));
+
+// Link Supabase project to Recoder project
+app.post('/api/integrations/supabase/:projectId/link', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { supabaseProjectId, organizationSlug } = req.body;
+  if (!supabaseProjectId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'supabaseProjectId is required'));
+  }
+  integrationStore.setProjectLink(req.params.projectId, 'supabase', {
+    projectId: supabaseProjectId,
+    organizationSlug: organizationSlug || '',
+  });
+  sendSuccess(res, { linked: true });
+}));
+
+// Unlink Supabase project
+app.delete('/api/integrations/supabase/:projectId/unlink', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  integrationStore.removeProjectLink(req.params.projectId, 'supabase');
+  sendSuccess(res, { unlinked: true });
+}));
+
+// Execute SQL on linked Supabase project
+app.post('/api/integrations/supabase/:projectId/sql', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.supabase) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
+  }
+  const { query } = req.body;
+  if (!query || typeof query !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'query is required'));
+  }
+  const result = await supabaseClient.executeSql(creds.supabase.accessToken, links.supabase.projectId, query);
+  sendSuccess(res, result);
+}));
+
+// Get schema of linked Supabase project
+app.get('/api/integrations/supabase/:projectId/schema', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.supabase) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
+  }
+  const schema = await supabaseClient.getTableSchema(creds.supabase.accessToken, links.supabase.projectId);
+  sendSuccess(res, { schema });
+}));
+
+// Deploy edge functions from container
+app.post('/api/integrations/supabase/:projectId/deploy-functions', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.supabase) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
+  }
+
+  // List edge function directories in the container
+  const entry = containers.get(req.params.projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found'));
+  }
+
+  // Read supabase/functions directory
+  const docker = new Docker();
+  const container = docker.getContainer(entry.id);
+  const exec = await container.exec({
+    Cmd: ['sh', '-c', 'ls -d /app/supabase/functions/*/ 2>/dev/null || echo ""'],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const execStream = await exec.start({ Detach: false, Tty: false });
+  const output = await new Promise<string>((resolve) => {
+    let data = '';
+    execStream.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+    execStream.on('end', () => resolve(data.trim()));
+  });
+
+  if (!output) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'No edge functions found in supabase/functions/'));
+  }
+
+  const functionDirs = output.split('\n').filter(Boolean).map(d => d.replace('/app/supabase/functions/', '').replace(/\/$/, ''));
+  const results: Array<{ name: string; status: string; error?: string }> = [];
+
+  for (const funcName of functionDirs) {
+    try {
+      // Read the function's index.ts file
+      const readExec = await container.exec({
+        Cmd: ['cat', `/app/supabase/functions/${funcName}/index.ts`],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const readStream = await readExec.start({ Detach: false, Tty: false });
+      const content = await new Promise<string>((resolve) => {
+        let data = '';
+        readStream.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+        readStream.on('end', () => resolve(data));
+      });
+
+      await supabaseClient.deployEdgeFunction(
+        creds.supabase.accessToken,
+        links.supabase.projectId,
+        funcName,
+        new Uint8Array(Buffer.from(content)),
+      );
+      results.push({ name: funcName, status: 'deployed' });
+    } catch (err: any) {
+      results.push({ name: funcName, status: 'failed', error: err.message });
+    }
+  }
+
+  sendSuccess(res, { deployed: results });
+}));
+
+// Get edge function logs
+app.get('/api/integrations/supabase/:projectId/edge-logs', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.supabase?.accessToken) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.supabase) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
+  }
+  const since = req.query.since ? parseInt(req.query.since as string) : undefined;
+  const logs = await supabaseClient.getEdgeFunctionLogs(creds.supabase.accessToken, links.supabase.projectId, since);
+  sendSuccess(res, { logs });
+}));
+
+startupInfo('routes.supabase', 'registered');
+
+// ── Neon PostgreSQL Integration Routes ─────────────────────────────
+
+// Connect Neon (store API key)
+app.post('/api/integrations/neon/connect', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { apiKey } = req.body;
+  if (!apiKey || typeof apiKey !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'apiKey is required'));
+  }
+  const valid = await neonClient.validateApiKey(apiKey);
+  if (!valid) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid Neon API key'));
+  }
+  integrationStore.setUserCredentials(req.userId!, 'neon', { apiKey });
+  const organizations = await neonClient.getOrganizations(apiKey);
+  sendSuccess(res, { organizations });
+}));
+
+// Disconnect Neon
+app.delete('/api/integrations/neon/disconnect', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  integrationStore.removeUserCredentials(req.userId!, 'neon');
+  sendSuccess(res, { disconnected: true });
+}));
+
+// List Neon projects
+app.get('/api/integrations/neon/projects', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const projects = await neonClient.listProjects(creds.neon.apiKey);
+  sendSuccess(res, { projects });
+}));
+
+// Create Neon project
+app.post('/api/integrations/neon/projects', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const { name, orgId } = req.body;
+  if (!name || typeof name !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name is required'));
+  }
+  const result = await neonClient.createProject(creds.neon.apiKey, name, orgId);
+  sendSuccess(res, result);
+}));
+
+// List Neon project branches
+app.get('/api/integrations/neon/projects/:neonProjectId/branches', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const branches = await neonClient.listBranches(creds.neon.apiKey, req.params.neonProjectId);
+  sendSuccess(res, { branches });
+}));
+
+// Link Neon project to Recoder project
+app.post('/api/integrations/neon/:projectId/link', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { neonProjectId, developmentBranchId, previewBranchId } = req.body;
+  if (!neonProjectId || !developmentBranchId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'neonProjectId and developmentBranchId are required'));
+  }
+  integrationStore.setProjectLink(req.params.projectId, 'neon', {
+    projectId: neonProjectId,
+    developmentBranchId,
+    previewBranchId,
+  });
+  sendSuccess(res, { linked: true });
+}));
+
+// Unlink Neon project
+app.delete('/api/integrations/neon/:projectId/unlink', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  integrationStore.removeProjectLink(req.params.projectId, 'neon');
+  sendSuccess(res, { unlinked: true });
+}));
+
+// Get Neon connection URI for linked project
+app.get('/api/integrations/neon/:projectId/connection-uri', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.neon) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+  }
+  const branchId = (req.query.branchId as string) || links.neon.developmentBranchId;
+  const uri = await neonClient.getConnectionUri(creds.neon.apiKey, links.neon.projectId, branchId);
+  sendSuccess(res, { uri });
+}));
+
+// Set POSTGRES_URL in container .env
+app.post('/api/integrations/neon/:projectId/set-env', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.neon) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+  }
+
+  const branchId = req.body.branchId || links.neon.developmentBranchId;
+  const uri = await neonClient.getConnectionUri(creds.neon.apiKey, links.neon.projectId, branchId);
+
+  // Write POSTGRES_URL to container's .env file
+  const entry = containers.get(req.params.projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found'));
+  }
+
+  const docker = new Docker();
+  const container = docker.getContainer(entry.id);
+
+  // Read existing .env, append/replace POSTGRES_URL
+  const readExec = await container.exec({
+    Cmd: ['sh', '-c', 'cat /app/.env 2>/dev/null || echo ""'],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const readStream = await readExec.start({ Detach: false, Tty: false });
+  const existingEnv = await new Promise<string>((resolve) => {
+    let data = '';
+    readStream.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+    readStream.on('end', () => resolve(data.trim()));
+  });
+
+  // Replace or append POSTGRES_URL
+  const lines = existingEnv.split('\n').filter(l => !l.startsWith('POSTGRES_URL=') && !l.startsWith('DATABASE_URL='));
+  lines.push(`POSTGRES_URL=${uri}`);
+  lines.push(`DATABASE_URL=${uri}`);
+  const newEnv = lines.filter(Boolean).join('\n') + '\n';
+
+  const writeExec = await container.exec({
+    Cmd: ['sh', '-c', `cat > /app/.env << 'ENVEOF'\n${newEnv}ENVEOF`],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  await writeExec.start({ Detach: false, Tty: false });
+
+  sendSuccess(res, { set: true, branchId });
+}));
+
+// Create Neon branch
+app.post('/api/integrations/neon/:projectId/branches', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.neon) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+  }
+  const { name, parentBranchId } = req.body;
+  if (!name || !parentBranchId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name and parentBranchId are required'));
+  }
+  const branch = await neonClient.createBranch(creds.neon.apiKey, links.neon.projectId, name, parentBranchId);
+  sendSuccess(res, { branch });
+}));
+
+// Delete Neon branch
+app.delete('/api/integrations/neon/:projectId/branches/:branchId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.neon) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+  }
+  await neonClient.deleteBranch(creds.neon.apiKey, links.neon.projectId, req.params.branchId);
+  sendSuccess(res, { deleted: true });
+}));
+
+// Restore Neon branch
+app.post('/api/integrations/neon/:projectId/branches/:branchId/restore', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const creds = integrationStore.getUserCredentials(req.userId!);
+  if (!creds.neon?.apiKey) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+  }
+  const links = integrationStore.getProjectLinks(req.params.projectId);
+  if (!links.neon) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+  }
+  const { timestamp } = req.body;
+  if (!timestamp) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'timestamp is required'));
+  }
+  await neonClient.restoreBranch(creds.neon.apiKey, links.neon.projectId, req.params.branchId, timestamp);
+  sendSuccess(res, { restored: true });
+}));
+
+startupInfo('routes.neon', 'registered');
+
+// ── Theme Routes ───────────────────────────────────────────────────
+
+// List all themes (built-in + custom)
+app.get('/api/themes', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const customThemes = themeStore.listThemes(req.userId!);
+  sendSuccess(res, {
+    builtinThemes: BUILTIN_THEMES.map(t => ({ id: t.id, name: t.name, description: t.description })),
+    customThemes,
+  });
+}));
+
+// Create custom theme
+app.post('/api/themes', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name, description, prompt } = req.body;
+  if (!name || !prompt) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name and prompt are required'));
+  }
+  const theme = themeStore.createTheme(req.userId!, name, description || '', prompt);
+  sendSuccess(res, { theme });
+}));
+
+// Update custom theme
+app.put('/api/themes/:themeId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name, description, prompt } = req.body;
+  const theme = themeStore.updateTheme(req.params.themeId, { name, description, prompt });
+  if (!theme) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Theme not found'));
+  }
+  sendSuccess(res, { theme });
+}));
+
+// Delete custom theme
+app.delete('/api/themes/:themeId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const deleted = themeStore.deleteTheme(req.params.themeId);
+  if (!deleted) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Theme not found'));
+  }
+  sendSuccess(res, { deleted: true });
+}));
+
+// Get project theme
+app.get('/api/themes/project/:projectId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const themeId = themeStore.getProjectTheme(req.params.projectId);
+  if (!themeId) {
+    return sendSuccess(res, { themeId: null, themeName: null, themePrompt: null });
+  }
+  const prompt = themeStore.resolveThemePrompt(themeId, req.userId!);
+  const builtin = themeStore.getBuiltinTheme(themeId);
+  sendSuccess(res, {
+    themeId,
+    themeName: builtin?.name || 'Custom Theme',
+    themePrompt: prompt,
+  });
+}));
+
+// Set project theme
+app.post('/api/themes/project/:projectId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { themeId } = req.body;
+  if (!themeId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'themeId is required'));
+  }
+  themeStore.setProjectTheme(req.params.projectId, themeId);
+  sendSuccess(res, { set: true });
+}));
+
+// Remove project theme
+app.delete('/api/themes/project/:projectId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  themeStore.removeProjectTheme(req.params.projectId);
+  sendSuccess(res, { removed: true });
+}));
+
+// Generate theme via AI
+app.post('/api/themes/generate', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { images, keywords, generationMode, model, apiKey, provider } = req.body;
+
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'At least one image is required'));
+  }
+  if (images.length > 5) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Maximum 5 images allowed'));
+  }
+  if (!model || !apiKey || !provider) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model, apiKey, and provider are required'));
+  }
+  if (!['inspired', 'high-fidelity'].includes(generationMode)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'generationMode must be "inspired" or "high-fidelity"'));
+  }
+  if (!['anthropic', 'openai', 'google', 'openrouter'].includes(provider)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'provider must be anthropic, openai, google, or openrouter'));
+  }
+
+  const prompt = await generateThemePrompt({
+    images,
+    keywords: keywords || '',
+    generationMode,
+    model,
+    apiKey,
+    provider: provider as ThemeProvider,
+  });
+
+  sendSuccess(res, { prompt });
+}));
+
+startupInfo('routes.theme', 'registered');
+
+// ==================== END SPRINT 12 ====================
+
+// ==================== SPRINT 13: Prompt Library + Vercel Integration ====================
+
+// ── Prompt Library Routes ─────────────────────────────────────────
+
+// List user's prompts
+app.get('/api/prompts', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const prompts = promptStore.listPrompts(req.userId!);
+  sendSuccess(res, { prompts });
+}));
+
+// Create prompt
+app.post('/api/prompts', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { title, description, content } = req.body;
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Title is required'));
+  }
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Content is required'));
+  }
+  const prompt = promptStore.createPrompt(req.userId!, title, description || '', content);
+  sendSuccess(res, { prompt });
+}));
+
+// Update prompt
+app.put('/api/prompts/:promptId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { promptId } = req.params;
+  const existing = promptStore.getPrompt(promptId);
+  if (!existing) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Prompt not found'));
+  }
+  if (existing.createdBy !== req.userId) {
+    return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Not your prompt'));
+  }
+  const updates: Partial<{ title: string; description: string; content: string }> = {};
+  if (req.body.title !== undefined) updates.title = req.body.title;
+  if (req.body.description !== undefined) updates.description = req.body.description;
+  if (req.body.content !== undefined) updates.content = req.body.content;
+
+  const updated = promptStore.updatePrompt(promptId, updates);
+  sendSuccess(res, { prompt: updated });
+}));
+
+// Delete prompt
+app.delete('/api/prompts/:promptId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { promptId } = req.params;
+  const existing = promptStore.getPrompt(promptId);
+  if (!existing) {
+    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Prompt not found'));
+  }
+  if (existing.createdBy !== req.userId) {
+    return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Not your prompt'));
+  }
+  promptStore.deletePrompt(promptId);
+  sendSuccess(res, { deleted: true });
+}));
+
+// Replace prompt references in text (utility endpoint for chat pipeline)
+app.post('/api/prompts/resolve', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Text is required'));
+  }
+  const resolved = promptStore.replacePromptReferences(text);
+  sendSuccess(res, { resolved });
+}));
+
+startupInfo('routes.prompt-library', 'registered');
+
+// ── Vercel Integration Routes ─────────────────────────────────────
+
+// Connect (save token)
+app.post('/api/integrations/vercel/connect', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { token } = req.body;
+  if (!token || typeof token !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Vercel access token is required'));
+  }
+
+  const validation = await vercelStore.validateVercelToken(token);
+  if (!validation.valid) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid Vercel access token'));
+  }
+
+  vercelStore.setVercelToken(req.userId!, token);
+  const teams = await vercelStore.listVercelTeams(token);
+
+  sendSuccess(res, { username: validation.username, teams });
+}));
+
+// Disconnect
+app.delete('/api/integrations/vercel/disconnect', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  vercelStore.removeVercelToken(req.userId!);
+  sendSuccess(res, { disconnected: true });
+}));
+
+// Check if connected
+app.get('/api/integrations/vercel/status', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const token = vercelStore.getVercelToken(req.userId!);
+  if (!token) {
+    return sendSuccess(res, { connected: false });
+  }
+  const validation = await vercelStore.validateVercelToken(token);
+  if (!validation.valid) {
+    vercelStore.removeVercelToken(req.userId!);
+    return sendSuccess(res, { connected: false });
+  }
+  const teams = await vercelStore.listVercelTeams(token);
+  sendSuccess(res, { connected: true, username: validation.username, teams });
+}));
+
+// List Vercel projects
+app.get('/api/integrations/vercel/projects', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const token = vercelStore.getVercelToken(req.userId!);
+  if (!token) return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
+
+  const teamId = (req.query.teamId as string) || null;
+  const projects = await vercelStore.listVercelProjects(token, teamId);
+  sendSuccess(res, { projects });
+}));
+
+// Check project name availability
+app.get('/api/integrations/vercel/available', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const token = vercelStore.getVercelToken(req.userId!);
+  if (!token) return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
+
+  const name = req.query.name as string;
+  if (!name) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Project name required'));
+
+  const teamId = (req.query.teamId as string) || null;
+  const available = await vercelStore.isProjectNameAvailable(token, name, teamId);
+  sendSuccess(res, { available });
+}));
+
+// Create new Vercel project
+app.post('/api/integrations/vercel/projects', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const token = vercelStore.getVercelToken(req.userId!);
+  if (!token) return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
+
+  const { name, framework, teamId } = req.body;
+  if (!name || typeof name !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Project name required'));
+  }
+
+  const project = await vercelStore.createVercelProject(token, name, framework, teamId || null);
+  sendSuccess(res, { project });
+}));
+
+// Link Vercel project to Recoder project
+app.post('/api/integrations/vercel/:projectId/link', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const { vercelProjectId, vercelProjectName, vercelTeamId } = req.body;
+  if (!vercelProjectId || !vercelProjectName) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'vercelProjectId and vercelProjectName required'));
+  }
+
+  vercelStore.setVercelProjectLink(projectId, {
+    vercelProjectId,
+    vercelProjectName,
+    vercelTeamId: vercelTeamId || null,
+    vercelDeploymentUrl: null,
+  });
+
+  sendSuccess(res, { linked: true });
+}));
+
+// Unlink Vercel project
+app.delete('/api/integrations/vercel/:projectId/unlink', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  vercelStore.removeVercelProjectLink(req.params.projectId);
+  sendSuccess(res, { unlinked: true });
+}));
+
+// Get linked Vercel project info
+app.get('/api/integrations/vercel/:projectId/link', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const link = vercelStore.getVercelProjectLink(req.params.projectId);
+  sendSuccess(res, { link });
+}));
+
+// Get deployments for linked project
+app.get('/api/integrations/vercel/:projectId/deployments', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const token = vercelStore.getVercelToken(req.userId!);
+  if (!token) return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
+
+  const link = vercelStore.getVercelProjectLink(req.params.projectId);
+  if (!link) return sendError(res, createError(ErrorCode.NOT_FOUND, 'No Vercel project linked'));
+
+  const deployments = await vercelStore.getVercelDeployments(token, link.vercelProjectId, link.vercelTeamId);
+
+  // Update deployment URL if we have a newer READY production deployment
+  const readyProd = deployments.find(d => d.readyState === 'READY' && d.target === 'production');
+  if (readyProd && readyProd.url !== link.vercelDeploymentUrl) {
+    vercelStore.setVercelProjectLink(req.params.projectId, {
+      ...link,
+      vercelDeploymentUrl: readyProd.url,
+    });
+  }
+
+  sendSuccess(res, { deployments, deploymentUrl: readyProd?.url || link.vercelDeploymentUrl });
+}));
+
+// Deploy to Vercel (upload files from container)
+app.post('/api/integrations/vercel/:projectId/deploy', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const token = vercelStore.getVercelToken(req.userId!);
+  if (!token) return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
+
+  const link = vercelStore.getVercelProjectLink(req.params.projectId);
+  if (!link) return sendError(res, createError(ErrorCode.NOT_FOUND, 'No Vercel project linked'));
+
+  const { projectId } = req.params;
+  const container = containers.get(projectId);
+  if (!container) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+  // Read the build output from container
+  // First try to detect the build output directory
+  const target = req.body.target || 'production';
+
+  // Collect files from the container's output directory
+  // Use the container exec to list and read files
+  const buildDir = req.body.buildDir || 'dist';
+
+  // Exec tar in the container to get all files
+  const exec = await docker.getContainer(container.id).exec({
+    Cmd: ['tar', '-cf', '-', '-C', `/app/${buildDir}`, '.'],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const stream = await exec.start({ hijack: true, stdin: false });
+
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    stream.on('end', resolve);
+    stream.on('error', reject);
+  });
+
+  // For Vercel, we deploy using their Files API
+  // Get file list from container
+  const listExec = await docker.getContainer(container.id).exec({
+    Cmd: ['find', `/app/${buildDir}`, '-type', 'f', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const listStream = await listExec.start({ hijack: true, stdin: false });
+
+  let fileListStr = '';
+  await new Promise<void>((resolve, reject) => {
+    listStream.on('data', (chunk: Buffer) => { fileListStr += chunk.toString(); });
+    listStream.on('end', resolve);
+    listStream.on('error', reject);
+  });
+
+  const filePaths = fileListStr.trim().split('\n').filter(Boolean);
+  const files: Array<{ file: string; data: string }> = [];
+
+  for (const fp of filePaths.slice(0, 5000)) { // Max 5000 files
+    const relativePath = fp.replace(`/app/${buildDir}/`, '');
+    if (!relativePath || relativePath.startsWith('.')) continue;
+    try {
+      const readExec = await docker.getContainer(container.id).exec({
+        Cmd: ['base64', '-w', '0', fp],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const readStream = await readExec.start({ hijack: true, stdin: false });
+      let content = '';
+      await new Promise<void>((resolve, reject) => {
+        readStream.on('data', (chunk: Buffer) => { content += chunk.toString(); });
+        readStream.on('end', resolve);
+        readStream.on('error', reject);
+      });
+      // Strip docker stream header bytes
+      const cleanContent = content.replace(/^[\x00-\x1f]/g, '').trim();
+      if (cleanContent) {
+        files.push({ file: relativePath, data: cleanContent });
+      }
+    } catch {
+      // Skip files we can't read
+    }
+  }
+
+  if (files.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `No files found in ${buildDir}. Run a build first.`));
+  }
+
+  // Deploy via Vercel v13 API
+  const teamParam = link.vercelTeamId ? `?teamId=${link.vercelTeamId}` : '';
+  const deployRes = await fetch(`https://api.vercel.com/v13/deployments${teamParam}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: link.vercelProjectName,
+      project: link.vercelProjectId,
+      target,
+      files: files.map(f => ({
+        file: f.file,
+        data: f.data,
+        encoding: 'base64',
+      })),
+    }),
+  });
+
+  if (!deployRes.ok) {
+    const text = await deployRes.text().catch(() => '');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Vercel deploy failed: ${text || deployRes.statusText}`));
+  }
+
+  const deployResult = await deployRes.json() as { id: string; url: string; readyState: string };
+
+  // Update deployment URL
+  vercelStore.setVercelProjectLink(req.params.projectId, {
+    ...link,
+    vercelDeploymentUrl: deployResult.url,
+  });
+
+  sendSuccess(res, {
+    deploymentId: deployResult.id,
+    url: deployResult.url,
+    readyState: deployResult.readyState,
+  });
+}));
+
+// Detect framework from container files
+app.get('/api/integrations/vercel/:projectId/detect-framework', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId } = req.params;
+  const container = containers.get(projectId);
+  if (!container) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+  const exec = await docker.getContainer(container.id).exec({
+    Cmd: ['ls', '/app'],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const stream = await exec.start({ hijack: true, stdin: false });
+
+  let output = '';
+  await new Promise<void>((resolve, reject) => {
+    stream.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+    stream.on('end', resolve);
+    stream.on('error', reject);
+  });
+
+  const fileList = output.trim().split('\n').filter(Boolean);
+  const framework = vercelStore.detectFramework(fileList);
+
+  sendSuccess(res, { framework, files: fileList });
+}));
+
+startupInfo('routes.vercel', 'registered');
+startupInfo('routes.prompt-library-vercel', 'registered');
+
+// ==================== END SPRINT 13 ====================
+
+// ==================== SPRINT 14: Proposals + GitHub Collaborators ====================
+
+// ── GitHub Collaborators ────────────────────────────────────────────
+// Uses GitHub REST API to manage repository collaborators.
+// Token is sent from the frontend (same token used for push/pull).
+
+/**
+ * Parse a GitHub remote URL into owner/repo.
+ * Supports: https://github.com/owner/repo.git, git@github.com:owner/repo.git
+ */
+function parseGitHubRemoteUrl(url: string): { owner: string; repo: string } | null {
+  // HTTPS: https://github.com/owner/repo.git
+  const httpsMatch = url.match(/github\.com\/([^/]+)\/([^/.]+)/);
+  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
+  // SSH: git@github.com:owner/repo.git
+  const sshMatch = url.match(/github\.com:([^/]+)\/([^/.]+)/);
+  if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
+  return null;
+}
+
+/**
+ * Helper: Call GitHub API with token auth
+ */
+async function githubApi(
+  method: string,
+  path: string,
+  token: string,
+  body?: object
+): Promise<{ status: number; data: any }> {
+  const res = await fetch(`https://api.github.com${path}`, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  return { status: res.status, data };
+}
+
+// Get GitHub repo info from a project's remote URL
+app.get('/api/git/:projectId/github-repo', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res: express.Response) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const entry = containers.get(projectId);
+    if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+    const remotes = await gitOperations.getRemotes(entry.id);
+    const origin = remotes.find((r: any) => r.name === 'origin');
+    if (!origin) return sendSuccess(res, { github: null, message: 'No origin remote' });
+
+    const parsed = parseGitHubRemoteUrl(origin.url);
+    if (!parsed) return sendSuccess(res, { github: null, message: 'Origin is not a GitHub URL' });
+
+    sendSuccess(res, { github: parsed });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, err.message));
+  }
+});
+
+// List collaborators for a GitHub repo
+app.get('/api/git/:projectId/collaborators', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res: express.Response) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const token = req.query.token as string;
+    if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+
+    const entry = containers.get(projectId);
+    if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+    const remotes = await gitOperations.getRemotes(entry.id);
+    const origin = remotes.find((r: any) => r.name === 'origin');
+    if (!origin) return sendError(res, createError(ErrorCode.NOT_FOUND, 'No origin remote'));
+
+    const parsed = parseGitHubRemoteUrl(origin.url);
+    if (!parsed) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+
+    const { status, data } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/collaborators`, token);
+    if (status !== 200) {
+      return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
+    }
+
+    const collaborators = (data || []).map((c: any) => ({
+      id: c.id,
+      login: c.login,
+      avatarUrl: c.avatar_url,
+      role: c.role_name || (c.permissions?.admin ? 'admin' : c.permissions?.push ? 'write' : 'read'),
+      permissions: c.permissions,
+    }));
+
+    sendSuccess(res, { collaborators, repo: parsed });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, err.message));
+  }
+});
+
+// Invite a collaborator
+app.post('/api/git/:projectId/collaborators', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res: express.Response) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { token, username, permission } = req.body;
+    if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+    if (!username) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Username required'));
+
+    const entry = containers.get(projectId);
+    if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+    const remotes = await gitOperations.getRemotes(entry.id);
+    const origin = remotes.find((r: any) => r.name === 'origin');
+    if (!origin) return sendError(res, createError(ErrorCode.NOT_FOUND, 'No origin remote'));
+
+    const parsed = parseGitHubRemoteUrl(origin.url);
+    if (!parsed) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+
+    // Validate permission level
+    const validPerms = ['pull', 'push', 'admin', 'maintain', 'triage'];
+    const perm = validPerms.includes(permission) ? permission : 'push';
+
+    const { status, data } = await githubApi(
+      'PUT',
+      `/repos/${parsed.owner}/${parsed.repo}/collaborators/${encodeURIComponent(username)}`,
+      token,
+      { permission: perm }
+    );
+
+    if (status === 201) {
+      sendSuccess(res, { invited: true, invitation: data });
+    } else if (status === 204) {
+      sendSuccess(res, { invited: true, alreadyCollaborator: true });
+    } else {
+      sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to invite collaborator'));
+    }
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, err.message));
+  }
+});
+
+// Remove a collaborator
+app.delete('/api/git/:projectId/collaborators/:username', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res: express.Response) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const username = req.params.username;
+    const token = req.query.token as string;
+    if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+
+    const entry = containers.get(projectId);
+    if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+    const remotes = await gitOperations.getRemotes(entry.id);
+    const origin = remotes.find((r: any) => r.name === 'origin');
+    if (!origin) return sendError(res, createError(ErrorCode.NOT_FOUND, 'No origin remote'));
+
+    const parsed = parseGitHubRemoteUrl(origin.url);
+    if (!parsed) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+
+    const { status, data } = await githubApi(
+      'DELETE',
+      `/repos/${parsed.owner}/${parsed.repo}/collaborators/${encodeURIComponent(username)}`,
+      token
+    );
+
+    if (status === 204) {
+      sendSuccess(res, { removed: true });
+    } else {
+      sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to remove collaborator'));
+    }
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, err.message));
+  }
+});
+
+// List pending invitations
+app.get('/api/git/:projectId/invitations', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res: express.Response) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const token = req.query.token as string;
+    if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+
+    const entry = containers.get(projectId);
+    if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+    const remotes = await gitOperations.getRemotes(entry.id);
+    const origin = remotes.find((r: any) => r.name === 'origin');
+    if (!origin) return sendError(res, createError(ErrorCode.NOT_FOUND, 'No origin remote'));
+
+    const parsed = parseGitHubRemoteUrl(origin.url);
+    if (!parsed) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+
+    const { status, data } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/invitations`, token);
+    if (status !== 200) {
+      return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
+    }
+
+    const invitations = (data || []).map((inv: any) => ({
+      id: inv.id,
+      login: inv.invitee?.login,
+      avatarUrl: inv.invitee?.avatar_url,
+      permission: inv.permissions,
+      createdAt: inv.created_at,
+    }));
+
+    sendSuccess(res, { invitations, repo: parsed });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, err.message));
+  }
+});
+
+// Cancel a pending invitation
+app.delete('/api/git/:projectId/invitations/:invitationId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res: express.Response) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const invitationId = req.params.invitationId;
+    const token = req.query.token as string;
+    if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+
+    const entry = containers.get(projectId);
+    if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
+
+    const remotes = await gitOperations.getRemotes(entry.id);
+    const origin = remotes.find((r: any) => r.name === 'origin');
+    if (!origin) return sendError(res, createError(ErrorCode.NOT_FOUND, 'No origin remote'));
+
+    const parsed = parseGitHubRemoteUrl(origin.url);
+    if (!parsed) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+
+    const { status, data } = await githubApi(
+      'DELETE',
+      `/repos/${parsed.owner}/${parsed.repo}/invitations/${encodeURIComponent(invitationId)}`,
+      token
+    );
+
+    if (status === 204) {
+      sendSuccess(res, { cancelled: true });
+    } else {
+      sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to cancel invitation'));
+    }
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, err.message));
+  }
+});
+
+startupInfo('routes.github-collaborators', 'registered');
+
+// ==================== END SPRINT 14 ====================
 
 // Register shutdown handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -10431,12 +14871,36 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Validate environment variables before starting
 validateEnvironment();
 
+// ── Detect external IP for Expo hostname ────────────────────────────
+(function initExpoHostname() {
+  if (process.env.PUBLIC_HOSTNAME) {
+    setExpoPublicHostname(process.env.PUBLIC_HOSTNAME);
+    return;
+  }
+  try {
+    const os = require('os');
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] || []) {
+        if (net.family === 'IPv4' && !net.internal) {
+          setExpoPublicHostname(net.address);
+          return;
+        }
+      }
+    }
+  } catch {
+    // Fallback already set to 'localhost' in dev-server.ts
+  }
+})();
+
 server.listen(PORT, async () => {
-  console.log(`🚀 Recoder Docker Backend running on port ${PORT}`);
-  console.log(`📦 Image: ${IMAGE_NAME}`);
-  console.log(`🌐 Preview URL: http://localhost:${PORT}/preview/{projectId}`);
-  console.log(`🤝 Collaboration: ws://localhost:${PORT}/collab?projectId=XXX&file=YYY`);
-  console.log(`🔤 LSP: POST /api/lsp/:projectId/start`);
+  startupInfo('server', 'docker backend running', {
+    port: PORT,
+    image: IMAGE_NAME,
+    previewUrlPattern: `http://localhost:${PORT}/preview/{projectId}`,
+    collaborationUrlPattern: `ws://localhost:${PORT}/collab?projectId=XXX&file=YYY`,
+    lspStartEndpoint: '/api/lsp/:projectId/start',
+  });
 
   // Run startup sequence AFTER server is listening
   // This ensures cleanup happens first, then pool is initialized
