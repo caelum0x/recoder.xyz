@@ -44,6 +44,7 @@ export default function SettingsLayout() {
       title: 'Account',
       items: [
         { name: 'Profile', path: '/settings/profile', icon: '👤' },
+        { name: 'Billing', path: '/settings/billing', icon: '💳' },
         { name: 'Security', path: '/settings/security', icon: '🔒' },
       ],
     },

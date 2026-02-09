@@ -3,7 +3,7 @@
  * Shows current subscription, usage, and manage options
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 // Icon components using UnoCSS classes (Cloudflare Workers compatible)
 const CreditCard = ({ className }: { className?: string }) => <div className={`i-ph:credit-card ${className || ''}`} />;
@@ -29,10 +29,85 @@ interface SubscriptionData {
   };
 }
 
+function CancelModal({
+  open,
+  onClose,
+  onConfirm,
+  periodEnd,
+  loading,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  periodEnd: string | null;
+  loading: boolean;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+        <h3 className="text-xl font-semibold text-bolt-elements-textPrimary mb-3">
+          Cancel subscription?
+        </h3>
+
+        <p className="text-bolt-elements-textSecondary text-sm mb-2">
+          Your subscription will remain active until the end of the current billing period.
+        </p>
+
+        {periodEnd && (
+          <p className="text-bolt-elements-textTertiary text-sm mb-4">
+            You will keep access until{' '}
+            <span className="text-bolt-elements-textPrimary font-medium">
+              {new Date(periodEnd).toLocaleDateString()}
+            </span>
+            . After that, your account will revert to the Free plan.
+          </p>
+        )}
+
+        <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-6">
+          <p className="text-yellow-400 text-sm">
+            You can resubscribe at any time from the billing portal.
+          </p>
+        </div>
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-item-backgroundHover transition-colors"
+          >
+            Keep subscription
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Cancelling...' : 'Yes, cancel'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SubscriptionDashboard() {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showToast = useCallback((type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 5000);
+  }, []);
 
   useEffect(() => {
     loadSubscriptionData();
@@ -43,8 +118,8 @@ export function SubscriptionDashboard() {
       const userId = getUserId();
       const response = await fetch('/api/subscribe', {
         headers: {
-          'x-user-id': userId || ''
-        }
+          'x-user-id': userId || '',
+        },
       });
 
       if (!response.ok) {
@@ -63,11 +138,7 @@ export function SubscriptionDashboard() {
   async function handleCancelSubscription() {
     if (!data?.subscription) return;
 
-    const confirmed = confirm(
-      'Are you sure you want to cancel? You will keep access until the end of your billing period.'
-    );
-
-    if (!confirmed) return;
+    setCancelling(true);
 
     try {
       const userId = getUserId();
@@ -75,23 +146,26 @@ export function SubscriptionDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId || ''
+          'x-user-id': userId || '',
         },
         body: JSON.stringify({
           subscriptionId: data.subscription.subscription_id,
           provider: data.subscription.provider,
-          immediate: false
-        })
+          immediate: false,
+        }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to cancel subscription');
       }
 
-      alert('Subscription cancelled. You will keep access until the end of your billing period.');
+      setCancelModalOpen(false);
+      showToast('success', 'Subscription cancelled. You will keep access until the end of your billing period.');
       loadSubscriptionData();
     } catch (err: unknown) {
-      alert(`Error: ${err instanceof Error ? err.message : 'An unknown error occurred'}`);
+      showToast('error', err instanceof Error ? err.message : 'Failed to cancel subscription');
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -104,12 +178,12 @@ export function SubscriptionDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId || ''
+          'x-user-id': userId || '',
         },
         body: JSON.stringify({
           customerId: data.subscription.customer_id,
-          provider: data.subscription.provider
-        })
+          provider: data.subscription.provider,
+        }),
       });
 
       if (!response.ok) {
@@ -119,21 +193,25 @@ export function SubscriptionDashboard() {
       const { portalUrl } = (await response.json()) as { portalUrl: string };
       window.location.href = portalUrl;
     } catch (err: unknown) {
-      alert(`Error: ${err instanceof Error ? err.message : 'An unknown error occurred'}`);
+      showToast('error', err instanceof Error ? err.message : 'Failed to open billing portal');
     }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+      <div className="flex items-center justify-center py-20">
+        <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto p-8">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Billing</h1>
+          <p className="text-bolt-elements-textSecondary">Manage your subscription and usage</p>
+        </div>
         <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
           <p className="text-red-400">{error}</p>
         </div>
@@ -142,15 +220,32 @@ export function SubscriptionDashboard() {
   }
 
   const { subscription, usage, stats } = data || {};
-  const usagePercent = usage ? (usage.remaining / usage.limit) * 100 : 0;
+  const usagePercent = usage ? ((usage.limit - usage.remaining) / usage.limit) * 100 : 0;
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
-      <h1 className="text-3xl font-bold text-bolt-elements-textPrimary mb-8">Subscription & Usage</h1>
+    <div className="space-y-8">
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 max-w-sm p-4 rounded-lg border shadow-lg transition-opacity ${
+            toast.type === 'success'
+              ? 'bg-green-500/10 border-green-500/50 text-green-400'
+              : 'bg-red-500/10 border-red-500/50 text-red-400'
+          }`}
+        >
+          <p className="text-sm">{toast.message}</p>
+        </div>
+      )}
 
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold mb-2">Billing</h1>
+        <p className="text-bolt-elements-textSecondary">Manage your subscription and usage</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
         {/* Current Plan */}
-        <div className="bg-bolt-elements-background-depth-2 backdrop-blur-sm border border-bolt-elements-borderColor rounded-xl p-6">
+        <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <CreditCard className="w-6 h-6 text-blue-400" />
             <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">Current Plan</h2>
@@ -159,7 +254,9 @@ export function SubscriptionDashboard() {
           {subscription ? (
             <>
               <div className="mb-4">
-                <p className="text-3xl font-bold text-bolt-elements-textPrimary capitalize">{subscription.plan_id}</p>
+                <p className="text-3xl font-bold text-bolt-elements-textPrimary capitalize">
+                  {subscription.plan_id}
+                </p>
                 <p className="text-bolt-elements-textTertiary text-sm mt-1">
                   Provider: {subscription.provider === 'paddle' ? 'Paddle' : 'DodoPay'}
                 </p>
@@ -172,7 +269,9 @@ export function SubscriptionDashboard() {
                   ) : (
                     <AlertCircle className="w-4 h-4 text-yellow-400" />
                   )}
-                  <span className="text-bolt-elements-textSecondary capitalize">Status: {subscription.status}</span>
+                  <span className="text-bolt-elements-textSecondary capitalize">
+                    Status: {subscription.status}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -186,15 +285,15 @@ export function SubscriptionDashboard() {
               <div className="flex gap-3">
                 <button
                   onClick={handleManageBilling}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors text-sm"
                 >
                   Manage Billing
                 </button>
 
                 {!subscription.cancel_at_period_end && (
                   <button
-                    onClick={handleCancelSubscription}
-                    className="flex-1 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary py-2 px-4 rounded-lg font-medium transition-colors"
+                    onClick={() => setCancelModalOpen(true)}
+                    className="flex-1 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-item-backgroundHover text-bolt-elements-textSecondary py-2 px-4 rounded-lg font-medium transition-colors text-sm"
                   >
                     Cancel Plan
                   </button>
@@ -204,7 +303,8 @@ export function SubscriptionDashboard() {
               {subscription.cancel_at_period_end && (
                 <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/50 rounded-lg">
                   <p className="text-yellow-400 text-sm">
-                    Subscription will cancel on {new Date(subscription.current_period_end).toLocaleDateString()}
+                    Subscription will cancel on{' '}
+                    {new Date(subscription.current_period_end).toLocaleDateString()}
                   </p>
                 </div>
               )}
@@ -214,7 +314,7 @@ export function SubscriptionDashboard() {
               <p className="text-bolt-elements-textTertiary mb-4">No active subscription</p>
               <a
                 href="/pricing"
-                className="inline-block bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg font-medium transition-colors"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg font-medium transition-colors text-sm"
               >
                 View Plans
               </a>
@@ -223,7 +323,7 @@ export function SubscriptionDashboard() {
         </div>
 
         {/* Usage Stats */}
-        <div className="bg-bolt-elements-background-depth-2 backdrop-blur-sm border border-bolt-elements-borderColor rounded-xl p-6">
+        <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <TrendingUp className="w-6 h-6 text-green-400" />
             <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">Usage This Month</h2>
@@ -243,9 +343,13 @@ export function SubscriptionDashboard() {
                 <div className="w-full h-3 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
-                      usagePercent > 80 ? 'bg-red-500' : usagePercent > 50 ? 'bg-yellow-500' : 'bg-green-500'
+                      usagePercent > 80
+                        ? 'bg-red-500'
+                        : usagePercent > 50
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
                     }`}
-                    style={{ width: `${100 - usagePercent}%` }}
+                    style={{ width: `${usagePercent}%` }}
                   />
                 </div>
 
@@ -276,17 +380,23 @@ export function SubscriptionDashboard() {
 
       {/* Additional Stats */}
       {stats && stats.totalGenerations > 0 && (
-        <div className="bg-bolt-elements-background-depth-2 backdrop-blur-sm border border-bolt-elements-borderColor rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-4">Usage Statistics (30 days)</h2>
+        <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6">
+          <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-4">
+            Usage Statistics (30 days)
+          </h2>
 
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div>
               <p className="text-bolt-elements-textTertiary text-sm">Total Generations</p>
-              <p className="text-2xl font-bold text-bolt-elements-textPrimary">{stats.totalGenerations}</p>
+              <p className="text-2xl font-bold text-bolt-elements-textPrimary">
+                {stats.totalGenerations}
+              </p>
             </div>
             <div>
               <p className="text-bolt-elements-textTertiary text-sm">Tokens Used</p>
-              <p className="text-2xl font-bold text-bolt-elements-textPrimary">{stats.totalTokens.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-bolt-elements-textPrimary">
+                {stats.totalTokens.toLocaleString()}
+              </p>
             </div>
             <div>
               <p className="text-bolt-elements-textTertiary text-sm">Est. Cost Saved</p>
@@ -297,12 +407,16 @@ export function SubscriptionDashboard() {
           {/* Model usage breakdown */}
           {Object.keys(stats.byModel).length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-bolt-elements-textPrimary mb-3">By AI Model</h3>
+              <h3 className="text-lg font-semibold text-bolt-elements-textPrimary mb-3">
+                By AI Model
+              </h3>
               <div className="space-y-2">
                 {Object.entries(stats.byModel).map(([model, count]) => (
                   <div key={model} className="flex justify-between items-center">
                     <span className="text-bolt-elements-textSecondary">{model}</span>
-                    <span className="text-bolt-elements-textPrimary font-medium">{count} generations</span>
+                    <span className="text-bolt-elements-textPrimary font-medium">
+                      {count} generations
+                    </span>
                   </div>
                 ))}
               </div>
@@ -310,6 +424,15 @@ export function SubscriptionDashboard() {
           )}
         </div>
       )}
+
+      {/* Cancel Modal */}
+      <CancelModal
+        open={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        onConfirm={handleCancelSubscription}
+        periodEnd={data?.subscription?.current_period_end ?? null}
+        loading={cancelling}
+      />
     </div>
   );
 }
