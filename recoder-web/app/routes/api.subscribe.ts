@@ -5,19 +5,74 @@
 
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { getDatabase } from '~/lib/.server/db/client';
+import { verifySession } from '~/lib/auth/session.server';
+
+function isProductionEnv(env: any): boolean {
+  return String(env?.NODE_ENV || process.env.NODE_ENV || '').toLowerCase() === 'production';
+}
+
+function isBillingWriteActionsEnabled(env: any): boolean {
+  const raw = String(env?.BILLING_ACTIONS_ENABLED || process.env.BILLING_ACTIONS_ENABLED || '').toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+function billingWriteDisabledResponse(env: any) {
+  // Hide write endpoint surface in production unless explicitly enabled.
+  if (isProductionEnv(env)) {
+    return json({ error: 'Not found' }, { status: 404 });
+  }
+  return json(
+    {
+      error: 'Billing write actions are disabled. Set BILLING_ACTIONS_ENABLED=true to enable.',
+      code: 'BILLING_ACTIONS_DISABLED',
+    },
+    { status: 503 },
+  );
+}
+
+/**
+ * Allowed domains for billing portal redirect URLs.
+ * Only accept URLs from known payment provider domains.
+ */
+const ALLOWED_PORTAL_DOMAINS = new Set([
+  'paddle.com',
+  'sandbox.paddle.com',
+  'checkout.paddle.com',
+  'customer-portal.paddle.com',
+  'dodopayments.com',
+  'sandbox.dodopayments.com',
+  'portal.dodopayments.com',
+]);
+
+function isAllowedPortalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const hostname = parsed.hostname.toLowerCase();
+    // Check exact match or subdomain match (e.g., "x.paddle.com" matches "paddle.com")
+    for (const allowed of ALLOWED_PORTAL_DOMAINS) {
+      if (hostname === allowed || hostname.endsWith(`.${allowed}`)) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await verifySession(request);
+    if (!session?.user?.id) {
+      return json({ error: 'Authentication required' }, { status: 401 });
     }
-    
+    const userId = session.user.id;
+
     // Get subscription data for user from real database
     const data = await getSubscriptionData(env, userId);
-    
+
     return json(data);
   } catch (error) {
     console.error('Failed to fetch subscription data:', error);
@@ -31,26 +86,30 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 export async function action({ request, context }: ActionFunctionArgs) {
   try {
     const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
-    const userId = request.headers.get('x-user-id');
-    const url = new URL(request.url);
-    const action = url.searchParams.get('action');
-    
-    if (!userId) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await verifySession(request);
+    if (!session?.user?.id) {
+      return json({ error: 'Authentication required' }, { status: 401 });
     }
-    
+    const userId = session.user.id;
+    const url = new URL(request.url);
+    const actionType = url.searchParams.get('action');
+
+    if (!isBillingWriteActionsEnabled(env)) {
+      return billingWriteDisabledResponse(env);
+    }
+
     const body = await request.json() as any;
-    
-    switch (action) {
+
+    switch (actionType) {
       case 'create-checkout':
-        return await createCheckoutSession(env, body);
-      
+        return await createCheckoutSession(env, { ...body, userId });
+
       case 'cancel-subscription':
         return await cancelSubscription(env, body);
-      
+
       case 'create-portal':
         return await createBillingPortal(env, body);
-      
+
       default:
         return json({ error: 'Invalid action' }, { status: 400 });
     }
@@ -277,23 +336,37 @@ function getPlanAmount(planId: string): number {
 
 async function cancelSubscription(env: Env, data: any) {
   const { subscriptionId, provider, immediate } = data;
-  
+
+  if (!subscriptionId || !provider) {
+    return json({ error: 'subscriptionId and provider are required' }, { status: 400 });
+  }
+
   const db = getDatabase(env);
-  
+
   try {
-    // Update subscription in database
+    // Actually cancel with the payment provider first, before touching the DB.
+    if (provider === 'paddle') {
+      const { getPaddleClient } = await import('~/lib/.server/payment/paddle');
+      const paddle = getPaddleClient(env);
+      await paddle.cancelSubscription(subscriptionId, !!immediate);
+    } else if (provider === 'dodopay') {
+      const { getDodoPayClient } = await import('~/lib/.server/payment/dodopay');
+      const dodopay = getDodoPayClient(env);
+      await dodopay.cancelSubscription(subscriptionId, { immediate: !!immediate });
+    } else {
+      return json({ error: `Unsupported payment provider: ${provider}` }, { status: 400 });
+    }
+
+    // Provider cancel succeeded — now update local state.
     await db.execute(`
       UPDATE subscriptions
-      SET 
+      SET
         cancel_at_period_end = $1,
         cancelled_at = $2,
         updated_at = NOW()
       WHERE subscription_id = $3
     `, [!immediate, immediate ? new Date() : null, subscriptionId]);
-    
-    // TODO: Call provider API to cancel subscription
-    console.log(`Cancelling subscription ${subscriptionId} with ${provider}`);
-    
+
     return json({
       success: true,
       message: immediate
@@ -308,15 +381,43 @@ async function cancelSubscription(env: Env, data: any) {
 
 async function createBillingPortal(env: Env, data: any) {
   const { customerId, provider } = data;
-  
-  // TODO: Create real billing portal session with provider
-  const portalUrl = provider === 'paddle'
-    ? `https://vendors.paddle.com/subscriptions/customers/${customerId}`
-    : `https://dashboard.dodopayments.com/billing/${customerId}`;
-  
-  console.log(`Creating billing portal for customer ${customerId} with ${provider}`);
-  
-  return json({
-    portalUrl,
-  });
+
+  if (!customerId || !provider) {
+    return json({ error: 'customerId and provider are required' }, { status: 400 });
+  }
+
+  try {
+    let portalUrl: string;
+
+    if (provider === 'paddle') {
+      const { getPaddleClient } = await import('~/lib/.server/payment/paddle');
+      const paddle = getPaddleClient(env);
+      const portal = await paddle.createBillingPortalSession(customerId);
+      portalUrl = portal.url;
+    } else if (provider === 'dodopay') {
+      const { getDodoPayClient } = await import('~/lib/.server/payment/dodopay');
+      const dodopay = getDodoPayClient(env);
+      const portal = await dodopay.createBillingPortalSession(customerId);
+      portalUrl = portal.url;
+    } else {
+      return json({ error: `Unsupported payment provider: ${provider}` }, { status: 400 });
+    }
+
+    // SSRF protection: only redirect to known payment provider domains
+    if (!isAllowedPortalUrl(portalUrl)) {
+      console.error(`[api.subscribe] Rejected portal URL from ${provider}: ${portalUrl}`);
+      return json(
+        { error: 'Billing portal returned an unexpected URL' },
+        { status: 502 },
+      );
+    }
+
+    return json({ portalUrl });
+  } catch (error) {
+    console.error(`Failed to create billing portal for customer ${customerId}:`, error);
+    return json(
+      { error: 'Failed to create billing portal session' },
+      { status: 502 },
+    );
+  }
 }
