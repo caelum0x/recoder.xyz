@@ -5,3 +5,4 @@ export * from "./tools";
 export * from "./anthropic-web-search";
 export * from "./openai-web-search";
 export * from "./google-web-search";
+export * from "./build-tool-set";
