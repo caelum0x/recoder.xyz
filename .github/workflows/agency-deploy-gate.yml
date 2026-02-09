@@ -7,9 +7,6 @@ on:
 jobs:
   typecheck-and-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: recoder-agency
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -20,13 +17,14 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: 24.x
-      - run: pnpm install
+      - name: Install
+        run: cd recoder-agency && pnpm install --ignore-workspace
       - name: Build SDK
-        run: pnpm run build-sdk
+        run: cd recoder-agency && pnpm run build-sdk
       - name: Type check
-        run: pnpm run check-types
+        run: cd recoder-agency && pnpm run check-types
       - name: Test
-        run: pnpm run test
+        run: cd recoder-agency && pnpm run test
 
   db-guardrails:
     runs-on: ubuntu-latest
@@ -63,9 +61,6 @@ jobs:
 
   smoke-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: recoder-agency
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -76,10 +71,11 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: 24.x
-      - run: pnpm install
+      - name: Install
+        run: cd recoder-agency && pnpm install --ignore-workspace
       - name: Install Playwright browsers (chromium only)
-        run: npx -y playwright install --with-deps chromium
+        run: cd recoder-agency && npx -y playwright install --with-deps chromium
       - name: Run smoke tests
-        run: pnpm run --filter agency test:e2e -- --project=chromium --grep @smoke
+        run: cd recoder-agency && pnpm run --filter agency test:e2e -- --project=chromium --grep @smoke
         env:
           CI: true
