@@ -1,0 +1,22 @@
+name: Agency DB Guardrails
+
+on:
+  pull_request:
+    paths:
+      - "recoder-agency/**"
+
+jobs:
+  db-guardrails:
+    runs-on: ubuntu-latest
+    env:
+      AGENCY_STAGING_DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Run delivery release readiness assertions
+        if: env.AGENCY_STAGING_DATABASE_URL != ''
+        run: |
+          psql "$AGENCY_STAGING_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -v stale_days=${WEEKLY_METRICS_STALE_AFTER_DAYS:-10} \
+            -f recoder-agency/apps/agency/db/scripts/assert_delivery_release_readiness.sql
