@@ -93,6 +93,8 @@ service-account*.json
 
 # Keep legitimate source files that include "token" in their names.
 !recoder-web/app/lib/hooks/useTokenCount.ts
+!recoder-web/app/**/*.ts
+!recoder-web/app/**/*.tsx
 
 # Allow documentation files
 !*GUIDE*.md
