@@ -4,6 +4,8 @@ import { createElement, moveElement, updateStyles, exportToCode } from '~/lib/ca
 import { Canvas } from './Canvas';
 import { PropertyPanel } from './PropertyPanel';
 import { Toolbar } from './Toolbar';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CanvasEditor');
 
 export function CanvasEditor() {
   const [elements, setElements] = useState<CanvasElement[]>([]);
@@ -30,7 +32,7 @@ export function CanvasEditor() {
 
   const handleExport = () => {
     const code = exportToCode(elements);
-    console.log('Exported code:', code);
+    logger.info('Exported code:', code);
     navigator.clipboard.writeText(code);
     alert('Code copied to clipboard!');
   };

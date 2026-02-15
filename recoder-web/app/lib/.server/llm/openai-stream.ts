@@ -3,6 +3,10 @@
  * Uses OpenAI's Chat Completions API with streaming
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OpenAIStream');
+
 export interface StreamOptions {
   model?: string;
   temperature?: number;
@@ -17,9 +21,9 @@ export async function streamOpenAIResponse(
 ): Promise<ReadableStream<Uint8Array>> {
   const model = options.model || 'gpt-4-turbo-preview';
 
-  console.log('🚀 [OpenAI] Starting request to OpenAI API');
-  console.log('📝 [OpenAI] Model:', model);
-  console.log('📊 [OpenAI] Messages count:', messages.length);
+  logger.info('🚀 [OpenAI] Starting request to OpenAI API');
+  logger.info('📝 [OpenAI] Model:', model);
+  logger.info('📊 [OpenAI] Messages count:', messages.length);
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -39,20 +43,20 @@ export async function streamOpenAIResponse(
     }),
   });
 
-  console.log('📡 [OpenAI] Response received:', response.status, response.statusText);
+  logger.info('📡 [OpenAI] Response received:', response.status, response.statusText);
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('❌ [OpenAI] Error response:', errorText);
+    logger.error('❌ [OpenAI] Error response:', errorText);
     throw new Error(`OpenAI error: ${response.status} - ${errorText}`);
   }
 
   if (!response.body) {
-    console.error('❌ [OpenAI] No response body');
+    logger.error('❌ [OpenAI] No response body');
     throw new Error('No response body');
   }
 
-  console.log('✅ [OpenAI] Starting stream processing');
+  logger.info('✅ [OpenAI] Starting stream processing');
 
   const textEncoder = new TextEncoder();
   const textDecoder = new TextDecoder();
@@ -63,14 +67,14 @@ export async function streamOpenAIResponse(
       let buffer = '';
       let chunkCount = 0;
 
-      console.log('🔄 [OpenAI] Stream reader started');
+      logger.info('🔄 [OpenAI] Stream reader started');
 
       try {
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
-            console.log('✅ [OpenAI] Stream complete. Total chunks:', chunkCount);
+            logger.info('✅ [OpenAI] Stream complete. Total chunks:', chunkCount);
             break;
           }
 
@@ -87,7 +91,7 @@ export async function streamOpenAIResponse(
               const data = line.slice(6); // Remove 'data: ' prefix
 
               if (data === '[DONE]') {
-                console.log('✅ [OpenAI] Received [DONE] signal');
+                logger.info('✅ [OpenAI] Received [DONE] signal');
                 continue;
               }
 
@@ -101,16 +105,16 @@ export async function streamOpenAIResponse(
                   controller.enqueue(textEncoder.encode(delta.content));
                 }
               } catch (e) {
-                console.error('❌ [OpenAI] Failed to parse SSE data:', e);
+                logger.error('❌ [OpenAI] Failed to parse SSE data:', e);
               }
             }
           }
         }
 
         controller.close();
-        console.log('✅ [OpenAI] Controller closed');
+        logger.info('✅ [OpenAI] Controller closed');
       } catch (error) {
-        console.error('❌ [OpenAI] Stream processing error:', error);
+        logger.error('❌ [OpenAI] Stream processing error:', error);
         controller.error(error);
       }
     },

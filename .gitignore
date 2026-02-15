@@ -30,6 +30,9 @@ out/
 .env.production.local
 .env.server
 .env.deploy
+.env.a2a.workers
+a2a-js/
+openclaw/
 **/.env
 **/.env.local
 **/.env.production
@@ -138,6 +141,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+
+# Local runtime artifacts
+.run/
 
 # Runtime data
 pids/

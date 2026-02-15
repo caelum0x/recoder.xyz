@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[Editor Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch editor settings' },
+      { success: false, error: 'Failed to fetch editor settings' },
       { status: 500 }
     );
   }
@@ -102,7 +102,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error('[Editor Settings PUT] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update editor settings' },
+      { success: false, error: 'Failed to update editor settings' },
       { status: 500 }
     );
   }

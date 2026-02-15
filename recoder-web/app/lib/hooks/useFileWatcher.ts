@@ -19,6 +19,9 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { getSessionToken } from '~/lib/services/docker-api';
 import { updateFileWatcherStatus } from '~/lib/stores/connection';
 import { FileEventDeduper, type FileChange } from './file-watcher-dedup';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('FileWatcher');
 
 const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
 
@@ -70,7 +73,7 @@ export function signalBatchWriteStart(): void {
   _batchWriteInProgress = true;
   _bufferedChanges = [];
   if (DEBUG_MODE) {
-    console.log('[FileWatcher] Batch write started - buffering events');
+    logger.info('[FileWatcher] Batch write started - buffering events');
   }
 }
 
@@ -81,7 +84,7 @@ export function signalBatchWriteStart(): void {
 export function signalBatchWriteEnd(): void {
   _batchWriteInProgress = false;
   if (DEBUG_MODE) {
-    console.log('[FileWatcher] Batch write ended - flushing', _bufferedChanges.length, 'buffered events');
+    logger.info('[FileWatcher] Batch write ended - flushing', _bufferedChanges.length, 'buffered events');
   }
 
   // Notify any waiting reconnection callbacks
@@ -110,10 +113,10 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
   const projectId = useStore(workbenchStore.projectId);
   const containerReady = useStore(workbenchStore.containerReady);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout>();
-  const heartbeatTimeoutRef = useRef<NodeJS.Timeout>();
-  const gracePeriodTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const heartbeatTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const gracePeriodTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY);
   const connectionAttemptRef = useRef(0);
   const isConnectingRef = useRef(false);
@@ -135,12 +138,12 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
 
   // Event deduplication: track recently processed changes by "type:path" -> timestamp
   const deduperRef = useRef<FileEventDeduper>(new FileEventDeduper(DEDUP_WINDOW_MS));
-  const dedupCleanupRef = useRef<NodeJS.Timeout>();
+  const dedupCleanupRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Helper function for debug logging
   const debugLog = useCallback((...args: unknown[]) => {
     if (DEBUG_MODE) {
-      console.log('[FileWatcher]', ...args);
+      logger.info('[FileWatcher]', ...args);
     }
   }, []);
 
@@ -258,7 +261,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
     // Check max reconnect attempts
     if (connectionAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
       if (!gaveUpRef.current) {
-        console.warn('[FileWatcher] Max reconnection attempts reached, giving up');
+        logger.warn('[FileWatcher] Max reconnection attempts reached, giving up');
         gaveUpRef.current = true;
         updateFileWatcherStatus('error', { error: 'Max reconnection attempts reached' });
       }
@@ -286,7 +289,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
       connectionOpenTimeRef.current = Date.now();
       lastPongRef.current = Date.now();
       hasEverConnectedRef.current = true;
-      console.log('[FileWatcher] Connected to file watch stream');
+      logger.info('[FileWatcher] Connected to file watch stream');
       // Report connected status
       updateFileWatcherStatus('connected');
       // Start heartbeat monitoring
@@ -323,7 +326,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
             return;
           }
 
-          console.log(`[FileWatcher] ${uniqueChanges.length} file changes detected:`,
+          logger.info(`[FileWatcher] ${uniqueChanges.length} file changes detected:`,
             uniqueChanges.map((c: FileChange) => `${c.type}: ${c.path}`).join(', ')
           );
 
@@ -337,7 +340,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
           );
 
           if (hasCodeChange) {
-            console.log('[FileWatcher] Code file changed, triggering preview refresh');
+            logger.info('[FileWatcher] Code file changed, triggering preview refresh');
             onPreviewRefreshRef.current?.();
 
             // Dispatch event for preview component
@@ -352,7 +355,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
           }));
         }
       } catch (e) {
-        console.warn('[FileWatcher] Failed to parse message:', e);
+        logger.warn('[FileWatcher] Failed to parse message:', e);
       }
     };
 
@@ -408,7 +411,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
           debugLog(`Rapid disconnect #${rapidDisconnectCountRef.current} (connection lasted ${connectionDuration}ms)`);
 
           if (rapidDisconnectCountRef.current >= MAX_RAPID_DISCONNECTS) {
-            console.warn(`[FileWatcher] ${MAX_RAPID_DISCONNECTS} rapid disconnects detected, stopping retries`);
+            logger.warn(`[FileWatcher] ${MAX_RAPID_DISCONNECTS} rapid disconnects detected, stopping retries`);
             gaveUpRef.current = true;
             updateFileWatcherStatus('error', { error: 'Too many rapid disconnects' });
             return;
@@ -445,7 +448,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
         // Only log reconnection attempts after we've had a successful connection
         // or after a few failed attempts (to avoid spam during startup)
         if (hasEverConnectedRef.current || connectionAttemptRef.current > 2) {
-          console.log(`[FileWatcher] Reconnecting in ${Math.round(delay / 1000)}s (attempt ${connectionAttemptRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+          logger.info(`[FileWatcher] Reconnecting in ${Math.round(delay / 1000)}s (attempt ${connectionAttemptRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
         } else {
           debugLog(`Reconnecting in ${delay}ms (attempt ${connectionAttemptRef.current})`);
         }
@@ -547,6 +550,25 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
     window.addEventListener('recoder:reconnect-all', handleReconnectAll);
     return () => {
       window.removeEventListener('recoder:reconnect-all', handleReconnectAll);
+    };
+  }, [forceReconnect]);
+
+  // Listen for file-resync event (dispatched when terminal reconnects)
+  // Forces file watcher to reconnect and re-sync file state
+  useEffect(() => {
+    const handleFileResync = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // Already connected - clear dedup cache so new events come through fresh
+        deduperRef.current.clear();
+      } else {
+        // Not connected - force reconnect
+        forceReconnect();
+      }
+    };
+
+    window.addEventListener('recoder:file-resync', handleFileResync);
+    return () => {
+      window.removeEventListener('recoder:file-resync', handleFileResync);
     };
   }, [forceReconnect]);
 

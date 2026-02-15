@@ -3,7 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { clients, db, deliverables, invoices, projects } from "@/db";
-import { stripe } from "@/services/external/stripe";
+import { polar } from "@/services/external/polar";
 import { requireAdminRole } from "@/services/teams";
 
 export async function createInvoice(formData: FormData) {
@@ -81,54 +81,39 @@ async function attemptSendInvoice(invoiceId: string, projectId: string) {
 		throw new Error("Client has no email address");
 	}
 
-	// Ensure Stripe customer exists
-	let stripeCustomerId = client.stripeCustomerId;
-	if (!stripeCustomerId) {
-		const customer = await stripe.customers.create({
-			name: client.name,
+	// Ensure Polar customer exists
+	let polarCustomerId = client.polarCustomerId;
+	if (!polarCustomerId) {
+		const customer = await polar.customers.create({
 			email: client.email,
+			name: client.name,
 			metadata: { clientId: client.id },
 		});
-		stripeCustomerId = customer.id;
+		polarCustomerId = customer.id;
 		await db
 			.update(clients)
-			.set({ stripeCustomerId })
+			.set({ polarCustomerId })
 			.where(eq(clients.dbId, client.dbId));
 	}
 
-	// Create Stripe invoice
-	const stripeInvoice = await stripe.invoices.create({
-		customer: stripeCustomerId,
-		collection_method: "send_invoice",
-		days_until_due: invoice.dueDate
-			? Math.max(
-					1,
-					Math.ceil(
-						(invoice.dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-					),
-				)
-			: 30,
+	// Create a Polar checkout for the invoice amount
+	const productId = process.env.POLAR_PRO_PRODUCT_ID;
+	if (!productId) {
+		throw new Error("POLAR_PRO_PRODUCT_ID is not set");
+	}
+
+	const checkout = await polar.checkouts.create({
+		products: [productId],
+		amount: invoice.amount,
+		customerId: polarCustomerId,
 		metadata: { invoiceId: invoice.id, projectId },
 	});
-
-	// Add line item
-	await stripe.invoiceItems.create({
-		customer: stripeCustomerId,
-		invoice: stripeInvoice.id,
-		amount: invoice.amount,
-		currency: invoice.currency,
-		description: `Invoice for project`,
-	});
-
-	// Finalize and send
-	await stripe.invoices.finalizeInvoice(stripeInvoice.id);
-	await stripe.invoices.sendInvoice(stripeInvoice.id);
 
 	await db
 		.update(invoices)
 		.set({
 			status: "sent",
-			stripeInvoiceId: stripeInvoice.id,
+			polarOrderId: checkout.id,
 			lastError: null,
 			nextRetryAt: null,
 			lastRetryAt: new Date(),

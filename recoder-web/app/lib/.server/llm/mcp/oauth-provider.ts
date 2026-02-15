@@ -12,6 +12,9 @@ import type { OAuthToken } from './token-storage/types.js';
 import { MCPOAuthTokenStorage } from './oauth-token-storage.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { OAuthUtils } from './oauth-utils.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OAuthProvider');
 
 /**
  * OAuth configuration for an MCP server.
@@ -252,7 +255,7 @@ export class MCPOAuthProvider {
 
       server.on('error', reject);
       server.listen(this.REDIRECT_PORT, () => {
-        console.log(
+        logger.info(
           `OAuth callback server listening on port ${this.REDIRECT_PORT}`,
         );
       });
@@ -311,7 +314,7 @@ export class MCPOAuthProvider {
           OAuthUtils.buildResourceParameter(mcpServerUrl),
         );
       } catch (error) {
-        console.warn(
+        logger.warn(
           `Could not add resource parameter: ${getErrorMessage(error)}`,
         );
       }
@@ -369,7 +372,7 @@ export class MCPOAuthProvider {
           OAuthUtils.buildResourceParameter(resourceUrl),
         );
       } catch (error) {
-        console.warn(
+        logger.warn(
           `Could not add resource parameter: ${getErrorMessage(error)}`,
         );
       }
@@ -411,7 +414,7 @@ export class MCPOAuthProvider {
       !contentType.includes('application/json') &&
       !contentType.includes('application/x-www-form-urlencoded')
     ) {
-      console.warn(
+      logger.warn(
         `Token endpoint returned unexpected content-type: ${contentType}. ` +
           `Expected application/json or application/x-www-form-urlencoded. ` +
           `Will attempt to parse response.`,
@@ -491,7 +494,7 @@ export class MCPOAuthProvider {
           OAuthUtils.buildResourceParameter(mcpServerUrl),
         );
       } catch (error) {
-        console.warn(
+        logger.warn(
           `Could not add resource parameter: ${getErrorMessage(error)}`,
         );
       }
@@ -533,7 +536,7 @@ export class MCPOAuthProvider {
       !contentType.includes('application/json') &&
       !contentType.includes('application/x-www-form-urlencoded')
     ) {
-      console.warn(
+      logger.warn(
         `Token refresh endpoint returned unexpected content-type: ${contentType}. ` +
           `Expected application/json or application/x-www-form-urlencoded. ` +
           `Will attempt to parse response.`,
@@ -586,7 +589,7 @@ export class MCPOAuthProvider {
   ): Promise<OAuthToken> {
     // If no authorization URL is provided, try to discover OAuth configuration
     if (!config.authorizationUrl && mcpServerUrl) {
-      console.log(
+      logger.info(
         'No authorization URL provided, attempting OAuth discovery...',
       );
 
@@ -624,7 +627,7 @@ export class MCPOAuthProvider {
           }
         }
       } catch (error) {
-        console.debug(
+        logger.debug(
           `Failed to check endpoint for authentication requirements: ${getErrorMessage(error)}`,
         );
       }
@@ -664,7 +667,7 @@ export class MCPOAuthProvider {
       const authUrl = new URL(config.authorizationUrl);
       const serverUrl = `${authUrl.protocol}//${authUrl.host}`;
 
-      console.log(
+      logger.info(
         'No client ID provided, attempting dynamic client registration...',
       );
 
@@ -696,7 +699,7 @@ export class MCPOAuthProvider {
           config.clientSecret = clientRegistration.client_secret;
         }
 
-        console.log('Dynamic client registration successful');
+        logger.info('Dynamic client registration successful');
       } else {
         throw new Error(
           'No client ID provided and dynamic registration not supported',
@@ -721,30 +724,30 @@ export class MCPOAuthProvider {
       mcpServerUrl,
     );
 
-    console.log('\nOpening browser for OAuth authentication...');
-    console.log('If the browser does not open, please visit:');
-    console.log('');
+    logger.info('\nOpening browser for OAuth authentication...');
+    logger.info('If the browser does not open, please visit:');
+    logger.info('');
 
     // Get terminal width or default to 80
     const terminalWidth = process.stdout.columns || 80;
     const separatorLength = Math.min(terminalWidth - 2, 80);
     const separator = '━'.repeat(separatorLength);
 
-    console.log(separator);
-    console.log(
+    logger.info(separator);
+    logger.info(
       'COPY THE ENTIRE URL BELOW (select all text between the lines):',
     );
-    console.log(separator);
-    console.log(authUrl);
-    console.log(separator);
-    console.log('');
-    console.log(
+    logger.info(separator);
+    logger.info(authUrl);
+    logger.info(separator);
+    logger.info('');
+    logger.info(
       '💡 TIP: Triple-click to select the entire URL, then copy and paste it into your browser.',
     );
-    console.log(
+    logger.info(
       '⚠️  Make sure to copy the COMPLETE URL - it may wrap across multiple lines.',
     );
-    console.log('');
+    logger.info('');
 
     // Start callback server
     const callbackPromise = this.startCallbackServer(pkceParams.state);
@@ -753,7 +756,7 @@ export class MCPOAuthProvider {
     try {
       await openBrowserSecurely(authUrl);
     } catch (error) {
-      console.warn(
+      logger.warn(
         'Failed to open browser automatically:',
         getErrorMessage(error),
       );
@@ -762,7 +765,7 @@ export class MCPOAuthProvider {
     // Wait for callback
     const { code } = await callbackPromise;
 
-    console.log('\nAuthorization code received, exchanging for tokens...');
+    logger.info('\nAuthorization code received, exchanging for tokens...');
 
     // Exchange code for tokens
     const tokenResponse = await this.exchangeCodeForToken(
@@ -797,7 +800,7 @@ export class MCPOAuthProvider {
         config.tokenUrl,
         mcpServerUrl,
       );
-      console.log('Authentication successful! Token saved.');
+      logger.info('Authentication successful! Token saved.');
 
       // Verify token was saved
       const savedToken = await MCPOAuthTokenStorage.getToken(serverName);
@@ -806,14 +809,14 @@ export class MCPOAuthProvider {
           savedToken.token.accessToken.length > 20
             ? `${savedToken.token.accessToken.substring(0, 20)}...`
             : '[token]';
-        console.log(`Token verification successful: ${tokenPreview}`);
+        logger.info(`Token verification successful: ${tokenPreview}`);
       } else {
-        console.error(
+        logger.error(
           'Token verification failed: token not found or invalid after save',
         );
       }
     } catch (saveError) {
-      console.error(`Failed to save token: ${getErrorMessage(saveError)}`);
+      logger.error(`Failed to save token: ${getErrorMessage(saveError)}`);
       throw saveError;
     }
 
@@ -831,29 +834,29 @@ export class MCPOAuthProvider {
     serverName: string,
     config: MCPOAuthConfig,
   ): Promise<string | null> {
-    console.debug(`Getting valid token for server: ${serverName}`);
+    logger.debug(`Getting valid token for server: ${serverName}`);
     const credentials = await MCPOAuthTokenStorage.getToken(serverName);
 
     if (!credentials) {
-      console.debug(`No credentials found for server: ${serverName}`);
+      logger.debug(`No credentials found for server: ${serverName}`);
       return null;
     }
 
     const { token } = credentials;
-    console.debug(
+    logger.debug(
       `Found token for server: ${serverName}, expired: ${MCPOAuthTokenStorage.isTokenExpired(token)}`,
     );
 
     // Check if token is expired
     if (!MCPOAuthTokenStorage.isTokenExpired(token)) {
-      console.debug(`Returning valid token for server: ${serverName}`);
+      logger.debug(`Returning valid token for server: ${serverName}`);
       return token.accessToken;
     }
 
     // Try to refresh if we have a refresh token
     if (token.refreshToken && config.clientId && credentials.tokenUrl) {
       try {
-        console.log(`Refreshing expired token for MCP server: ${serverName}`);
+        logger.info(`Refreshing expired token for MCP server: ${serverName}`);
 
         const newTokenResponse = await this.refreshAccessToken(
           config,
@@ -884,7 +887,7 @@ export class MCPOAuthProvider {
 
         return newToken.accessToken;
       } catch (error) {
-        console.error(`Failed to refresh token: ${getErrorMessage(error)}`);
+        logger.error(`Failed to refresh token: ${getErrorMessage(error)}`);
         // Remove invalid token
         await MCPOAuthTokenStorage.removeToken(serverName);
       }

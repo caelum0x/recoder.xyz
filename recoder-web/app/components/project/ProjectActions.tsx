@@ -47,8 +47,21 @@ export function ProjectActions({
     );
   }
 
-  // TODO: Implement dropdown variant if needed
-  return null;
+  // Dropdown variant: compact menu
+  return (
+    <div className={`relative inline-block ${className}`}>
+      <details className="group">
+        <summary className="flex items-center gap-1 px-2 py-1 text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded cursor-pointer hover:bg-bolt-elements-background-depth-3 list-none">
+          <span className="i-ph:dots-three-vertical" />
+          Actions
+        </summary>
+        <div className="absolute right-0 mt-1 z-50 min-w-[160px] bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-lg p-1">
+          <DownloadButton projectId={projectId} size="sm" variant="ghost" className="w-full justify-start" />
+          <PushToGitHubButton projectId={projectId} projectName={projectName} size="sm" variant="ghost" className="w-full justify-start" />
+        </div>
+      </details>
+    </div>
+  );
 }
 
 // Export individual components

@@ -92,7 +92,7 @@ export function useTouchGestures<T extends HTMLElement = HTMLElement>(
   callbacks: TouchGestureCallbacks = {},
   options: TouchGestureOptions = {}
 ): {
-  ref: React.RefObject<T>;
+  ref: React.RefObject<T | null>;
   state: TouchGestureState;
 } {
   const {
@@ -430,7 +430,7 @@ export function useTouchGestures<T extends HTMLElement = HTMLElement>(
  */
 export function useHorizontalSwipe<T extends HTMLElement = HTMLElement>(
   callbacks: Pick<TouchGestureCallbacks, 'onSwipeLeft' | 'onSwipeRight'>
-): React.RefObject<T> {
+): React.RefObject<T | null> {
   const { ref } = useTouchGestures<T>(callbacks, {
     enablePinch: false,
     enableLongPress: false,
@@ -458,7 +458,7 @@ export function useHorizontalSwipe<T extends HTMLElement = HTMLElement>(
 export function usePinchZoom<T extends HTMLElement = HTMLElement>(
   callbacks: Pick<TouchGestureCallbacks, 'onPinch' | 'onPinchStart' | 'onPinchEnd'>
 ): {
-  ref: React.RefObject<T>;
+  ref: React.RefObject<T | null>;
   scale: number;
 } {
   const { ref, state } = useTouchGestures<T>(callbacks, {

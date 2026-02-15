@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { useStore } from '@nanostores/react';
+import { createScopedLogger } from '~/utils/logger';
 import {
   contextConfigStore,
   conversationMessagesStore,
@@ -39,6 +40,8 @@ import {
   type ContextConfig,
   type FileContext,
 } from '~/lib/services/context-management';
+
+const logger = createScopedLogger('ContextManagement');
 
 export interface UseContextManagementOptions {
   autoCondense?: boolean;
@@ -139,7 +142,7 @@ export function useContextManagement(
           summary
         );
       } catch (error) {
-        console.error('Auto-condensation failed:', error);
+        logger.error('Auto-condensation failed:', error);
       } finally {
         isCondensing.set(false);
       }
@@ -174,7 +177,7 @@ export function useContextManagement(
 
   const handleCondense = useCallback(async () => {
     if (!onCondensationNeeded) {
-      console.warn('No onCondensationNeeded handler provided');
+      logger.warn('No onCondensationNeeded handler provided');
       return null;
     }
 
@@ -223,7 +226,7 @@ export function useContextManagement(
             const content = await fetchContent(file.path);
             setFileContext(file.path, content, file.source);
           } catch (error) {
-            console.error(`Failed to refresh ${file.path}:`, error);
+            logger.error(`Failed to refresh ${file.path}:`, error);
           }
         })
       );

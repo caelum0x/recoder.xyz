@@ -5,6 +5,9 @@
 
 import { BaseEmbedder, type BaseEmbedderOptions } from './base-embedder';
 import type { EmbeddingResponse, EmbedderInfo } from '../interfaces';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OpenAIEmbedder');
 
 interface OpenAIEmbeddingResponse {
   data: Array<{
@@ -118,7 +121,7 @@ export class OpenAIEmbedder extends BaseEmbedder {
       if (result.embeddings && result.embeddings.length > 0) {
         // Verify dimensions
         if (result.embeddings[0].length !== this.dimensions) {
-          console.warn(`Expected ${this.dimensions} dimensions, got ${result.embeddings[0].length}`);
+          logger.warn(`Expected ${this.dimensions} dimensions, got ${result.embeddings[0].length}`);
         }
         return { valid: true };
       }

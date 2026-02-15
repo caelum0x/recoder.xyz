@@ -5,6 +5,9 @@
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { v4 as uuidv4 } from 'uuid';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SpawnTask');
 
 // In-memory task store (could be moved to Redis/database for production)
 const tasks = new Map<string, {
@@ -49,7 +52,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // In a real implementation, this would trigger an async job
   // For now, we mark it as pending and return immediately
-  console.log(`[Spawn Task] Created task ${taskId}:`, {
+  logger.info(`[Spawn Task] Created task ${taskId}:`, {
     description: taskDescription,
     mode,
   });

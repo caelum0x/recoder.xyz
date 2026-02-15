@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CodeEmbedder');
 /**
  * OpenAI Embeddings wrapper for code indexing
  * Uses text-embedding-3-small for cost-effective semantic search
@@ -86,7 +88,7 @@ async function embedBatchWithRetry(
       // Check for rate limit
       if (lastError.message.includes('429') || lastError.message.includes('rate')) {
         const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.warn(`Rate limited, waiting ${delay}ms before retry ${attempt + 1}/${MAX_RETRIES}`);
+        logger.warn(`Rate limited, waiting ${delay}ms before retry ${attempt + 1}/${MAX_RETRIES}`);
         await sleep(delay);
         continue;
       }

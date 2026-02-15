@@ -5,6 +5,8 @@
  */
 
 import { execSync, spawn } from 'node:child_process';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LLMEditor');
 
 export type EditorType =
   | 'vscode'
@@ -168,7 +170,7 @@ export async function openDiff(
 ): Promise<void> {
   const diffCommand = getDiffCommand(oldPath, newPath, editor);
   if (!diffCommand) {
-    console.error('No diff tool available. Install a supported editor.');
+    logger.error('No diff tool available. Install a supported editor.');
     return;
   }
 
@@ -213,7 +215,7 @@ export async function openDiff(
             encoding: 'utf8',
           });
         } catch (e) {
-          console.error('Error in onEditorClose callback:', e);
+          logger.error('Error in onEditorClose callback:', e);
         } finally {
           onEditorClose();
         }
@@ -224,6 +226,6 @@ export async function openDiff(
         throw new Error(`Unsupported editor: ${editor}`);
     }
   } catch (error) {
-    console.error(error);
+    logger.error(error);
   }
 }

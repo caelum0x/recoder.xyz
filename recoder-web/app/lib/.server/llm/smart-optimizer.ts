@@ -7,11 +7,14 @@
 import { matchTemplate, isTemplateSuitable, getTemplatePrompt, type TemplateMatch } from './template-matcher';
 import { routeToModel, type TaskAnalysis, type ModelConfig, calculateSavings } from './model-router';
 import { getSystemPrompt } from './prompts';
+import { createScopedLogger } from '~/utils/logger';
 import {
   loadStarterTemplates,
   matchUserRequestToTemplate,
   generateTemplateCustomizationPrompt
 } from '../templates/starter-integration';
+
+const logger = createScopedLogger('SmartOptimizer');
 
 export interface OptimizationResult {
   strategy: 'template-based' | 'model-routed' | 'standard';
@@ -91,7 +94,7 @@ export function optimizeRequest(
         matchedKeywords: starterMatch.template.keywords
       };
 
-      console.log(`🎯 REAL TEMPLATE MATCH: ${starterMatch.template.name} (${starterMatch.confidence}% confidence, ${starterMatch.template.files.length} files)`);
+      logger.info(`🎯 REAL TEMPLATE MATCH: ${starterMatch.template.name} (${starterMatch.confidence}% confidence, ${starterMatch.template.files.length} files)`);
 
       return {
         strategy: 'template-based',
@@ -112,7 +115,7 @@ export function optimizeRequest(
       };
     }
   } catch (error) {
-    console.error('Failed to load starter templates:', error);
+    logger.error('Failed to load starter templates:', error);
     // Fall through to legacy template matching
   }
 

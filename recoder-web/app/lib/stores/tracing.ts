@@ -5,6 +5,8 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('TracingStore');
 
 // ============================================
 // Types
@@ -104,7 +106,7 @@ function loadConfig(): TracingConfig {
       return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (e) {
-    console.warn('[Tracing] Failed to load config:', e);
+    logger.warn('[Tracing] Failed to load config:', e);
   }
 
   return DEFAULT_CONFIG;
@@ -116,7 +118,7 @@ function saveConfig(config: TracingConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   } catch (e) {
-    console.warn('[Tracing] Failed to save config:', e);
+    logger.warn('[Tracing] Failed to save config:', e);
   }
 }
 
@@ -525,7 +527,7 @@ export function importTracesFromJSON(json: string): void {
       metricsStore.set(data.metrics);
     }
   } catch (e) {
-    console.error('[Tracing] Failed to import traces:', e);
+    logger.error('[Tracing] Failed to import traces:', e);
   }
 }
 

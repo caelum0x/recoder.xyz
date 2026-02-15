@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertTwoFactorVerifyResponse } from '@/lib/contracts/security-contracts';
 import { TwoFactorAuthService } from '@/lib/services/2fa.service';
 
 /**
@@ -26,13 +27,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    return NextResponse.json(assertTwoFactorVerifyResponse({
       success: true,
       message: result.message,
-    });
+    }));
   } catch (error: any) {
     return NextResponse.json(
-      { error: 'Failed to verify 2FA', message: error.message },
+      { error: 'Failed to verify 2FA' },
       { status: 500 }
     );
   }

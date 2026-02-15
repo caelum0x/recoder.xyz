@@ -81,8 +81,7 @@ export async function POST(request: NextRequest) {
     console.error('Set user error:', error);
     return NextResponse.json({
       success: false,
-      error: 'server_error',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'server_error'
     }, { status: 500 });
   }
 }

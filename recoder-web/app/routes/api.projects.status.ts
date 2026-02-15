@@ -6,6 +6,9 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectStatus');
 
 // Quota limits by subscription plan
 const PLAN_QUOTAS = {
@@ -126,10 +129,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       quota: quotaStatus,
     });
   } catch (error) {
-    console.error('[Projects] Status error:', error);
+    logger.error('[Projects] Status error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: 'Internal server error',
     }, { status: 500 });
   }
 }

@@ -9,6 +9,9 @@ import { consoleStore, REPL_LANGUAGES, type ReplLanguage, type ReplCommand } fro
 import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerPost, dockerGet } from '~/lib/services/docker-api';
 import { IconButton } from '~/components/ui/IconButton';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ConsolePanel');
 
 interface ConsolePanelProps {
   className?: string;
@@ -79,7 +82,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
           );
         }
       } catch (err) {
-        console.error('[Console] Error checking languages:', err);
+        logger.error('[Console] Error checking languages:', err);
         // Default to all languages as potentially available
         setAvailableLanguages(
           (Object.keys(REPL_LANGUAGES) as ReplLanguage[]).map((lang) => ({
@@ -149,7 +152,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
       await dockerPost(`/api/repl/${projectId}/stop`, { language: session.language });
       consoleStore.stopSession();
     } catch (err: any) {
-      console.error('[Console] Error stopping session:', err);
+      logger.error('[Console] Error stopping session:', err);
     }
   }, [projectId, session]);
 

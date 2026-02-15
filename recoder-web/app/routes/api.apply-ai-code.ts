@@ -12,6 +12,20 @@
 import type { ActionFunctionArgs } from '@remix-run/cloudflare';
 import { json } from '@remix-run/cloudflare';
 import { dockerWriteFile, dockerReadFile, dockerPost } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ApplyAiCode');
+
+const DEBUG_APPLY_AI = process.env.NODE_ENV !== 'production' && process.env.DEBUG_APPLY_AI === 'true';
+
+function applyInfo(message: string, meta?: unknown) {
+  if (!DEBUG_APPLY_AI) return;
+  if (typeof meta !== 'undefined') {
+    logger.debug(message, meta);
+    return;
+  }
+  logger.debug(message);
+}
 
 /**
  * Parsed response structure from AI output
@@ -104,10 +118,10 @@ function parseAIResponse(response: string): ParsedResponse {
       shouldReplace = true; // First occurrence
     } else if (!existing.isComplete && hasClosingTag) {
       shouldReplace = true; // Replace incomplete with complete
-      console.log(`[apply-ai-code] Replacing incomplete ${filePath} with complete version`);
+      applyInfo(`[apply-ai-code] Replacing incomplete ${filePath} with complete version`);
     } else if (existing.isComplete && hasClosingTag && content.length > existing.content.length) {
       shouldReplace = true; // Replace with longer complete version
-      console.log(`[apply-ai-code] Replacing ${filePath} with longer complete version`);
+      applyInfo(`[apply-ai-code] Replacing ${filePath} with longer complete version`);
     } else if (!existing.isComplete && !hasClosingTag && content.length > existing.content.length) {
       shouldReplace = true; // Both incomplete, keep longer one
     }
@@ -115,7 +129,7 @@ function parseAIResponse(response: string): ParsedResponse {
     if (shouldReplace) {
       // Additional validation: reject obviously broken content
       if (content.includes('...') && !content.includes('...props') && !content.includes('...rest')) {
-        console.warn(`[apply-ai-code] Warning: ${filePath} contains ellipsis, may be truncated`);
+        applyInfo(`[apply-ai-code] Warning: ${filePath} contains ellipsis, may be truncated`);
         // Still use it if it's the only version we have
         if (!existing) {
           fileMap.set(filePath, { content, isComplete: hasClosingTag });
@@ -140,7 +154,7 @@ function parseAIResponse(response: string): ParsedResponse {
   // Convert map to array for sections.files
   for (const [path, { content, isComplete }] of Array.from(fileMap.entries())) {
     if (!isComplete) {
-      console.log(`[apply-ai-code] Warning: File ${path} appears to be truncated (no closing tag)`);
+      applyInfo(`[apply-ai-code] Warning: File ${path} appears to be truncated (no closing tag)`);
     }
 
     sections.files.push({
@@ -153,7 +167,7 @@ function parseAIResponse(response: string): ParsedResponse {
     for (const pkg of filePackages) {
       if (!sections.packages.includes(pkg)) {
         sections.packages.push(pkg);
-        console.log(`[apply-ai-code] Package detected from imports: ${pkg}`);
+        applyInfo(`[apply-ai-code] Package detected from imports: ${pkg}`);
       }
     }
   }
@@ -197,7 +211,7 @@ function parseAIResponse(response: string): ParsedResponse {
           f.endsWith('.json') ||
           f.endsWith('.html')
       );
-    console.log(`[apply-ai-code] Detected generated files from plain text: ${filesList.join(', ')}`);
+    applyInfo(`[apply-ai-code] Detected generated files from plain text: ${filesList.join(', ')}`);
 
     // Try to extract the actual file content if it follows
     for (const fileName of filesList) {
@@ -448,15 +462,15 @@ async function installPackages(
       if (data.success && data.installedPackages) {
         result.installed = data.installedPackages;
       } else if (data.error) {
-        console.error('[apply-ai-code] Package installation error:', data.error);
+        logger.error('[apply-ai-code] Package installation error:', data.error);
         result.failed = packages;
       }
     } else {
-      console.error('[apply-ai-code] Package installation failed:', response.status);
+      logger.error('[apply-ai-code] Package installation failed:', response.status);
       result.failed = packages;
     }
   } catch (error) {
-    console.error('[apply-ai-code] Error installing packages:', error);
+    logger.error('[apply-ai-code] Error installing packages:', error);
     result.failed = packages;
   }
 
@@ -492,7 +506,7 @@ async function executeCommand(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: 'Command execution failed',
     };
   }
 }
@@ -616,24 +630,24 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Debug log
-    console.log('[apply-ai-code] Received response to parse:');
-    console.log('[apply-ai-code] Response length:', response.length);
-    console.log('[apply-ai-code] Project ID:', projectId);
-    console.log('[apply-ai-code] Is edit mode:', isEdit);
-    console.log('[apply-ai-code] Packages:', packages);
+    applyInfo('[apply-ai-code] Received response to parse:');
+    applyInfo('[apply-ai-code] Response length:', response.length);
+    applyInfo('[apply-ai-code] Project ID:', projectId);
+    applyInfo('[apply-ai-code] Is edit mode:', isEdit);
+    applyInfo('[apply-ai-code] Packages:', packages);
 
     // Parse the AI response
     const parsed = parseAIResponse(response);
 
     // Log what was parsed
-    console.log('[apply-ai-code] Parsed result:');
-    console.log('[apply-ai-code] Files found:', parsed.files.length);
+    applyInfo('[apply-ai-code] Parsed result:');
+    applyInfo('[apply-ai-code] Files found:', parsed.files.length);
     if (parsed.files.length > 0) {
       parsed.files.forEach((f) => {
-        console.log(`[apply-ai-code] - ${f.path} (${f.content.length} chars)`);
+        applyInfo(`[apply-ai-code] - ${f.path} (${f.content.length} chars)`);
       });
     }
-    console.log('[apply-ai-code] Packages found:', parsed.packages);
+    applyInfo('[apply-ai-code] Packages found:', parsed.packages);
 
     // Track existing files
     const existingFilesSet = new Set<string>(existingFiles);
@@ -662,7 +676,7 @@ export async function action({ request }: ActionFunctionArgs) {
       .filter((pkg) => pkg !== 'react' && pkg !== 'react-dom');
 
     if (uniquePackages.length > 0) {
-      console.log('[apply-ai-code] Installing packages:', uniquePackages);
+      applyInfo('[apply-ai-code] Installing packages:', uniquePackages);
 
       const installResult = await installPackages(projectId, uniquePackages, request);
       results.packagesInstalled = installResult.installed;
@@ -691,13 +705,13 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!file || typeof file !== 'object') return false;
       const fileName = (file.path || '').split('/').pop() || '';
       if (configFiles.includes(fileName)) {
-        console.warn(`[apply-ai-code] Skipping config file: ${file.path} - already exists in template`);
+        applyInfo(`[apply-ai-code] Skipping config file: ${file.path} - already exists in template`);
         return false;
       }
       return true;
     });
 
-    console.log('[apply-ai-code] Applying files:', filteredFiles.map(f => f.path));
+    applyInfo('[apply-ai-code] Applying files:', filteredFiles.map(f => f.path));
 
     for (const file of filteredFiles) {
       try {
@@ -714,7 +728,7 @@ export async function action({ request }: ActionFunctionArgs) {
         await dockerWriteFile(projectId, normalizedPath, cleanedContent, {
           timeout: 30000,
           onRetry: (attempt) => {
-            console.log(`[apply-ai-code] Retry ${attempt} for ${normalizedPath}`);
+            applyInfo(`[apply-ai-code] Retry ${attempt} for ${normalizedPath}`);
           },
         });
 
@@ -726,11 +740,10 @@ export async function action({ request }: ActionFunctionArgs) {
           existingFilesSet.add(normalizedPath);
         }
 
-        console.log(`[apply-ai-code] ${isUpdate ? 'Updated' : 'Created'} file: ${normalizedPath}`);
+        applyInfo(`[apply-ai-code] ${isUpdate ? 'Updated' : 'Created'} file: ${normalizedPath}`);
       } catch (error) {
-        const errorMsg = `Failed to create ${file.path}: ${(error as Error).message}`;
-        results.errors.push(errorMsg);
-        console.error(`[apply-ai-code] ${errorMsg}`);
+        logger.error(`[apply-ai-code] Failed to create ${file.path}:`, error);
+        results.errors.push(`Failed to create ${file.path}`);
       }
     }
 
@@ -757,9 +770,10 @@ export async function action({ request }: ActionFunctionArgs) {
           const appContent = generateAppJsx(componentFiles);
           await dockerWriteFile(projectId, 'src/App.jsx', appContent, { timeout: 30000 });
           results.filesCreated.push('src/App.jsx (auto-generated)');
-          console.log('[apply-ai-code] Auto-generated: src/App.jsx');
+          applyInfo('[apply-ai-code] Auto-generated: src/App.jsx');
         } catch (error) {
-          results.errors.push(`Failed to create App.jsx: ${(error as Error).message}`);
+          logger.error('[apply-ai-code] Failed to create App.jsx:', error);
+          results.errors.push('Failed to create App.jsx');
         }
       }
 
@@ -777,9 +791,9 @@ export async function action({ request }: ActionFunctionArgs) {
           const indexCssContent = generateIndexCss();
           await dockerWriteFile(projectId, 'src/index.css', indexCssContent, { timeout: 30000 });
           results.filesCreated.push('src/index.css (with Tailwind)');
-          console.log('[apply-ai-code] Auto-generated: src/index.css');
+          applyInfo('[apply-ai-code] Auto-generated: src/index.css');
         } catch (error) {
-          console.error('[apply-ai-code] Failed to create index.css:', error);
+          logger.error('[apply-ai-code] Failed to create index.css:', error);
           results.errors.push('Failed to create index.css with Tailwind');
         }
       }
@@ -789,20 +803,21 @@ export async function action({ request }: ActionFunctionArgs) {
     const commandsArray = Array.isArray(parsed.commands) ? parsed.commands : [];
     for (const cmd of commandsArray) {
       try {
-        console.log(`[apply-ai-code] Executing command: ${cmd}`);
+        applyInfo(`[apply-ai-code] Executing command: ${cmd}`);
         const cmdResult = await executeCommand(projectId, cmd);
 
         if (cmdResult.success) {
           results.commandsExecuted.push(cmd);
-          console.log(`[apply-ai-code] Command executed: ${cmd}`);
+          applyInfo(`[apply-ai-code] Command executed: ${cmd}`);
           if (cmdResult.output) {
-            console.log(`[apply-ai-code] Output: ${cmdResult.output}`);
+            applyInfo(`[apply-ai-code] Output: ${cmdResult.output}`);
           }
         } else {
           results.errors.push(`Failed to execute ${cmd}: ${cmdResult.error}`);
         }
       } catch (error) {
-        results.errors.push(`Failed to execute ${cmd}: ${(error as Error).message}`);
+        logger.error(`[apply-ai-code] Failed to execute command ${cmd}:`, error);
+        results.errors.push(`Failed to execute ${cmd}`);
       }
     }
 
@@ -860,12 +875,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Add warning for missing imports
     if (missingImports.length > 0) {
-      console.warn('[apply-ai-code] Missing imports detected:', missingImports);
+      applyInfo('[apply-ai-code] Missing imports detected', missingImports);
       responseData.warning = `Missing ${missingImports.length} imported components: ${missingImports.join(', ')}`;
       responseData.missingImports = missingImports;
     }
 
-    console.log('[apply-ai-code] Complete. Results:', {
+    applyInfo('[apply-ai-code] Complete. Results:', {
       filesCreated: results.filesCreated.length,
       filesUpdated: results.filesUpdated.length,
       packagesInstalled: results.packagesInstalled.length,
@@ -874,9 +889,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return json(responseData);
   } catch (error) {
-    console.error('Apply AI code error:', error);
+    logger.error('Apply AI code error:', error);
     return json(
-      { error: error instanceof Error ? error.message : 'Failed to parse AI code' },
+      { error: 'Failed to parse AI code' },
       { status: 500 }
     );
   }

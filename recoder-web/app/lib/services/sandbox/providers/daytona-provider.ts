@@ -22,6 +22,8 @@ import type {
 import { SandboxError, SandboxErrorType, SandboxStatus } from '../types';
 import { tryCatch, createSandboxLogger } from '../utils';
 import { CONTAINER_TIMEOUTS } from '../config';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DaytonaProvider');
 
 // Daytona SDK types (dynamically imported)
 type DaytonaSandboxType = {
@@ -105,7 +107,7 @@ export class DaytonaSandboxProvider extends BaseSandboxProvider {
         apiKey: this.apiKey,
       });
     } catch (error) {
-      console.warn('Daytona SDK not available. Daytona provider will not work.');
+      logger.warn('Daytona SDK not available. Daytona provider will not work.');
     }
   }
 

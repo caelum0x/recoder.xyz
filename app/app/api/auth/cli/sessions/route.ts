@@ -5,6 +5,12 @@ import { headers } from 'next/headers';
 
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
 import { prisma } from '@/lib/prisma';
+import {
+  APP_CLI_SESSION_CONTRACT,
+  assertCliSessionActionResponse,
+  assertCliSessionErrorResponse,
+  assertCliSessionsListResponse,
+} from '@/lib/contracts/cli-session-contracts';
 
 /**
  * GET /api/auth/cli/sessions
@@ -16,8 +22,12 @@ export async function GET(request: NextRequest) {
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
     if (!authUser?.email) {
+      const payload = assertCliSessionErrorResponse({
+        contract: APP_CLI_SESSION_CONTRACT,
+        error: 'Unauthorized',
+      });
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        payload,
         { status: 401 }
       );
     }
@@ -27,19 +37,31 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
+      const payload = assertCliSessionErrorResponse({
+        contract: APP_CLI_SESSION_CONTRACT,
+        error: 'User not found',
+      });
       return NextResponse.json(
-        { error: 'User not found' },
+        payload,
         { status: 404 }
       );
     }
 
     const sessions = await CLIAuthService.listUserSessions(user.id);
+    const payload = assertCliSessionsListResponse({
+      contract: APP_CLI_SESSION_CONTRACT,
+      sessions,
+    });
 
-    return NextResponse.json({ sessions }, { status: 200 });
+    return NextResponse.json(payload, { status: 200 });
   } catch (error: any) {
     console.error('List sessions error:', error);
+    const payload = assertCliSessionErrorResponse({
+      contract: APP_CLI_SESSION_CONTRACT,
+      error: 'Failed to list sessions',
+    });
     return NextResponse.json(
-      { error: 'Failed to list sessions', message: error.message },
+      payload,
       { status: 500 }
     );
   }
@@ -55,8 +77,12 @@ export async function DELETE(request: NextRequest) {
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
     if (!authUser?.email) {
+      const payload = assertCliSessionErrorResponse({
+        contract: APP_CLI_SESSION_CONTRACT,
+        error: 'Unauthorized',
+      });
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        payload,
         { status: 401 }
       );
     }
@@ -66,8 +92,12 @@ export async function DELETE(request: NextRequest) {
     });
 
     if (!user) {
+      const payload = assertCliSessionErrorResponse({
+        contract: APP_CLI_SESSION_CONTRACT,
+        error: 'User not found',
+      });
       return NextResponse.json(
-        { error: 'User not found' },
+        payload,
         { status: 404 }
       );
     }
@@ -76,19 +106,31 @@ export async function DELETE(request: NextRequest) {
     const sessionId = url.searchParams.get('session_id');
 
     if (!sessionId) {
+      const payload = assertCliSessionErrorResponse({
+        contract: APP_CLI_SESSION_CONTRACT,
+        error: 'Missing session_id',
+      });
       return NextResponse.json(
-        { error: 'Missing session_id' },
+        payload,
         { status: 400 }
       );
     }
 
     const result = await CLIAuthService.revokeSession(sessionId, user.id);
+    const payload = assertCliSessionActionResponse({
+      contract: APP_CLI_SESSION_CONTRACT,
+      ...(typeof result === 'object' && result ? result : {}),
+    });
 
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(payload, { status: 200 });
   } catch (error: any) {
     console.error('Revoke session error:', error);
+    const payload = assertCliSessionErrorResponse({
+      contract: APP_CLI_SESSION_CONTRACT,
+      error: 'Failed to revoke session',
+    });
     return NextResponse.json(
-      { error: 'Failed to revoke session', message: error.message },
+      payload,
       { status: 500 }
     );
   }

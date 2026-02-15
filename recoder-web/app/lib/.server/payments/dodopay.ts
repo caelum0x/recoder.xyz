@@ -3,6 +3,9 @@
  * Handles DodoPay subscriptions for Asian markets (Alipay, WeChat Pay, UnionPay)
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DodoPayService');
+
 interface DodoPayConfig {
   merchantId: string;
   apiKey: string;
@@ -87,7 +90,7 @@ export async function createDodoPayCheckout(
     ? 'https://api.dodopay.com/v1/order/create'
     : 'https://sandbox.dodopay.com/v1/order/create';
 
-  const orderId = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const orderId = `ord_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
   const params = {
     merchant_id: config.merchantId,
@@ -118,8 +121,9 @@ export async function createDodoPayCheckout(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`DodoPay checkout failed: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`DodoPay checkout failed (${response.status}):`, errorBody);
+    throw new Error('DodoPay checkout failed');
   }
 
   const data = await response.json() as {
@@ -131,7 +135,8 @@ export async function createDodoPayCheckout(
   };
 
   if (data.code !== 0) {
-    throw new Error(`DodoPay error: ${data.message}`);
+    logger.error('DodoPay API error:', data.message);
+    throw new Error('DodoPay payment processing failed');
   }
 
   return {
@@ -172,8 +177,9 @@ export async function getDodoPaySubscription(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to get DodoPay subscription: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`Failed to get DodoPay subscription (${response.status}):`, errorBody);
+    throw new Error('Failed to get DodoPay subscription');
   }
 
   const data = await response.json() as {
@@ -191,7 +197,8 @@ export async function getDodoPaySubscription(
   };
 
   if (data.code !== 0) {
-    throw new Error(`DodoPay error: ${data.message}`);
+    logger.error('DodoPay subscription query error:', data.message);
+    throw new Error('Failed to query DodoPay subscription');
   }
 
   const sub = data.data;
@@ -243,8 +250,9 @@ export async function cancelDodoPaySubscription(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to cancel DodoPay subscription: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`Failed to cancel DodoPay subscription (${response.status}):`, errorBody);
+    throw new Error('Failed to cancel DodoPay subscription');
   }
 
   const data = await response.json() as {
@@ -253,7 +261,8 @@ export async function cancelDodoPaySubscription(
   };
 
   if (data.code !== 0) {
-    throw new Error(`DodoPay error: ${data.message}`);
+    logger.error('DodoPay cancel error:', data.message);
+    throw new Error('Failed to cancel DodoPay subscription');
   }
 }
 
@@ -292,8 +301,9 @@ export async function updateDodoPaySubscription(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to update DodoPay subscription: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`Failed to update DodoPay subscription (${response.status}):`, errorBody);
+    throw new Error('Failed to update DodoPay subscription');
   }
 
   const data = await response.json() as {
@@ -302,7 +312,8 @@ export async function updateDodoPaySubscription(
   };
 
   if (data.code !== 0) {
-    throw new Error(`DodoPay error: ${data.message}`);
+    logger.error('DodoPay update error:', data.message);
+    throw new Error('Failed to update DodoPay subscription');
   }
 }
 
@@ -319,7 +330,7 @@ export function verifyDodoPayWebhook(
     const expectedSignature = generateDodoPaySignature(body, apiSecret);
     return signature === expectedSignature;
   } catch (error) {
-    console.error('DodoPay webhook verification failed:', error);
+    logger.error('DodoPay webhook verification failed:', error);
     return false;
   }
 }
@@ -332,7 +343,7 @@ export async function processDodoPayWebhook(
   eventData: any,
   db: any
 ): Promise<void> {
-  console.log(`Processing DodoPay webhook: ${eventType}`);
+  logger.info(`Processing DodoPay webhook: ${eventType}`);
 
   switch (eventType) {
     case 'subscription.created':
@@ -358,7 +369,7 @@ export async function processDodoPayWebhook(
       break;
 
     default:
-      console.log(`Unhandled DodoPay event: ${eventType}`);
+      logger.info(`Unhandled DodoPay event: ${eventType}`);
   }
 }
 
@@ -403,7 +414,7 @@ async function handleDodoSubscriptionActivated(data: any, db: any) {
     data.customer_email
   ]);
 
-  console.log(` DodoPay subscription activated: ${subscriptionId}`);
+  logger.info(` DodoPay subscription activated: ${subscriptionId}`);
 }
 
 async function handleDodoSubscriptionUpdated(data: any, db: any) {
@@ -424,7 +435,7 @@ async function handleDodoSubscriptionUpdated(data: any, db: any) {
     subscriptionId
   ]);
 
-  console.log(` DodoPay subscription updated: ${subscriptionId}`);
+  logger.info(` DodoPay subscription updated: ${subscriptionId}`);
 }
 
 async function handleDodoSubscriptionCanceled(data: any, db: any) {
@@ -439,7 +450,7 @@ async function handleDodoSubscriptionCanceled(data: any, db: any) {
     WHERE subscription_id = $1
   `, [subscriptionId]);
 
-  console.log(` DodoPay subscription canceled: ${subscriptionId}`);
+  logger.info(` DodoPay subscription canceled: ${subscriptionId}`);
 }
 
 async function handleDodoPaymentSucceeded(data: any, db: any) {
@@ -464,7 +475,7 @@ async function handleDodoPaymentSucceeded(data: any, db: any) {
     subscriptionId
   ]);
 
-  console.log(` DodoPay payment succeeded: ${transactionId}`);
+  logger.info(` DodoPay payment succeeded: ${transactionId}`);
 }
 
 async function handleDodoPaymentFailed(data: any, db: any) {
@@ -495,5 +506,5 @@ async function handleDodoPaymentFailed(data: any, db: any) {
     WHERE subscription_id = $1
   `, [subscriptionId]);
 
-  console.log(`L DodoPay payment failed: ${transactionId}`);
+  logger.info(`L DodoPay payment failed: ${transactionId}`);
 }

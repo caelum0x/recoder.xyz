@@ -4,6 +4,9 @@ import { newShellProcess, type ShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
 import { terminalSync } from '~/lib/terminal-sync';
 import { dockerPost } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('TerminalStore');
 // NOTE: ensureContainerExists is now exported directly from workbench.ts
 // Import is done dynamically in #attachDockerTerminal to avoid circular dependency at module load time
 
@@ -62,7 +65,7 @@ export class TerminalStore {
     // Restore terminal sessions from sync
     const savedSessions = terminalSync.getSessions(projectId);
     if (savedSessions.length > 0) {
-      console.log(`[Terminal] Found ${savedSessions.length} saved sessions to restore`);
+      logger.info(`[Terminal] Found ${savedSessions.length} saved sessions to restore`);
     }
 
     // Restore active index
@@ -114,7 +117,7 @@ export class TerminalStore {
         this.#keepAliveFailedAt = 0;
       } catch (error) {
         this.#keepAliveFailedAt = Date.now();
-        console.debug(`[Terminal] Keep-alive failed, cooling down for ${KEEP_ALIVE_FAILURE_COOLDOWN_MS / 1000}s`);
+        logger.debug(`[Terminal] Keep-alive failed, cooling down for ${KEEP_ALIVE_FAILURE_COOLDOWN_MS / 1000}s`);
       }
     }, 5 * 60 * 1000);
   }
@@ -163,7 +166,7 @@ export class TerminalStore {
         terminal.write('\x1b[33mWaiting for project initialization...\x1b[0m\r\n');
       }
     } catch (error: any) {
-      console.error('Failed to attach terminal:', error);
+      logger.error('Failed to attach terminal:', error);
       terminal.write(coloredText.red('Failed to spawn shell\n\n') + error.message);
     }
   }
@@ -217,7 +220,7 @@ export class TerminalStore {
     terminalSync.saveSession(shellProcess.terminalId, this.#projectId!);
     terminalSync.setTerminalName(shellProcess.terminalId, terminalName);
 
-    console.log(`✅ Terminal attached: ${shellProcess.terminalId} (${terminalName}) (total: ${this.#terminals.length})`);
+    logger.info(`✅ Terminal attached: ${shellProcess.terminalId} (${terminalName}) (total: ${this.#terminals.length})`);
   }
 
   #updateCommandRunningState() {

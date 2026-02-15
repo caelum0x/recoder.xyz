@@ -6,6 +6,10 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { getOpenRouterModels, isDynamicModelsLoaded, type ModelInfo as ProviderModelInfo } from '~/lib/models';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ModelSelection');
 
 // Storage key
 const MODEL_SELECTION_KEY = 'recoder_model_selection';
@@ -427,7 +431,7 @@ function loadState(): ModelSelectionState {
       };
     }
   } catch (e) {
-    console.error('[ModelSelection] Failed to load state:', e);
+    logger.error('[ModelSelection] Failed to load state:', e);
   }
 
   return DEFAULT_STATE;
@@ -440,7 +444,7 @@ function saveState(state: ModelSelectionState): void {
   try {
     localStorage.setItem(MODEL_SELECTION_KEY, JSON.stringify(state));
   } catch (e) {
-    console.error('[ModelSelection] Failed to save state:', e);
+    logger.error('[ModelSelection] Failed to save state:', e);
   }
 }
 
@@ -464,7 +468,7 @@ export const recentModelsStore = computed(recentModelIdsStore, (ids) => {
 export function selectModel(modelId: string): void {
   const model = getModelById(modelId);
   if (!model) {
-    console.warn(`[ModelSelection] Model not found: ${modelId}`);
+    logger.warn(`[ModelSelection] Model not found: ${modelId}`);
     return;
   }
 
@@ -581,4 +585,45 @@ export function formatContextWindow(tokens: number): string {
     return `${(tokens / 1000000).toFixed(1)}M`;
   }
   return `${Math.round(tokens / 1000)}K`;
+}
+
+// ==================== Dynamic OpenRouter Models ====================
+
+export const dynamicModelsStore = atom<ProviderModelInfo[]>([]);
+export const dynamicModelsLoadingStore = atom<boolean>(false);
+export const dynamicModelsLoadedStore = atom<boolean>(false);
+
+/**
+ * Load dynamic OpenRouter models into the store.
+ * Safe to call multiple times — deduplicates and caches.
+ */
+export async function loadDynamicModels(): Promise<void> {
+  if (dynamicModelsLoadedStore.get() || dynamicModelsLoadingStore.get()) return;
+
+  dynamicModelsLoadingStore.set(true);
+  try {
+    const models = await getOpenRouterModels();
+    dynamicModelsStore.set(models);
+    dynamicModelsLoadedStore.set(true);
+  } catch (e) {
+    logger.error('[ModelSelection] Failed to load dynamic models:', e);
+  } finally {
+    dynamicModelsLoadingStore.set(false);
+  }
+}
+
+/**
+ * Search dynamic OpenRouter models by query string.
+ */
+export function searchDynamicModels(query: string): ProviderModelInfo[] {
+  const models = dynamicModelsStore.get();
+  if (!query.trim()) return models;
+
+  const lowerQuery = query.toLowerCase();
+  return models.filter(
+    (m) =>
+      m.name.toLowerCase().includes(lowerQuery) ||
+      m.id.toLowerCase().includes(lowerQuery) ||
+      (m.description && m.description.toLowerCase().includes(lowerQuery))
+  );
 }

@@ -77,11 +77,9 @@ export async function updateTeamName(teamId: TeamId, formData: FormData) {
 
 		return { success: true };
 	} catch (error) {
-		if (error instanceof Error) {
-			if (error.message.includes("not found")) {
-				return { success: false, error: "Team not found or access denied" };
-			}
-			return { success: false, error: error.message };
+		console.error("Failed to update team name:", error);
+		if (error instanceof Error && error.message.includes("not found")) {
+			return { success: false, error: "Team not found or access denied" };
 		}
 		return { success: false, error: "Failed to update team name" };
 	}
@@ -148,15 +146,10 @@ export async function updateTeamAvatar(teamId: TeamId, formData: FormData) {
 			avatarUrl,
 		};
 	} catch (error) {
-		if (error instanceof Error) {
-			return {
-				success: false,
-				error: error.message,
-			};
-		}
+		console.error("Failed to update team avatar:", error);
 		return {
 			success: false,
-			error: "An unexpected error occurred. Please try again.",
+			error: "Failed to update team avatar. Please try again.",
 		};
 	}
 }
@@ -190,10 +183,10 @@ export async function getTeamMembers() {
 			data: teamMembers,
 		};
 	} catch (error) {
+		console.error("Failed to get team members:", error);
 		return {
 			success: false,
-			error:
-				error instanceof Error ? error.message : "Failed to get team members",
+			error: "Failed to get team members",
 		};
 	}
 }
@@ -274,12 +267,10 @@ export async function updateTeamMemberRole(formData: FormData) {
 			success: true,
 		};
 	} catch (error) {
+		console.error("Failed to update team member role:", error);
 		return {
 			success: false,
-			error:
-				error instanceof Error
-					? error.message
-					: "Failed to update team member role",
+			error: "Failed to update team member role",
 		};
 	}
 }
@@ -386,10 +377,10 @@ export async function deleteTeamMember(formData: FormData) {
 
 		return { success: true };
 	} catch (error) {
+		console.error("Failed to delete team member:", error);
 		return {
 			success: false,
-			error:
-				error instanceof Error ? error.message : "Failed to delete team member",
+			error: "Failed to delete team member",
 		};
 	}
 }
@@ -421,12 +412,10 @@ export async function getCurrentUserRole() {
 			data: result[0].role,
 		};
 	} catch (error) {
+		console.error("Failed to get current user role:", error);
 		return {
 			success: false,
-			error:
-				error instanceof Error
-					? error.message
-					: "Failed to get current user role",
+			error: "Failed to get current user role",
 		};
 	}
 }
@@ -477,12 +466,10 @@ export async function getAgentActivities({
 			data: formattedActivities,
 		};
 	} catch (error) {
+		console.error("Failed to get agent activities:", error);
 		return {
 			success: false,
-			error:
-				error instanceof Error
-					? error.message
-					: "Failed to get agent activities",
+			error: "Failed to get agent activities",
 		};
 	}
 }
@@ -537,8 +524,9 @@ export async function deleteTeam(
 		// This ensures that the user is redirected to a valid team context and prevents access to the deleted team's resources.
 		await updateGiselleSession({ teamId: otherTeams[0].teamId });
 	} catch (error) {
+		console.error("Failed to delete team:", error);
 		return {
-			error: error instanceof Error ? error.message : "Failed to delete team",
+			error: "Failed to delete team",
 		};
 	}
 
@@ -628,7 +616,7 @@ export async function sendInvitationsAction(
 					};
 				}
 				const status = invitation ? "email_error" : "db_error";
-				return { email, status, error: errorMessage };
+				return { email, status, error: invitation ? "Failed to send invitation email" : "Failed to create invitation" };
 			}
 		},
 	);
@@ -642,15 +630,10 @@ export async function sendInvitationsAction(
 			}
 			// Capture unexpected errors in Sentry
 			Sentry.captureException(result.reason);
-			const reason = result.reason as unknown;
-			const errorMessage =
-				reason instanceof Error
-					? reason.message
-					: "Unexpected processing error";
 			return {
 				email: emails[index],
 				status: "unknown_error",
-				error: errorMessage,
+				error: "Unexpected processing error",
 			};
 		},
 	);
@@ -738,7 +721,7 @@ export async function revokeInvitationAction(
 	} catch (e: unknown) {
 		return {
 			success: false,
-			error: e instanceof Error ? e.message : "Unknown error",
+			error: "Failed to process invitation",
 		};
 	}
 }
@@ -788,7 +771,7 @@ export async function resendInvitationAction(
 	} catch (e: unknown) {
 		return {
 			success: false,
-			error: e instanceof Error ? e.message : "Unknown error",
+			error: "Failed to process invitation",
 		};
 	}
 }

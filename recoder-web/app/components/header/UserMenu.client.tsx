@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { atom } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('UserMenu');
 
 interface UserProfile {
   id: string;
@@ -40,7 +42,7 @@ export function UserMenu() {
         userProfileStore.set(null);
       }
     } catch (error) {
-      console.error('[UserMenu] Failed to load profile:', error);
+      logger.error('[UserMenu] Failed to load profile:', error);
       userProfileStore.set(null);
     } finally {
       setLoading(false);

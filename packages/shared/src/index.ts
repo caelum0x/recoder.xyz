@@ -21,7 +21,8 @@ export * from './other-provider-types';
 export * from './file-utils';
 
 // OAuth and Auth exports
-export { OAuthHandler, OAuthCallbackData } from './oauth-handler';
+export { OAuthHandler } from './oauth-handler';
+export type { OAuthCallbackData } from './oauth-handler';
 export { AuthClient } from './auth-client';
 
 // Re-export specific items from @roo-code/types to avoid conflicts
@@ -42,8 +43,9 @@ export {
   SUCCESS_MESSAGES,
   EXTENSIONS,
   FEATURE_FLAGS,
-  
-  // Type exports with prefixes to avoid conflicts
+} from './constants';
+
+export type {
   TemplateCategory,
   FrameworkType,
   ProjectType as ConstantProjectType,
@@ -55,6 +57,13 @@ export * from './utils';
 
 // Security exports
 export * from './security/soc2-compliance-scanner';
+
+// Workflow contract exports
+export {
+  WORKFLOW_CONTRACT_VERSION,
+  PUBLIC_WORKFLOW_CONTRACT_VERSION,
+} from './contracts/workflow';
+export type { WorkflowContractVersion } from './contracts/workflow';
 
 // Version export
 export const VERSION = '1.0.0';

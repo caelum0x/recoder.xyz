@@ -5,14 +5,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
     const signature = request.headers.get('paddle-signature');
 
-    // Verify webhook signature (skip in development)
-    if (process.env.NODE_ENV === 'production' && !verifyPaddleWebhook(body, signature)) {
+    // Verify webhook signature
+    if (!verifyPaddleWebhook(body, signature)) {
       return NextResponse.json({
         success: false,
         error: 'invalid_signature'
@@ -63,39 +64,92 @@ function verifyPaddleWebhook(body: string, signature: string | null): boolean {
     return false;
   }
 
-  const hmac = crypto
+  const expected = crypto
     .createHmac('sha256', process.env.PADDLE_WEBHOOK_SECRET)
     .update(body)
     .digest('hex');
 
-  return hmac === signature;
+  if (expected.length !== signature.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 }
 
 async function handleSubscriptionCreated(event: any) {
-  const { passthrough, subscription_id, email, status } = event;
+  const { passthrough, subscription_id, status } = event;
   const { userId, plan } = JSON.parse(passthrough || '{}');
 
-  console.log('✅ Subscription created:', { userId, plan, subscription_id, status });
-  
-  // TODO: Update database with subscription info
+  if (!userId) {
+    console.warn('[Paddle] subscription_created missing userId in passthrough');
+    return;
+  }
+
+  console.log('[Paddle] Subscription created:', { userId, plan, subscription_id, status });
+
+  await prisma.subscriptions.upsert({
+    where: { userId },
+    create: {
+      id: crypto.randomUUID(),
+      userId,
+      status: status || 'active',
+      provider: 'paddle',
+      providerId: String(subscription_id),
+      planId: plan || 'pro',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: new Date(),
+    },
+    update: {
+      status: status || 'active',
+      provider: 'paddle',
+      providerId: String(subscription_id),
+      planId: plan || 'pro',
+      updatedAt: new Date(),
+    },
+  });
 }
 
 async function handleSubscriptionUpdated(event: any) {
   const { subscription_id, status } = event;
-  console.log('✅ Subscription updated:', { subscription_id, status });
+  console.log('[Paddle] Subscription updated:', { subscription_id, status });
+
+  const sub = await prisma.subscriptions.findFirst({
+    where: { providerId: String(subscription_id), provider: 'paddle' },
+  });
+
+  if (sub) {
+    await prisma.subscriptions.update({
+      where: { id: sub.id },
+      data: { status: status || sub.status, updatedAt: new Date() },
+    });
+  }
 }
 
 async function handleSubscriptionCancelled(event: any) {
   const { subscription_id } = event;
-  console.log('✅ Subscription cancelled:', { subscription_id });
+  console.log('[Paddle] Subscription cancelled:', { subscription_id });
+
+  const sub = await prisma.subscriptions.findFirst({
+    where: { providerId: String(subscription_id), provider: 'paddle' },
+  });
+
+  if (sub) {
+    await prisma.subscriptions.update({
+      where: { id: sub.id },
+      data: {
+        status: 'cancelled',
+        cancelAtPeriodEnd: true,
+        cancelledAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+  }
 }
 
 async function handlePaymentSucceeded(event: any) {
-  const { subscription_id, receipt_url } = event;
-  console.log('✅ Payment succeeded:', { subscription_id });
+  const { subscription_id } = event;
+  console.log('[Paddle] Payment succeeded:', { subscription_id });
 }
 
 async function handlePaymentFailed(event: any) {
   const { subscription_id } = event;
-  console.log('❌ Payment failed:', { subscription_id });
+  console.log('[Paddle] Payment failed:', { subscription_id });
 }

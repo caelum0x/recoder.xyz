@@ -12,6 +12,9 @@
 
 import type { Message } from 'ai';
 import { nanoid } from 'nanoid';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Checkpoint');
 
 // ============================================
 // Types
@@ -182,7 +185,7 @@ export function createCheckpoint(
   // Update cache
   checkpointCache.set(checkpoint.id, checkpoint);
 
-  console.log(`[Checkpoint] Created checkpoint: ${checkpoint.id} - "${description}"`);
+  logger.info(`[Checkpoint] Created checkpoint: ${checkpoint.id} - "${description}"`);
 
   return checkpoint;
 }
@@ -232,7 +235,7 @@ function saveCheckpoint(projectId: string, checkpoint: Checkpoint): void {
 
     localStorage.setItem(storageKey, JSON.stringify(checkpoints));
   } catch (error) {
-    console.error('[Checkpoint] Failed to save checkpoint:', error);
+    logger.error('[Checkpoint] Failed to save checkpoint:', error);
   }
 }
 
@@ -257,7 +260,7 @@ export function loadCheckpoints(projectId: string): Checkpoint[] {
 
     return checkpoints;
   } catch (error) {
-    console.error('[Checkpoint] Failed to load checkpoints:', error);
+    logger.error('[Checkpoint] Failed to load checkpoints:', error);
     return [];
   }
 }
@@ -312,10 +315,10 @@ export function deleteCheckpoint(projectId: string, checkpointId: string): boole
     localStorage.setItem(storageKey, JSON.stringify(filtered));
     checkpointCache.delete(checkpointId);
 
-    console.log(`[Checkpoint] Deleted checkpoint: ${checkpointId}`);
+    logger.info(`[Checkpoint] Deleted checkpoint: ${checkpointId}`);
     return true;
   } catch (error) {
-    console.error('[Checkpoint] Failed to delete checkpoint:', error);
+    logger.error('[Checkpoint] Failed to delete checkpoint:', error);
     return false;
   }
 }
@@ -364,10 +367,10 @@ export function pruneCheckpoints(
     const remaining = [...protected_, ...toKeep].sort((a, b) => a.timestamp - b.timestamp);
     localStorage.setItem(storageKey, JSON.stringify(remaining));
 
-    console.log(`[Checkpoint] Pruned ${toDelete.length} checkpoints, kept ${remaining.length}`);
+    logger.info(`[Checkpoint] Pruned ${toDelete.length} checkpoints, kept ${remaining.length}`);
     return toDelete.length;
   } catch (error) {
-    console.error('[Checkpoint] Failed to prune checkpoints:', error);
+    logger.error('[Checkpoint] Failed to prune checkpoints:', error);
     return 0;
   }
 }
@@ -388,9 +391,9 @@ export function clearCheckpoints(projectId: string): void {
     }
 
     localStorage.removeItem(storageKey);
-    console.log(`[Checkpoint] Cleared all checkpoints for project: ${projectId}`);
+    logger.info(`[Checkpoint] Cleared all checkpoints for project: ${projectId}`);
   } catch (error) {
-    console.error('[Checkpoint] Failed to clear checkpoints:', error);
+    logger.error('[Checkpoint] Failed to clear checkpoints:', error);
   }
 }
 
@@ -409,7 +412,7 @@ export function resumeFromCheckpoint(
   const checkpoint = getCheckpoint(projectId, checkpointId);
 
   if (!checkpoint) {
-    console.error(`[Checkpoint] Checkpoint not found: ${checkpointId}`);
+    logger.error(`[Checkpoint] Checkpoint not found: ${checkpointId}`);
     return null;
   }
 
@@ -419,7 +422,7 @@ export function resumeFromCheckpoint(
     files[snapshot.path] = snapshot.content;
   }
 
-  console.log(`[Checkpoint] Resuming from checkpoint: ${checkpointId} - "${checkpoint.description}"`);
+  logger.info(`[Checkpoint] Resuming from checkpoint: ${checkpointId} - "${checkpoint.description}"`);
 
   return {
     messages: structuredClone(checkpoint.messages),
@@ -455,7 +458,7 @@ export function setCurrentCheckpointId(projectId: string, checkpointId: string |
       localStorage.removeItem(key);
     }
   } catch (error) {
-    console.error('[Checkpoint] Failed to set current checkpoint:', error);
+    logger.error('[Checkpoint] Failed to set current checkpoint:', error);
   }
 }
 
@@ -475,7 +478,7 @@ export function compareCheckpoints(
   const toCheckpoint = getCheckpoint(projectId, toCheckpointId);
 
   if (!fromCheckpoint || !toCheckpoint) {
-    console.error('[Checkpoint] One or both checkpoints not found');
+    logger.error('[Checkpoint] One or both checkpoints not found');
     return null;
   }
 
@@ -603,7 +606,7 @@ export function createBranch(
   checkpoint.branchName = branchName;
   updateCheckpoint(projectId, checkpoint);
 
-  console.log(`[Checkpoint] Created branch "${branchName}" from checkpoint: ${checkpointId}`);
+  logger.info(`[Checkpoint] Created branch "${branchName}" from checkpoint: ${checkpointId}`);
 
   return branch;
 }
@@ -629,7 +632,7 @@ function saveBranch(projectId: string, branch: CheckpointBranch): void {
 
     localStorage.setItem(key, JSON.stringify(branches));
   } catch (error) {
-    console.error('[Checkpoint] Failed to save branch:', error);
+    logger.error('[Checkpoint] Failed to save branch:', error);
   }
 }
 
@@ -664,7 +667,7 @@ export function deleteBranch(projectId: string, branchName: string): boolean {
     }
 
     localStorage.setItem(key, JSON.stringify(filtered));
-    console.log(`[Checkpoint] Deleted branch: ${branchName}`);
+    logger.info(`[Checkpoint] Deleted branch: ${branchName}`);
     return true;
   } catch {
     return false;
@@ -688,7 +691,7 @@ function updateCheckpoint(projectId: string, checkpoint: Checkpoint): void {
       checkpointCache.set(checkpoint.id, checkpoint);
     }
   } catch (error) {
-    console.error('[Checkpoint] Failed to update checkpoint:', error);
+    logger.error('[Checkpoint] Failed to update checkpoint:', error);
   }
 }
 
@@ -870,7 +873,7 @@ export function importCheckpoints(
       }
     }
 
-    console.log(`[Checkpoint] Imported ${result.imported} checkpoints`);
+    logger.info(`[Checkpoint] Imported ${result.imported} checkpoints`);
   } catch (error) {
     result.errors.push(`Failed to parse import data: ${error}`);
   }

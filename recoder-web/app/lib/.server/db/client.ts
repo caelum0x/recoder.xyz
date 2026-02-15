@@ -4,6 +4,8 @@
  */
 
 import { neon } from '@neondatabase/serverless';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DBClient');
 
 let cachedDb: any = null;
 
@@ -172,7 +174,7 @@ export function getDatabase(env: Env) {
 export async function initializeDatabase(env: Env) {
   const db = getDatabase(env);
 
-  console.log('🔧 Initializing database schema...');
+  logger.info('🔧 Initializing database schema...');
 
   try {
     // Read and execute schema.sql
@@ -269,9 +271,9 @@ export async function initializeDatabase(env: Env) {
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id ON usage_logs(user_id)`);
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_webhook_events_processed ON webhook_events(processed, created_at)`);
 
-    console.log(' Database schema initialized successfully');
+    logger.info(' Database schema initialized successfully');
   } catch (error) {
-    console.error('L Database initialization failed:', error);
+    logger.error('L Database initialization failed:', error);
     throw error;
   }
 }

@@ -1,0 +1,43 @@
+{
+	"name": "@giselles-ai/protocol",
+	"version": "0.0.0",
+	"private": true,
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"clean": "rm -rf .turbo dist node_modules",
+		"format": "biome check --write .",
+		"test": "vitest run"
+	},
+	"exports": {
+		"./package.json": "./package.json",
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"devDependencies": {
+		"@giselles-ai/tsconfig": "workspace:*",
+		"@giselles-ai/utils": "workspace:*",
+		"tsup": "catalog:",
+		"vitest": "catalog:"
+	},
+	"dependencies": {
+		"@ai-sdk/provider": "catalog:",
+		"@giselles-ai/action-registry": "workspace:*",
+		"@giselles-ai/data-store-registry": "workspace:*",
+		"@giselles-ai/language-model": "workspace:^",
+		"@giselles-ai/language-model-registry": "workspace:*",
+		"@giselles-ai/trigger-registry": "workspace:*",
+		"@octokit/webhooks": "catalog:",
+		"ai": "catalog:"
+	},
+	"peerDependencies": {
+		"zod": "catalog:"
+	}
+}

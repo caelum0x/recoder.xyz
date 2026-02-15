@@ -7,6 +7,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('EnterpriseIntegration');
 
 const execAsync = promisify(exec);
 
@@ -68,7 +70,7 @@ export async function checkForLoops(messages: any[]): Promise<{ hasLoop: boolean
     operationCache.set(cacheKey, { result: response, timestamp: Date.now() });
     return response;
   } catch (error) {
-    console.warn('Loop detection failed:', error);
+    logger.warn('Loop detection failed:', error);
     return { hasLoop: false };
   }
 }
@@ -145,7 +147,7 @@ function validateShellCommand(command: string): { valid: boolean; error?: string
   // Check against blocked patterns
   for (const pattern of BLOCKED_PATTERNS) {
     if (pattern.test(trimmed)) {
-      console.warn(`[Security] Blocked dangerous command pattern: ${pattern}`);
+      logger.warn(`[Security] Blocked dangerous command pattern: ${pattern}`);
       return { valid: false, error: 'Command contains blocked pattern' };
     }
   }
@@ -155,7 +157,7 @@ function validateShellCommand(command: string): { valid: boolean; error?: string
 
   // Check if base command is in allowed list
   if (!ALLOWED_COMMANDS.includes(baseCommand)) {
-    console.warn(`[Security] Command not in allowlist: ${baseCommand}`);
+    logger.warn(`[Security] Command not in allowlist: ${baseCommand}`);
     return { valid: false, error: `Command '${baseCommand}' is not allowed` };
   }
 
@@ -170,7 +172,7 @@ export async function executeShellCommand(command: string, projectPath: string):
   // SECURITY: Validate command before execution
   const validation = validateShellCommand(command);
   if (!validation.valid) {
-    console.warn(`[Security] Rejected shell command: ${command.substring(0, 100)}...`);
+    logger.warn(`[Security] Rejected shell command: ${command.substring(0, 100)}...`);
     return {
       success: false,
       output: '',
@@ -214,7 +216,7 @@ export async function executeShellCommand(command: string, projectPath: string):
 export async function recordChatSession(sessionId: string, messages: any[]): Promise<void> {
   try {
     // Simple logging - can be expanded to file storage later
-    console.log(`[ChatRecording] Session ${sessionId}: ${messages.length} messages`);
+    logger.info(`[ChatRecording] Session ${sessionId}: ${messages.length} messages`);
 
     // Optionally save to a temp directory if needed
     const tempDir = process.env.CHAT_LOGS_DIR;
@@ -233,7 +235,7 @@ export async function recordChatSession(sessionId: string, messages: any[]): Pro
       }, null, 2));
     }
   } catch (error) {
-    console.warn('Chat recording failed:', error);
+    logger.warn('Chat recording failed:', error);
   }
 }
 
@@ -250,7 +252,7 @@ export async function getChatAnalytics(sessionId: string): Promise<any> {
     }
     return null;
   } catch (error) {
-    console.warn('Analytics retrieval failed:', error);
+    logger.warn('Analytics retrieval failed:', error);
     return null;
   }
 }
@@ -263,14 +265,14 @@ export async function getChatAnalytics(sessionId: string): Promise<any> {
 export async function discoverRelevantFiles(query: string, projectPath: string): Promise<string[]> {
   // SECURITY: Validate projectPath is within /workspace
   if (!projectPath || !projectPath.startsWith('/workspace')) {
-    console.warn('[Security] discoverRelevantFiles: Invalid project path');
+    logger.warn('[Security] discoverRelevantFiles: Invalid project path');
     return [];
   }
 
   // SECURITY: Sanitize projectPath to prevent injection
   const safePath = projectPath.replace(/[^a-zA-Z0-9/_.-]/g, '');
   if (safePath !== projectPath) {
-    console.warn('[Security] discoverRelevantFiles: Path contained invalid characters');
+    logger.warn('[Security] discoverRelevantFiles: Path contained invalid characters');
     return [];
   }
 
@@ -323,7 +325,7 @@ export async function discoverRelevantFiles(query: string, projectPath: string):
     operationCache.set(cacheKey, { result, timestamp: Date.now() });
     return result;
   } catch (error) {
-    console.warn('File discovery failed:', error);
+    logger.warn('File discovery failed:', error);
     return [];
   }
 }
@@ -389,7 +391,7 @@ export async function autoCommitChanges(projectPath: string, files: string[]): P
     for (const file of files) {
       // Reject files with path traversal or special characters
       if (file.includes('..') || file.startsWith('/') || /[;&|`$(){}]/.test(file)) {
-        console.warn(`[Security] autoCommitChanges: Rejected unsafe file path: ${file}`);
+        logger.warn(`[Security] autoCommitChanges: Rejected unsafe file path: ${file}`);
         continue;
       }
       // Only allow alphanumeric, slashes, dots, dashes, underscores

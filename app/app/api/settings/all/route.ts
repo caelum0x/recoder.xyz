@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[All Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch settings' },
+      { success: false, error: 'Failed to fetch settings' },
       { status: 500 }
     );
   }

@@ -9,6 +9,7 @@
 import { atom, computed, map } from 'nanostores';
 import type { Message } from 'ai';
 import * as checkpointService from '~/lib/services/checkpoint';
+import { createScopedLogger } from '~/utils/logger';
 import type {
   Checkpoint,
   CheckpointSummary,
@@ -24,6 +25,8 @@ export type {
   CheckpointBranch,
   FileSnapshot,
 } from '~/lib/services/checkpoint';
+
+const logger = createScopedLogger('CheckpointsStore');
 
 // ============================================
 // State Atoms
@@ -249,7 +252,7 @@ export function createCheckpoint(
 ): Checkpoint | null {
   const projectId = currentProjectId.get();
   if (!projectId) {
-    console.error('[CheckpointStore] No project ID set');
+    logger.error('[CheckpointStore] No project ID set');
     return null;
   }
 
@@ -315,7 +318,7 @@ export function createAutoCheckpoint(
 
     return checkpoint;
   } catch (error) {
-    console.error('[CheckpointStore] Auto-checkpoint failed:', error);
+    logger.error('[CheckpointStore] Auto-checkpoint failed:', error);
     return null;
   }
 }

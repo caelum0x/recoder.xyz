@@ -170,6 +170,46 @@ export async function resolveTrigger(args: {
 			}
 			break;
 		}
+		case "whatsapp": {
+			const parametersInput = generationContext.inputs?.find(
+				(i): i is GenerationContextInput & { type: "parameters" } =>
+					i.type === "parameters",
+			);
+			for (const output of operationNode.outputs) {
+				const item = parametersInput?.items.find(
+					(item) => item.name === output.accessor,
+				);
+				if (item === undefined) {
+					continue;
+				}
+				outputs.push({
+					type: "generated-text",
+					outputId: output.id,
+					content: `${item.value}`,
+				});
+			}
+			break;
+		}
+		case "slack": {
+			const parametersInput = generationContext.inputs?.find(
+				(i): i is GenerationContextInput & { type: "parameters" } =>
+					i.type === "parameters",
+			);
+			for (const output of operationNode.outputs) {
+				const item = parametersInput?.items.find(
+					(item) => item.name === output.accessor,
+				);
+				if (item === undefined) {
+					continue;
+				}
+				outputs.push({
+					type: "generated-text",
+					outputId: output.id,
+					content: `${item.value}`,
+				});
+			}
+			break;
+		}
 		default: {
 			const _exhaustiveCheck: never = triggerData.configuration;
 			throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);

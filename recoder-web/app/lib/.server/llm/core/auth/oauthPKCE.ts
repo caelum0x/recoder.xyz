@@ -5,12 +5,15 @@
  */
 
 import * as crypto from 'crypto';
+import { createScopedLogger } from '~/utils/logger';
 import type {
   OAuthConfig,
   PKCETokens,
   OAuthAuthorizationResponse,
   OAuthTokenResponse,
 } from './types.js';
+
+const logger = createScopedLogger('OAuthPKCE');
 
 /**
  * OAuth PKCE (Proof Key for Code Exchange) implementation for OpenRouter
@@ -261,7 +264,7 @@ export class OAuthPKCEClient {
       });
 
       server.listen(port, () => {
-        console.log(`OAuth callback server listening on http://localhost:${port}`);
+        logger.info(`OAuth callback server listening on http://localhost:${port}`);
       });
 
       // Timeout after 5 minutes

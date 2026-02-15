@@ -22,6 +22,8 @@ import { useStore } from '@nanostores/react';
 import { map } from 'nanostores';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerGet } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('AutoErrorFix');
 
 /**
  * Get the Better Auth session token from cookies
@@ -318,58 +320,58 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
     const state = autoFixStore.get();
 
     if (!state.enabled || !enabled) {
-      console.log('[AutoFix] Disabled, skipping fix');
+      logger.info('[AutoFix] Disabled, skipping fix');
       return;
     }
 
     if (state.isFixing) {
-      console.log('[AutoFix] Already fixing, skipping');
+      logger.info('[AutoFix] Already fixing, skipping');
       return;
     }
 
     if (isStreaming) {
-      console.log('[AutoFix] AI is streaming, skipping');
+      logger.info('[AutoFix] AI is streaming, skipping');
       return;
     }
 
     if (Date.now() < state.cooldownUntil) {
-      console.log('[AutoFix] In cooldown, skipping');
+      logger.info('[AutoFix] In cooldown, skipping');
       return;
     }
 
     if (state.fixCount >= maxAttempts) {
-      console.log('[AutoFix] Max attempts reached, entering cooldown');
+      logger.info('[AutoFix] Max attempts reached, entering cooldown');
       enterCooldown(60000);
       return;
     }
 
     // Smarter same-error check: give up after 3 consecutive same-error fails
     if (state.consecutiveSameErrorFails >= 3) {
-      console.log('[AutoFix] 3 consecutive same-error failures, entering extended cooldown');
+      logger.info('[AutoFix] 3 consecutive same-error failures, entering extended cooldown');
       enterCooldown(120000);
       return;
     }
 
     if (areErrorsSameAsLastFix(errors) && state.consecutiveSameErrorFails > 0) {
-      console.log('[AutoFix] Same errors as last fix attempt, entering backoff');
+      logger.info('[AutoFix] Same errors as last fix attempt, entering backoff');
       enterCooldown(getBackoffDelay(state.consecutiveSameErrorFails));
       return;
     }
 
     const fixableErrors = errors.filter(isAutoFixable);
     if (fixableErrors.length === 0) {
-      console.log('[AutoFix] No fixable errors found');
+      logger.info('[AutoFix] No fixable errors found');
       return;
     }
 
-    console.log(`[AutoFix] Triggering fix for ${fixableErrors.length} errors (attempt ${state.fixCount + 1}/${maxAttempts})`);
+    logger.info(`[AutoFix] Triggering fix for ${fixableErrors.length} errors (attempt ${state.fixCount + 1}/${maxAttempts})`);
 
     // Check if errors produce a usable prompt BEFORE incrementing the fix counter.
     // 502/network errors during dev server restart generate empty prompts — we don't
     // want to waste fix attempts on those.
     const prompt = formatErrorsForAI(fixableErrors);
     if (!prompt) {
-      console.log('[AutoFix] Skipping fix — empty/invalid error prompt (not counting as attempt)');
+      logger.info('[AutoFix] Skipping fix — empty/invalid error prompt (not counting as attempt)');
       return;
     }
 
@@ -440,7 +442,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
       }
       return [];
     } catch (error) {
-      console.debug('[AutoFix] Poll failed:', error);
+      logger.debug('[AutoFix] Poll failed:', error);
       return [];
     }
   }, [projectId, containerReady, handleErrors]);
@@ -517,7 +519,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
       wsIntentionalCloseRef.current = false;
 
       ws.onopen = () => {
-        console.log(`[AutoFix] WebSocket connected for ${projectId}`);
+        logger.info(`[AutoFix] WebSocket connected for ${projectId}`);
         wsOpenTimestampRef.current = Date.now();
       };
 
@@ -532,12 +534,12 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
             lastErrorHashRef.current = '';
           }
         } catch (e) {
-          console.warn('[AutoFix] Failed to parse WebSocket message:', e);
+          logger.warn('[AutoFix] Failed to parse WebSocket message:', e);
         }
       };
 
       ws.onerror = (error) => {
-        console.warn('[AutoFix] WebSocket error:', error);
+        logger.warn('[AutoFix] WebSocket error:', error);
       };
 
       ws.onclose = () => {
@@ -557,7 +559,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
 
         if (wasStable) {
           // Connection was healthy before closing -- reset backoff
-          console.log('[AutoFix] WebSocket closed after stable connection, resetting backoff');
+          logger.info('[AutoFix] WebSocket closed after stable connection, resetting backoff');
           resetWsBackoff();
         } else {
           // Rapid connect/disconnect -- count as a failure
@@ -566,7 +568,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
             WS_BACKOFF_INITIAL * Math.pow(2, wsConsecutiveFailsRef.current - 1),
             WS_BACKOFF_MAX,
           );
-          console.log(
+          logger.info(
             `[AutoFix] WebSocket closed after ${connectionDuration}ms ` +
             `(consecutive fails: ${wsConsecutiveFailsRef.current}/${WS_MAX_CONSECUTIVE_FAILS}, ` +
             `next backoff: ${wsBackoffDelayRef.current}ms)`,
@@ -575,7 +577,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
 
         // If too many consecutive rapid failures, give up
         if (wsConsecutiveFailsRef.current >= WS_MAX_CONSECUTIVE_FAILS) {
-          console.warn(
+          logger.warn(
             `[AutoFix] WebSocket reconnection stopped after ${WS_MAX_CONSECUTIVE_FAILS} ` +
             'consecutive failed connections. The build-errors endpoint may be unavailable. ' +
             'Falling back to polling only.',
@@ -596,7 +598,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
         }
       };
     } catch (error) {
-      console.warn('[AutoFix] Failed to create WebSocket:', error);
+      logger.warn('[AutoFix] Failed to create WebSocket:', error);
     }
   }, [projectId, containerReady, resetWsBackoff]);
 
@@ -679,7 +681,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
         return;
       }
 
-      console.log(`[AutoFix] Received compile-errors-detected: ${rawErrors.length} errors`);
+      logger.info(`[AutoFix] Received compile-errors-detected: ${rawErrors.length} errors`);
 
       // Parse raw error strings into BuildError objects
       const parsedErrors = parseRawErrors(rawErrors);
@@ -713,7 +715,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
         return;
       }
 
-      console.log('[AutoFix] Streaming completed during fix cycle, waiting 7s for dev server reload...');
+      logger.info('[AutoFix] Streaming completed during fix cycle, waiting 7s for dev server reload...');
 
       // Clear any previous verify timer
       if (verifyTimerRef.current) {
@@ -722,14 +724,14 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
 
       // Wait 7 seconds for dev server to reload and compile
       verifyTimerRef.current = setTimeout(async () => {
-        console.log('[AutoFix] Verifying fix result...');
+        logger.info('[AutoFix] Verifying fix result...');
 
         const remainingErrors = await pollForErrors();
         const previousHash = pendingErrorHashRef.current;
 
         if (remainingErrors.length === 0) {
           // All errors gone -- success!
-          console.log('[AutoFix] Fix verified -- no errors remain');
+          logger.info('[AutoFix] Fix verified -- no errors remain');
           const errorHashes = autoFixStore.get().currentErrors.map(hashError);
           finishFixing(true, errorHashes);
           onFixComplete?.(true);
@@ -741,7 +743,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
             // Same errors persist -- increment consecutive fail counter
             incrementSameErrorFails();
             const currentState = autoFixStore.get();
-            console.log(`[AutoFix] Same errors persist after fix (consecutive fails: ${currentState.consecutiveSameErrorFails})`);
+            logger.info(`[AutoFix] Same errors persist after fix (consecutive fails: ${currentState.consecutiveSameErrorFails})`);
 
             // Record these error hashes so areErrorsSameAsLastFix works
             const errorHashes = remainingErrors.map(hashError);
@@ -749,19 +751,19 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
             onFixComplete?.(false);
 
             if (currentState.consecutiveSameErrorFails >= 3) {
-              console.log('[AutoFix] 3 consecutive same-error failures, giving up on this pattern');
+              logger.info('[AutoFix] 3 consecutive same-error failures, giving up on this pattern');
               enterCooldown(120000);
             } else {
               // Backoff before retrying
               const backoffMs = getBackoffDelay(currentState.consecutiveSameErrorFails);
-              console.log(`[AutoFix] Entering backoff for ${backoffMs}ms before next attempt`);
+              logger.info(`[AutoFix] Entering backoff for ${backoffMs}ms before next attempt`);
               enterCooldown(backoffMs);
             }
           } else {
             // Different errors -- the fix changed something but introduced new issues
             // Reset the consecutive same-error counter since errors are different
             resetSameErrorFails();
-            console.log(`[AutoFix] Fix changed the errors (${remainingErrors.length} new/different errors), triggering another fix round`);
+            logger.info(`[AutoFix] Fix changed the errors (${remainingErrors.length} new/different errors), triggering another fix round`);
 
             finishFixing(false);
             pendingErrorHashRef.current = '';

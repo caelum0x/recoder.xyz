@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { AppSwitcher } from './AppSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from './NotificationCenter';
 
@@ -44,6 +45,7 @@ export function AppHeader({ showBackButton = false, backHref = '/dashboard', bac
 
         {/* Right side - Controls */}
         <div className="flex items-center space-x-2">
+          <AppSwitcher />
           <ThemeToggle />
           <NotificationCenter />
         </div>

@@ -1,17 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
 
 const RECODER_WEB_URL = process.env.RECODER_WEB_URL || 'http://localhost:5173';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get session from better-auth
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const hasInternalHeaders = Boolean(
+      request.headers.get('x-internal-service-key')
+      || request.headers.get('x-internal-signature')
+      || request.headers.get('x-internal-timestamp')
+      || request.headers.get('x-internal-nonce')
+    );
+    let effectiveUserId: string | null = null;
 
-    if (!session?.user?.id) {
+    if (hasInternalHeaders) {
+      const authResult = verifyInternalServiceRequest(request, { rawBody: '' });
+      if (!authResult.ok) {
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+      effectiveUserId = request.headers.get('x-user-id');
+    } else {
+      // Session-auth path for browser callers
+      const session = await auth.api.getSession({
+        headers: await headers(),
+      });
+      effectiveUserId = session?.user?.id || null;
+    }
+
+    if (!effectiveUserId) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -23,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch projects from recoder-web API
     const url = new URL(`${RECODER_WEB_URL}/api/chat-history`);
-    url.searchParams.set('userId', session.user.id);
+    url.searchParams.set('userId', effectiveUserId);
     url.searchParams.set('limit', limit);
 
     const response = await fetch(url.toString(), {
@@ -73,7 +94,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Error fetching projects:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }

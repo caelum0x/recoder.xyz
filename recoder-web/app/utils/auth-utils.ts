@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('AuthUtils');
 /**
  * Client-side authentication utilities
  * Works with server-side session from recoder.xyz (better-auth)
@@ -95,7 +97,7 @@ async function fetchSession(): Promise<User | null> {
 
     return null;
   } catch (error) {
-    console.error('[auth-utils] Failed to fetch session:', error);
+    logger.error('[auth-utils] Failed to fetch session:', error);
     return null;
   }
 }

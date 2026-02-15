@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
 import { IconButton } from '~/components/ui/IconButton';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DownloadButton');
 
 interface DownloadButtonProps {
   projectId?: string;
@@ -36,7 +38,7 @@ export function DownloadButton({ projectId, className }: DownloadButtonProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error: any) {
-      console.error('Download error:', error);
+      logger.error('Download error:', error);
       alert(error.message || 'Failed to download project');
     } finally {
       setIsDownloading(false);

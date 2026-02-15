@@ -11,6 +11,9 @@ import mime from 'mime-types';
 import type { FileSystemService } from '../services/fileSystemService.js';
 import { ToolErrorType } from '../tools/tool-error.js';
 import { BINARY_EXTENSIONS } from './ignorePatterns.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('FileUtils');
 
 // Constants for text file processing
 export const DEFAULT_MAX_LINES_TEXT_FILE = 2000;
@@ -91,7 +94,7 @@ export async function isBinaryFile(filePath: string): Promise<boolean> {
     return nonPrintableCount / bytesRead > 0.3;
   } catch (error) {
     // Log error for debugging while maintaining existing behavior
-    console.warn(
+    logger.warn(
       `Failed to check if file is binary: ${filePath}`,
       error instanceof Error ? error.message : String(error),
     );
@@ -105,7 +108,7 @@ export async function isBinaryFile(filePath: string): Promise<boolean> {
         await fileHandle.close();
       } catch (closeError) {
         // Log close errors for debugging while continuing with cleanup
-        console.warn(
+        logger.warn(
           `Failed to close file handle for: ${filePath}`,
           closeError instanceof Error ? closeError.message : String(closeError),
         );

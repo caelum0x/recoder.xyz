@@ -1,0 +1,78 @@
+name: Security Container Scan
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - Dockerfile
+      - apps/agency/**
+      - packages/**
+      - internal-packages/**
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - package.json
+      - .github/workflows/security-container-scan.yml
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - apps/agency/**
+      - packages/**
+      - internal-packages/**
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - package.json
+      - .github/workflows/security-container-scan.yml
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  trivy-and-sbom:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_REF: recoder-agency:${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        run: docker build -t "$IMAGE_REF" .
+
+      - name: Run Trivy vulnerability scan (SARIF)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          format: sarif
+          output: trivy-results.sarif
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          format: cyclonedx
+          output: sbom-cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: sbom-cyclonedx-${{ github.sha }}
+          path: sbom-cyclonedx.json

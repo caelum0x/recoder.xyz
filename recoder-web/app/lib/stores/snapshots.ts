@@ -5,6 +5,8 @@
 
 import { atom, map } from 'nanostores';
 import { dockerGet, dockerPost } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SnapshotsStore');
 
 // ============================================
 // Failure Rate-Limiting
@@ -36,7 +38,7 @@ function shouldSkipDueToRecentFailure(): boolean {
   const elapsed = Date.now() - _lastFailureTimestamp;
 
   if (elapsed < cooldown) {
-    console.log(
+    logger.info(
       `[Snapshot] Skipping API call — last failure was ${(elapsed / 1000).toFixed(1)}s ago ` +
       `(cooldown: ${(cooldown / 1000).toFixed(0)}s, consecutive failures: ${_consecutiveFailures})`,
     );
@@ -67,6 +69,7 @@ export interface Snapshot {
   filesChanged?: number;
   additions?: number;
   deletions?: number;
+  neonDbTimestamp?: string;  // ISO timestamp of Neon DB state at snapshot time
 }
 
 export interface SnapshotDiff {
@@ -105,6 +108,7 @@ interface SnapshotStatusResponse {
 
 interface RestoreSnapshotResponse {
   success: boolean;
+  dbRestored?: boolean;
 }
 
 interface DiffResponse extends SnapshotDiff {}
@@ -206,7 +210,7 @@ export async function createSnapshot(
 ): Promise<Snapshot | null> {
   // Don't call snapshot API if container isn't ready or we're in a failure cooldown
   if (!await isContainerReady()) {
-    console.log('[Snapshot] Skipping create — container not ready or in failure cooldown');
+    logger.info('[Snapshot] Skipping create — container not ready or in failure cooldown');
     return null;
   }
 
@@ -216,7 +220,7 @@ export async function createSnapshot(
     return snapshot;
   } catch (error: any) {
     recordFailure();
-    console.warn('[Snapshot] Create error:', error?.message || error);
+    logger.warn('[Snapshot] Create error:', error?.message || error);
     return null;
   }
 }
@@ -227,7 +231,7 @@ export async function createSnapshot(
 export async function loadSnapshots(projectId: string, limit: number = 50): Promise<void> {
   // Don't call snapshot API if container isn't ready or we're in a failure cooldown
   if (!await isContainerReady()) {
-    console.log('[Snapshot] Skipping load — container not ready or in failure cooldown');
+    logger.info('[Snapshot] Skipping load — container not ready or in failure cooldown');
     return;
   }
 
@@ -247,7 +251,7 @@ export async function loadSnapshots(projectId: string, limit: number = 50): Prom
     snapshotStore.setKey('error', error.message);
     snapshotStore.setKey('isLoading', false);
     recordFailure();
-    console.warn('[Snapshot] Load error:', error?.message || error);
+    logger.warn('[Snapshot] Load error:', error?.message || error);
   }
 }
 
@@ -270,38 +274,38 @@ export async function checkSnapshotStatus(projectId: string): Promise<void> {
     recordSuccess();
   } catch (error: any) {
     recordFailure();
-    console.warn('[Snapshot] Status check error:', error?.message || error);
+    logger.warn('[Snapshot] Status check error:', error?.message || error);
   }
 }
 
 /**
  * Restore to a specific snapshot
  */
-export async function restoreSnapshot(projectId: string, snapshotId: string): Promise<boolean> {
+export async function restoreSnapshot(projectId: string, snapshotId: string): Promise<{ success: boolean; dbRestored?: boolean }> {
   // Don't call snapshot API if container isn't ready or we're in a failure cooldown
   if (!await isContainerReady()) {
-    console.warn('[Snapshot] Skipping restore — container not ready or in failure cooldown');
+    logger.warn('[Snapshot] Skipping restore — container not ready or in failure cooldown');
     snapshotStore.setKey('error', 'Container is not ready');
-    return false;
+    return { success: false };
   }
 
   snapshotStore.setKey('isLoading', true);
   snapshotStore.setKey('error', null);
 
   try {
-    await dockerPost<RestoreSnapshotResponse>(`/api/snapshot/${projectId}/restore`, { snapshotId });
+    const result = await dockerPost<RestoreSnapshotResponse>(`/api/snapshot/${projectId}/restore`, { snapshotId });
 
     // Reload snapshots to get updated list
     await loadSnapshots(projectId);
 
     recordSuccess();
-    return true;
+    return { success: true, dbRestored: result?.dbRestored };
   } catch (error: any) {
     snapshotStore.setKey('error', error.message);
     snapshotStore.setKey('isLoading', false);
     recordFailure();
-    console.warn('[Snapshot] Restore error:', error?.message || error);
-    return false;
+    logger.warn('[Snapshot] Restore error:', error?.message || error);
+    return { success: false };
   }
 }
 
@@ -335,7 +339,7 @@ export async function getDiff(
     return diff;
   } catch (error: any) {
     recordFailure();
-    console.warn('[Snapshot] Diff error:', error?.message || error);
+    logger.warn('[Snapshot] Diff error:', error?.message || error);
     return null;
   }
 }
@@ -361,7 +365,7 @@ export async function getFileDiff(
     return data.diff;
   } catch (error: any) {
     recordFailure();
-    console.warn('[Snapshot] File diff error:', error?.message || error);
+    logger.warn('[Snapshot] File diff error:', error?.message || error);
     return null;
   }
 }
@@ -386,7 +390,7 @@ export async function getFileAtSnapshot(
     return data.content;
   } catch (error: any) {
     recordFailure();
-    console.warn('[Snapshot] Get file error:', error?.message || error);
+    logger.warn('[Snapshot] Get file error:', error?.message || error);
     return null;
   }
 }
@@ -400,7 +404,7 @@ export async function setAutoSave(
   intervalMs: number = 5 * 60 * 1000
 ): Promise<void> {
   if (!await isContainerReady()) {
-    console.log('[Snapshot] Skipping auto-save toggle — container not ready');
+    logger.info('[Snapshot] Skipping auto-save toggle — container not ready');
     return;
   }
 
@@ -410,7 +414,7 @@ export async function setAutoSave(
     recordSuccess();
   } catch (error: any) {
     recordFailure();
-    console.warn('[Snapshot] Auto-save toggle error:', error?.message || error);
+    logger.warn('[Snapshot] Auto-save toggle error:', error?.message || error);
   }
 }
 

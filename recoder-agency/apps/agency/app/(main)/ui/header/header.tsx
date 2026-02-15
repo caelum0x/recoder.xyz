@@ -2,17 +2,19 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { RecoderLogo } from "@/components/recoder-logo";
 import { AccountMenu, getCurrentUser } from "./account-menu";
+import { AppSwitcher } from "./app-switcher";
 import { getTeamContext, TeamSwitcher } from "./team-switcher";
 import { getUpgradeButtonContext, UpgradeButton } from "./upgrade-button";
 
 export function Header() {
 	return (
 		<header className="h-[48px] shrink-0 border-b border-border flex items-center justify-between px-4 bg-background">
-			{/* Left side: Logo + Team Selection */}
+			{/* Left side: Logo + App Switcher + Team Selection */}
 			<div className="flex items-center gap-[3px]">
 				<Link href="/" aria-label="Go to home" className="group">
 					<RecoderLogo size={24} />
 				</Link>
+				<AppSwitcher />
 				<span className="text-inverse/20 text-[18px] font-[250] leading-none ml-[4px]">
 					/
 				</span>

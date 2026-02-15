@@ -1,0 +1,19 @@
+# Minimal dependencies for E2E API tests
+# These tests only make HTTP calls to the deployed API
+
+# HTTP client
+httpx>=0.27.0
+
+# Test framework
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+pytest-timeout>=2.3.0
+
+# JWT token generation
+pyjwt>=2.8.0
+
+# Direct auth DB access for test user/session setup
+psycopg[binary]>=3.0.0
+
+# Environment variables
+python-dotenv>=1.0.0

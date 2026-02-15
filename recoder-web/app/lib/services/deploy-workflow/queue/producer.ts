@@ -12,6 +12,8 @@ import type {
 } from '../types';
 import { generateDeploymentId } from '../utils/common';
 import { DeploymentError, ErrorCodes } from '../utils/errors';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DeployQueueProducer');
 
 /**
  * In-memory queue for local development
@@ -106,7 +108,7 @@ export async function sendToQueue(
   try {
     deploymentQueue.enqueue(message);
 
-    console.log(`[Queue] Message enqueued: ${message.metadata.deploymentId}`);
+    logger.info(`[Queue] Message enqueued: ${message.metadata.deploymentId}`);
 
     return message.metadata.deploymentId;
   } catch (error) {
@@ -160,7 +162,7 @@ export async function sendBatchToQueue(
       deploymentIds.push(message.metadata.deploymentId);
     }
 
-    console.log(`[Queue] Batch of ${messages.length} messages enqueued`);
+    logger.info(`[Queue] Batch of ${messages.length} messages enqueued`);
 
     return deploymentIds;
   } catch (error) {
@@ -220,7 +222,7 @@ export async function sendToDLQ(
 
   deadLetterQueue.enqueue(dlqMessage);
 
-  console.log(`[DLQ] Message sent to DLQ: ${message.metadata.deploymentId}, reason: ${reason}`);
+  logger.info(`[DLQ] Message sent to DLQ: ${message.metadata.deploymentId}, reason: ${reason}`);
 }
 
 /**

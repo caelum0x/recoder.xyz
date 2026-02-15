@@ -13,6 +13,9 @@ import {
   methodNotAllowed,
   parseJsonWithSchema,
 } from '~/lib/http/request-validation';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectsCopy');
 
 const CopyProjectRequestSchema = z.object({
   sourceProjectId: z.string().trim().min(1, 'sourceProjectId is required'),
@@ -98,7 +101,7 @@ async function ensureContainer(
     );
   } catch (error) {
     throw new Error(
-      `Failed to prepare container for project ${projectId}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to prepare container for project ${projectId}`
     );
   }
 }
@@ -314,10 +317,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
       status: 'error',
       reason: error instanceof Error ? error.message : 'copy_project_failed',
     });
-    console.error('[api.projects.copy] Error:', error);
+    logger.error('[api.projects.copy] Error:', error);
     return JsonResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to copy project',
+      error: 'Failed to copy project',
     }, { status: 500 });
   }
 }

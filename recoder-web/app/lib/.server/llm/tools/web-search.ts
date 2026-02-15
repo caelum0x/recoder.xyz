@@ -19,6 +19,9 @@ import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
 import { getErrorMessage } from '../utils/errors.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('WebSearchTool');
+
 interface TavilyResultItem {
   title: string;
   url: string;
@@ -160,7 +163,7 @@ class WebSearchToolInvocation extends BaseToolInvocation<
       const errorMessage = `Error during web search for query "${this.params.query}": ${getErrorMessage(
         error,
       )}`;
-      console.error(errorMessage, error);
+      logger.error(errorMessage, error);
       return {
         llmContent: `Error: ${errorMessage}`,
         returnDisplay: `Error performing web search.`,

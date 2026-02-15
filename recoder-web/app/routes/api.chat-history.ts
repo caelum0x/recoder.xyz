@@ -5,6 +5,9 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { createChatHistoryDB } from '~/lib/.server/db/chat-history-db';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatHistory');
 
 /**
  * GET /api/chat-history - Get user's chat history
@@ -24,7 +27,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const urlId = url.searchParams.get('urlId');
     const limit = parseInt(url.searchParams.get('limit') || '50');
 
-    console.log('📋 [api.chat-history.loader] Request received:', {
+    logger.info('📋 [api.chat-history.loader] Request received:', {
       userId,
       anonymousId,
       urlId,
@@ -37,14 +40,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     // If urlId is provided, load specific chat with messages and file snapshot
     if (urlId) {
-      console.log('📋 [api.chat-history.loader] Loading specific chat:', urlId);
+      logger.info('📋 [api.chat-history.loader] Loading specific chat:', urlId);
       const chat = await chatDB.loadChat(urlId);
 
       if (!chat) {
         return json({ error: 'Chat not found' }, { status: 404 });
       }
 
-      console.log('📋 [api.chat-history.loader] Chat loaded:', {
+      logger.info('📋 [api.chat-history.loader] Chat loaded:', {
         sessionId: chat.id,
         messageCount: chat.messages.length,
         fileCount: Object.keys(chat.fileSnapshot || {}).length,
@@ -58,28 +61,28 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     // Otherwise, return list of chat sessions
     if (!userId && !anonymousId) {
-      console.error('❌ [api.chat-history.loader] No userId or anonymousId provided');
+      logger.error('❌ [api.chat-history.loader] No userId or anonymousId provided');
       return json({ error: 'Either userId or anonymousId required' }, { status: 400 });
     }
 
-    console.log('📋 [api.chat-history.loader] Fetching history...');
+    logger.info('📋 [api.chat-history.loader] Fetching history...');
     const history = await chatDB.getChatHistory(userId || undefined, anonymousId || undefined, limit);
 
-    console.log('📋 [api.chat-history.loader] History fetched:', history.length, 'sessions');
+    logger.info('📋 [api.chat-history.loader] History fetched:', history.length, 'sessions');
 
     return json({
       success: true,
       data: history,
     });
   } catch (error) {
-    console.error('❌ [api.chat-history.loader] Failed to load chat history:', error);
+    logger.error('❌ [api.chat-history.loader] Failed to load chat history:', error);
     if (error instanceof Error) {
-      console.error('❌ [api.chat-history.loader] Error details:', error.message, error.stack);
+      logger.error('❌ [api.chat-history.loader] Error details:', error.message, error.stack);
     }
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to load chat history',
+        error: 'Failed to load chat history',
       },
       { status: 500 }
     );
@@ -154,7 +157,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     const { userId, anonymousId, urlId, title, description, messages, artifactId, fileSnapshot, projectId, source, cliVersion } = data;
 
-    console.log('💾 [api.chat-history.action] Save request received:', {
+    logger.info('💾 [api.chat-history.action] Save request received:', {
       userId,
       anonymousId,
       urlId,
@@ -169,21 +172,21 @@ export async function action({ request, context }: ActionFunctionArgs) {
     });
 
     if (!urlId) {
-      console.error('❌ [api.chat-history.action] Missing urlId');
+      logger.error('❌ [api.chat-history.action] Missing urlId');
       return json({ error: 'urlId required' }, { status: 400 });
     }
 
     if (!messages || !Array.isArray(messages)) {
-      console.error('❌ [api.chat-history.action] Missing or invalid messages');
+      logger.error('❌ [api.chat-history.action] Missing or invalid messages');
       return json({ error: 'messages array required' }, { status: 400 });
     }
 
     if (!userId && !anonymousId) {
-      console.error('❌ [api.chat-history.action] No userId or anonymousId');
+      logger.error('❌ [api.chat-history.action] No userId or anonymousId');
       return json({ error: 'Either userId or anonymousId required' }, { status: 400 });
     }
 
-    console.log('💾 [api.chat-history.action] Saving to database...');
+    logger.info('💾 [api.chat-history.action] Saving to database...');
     const session = await chatDB.saveChat({
       userId,
       anonymousId,
@@ -198,7 +201,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       cliVersion,
     });
 
-    console.log('✅ [api.chat-history.action] Save successful:', {
+    logger.info('✅ [api.chat-history.action] Save successful:', {
       sessionId: session.id,
       urlId: session.urlId,
     });
@@ -211,11 +214,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('Failed to save chat:', error);
+    logger.error('Failed to save chat:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to save chat',
+        error: 'Failed to save chat',
       },
       { status: 500 }
     );

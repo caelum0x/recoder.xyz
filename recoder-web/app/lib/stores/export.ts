@@ -5,6 +5,9 @@
  */
 
 import { atom, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ExportStore');
 
 // ==================== TYPES ====================
 
@@ -428,7 +431,7 @@ export function loadExportHistory(): void {
       exportHistory.set(history);
     }
   } catch (e) {
-    console.error('[Export] Failed to load export history:', e);
+    logger.error('[Export] Failed to load export history:', e);
   }
 }
 
@@ -441,7 +444,7 @@ function saveExportHistory(history: ExportHistoryEntry[]): void {
   try {
     localStorage.setItem('recoder_export_history', JSON.stringify(history));
   } catch (e) {
-    console.error('[Export] Failed to save export history:', e);
+    logger.error('[Export] Failed to save export history:', e);
   }
 }
 

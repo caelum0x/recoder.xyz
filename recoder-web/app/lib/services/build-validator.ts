@@ -12,6 +12,8 @@
  */
 
 import { dockerPost } from './docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('BuildValidator');
 
 // ============================================
 // Types
@@ -522,7 +524,7 @@ export async function autoInstallPackages(
 
   try {
     const packageList = packages.join(' ');
-    console.log(`[BuildValidator] Auto-installing packages: ${packageList}`);
+    logger.info(`[BuildValidator] Auto-installing packages: ${packageList}`);
 
     // Execute npm/bun install in the container
     const response = await dockerPost<{ success: boolean; output?: string; error?: string }>(
@@ -534,7 +536,7 @@ export async function autoInstallPackages(
     );
 
     if (response.success) {
-      console.log(`[BuildValidator] Successfully installed packages: ${packageList}`);
+      logger.info(`[BuildValidator] Successfully installed packages: ${packageList}`);
       return { success: true };
     }
 
@@ -544,7 +546,7 @@ export async function autoInstallPackages(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[BuildValidator] Failed to install packages:`, message);
+    logger.error(`[BuildValidator] Failed to install packages:`, message);
     return {
       success: false,
       error: message,
@@ -559,7 +561,7 @@ export async function restartDevServer(
   projectId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log(`[BuildValidator] Restarting dev server for project: ${projectId}`);
+    logger.info(`[BuildValidator] Restarting dev server for project: ${projectId}`);
 
     // First, kill any existing dev process
     await dockerPost(`/api/shell/${projectId}`, {
@@ -581,7 +583,7 @@ export async function restartDevServer(
     );
 
     if (response.success) {
-      console.log(`[BuildValidator] Dev server restart initiated`);
+      logger.info(`[BuildValidator] Dev server restart initiated`);
       return { success: true };
     }
 
@@ -591,7 +593,7 @@ export async function restartDevServer(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[BuildValidator] Failed to restart dev server:`, message);
+    logger.error(`[BuildValidator] Failed to restart dev server:`, message);
     return {
       success: false,
       error: message,
@@ -606,7 +608,7 @@ export async function applyRecoveryAction(
   projectId: string,
   action: RecoveryAction
 ): Promise<{ success: boolean; error?: string }> {
-  console.log(`[BuildValidator] Applying recovery action: ${action.type}`);
+  logger.info(`[BuildValidator] Applying recovery action: ${action.type}`);
 
   switch (action.type) {
     case 'install-package':
@@ -694,13 +696,13 @@ export async function validateBuildWithRecovery(
     if (autoFix && action.autoApply) {
       const result = await applyRecoveryAction(projectId, action);
       if (!result.success) {
-        console.warn(`[BuildValidator] Recovery action failed:`, result.error);
+        logger.warn(`[BuildValidator] Recovery action failed:`, result.error);
       }
     }
 
     // Wait before next attempt
     const delay = calculateRetryDelay(attempt, validation.errorType || 'unknown');
-    console.log(`[BuildValidator] Waiting ${delay}ms before retry ${attempt + 1}/${maxRetries + 1}`);
+    logger.info(`[BuildValidator] Waiting ${delay}ms before retry ${attempt + 1}/${maxRetries + 1}`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 

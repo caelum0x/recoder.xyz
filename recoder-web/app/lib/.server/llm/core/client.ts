@@ -58,6 +58,9 @@ import {
 import { tokenLimit } from './tokenLimits.js';
 import type { ChatCompressionInfo, ServerGeminiStreamEvent } from './turn.js';
 import { CompressionStatus, GeminiEventType, Turn } from './turn.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('LLMClient');
 
 function isThinkingSupported(model: string) {
   if (model.startsWith('gemini-2.5')) return true;
@@ -374,7 +377,7 @@ export class GeminiClient {
       ];
 
       if (this.config.getDebugMode()) {
-        console.log(contextParts.join('\n'));
+        logger.info(contextParts.join('\n'));
       }
       return {
         contextParts,
@@ -484,7 +487,7 @@ export class GeminiClient {
       ];
 
       if (this.config.getDebugMode()) {
-        console.log(contextParts.join('\n'));
+        logger.info(contextParts.join('\n'));
       }
       return {
         contextParts,
@@ -904,7 +907,7 @@ export class GeminiClient {
         contents: curatedHistory,
       });
     if (originalTokenCount === undefined) {
-      console.warn(`Could not determine token count for model ${model}.`);
+      logger.warn(`Could not determine token count for model ${model}.`);
       this.hasFailedCompressionAttempt = !force && true;
       return {
         originalTokenCount: 0,
@@ -980,7 +983,7 @@ export class GeminiClient {
         contents: chat.getHistory(),
       });
     if (newTokenCount === undefined) {
-      console.warn('Could not determine compressed history token count.');
+      logger.warn('Could not determine compressed history token count.');
       this.hasFailedCompressionAttempt = !force && true;
       return {
         originalTokenCount,
@@ -1071,7 +1074,7 @@ export class GeminiClient {
           return null; // Model was switched but don't continue with current prompt
         }
       } catch (error) {
-        console.warn('Flash fallback handler failed:', error);
+        logger.warn('Flash fallback handler failed:', error);
       }
     }
 
@@ -1113,17 +1116,17 @@ export class GeminiClient {
       errorMessage.includes('too many requests');
 
     if (isAuthError) {
-      console.warn('Qwen OAuth authentication error detected:', errorMessage);
+      logger.warn('Qwen OAuth authentication error detected:', errorMessage);
       // The QwenContentGenerator should automatically handle token refresh
       // If it still fails, it likely means the refresh token is also expired
-      console.log(
+      logger.info(
         'Note: If this persists, you may need to re-authenticate with Qwen OAuth',
       );
       return null;
     }
 
     if (isRateLimitError) {
-      console.warn('Qwen API rate limit encountered:', errorMessage);
+      logger.warn('Qwen API rate limit encountered:', errorMessage);
       // For rate limiting, we don't need to do anything special
       // The retry mechanism will handle the backoff
       return null;

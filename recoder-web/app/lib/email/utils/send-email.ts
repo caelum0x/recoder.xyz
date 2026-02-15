@@ -10,13 +10,17 @@ import {
   SignInTemplate,
   WelcomeEmailTemplate,
 } from '../templates';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SendEmail');
+
 
 // Initialize Resend client
 // In production, set RESEND_API_KEY environment variable
 const getResendClient = () => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn('[Email] RESEND_API_KEY not set. Email sending will be disabled.');
+    logger.warn('[Email] RESEND_API_KEY not set. Email sending will be disabled.');
     return null;
   }
   return new Resend(apiKey);
@@ -42,7 +46,7 @@ export interface EmailSendResult {
 export async function sendWelcomeEmail(userEmail: string, planName: string): Promise<EmailSendResult> {
   const resend = getResendClient();
   if (!resend) {
-    console.log(`[Email] Would send welcome email to ${userEmail} for plan: ${planName}`);
+    logger.info(`[Email] Would send welcome email to ${userEmail} for plan: ${planName}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -55,14 +59,14 @@ export async function sendWelcomeEmail(userEmail: string, planName: string): Pro
     });
 
     if (error) {
-      console.error(`[Email] Failed to send welcome email to ${userEmail}:`, error);
+      logger.error(`[Email] Failed to send welcome email to ${userEmail}:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send welcome email to ${userEmail}:`, error);
+    logger.error(`[Email] Failed to send welcome email to ${userEmail}:`, error);
     return { success: false, error: message };
   }
 }
@@ -73,7 +77,7 @@ export async function sendWelcomeEmail(userEmail: string, planName: string): Pro
 export async function sendCancellationEmail(userEmail: string): Promise<EmailSendResult> {
   const resend = getResendClient();
   if (!resend) {
-    console.log(`[Email] Would send cancellation email to ${userEmail}`);
+    logger.info(`[Email] Would send cancellation email to ${userEmail}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -86,14 +90,14 @@ export async function sendCancellationEmail(userEmail: string): Promise<EmailSen
     });
 
     if (error) {
-      console.error(`[Email] Failed to send cancellation email to ${userEmail}:`, error);
+      logger.error(`[Email] Failed to send cancellation email to ${userEmail}:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send cancellation email to ${userEmail}:`, error);
+    logger.error(`[Email] Failed to send cancellation email to ${userEmail}:`, error);
     return { success: false, error: message };
   }
 }
@@ -112,7 +116,7 @@ export async function sendOrganizationInvitation(options: {
   const resend = getResendClient();
 
   if (!resend) {
-    console.log(`[Email] Would send organization invitation to ${email} for team: ${teamName}`);
+    logger.info(`[Email] Would send organization invitation to ${email} for team: ${teamName}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -130,14 +134,14 @@ export async function sendOrganizationInvitation(options: {
     });
 
     if (error) {
-      console.error(`[Email] Failed to send organization invitation to ${email}:`, error);
+      logger.error(`[Email] Failed to send organization invitation to ${email}:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send organization invitation to ${email}:`, error);
+    logger.error(`[Email] Failed to send organization invitation to ${email}:`, error);
     return { success: false, error: message };
   }
 }
@@ -148,7 +152,7 @@ export async function sendOrganizationInvitation(options: {
 export async function sendSignInEmail(userEmail: string, otp: string): Promise<EmailSendResult> {
   const resend = getResendClient();
   if (!resend) {
-    console.log(`[Email] Would send sign-in email to ${userEmail} with OTP: ${otp}`);
+    logger.info(`[Email] Would send sign-in email to ${userEmail} with OTP: ${otp}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -161,14 +165,14 @@ export async function sendSignInEmail(userEmail: string, otp: string): Promise<E
     });
 
     if (error) {
-      console.error(`[Email] Failed to send sign-in email to ${userEmail}:`, error);
+      logger.error(`[Email] Failed to send sign-in email to ${userEmail}:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send sign-in email to ${userEmail}:`, error);
+    logger.error(`[Email] Failed to send sign-in email to ${userEmail}:`, error);
     return { success: false, error: message };
   }
 }
@@ -179,7 +183,7 @@ export async function sendSignInEmail(userEmail: string, otp: string): Promise<E
 export async function sendEmailVerification(userEmail: string, otp: string): Promise<EmailSendResult> {
   const resend = getResendClient();
   if (!resend) {
-    console.log(`[Email] Would send email verification to ${userEmail} with OTP: ${otp}`);
+    logger.info(`[Email] Would send email verification to ${userEmail} with OTP: ${otp}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -192,14 +196,14 @@ export async function sendEmailVerification(userEmail: string, otp: string): Pro
     });
 
     if (error) {
-      console.error(`[Email] Failed to send email verification to ${userEmail}:`, error);
+      logger.error(`[Email] Failed to send email verification to ${userEmail}:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send email verification to ${userEmail}:`, error);
+    logger.error(`[Email] Failed to send email verification to ${userEmail}:`, error);
     return { success: false, error: message };
   }
 }
@@ -214,7 +218,7 @@ export async function sendPasswordResetEmail(
 ): Promise<EmailSendResult> {
   const resend = getResendClient();
   if (!resend) {
-    console.log(`[Email] Would send password reset to ${userEmail}`);
+    logger.info(`[Email] Would send password reset to ${userEmail}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -227,14 +231,14 @@ export async function sendPasswordResetEmail(
     });
 
     if (error) {
-      console.error(`[Email] Failed to send password reset to ${userEmail}:`, error);
+      logger.error(`[Email] Failed to send password reset to ${userEmail}:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send password reset to ${userEmail}:`, error);
+    logger.error(`[Email] Failed to send password reset to ${userEmail}:`, error);
     return { success: false, error: message };
   }
 }
@@ -252,7 +256,7 @@ export async function sendContactFormNotification(options: {
   const resend = getResendClient();
 
   if (!resend) {
-    console.log(`[Email] Would send contact form notification to ${recipientEmail}`);
+    logger.info(`[Email] Would send contact form notification to ${recipientEmail}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -265,14 +269,14 @@ export async function sendContactFormNotification(options: {
     });
 
     if (error) {
-      console.error(`[Email] Failed to send contact form notification to ${recipientEmail}:`, error);
+      logger.error(`[Email] Failed to send contact form notification to ${recipientEmail}:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send contact form notification to ${recipientEmail}:`, error);
+    logger.error(`[Email] Failed to send contact form notification to ${recipientEmail}:`, error);
     return { success: false, error: message };
   }
 }
@@ -290,7 +294,7 @@ export async function sendEmail(options: {
   const resend = getResendClient();
 
   if (!resend) {
-    console.log(`[Email] Would send email "${subject}" to ${Array.isArray(to) ? to.join(', ') : to}`);
+    logger.info(`[Email] Would send email "${subject}" to ${Array.isArray(to) ? to.join(', ') : to}`);
     return { success: true, messageId: 'mock-id' };
   }
 
@@ -304,14 +308,14 @@ export async function sendEmail(options: {
     });
 
     if (error) {
-      console.error(`[Email] Failed to send email:`, error);
+      logger.error(`[Email] Failed to send email:`, error);
       return { success: false, error: error.message };
     }
 
     return { success: true, messageId: data?.id };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send email:`, error);
+    logger.error(`[Email] Failed to send email:`, error);
     return { success: false, error: errorMessage };
   }
 }

@@ -1,0 +1,39 @@
+{
+  "generated_at_utc": "2026-02-14T09:24:50.581Z",
+  "dataset": "/Users/arhansubasi/recoder.xyz/tools/evals/composer/dataset.json",
+  "results": "/Users/arhansubasi/recoder.xyz/tools/evals/composer/results/latest-results.json",
+  "metrics": {
+    "composer_case_pass_rate": 1,
+    "composer_failed_critical_cases": 0
+  },
+  "summary": {
+    "total_cases": 3,
+    "passed_cases": 3,
+    "failed_cases": 0,
+    "min_pass_rate": 1,
+    "strict": true
+  },
+  "cases": [
+    {
+      "id": "composer.copy-route-regression",
+      "title": "Copy route keeps copy semantics and error logging",
+      "critical": true,
+      "status": "pass",
+      "reasons": []
+    },
+    {
+      "id": "composer.tools-copy-smoke",
+      "title": "Tools-and-copy smoke path remains covered",
+      "critical": true,
+      "status": "pass",
+      "reasons": []
+    },
+    {
+      "id": "composer.message-parser-actions",
+      "title": "Message parser action tests retain action coverage",
+      "critical": false,
+      "status": "pass",
+      "reasons": []
+    }
+  ]
+}

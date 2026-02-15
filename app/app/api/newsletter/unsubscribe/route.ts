@@ -158,7 +158,18 @@ export async function GET(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // TODO: Add admin authentication
+    const { requireAuth } = await import('@/lib/auth-helpers');
+    const authResult = await requireAuth(request);
+    if (authResult.error) return authResult.response;
+
+    // Only allow admin users to perform bulk operations
+    if (authResult.user?.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'Admin access required' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { emails } = body;
 

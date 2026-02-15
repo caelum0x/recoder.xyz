@@ -14,6 +14,10 @@
  */
 
 // Feature flag names as const for type safety
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('FeatureFlags');
+
 export const FEATURE_FLAGS = {
   EXPERIMENTAL_WORKFLOWS: 'EXPERIMENTAL_WORKFLOWS',
   MULTI_PROVIDER_AI: 'MULTI_PROVIDER_AI',
@@ -312,7 +316,7 @@ export function getFeatureFlagState(
   const config = DEFAULT_FLAG_CONFIGS[flagName];
 
   if (!config) {
-    console.warn(`[FeatureFlags] Unknown feature flag: ${flagName}`);
+    logger.warn(`[FeatureFlags] Unknown feature flag: ${flagName}`);
     return false;
   }
 
@@ -504,7 +508,7 @@ export function loadUserOverrides(): Partial<Record<FeatureFlagName, boolean>> {
       return validOverrides;
     }
   } catch (e) {
-    console.error('[FeatureFlags] Failed to load user overrides:', e);
+    logger.error('[FeatureFlags] Failed to load user overrides:', e);
   }
 
   return {};
@@ -519,7 +523,7 @@ export function saveUserOverrides(overrides: Partial<Record<FeatureFlagName, boo
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
   } catch (e) {
-    console.error('[FeatureFlags] Failed to save user overrides:', e);
+    logger.error('[FeatureFlags] Failed to save user overrides:', e);
   }
 }
 
@@ -532,7 +536,7 @@ export function clearUserOverrides(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (e) {
-    console.error('[FeatureFlags] Failed to clear user overrides:', e);
+    logger.error('[FeatureFlags] Failed to clear user overrides:', e);
   }
 }
 

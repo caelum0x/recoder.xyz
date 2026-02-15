@@ -16,6 +16,8 @@
 
 import type { DeploymentConfig, DeploymentResult, FileTree } from '../types';
 import { fetchWithRetry, withRetry } from '../utils/retry';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('RailwayDeploy');
 
 interface RailwayUser {
   id: string;
@@ -68,7 +70,7 @@ export class RailwayDeployer {
     const startTime = Date.now();
 
     try {
-      console.log(`[Railway] Starting deployment: ${config.projectName}`);
+      logger.info(`[Railway] Starting deployment: ${config.projectName}`);
 
       if (!this.token) {
         throw new Error('Railway token not configured. Get your token from https://railway.app/account/tokens');
@@ -76,22 +78,22 @@ export class RailwayDeployer {
 
       // Step 1: Get user info
       const me = await this.getMe();
-      console.log(`[Railway] User: ${me.name || me.email}`);
+      logger.info(`[Railway] User: ${me.name || me.email}`);
 
       // Step 2: Create or get project
       const project = await this.createOrGetProject(config.projectName);
-      console.log(`[Railway] Project: ${project.name} (${project.id})`);
+      logger.info(`[Railway] Project: ${project.name} (${project.id})`);
 
       // Get the default environment (production)
       const environmentId = project.environments?.edges?.[0]?.node?.id;
       if (!environmentId) {
         throw new Error('No environment found in project');
       }
-      console.log(`[Railway] Environment: ${environmentId}`);
+      logger.info(`[Railway] Environment: ${environmentId}`);
 
       // Step 3: Create service
       const service = await this.createService(project.id, config.projectName);
-      console.log(`[Railway] Service created: ${service.id}`);
+      logger.info(`[Railway] Service created: ${service.id}`);
 
       // Step 4: Set environment variables if provided
       if (config.environmentVariables && Object.keys(config.environmentVariables).length > 0) {
@@ -101,7 +103,7 @@ export class RailwayDeployer {
           service.id,
           config.environmentVariables
         );
-        console.log(`[Railway] Environment variables set`);
+        logger.info(`[Railway] Environment variables set`);
       }
 
       // Step 5: Create deployment with files
@@ -112,7 +114,7 @@ export class RailwayDeployer {
         files,
         config
       );
-      console.log(`[Railway] Deployment created: ${deployment.id}`);
+      logger.info(`[Railway] Deployment created: ${deployment.id}`);
 
       // Step 6: Generate a public domain
       const domain = await this.generateServiceDomain(
@@ -120,7 +122,7 @@ export class RailwayDeployer {
         environmentId,
         service.id
       );
-      console.log(`[Railway] Domain generated: ${domain.domain}`);
+      logger.info(`[Railway] Domain generated: ${domain.domain}`);
 
       // Step 7: Wait for deployment to complete
       const finalDeployment = await this.waitForDeployment(
@@ -134,7 +136,7 @@ export class RailwayDeployer {
       const totalTime = endTime - startTime;
 
       const url = `https://${domain.domain}`;
-      console.log(`[Railway] Deployment successful: ${url}`);
+      logger.info(`[Railway] Deployment successful: ${url}`);
 
       return {
         id: deployment.id,
@@ -152,7 +154,7 @@ export class RailwayDeployer {
         },
       };
     } catch (error) {
-      console.error('[Railway] Deployment failed:', error);
+      logger.error('[Railway] Deployment failed:', error);
 
       return {
         id: `railway-${Date.now()}`,
@@ -198,7 +200,7 @@ export class RailwayDeployer {
     }, {
       maxRetries: 3,
       onRetry: (attempt, error) => {
-        console.log(`[Railway] Retrying GraphQL request (attempt ${attempt}): ${error.message}`);
+        logger.info(`[Railway] Retrying GraphQL request (attempt ${attempt}): ${error.message}`);
       },
     });
   }
@@ -251,11 +253,11 @@ export class RailwayDeployer {
       );
 
       if (found) {
-        console.log(`[Railway] Found existing project: ${found.node.name}`);
+        logger.info(`[Railway] Found existing project: ${found.node.name}`);
         return found.node;
       }
     } catch (error) {
-      console.log(`[Railway] Could not search for existing project, creating new one`);
+      logger.info(`[Railway] Could not search for existing project, creating new one`);
     }
 
     // Create new project
@@ -386,7 +388,7 @@ export class RailwayDeployer {
       throw new Error(`Failed to upload files: ${uploadResponse.status} - ${errorText}`);
     }
 
-    console.log(`[Railway] Files uploaded, deployment ID: ${deploymentId}`);
+    logger.info(`[Railway] Files uploaded, deployment ID: ${deploymentId}`);
 
     return {
       id: deploymentId,
@@ -461,7 +463,7 @@ cmd = "npx serve -s ${config.outputDirectory || '.'}"
       // Log a warning and truncate if necessary.
       let filePath = path;
       if (filePath.length > 100) {
-        console.warn(
+        logger.warn(
           `[Railway] Filename exceeds 100 chars and will be truncated in tarball: ${filePath} (${filePath.length} chars)`
         );
         filePath = filePath.slice(filePath.length - 100);
@@ -610,7 +612,7 @@ cmd = "npx serve -s ${config.outputDirectory || '.'}"
         const deployment = data.deployments?.edges?.[0]?.node;
         if (deployment) {
           const status = deployment.status?.toUpperCase();
-          console.log(`[Railway] Deployment status: ${status}`);
+          logger.info(`[Railway] Deployment status: ${status}`);
 
           if (status === 'SUCCESS' || status === 'READY' || status === 'RUNNING') {
             return deployment;
@@ -624,14 +626,14 @@ cmd = "npx serve -s ${config.outputDirectory || '.'}"
           throw error;
         }
         // Continue polling if query fails (deployment might not exist yet)
-        console.log('[Railway] Waiting for deployment...');
+        logger.info('[Railway] Waiting for deployment...');
       }
 
       await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
 
     // Timeout but deployment might still complete
-    console.log('[Railway] Deployment is still building, but continuing...');
+    logger.info('[Railway] Deployment is still building, but continuing...');
     return null;
   }
 

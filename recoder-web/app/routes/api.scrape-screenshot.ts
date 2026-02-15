@@ -1,4 +1,8 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { firecrawlDisabledError, isFirecrawlEnabled } from '~/lib/.server/firecrawl-control';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ScrapeScreenshot');
 
 /**
  * POST /api/scrape-screenshot
@@ -69,12 +73,20 @@ interface FirecrawlScreenshotResponse {
 }
 
 /**
- * Validate URL format
+ * Validate URL format and reject internal/private addresses.
  */
 function isValidUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const h = url.hostname.toLowerCase();
+    if (
+      h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' ||
+      h === '::1' || h === '[::1]' ||
+      h.startsWith('10.') || h.startsWith('172.') || h.startsWith('192.168.') ||
+      h === '169.254.169.254' || h.endsWith('.internal') || h.endsWith('.local')
+    ) return false;
+    return true;
   } catch {
     return false;
   }
@@ -98,7 +110,7 @@ async function urlToBase64(url: string): Promise<string | null> {
     const contentType = response.headers.get('content-type') || 'image/png';
     return `data:${contentType};base64,${base64}`;
   } catch (error) {
-    console.error('[scrape-screenshot] Failed to convert URL to base64:', error);
+    logger.error('[scrape-screenshot] Failed to convert URL to base64:', error);
     return null;
   }
 }
@@ -121,6 +133,10 @@ function extractBase64FromDataUrl(dataUrl: string): string {
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
+  }
+
+  if (!isFirecrawlEnabled(context)) {
+    return json(firecrawlDisabledError(), { status: 403 });
   }
 
   try {
@@ -162,14 +178,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }, { status: 400 });
     }
 
-    console.log('[scrape-screenshot] Capturing screenshot for:', url, { fullPage, format });
+    logger.info('[scrape-screenshot] Capturing screenshot for:', url, { fullPage, format });
 
     // Get Firecrawl API key from environment
     const env = (context as any)?.cloudflare?.env || process.env;
     const FIRECRAWL_API_KEY = env.FIRECRAWL_API_KEY;
 
     if (!FIRECRAWL_API_KEY) {
-      console.error('[scrape-screenshot] FIRECRAWL_API_KEY not configured');
+      logger.error('[scrape-screenshot] FIRECRAWL_API_KEY not configured');
       return json({
         success: false,
         error: 'Screenshot service not configured. Please set FIRECRAWL_API_KEY.'
@@ -215,7 +231,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
           });
           break;
         default:
-          console.warn('[scrape-screenshot] Unknown action type:', (action as any).type);
+          logger.warn('[scrape-screenshot] Unknown action type:', (action as any).type);
       }
     }
 
@@ -264,7 +280,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (!firecrawlResponse.ok) {
       const errorText = await firecrawlResponse.text();
-      console.error('[scrape-screenshot] Firecrawl API error:', firecrawlResponse.status, errorText);
+      logger.error('[scrape-screenshot] Firecrawl API error:', firecrawlResponse.status, errorText);
 
       let errorMessage = 'Failed to capture screenshot';
       try {
@@ -282,7 +298,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     const data = await firecrawlResponse.json() as FirecrawlScreenshotResponse;
 
-    console.log('[scrape-screenshot] Full scrape result keys:', data ? Object.keys(data) : 'null');
+    logger.info('[scrape-screenshot] Full scrape result keys:', data ? Object.keys(data) : 'null');
 
     // Extract screenshot from various possible response formats
     let screenshotResult: string | null = null;
@@ -301,7 +317,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     if (!screenshotResult) {
-      console.error('[scrape-screenshot] No screenshot in response:', JSON.stringify(data, null, 2));
+      logger.error('[scrape-screenshot] No screenshot in response:', JSON.stringify(data, null, 2));
       return json({
         success: false,
         error: 'Screenshot not available in response'
@@ -325,7 +341,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
           // Fallback to returning the URL
           finalScreenshot = screenshotResult;
           screenshotFormat = 'url';
-          console.warn('[scrape-screenshot] Could not convert to base64, returning URL instead');
+          logger.warn('[scrape-screenshot] Could not convert to base64, returning URL instead');
         } else {
           finalScreenshot = base64Result;
           screenshotFormat = 'base64';
@@ -368,7 +384,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
     };
 
-    console.log('[scrape-screenshot] Success:', {
+    logger.info('[scrape-screenshot] Success:', {
       url,
       format: screenshotFormat,
       fullPage,
@@ -378,7 +394,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json(response);
 
   } catch (error) {
-    console.error('[scrape-screenshot] Error:', error);
+    logger.error('[scrape-screenshot] Error:', error);
 
     if (error instanceof SyntaxError) {
       return json({
@@ -389,7 +405,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: 'Screenshot capture failed'
     }, { status: 500 });
   }
 }

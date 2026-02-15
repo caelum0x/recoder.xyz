@@ -5,6 +5,9 @@
  */
 
 import crypto from 'crypto';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ResponseCache');
 
 interface CacheEntry {
   response: any;
@@ -59,7 +62,7 @@ export class ResponseCache {
     this.cache.delete(key);
     this.cache.set(key, entry);
 
-    console.log(`[Cache] Hit for model ${model} (age: ${Math.round(age / 1000)}s)`);
+    logger.info(`[Cache] Hit for model ${model} (age: ${Math.round(age / 1000)}s)`);
     return entry.response;
   }
 
@@ -82,7 +85,7 @@ export class ResponseCache {
       timestamp: Date.now(),
     });
 
-    console.log(`[Cache] Stored response for model ${model} (total: ${this.cache.size})`);
+    logger.info(`[Cache] Stored response for model ${model} (total: ${this.cache.size})`);
   }
 
   /**
@@ -90,7 +93,7 @@ export class ResponseCache {
    */
   clear(): void {
     this.cache.clear();
-    console.log('[Cache] Cleared all entries');
+    logger.info('[Cache] Cleared all entries');
   }
 
   /**
@@ -108,7 +111,7 @@ export class ResponseCache {
     }
 
     if (removed > 0) {
-      console.log(`[Cache] Cleaned up ${removed} expired entries`);
+      logger.info(`[Cache] Cleaned up ${removed} expired entries`);
     }
   }
 

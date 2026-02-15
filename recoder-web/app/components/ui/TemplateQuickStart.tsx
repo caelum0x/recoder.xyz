@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { TemplateRepo } from '~/lib/.server/github/types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('TemplateQuickStart');
 
 interface TemplateQuickStartProps {
   onSelectTemplate: (template: TemplateRepo) => void;
@@ -25,7 +27,7 @@ export function TemplateQuickStart({ onSelectTemplate }: TemplateQuickStartProps
         setTemplates(featuredTemplates);
       }
     } catch (error) {
-      console.error('Failed to load templates:', error);
+      logger.error('Failed to load templates:', error);
     } finally {
       setLoading(false);
     }

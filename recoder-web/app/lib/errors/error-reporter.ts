@@ -3,6 +3,7 @@
  * Centralized error reporting with deduplication, batching, and local logging
  */
 
+import { createScopedLogger } from '~/utils/logger';
 import {
   type AppError,
   type SerializedError,
@@ -11,6 +12,8 @@ import {
   toAppError,
   getErrorId,
 } from './types';
+
+const logger = createScopedLogger('ErrorReporter');
 
 /**
  * Error report destination
@@ -396,7 +399,7 @@ class ErrorReporter {
       });
     } catch (e) {
       // Silently fail to avoid error loops
-      console.debug('[ErrorReporter] Failed to send errors to backend:', e);
+      logger.debug('[ErrorReporter] Failed to send errors to backend:', e);
     }
   }
 

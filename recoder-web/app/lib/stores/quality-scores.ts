@@ -11,6 +11,9 @@
 
 import { atom, computed, map } from 'nanostores';
 import type { QualityResult, QualityDimension } from '../services/response-quality';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('QualityScores');
 
 // ============================================================================
 // Types
@@ -322,7 +325,7 @@ export function loadScores(): void {
       }
     }
   } catch (error) {
-    console.warn('[QualityScores] Failed to load scores from localStorage:', error);
+    logger.warn('[QualityScores] Failed to load scores from localStorage:', error);
   }
 }
 
@@ -345,7 +348,7 @@ function persistScores(): void {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
     }
   } catch (error) {
-    console.warn('[QualityScores] Failed to persist scores:', error);
+    logger.warn('[QualityScores] Failed to persist scores:', error);
   }
 }
 

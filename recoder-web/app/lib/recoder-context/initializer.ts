@@ -3,6 +3,7 @@
  * Auto-creates .recoder/ directory in WebContainer
  */
 
+import { createScopedLogger } from '~/utils/logger';
 import {
   DEFAULT_CONTEXT,
   DEFAULT_SPEC,
@@ -16,6 +17,8 @@ import {
   getTemplate,
   type RecoderTemplate,
 } from './templates';
+
+const logger = createScopedLogger('RecoderContextInit');
 
 export interface FileWriter {
   writeFile: (path: string, content: string) => Promise<void>;
@@ -37,7 +40,7 @@ export async function initializeRecoderDirectory(
   // Check if already initialized
   const exists = await fs.exists('.recoder/context.md');
   if (exists) {
-    console.log('.recoder/ already initialized');
+    logger.info('.recoder/ already initialized');
     return;
   }
 
@@ -48,7 +51,7 @@ export async function initializeRecoderDirectory(
       for (const [file, content] of Object.entries(tmpl.files)) {
         await fs.writeFile(`.recoder/${file}`, content);
       }
-      console.log(`.recoder/ initialized with ${template} template`);
+      logger.info(`.recoder/ initialized with ${template} template`);
       return;
     }
   }
@@ -64,7 +67,7 @@ export async function initializeRecoderDirectory(
   await fs.writeFile('.recoder/prompts/api.md', DEFAULT_API_PROMPT);
   await fs.writeFile('.recoder/prompts/test.md', DEFAULT_TEST_PROMPT);
 
-  console.log('.recoder/ initialized with default files');
+  logger.info('.recoder/ initialized with default files');
 }
 
 /**

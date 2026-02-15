@@ -13,7 +13,9 @@ import type {
   NodeId,
   ConnectionId,
 } from './types';
-import { generateWorkspaceId, generateConnectionId } from './types';
+import { generateWorkspaceId, generateConnectionId, generateNodeId } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('WorkflowWorkspaceStore');
 
 // ============================================================
 // Default Settings
@@ -218,7 +220,7 @@ export function updateWorkspace(
 ): void {
   const existing = $workspacesById.get()[workspaceId];
   if (!existing) {
-    console.warn(`Workspace ${workspaceId} not found`);
+    logger.warn(`Workspace ${workspaceId} not found`);
     return;
   }
 
@@ -264,11 +266,50 @@ export function duplicateWorkspace(workspaceId: WorkspaceId): Workspace | null {
   if (!original) return null;
 
   const newWorkspace = createWorkspace(`${original.name} (copy)`, original.metadata);
+  const nodeIdMap = new Map<NodeId, NodeId>();
+  for (const node of original.nodes) {
+    nodeIdMap.set(node.id, generateNodeId());
+  }
 
-  // Deep copy nodes and connections
+  const remapNodeRefs = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      return nodeIdMap.get(value as NodeId) || value;
+    }
+    if (Array.isArray(value)) {
+      return value.map(remapNodeRefs);
+    }
+    if (value && typeof value === 'object') {
+      const mapped: Record<string, unknown> = {};
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        mapped[key] = remapNodeRefs(nested);
+      }
+      return mapped;
+    }
+    return value;
+  };
+
+  const duplicatedNodes = original.nodes.map((node) => ({
+    ...node,
+    id: nodeIdMap.get(node.id) || node.id,
+    data: remapNodeRefs(node.data) as Record<string, unknown>,
+  }));
+
+  const duplicatedConnections = original.connections.map((connection) => ({
+    ...connection,
+    id: generateConnectionId(),
+    sourceNodeId: nodeIdMap.get(connection.sourceNodeId) || connection.sourceNodeId,
+    targetNodeId: nodeIdMap.get(connection.targetNodeId) || connection.targetNodeId,
+  }));
+
   updateWorkspace(newWorkspace.id, {
-    nodes: original.nodes.map((n) => ({ ...n })),
-    connections: original.connections.map((c) => ({ ...c })),
+    nodes: duplicatedNodes,
+    connections: duplicatedConnections,
+    metadata: {
+      ...(original.metadata || {}),
+      copiedFromWorkspaceId: original.id,
+      copiedAt: new Date().toISOString(),
+      nodeIdMap: Object.fromEntries(nodeIdMap.entries()),
+    },
   });
 
   return $workspacesById.get()[newWorkspace.id];

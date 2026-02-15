@@ -7,6 +7,8 @@
 import { loadStarterFiles, generateStarterArtifact, generateCustomizationInstructions, type LoadedStarterFiles } from './starter-loader';
 import { searchStarters, findBestStarter } from './starter-search';
 import { STARTER_CONFIG, log } from './starter-config';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('StarterInjector');
 
 export interface StarterInjectionResult {
   shouldInject: boolean;
@@ -85,7 +87,7 @@ export async function detectAndPrepareStarter(userMessage: string): Promise<Star
       webContainerWarning,
     };
   } catch (error) {
-    console.error(`❌ Failed to load starter ${selectedStarterId}:`, error);
+    logger.error(`❌ Failed to load starter ${selectedStarterId}:`, error);
     return { shouldInject: false };
   }
 }

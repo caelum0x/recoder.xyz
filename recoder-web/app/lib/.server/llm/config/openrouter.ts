@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('OpenRouterConfig');
 /**
  * OpenRouter API Configuration for Recoder Code
  * Adapts the Gemini/Qwen architecture to use OpenRouter
@@ -88,7 +90,7 @@ export function getOpenRouterConfig(): OpenRouterConfig {
 
 export function validateOpenRouterConfig(config: OpenRouterConfig): boolean {
   if (!config.apiKey) {
-    console.error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.');
+    logger.error('OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.');
     return false;
   }
   return true;

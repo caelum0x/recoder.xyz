@@ -10,6 +10,9 @@ import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Textarea } from '~/components/ui/textarea';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PushToGitHub');
 
 interface PushToGitHubButtonProps {
   projectId: string;
@@ -73,10 +76,10 @@ export function PushToGitHubButton({
       setRepoUrl(result.repoUrl || null);
       localStorage.setItem('github_token', githubToken); // Save for next time
 
-      console.log('✅ Successfully pushed to GitHub:', result.repoUrl);
+      logger.info('✅ Successfully pushed to GitHub:', result.repoUrl);
       
     } catch (error) {
-      console.error('❌ GitHub push failed:', error);
+      logger.error('❌ GitHub push failed:', error);
       alert(`GitHub push failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsPushing(false);

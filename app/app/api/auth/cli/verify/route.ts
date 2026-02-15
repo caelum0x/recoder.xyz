@@ -58,7 +58,6 @@ export async function POST(request: NextRequest) {
         {
           valid: false,
           error: 'Invalid token',
-          message: error.message
         },
         { status: 401 }
       );
@@ -66,7 +65,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Token verification error:', error);
     return NextResponse.json(
-      { error: 'Verification failed', message: error.message },
+      { error: 'Verification failed' },
       { status: 500 }
     );
   }

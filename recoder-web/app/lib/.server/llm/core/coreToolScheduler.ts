@@ -35,6 +35,8 @@ import * as Diff from 'diff';
 import { doesToolInvocationMatch } from '../utils/tool-utils.js';
 import levenshtein from 'fast-levenshtein';
 import { getPlanModeSystemReminder } from './prompts.js';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CoreToolScheduler');
 
 export type ValidatingToolCall = {
   status: 'validating';
@@ -1044,7 +1046,7 @@ export class CoreToolScheduler {
           this.setStatusInternal(pendingTool.request.callId, 'scheduled');
         }
       } catch (error) {
-        console.error(
+        logger.error(
           `Error checking confirmation for tool ${pendingTool.request.callId}:`,
           error,
         );

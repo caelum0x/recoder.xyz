@@ -112,13 +112,15 @@ async function BillingInfoForProPlan({ team }: BillingInfoProps) {
 		return null;
 	}
 
-	// Get willCancelAt for v2 subscriptions
+	// Get cancellation date for subscriptions
 	let willCancelAt: Date | null = null;
-	if (team.activeSubscriptionId?.startsWith("bpps_")) {
+	if (team.activeSubscriptionId) {
 		const subscription = await getLatestSubscriptionV2(
 			team.activeSubscriptionId,
 		);
-		willCancelAt = subscription?.subscription.willCancelAt ?? null;
+		if (subscription?.subscription.status === "canceled") {
+			willCancelAt = subscription.subscription.currentPeriodEnd ?? null;
+		}
 	}
 
 	return (

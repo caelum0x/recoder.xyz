@@ -15,6 +15,9 @@ import { makeRelative, shortenPath } from '../utils/paths.js';
 import { getErrorMessage, isNodeError } from '../utils/errors.js';
 import type { Config } from '../config/config.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('RipGrepTool');
+
 const DEFAULT_TOTAL_MAX_MATCHES = 20000;
 
 /**
@@ -126,7 +129,7 @@ class GrepToolInvocation extends BaseToolInvocation<
       const totalMaxMatches = DEFAULT_TOTAL_MAX_MATCHES;
 
       if (this.config.getDebugMode()) {
-        console.log(`[GrepTool] Total result limit: ${totalMaxMatches}`);
+        logger.info(`[GrepTool] Total result limit: ${totalMaxMatches}`);
       }
 
       for (const searchDir of searchDirectories) {
@@ -213,7 +216,7 @@ class GrepToolInvocation extends BaseToolInvocation<
         returnDisplay: displayMessage,
       };
     } catch (error) {
-      console.error(`Error during GrepLogic execution: ${error}`);
+      logger.error(`Error during GrepLogic execution: ${error}`);
       const errorMessage = getErrorMessage(error);
       return {
         llmContent: `Error during grep search operation: ${errorMessage}`,
@@ -347,7 +350,7 @@ class GrepToolInvocation extends BaseToolInvocation<
 
       return this.parseRipgrepOutput(output, absolutePath);
     } catch (error: unknown) {
-      console.error(`GrepLogic: ripgrep failed: ${getErrorMessage(error)}`);
+      logger.error(`GrepLogic: ripgrep failed: ${getErrorMessage(error)}`);
       throw error;
     }
   }

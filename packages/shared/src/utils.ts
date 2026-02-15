@@ -130,9 +130,11 @@ export class StringUtils {
    * Generate random string
    */
   static random(length: number, chars: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'): string {
+    const bytes = new Uint8Array(length);
+    crypto.getRandomValues(bytes);
     let result = '';
     for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(bytes[i] % chars.length);
     }
     return result;
   }
@@ -910,12 +912,14 @@ export class IdUtils {
    */
   static nanoId(size: number = 21): string {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const bytes = new Uint8Array(size);
+    crypto.getRandomValues(bytes);
     let id = '';
-    
+
     for (let i = 0; i < size; i++) {
-      id += alphabet[Math.floor(Math.random() * alphabet.length)];
+      id += alphabet[bytes[i] % alphabet.length];
     }
-    
+
     return id;
   }
 }

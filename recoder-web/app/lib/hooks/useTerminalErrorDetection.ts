@@ -37,7 +37,7 @@ export function useTerminalErrorDetection(
   } = options;
 
   const terminalOutputRef = useRef<string>('');
-  const debounceTimerRef = useRef<NodeJS.Timeout>();
+  const debounceTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const projectId = useStore(workbenchStore.projectId);
   const existingErrors = useStore(errorsAtom);
 

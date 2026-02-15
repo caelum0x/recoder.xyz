@@ -7,6 +7,9 @@ import {
   endAIChangesBatch,
   createSnapshot
 } from '~/lib/stores/snapshots';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MessageParser');
 
 // Track the current AI artifact for snapshot management
 let currentArtifactId: string | null = null;
@@ -15,7 +18,7 @@ let snapshotBeforeChanges: boolean = false;
 const messageParser = new StreamingMessageParser({
   callbacks: {
     onArtifactOpen: (data) => {
-      console.log('🎨 [MessageParser] Artifact opened:', data.id, data.title);
+      logger.info('🎨 [MessageParser] Artifact opened:', data.id, data.title);
       workbenchStore.showWorkbench.set(true);
       workbenchStore.addArtifact(data);
 
@@ -31,7 +34,7 @@ const messageParser = new StreamingMessageParser({
       }
     },
     onArtifactClose: (data) => {
-      console.log('🎨 [MessageParser] Artifact closed:', data.id, data.title);
+      logger.info('🎨 [MessageParser] Artifact closed:', data.id, data.title);
       workbenchStore.updateArtifact(data, { closed: true });
 
       // 🔄 End snapshot batch when AI finishes artifact
@@ -42,17 +45,17 @@ const messageParser = new StreamingMessageParser({
       }
     },
     onActionOpen: (data) => {
-      console.log('🔧 [MessageParser] Action opened:', data.action.type, data.action.type === 'file' ? (data.action as any).filePath : '');
+      logger.info('🔧 [MessageParser] Action opened:', data.action.type, data.action.type === 'file' ? (data.action as any).filePath : '');
       if (data.action.type !== 'shell') {
         workbenchStore.addAction(data);
       }
     },
     onActionClose: (data) => {
-      console.log('🔧 [MessageParser] Action closed:', data.action.type, data.action.type === 'file' ? (data.action as any).filePath : '');
+      logger.info('🔧 [MessageParser] Action closed:', data.action.type, data.action.type === 'file' ? (data.action as any).filePath : '');
       if (data.action.type === 'shell') {
         workbenchStore.addAction(data);
       }
-      console.log('🔧 [MessageParser] Calling workbenchStore.runAction for:', data.action.type);
+      logger.info('🔧 [MessageParser] Calling workbenchStore.runAction for:', data.action.type);
       workbenchStore.runAction(data);
     },
   },
@@ -89,11 +92,11 @@ export function useMessageParser() {
           const stats = messageParser.getStats(message.id);
           if (stats) {
             if (stats.artifactsFound > 0) {
-              console.log(
+              logger.info(
                 `✅ [MessageParser] Message ${message.id}: ${stats.artifactsFound} artifact(s), ${stats.actionsFound} action(s) detected in ${message.content.length} chars`
               );
             } else {
-              console.warn(
+              logger.warn(
                 `⚠️ [MessageParser] Message ${message.id}: NO artifacts detected in ${message.content.length} chars. ` +
                 `First 300 chars: ${message.content.substring(0, 300)}`
               );

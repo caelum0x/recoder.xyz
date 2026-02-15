@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { webSearch } from '~/lib/.server/llm/tools/simple-wrappers';
+import { providerNativeSearch } from '~/lib/.server/llm/provider-native-search';
 import { logToolAuditEvent } from '~/lib/.server/audit/tool-audit';
 import { fetchUrlWithGiselleWebSearch } from '~/lib/.server/web/giselle-web-search';
 import { parseDomainList, validateWebUrlWithDns } from '~/lib/.server/web/web-safety';
@@ -7,6 +8,9 @@ import { verifySession } from '~/lib/auth/session.server';
 import { JsonResponse } from '~/lib/http/json-response';
 import { getWebProviderOrder, getWebToolProviderCapability } from '~/lib/modes/types';
 import { buildToolSet } from '~/lib/services/language-model-registry/tools/build-tool-set';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('WebSearchTool');
 
 interface ToolsWebSearchRequest {
   query?: string;
@@ -146,7 +150,7 @@ function enforceSearchRateLimit(userId: string): { allowed: boolean; retryAfterS
   return { allowed: true };
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return JsonResponse.json({ error: 'Method not allowed' }, { status: 405 });
   }
@@ -239,14 +243,34 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // Currently uses free-fallback search (DuckDuckGo/Tavily/scraping).
-    // When provider-native search is wired (Anthropic/OpenAI/Google tool_use),
-    // check toolSet.webSearch.nativeSearchAvailable to route accordingly.
-    const result = await webSearch(query, {
-      maxResults,
-      allowedDomains,
-      blockedDomains,
-    });
+    // Try provider-native search first (Anthropic/OpenAI/Google).
+    // Falls through to free-fallback if native is unavailable or fails.
+    let retrievalMode: 'provider-native' | 'free-fallback' = 'free-fallback';
+    let result: { success: boolean; results: Array<{ title: string; url: string; snippet: string }>; error?: string };
+
+    if (toolSet.webSearch.nativeSearchAvailable) {
+      try {
+        const nativeResult = await providerNativeSearch(
+          toolSet.webSearch.provider,
+          query,
+          toolSet.webSearch.nativeConfig,
+          request,
+          context,
+        );
+        if (nativeResult.success && nativeResult.results.length > 0) {
+          result = nativeResult;
+          retrievalMode = 'provider-native';
+        } else {
+          // Native returned no results or failed — fall through to free-fallback
+          result = await webSearch(query, { maxResults, allowedDomains, blockedDomains });
+        }
+      } catch {
+        // Native threw — fall through to free-fallback
+        result = await webSearch(query, { maxResults, allowedDomains, blockedDomains });
+      }
+    } else {
+      result = await webSearch(query, { maxResults, allowedDomains, blockedDomains });
+    }
 
     if (!result.success) {
       logToolAuditEvent({
@@ -255,11 +279,12 @@ export async function action({ request }: ActionFunctionArgs) {
         userId,
         status: 'error',
         reason: result.error || 'search_failed',
-        meta: { queryLength: query.length },
+        meta: { queryLength: query.length, retrievalMode },
       });
       return JsonResponse.json({
         results: [],
         summary: result.error || 'Web search failed',
+        retrievalMode,
       }, { status: 200 });
     }
 
@@ -283,6 +308,7 @@ export async function action({ request }: ActionFunctionArgs) {
         queryLength: query.length,
         results: enrichedResults.length,
         includePageContext,
+        retrievalMode,
         pageContextCacheHits: enrichment.cacheHits,
         pageContextCacheMisses: enrichment.cacheMisses,
       },
@@ -292,6 +318,7 @@ export async function action({ request }: ActionFunctionArgs) {
       results: enrichedResults,
       summary,
       warnings,
+      retrievalMode,
       provider: capability.provider,
       capabilities: capability,
       toolSet: {
@@ -316,10 +343,10 @@ export async function action({ request }: ActionFunctionArgs) {
       status: 'error',
       reason: error instanceof Error ? error.message : 'search_failed',
     });
-    console.error('[api.tools.web-search] Error:', error);
+    logger.error('[api.tools.web-search] Error:', error);
     return JsonResponse.json({
       results: [],
-      summary: error instanceof Error ? error.message : 'Search failed',
+      summary: 'Search failed',
     }, { status: 500 });
   }
 }

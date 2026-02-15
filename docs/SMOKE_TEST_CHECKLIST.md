@@ -53,6 +53,11 @@ These tests are blocking for deployment. All must pass before going to productio
 - [ ] **Dev server start** - `npm run dev` starts successfully
 - [ ] **Preview URL** - HTTP proxy serves preview correctly
 
+### 1.6 Production Static Assets
+- [ ] **Static smoke script** - `cd app && BASE_URL=https://recoder.xyz npm run smoke:static` passes
+- [ ] **Logo asset** - `https://recoder.xyz/logo.png` returns `200 image/png`
+- [ ] **Next static assets** - homepage-referenced `/_next/static/*` assets return `200` with correct MIME
+
 ---
 
 ## 2. Feature Tests (By Module)
@@ -243,6 +248,8 @@ Test these API endpoints manually with curl or Postman.
 
 ### 3.2 Docker Backend APIs (Port 3100)
 - [ ] `GET /api/health` - Returns `{ status: "ok" }`
+- [ ] `GET /api/health/public-api-queue` - Returns selected backend diagnostics (`selectedBackend=redis` in prod)
+- [ ] `GET /api/health/byok-readiness` - Returns `overallReady=true` for prod BYOK prerequisites
 - [ ] `GET /api/pool/stats` - Returns pool statistics
 - [ ] `POST /api/containers/:projectId/create` - Creates container
 - [ ] `POST /api/containers/:projectId/files` - Creates file

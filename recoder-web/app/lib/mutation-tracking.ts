@@ -3,6 +3,10 @@
  * Logs all mutations with IDs for debugging
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MutationTracking');
+
 let mutationId = 0;
 const DEBUG = process.env.NODE_ENV === 'development';
 
@@ -13,26 +17,26 @@ export function trackMutation<T>(
   if (!DEBUG) return fn();
 
   const id = ++mutationId;
-  console.log(`>> mutation #${id} ${name}`);
+  logger.info(`>> mutation #${id} ${name}`);
   
   const result = fn();
   
   if (result instanceof Promise) {
     return result.then((value) => {
-      console.log(`<< mutation #${id} ${name}`);
+      logger.info(`<< mutation #${id} ${name}`);
       return value;
     }).catch((error) => {
-      console.log(`<< mutation #${id} ${name} [ERROR]`, error.message);
+      logger.info(`<< mutation #${id} ${name} [ERROR]`, error.message);
       throw error;
     });
   }
   
-  console.log(`<< mutation #${id} ${name}`);
+  logger.info(`<< mutation #${id} ${name}`);
   return result;
 }
 
 export function logMutation(name: string, data?: any): void {
   if (!DEBUG) return;
   const id = ++mutationId;
-  console.log(`>> mutation #${id} ${name}`, data ?? '');
+  logger.info(`>> mutation #${id} ${name}`, data ?? '');
 }

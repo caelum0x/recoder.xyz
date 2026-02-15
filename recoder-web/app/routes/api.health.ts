@@ -86,7 +86,7 @@ export async function action({ request }: LoaderFunctionArgs) {
   } catch (error) {
     checks.checks.webcontainer = {
       status: 'fail',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Health check failed',
     };
     checks.overall = 'unhealthy';
   }
@@ -103,7 +103,7 @@ export async function action({ request }: LoaderFunctionArgs) {
   } catch (error) {
     checks.checks.metrics = {
       status: 'fail',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Metrics check failed',
     };
     checks.overall = 'degraded';
   }
@@ -121,7 +121,7 @@ export async function action({ request }: LoaderFunctionArgs) {
   } catch (error) {
     checks.checks.rateLimiters = {
       status: 'fail',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Rate limiter check failed',
     };
     checks.overall = 'degraded';
   }
@@ -144,7 +144,7 @@ export async function action({ request }: LoaderFunctionArgs) {
   } catch (error) {
     checks.checks.environment = {
       status: 'fail',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Environment check failed',
     };
   }
 

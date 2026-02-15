@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import { assertAuthSessionGetResponse } from '@/lib/contracts/auth-session-contracts';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,12 +20,12 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user) {
       console.log('[Session API] No session found');
-      return NextResponse.json({ user: null }, { status: 200 });
+      return NextResponse.json(assertAuthSessionGetResponse({ user: null }), { status: 200 });
     }
 
     console.log('[Session API] Session verified for user:', session.user.email);
 
-    return NextResponse.json({
+    return NextResponse.json(assertAuthSessionGetResponse({
       user: {
         id: session.user.id,
         email: session.user.email,
@@ -37,10 +38,10 @@ export async function GET(request: NextRequest) {
         id: session.session.id,
         expiresAt: session.session.expiresAt,
       }
-    });
+    }));
 
   } catch (error) {
     console.error('[Session API] Error:', error);
-    return NextResponse.json({ user: null }, { status: 200 });
+    return NextResponse.json(assertAuthSessionGetResponse({ user: null }), { status: 200 });
   }
 }

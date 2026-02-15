@@ -1,9 +1,19 @@
 /**
  * Browser Automation Service for docker-backend
  * Real Puppeteer implementation running inside Docker containers
+ * Note: puppeteer is lazily imported so the server can start without it installed.
  */
 
-import puppeteer, { Browser, Page } from 'puppeteer';
+type Browser = import('puppeteer').Browser;
+type Page = import('puppeteer').Page;
+
+let _puppeteer: typeof import('puppeteer') | undefined;
+async function getPuppeteer() {
+  if (!_puppeteer) {
+    _puppeteer = await import('puppeteer');
+  }
+  return _puppeteer.default;
+}
 
 export interface BrowserActionResult {
   success: boolean;
@@ -61,6 +71,7 @@ export async function browserLaunch(
     // Close existing session if any
     await browserClose(projectId);
 
+    const puppeteer = await getPuppeteer();
     const browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -296,9 +307,10 @@ export async function browserExecute(
 
     const result = await page.evaluate((code: string) => {
       try {
-        // eslint-disable-next-line no-eval
-        const evalResult = eval(code);
-        return { success: true, result: String(evalResult) };
+        // Use Function constructor instead of eval - no access to enclosing scope
+        const fn = new Function(code);
+        const fnResult = fn();
+        return { success: true, result: String(fnResult) };
       } catch (e) {
         return { success: false, error: String(e) };
       }

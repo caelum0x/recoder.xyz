@@ -9,6 +9,10 @@ import { toast } from 'react-toastify';
 import type { MCPServer, MCPServersResponse, MCPServerResponse } from '~/types/mcp';
 import { get, post, del } from '~/lib/api-client';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPServerManager');
+
 const PRESET_SERVERS = [
   {
     name: 'Filesystem Server',
@@ -64,7 +68,7 @@ export default function MCPServerManager() {
       const data = await get<MCPServersResponse>('/api/mcp/servers');
       setServers(data.servers || []);
     } catch (error) {
-      console.error('Failed to load MCP servers:', error);
+      logger.error('Failed to load MCP servers:', error);
     }
   };
 
@@ -101,7 +105,7 @@ export default function MCPServerManager() {
       setSelectedPreset(null);
     } catch (error) {
       toast.error('Failed to add server');
-      console.error(error);
+      logger.error(error);
     } finally {
       setLoading(false);
     }
@@ -118,7 +122,7 @@ export default function MCPServerManager() {
       toast.success(`Connected to "${data.server.name}"`);
     } catch (error) {
       toast.error('Failed to connect to server');
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -136,7 +140,7 @@ export default function MCPServerManager() {
       toast.success('Server disconnected');
     } catch (error) {
       toast.error('Failed to disconnect');
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -154,7 +158,7 @@ export default function MCPServerManager() {
       toast.success('Server deleted');
     } catch (error) {
       toast.error('Failed to delete server');
-      console.error(error);
+      logger.error(error);
     }
   };
 

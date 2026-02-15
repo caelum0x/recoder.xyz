@@ -13,6 +13,8 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { GoogleAuth } from 'google-auth-library';
 import type { MCPServerConfig } from '../config/config.js';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('GoogleAuthProvider');
 
 const ALLOWED_HOSTS = [/^.+\.googleapis\.com$/, /^(.*\.)?luci\.app$/];
 
@@ -69,7 +71,7 @@ export class GoogleCredentialProvider implements OAuthClientProvider {
     const accessTokenResponse = await client.getAccessToken();
 
     if (!accessTokenResponse.token) {
-      console.error('Failed to get access token from Google ADC');
+      logger.error('Failed to get access token from Google ADC');
       return undefined;
     }
 

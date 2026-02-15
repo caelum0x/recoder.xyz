@@ -12,6 +12,9 @@ import {
   getCategoriesWithCounts,
   type MarketplaceCategory,
 } from '~/lib/.server/mcp/marketplace-catalog';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPMarketplace');
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -41,7 +44,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       total: servers.length,
     });
   } catch (error) {
-    console.error('[MCP Marketplace] Error:', error);
+    logger.error('[MCP Marketplace] Error:', error);
     return json(
       {
         success: false,

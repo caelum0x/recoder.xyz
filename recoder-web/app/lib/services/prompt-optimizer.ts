@@ -6,6 +6,9 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PromptOptimizer');
 
 // ============================================
 // Types
@@ -230,7 +233,7 @@ export function loadCache(): void {
       cacheStore.set(validEntries);
     }
   } catch (e) {
-    console.error('[PromptOptimizer] Failed to load cache:', e);
+    logger.error('[PromptOptimizer] Failed to load cache:', e);
   }
 }
 
@@ -244,7 +247,7 @@ function saveCache(): void {
     const cache = cacheStore.get();
     localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
   } catch (e) {
-    console.error('[PromptOptimizer] Failed to save cache:', e);
+    logger.error('[PromptOptimizer] Failed to save cache:', e);
   }
 }
 
@@ -389,7 +392,7 @@ export function loadPerformanceMetrics(): void {
       performanceStore.set(JSON.parse(stored));
     }
   } catch (e) {
-    console.error('[PromptOptimizer] Failed to load performance metrics:', e);
+    logger.error('[PromptOptimizer] Failed to load performance metrics:', e);
   }
 }
 
@@ -402,7 +405,7 @@ function savePerformanceMetrics(): void {
   try {
     localStorage.setItem(PERFORMANCE_KEY, JSON.stringify(performanceStore.get()));
   } catch (e) {
-    console.error('[PromptOptimizer] Failed to save performance metrics:', e);
+    logger.error('[PromptOptimizer] Failed to save performance metrics:', e);
   }
 }
 

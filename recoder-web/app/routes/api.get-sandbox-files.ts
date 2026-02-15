@@ -1,4 +1,20 @@
-import { type LoaderFunctionArgs, type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/cloudflare';
+import { JsonResponse } from '~/lib/http/json-response';
+import { createDockerProxyHeaders, dockerFetchJson, getDockerBackendUrl } from '~/lib/http/docker-server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GetSandboxFiles');
+
+const DEBUG_SANDBOX_FILES = process.env.NODE_ENV !== 'production' && process.env.DEBUG_SANDBOX_FILES === 'true';
+
+function sandboxDebug(message: string, meta?: Record<string, unknown>) {
+  if (!DEBUG_SANDBOX_FILES) return;
+  if (meta) {
+    logger.debug(`[get-sandbox-files] ${message}`, meta);
+    return;
+  }
+  logger.debug(`[get-sandbox-files] ${message}`);
+}
 
 /**
  * API Route: GET /api/get-sandbox-files
@@ -70,34 +86,13 @@ interface SandboxFilesResponse {
   error?: string;
 }
 
-// Get the Docker backend URL from environment
-function getDockerBackendUrl(context: LoaderFunctionArgs['context']): string {
-  const env = (context as unknown as { cloudflare?: { env?: Record<string, string> } }).cloudflare?.env;
-  return env?.DOCKER_BACKEND_URL || process.env.DOCKER_BACKEND_URL || 'http://localhost:3100';
-}
-
-// Make authenticated request to docker-backend
-async function dockerFetch<T>(
-  url: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error((errorData as { error?: string }).error || `Request failed with status ${response.status}`);
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return JsonResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
-  return response.json() as Promise<T>;
-}
-
-export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const url = new URL(request.url);
     const projectId = url.searchParams.get('projectId');
@@ -108,7 +103,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const maxFileSize = parseInt(url.searchParams.get('maxFileSize') || '100', 10) * 1024; // Convert KB to bytes
 
     if (!projectId) {
-      return json<SandboxFilesResponse>(
+      return JsonResponse.json<SandboxFilesResponse>(
         {
           success: false,
           files: [],
@@ -122,6 +117,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     }
 
     const dockerUrl = getDockerBackendUrl(context);
+    const authHeaders = createDockerProxyHeaders(request);
 
     // Build the path query parameter
     const basePath = directory ? `/workspace/${directory.replace(/^\//, '')}` : '/workspace';
@@ -129,7 +125,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     // Step 1: Get list of all files using docker-backend's /api/files endpoint
     // This endpoint uses find with maxdepth 2, but we'll use the export endpoint pattern
     // for deeper traversal
-    console.log(`[get-sandbox-files] Fetching files for project ${projectId}, directory: ${directory || '/'}`);
+    sandboxDebug('fetching files', { projectId, directory: directory || '/' });
 
     // We'll make a direct call to list files, then optionally read contents
     const filesEndpoint = `${dockerUrl}/api/files/${projectId}?path=${encodeURIComponent(basePath)}`;
@@ -137,18 +133,18 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     let rawFiles: string[] = [];
 
     try {
-      const filesResponse = await dockerFetch<{ files: string[] }>(filesEndpoint);
+      const filesResponse = await dockerFetchJson<{ files: string[] }>(filesEndpoint, {}, authHeaders);
       rawFiles = filesResponse.files || [];
     } catch (error) {
-      console.error(`[get-sandbox-files] Failed to list files:`, error);
-      return json<SandboxFilesResponse>(
+      logger.error(`[get-sandbox-files] Failed to list files:`, error);
+      return JsonResponse.json<SandboxFilesResponse>(
         {
           success: false,
           files: [],
           directories: [],
           structure: '',
           fileCount: 0,
-          error: error instanceof Error ? error.message : 'Failed to list files',
+          error: 'Failed to list files',
         },
         { status: 500 }
       );
@@ -207,11 +203,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     // Get files only
     const filesOnly = allItems.filter((item) => item.type === 'file');
 
-    console.log(`[get-sandbox-files] Found ${filesOnly.length} files, ${directories.length} directories`);
+    sandboxDebug('files discovered', { files: filesOnly.length, directories: directories.length });
 
     // Step 2: Optionally fetch file contents
     if (includeContent && filesOnly.length > 0) {
-      console.log(`[get-sandbox-files] Fetching content for ${filesOnly.length} files`);
+      sandboxDebug('fetching file content', { files: filesOnly.length });
 
       // First, get file stats (size) to filter out large files
       // We'll read files in batches to avoid overwhelming the server
@@ -226,7 +222,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
             try {
               // Read file content
               const fileEndpoint = `${dockerUrl}/api/file/${projectId}?path=${encodeURIComponent(file.path)}`;
-              const fileResponse = await dockerFetch<{ content: string; size?: number }>(fileEndpoint);
+              const fileResponse = await dockerFetchJson<{ content: string; size?: number }>(fileEndpoint, {}, authHeaders);
 
               const content = fileResponse.content || '';
               const size = Buffer.byteLength(content, 'utf8');
@@ -241,7 +237,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
               }
             } catch (error) {
               // Skip files that can't be read (binary, permissions, etc.)
-              console.debug(`[get-sandbox-files] Could not read ${file.path}:`, error);
+              sandboxDebug('file read skipped', { path: file.path, error: error instanceof Error ? error.message : 'read_failed' });
             }
           })
         );
@@ -252,7 +248,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const uniqueDirs = Array.from(new Set(directories)).sort();
     const structure = uniqueDirs.slice(0, 50).join('\n');
 
-    return json<SandboxFilesResponse>({
+    return JsonResponse.json<SandboxFilesResponse>({
       success: true,
       files: filesOnly,
       directories: uniqueDirs,
@@ -260,15 +256,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       fileCount: filesOnly.length,
     });
   } catch (error) {
-    console.error('[get-sandbox-files] Error:', error);
-    return json<SandboxFilesResponse>(
+    logger.error('[get-sandbox-files] Error:', error);
+    return JsonResponse.json<SandboxFilesResponse>(
       {
         success: false,
         files: [],
         directories: [],
         structure: '',
         fileCount: 0,
-        error: error instanceof Error ? error.message : 'Internal server error',
+        error: 'Internal server error',
       },
       { status: 500 }
     );
@@ -287,7 +283,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
  */
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
-    return json({ success: false, error: 'Method not allowed' }, { status: 405 });
+    return JsonResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
+  }
+
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return JsonResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
   try {
@@ -303,13 +305,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const { projectId, paths, excludePatterns, includeContent, maxFileSize = 100 } = body;
 
     if (!projectId) {
-      return json(
+      return JsonResponse.json(
         { success: false, error: 'Project ID is required' },
         { status: 400 }
       );
     }
 
     const dockerUrl = getDockerBackendUrl(context);
+    const authHeaders = createDockerProxyHeaders(request);
     const maxFileSizeBytes = maxFileSize * 1024;
 
     // If specific paths provided, just fetch those
@@ -329,7 +332,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
             try {
               const fileEndpoint = `${dockerUrl}/api/file/${projectId}?path=${encodeURIComponent(fullPath)}`;
-              const fileResponse = await dockerFetch<{ content: string }>(fileEndpoint);
+              const fileResponse = await dockerFetchJson<{ content: string }>(fileEndpoint, {}, authHeaders);
 
               const content = fileResponse.content || '';
               const size = Buffer.byteLength(content, 'utf8');
@@ -346,14 +349,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
             } catch (error) {
               failed.push({
                 path: filePath,
-                error: error instanceof Error ? error.message : 'Failed to read file',
+                error: 'Failed to read file',
               });
             }
           })
         );
       }
 
-      return json({
+      return JsonResponse.json({
         success: true,
         files: results,
         failed,
@@ -363,7 +366,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Otherwise, list all files with optional filters
     const filesEndpoint = `${dockerUrl}/api/files/${projectId}?path=/workspace`;
-    const filesResponse = await dockerFetch<{ files: string[] }>(filesEndpoint);
+    const filesResponse = await dockerFetchJson<{ files: string[] }>(filesEndpoint, {}, authHeaders);
     const rawFiles = filesResponse.files || [];
 
     // Apply exclusion patterns
@@ -410,7 +413,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
           batch.map(async (file) => {
             try {
               const fileEndpoint = `${dockerUrl}/api/file/${projectId}?path=${encodeURIComponent(file.path)}`;
-              const fileResponse = await dockerFetch<{ content: string }>(fileEndpoint);
+              const fileResponse = await dockerFetchJson<{ content: string }>(fileEndpoint, {}, authHeaders);
 
               const content = fileResponse.content || '';
               const size = Buffer.byteLength(content, 'utf8');
@@ -428,7 +431,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     const uniqueDirectories = Array.from(new Set(directories)).sort();
-    return json({
+    return JsonResponse.json({
       success: true,
       files,
       directories: uniqueDirectories,
@@ -436,11 +439,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
       fileCount: files.length,
     });
   } catch (error) {
-    console.error('[get-sandbox-files] POST error:', error);
-    return json(
+    logger.error('[get-sandbox-files] POST error:', error);
+    return JsonResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
+        error: 'Internal server error',
       },
       { status: 500 }
     );

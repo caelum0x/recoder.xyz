@@ -66,6 +66,9 @@ import type {
 } from './types';
 
 import { CompletionTriggerKind } from './types';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('EnhancedLSP');
 
 // Re-export types for convenience
 export type {
@@ -655,7 +658,7 @@ export class EnhancedLSPClient extends EventEmitter {
       try {
         listener(uri, diagnostics);
       } catch (err) {
-        console.error('[LSP] Diagnostics listener error:', err);
+        logger.error('[LSP] Diagnostics listener error:', err);
       }
     }
 
@@ -797,7 +800,7 @@ export class EnhancedLSPClient extends EventEmitter {
 
   private log(...args: any[]): void {
     if (this.config.verbose) {
-      console.log('[EnhancedLSPClient]', ...args);
+      logger.info('[EnhancedLSPClient]', ...args);
     }
   }
 }

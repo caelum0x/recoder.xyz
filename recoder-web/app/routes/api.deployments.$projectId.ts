@@ -9,6 +9,9 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
 import { neon } from '@neondatabase/serverless';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Deployments');
 
 // Deployment status types matching libra schema
 type DeploymentStatus = 'idle' | 'preparing' | 'deploying' | 'deployed' | 'failed';
@@ -106,7 +109,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     // Map to workflow-style status
     const workflowStatus = mapDeploymentStatus(project.deploymentStatus);
 
-    console.log(`[Deployments] Status requested for project ${projectId}:`, {
+    logger.info(`[Deployments] Status requested for project ${projectId}:`, {
       dbStatus: project.deploymentStatus,
       workflowStatus,
     });
@@ -116,10 +119,10 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       ...buildDeploymentStatusResponse(project, workflowStatus),
     });
   } catch (error) {
-    console.error('[Deployments] Get status error:', error);
+    logger.error('[Deployments] Get status error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get deployment status',
+      error: 'Failed to get deployment status',
     }, { status: 500 });
   }
 }
@@ -219,7 +222,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     const updatedProject = updatedProjects[0];
     const workflowStatus = mapDeploymentStatus(updatedProject.deploymentStatus);
 
-    console.log(`[Deployments] Status updated for project ${projectId}:`, {
+    logger.info(`[Deployments] Status updated for project ${projectId}:`, {
       deploymentStatus,
       productionDeployUrl,
       workflowStatus,
@@ -230,10 +233,10 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       ...buildDeploymentStatusResponse(updatedProject, workflowStatus),
     });
   } catch (error) {
-    console.error('[Deployments] Update status error:', error);
+    logger.error('[Deployments] Update status error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to update deployment status',
+      error: 'Failed to update deployment status',
     }, { status: 500 });
   }
 }

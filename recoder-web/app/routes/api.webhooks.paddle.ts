@@ -6,6 +6,9 @@
 import { json, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { getPaddleClient } from '~/lib/.server/payment/paddle';
 import { getDatabase } from '~/lib/.server/db/client';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('api.webhooks.paddle');
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
@@ -20,7 +23,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const isValid = paddle.verifyWebhook(body, signature);
 
     if (!isValid) {
-      console.error('Invalid Paddle webhook signature');
+      logger.warn('Invalid Paddle webhook signature');
       return json({ error: 'Invalid signature' }, { status: 401 });
     }
 
@@ -29,7 +32,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const eventType = event.event_type;
     const eventId = event.event_id;
 
-    console.log(`Processing Paddle webhook: ${eventType} (${eventId})`);
+    logger.info(`Processing Paddle webhook: ${eventType} (${eventId})`);
 
     // Store webhook event
     const db = getDatabase(env);
@@ -47,7 +50,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     return json({ received: true });
   } catch (error) {
-    console.error('Paddle webhook processing failed:', error);
+    logger.error('Paddle webhook processing failed:', error);
     return json(
       { error: 'Webhook processing failed' },
       { status: 500 }
@@ -93,7 +96,7 @@ async function processWebhookEvent(env: Env, event: any) {
       break;
 
     default:
-      console.log(`Unhandled Paddle event type: ${eventType}`);
+      logger.info(`Unhandled Paddle event type: ${eventType}`);
   }
 }
 
@@ -102,7 +105,7 @@ async function handleSubscriptionCreated(db: any, event: any) {
   const userId = subscription.custom_data?.user_id;
 
   if (!userId) {
-    console.error('No user ID in subscription data');
+    logger.warn('No user ID in subscription data');
     return;
   }
 
@@ -139,7 +142,7 @@ async function handleSubscriptionCreated(db: any, event: any) {
     JSON.stringify(subscription),
   ]);
 
-  console.log(`Subscription created for user ${userId}: ${planId}`);
+  logger.info(`Subscription created for user ${userId}: ${planId}`);
 }
 
 async function handleSubscriptionUpdated(db: any, event: any) {
@@ -164,7 +167,7 @@ async function handleSubscriptionUpdated(db: any, event: any) {
     subscription.id,
   ]);
 
-  console.log(`Subscription updated: ${subscription.id}`);
+  logger.info(`Subscription updated: ${subscription.id}`);
 }
 
 async function handleSubscriptionCanceled(db: any, event: any) {
@@ -180,7 +183,7 @@ async function handleSubscriptionCanceled(db: any, event: any) {
     WHERE subscription_id = $1
   `, [subscription.id]);
 
-  console.log(`Subscription cancelled: ${subscription.id}`);
+  logger.info(`Subscription cancelled: ${subscription.id}`);
 }
 
 async function handleSubscriptionPaused(db: any, event: any) {
@@ -194,7 +197,7 @@ async function handleSubscriptionPaused(db: any, event: any) {
     WHERE subscription_id = $1
   `, [subscription.id]);
 
-  console.log(`Subscription paused: ${subscription.id}`);
+  logger.info(`Subscription paused: ${subscription.id}`);
 }
 
 async function handleSubscriptionResumed(db: any, event: any) {
@@ -208,7 +211,7 @@ async function handleSubscriptionResumed(db: any, event: any) {
     WHERE subscription_id = $1
   `, [subscription.id]);
 
-  console.log(`Subscription resumed: ${subscription.id}`);
+  logger.info(`Subscription resumed: ${subscription.id}`);
 }
 
 async function handleTransactionCompleted(db: any, event: any) {
@@ -221,7 +224,7 @@ async function handleTransactionCompleted(db: any, event: any) {
   `, [subscriptionId]);
 
   if (!subscription || subscription.length === 0) {
-    console.error('No subscription found for transaction');
+    logger.warn('No subscription found for transaction');
     return;
   }
 
@@ -255,14 +258,40 @@ async function handleTransactionCompleted(db: any, event: any) {
     subscriptionId,
   ]);
 
-  console.log(`Transaction completed: ${transaction.id}`);
+  logger.info(`Transaction completed: ${transaction.id}`);
 }
 
 async function handleTransactionFailed(db: any, event: any) {
   const transaction = event.data;
 
-  console.error(`Transaction failed: ${transaction.id}`);
-  // TODO: Send notification to user about failed payment
+  // Record the failed transaction
+  logger.warn({
+    transactionId: transaction.id,
+    customerId: transaction.customer_id,
+    amount: transaction.details?.totals?.total,
+    currency: transaction.currency_code,
+    reason: transaction.payments?.[0]?.error_code,
+  }, 'Payment transaction failed');
+
+  // Look up user to log for monitoring/alerting
+  try {
+    const result = await db.execute(`
+      SELECT u.email, u.id FROM users u
+      JOIN subscriptions s ON s.user_id = u.id
+      WHERE s.customer_id = $1
+      LIMIT 1
+    `, [transaction.customer_id]);
+
+    if (result.rows?.[0]) {
+      logger.warn({
+        userId: result.rows[0].id,
+        userEmail: result.rows[0].email,
+        transactionId: transaction.id,
+      }, 'Payment failed for user - requires follow-up');
+    }
+  } catch {
+    // User lookup is best-effort for monitoring
+  }
 }
 
 async function handleSubscriptionPastDue(db: any, event: any) {
@@ -276,8 +305,30 @@ async function handleSubscriptionPastDue(db: any, event: any) {
     WHERE subscription_id = $1
   `, [subscription.id]);
 
-  console.warn(`Subscription past due: ${subscription.id}`);
-  // TODO: Send notification to user
+  logger.warn({
+    subscriptionId: subscription.id,
+    customerId: subscription.customer_id,
+  }, 'Subscription past due');
+
+  // Look up user for monitoring/alerting
+  try {
+    const result = await db.execute(`
+      SELECT u.email, u.id FROM users u
+      JOIN subscriptions s ON s.user_id = u.id
+      WHERE s.subscription_id = $1
+      LIMIT 1
+    `, [subscription.id]);
+
+    if (result.rows?.[0]) {
+      logger.warn({
+        userId: result.rows[0].id,
+        userEmail: result.rows[0].email,
+        subscriptionId: subscription.id,
+      }, 'Subscription past due for user - requires follow-up');
+    }
+  } catch {
+    // User lookup is best-effort for monitoring
+  }
 }
 
 function getPlanIdFromPrice(priceId: string): string {

@@ -33,6 +33,9 @@ import { safeJsonStringify } from '../../utils/safeJsonStringify.js';
 import { FixedDeque } from 'mnemonist';
 import { GIT_COMMIT_INFO, CLI_VERSION } from '../../generated/git-commit.js';
 import { DetectedIde, detectIdeFromEnv } from '../../ide/detect-ide.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ClearcutLogger');
 
 export enum EventNames {
   START_SESSION = 'start_session',
@@ -201,13 +204,13 @@ export class ClearcutLogger {
       ]);
 
       if (wasAtCapacity && this.config?.getDebugMode()) {
-        console.debug(
+        logger.debug(
           `ClearcutLogger: Dropped old event to prevent memory leak (queue size: ${this.events.size})`,
         );
       }
     } catch (error) {
       if (this.config?.getDebugMode()) {
-        console.error('ClearcutLogger: Failed to enqueue log event.', error);
+        logger.error('ClearcutLogger: Failed to enqueue log event.', error);
       }
     }
   }
@@ -245,14 +248,14 @@ export class ClearcutLogger {
     }
 
     this.flushToClearcut().catch((error) => {
-      console.debug('Error flushing to Clearcut:', error);
+      logger.debug('Error flushing to Clearcut:', error);
     });
   }
 
   async flushToClearcut(): Promise<LogResponse> {
     if (this.flushing) {
       if (this.config?.getDebugMode()) {
-        console.debug(
+        logger.debug(
           'ClearcutLogger: Flush already in progress, marking pending flush.',
         );
       }
@@ -262,7 +265,7 @@ export class ClearcutLogger {
     this.flushing = true;
 
     if (this.config?.getDebugMode()) {
-      console.log('Flushing log events to Clearcut.');
+      logger.info('Flushing log events to Clearcut.');
     }
     const eventsToSend = this.events.toArray() as LogEventEntry[][];
     this.events.clear();
@@ -297,7 +300,7 @@ export class ClearcutLogger {
         };
       } else {
         if (this.config?.getDebugMode()) {
-          console.error(
+          logger.error(
             `Error flushing log events: HTTP ${response.status}: ${response.statusText}`,
           );
         }
@@ -307,7 +310,7 @@ export class ClearcutLogger {
       }
     } catch (e: unknown) {
       if (this.config?.getDebugMode()) {
-        console.error('Error flushing log events:', e as Error);
+        logger.error('Error flushing log events:', e as Error);
       }
 
       // Re-queue failed events for retry
@@ -322,7 +325,7 @@ export class ClearcutLogger {
       // Fire and forget the pending flush
       this.flushToClearcut().catch((error) => {
         if (this.config?.getDebugMode()) {
-          console.debug('Error in pending flush to Clearcut:', error);
+          logger.debug('Error in pending flush to Clearcut:', error);
         }
       });
     }
@@ -414,7 +417,7 @@ export class ClearcutLogger {
     // Flush start event immediately
     this.enqueueLogEvent(this.createLogEvent(EventNames.START_SESSION, data));
     this.flushToClearcut().catch((error) => {
-      console.debug('Error flushing to Clearcut:', error);
+      logger.debug('Error flushing to Clearcut:', error);
     });
   }
 
@@ -649,7 +652,7 @@ export class ClearcutLogger {
   logFlashFallbackEvent(): void {
     this.enqueueLogEvent(this.createLogEvent(EventNames.FLASH_FALLBACK, []));
     this.flushToClearcut().catch((error) => {
-      console.debug('Error flushing to Clearcut:', error);
+      logger.debug('Error flushing to Clearcut:', error);
     });
   }
 
@@ -780,7 +783,7 @@ export class ClearcutLogger {
     // Flush immediately on session end.
     this.enqueueLogEvent(this.createLogEvent(EventNames.END_SESSION, []));
     this.flushToClearcut().catch((error) => {
-      console.debug('Error flushing to Clearcut:', error);
+      logger.debug('Error flushing to Clearcut:', error);
     });
   }
 
@@ -915,7 +918,7 @@ export class ClearcutLogger {
 
     // Log a warning if we're dropping events
     if (eventsToSend.length > MAX_RETRY_EVENTS && this.config?.getDebugMode()) {
-      console.warn(
+      logger.warn(
         `ClearcutLogger: Dropping ${
           eventsToSend.length - MAX_RETRY_EVENTS
         } events due to retry queue limit. Total events: ${
@@ -930,7 +933,7 @@ export class ClearcutLogger {
 
     if (numEventsToRequeue === 0) {
       if (this.config?.getDebugMode()) {
-        console.debug(
+        logger.debug(
           `ClearcutLogger: No events re-queued (queue size: ${this.events.size})`,
         );
       }
@@ -953,7 +956,7 @@ export class ClearcutLogger {
     }
 
     if (this.config?.getDebugMode()) {
-      console.debug(
+      logger.debug(
         `ClearcutLogger: Re-queued ${numEventsToRequeue} events for retry (queue size: ${this.events.size})`,
       );
     }

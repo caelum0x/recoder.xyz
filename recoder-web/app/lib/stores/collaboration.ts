@@ -7,6 +7,8 @@
 
 import { atom, map, computed } from 'nanostores';
 import type { UserInfo, CursorPosition, SelectionRange, ConnectionState } from '../collaboration/yjs-provider';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CollaborationStore');
 
 // ============================================================================
 // Types
@@ -174,7 +176,7 @@ export function initializeCollaboration(projectId: string, user: UserInfo): void
   collaborators.set({});
   activityFeed.set([]);
   unreadActivityCount.set(0);
-  console.log('[CollabStore] Initialized for project:', projectId);
+  logger.info('[CollabStore] Initialized for project:', projectId);
 }
 
 /**

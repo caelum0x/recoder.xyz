@@ -54,14 +54,16 @@ interface ExecutionRecord {
  * In-memory execution tracking
  * In production, this should be persisted to a database
  */
-class ExecutionTracker {
+export class ExecutionTracker {
   private records = new Map<string, ExecutionRecord>();
   private alerts: ResourceAlert[] = [];
   private trackingInterval: NodeJS.Timeout | null = null;
 
-  constructor() {
+  constructor(autoStartTracking = true) {
     // Start periodic tracking
-    this.startTracking();
+    if (autoStartTracking) {
+      this.startTracking();
+    }
   }
 
   /**
@@ -171,6 +173,32 @@ class ExecutionTracker {
 
       record.activeSessions.delete(projectId);
       console.log(`[ExecutionLimits] Ended session for user ${userId}, project ${projectId}, +${durationMinutes.toFixed(1)}min`);
+    }
+  }
+
+  /**
+   * Update a user's subscription tier (called on subscription activation/cancellation)
+   */
+  updateUserTier(userId: string, tier: SubscriptionTier): void {
+    const record = this.records.get(userId);
+    if (record) {
+      record.tier = tier;
+      // Unpause if upgrading from free and was paused due to limits
+      if (tier !== SubscriptionTier.FREE && record.isPaused) {
+        const limits = getTierResourceLimits(tier);
+        if (
+          (record.pauseReason === 'daily_limit' && (hasUnlimitedExecution(tier) || record.dailyMinutes < limits.dailyExecutionMinutes)) ||
+          (record.pauseReason === 'monthly_limit' && (hasUnlimitedExecution(tier) || record.monthlyHours < limits.monthlyExecutionHours))
+        ) {
+          record.isPaused = false;
+          record.pauseReason = undefined;
+        }
+      }
+      console.log(`[ExecutionLimits] Updated tier for user ${userId}: ${tier}`);
+    } else {
+      // Create a new record with the given tier
+      this.getOrCreateRecord(userId, tier);
+      console.log(`[ExecutionLimits] Created record for user ${userId} with tier ${tier}`);
     }
   }
 

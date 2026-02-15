@@ -3,7 +3,12 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const agents = await prisma.marketplace_agents.findMany({
+    const marketplaceAgentsModel = (prisma as any).marketplace_agents;
+    if (!marketplaceAgentsModel?.findMany) {
+      return NextResponse.json({ error: 'Agent marketplace is not available in this schema' }, { status: 503 });
+    }
+
+    const agents = await marketplaceAgentsModel.findMany({
       where: { published: true },
       orderBy: { downloads: 'desc' },
       take: 50,

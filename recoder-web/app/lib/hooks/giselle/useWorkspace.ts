@@ -11,6 +11,8 @@ import { generateWorkspaceId } from './types';
 import { $generations, getGenerationsForNode } from './generation-store';
 import { $tasks, $activeTask, setCurrentWorkspace } from './task-store';
 import { $effectiveGiselleFeatureFlags } from './feature-flags-store';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('GiselleWorkspace');
 
 // ============================================================
 // Workspace Types
@@ -162,7 +164,7 @@ export function updateWorkspace(
 ): void {
   const existing = $workspacesById.get()[workspaceId];
   if (!existing) {
-    console.warn(`Workspace ${workspaceId} not found`);
+    logger.warn(`Workspace ${workspaceId} not found`);
     return;
   }
 

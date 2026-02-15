@@ -37,11 +37,6 @@ const nextConfig = {
   // Force dynamic rendering for all pages to avoid build-time DB connections
   output: 'standalone',
 
-  // Generate static error pages at build time
-  generateBuildId: async () => {
-    return 'build-' + Date.now();
-  },
-
   // Security headers
   async headers() {
     return [
@@ -78,7 +73,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://openrouter.ai https://www.googletagmanager.com https://www.google-analytics.com https://tagmanager.google.com; script-src-elem 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://tagmanager.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:3000 http://localhost:3001 http://localhost:3002 http://localhost:5173 https://openrouter.ai https://api.openai.com https://api.anthropic.com https://recoder.xyz https://web.recoder.xyz https://api.recoder.xyz https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; frame-ancestors 'self';"
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://openrouter.ai https://www.googletagmanager.com https://www.google-analytics.com https://tagmanager.google.com https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://tagmanager.google.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://openrouter.ai https://api.openai.com https://api.anthropic.com https://recoder.xyz https://web.recoder.xyz https://api.recoder.xyz https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://cloudflareinsights.com; frame-ancestors 'self';"
           },
         ],
       },

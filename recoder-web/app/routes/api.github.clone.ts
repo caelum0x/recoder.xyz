@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHubClone');
 
 /**
  * API endpoint to clone a GitHub repository
@@ -9,6 +12,12 @@ import { Octokit } from '@octokit/rest';
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -34,7 +43,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const owner = match[1];
     const repo = match[2].replace('.git', '');
 
-    console.log('🔄 [github-clone] Cloning', `${owner}/${repo}`);
+    logger.info('🔄 [github-clone] Cloning', `${owner}/${repo}`);
 
     const octokit = new Octokit({ auth: accessToken });
 
@@ -77,12 +86,12 @@ export async function action({ request }: ActionFunctionArgs) {
           const content = Buffer.from(blobData.content, 'base64').toString('utf-8');
           files[`/${item.path}`] = content;
         } catch (error) {
-          console.warn(`⚠️ Failed to fetch ${item.path}:`, error);
+          logger.warn(`⚠️ Failed to fetch ${item.path}:`, error);
         }
       }
     }
 
-    console.log('✅ [github-clone] Cloned', Object.keys(files).length, 'files');
+    logger.info('✅ [github-clone] Cloned', Object.keys(files).length, 'files');
 
     return new Response(
       JSON.stringify({
@@ -101,11 +110,10 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('❌ [github-clone] Failed:', error);
+    logger.error('❌ [github-clone] Failed:', error);
     return new Response(
       JSON.stringify({
-        error: error.message || 'Failed to clone from GitHub',
-        details: error.response?.data || error.toString(),
+        error: 'Failed to clone from GitHub',
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );

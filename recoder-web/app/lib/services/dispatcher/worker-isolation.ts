@@ -287,17 +287,50 @@ export function checkWorkerAccess(
   workerName: string,
   permissions: Partial<WorkerPermissions> = {}
 ): ValidationResult {
-  // If no session, check if public access is allowed
+  // Unauthenticated requests are rejected by default
   if (!session) {
-    // For now, allow public read access
-    // In production, configure per-worker
-    return { valid: true }
+    return {
+      valid: false,
+      error: 'Authentication required to access workers',
+      code: 'AUTHENTICATION_REQUIRED',
+    }
   }
 
-  // TODO: Implement proper permission checking based on:
-  // - User's organization membership
-  // - Worker's ownership
-  // - Explicit permission grants
+  // User must belong to an organization to access workers
+  if (!session.activeOrganizationId) {
+    return {
+      valid: false,
+      error: 'No active organization for worker access',
+      code: 'NO_ORGANIZATION',
+    }
+  }
+
+  // Verify the worker name belongs to the user's organization
+  // Workers are namespaced as: {orgId}-{workerSlug} or {orgId}/{workerSlug}
+  const orgPrefix = session.activeOrganizationId
+  const workerBelongsToOrg =
+    workerName.startsWith(`${orgPrefix}-`) ||
+    workerName.startsWith(`${orgPrefix}/`)
+
+  if (!workerBelongsToOrg) {
+    return {
+      valid: false,
+      error: 'Worker does not belong to your organization',
+      code: 'INSUFFICIENT_PERMISSIONS',
+    }
+  }
+
+  // Check admin permission requirement
+  if (permissions.admin) {
+    const isAdmin = session.role === 'admin' || session.role === 'owner'
+    if (!isAdmin) {
+      return {
+        valid: false,
+        error: 'Admin access required for this operation',
+        code: 'INSUFFICIENT_PERMISSIONS',
+      }
+    }
+  }
 
   return { valid: true }
 }

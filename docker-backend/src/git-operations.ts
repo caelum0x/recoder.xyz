@@ -871,6 +871,566 @@ export async function revertToCommit(
   }
 }
 
+// ============================================
+// Remote Operations
+// ============================================
+
+/**
+ * Get the list of configured remotes
+ */
+async function getRemotes(containerId: string): Promise<{ name: string; url: string; type: string }[]> {
+  try {
+    const output = await execInContainer(containerId, 'cd /workspace && git remote -v 2>/dev/null || echo ""');
+    const lines = output.trim().split('\n').filter(Boolean);
+    const remotes: { name: string; url: string; type: string }[] = [];
+
+    for (const line of lines) {
+      const match = line.match(/^(\S+)\s+(\S+)\s+\((\w+)\)$/);
+      if (match) {
+        remotes.push({ name: match[1], url: match[2], type: match[3] });
+      }
+    }
+
+    return remotes;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Add or update a remote
+ */
+async function setRemote(
+  containerId: string,
+  name: string,
+  url: string
+): Promise<{ success: boolean; error?: string }> {
+  const nameValidation = sanitizeBranchName(name);
+  if (!nameValidation.valid) {
+    return { success: false, error: `Invalid remote name: ${nameValidation.error}` };
+  }
+
+  // Validate URL format (HTTPS or SSH)
+  if (!url.startsWith('https://') && !url.startsWith('git@')) {
+    return { success: false, error: 'Remote URL must start with https:// or git@' };
+  }
+
+  try {
+    // Check if remote already exists
+    const remotes = await getRemotes(containerId);
+    const exists = remotes.some(r => r.name === name);
+
+    if (exists) {
+      await execInContainer(containerId, `cd /workspace && git remote set-url '${nameValidation.sanitized}' '${url}'`);
+    } else {
+      await execInContainer(containerId, `cd /workspace && git remote add '${nameValidation.sanitized}' '${url}'`);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Remove a remote
+ */
+async function removeRemote(
+  containerId: string,
+  name: string
+): Promise<{ success: boolean; error?: string }> {
+  const nameValidation = sanitizeBranchName(name);
+  if (!nameValidation.valid) {
+    return { success: false, error: `Invalid remote name: ${nameValidation.error}` };
+  }
+
+  try {
+    await execInContainer(containerId, `cd /workspace && git remote remove '${nameValidation.sanitized}'`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Push to remote repository
+ * Supports token-based auth via URL rewriting
+ */
+async function push(
+  containerId: string,
+  remote = 'origin',
+  branch?: string,
+  options?: { force?: boolean; setUpstream?: boolean; token?: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // If token provided, configure credential helper temporarily
+    if (options?.token) {
+      await execInContainer(
+        containerId,
+        `cd /workspace && git config credential.helper '!f() { echo "password=${options.token}"; echo "username=x-access-token"; }; f'`
+      );
+    }
+
+    let cmd = `cd /workspace && git push '${escapeFilePath(remote)}'`;
+
+    if (branch) {
+      const branchValidation = sanitizeBranchName(branch);
+      if (!branchValidation.valid) {
+        return { success: false, error: `Invalid branch name: ${branchValidation.error}` };
+      }
+      cmd += ` '${branchValidation.sanitized}'`;
+    }
+
+    if (options?.setUpstream) {
+      cmd += ' -u';
+    }
+
+    if (options?.force) {
+      cmd += ' --force-with-lease';
+    }
+
+    cmd += ' 2>&1';
+
+    await execInContainer(containerId, cmd);
+
+    // Clean up credential helper
+    if (options?.token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true');
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    // Clean up credential helper on error
+    if (options?.token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+    }
+
+    const msg = error.message || '';
+    if (msg.includes('Authentication') || msg.includes('403') || msg.includes('401')) {
+      return { success: false, error: 'Authentication failed. Check your access token.' };
+    }
+    if (msg.includes('rejected') || msg.includes('non-fast-forward')) {
+      return { success: false, error: 'Push rejected. Remote has changes you need to pull first.' };
+    }
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Pull from remote repository
+ */
+async function pull(
+  containerId: string,
+  remote = 'origin',
+  branch?: string,
+  options?: { rebase?: boolean; token?: string }
+): Promise<{ success: boolean; error?: string; conflicts?: string[] }> {
+  try {
+    // If token provided, configure credential helper temporarily
+    if (options?.token) {
+      await execInContainer(
+        containerId,
+        `cd /workspace && git config credential.helper '!f() { echo "password=${options.token}"; echo "username=x-access-token"; }; f'`
+      );
+    }
+
+    let cmd = `cd /workspace && git pull`;
+
+    if (options?.rebase) {
+      cmd += ' --rebase';
+    }
+
+    cmd += ` '${escapeFilePath(remote)}'`;
+
+    if (branch) {
+      const branchValidation = sanitizeBranchName(branch);
+      if (!branchValidation.valid) {
+        return { success: false, error: `Invalid branch name: ${branchValidation.error}` };
+      }
+      cmd += ` '${branchValidation.sanitized}'`;
+    }
+
+    cmd += ' 2>&1';
+
+    const output = await execInContainer(containerId, cmd);
+
+    // Clean up credential helper
+    if (options?.token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true');
+    }
+
+    // Check for conflicts
+    if (output.includes('CONFLICT') || output.includes('Automatic merge failed')) {
+      const statusOutput = await execInContainer(containerId, 'cd /workspace && git status --porcelain');
+      const conflicts = statusOutput
+        .split('\n')
+        .filter(line => line.startsWith('UU ') || line.startsWith('AA ') || line.startsWith('DD '))
+        .map(line => line.substring(3).trim());
+
+      return { success: false, error: 'Merge conflicts detected', conflicts };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    // Clean up credential helper on error
+    if (options?.token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+    }
+
+    const msg = error.message || '';
+    if (msg.includes('Authentication') || msg.includes('403') || msg.includes('401')) {
+      return { success: false, error: 'Authentication failed. Check your access token.' };
+    }
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Fetch from remote without merging
+ */
+async function fetchRemote(
+  containerId: string,
+  remote = 'origin',
+  options?: { token?: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (options?.token) {
+      await execInContainer(
+        containerId,
+        `cd /workspace && git config credential.helper '!f() { echo "password=${options.token}"; echo "username=x-access-token"; }; f'`
+      );
+    }
+
+    await execInContainer(containerId, `cd /workspace && git fetch '${escapeFilePath(remote)}' 2>&1`);
+
+    if (options?.token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true');
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    if (options?.token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+    }
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Clone a repository into the workspace
+ */
+async function cloneRepo(
+  containerId: string,
+  url: string,
+  options?: { branch?: string; token?: string; depth?: number }
+): Promise<{ success: boolean; error?: string }> {
+  if (!url.startsWith('https://') && !url.startsWith('git@')) {
+    return { success: false, error: 'URL must start with https:// or git@' };
+  }
+
+  try {
+    // If token is provided and URL is HTTPS, embed it
+    let cloneUrl = url;
+    if (options?.token && url.startsWith('https://')) {
+      const urlObj = new URL(url);
+      urlObj.username = 'x-access-token';
+      urlObj.password = options.token;
+      cloneUrl = urlObj.toString();
+    }
+
+    // Clear workspace first
+    await execInContainer(containerId, 'cd /workspace && rm -rf .* * 2>/dev/null || true');
+
+    let cmd = `cd /workspace && git clone '${cloneUrl}' .`;
+
+    if (options?.branch) {
+      const branchValidation = sanitizeBranchName(options.branch);
+      if (branchValidation.valid && branchValidation.sanitized) {
+        cmd += ` -b '${branchValidation.sanitized}'`;
+      }
+    }
+
+    if (options?.depth) {
+      cmd += ` --depth ${Math.min(Math.max(options.depth, 1), 100)}`;
+    }
+
+    cmd += ' 2>&1';
+
+    await execInContainer(containerId, cmd);
+
+    // Remove any embedded token from the remote URL for security
+    if (options?.token && url.startsWith('https://')) {
+      await execInContainer(containerId, `cd /workspace && git remote set-url origin '${url}'`);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    const msg = error.message || '';
+    if (msg.includes('Authentication') || msg.includes('403') || msg.includes('401')) {
+      return { success: false, error: 'Authentication failed. Check your access token.' };
+    }
+    if (msg.includes('not found') || msg.includes('404')) {
+      return { success: false, error: 'Repository not found.' };
+    }
+    return { success: false, error: msg };
+  }
+}
+
+// ============================================
+// Enhanced Git Operations
+// ============================================
+
+export type GitStateType = 'clean' | 'merging' | 'rebasing' | 'cherry-picking';
+
+export interface GitState {
+  state: GitStateType;
+  conflictFiles?: string[];
+}
+
+export interface GitConflicts {
+  files: string[];
+  type: 'merge' | 'rebase';
+}
+
+/**
+ * Detect the current git state (merging, rebasing, cherry-picking, or clean)
+ */
+async function getGitState(containerId: string): Promise<GitState> {
+  try {
+    // Check for MERGE_HEAD
+    const mergeHead = await execInContainer(containerId, 'cd /workspace && test -f .git/MERGE_HEAD && echo "exists" || echo "no"');
+    if (mergeHead === 'exists') {
+      const conflicts = await getConflictFiles(containerId);
+      return { state: 'merging', conflictFiles: conflicts };
+    }
+
+    // Check for REBASE_HEAD (or rebase-merge/rebase-apply directories)
+    const rebaseHead = await execInContainer(containerId, 'cd /workspace && (test -d .git/rebase-merge || test -d .git/rebase-apply || test -f .git/REBASE_HEAD) && echo "exists" || echo "no"');
+    if (rebaseHead === 'exists') {
+      const conflicts = await getConflictFiles(containerId);
+      return { state: 'rebasing', conflictFiles: conflicts };
+    }
+
+    // Check for CHERRY_PICK_HEAD
+    const cherryHead = await execInContainer(containerId, 'cd /workspace && test -f .git/CHERRY_PICK_HEAD && echo "exists" || echo "no"');
+    if (cherryHead === 'exists') {
+      const conflicts = await getConflictFiles(containerId);
+      return { state: 'cherry-picking', conflictFiles: conflicts };
+    }
+
+    return { state: 'clean' };
+  } catch {
+    return { state: 'clean' };
+  }
+}
+
+/**
+ * Get list of files with merge conflicts
+ */
+async function getConflictFiles(containerId: string): Promise<string[]> {
+  try {
+    const output = await execInContainer(containerId, 'cd /workspace && git diff --name-only --diff-filter=U 2>/dev/null || echo ""');
+    if (!output) return [];
+    return output.split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get conflicts with type information
+ */
+async function getConflicts(containerId: string): Promise<GitConflicts> {
+  const state = await getGitState(containerId);
+  const files = await getConflictFiles(containerId);
+  const type: 'merge' | 'rebase' = state.state === 'rebasing' ? 'rebase' : 'merge';
+  return { files, type };
+}
+
+/**
+ * Merge a branch into the current branch
+ */
+async function merge(
+  containerId: string,
+  branch: string,
+  options?: { noFf?: boolean; squash?: boolean }
+): Promise<{ success: boolean; error?: string; conflicts?: string[] }> {
+  const validation = sanitizeBranchName(branch);
+  if (!validation.valid || !validation.sanitized) {
+    return { success: false, error: validation.error || 'Invalid branch name' };
+  }
+
+  const safeName = validation.sanitized;
+
+  try {
+    let cmd = `cd /workspace && git merge '${safeName}'`;
+    if (options?.noFf) cmd += ' --no-ff';
+    if (options?.squash) cmd += ' --squash';
+    cmd += ' 2>&1';
+
+    const output = await execInContainer(containerId, cmd);
+
+    // Check for conflicts
+    if (output.includes('CONFLICT') || output.includes('Automatic merge failed')) {
+      const conflictFiles = await getConflictFiles(containerId);
+      return { success: false, error: 'Merge conflicts detected', conflicts: conflictFiles };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    const msg = error.message || '';
+    if (msg.includes('CONFLICT') || msg.includes('Automatic merge failed')) {
+      const conflictFiles = await getConflictFiles(containerId);
+      return { success: false, error: 'Merge conflicts detected', conflicts: conflictFiles };
+    }
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Rebase current branch onto another branch
+ */
+async function rebase(
+  containerId: string,
+  branch: string
+): Promise<{ success: boolean; error?: string; conflicts?: string[] }> {
+  const validation = sanitizeBranchName(branch);
+  if (!validation.valid || !validation.sanitized) {
+    return { success: false, error: validation.error || 'Invalid branch name' };
+  }
+
+  const safeName = validation.sanitized;
+
+  try {
+    const output = await execInContainer(containerId, `cd /workspace && git rebase '${safeName}' 2>&1`);
+
+    if (output.includes('CONFLICT') || output.includes('could not apply')) {
+      const conflictFiles = await getConflictFiles(containerId);
+      return { success: false, error: 'Rebase conflicts detected', conflicts: conflictFiles };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    const msg = error.message || '';
+    if (msg.includes('CONFLICT') || msg.includes('could not apply')) {
+      const conflictFiles = await getConflictFiles(containerId);
+      return { success: false, error: 'Rebase conflicts detected', conflicts: conflictFiles };
+    }
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Abort an in-progress rebase
+ */
+async function rebaseAbort(
+  containerId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await execInContainer(containerId, 'cd /workspace && git rebase --abort 2>&1');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Continue a rebase after resolving conflicts
+ */
+async function rebaseContinue(
+  containerId: string
+): Promise<{ success: boolean; error?: string; conflicts?: string[] }> {
+  try {
+    const output = await execInContainer(containerId, 'cd /workspace && git rebase --continue 2>&1');
+
+    if (output.includes('CONFLICT') || output.includes('could not apply')) {
+      const conflictFiles = await getConflictFiles(containerId);
+      return { success: false, error: 'More conflicts detected', conflicts: conflictFiles };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    const msg = error.message || '';
+    if (msg.includes('CONFLICT') || msg.includes('could not apply')) {
+      const conflictFiles = await getConflictFiles(containerId);
+      return { success: false, error: 'More conflicts detected', conflicts: conflictFiles };
+    }
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Rename a branch
+ */
+async function renameBranch(
+  containerId: string,
+  oldName: string,
+  newName: string
+): Promise<{ success: boolean; error?: string }> {
+  const oldValidation = sanitizeBranchName(oldName);
+  if (!oldValidation.valid || !oldValidation.sanitized) {
+    return { success: false, error: `Invalid old branch name: ${oldValidation.error}` };
+  }
+
+  const newValidation = sanitizeBranchName(newName);
+  if (!newValidation.valid || !newValidation.sanitized) {
+    return { success: false, error: `Invalid new branch name: ${newValidation.error}` };
+  }
+
+  try {
+    await execInContainer(
+      containerId,
+      `cd /workspace && git branch -m '${oldValidation.sanitized}' '${newValidation.sanitized}'`
+    );
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Push with --force-with-lease (safe force push)
+ */
+async function pushForceWithLease(
+  containerId: string,
+  remote: string,
+  branch: string,
+  token?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (token) {
+      await execInContainer(
+        containerId,
+        `cd /workspace && git config credential.helper '!f() { echo "password=${token}"; echo "username=x-access-token"; }; f'`
+      );
+    }
+
+    const branchValidation = sanitizeBranchName(branch);
+    if (!branchValidation.valid || !branchValidation.sanitized) {
+      return { success: false, error: `Invalid branch name: ${branchValidation.error}` };
+    }
+
+    const cmd = `cd /workspace && git push --force-with-lease '${escapeFilePath(remote)}' '${branchValidation.sanitized}' 2>&1`;
+    await execInContainer(containerId, cmd);
+
+    if (token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true');
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    if (token) {
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+    }
+
+    const msg = error.message || '';
+    if (msg.includes('Authentication') || msg.includes('403') || msg.includes('401')) {
+      return { success: false, error: 'Authentication failed. Check your access token.' };
+    }
+    return { success: false, error: msg };
+  }
+}
+
 export const gitOperations = {
   isGitRepo,
   initRepo,
@@ -887,4 +1447,21 @@ export const gitOperations = {
   discardChanges,
   autoCommit,
   revertToCommit,
+  // Remote operations
+  getRemotes,
+  setRemote,
+  removeRemote,
+  push,
+  pull,
+  fetchRemote,
+  cloneRepo,
+  // Enhanced operations
+  merge,
+  rebase,
+  rebaseAbort,
+  rebaseContinue,
+  getGitState,
+  getConflicts,
+  renameBranch,
+  pushForceWithLease,
 };

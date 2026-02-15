@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SaveToProject');
 
 interface SaveToProjectProps {
   chatId: string;
@@ -25,7 +28,7 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
         setProjects(data.projects || []);
       }
     } catch (error) {
-      console.error('Failed to load projects:', error);
+      logger.error('Failed to load projects:', error);
     }
   }
 
@@ -48,7 +51,7 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
         setShowDropdown(false);
       }
     } catch (error) {
-      console.error('Failed to save to project:', error);
+      logger.error('Failed to save to project:', error);
     } finally {
       setSaving(false);
     }

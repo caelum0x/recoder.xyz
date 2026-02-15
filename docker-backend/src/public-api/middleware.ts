@@ -23,8 +23,13 @@ import {
   consumeRateLimit,
   getRateLimitHeaders,
   checkSandboxLimit,
+  checkSlidingWindowLimit,
 } from './rate-limiter.js';
-import type { ApiKey, ApiKeyScope, PublicApiErrorCode } from './types.js';
+import type { ApiKey, ApiKeyScope, AppKey, PublicApiErrorCode, ApiKeyTier } from './types.js';
+import { validateAppKey as validateAppKeyFn } from './app-keys.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('public-api');
 
 // ==================== Types ====================
 
@@ -46,6 +51,20 @@ export interface AuthenticatedApiRequest extends Request {
 
   /** Request start time */
   startTime?: number;
+}
+
+/**
+ * Extended request with App key context (for third-party developers)
+ */
+export interface AppKeyAuthenticatedRequest extends AuthenticatedApiRequest {
+  /** The validated app key */
+  appKey?: AppKey;
+
+  /** App key ID */
+  appKeyId?: string;
+
+  /** User ID who owns the app key */
+  appKeyOwnerId?: string;
 }
 
 /**
@@ -116,6 +135,9 @@ function getStatusCodeForError(code: string): number {
     SANDBOX_NOT_RUNNING: 503,
     SANDBOX_CREATION_FAILED: 500,
     SANDBOX_LIMIT_EXCEEDED: 429,
+    PROJECT_NOT_FOUND: 404,
+    PROJECT_CREATION_FAILED: 500,
+    PROJECT_PUBLISH_FAILED: 500,
     FILE_NOT_FOUND: 404,
     FILE_TOO_LARGE: 413,
     INVALID_FILE_PATH: 400,
@@ -126,6 +148,25 @@ function getStatusCodeForError(code: string): number {
     VALIDATION_ERROR: 400,
     INVALID_REQUEST: 400,
     MISSING_REQUIRED_FIELD: 400,
+    // Identity token errors
+    IDENTITY_TOKEN_INVALID: 401,
+    IDENTITY_TOKEN_EXPIRED: 401,
+    IDENTITY_TOKEN_REVOKED: 401,
+    IDENTITY_TOKEN_AUDIENCE_MISMATCH: 403,
+    IDENTITY_TOKEN_CREATION_FAILED: 500,
+    IDENTITY_SCOPE_INVALID: 400,
+    // App key errors
+    APP_KEY_INVALID: 401,
+    APP_KEY_REVOKED: 401,
+    APP_KEY_NOT_FOUND: 404,
+    APP_KEY_CREATION_FAILED: 500,
+    APP_KEY_FORBIDDEN: 403,
+    // External identity errors
+    EXTERNAL_IDENTITY_NOT_FOUND: 404,
+    EXTERNAL_IDENTITY_ALREADY_LINKED: 409,
+    EXTERNAL_PROVIDER_ERROR: 502,
+    EXTERNAL_TOKEN_INVALID: 401,
+    // Server errors
     INTERNAL_ERROR: 500,
     SERVICE_UNAVAILABLE: 503,
   };
@@ -233,6 +274,61 @@ export function authenticateApiKey(
   next();
 }
 
+// ==================== Middleware: App Key Authentication ====================
+
+/**
+ * Authenticate requests using App key (for third-party developers)
+ *
+ * Expects: X-App-Key: app_xxx_xxx
+ */
+export function authenticateAppKey(
+  req: AppKeyAuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  const requestId = req.requestId || 'unknown';
+
+  // Get App key from header
+  const appKeyHeader = req.headers['x-app-key'];
+
+  if (!appKeyHeader) {
+    sendApiError(res, {
+      code: 'INVALID_API_KEY',
+      message: 'Missing X-App-Key header. Expected: app_xxx_xxx',
+    }, requestId);
+    return;
+  }
+
+  const appKeyString = typeof appKeyHeader === 'string' ? appKeyHeader : appKeyHeader[0];
+
+  // Validate key format
+  if (!appKeyString.startsWith('app_')) {
+    sendApiError(res, {
+      code: 'INVALID_API_KEY',
+      message: 'Invalid app key format. Keys must start with app_',
+    }, requestId);
+    return;
+  }
+
+  // Validate key
+  const appKey = validateAppKeyFn(appKeyString);
+
+  if (!appKey) {
+    sendApiError(res, {
+      code: 'INVALID_API_KEY',
+      message: 'Invalid or revoked app key',
+    }, requestId);
+    return;
+  }
+
+  // Attach key to request
+  req.appKey = appKey;
+  req.appKeyId = appKey.id;
+  req.appKeyOwnerId = appKey.ownerId;
+
+  next();
+}
+
 // ==================== Middleware: Rate Limiting ====================
 
 /**
@@ -324,6 +420,85 @@ export function sandboxLimitMiddleware(
   }
 
   next();
+}
+
+type RouteRateLimitKey = 'projectPrompt' | 'projectTaskRead' | 'projectTaskStream';
+
+const ROUTE_RATE_LIMITS_PER_MINUTE: Record<RouteRateLimitKey, Record<ApiKeyTier, number>> = {
+  projectPrompt: {
+    free: 20,
+    developer: 60,
+    team: 180,
+    enterprise: 600,
+  },
+  projectTaskRead: {
+    free: 120,
+    developer: 300,
+    team: 900,
+    enterprise: 3000,
+  },
+  projectTaskStream: {
+    free: 10,
+    developer: 30,
+    team: 90,
+    enterprise: 200,
+  },
+};
+
+function setModernRateLimitHeaders(
+  res: Response,
+  limit: number,
+  remaining: number,
+  resetAtSeconds: number
+): void {
+  res.setHeader('RateLimit-Limit', limit.toString());
+  res.setHeader('RateLimit-Remaining', Math.max(0, remaining).toString());
+  res.setHeader('RateLimit-Reset', resetAtSeconds.toString());
+  res.setHeader('RateLimit-Policy', `${limit};w=60`);
+}
+
+export function requireRouteRateLimit(routeKey: RouteRateLimitKey) {
+  return (
+    req: AuthenticatedApiRequest,
+    res: Response,
+    next: NextFunction
+  ): void => {
+    const requestId = req.requestId || 'unknown';
+    const apiKey = req.apiKey;
+
+    if (!apiKey) {
+      sendApiError(res, {
+        code: 'INTERNAL_ERROR',
+        message: 'Authentication required before route rate limiting',
+      }, requestId);
+      return;
+    }
+
+    const limit = ROUTE_RATE_LIMITS_PER_MINUTE[routeKey][apiKey.tier];
+    const windowMs = 60_000;
+    const key = `${apiKey.id}:${routeKey}`;
+    const result = checkSlidingWindowLimit(key, limit, windowMs);
+    const resetAtSeconds = Math.floor(result.resetAt / 1000);
+    setModernRateLimitHeaders(res, limit, result.remaining, resetAtSeconds);
+
+    if (!result.allowed) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000));
+      res.setHeader('Retry-After', retryAfterSeconds.toString());
+      sendApiError(res, {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Route rate limit exceeded. Try again in ${retryAfterSeconds} seconds.`,
+        details: {
+          routeKey,
+          limit,
+          retryAfter: retryAfterSeconds,
+        },
+        statusCode: 429,
+      }, requestId);
+      return;
+    }
+
+    next();
+  };
 }
 
 // ==================== Middleware: Scope Validation ====================
@@ -444,13 +619,12 @@ export function requestLoggingMiddleware(
       userAgent: req.headers['user-agent'],
     };
 
-    // Log to console (in production, send to logging service)
     if (res.statusCode >= 400) {
-      console.error('[Public API]', JSON.stringify(logEntry));
+      logger.error(logEntry);
     } else if (duration > 5000) {
-      console.warn('[Public API] Slow request:', JSON.stringify(logEntry));
+      logger.warn(logEntry, 'Slow request');
     } else {
-      console.log('[Public API]', JSON.stringify(logEntry));
+      logger.info(logEntry);
     }
   });
 
@@ -517,21 +691,11 @@ export function requireFields(...fields: string[]) {
  * Get client IP address from request
  */
 export function getClientIp(req: Request): string {
-  // Check common proxy headers
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (forwardedFor) {
-    const ips = Array.isArray(forwardedFor)
-      ? forwardedFor[0]
-      : forwardedFor.split(',')[0];
-    return ips.trim();
+  // Prefer Express's derived client IP (respects trusted proxy settings).
+  if (req.ip) {
+    return req.ip;
   }
-
-  const realIp = req.headers['x-real-ip'];
-  if (realIp) {
-    return Array.isArray(realIp) ? realIp[0] : realIp;
-  }
-
-  return req.ip || req.socket.remoteAddress || 'unknown';
+  return req.socket.remoteAddress || 'unknown';
 }
 
 /**
@@ -544,11 +708,7 @@ export function asyncApiHandler<T extends AuthenticatedApiRequest = Authenticate
     Promise.resolve(fn(req, res, next)).catch((error: Error) => {
       const requestId = req.requestId || 'unknown';
 
-      console.error('[Public API] Unhandled error:', {
-        requestId,
-        error: error.message,
-        stack: error.stack,
-      });
+      logger.error({ requestId, err: error }, 'Unhandled error');
 
       sendApiError(res, {
         code: 'INTERNAL_ERROR',

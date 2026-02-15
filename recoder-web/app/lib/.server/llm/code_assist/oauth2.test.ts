@@ -107,7 +107,7 @@ describe('oauth2', () => {
     );
 
     vi.spyOn(crypto, 'randomBytes').mockReturnValue(mockState as never);
-    (open as Mock).mockImplementation(async () => ({ on: vi.fn() }) as never);
+    (open as unknown as Mock).mockImplementation(async () => ({ on: vi.fn() }) as never);
 
     // Mock the UserInfo API response
     (global.fetch as Mock).mockResolvedValue({

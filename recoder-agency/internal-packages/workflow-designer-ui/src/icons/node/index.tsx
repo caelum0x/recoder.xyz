@@ -172,6 +172,9 @@ export function NodeIcon({
 							return <GitHubIcon {...props} data-content-type-icon />;
 						case "manual":
 							return <ZapIcon {...props} data-content-type-icon />;
+						case "whatsapp":
+						case "slack":
+							return <ZapIcon {...props} data-content-type-icon />;
 						default: {
 							const _exhaustiveCheck: never = node.content;
 							throw new Error(
@@ -187,12 +190,11 @@ export function NodeIcon({
 					switch (node.content.command.provider) {
 						case "github":
 							return <GitHubIcon {...props} data-content-type-icon />;
-						default: {
-							const _exhaustiveCheck: never = node.content.command.provider;
-							throw new Error(
-								`Unhandled TriggerProviderType: ${_exhaustiveCheck}`,
-							);
-						}
+						case "whatsapp":
+						case "slack":
+							return <ZapIcon {...props} data-content-type-icon />;
+						default:
+							return <ZapIcon {...props} data-content-type-icon />;
 					}
 				}
 				case "query":

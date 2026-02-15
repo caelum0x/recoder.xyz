@@ -6,6 +6,9 @@
  */
 
 import { atom, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CommandPalette');
 
 // =============================================================================
 // Types
@@ -125,7 +128,7 @@ export function getCommandsByCategory(category: CommandCategory): PaletteCommand
 export async function executeCommand(id: string): Promise<void> {
   const command = commandRegistry.get()[id];
   if (!command) {
-    console.warn(`[CommandPalette] Command not found: ${id}`);
+    logger.warn(`[CommandPalette] Command not found: ${id}`);
     return;
   }
 
@@ -136,7 +139,7 @@ export async function executeCommand(id: string): Promise<void> {
   try {
     await command.action();
   } catch (error) {
-    console.error(`[CommandPalette] Error executing command ${id}:`, error);
+    logger.error(`[CommandPalette] Error executing command ${id}:`, error);
   }
 
   // Close the palette after execution

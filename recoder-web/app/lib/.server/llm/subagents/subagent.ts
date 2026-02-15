@@ -55,6 +55,8 @@ import type { SubagentHooks } from './subagent-hooks.js';
 import { logSubagentExecution } from '../telemetry/loggers.js';
 import { SubagentExecutionEvent } from '../telemetry/types.js';
 import { TaskTool } from '../tools/task.js';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('Subagent');
 
 /**
  * @fileoverview Defines the configuration interfaces for a subagent.
@@ -483,7 +485,7 @@ export class SubAgentScope {
         } as SubAgentRoundEvent);
       }
     } catch (error) {
-      console.error('Error during subagent execution:', error);
+      logger.error('Error during subagent execution:', error);
       this.terminateMode = SubagentTerminateMode.ERROR;
       this.eventEmitter?.emit(SubAgentEventType.ERROR, {
         subagentId: this.subagentId,

@@ -6,7 +6,8 @@
  * - GET /api/commands - List available commands (for a project)
  */
 
-import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs, type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { JsonResponse } from '~/lib/http/json-response';
 
 interface ExecuteCommandRequest {
   commandId: string;
@@ -76,20 +77,81 @@ export async function loader({ request }: LoaderFunctionArgs) {
     isBuiltin: true,
   }));
 
-  // TODO: Load custom commands from .recoder/commands/ if projectId provided
+  // Load custom commands from .recoder/commands/ if projectId provided
+  if (projectId) {
+    try {
+      const { loadProjectCommands } = await import('~/lib/.server/commands/loader');
+      const customCommands = await loadProjectCommands('/workspace');
+      for (const cmd of customCommands) {
+        commands.push({
+          id: cmd.id,
+          type: cmd.action as 'shell' | 'prompt' | 'workflow',
+          isBuiltin: false,
+        });
+      }
+    } catch {
+      // Custom command loader may not be available in all environments
+    }
+  }
 
-  return json({ commands });
+  return JsonResponse.json({ commands });
+}
+
+/**
+ * Sanitize shell args to prevent command injection.
+ * Rejects characters commonly used for injection (;, |, &, $, `, etc.)
+ */
+function sanitizeArgs(args: string): string {
+  const forbidden = /[;&|`$(){}[\]<>!\n\r\\]/;
+  if (forbidden.test(args)) {
+    throw new Error('Invalid characters in command arguments');
+  }
+  return args;
 }
 
 /**
  * POST /api/commands - Execute a command
+ * SECURITY: Requires authentication
  */
 export async function action({ request }: ActionFunctionArgs) {
+  // SECURITY: Verify user is authenticated before allowing command execution
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+
+  if (!session?.user) {
+    return JsonResponse.json(
+      { success: false, error: 'Authentication required' } as CommandResult,
+      { status: 401 },
+    );
+  }
+
   const body = (await request.json()) as ExecuteCommandRequest;
-  const { commandId, projectId, args, workingDir = '/workspace' } = body;
+  const { commandId, projectId, args } = body;
+
+  // SECURITY: Validate workingDir to prevent path traversal
+  const workingDir = body.workingDir || '/workspace';
+  if (!workingDir.startsWith('/workspace') || workingDir.includes('..')) {
+    return JsonResponse.json(
+      { success: false, error: 'Invalid working directory' } as CommandResult,
+      { status: 400 },
+    );
+  }
 
   if (!commandId) {
-    return json({ success: false, error: 'Missing commandId' } as CommandResult, { status: 400 });
+    return JsonResponse.json({ success: false, error: 'Missing commandId' } as CommandResult, { status: 400 });
+  }
+
+  // Sanitize args to prevent command injection
+  let safeArgs: string | undefined;
+  if (args) {
+    try {
+      safeArgs = sanitizeArgs(args);
+    } catch (e) {
+      return JsonResponse.json(
+        { success: false, error: e instanceof Error ? e.message : 'Invalid arguments', type: 'shell' } as CommandResult,
+        { status: 400 },
+      );
+    }
   }
 
   // Check if it's a built-in command
@@ -100,16 +162,16 @@ export async function action({ request }: ActionFunctionArgs) {
       // Execute shell command
       let shellCommand = builtinCmd.shell;
 
-      // Append args if provided
-      if (args) {
-        shellCommand = `${shellCommand} ${args}`;
+      // Append sanitized args if provided
+      if (safeArgs) {
+        shellCommand = `${shellCommand} ${safeArgs}`;
       }
 
       try {
         const { executeShellCommand } = await import('~/lib/.server/llm/enterprise-integration');
         const result = await executeShellCommand(shellCommand, workingDir);
 
-        return json({
+        return JsonResponse.json({
           success: result.success,
           output: result.output,
           error: result.error,
@@ -117,10 +179,10 @@ export async function action({ request }: ActionFunctionArgs) {
           type: 'shell',
         } as CommandResult);
       } catch (error) {
-        return json(
+        return JsonResponse.json(
           {
             success: false,
-            error: error instanceof Error ? error.message : 'Shell execution failed',
+            error: 'Shell execution failed',
             type: 'shell',
           } as CommandResult,
           { status: 500 }
@@ -132,12 +194,12 @@ export async function action({ request }: ActionFunctionArgs) {
       // Return prompt to be sent to AI
       let prompt = builtinCmd.prompt;
 
-      // Replace {args} placeholder
-      if (args) {
-        prompt = prompt.replace('{args}', args);
+      // Replace {args} placeholder (safe - prompt goes to AI, not shell)
+      if (safeArgs) {
+        prompt = prompt.replace('{args}', safeArgs);
       }
 
-      return json({
+      return JsonResponse.json({
         success: true,
         output: prompt,
         type: 'prompt',
@@ -154,14 +216,14 @@ export async function action({ request }: ActionFunctionArgs) {
     if (customCmd) {
       if (customCmd.action === 'shell' && customCmd.shell) {
         let shellCommand = customCmd.shell;
-        if (args) {
-          shellCommand = `${shellCommand} ${args}`;
+        if (safeArgs) {
+          shellCommand = `${shellCommand} ${safeArgs}`;
         }
 
         const { executeShellCommand } = await import('~/lib/.server/llm/enterprise-integration');
         const result = await executeShellCommand(shellCommand, workingDir);
 
-        return json({
+        return JsonResponse.json({
           success: result.success,
           output: result.output,
           error: result.error,
@@ -172,11 +234,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
       if (customCmd.action === 'prompt' && customCmd.prompt) {
         let prompt = customCmd.prompt;
-        if (args) {
-          prompt = prompt.replace('{args}', args);
+        if (safeArgs) {
+          prompt = prompt.replace('{args}', safeArgs);
         }
 
-        return json({
+        return JsonResponse.json({
           success: true,
           output: prompt,
           type: 'prompt',
@@ -193,7 +255,7 @@ export async function action({ request }: ActionFunctionArgs) {
             const result = await executeShellCommand(step.command, workingDir);
 
             if (!result.success) {
-              return json({
+              return JsonResponse.json({
                 success: false,
                 error: `Workflow failed at step "${step.name}": ${result.error}`,
                 output: `Completed: ${completedSteps.join(' -> ')}\nFailed: ${step.name}`,
@@ -205,7 +267,7 @@ export async function action({ request }: ActionFunctionArgs) {
           }
         }
 
-        return json({
+        return JsonResponse.json({
           success: true,
           output: `Workflow completed: ${completedSteps.join(' -> ')}`,
           type: 'workflow',
@@ -216,7 +278,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Custom command loader not available or failed
   }
 
-  return json({ success: false, error: `Command not found: ${commandId}`, type: 'shell' } as CommandResult, {
+  return JsonResponse.json({ success: false, error: `Command not found: ${commandId}`, type: 'shell' } as CommandResult, {
     status: 404,
   });
 }

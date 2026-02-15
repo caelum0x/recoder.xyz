@@ -3,6 +3,9 @@
  */
 
 import type { WebContainer } from '@webcontainer/api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CLIInstaller');
 
 let isInstalled = false;
 let isInstalling = false;
@@ -18,7 +21,7 @@ export async function installRecoderCLI(webcontainer: WebContainer): Promise<boo
   isInstalling = true;
 
   try {
-    console.log('📦 Installing recoder-code CLI locally in WebContainer...');
+    logger.info('📦 Installing recoder-code CLI locally in WebContainer...');
 
     // Create a local directory for the CLI
     await webcontainer.fs.mkdir('cli-tools', { recursive: true });
@@ -39,7 +42,7 @@ export async function installRecoderCLI(webcontainer: WebContainer): Promise<boo
         // Filter out terminal escape codes and noise
         const cleanData = data.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim();
         if (cleanData && cleanData.length > 1 && !cleanData.match(/^\s*[-\\|/]\s*$/)) {
-          console.log('📦', cleanData);
+          logger.info('📦', cleanData);
         }
       }
     }));
@@ -71,39 +74,39 @@ node /home/project/cli-tools/node_modules/recoder-code/bin/recoder.js "$@"`;
         }
         await webcontainer.fs.writeFile('.bashrc', bashrcContent + pathExport + '\n');
         
-        console.log('✅ recoder-code CLI installed successfully');
-        console.log('💡 CLI available as "recoder" command in terminal');
+        logger.info('✅ recoder-code CLI installed successfully');
+        logger.info('💡 CLI available as "recoder" command in terminal');
         isInstalled = true;
         return true;
       } catch (pathError) {
-        console.warn('⚠️ CLI installed but PATH setup failed:', pathError);
-        console.log('💡 You can run CLI with: node cli-tools/node_modules/recoder-code/bin/recoder.js');
+        logger.warn('⚠️ CLI installed but PATH setup failed:', pathError);
+        logger.info('💡 You can run CLI with: node cli-tools/node_modules/recoder-code/bin/recoder.js');
         isInstalled = true;
         return true;
       }
     } else {
-      console.log('📦 CLI install completed with non-zero exit code:', exitCode);
-      console.log('💡 This is often normal for npm installs. Checking if CLI was installed...');
+      logger.info('📦 CLI install completed with non-zero exit code:', exitCode);
+      logger.info('💡 This is often normal for npm installs. Checking if CLI was installed...');
       
       // Even if npm install returned non-zero, check if CLI was actually installed
       try {
         const cliCheck = await webcontainer.fs.readFile('cli-tools/node_modules/recoder-code/package.json', 'utf-8');
         if (cliCheck) {
-          console.log('✅ recoder-code CLI installed successfully (despite exit code)');
-          console.log('💡 You can run CLI with: node cli-tools/node_modules/recoder-code/bin/recoder.js');
+          logger.info('✅ recoder-code CLI installed successfully (despite exit code)');
+          logger.info('💡 You can run CLI with: node cli-tools/node_modules/recoder-code/bin/recoder.js');
           isInstalled = true;
           return true;
         }
       } catch (checkError) {
-        console.error('❌ Failed to install recoder-code CLI (exit code:', exitCode, ')');
+        logger.error('❌ Failed to install recoder-code CLI (exit code:', exitCode, ')');
         return false;
       }
       
-      console.error('❌ Failed to install recoder-code CLI (exit code:', exitCode, ')');
+      logger.error('❌ Failed to install recoder-code CLI (exit code:', exitCode, ')');
       return false;
     }
   } catch (error) {
-    console.error('❌ Failed to install recoder-code CLI:', error);
+    logger.error('❌ Failed to install recoder-code CLI:', error);
     return false;
   } finally {
     isInstalling = false;
@@ -124,7 +127,7 @@ export async function setupRecoderCLI(webcontainer: WebContainer, userToken?: st
   // If user token provided, authenticate the CLI
   if (userToken) {
     try {
-      console.log('🔐 Authenticating recoder CLI...');
+      logger.info('🔐 Authenticating recoder CLI...');
       
       // Try to authenticate using the token
       const authProcess = await webcontainer.spawn('node', [
@@ -137,12 +140,12 @@ export async function setupRecoderCLI(webcontainer: WebContainer, userToken?: st
       const authExitCode = await authProcess.exit;
       
       if (authExitCode === 0) {
-        console.log('✅ CLI authenticated successfully');
+        logger.info('✅ CLI authenticated successfully');
       } else {
-        console.warn('⚠️ CLI authentication failed, but CLI is still usable');
+        logger.warn('⚠️ CLI authentication failed, but CLI is still usable');
       }
     } catch (authError) {
-      console.warn('⚠️ CLI authentication failed:', authError);
+      logger.warn('⚠️ CLI authentication failed:', authError);
     }
   }
 
@@ -165,7 +168,7 @@ export async function testCLI(webcontainer: WebContainer): Promise<boolean> {
     const exitCode = await testProcess.exit;
     return exitCode === 0;
   } catch (error) {
-    console.warn('CLI test failed:', error);
+    logger.warn('CLI test failed:', error);
     return false;
   }
 }

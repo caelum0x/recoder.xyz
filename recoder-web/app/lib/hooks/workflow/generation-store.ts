@@ -13,6 +13,8 @@ import type {
   GenerationOrigin,
 } from './types';
 import { isRunningGeneration } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('WorkflowGenerationStore');
 
 // ============================================================
 // Atoms for generation state
@@ -144,7 +146,7 @@ export function updateGenerationMessages(
   const generation = $generationsById.get()[id];
 
   if (!generation) {
-    console.warn(`Generation ${id} not found when updating messages`);
+    logger.warn(`Generation ${id} not found when updating messages`);
     return;
   }
 

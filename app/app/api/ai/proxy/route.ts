@@ -26,7 +26,7 @@ async function handler(req: AuthenticatedRequest) {
 
     if (!validation.success) {
       return NextResponse.json(
-        { error: 'Invalid request format', details: validation.error.errors },
+        { error: 'Invalid request format' },
         { status: 400 }
       );
     }
@@ -65,7 +65,7 @@ async function handler(req: AuthenticatedRequest) {
     if (!openRouterResponse.ok) {
       const errorData = await openRouterResponse.json().catch(() => ({}));
       return NextResponse.json(
-        { error: 'AI provider error', details: errorData },
+        { error: 'AI provider error' },
         { status: openRouterResponse.status }
       );
     }

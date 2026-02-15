@@ -5,8 +5,28 @@
 
 import { Outlet, Link, useLocation } from '@remix-run/react';
 import { useState } from 'react';
+import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { useLoaderData } from '@remix-run/react';
+
+function parseBoolean(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+export function loader({ context }: LoaderFunctionArgs) {
+  const env = (context as unknown as { cloudflare?: { env?: Record<string, string> } } | undefined)?.cloudflare?.env;
+  const nodeEnv = env?.NODE_ENV || process.env.NODE_ENV || 'development';
+  const billingActionsEnabled = parseBoolean(env?.BILLING_ACTIONS_ENABLED || process.env.BILLING_ACTIONS_ENABLED);
+  const billingVisible = nodeEnv !== 'production' || billingActionsEnabled;
+
+  return json({
+    billingVisible,
+  });
+}
 
 export default function SettingsLayout() {
+  const { billingVisible } = useLoaderData<typeof loader>();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -44,7 +64,7 @@ export default function SettingsLayout() {
       title: 'Account',
       items: [
         { name: 'Profile', path: '/settings/profile', icon: '👤' },
-        { name: 'Billing', path: '/settings/billing', icon: '💳' },
+        ...(billingVisible ? [{ name: 'Billing', path: '/settings/billing', icon: '💳' }] : []),
         { name: 'Security', path: '/settings/security', icon: '🔒' },
       ],
     },

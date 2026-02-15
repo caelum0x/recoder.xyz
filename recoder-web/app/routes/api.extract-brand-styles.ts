@@ -1,4 +1,8 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { firecrawlDisabledError, isFirecrawlEnabled } from '~/lib/.server/firecrawl-control';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ExtractBrandStyles');
 
 /**
  * POST /api/extract-brand-styles
@@ -505,7 +509,7 @@ function generateCSSVariables(tokens: DesignTokens): string {
 
 // Fallback: Scrape and analyze website directly if Firecrawl unavailable
 async function fallbackExtractStyles(url: string): Promise<FirecrawlBrandingData> {
-  console.log('[extract-brand-styles] Using fallback style extraction for:', url);
+  logger.info('[extract-brand-styles] Using fallback style extraction for:', url);
 
   try {
     // Fetch the webpage
@@ -609,14 +613,18 @@ async function fallbackExtractStyles(url: string): Promise<FirecrawlBrandingData
       },
     };
   } catch (error) {
-    console.error('[extract-brand-styles] Fallback extraction failed:', error);
+    logger.error('[extract-brand-styles] Fallback extraction failed:', error);
     throw error;
   }
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, { status: 405 });
+  }
+
+  if (!isFirecrawlEnabled(context)) {
+    return json(firecrawlDisabledError(), { status: 403 });
   }
 
   try {
@@ -638,9 +646,9 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: 'Invalid URL format' }, { status: 400 });
     }
 
-    console.log('[extract-brand-styles] Extracting brand styles for:', url);
+    logger.info('[extract-brand-styles] Extracting brand styles for:', url);
     if (prompt) {
-      console.log('[extract-brand-styles] User prompt:', prompt);
+      logger.info('[extract-brand-styles] User prompt:', prompt);
     }
 
     let brandingData: FirecrawlBrandingData;
@@ -649,7 +657,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
 
     if (FIRECRAWL_API_KEY) {
-      console.log('[extract-brand-styles] Calling Firecrawl branding API');
+      logger.info('[extract-brand-styles] Calling Firecrawl branding API');
 
       try {
         const firecrawlResponse = await fetch('https://api.firecrawl.dev/v2/scrape', {
@@ -666,25 +674,25 @@ export async function action({ request }: ActionFunctionArgs) {
 
         if (!firecrawlResponse.ok) {
           const errorText = await firecrawlResponse.text();
-          console.error('[extract-brand-styles] Firecrawl API error:', firecrawlResponse.status, errorText);
+          logger.error('[extract-brand-styles] Firecrawl API error:', firecrawlResponse.status, errorText);
           throw new Error(`Firecrawl API returned ${firecrawlResponse.status}`);
         }
 
         const firecrawlData = (await firecrawlResponse.json()) as FirecrawlResponse;
-        console.log('[extract-brand-styles] Firecrawl response received successfully');
+        logger.info('[extract-brand-styles] Firecrawl response received successfully');
 
         brandingData = firecrawlData.data?.branding || firecrawlData.branding || {};
 
         if (!brandingData || Object.keys(brandingData).length === 0) {
-          console.log('[extract-brand-styles] No branding data from Firecrawl, using fallback');
+          logger.info('[extract-brand-styles] No branding data from Firecrawl, using fallback');
           brandingData = await fallbackExtractStyles(url);
         }
       } catch (firecrawlError) {
-        console.error('[extract-brand-styles] Firecrawl failed, using fallback:', firecrawlError);
+        logger.error('[extract-brand-styles] Firecrawl failed, using fallback:', firecrawlError);
         brandingData = await fallbackExtractStyles(url);
       }
     } else {
-      console.log('[extract-brand-styles] No Firecrawl API key, using fallback extraction');
+      logger.info('[extract-brand-styles] No Firecrawl API key, using fallback extraction');
       brandingData = await fallbackExtractStyles(url);
     }
 
@@ -697,7 +705,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Generate CSS variables
     const cssVariables = generateCSSVariables(designTokens);
 
-    console.log('[extract-brand-styles] Successfully extracted brand styles');
+    logger.info('[extract-brand-styles] Successfully extracted brand styles');
 
     const response: ExtractBrandStylesResponse = {
       success: true,
@@ -711,11 +719,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return json(response);
   } catch (error) {
-    console.error('[extract-brand-styles] Error:', error);
+    logger.error('[extract-brand-styles] Error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to extract brand styles',
+        error: 'Failed to extract brand styles',
       },
       { status: 500 }
     );

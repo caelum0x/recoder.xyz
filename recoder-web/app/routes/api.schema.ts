@@ -5,6 +5,9 @@
 
 import { json, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { generateDatabaseSchema, generateProjectFiles, type DatabaseSchemaConfig } from '~/lib/.server/database';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Schema');
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
@@ -82,11 +85,10 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
   } catch (error) {
-    console.error('Schema generation error:', error);
+    logger.error('Schema generation error:', error);
     return json(
       {
         error: 'Failed to generate schema',
-        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

@@ -5,6 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('StartersBrowser');
 
 interface Starter {
   id: string;
@@ -43,7 +45,7 @@ export function StartersBrowser({ onSelectStarter, onClose }: StartersBrowserPro
         toast.error('Failed to load starters');
       }
     } catch (error) {
-      console.error('Failed to load starters:', error);
+      logger.error('Failed to load starters:', error);
       toast.error('Failed to load starters');
     } finally {
       setLoading(false);

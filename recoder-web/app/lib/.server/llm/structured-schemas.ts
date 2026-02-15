@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('StructuredSchemas');
 /**
  * Structured Output Schemas for OpenRouter
  *
@@ -191,7 +193,7 @@ export function shouldUseStructuredOutputs(
 
   // Model support check
   if (!supportsStructuredOutputs(modelId)) {
-    console.log(`⚠️  Model ${modelId} does not support structured outputs, using regular streaming`);
+    logger.info(`⚠️  Model ${modelId} does not support structured outputs, using regular streaming`);
     return null;
   }
 

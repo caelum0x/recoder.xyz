@@ -1,0 +1,124 @@
+---
+- - :permit
+  - MIT
+  - &1
+    :who:
+    :why:
+    :versions: []
+    :when: 2024-09-18 04:48:24.532612000 Z
+- - :permit
+  - Apache 2.0
+  - *1
+- - :permit
+  - ISC
+  - :who:
+    :why:
+    :versions: []
+    :when: 2024-09-18 06:17:35.742242000 Z
+- - :permit
+  - New BSD
+  - &2
+    :who:
+    :why:
+    :versions: []
+    :when: 2024-09-18 06:27:28.918434000 Z
+- - :permit
+  - Simplified BSD
+  - *2
+- - :permit
+  - BSD Zero Clause License
+  - :who:
+    :why:
+    :versions: []
+    :when: 2024-09-18 06:33:58.436978000 Z
+- - :permit
+  - BlueOak-1.0.0
+  - :who:
+    :why:
+    :versions: []
+    :when: 2024-09-18 06:43:07.596790000 Z
+- - :permit
+  - The Unlicense
+  - :who:
+    :why:
+    :versions: []
+    :when: 2024-09-18 06:46:06.140937000 Z
+- - :permit
+  - Zlib
+  - :who:
+    :why: To not conflict with Apache-2.0 license. https://zlib.net/zlib_license.html
+    :versions: []
+    :when: 2024-10-11 06:16:13.501764000 Z
+- - :permit
+  - LGPL-3.0-or-later
+  - :who:
+    :why: To not conflict with Apache-2.0 license. https://opensource.org/license/LGPL-3.0
+    :versions: []
+    :when: 2024-10-22 07:22:03.743391000 Z
+- - :permit
+  - CC0 1.0 Universal
+  - :who:
+    :why: To not conflict with Apache-2.0 license. https://creativecommons.org/publicdomain/zero/1.0/
+    :versions: []
+    :when: 2024-10-22 07:22:41.342554000 Z
+- - :permit
+  - CC-BY-4.0
+  - :who:
+    :why: To not conflict with Apache-2.0 license. https://creativecommons.org/licenses/by/4.0/
+    :versions: []
+    :when: 2024-10-22 07:23:14.573790000 Z
+- - :approve
+  - url-template
+  - :who:
+    :why: The BSD license is ambiguous. The license is now BSD 3-Clause from url-template
+      v3.1.0. See https://github.com/bramstein/url-template/pull/47
+    :versions:
+    - 2.0.8
+    :when: 2024-11-22 02:39:34.598816000 Z
+- - :permit
+  - MIT-0
+  - :who:
+    :why: MIT-0 is an extremely permissive license with no attribution requirements. https://github.com/aws/mit-0
+    :versions: []
+    :when: 2025-01-20 15:39:57.858569000 Z
+- - :permit
+  - Mozilla Public License 2.0
+  - :who: OSPO @masutaka
+    :why: Compatible with Apache-2.0 license. See https://opensource.org/license/mpl-2-0
+    :versions: []
+    :when: 2025-02-17 08:52:56.670306000 Z
+- - :approve
+  - argparse
+  - :who: OSPO @masutaka
+    :why: Python 2.0 license is compatible with Apache-2.0. But License Finder does
+      not support the name "Python-2.0". See https://github.com/pivotal/LicenseFinder/pull/1053
+    :versions:
+    - 2.0.1
+    :when: 2025-02-17 09:01:39.703928000 Z
+- - :permit
+  - SIL OPEN FONT LICENSE
+  - :who: OSPO @masutaka
+    :why: Compatible with Apache-2.0 license. See https://openfontlicense.org/open-font-license-official-text/
+    :versions: []
+    :when: 2025-02-27 06:29:24.670306000 Z
+- - :approve
+  - spawndamnit
+  - :who: sakito
+    :why: See https://github.com/jamiebuilds/spawndamnit/pull/11
+    :versions: 
+    - 3.0.1
+    :when: 2025-03-10 08:02:40.655579000 Z
+- - :approve
+  - spamc
+  - :who: shige
+    :why: spamc is brought in by @react-email/preview-server, and the upstream react-email project is MIT licensed. https://github.com/resend/react-email/blob/main/LICENSE
+    :versions:
+    - 0.0.5
+    :when: 2025-11-10 01:16:57.900000000 Z
+- - :approve
+  - khroma
+  - :who: toyamarinyon
+    :why: Khroma does not list license information on npm; however, the repository includes a license file, and it is licensed under the MIT License. https://github.com/fabiospampinato/khroma/blob/4968165afb0d3d09be66497e7985a34f7bfe6d42/license
+    :versions:
+    - 2.1.0
+    :when: 2025-12-23 08:01:00.900000000 Z

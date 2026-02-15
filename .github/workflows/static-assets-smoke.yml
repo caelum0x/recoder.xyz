@@ -1,0 +1,41 @@
+name: Static Assets Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to probe"
+        required: true
+        default: "https://recoder.xyz"
+        type: string
+  workflow_run:
+    workflows:
+      - "Deploy Production"
+      - "🌐 Web Platform CI/CD"
+    types:
+      - completed
+
+jobs:
+  smoke:
+    name: Probe Static Assets
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    env:
+      BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.base_url || 'https://recoder.xyz' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run static asset smoke
+        run: |
+          chmod +x app/scripts/smoke-static-assets.sh
+          BASE_URL="${BASE_URL}" app/scripts/smoke-static-assets.sh
+
+      - name: Write summary
+        if: always()
+        run: |
+          echo "## Static Asset Smoke" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Base URL: ${BASE_URL}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Result: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

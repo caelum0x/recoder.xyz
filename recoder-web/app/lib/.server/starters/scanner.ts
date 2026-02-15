@@ -2,6 +2,10 @@ import { readdir, readFile } from 'fs/promises';
 import { join } from 'node:path';
 import type { TemplateRepo } from '../github/types';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('StarterScanner');
+
 export interface StarterTemplate extends Omit<TemplateRepo, 'repo'> {
   path: string;
   files: Record<string, string>;
@@ -82,11 +86,11 @@ export async function scanStarters(): Promise<StarterTemplate[]> {
           templates.push(template);
         }
       } catch (error) {
-        console.warn(`Failed to process starter ${entry.name}:`, error);
+        logger.warn(`Failed to process starter ${entry.name}:`, error);
       }
     }
   } catch (error) {
-    console.error('Failed to scan starters directory:', error);
+    logger.error('Failed to scan starters directory:', error);
   }
 
   return templates.sort((a, b) => {
@@ -141,7 +145,7 @@ async function createTemplateFromStarter(name: string, starterPath: string): Pro
       files
     };
   } catch (error) {
-    console.error(`Error creating template for ${name}:`, error);
+    logger.error(`Error creating template for ${name}:`, error);
     return null;
   }
 }
@@ -172,12 +176,12 @@ async function readAllFiles(dirPath: string, relativePath = ''): Promise<Record<
           files[relativeFilePath] = content;
         } catch (error) {
           // Skip files that can't be read as text
-          console.warn(`Skipping file ${relativeFilePath}: ${error}`);
+          logger.warn(`Skipping file ${relativeFilePath}: ${error}`);
         }
       }
     }
   } catch (error) {
-    console.error(`Error reading directory ${dirPath}:`, error);
+    logger.error(`Error reading directory ${dirPath}:`, error);
   }
 
   return files;

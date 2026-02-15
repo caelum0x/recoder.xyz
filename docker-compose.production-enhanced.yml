@@ -24,6 +24,15 @@ volumes:
   nginx-certs:
     driver: local
     name: recoder-ssl-certs
+  published-data:
+    driver: local
+    name: recoder-published-data
+  letsencrypt-data:
+    driver: local
+    name: recoder-letsencrypt-data
+  custom-domain-configs:
+    driver: local
+    name: recoder-custom-domain-configs
   grafana-data:
     driver: local
     name: recoder-grafana-data
@@ -122,14 +131,13 @@ services:
   #====================================
   backend:
     build:
-      context: ./backend
+      context: ./docker-backend
       dockerfile: Dockerfile
-      target: production
     container_name: recoder-backend-prod
     restart: always
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=3100
       - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-recoder_production}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - JWT_SECRET=${JWT_SECRET:?JWT secret required}
@@ -145,9 +153,8 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
-      # Payment Processing
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      # Cross-service auth
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Internal service key required}
       # Security & Performance
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?Encryption key required}
       - RATE_LIMIT_WINDOW_MS=900000
@@ -156,11 +163,14 @@ services:
       - CORS_ORIGIN=${WEB_URL:-https://recoder.xyz}
       - SENTRY_DSN=${SENTRY_DSN:-}
     volumes:
-      - ./backend/logs:/app/logs
-      - ./backend/uploads:/app/uploads
+      - ./docker-backend/logs:/app/logs
+      - ./docker-backend/uploads:/app/uploads
+      - published-data:/app/data/published
+      - letsencrypt-data:/etc/letsencrypt
+      - custom-domain-configs:/etc/nginx/conf.d/custom-domains
       - /tmp:/tmp
     ports:
-      - "3001:3001"
+      - "3100:3100"
     networks:
       - recoder-network
     depends_on:
@@ -169,7 +179,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3100/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -189,75 +199,70 @@ services:
         max_attempts: 3
         window: 120s
 
-  production-engine:
+  web:
     build:
-      context: ./production-engine
+      context: ./recoder-web
       dockerfile: Dockerfile
-      target: production
-    container_name: recoder-production-engine
+    container_name: recoder-web-prod
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=5173
+      - NEXT_PUBLIC_API_URL=${API_URL:-https://api.recoder.xyz}
+      - NEXT_PUBLIC_WEB_URL=${WEB_URL:-https://recoder.xyz}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?Better Auth secret required}
+      - AUTH_DATABASE_URL=${AUTH_DATABASE_URL:?Auth database URL required}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Internal service key required}
+      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-recoder_production}
+    ports:
+      - "5173:5173"
+    networks:
+      - recoder-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  pm:
+    build:
+      context: ./recoder-pm
+      dockerfile: Dockerfile.web
+    container_name: recoder-pm-prod
     restart: always
     environment:
       - NODE_ENV=production
       - PORT=3002
-      - BACKEND_URL=http://backend:3001
-      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - LOG_LEVEL=info
-    volumes:
-      - ./production-engine/generated:/app/generated
-      - ./production-engine/logs:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock
+      - DATABASE_URL=${PM_DATABASE_URL:?PM database URL required}
+      - AUTH_DATABASE_URL=${AUTH_DATABASE_URL:?Auth database URL required}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?Better Auth secret required}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-https://recoder.xyz}
     ports:
       - "3002:3002"
     networks:
       - recoder-network
     depends_on:
-      - backend
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3002/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     deploy:
-      replicas: 2
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
-          memory: 2G
-          cpus: '1.0'
-
-  web:
-    build:
-      context: ./recoder-web
-      dockerfile: Dockerfile
-      target: production
-    container_name: recoder-web-prod
-    restart: always
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${API_URL:-https://api.recoder.xyz}
-      - NEXT_PUBLIC_WEB_URL=${WEB_URL:-https://recoder.xyz}
-      - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-}
-      - NEXTAUTH_URL=${WEB_URL:-https://recoder.xyz}
-      - NEXTAUTH_SECRET=${JWT_SECRET}
-      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-recoder_production}
-    ports:
-      - "3000:3000"
-    networks:
-      - recoder-network
-    depends_on:
-      - backend
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      replicas: 2
       resources:
         limits:
           memory: 1G
@@ -265,35 +270,47 @@ services:
         reservations:
           memory: 512M
           cpus: '0.25'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
 
-  chat:
+  agency:
     build:
-      context: ./recoder-chat
+      context: ./recoder-agency
       dockerfile: Dockerfile
-      target: production
-    container_name: recoder-chat-prod
+    container_name: recoder-agency-prod
     restart: always
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${API_URL:-https://api.recoder.xyz}
-      - NEXTAUTH_URL=${CHAT_URL:-https://chat.recoder.xyz}
-      - NEXTAUTH_SECRET=${JWT_SECRET}
-      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-recoder_production}
-      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - PORT=3000
+      - DATABASE_URL=${AGENCY_DATABASE_URL:?Agency database URL required}
+      - AUTH_DATABASE_URL=${AUTH_DATABASE_URL:?Shared auth database URL required}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?Better Auth secret required}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-https://agency.recoder.xyz}
+      - COOKIE_SECRET=${AGENCY_COOKIE_SECRET:?Agency cookie secret required}
+      - TOKEN_ENCRYPTION_KEY=${AGENCY_TOKEN_ENCRYPTION_KEY:?Agency token encryption key required}
+      - POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:?Polar access token required}
+      - POLAR_PRO_PRODUCT_ID=${POLAR_PRO_PRODUCT_ID:?Polar pro product ID required}
+      - POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:?Polar webhook secret required}
+      - POLAR_ORGANIZATION_ID=${POLAR_ORGANIZATION_ID:?Polar organization ID required}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@recoder.xyz}
     ports:
-      - "3003:3000"
+      - "3005:3000"
     networks:
       - recoder-network
-    depends_on:
-      - backend
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     deploy:
-      replicas: 2
       resources:
         limits:
           memory: 1G
@@ -301,6 +318,11 @@ services:
         reservations:
           memory: 512M
           cpus: '0.25'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
 
   #====================================
   # Reverse Proxy & SSL Termination
@@ -313,6 +335,9 @@ services:
       - ./nginx/nginx-production.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - nginx-certs:/etc/nginx/ssl
+      - letsencrypt-data:/etc/letsencrypt:ro
+      - custom-domain-configs:/etc/nginx/conf.d/custom-domains:ro
+      - published-data:/data/published:ro
       - ./nginx/html:/usr/share/nginx/html:ro
     ports:
       - "80:80"
@@ -321,13 +346,15 @@ services:
       - recoder-network
     depends_on:
       - web
-      - chat
+      - pm
       - backend
+      - agency
     healthcheck:
-      test: ["CMD", "nginx", "-t"]
+      test: ["CMD-SHELL", "curl -f http://localhost/nginx-health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
     deploy:
       resources:
         limits:
@@ -341,17 +368,20 @@ services:
     image: certbot/certbot
     container_name: recoder-certbot
     volumes:
-      - nginx-certs:/etc/letsencrypt
+      - nginx-certs:/etc/nginx/ssl
+      - letsencrypt-data:/etc/letsencrypt
       - ./nginx/html:/var/www/html
     command: >
       sh -c "
-        certbot certonly --webroot -w /var/www/html 
-        --email ${ACME_EMAIL:?Email required for SSL} 
-        --agree-tos --no-eff-email 
-        -d ${DOMAIN:-recoder.xyz} 
-        -d www.${DOMAIN:-recoder.xyz} 
-        -d api.${DOMAIN:-recoder.xyz} 
-        -d chat.${DOMAIN:-recoder.xyz} 
+        certbot certonly --webroot -w /var/www/html
+        --email ${ACME_EMAIL:?Email required for SSL}
+        --agree-tos --no-eff-email
+        -d ${DOMAIN:-recoder.xyz}
+        -d www.${DOMAIN:-recoder.xyz}
+        -d api.${DOMAIN:-recoder.xyz}
+        -d web.${DOMAIN:-recoder.xyz}
+        -d agency.${DOMAIN:-recoder.xyz}
+        -d pm.${DOMAIN:-recoder.xyz}
         --non-interactive || true;
         trap exit TERM; while :; do sleep 12h & wait; done;
       "
@@ -519,16 +549,17 @@ services:
       - recoder-network
     depends_on:
       - web
-      - chat
+      - pm
       - backend
+      - agency
     command: >
       sh -c "
         while true; do
           echo 'Running health checks...';
-          curl -f http://web:3000/api/health || echo 'Web health check failed';
-          curl -f http://chat:3000/api/health || echo 'Chat health check failed';
-          curl -f http://backend:3001/api/health || echo 'Backend health check failed';
-          curl -f http://production-engine:3002/health || echo 'Production engine health check failed';
+          curl -f http://web:5173/api/health || echo 'Web health check failed';
+          curl -f http://backend:3100/api/health || echo 'Backend health check failed';
+          curl -f http://agency:3000/api/health || echo 'Agency health check failed';
+          curl -f http://pm:3002/api/health || echo 'PM health check failed';
           sleep 60;
         done
       "
@@ -542,19 +573,31 @@ services:
 # Required Environment Variables:
 # Core:
 # - DB_PASSWORD
-# - REDIS_PASSWORD  
-# - JWT_SECRET
-# - JWT_REFRESH_SECRET
+# - REDIS_PASSWORD
 # - ENCRYPTION_KEY
 # - TOGETHER_API_KEY (FREE AI - Primary)
+# - INTERNAL_SERVICE_KEY
+#
+# Auth (shared across all apps):
+# - AUTH_DATABASE_URL
+# - BETTER_AUTH_SECRET
+# - BETTER_AUTH_URL (default: https://recoder.xyz)
+#
+# Agency:
+# - AGENCY_DATABASE_URL
+# - POLAR_ACCESS_TOKEN
+# - POLAR_PRO_PRODUCT_ID
+# - POLAR_WEBHOOK_SECRET
+# - POLAR_ORGANIZATION_ID
+#
+# PM:
+# - PM_DATABASE_URL
 #
 # Optional:
 # - GROQ_API_KEY
 # - GOOGLE_API_KEY
 # - ANTHROPIC_API_KEY
 # - OPENAI_API_KEY
-# - STRIPE_SECRET_KEY
-# - STRIPE_PUBLISHABLE_KEY
 # - ACME_EMAIL (for SSL)
 # - DOMAIN (default: recoder.xyz)
 # - GRAFANA_PASSWORD
@@ -562,7 +605,6 @@ services:
 # URLs:
 # - WEB_URL (default: https://recoder.xyz)
 # - API_URL (default: https://api.recoder.xyz)
-# - CHAT_URL (default: https://chat.recoder.xyz)
 
 # Usage:
 # Production: docker-compose -f docker-compose.production-enhanced.yml up -d

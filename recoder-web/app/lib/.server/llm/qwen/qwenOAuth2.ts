@@ -18,6 +18,10 @@ import {
   TokenManagerError,
   TokenError,
 } from './sharedTokenManager.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('QwenOAuth2');
+
 
 // OAuth Endpoints
 const QWEN_OAUTH_BASE_URL = 'https://chat.qwen.ai';
@@ -272,7 +276,7 @@ export class QwenOAuth2Client implements IQwenOAuth2Client {
       const credentials = await this.sharedManager.getValidCredentials(this);
       return { token: credentials.access_token };
     } catch (error) {
-      console.warn('Failed to get access token from shared manager:', error);
+      logger.warn('Failed to get access token from shared manager:', error);
 
       // Don't use fallback to local credentials to prevent race conditions
       // All token management should go through SharedTokenManager for consistency
@@ -311,7 +315,7 @@ export class QwenOAuth2Client implements IQwenOAuth2Client {
     }
 
     const result = (await response.json()) as DeviceAuthorizationResponse;
-    console.debug('Device authorization result:', result);
+    logger.debug('Device authorization result:', result);
 
     // Check if the response indicates success
     if (!isDeviceAuthorizationSuccess(result)) {
@@ -488,7 +492,7 @@ export async function getQwenOAuthClient(
     client.setCredentials(credentials);
     return client;
   } catch (error: unknown) {
-    console.debug(
+    logger.debug(
       'Shared token manager failed, attempting device flow:',
       error,
     );
@@ -497,20 +501,20 @@ export async function getQwenOAuthClient(
     if (error instanceof TokenManagerError) {
       switch (error.type) {
         case TokenError.NO_REFRESH_TOKEN:
-          console.debug(
+          logger.debug(
             'No refresh token available, proceeding with device flow',
           );
           break;
         case TokenError.REFRESH_FAILED:
-          console.debug('Token refresh failed, proceeding with device flow');
+          logger.debug('Token refresh failed, proceeding with device flow');
           break;
         case TokenError.NETWORK_ERROR:
-          console.warn(
+          logger.warn(
             'Network error during token refresh, trying device flow',
           );
           break;
         default:
-          console.warn('Token manager error:', (error as Error).message);
+          logger.warn('Token manager error:', (error as Error).message);
       }
     }
 
@@ -593,12 +597,12 @@ async function authWithQwenDeviceFlow(
     qwenOAuth2Events.emit(QwenOAuth2Event.AuthUri, deviceAuth);
 
     const showFallbackMessage = () => {
-      console.log('\n=== Qwen OAuth Device Authorization ===');
-      console.log(
+      logger.info('\n=== Qwen OAuth Device Authorization ===');
+      logger.info(
         'Please visit the following URL in your browser to authorize:',
       );
-      console.log(`\n${deviceAuth.verification_uri_complete}\n`);
-      console.log('Waiting for authorization to complete...\n');
+      logger.info(`\n${deviceAuth.verification_uri_complete}\n`);
+      logger.info('Waiting for authorization to complete...\n');
     };
 
     // If browser launch is not suppressed, try to open the URL
@@ -612,7 +616,7 @@ async function authWithQwenDeviceFlow(
         // causing the entire Node.js process to crash.
         if (childProcess) {
           childProcess.on('error', () => {
-            console.debug(
+            logger.debug(
               'Failed to open browser. Visit this URL to authorize:',
             );
             showFallbackMessage();
@@ -633,7 +637,7 @@ async function authWithQwenDeviceFlow(
       'Waiting for authorization...',
     );
 
-    console.debug('Waiting for authorization...\n');
+    logger.debug('Waiting for authorization...\n');
 
     // Poll for the token
     let pollInterval = 2000; // 2 seconds, can be increased if slow_down is received
@@ -644,7 +648,7 @@ async function authWithQwenDeviceFlow(
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       // Check if authentication was cancelled
       if (isCancelled) {
-        console.debug('\nAuthentication cancelled by user.');
+        logger.debug('\nAuthentication cancelled by user.');
         qwenOAuth2Events.emit(
           QwenOAuth2Event.AuthProgress,
           'error',
@@ -654,7 +658,7 @@ async function authWithQwenDeviceFlow(
       }
 
       try {
-        console.debug('polling for token...');
+        logger.debug('polling for token...');
         const tokenResponse = await client.pollDeviceToken({
           device_code: deviceAuth.device_code,
           code_verifier,
@@ -687,7 +691,7 @@ async function authWithQwenDeviceFlow(
             'Authentication successful! Access token obtained.',
           );
 
-          console.debug('Authentication successful! Access token obtained.');
+          logger.debug('Authentication successful! Access token obtained.');
           return { success: true };
         }
 
@@ -698,7 +702,7 @@ async function authWithQwenDeviceFlow(
           // Handle slow_down error by increasing poll interval
           if (pendingData.slowDown) {
             pollInterval = Math.min(pollInterval * 1.5, 10000); // Increase by 50%, max 10 seconds
-            console.debug(
+            logger.debug(
               `\nServer requested to slow down, increasing poll interval to ${pollInterval}ms'`,
             );
           } else {
@@ -738,7 +742,7 @@ async function authWithQwenDeviceFlow(
 
           // Check for cancellation after waiting
           if (isCancelled) {
-            console.debug('\nAuthentication cancelled by user.');
+            logger.debug('\nAuthentication cancelled by user.');
             qwenOAuth2Events.emit(
               QwenOAuth2Event.AuthProgress,
               'error',
@@ -788,7 +792,7 @@ async function authWithQwenDeviceFlow(
             message,
           );
 
-          console.log('\n' + message);
+          logger.info('\n' + message);
 
           // Return false to stop polling and go back to auth selection
           return { success: false, reason: 'rate_limit' };
@@ -817,11 +821,11 @@ async function authWithQwenDeviceFlow(
       timeoutMessage,
     );
 
-    console.error('\n' + timeoutMessage);
+    logger.error('\n' + timeoutMessage);
     return { success: false, reason: 'timeout' };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Device authorization flow failed:', errorMessage);
+    logger.error('Device authorization flow failed:', errorMessage);
     return { success: false, reason: 'error' };
   } finally {
     // Clean up event listener
@@ -866,7 +870,7 @@ export async function clearQwenCredentials(): Promise<void> {
   try {
     const filePath = getQwenCachedCredentialPath();
     await fs.unlink(filePath);
-    console.debug('Cached Qwen credentials cleared successfully.');
+    logger.debug('Cached Qwen credentials cleared successfully.');
   } catch (error: unknown) {
     // If file doesn't exist or can't be deleted, we consider it cleared
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
@@ -874,7 +878,7 @@ export async function clearQwenCredentials(): Promise<void> {
       return;
     }
     // Log other errors but don't throw - clearing credentials should be non-critical
-    console.warn('Warning: Failed to clear cached Qwen credentials:', error);
+    logger.warn('Warning: Failed to clear cached Qwen credentials:', error);
   }
 }
 

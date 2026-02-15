@@ -16,7 +16,10 @@ import {
   type EditIntent,
   EditType,
 } from '~/lib/services/edit-intent';
-import { loadProjectContext, type ProjectContext } from '~/lib/services/code-context';
+import { type ProjectContext } from '~/lib/services/code-context';
+import { projectContextCache } from '~/lib/services/project-context-cache';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('EditIntent');
 
 export interface EditIntentState {
   intent: EditIntent | null;
@@ -59,7 +62,7 @@ export function useEditIntent(options: UseEditIntentOptions) {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastPromptRef = useRef<string>('');
 
-  // Load project context on mount and when projectId changes
+  // Load project context on mount and when projectId changes (via shared cache)
   useEffect(() => {
     if (!enabled || !projectId) return;
 
@@ -67,12 +70,12 @@ export function useEditIntent(options: UseEditIntentOptions) {
 
     async function loadContext() {
       try {
-        const context = await loadProjectContext(projectId);
+        const context = await projectContextCache.getContext(projectId);
         if (!cancelled) {
           setProjectContext(context);
         }
       } catch (error) {
-        console.warn('[useEditIntent] Failed to load project context:', error);
+        logger.warn('[useEditIntent] Failed to load project context:', error);
       }
     }
 
@@ -121,7 +124,7 @@ export function useEditIntent(options: UseEditIntentOptions) {
 
       return intent;
     } catch (error: any) {
-      console.error('[useEditIntent] Analysis failed:', error);
+      logger.error('[useEditIntent] Analysis failed:', error);
       setState(prev => ({
         ...prev,
         isAnalyzing: false,
@@ -169,15 +172,16 @@ export function useEditIntent(options: UseEditIntentOptions) {
     });
   }, []);
 
-  // Refresh project context manually
+  // Refresh project context manually (invalidates cache first)
   const refreshContext = useCallback(async () => {
     if (!projectId) return;
 
     try {
-      const context = await loadProjectContext(projectId);
+      projectContextCache.invalidate();
+      const context = await projectContextCache.getContext(projectId);
       setProjectContext(context);
     } catch (error) {
-      console.warn('[useEditIntent] Failed to refresh context:', error);
+      logger.warn('[useEditIntent] Failed to refresh context:', error);
     }
   }, [projectId]);
 

@@ -7,6 +7,9 @@ import { useEffect, useState } from 'react';
 import ScoreChart from './ScoreChart';
 import RadarChart from './RadarChart';
 import MetricBars from './MetricBars';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AIReadinessPanel');
 
 export interface CheckItem {
   id: string;
@@ -210,7 +213,7 @@ export default function ControlPanel({
         }
       }
     } catch (error) {
-      console.error('AI analysis error:', error);
+      logger.error('AI analysis error:', error);
       setCombinedChecks(prev => prev.filter(c => !c.isLoading));
     } finally {
       setIsAnalyzingAI(false);
@@ -271,7 +274,7 @@ export default function ControlPanel({
         processAIInsights(result.insights);
       }
     } catch (error) {
-      console.error('AI analysis error:', error);
+      logger.error('AI analysis error:', error);
       setCombinedChecks(prev => prev.filter(c => !c.isLoading));
     } finally {
       setIsAnalyzingAI(false);

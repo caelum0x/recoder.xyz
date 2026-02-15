@@ -1,0 +1,33 @@
+import invariant from "tiny-invariant";
+import { getUser } from "@/lib/supabase";
+import { isEmailFromRoute06 } from "@/lib/utils";
+import { formatStripePrice, getCachedPrice } from "@/services/external/stripe";
+import { fetchUserTeams } from "../fetch-user-teams";
+import { TeamCreationForm } from "./team-creation-form";
+
+export default async function TeamCreation({
+	children,
+}: {
+	children?: React.ReactNode;
+}) {
+	const user = await getUser();
+	if (!user) {
+		throw new Error("User not found");
+	}
+	const isInternalUser = user.email != null && isEmailFromRoute06(user.email);
+	const teams = await fetchUserTeams();
+	const hasExistingFreeTeam = teams.some((team) => team.plan === "free");
+	const proPlanPriceId = process.env.STRIPE_PRO_PLAN_PRICE_ID;
+	invariant(proPlanPriceId, "STRIPE_PRO_PLAN_PRICE_ID is not set");
+	const proPlan = await getCachedPrice(proPlanPriceId);
+	const proPlanPrice = formatStripePrice(proPlan);
+
+	return (
+		<TeamCreationForm
+			canCreateFreeTeam={!isInternalUser && !hasExistingFreeTeam}
+			proPlanPrice={proPlanPrice}
+		>
+			{children}
+		</TeamCreationForm>
+	);
+}

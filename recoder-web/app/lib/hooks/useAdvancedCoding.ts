@@ -16,6 +16,8 @@ import type { ProjectContext, RelatedFiles } from '~/lib/services/code-context';
 import type { ParsedError } from '~/lib/services/error-analyzer';
 import type { FileDiff, PendingChange } from '~/lib/services/diff-preview';
 import type { FileState, UndoAction } from '~/lib/services/undo-manager';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('AdvancedCoding');
 
 export interface UseAdvancedCodingOptions {
   projectId?: string;
@@ -38,7 +40,7 @@ export function useAdvancedCoding(options: UseAdvancedCodingOptions = {}) {
       setProjectContext(context);
       return context;
     } catch (error) {
-      console.error('Failed to load project context:', error);
+      logger.error('Failed to load project context:', error);
       return null;
     } finally {
       setIsLoadingContext(false);

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recoder.xyz/schemas/recoder-a2a-envelope.schema.json",
+  "title": "RecoderA2AEnvelope",
+  "type": "object",
+  "required": [
+    "envelopeVersion",
+    "protocolVersion",
+    "messageId",
+    "threadId",
+    "createdAt",
+    "from",
+    "to",
+    "intent",
+    "payload"
+  ],
+  "properties": {
+    "envelopeVersion": { "type": "string" },
+    "protocolVersion": { "type": "string" },
+    "messageId": { "type": "string" },
+    "threadId": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "from": { "$ref": "#/$defs/identity" },
+    "to": { "$ref": "#/$defs/identity" },
+    "intent": {
+      "type": "string",
+      "enum": [
+        "plan",
+        "execute",
+        "review",
+        "handoff",
+        "status",
+        "sync",
+        "tool_call",
+        "tool_result",
+        "error"
+      ]
+    },
+    "payload": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/payload" }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "required": ["id", "name", "platform"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "platform": { "type": "string" },
+        "instanceId": { "type": "string" },
+        "team": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "text"],
+          "properties": {
+            "kind": { "const": "text" },
+            "text": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "data"],
+          "properties": {
+            "kind": { "const": "json" },
+            "data": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      ]
+    }
+  }
+}

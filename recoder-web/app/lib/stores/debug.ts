@@ -7,6 +7,9 @@
 import { atom, computed, type WritableAtom } from 'nanostores';
 import { createDockerWebSocket, dockerPost, dockerGet, type ConnectionState } from '~/lib/services/docker-api';
 import type { ReconnectingWebSocket } from '~/lib/utils/error-handler';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DebugStore');
 
 // ============================================
 // Types
@@ -199,7 +202,7 @@ export class DebugStore {
 
   connect(): void {
     if (!this.#projectId) {
-      console.warn('[Debug] Cannot connect: no project ID');
+      logger.warn('[Debug] Cannot connect: no project ID');
       return;
     }
 
@@ -213,7 +216,7 @@ export class DebugStore {
       onMessage: (data) => this.#handleDebugEvent(data as DebugEvent),
       onStatusChange: (status) => this.connectionStatus.set(status),
       onError: (error) => {
-        console.error('[Debug] WebSocket error:', error);
+        logger.error('[Debug] WebSocket error:', error);
         this.error.set(error.message);
       },
     });
@@ -276,7 +279,7 @@ export class DebugStore {
 
       return true;
     } catch (err: any) {
-      console.error('[Debug] Failed to start session:', err);
+      logger.error('[Debug] Failed to start session:', err);
       this.error.set(err.message || 'Failed to start debug session');
       return false;
     } finally {
@@ -298,7 +301,7 @@ export class DebugStore {
       this.expandedVariables.set(new Map());
       this.selectedFrameIndex.set(0);
     } catch (err: any) {
-      console.error('[Debug] Failed to stop session:', err);
+      logger.error('[Debug] Failed to stop session:', err);
       this.error.set(err.message);
     } finally {
       this.isLoading.set(false);
@@ -320,7 +323,7 @@ export class DebugStore {
       this.variables.set([]);
       this.selectedFrameIndex.set(0);
     } catch (err: any) {
-      console.error('[Debug] Failed to restart session:', err);
+      logger.error('[Debug] Failed to restart session:', err);
       this.error.set(err.message);
     } finally {
       this.isLoading.set(false);
@@ -365,7 +368,7 @@ export class DebugStore {
     try {
       await dockerPost(`/api/debug/${this.#projectId}/${command}`, args);
     } catch (err: any) {
-      console.error(`[Debug] Failed to execute ${command}:`, err);
+      logger.error(`[Debug] Failed to execute ${command}:`, err);
       this.error.set(err.message);
     }
   }
@@ -429,7 +432,7 @@ export class DebugStore {
 
         return updatedFileBreakpoints.find(bp => bp.id === breakpointId) || breakpoint;
       } catch (err: any) {
-        console.error('[Debug] Failed to add breakpoint:', err);
+        logger.error('[Debug] Failed to add breakpoint:', err);
       }
     }
 
@@ -457,7 +460,7 @@ export class DebugStore {
       try {
         await dockerPost(`/api/debug/${this.#projectId}/breakpoints/remove`, { filePath, line });
       } catch (err: any) {
-        console.error('[Debug] Failed to remove breakpoint:', err);
+        logger.error('[Debug] Failed to remove breakpoint:', err);
       }
     }
   }
@@ -490,7 +493,7 @@ export class DebugStore {
       try {
         await dockerPost(`/api/debug/${this.#projectId}/breakpoints/enable`, { filePath, line, enabled });
       } catch (err: any) {
-        console.error('[Debug] Failed to toggle breakpoint:', err);
+        logger.error('[Debug] Failed to toggle breakpoint:', err);
       }
     }
   }
@@ -521,7 +524,7 @@ export class DebugStore {
           filePath, line, condition, hitCountCondition, logMessage
         });
       } catch (err: any) {
-        console.error('[Debug] Failed to update breakpoint:', err);
+        logger.error('[Debug] Failed to update breakpoint:', err);
       }
     }
   }
@@ -533,7 +536,7 @@ export class DebugStore {
     // Clear from debugger if session is active
     if (this.#projectId && this.session.get()) {
       dockerPost(`/api/debug/${this.#projectId}/breakpoints/clear`).catch(err => {
-        console.error('[Debug] Failed to clear breakpoints:', err);
+        logger.error('[Debug] Failed to clear breakpoints:', err);
       });
     }
   }
@@ -560,7 +563,7 @@ export class DebugStore {
       }));
       localStorage.setItem(`debug-breakpoints-${this.#projectId}`, JSON.stringify(breakpointsData));
     } catch (err) {
-      console.warn('[Debug] Failed to persist breakpoints:', err);
+      logger.warn('[Debug] Failed to persist breakpoints:', err);
     }
   }
 
@@ -578,7 +581,7 @@ export class DebugStore {
         this.breakpoints.set(breakpointsMap);
       }
     } catch (err) {
-      console.warn('[Debug] Failed to load persisted breakpoints:', err);
+      logger.warn('[Debug] Failed to load persisted breakpoints:', err);
     }
   }
 
@@ -612,7 +615,7 @@ export class DebugStore {
         await this.loadVariables(response.scopes[0].variablesReference);
       }
     } catch (err: any) {
-      console.error('[Debug] Failed to load variables:', err);
+      logger.error('[Debug] Failed to load variables:', err);
     }
   }
 
@@ -637,7 +640,7 @@ export class DebugStore {
 
       return response.variables;
     } catch (err: any) {
-      console.error('[Debug] Failed to load variables:', err);
+      logger.error('[Debug] Failed to load variables:', err);
       return [];
     }
   }
@@ -768,7 +771,7 @@ export class DebugStore {
   // ============================================
 
   #handleDebugEvent(event: DebugEvent): void {
-    console.log('[Debug] Event:', event.type, event);
+    logger.info('[Debug] Event:', event.type, event);
 
     switch (event.type) {
       case 'initialized': {
@@ -876,7 +879,7 @@ export class DebugStore {
         await this.#loadVariablesForFrame(0);
       }
     } catch (err: any) {
-      console.error('[Debug] Failed to load call stack:', err);
+      logger.error('[Debug] Failed to load call stack:', err);
     }
   }
 

@@ -1,0 +1,96 @@
+name: Ops Alert Routing
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy Gate
+      - Agency Smokes Nightly
+      - Staging DB Delivery Release Gate
+      - Staging DB Weekly Metrics Refresh
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      test_status:
+        description: "Status to simulate for alert testing"
+        required: true
+        default: failure
+        type: choice
+        options:
+          - failure
+          - success
+      reason:
+        description: "Optional note for manual test alerts"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success')
+    env:
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+      ALERT_WEBHOOK_BEARER: ${{ secrets.ALERT_WEBHOOK_BEARER }}
+    steps:
+      - name: Validate alert webhook configuration
+        run: |
+          if [ -z "${ALERT_WEBHOOK_URL}" ]; then
+            echo "Missing secret: ALERT_WEBHOOK_URL"
+            echo "Configure alert routing webhook before relying on this workflow."
+            exit 1
+          fi
+
+      - name: Build alert payload
+        id: payload
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            status="${{ github.event.workflow_run.conclusion }}"
+            workflow_name="${{ github.event.workflow_run.name }}"
+            run_url="${{ github.event.workflow_run.html_url }}"
+            summary="Workflow failure detected"
+            note=""
+          else
+            status="${{ inputs.test_status }}"
+            workflow_name="Ops Alert Routing (manual test)"
+            run_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            summary="Manual alert routing test"
+            note="${{ inputs.reason }}"
+          fi
+
+          cat > payload.json <<EOF
+          {
+            "service": "recoder-agency",
+            "environment": "github-actions",
+            "summary": "${summary}",
+            "status": "${status}",
+            "workflow": "${workflow_name}",
+            "repository": "${{ github.repository }}",
+            "branch": "${{ github.ref_name }}",
+            "run_url": "${run_url}",
+            "note": "${note}"
+          }
+          EOF
+
+      - name: Send alert webhook
+        run: |
+          if [ -n "${ALERT_WEBHOOK_BEARER}" ]; then
+            curl -fsS -X POST "${ALERT_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${ALERT_WEBHOOK_BEARER}" \
+              --data @payload.json
+          else
+            curl -fsS -X POST "${ALERT_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              --data @payload.json
+          fi
+
+      - name: Emit step summary
+        run: |
+          echo "Alert sent for workflow status event." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workflow: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.name || 'manual-test' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || inputs.test_status }}" >> "$GITHUB_STEP_SUMMARY"

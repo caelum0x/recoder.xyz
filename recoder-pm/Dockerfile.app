@@ -1,0 +1,33 @@
+FROM node:20-alpine AS base
+WORKDIR /repo
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps ./apps
+COPY packages ./packages
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @repo/backend exec -- prisma generate
+
+ENV DOCKER=1
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=pm.recoder.xyz
+ENV RECODER_PM_WEB_URL=https://pm.recoder.xyz
+ENV RECODER_PM_API_URL=https://pm.recoder.xyz/api
+ENV RECODER_PM_PORTAL_URL=https://pm.recoder.xyz/portal
+
+RUN pnpm --filter app exec -- next build --experimental-build-mode compile
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+COPY --from=base /repo/apps/app/.next/standalone ./
+COPY --from=base /repo/apps/app/.next/static ./apps/app/.next/static
+COPY --from=base /repo/apps/app/public ./apps/app/public
+
+CMD ["node", "apps/app/server.js"]

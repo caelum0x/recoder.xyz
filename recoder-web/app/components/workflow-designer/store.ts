@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react';
 import { createStore, useStore } from 'zustand';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { combine } from 'zustand/middleware';
 import type {
   Workflow,
@@ -183,7 +184,7 @@ export function useEditorStoreWithEqualityFn<T>(
   if (!store) {
     throw new Error('useEditorStore must be used within <EditorStoreProvider/>');
   }
-  return useStore(store, selector, equalityFn);
+  return useStoreWithEqualityFn(store, selector, equalityFn);
 }
 
 // Selectors

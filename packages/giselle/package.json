@@ -1,0 +1,61 @@
+{
+	"name": "@giselles-ai/giselle",
+	"version": "0.0.0",
+	"private": true,
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"clean": "rm -rf .turbo dist next react node_modules",
+		"test": "vitest run",
+		"format": "biome check --write ."
+	},
+	"exports": {
+		"./package.json": "./package.json",
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"devDependencies": {
+		"@giselles-ai/protocol": "workspace:*",
+		"@giselles-ai/rag": "workspace:^",
+		"@giselles-ai/tsconfig": "workspace:*",
+		"@types/pg": "catalog:",
+		"@zod/core": "0.11.6",
+		"tsup": "catalog:",
+		"vitest": "catalog:"
+	},
+	"dependencies": {
+		"@ai-sdk/anthropic": "catalog:",
+		"@ai-sdk/fal": "catalog:",
+		"@ai-sdk/gateway": "catalog:",
+		"@ai-sdk/google": "catalog:",
+		"@ai-sdk/openai": "catalog:",
+		"@ai-sdk/provider": "catalog:",
+		"@giselles-ai/action-registry": "workspace:*",
+		"@giselles-ai/data-store-registry": "workspace:*",
+		"@giselles-ai/github-tool": "workspace:^",
+		"@giselles-ai/language-model": "workspace:^",
+		"@giselles-ai/language-model-registry": "workspace:*",
+		"@giselles-ai/logger": "workspace:*",
+		"@giselles-ai/node-registry": "workspace:*",
+		"@giselles-ai/storage": "workspace:*",
+		"@giselles-ai/stream": "workspace:*",
+		"@giselles-ai/text-editor-utils": "workspace:^",
+		"@giselles-ai/trigger-registry": "workspace:*",
+		"@giselles-ai/vault": "workspace:*",
+		"@giselles-ai/web-search": "workspace:^",
+		"@giselles-ai/workspace-utils": "workspace:*",
+		"ai": "catalog:",
+		"openai": "catalog:",
+		"pg": "catalog:"
+	},
+	"peerDependencies": {
+		"zod": "catalog:"
+	}
+}

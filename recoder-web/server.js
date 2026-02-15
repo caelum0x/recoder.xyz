@@ -29,6 +29,7 @@ if (process.env.NODE_ENV === 'production') {
 
 const BUILD_DIR = join(__dirnameLocal, 'build');
 const app = express();
+const publicBaseUrl = process.env.RECODER_WEB_URL || process.env.MAIN_SITE_URL || 'https://web.recoder.xyz';
 
 // Add cross-origin isolation headers for WebContainer support
 app.use((req, res, next) => {
@@ -63,6 +64,26 @@ app.use(express.static(join(BUILD_DIR, 'client'), {
     }
   }
 }));
+
+app.get('/.well-known/agent-card.json', (_req, res) => {
+  res.json({
+    name: 'Recoder Web Agent',
+    description: 'Recoder Web orchestration and execution gateway',
+    protocolVersion: '0.3.0',
+    version: '1.0.0',
+    url: `${publicBaseUrl}/api/a2a/envelope`,
+    skills: [
+      { id: 'plan', name: 'Planning', description: 'Cross-service planning', tags: ['plan', 'workflow'] },
+      { id: 'execute', name: 'Execution', description: 'Task execution and delegation', tags: ['execute', 'agent'] },
+    ],
+    capabilities: {
+      streaming: true,
+      pushNotifications: false,
+    },
+    defaultInputModes: ['text', 'application/json'],
+    defaultOutputModes: ['text', 'application/json'],
+  });
+});
 
 const buildPath = pathToFileURL(join(BUILD_DIR, 'server', 'index.js')).href;
 

@@ -1,5 +1,7 @@
-import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "crypto";
+import { prisma as defaultPrisma } from "./prisma";
+
+type PrismaClient = typeof defaultPrisma;
 
 /**
  * Custom Prisma adapter for Better Auth that properly handles Prisma models

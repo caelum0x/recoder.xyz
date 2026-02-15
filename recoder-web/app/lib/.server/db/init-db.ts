@@ -6,8 +6,12 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('InitDB');
+
 export async function initializeDatabase(db: any) {
-  console.log('🗄️ Initializing database schema...');
+  logger.info('🗄️ Initializing database schema...');
 
   const schemaFiles = [
     'schema.sql',
@@ -22,14 +26,14 @@ export async function initializeDatabase(db: any) {
       const schemaPath = join(__dirname, file);
       const schema = readFileSync(schemaPath, 'utf-8');
       
-      console.log(`📄 Running ${file}...`);
+      logger.info(`📄 Running ${file}...`);
       await db.exec(schema);
-      console.log(`✅ ${file} completed`);
+      logger.info(`✅ ${file} completed`);
     } catch (error) {
-      console.error(`❌ Failed to run ${file}:`, error);
+      logger.error(`❌ Failed to run ${file}:`, error);
       // Continue with other files
     }
   }
 
-  console.log('✅ Database initialization complete');
+  logger.info('✅ Database initialization complete');
 }

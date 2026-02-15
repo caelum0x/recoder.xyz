@@ -6,6 +6,9 @@
 import { getAuthEnv } from '../env';
 import type { Subscription, AuthUser, Organization } from '../types';
 import { PLAN_TYPES, type PlanType } from '../subscription-limits';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SubscriptionUtils');
 
 /**
  * Get user's subscription from the main site
@@ -23,7 +26,7 @@ export async function getSubscription(userId: string): Promise<Subscription & { 
     });
 
     if (!response.ok) {
-      console.log(`[Subscription] No subscription found for user ${userId}`);
+      logger.info(`[Subscription] No subscription found for user ${userId}`);
       return {
         id: '',
         plan: 'FREE',
@@ -38,7 +41,7 @@ export async function getSubscription(userId: string): Promise<Subscription & { 
       plan: data.plan || 'FREE',
     };
   } catch (error) {
-    console.error('[Subscription] Error fetching subscription:', error);
+    logger.error('[Subscription] Error fetching subscription:', error);
     return {
       id: '',
       plan: 'FREE',
@@ -66,7 +69,7 @@ export async function getOrganizationSubscription(
     });
 
     if (!response.ok) {
-      console.log(`[Subscription] No subscription found for organization ${organizationId}`);
+      logger.info(`[Subscription] No subscription found for organization ${organizationId}`);
       return {
         id: '',
         plan: 'FREE',
@@ -77,7 +80,7 @@ export async function getOrganizationSubscription(
 
     return (await response.json()) as Subscription & { plan: string };
   } catch (error) {
-    console.error('[Subscription] Error fetching organization subscription:', error);
+    logger.error('[Subscription] Error fetching organization subscription:', error);
     return {
       id: '',
       plan: 'FREE',
@@ -148,13 +151,13 @@ export async function getActiveOrganization(userId: string): Promise<Organizatio
     });
 
     if (!response.ok) {
-      console.log(`[Subscription] No organization found for user ${userId}`);
+      logger.info(`[Subscription] No organization found for user ${userId}`);
       return null;
     }
 
     return (await response.json()) as Organization;
   } catch (error) {
-    console.error('[Subscription] Error fetching organization:', error);
+    logger.error('[Subscription] Error fetching organization:', error);
     return null;
   }
 }
@@ -181,7 +184,7 @@ export async function getOrganizationOwnerUserId(organizationId: string): Promis
     const data = (await response.json()) as { userId?: string };
     return data.userId || null;
   } catch (error) {
-    console.error('[Subscription] Error fetching organization owner:', error);
+    logger.error('[Subscription] Error fetching organization owner:', error);
     return null;
   }
 }
@@ -233,7 +236,7 @@ export async function hasOrganizationRole(
 
     return userLevel >= requiredLevel;
   } catch (error) {
-    console.error('[Subscription] Error checking organization role:', error);
+    logger.error('[Subscription] Error checking organization role:', error);
     return false;
   }
 }

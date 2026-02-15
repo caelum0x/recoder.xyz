@@ -6,6 +6,10 @@
 /**
  * Get the project root directory
  */
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('StarterConfig');
+
 export function getProjectRoot(): string {
   if (typeof process !== 'undefined' && process.cwd) {
     return process.cwd();
@@ -138,7 +142,7 @@ export function shouldIgnoreFile(path: string, name: string): boolean {
  */
 export function log(message: string, ...args: any[]): void {
   if (STARTER_CONFIG.logging.enabled) {
-    console.log(message, ...args);
+    logger.info(message, ...args);
   }
 }
 
@@ -147,6 +151,6 @@ export function log(message: string, ...args: any[]): void {
  */
 export function logVerbose(message: string, ...args: any[]): void {
   if (STARTER_CONFIG.logging.enabled && STARTER_CONFIG.logging.verbose) {
-    console.log(message, ...args);
+    logger.info(message, ...args);
   }
 }

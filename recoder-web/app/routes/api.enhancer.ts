@@ -1,6 +1,9 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import { stripIndents } from '~/utils/stripIndent';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Enhancer');
 
 const encoder = new TextEncoder();
 
@@ -54,7 +57,7 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    console.log(error);
+    logger.error(error);
 
     throw new Response(null, {
       status: 500,

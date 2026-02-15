@@ -8,7 +8,11 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Preview');
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
+import { createDockerAuthHeaders, dockerFetchJson, getDockerBackendUrl } from '~/lib/http/docker-server';
 
 interface PreviewRequest {
   projectId: string;
@@ -50,20 +54,6 @@ function normalizeUrl(url: string): string {
 }
 
 /**
- * Extract session token from cookies
- */
-function extractSessionToken(cookieHeader: string): string | undefined {
-  const cookies = cookieHeader.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'recoder.session_token' || name === 'session_token') {
-      return decodeURIComponent(value);
-    }
-  }
-  return undefined;
-}
-
-/**
  * GET /api/preview - Get preview URL
  * Query params:
  * - projectId: Project ID (required)
@@ -86,7 +76,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     const env = context?.cloudflare?.env || process.env || {};
     const databaseUrl = (env as any).DATABASE_URL || process.env.DATABASE_URL;
-    const dockerBackendUrl = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
+    const dockerBackendUrl = getDockerBackendUrl(context);
 
     if (!databaseUrl) {
       return json({ success: false, error: 'Database not configured' }, { status: 500 });
@@ -100,28 +90,18 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       return json({ success: false, error: 'Project not found or unauthorized' }, { status: 404 });
     }
 
-    // Get preview URL from docker-backend
-    const cookieHeader = request.headers.get('Cookie') || '';
-    const sessionToken = extractSessionToken(cookieHeader);
+    const headers = createDockerAuthHeaders(request);
 
     try {
-      const response = await fetch(`${dockerBackendUrl}/preview/${projectId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sessionToken && { 'Authorization': `Bearer ${sessionToken}` }),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get preview URL from backend');
-      }
-
-      const data = await response.json() as { url: string; token?: string };
+      const data = await dockerFetchJson<{ url: string; token?: string }>(
+        `${dockerBackendUrl}/preview/${projectId}`,
+        { method: 'GET' },
+        headers,
+      );
       const normalizedUrl = normalizeUrl(data.url);
       const previewURL = buildPreviewUrl(normalizedUrl, planId);
 
-      console.log(`[Preview] URL retrieved for project ${projectId}:`, previewURL);
+      logger.info(`[Preview] URL retrieved for project ${projectId}:`, previewURL);
 
       return json({
         success: true,
@@ -130,7 +110,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       });
     } catch (fetchError) {
       // Fallback: Return a mock preview URL for development
-      console.warn('[Preview] Docker backend unavailable, returning mock URL');
+      logger.warn('[Preview] Docker backend unavailable, returning mock URL');
 
       const mockUrl = `http://localhost:5173/?projectId=${projectId}`;
       const previewURL = buildPreviewUrl(mockUrl, planId);
@@ -142,10 +122,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       });
     }
   } catch (error) {
-    console.error('[Preview] Get URL error:', error);
+    logger.error('[Preview] Get URL error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get preview URL',
+      error: 'Failed to get preview URL',
     }, { status: 500 });
   }
 }
@@ -174,7 +154,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     const env = context?.cloudflare?.env || process.env || {};
     const databaseUrl = (env as any).DATABASE_URL || process.env.DATABASE_URL;
-    const dockerBackendUrl = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
+    const dockerBackendUrl = getDockerBackendUrl(context);
 
     if (!databaseUrl) {
       return json({ success: false, error: 'Database not configured' }, { status: 500 });
@@ -188,44 +168,29 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ success: false, error: 'Project not found or unauthorized' }, { status: 404 });
     }
 
-    // Extract session token for backend auth
-    const cookieHeader = request.headers.get('Cookie') || '';
-    const sessionToken = extractSessionToken(cookieHeader);
+    const headers = createDockerAuthHeaders(request);
 
     try {
       // Trigger container content update
-      const updateResponse = await fetch(`${dockerBackendUrl}/preview/${projectId}/update`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sessionToken && { 'Authorization': `Bearer ${sessionToken}` }),
+      await dockerFetchJson<{ success?: boolean }>(
+        `${dockerBackendUrl}/preview/${projectId}/update`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ planId }),
         },
-        body: JSON.stringify({ planId }),
-      });
-
-      if (!updateResponse.ok) {
-        const errorData = await updateResponse.json().catch(() => ({})) as { error?: string };
-        throw new Error(errorData.error || 'Failed to update container');
-      }
+        headers,
+      );
 
       // Get the new preview URL
-      const previewResponse = await fetch(`${dockerBackendUrl}/preview/${projectId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sessionToken && { 'Authorization': `Bearer ${sessionToken}` }),
-        },
-      });
-
-      if (!previewResponse.ok) {
-        throw new Error('Failed to get preview URL');
-      }
-
-      const data = await previewResponse.json() as { url: string; token?: string };
+      const data = await dockerFetchJson<{ url: string; token?: string }>(
+        `${dockerBackendUrl}/preview/${projectId}`,
+        { method: 'GET' },
+        headers,
+      );
       const normalizedUrl = normalizeUrl(data.url);
       const previewURL = buildPreviewUrl(normalizedUrl, planId);
 
-      console.log(`[Preview] Container updated for project ${projectId}, URL:`, previewURL);
+      logger.info(`[Preview] Container updated for project ${projectId}, URL:`, previewURL);
 
       return json({
         success: true,
@@ -233,7 +198,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         planId,
       });
     } catch (fetchError) {
-      console.error('[Preview] Container update error:', fetchError);
+      logger.error('[Preview] Container update error:', fetchError);
 
       // Return mock for development
       const mockUrl = `http://localhost:5173/?projectId=${projectId}`;
@@ -248,10 +213,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
       });
     }
   } catch (error) {
-    console.error('[Preview] Update error:', error);
+    logger.error('[Preview] Update error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to update preview',
+      error: 'Failed to update preview',
     }, { status: 500 });
   }
 }

@@ -6,6 +6,9 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { getOpenRouterConfig, validateOpenRouterConfig } from '../config/openrouter.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CoreOpenRouterClient');
 
 export class OpenRouterClient {
   private client: OpenAI;
@@ -133,7 +136,7 @@ export class OpenRouterClient {
       const data = await response.json() as { data?: any[] };
       return data.data || [];
     } catch (error) {
-      console.error('Error fetching OpenRouter models:', error);
+      logger.error('Error fetching OpenRouter models:', error);
       return [];
     }
   }
@@ -166,7 +169,7 @@ export class OpenRouterClient {
       const data = await response.json() as { data?: any };
       return data.data;
     } catch (error) {
-      console.error('Error fetching model endpoints:', error);
+      logger.error('Error fetching model endpoints:', error);
       throw error;
     }
   }

@@ -69,12 +69,9 @@ export async function scrapeUrl(
 			// If it's already plain text/markdown, use it directly
 			markdown = content;
 		} else {
-			// If it's HTML, convert it to markdown
-			const Window = (await import("happy-dom")).Window;
-			const window = new Window({ url });
-			window.document.body.innerHTML = content;
+			// If it's HTML, convert it to markdown using defuddle/node (accepts string | JSDOM)
 			const Defuddle = (await import("defuddle/node")).Defuddle;
-			const result = await Defuddle(window, url, {
+			const result = await Defuddle(content, url, {
 				markdown: true,
 			});
 			markdown = result.content;

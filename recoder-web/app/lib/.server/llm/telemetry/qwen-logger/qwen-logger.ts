@@ -45,6 +45,8 @@ import { type HttpError, retryWithBackoff } from '../../utils/retry.js';
 import { InstallationManager } from '../../utils/installationManager.js';
 import { FixedDeque } from 'mnemonist';
 import { AuthType } from '../../core/contentGenerator.js';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('QwenLogger');
 
 // Usage statistics collection endpoint
 const USAGE_STATS_HOSTNAME = 'gb4w8c3ygj-default-sea.rum.aliyuncs.com';
@@ -150,13 +152,13 @@ export class QwenLogger {
       this.events.push(event);
 
       if (wasAtCapacity && this.config?.getDebugMode()) {
-        console.debug(
+        logger.debug(
           `QwenLogger: Dropped old event to prevent memory leak (queue size: ${this.events.size})`,
         );
       }
     } catch (error) {
       if (this.config?.getDebugMode()) {
-        console.error('QwenLogger: Failed to enqueue log event.', error);
+        logger.error('QwenLogger: Failed to enqueue log event.', error);
       }
     }
   }
@@ -250,7 +252,7 @@ export class QwenLogger {
 
     this.flushToRum().catch((error) => {
       if (this.config?.getDebugMode()) {
-        console.debug('Error flushing to RUM:', error);
+        logger.debug('Error flushing to RUM:', error);
       }
     });
   }
@@ -258,7 +260,7 @@ export class QwenLogger {
   async flushToRum(): Promise<LogResponse> {
     if (this.isFlushInProgress) {
       if (this.config?.getDebugMode()) {
-        console.debug(
+        logger.debug(
           'QwenLogger: Flush already in progress, marking pending flush.',
         );
       }
@@ -268,7 +270,7 @@ export class QwenLogger {
     this.isFlushInProgress = true;
 
     if (this.config?.getDebugMode()) {
-      console.log('Flushing log events to RUM.');
+      logger.info('Flushing log events to RUM.');
     }
     if (this.events.size === 0) {
       this.isFlushInProgress = false;
@@ -338,7 +340,7 @@ export class QwenLogger {
       return {};
     } catch (error) {
       if (this.config?.getDebugMode()) {
-        console.error('RUM flush failed after multiple retries.', error);
+        logger.error('RUM flush failed after multiple retries.', error);
       }
 
       // Re-queue failed events for retry
@@ -353,7 +355,7 @@ export class QwenLogger {
         // Fire and forget the pending flush
         this.flushToRum().catch((error) => {
           if (this.config?.getDebugMode()) {
-            console.debug('Error in pending flush to RUM:', error);
+            logger.debug('Error in pending flush to RUM:', error);
           }
         });
       }
@@ -384,7 +386,7 @@ export class QwenLogger {
     this.enqueueLogEvent(applicationEvent);
     this.flushToRum().catch((error: unknown) => {
       if (this.config?.getDebugMode()) {
-        console.debug('Error flushing to RUM:', error);
+        logger.debug('Error flushing to RUM:', error);
       }
     });
   }
@@ -694,7 +696,7 @@ export class QwenLogger {
     this.enqueueLogEvent(applicationEvent);
     this.flushToRum().catch((error: unknown) => {
       if (this.config?.getDebugMode()) {
-        console.debug('Error flushing to RUM:', error);
+        logger.debug('Error flushing to RUM:', error);
       }
     });
   }
@@ -725,7 +727,7 @@ export class QwenLogger {
 
     // Log a warning if we're dropping events
     if (eventsToSend.length > MAX_RETRY_EVENTS && this.config?.getDebugMode()) {
-      console.warn(
+      logger.warn(
         `QwenLogger: Dropping ${
           eventsToSend.length - MAX_RETRY_EVENTS
         } events due to retry queue limit. Total events: ${
@@ -740,7 +742,7 @@ export class QwenLogger {
 
     if (numEventsToRequeue === 0) {
       if (this.config?.getDebugMode()) {
-        console.debug(
+        logger.debug(
           `QwenLogger: No events re-queued (queue size: ${this.events.size})`,
         );
       }
@@ -763,7 +765,7 @@ export class QwenLogger {
     }
 
     if (this.config?.getDebugMode()) {
-      console.debug(
+      logger.debug(
         `QwenLogger: Re-queued ${numEventsToRequeue} events for retry (queue size: ${this.events.size})`,
       );
     }

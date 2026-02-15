@@ -5,6 +5,8 @@
 
 import { json } from '@remix-run/cloudflare';
 import { getCacheManager, CacheKeys } from '../cache/redis';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('RateLimitMiddleware');
 
 export interface RateLimitConfig {
   windowMs: number;      // Time window in milliseconds
@@ -33,7 +35,7 @@ export async function checkRateLimit(
 
   if (!cache) {
     // No Redis, allow request but log warning
-    console.warn('Rate limiting disabled: Redis not configured');
+    logger.warn('Rate limiting disabled: Redis not configured');
     return {
       allowed: true,
       limit: config.maxRequests,

@@ -15,6 +15,9 @@ import type { FunctionDeclaration } from '@google/genai';
 import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ExitPlanMode');
+
 export interface ExitPlanModeParams {
   plan: string;
 }
@@ -101,7 +104,7 @@ class ExitPlanModeToolInvocation extends BaseToolInvocation<
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(
+      logger.error(
         `[ExitPlanModeTool] Failed to set approval mode to "${mode}": ${errorMessage}`,
       );
     }
@@ -139,7 +142,7 @@ class ExitPlanModeToolInvocation extends BaseToolInvocation<
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(
+      logger.error(
         `[ExitPlanModeTool] Error executing exit_plan_mode: ${errorMessage}`,
       );
       return {

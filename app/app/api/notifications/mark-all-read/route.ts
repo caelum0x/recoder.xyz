@@ -3,33 +3,44 @@
  * POST - Mark all notifications as read for the current user
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
+import { prisma } from '@/lib/prisma';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user } = authResult;
-    
-    if (!user) {
+
+    if (!user?.email) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    // TODO: Update in database when Notification model is added
-    // await prisma.notifications.updateMany({
-    //   where: { userId: user.id, read: false },
-    //   data: { read: true }
-    // });
+    const dbUser = await prisma.users.findUnique({
+      where: { email: user.email },
+      select: { id: true },
+    });
+
+    if (!dbUser) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    const result = await prisma.notifications.updateMany({
+      where: { userId: dbUser.id, read: false },
+      data: { read: true, readAt: new Date() },
+    });
 
     return NextResponse.json({
       success: true,
-      message: 'All notifications marked as read',
+      message: `Marked ${result.count} notifications as read`,
+      count: result.count,
     });
   } catch (error) {
     console.error('Failed to mark all notifications as read:', error);

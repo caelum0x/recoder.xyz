@@ -152,6 +152,9 @@ export default TodoList;`
 <script>
 import Sidebar from './components/Sidebar.vue'
 import Header from './components/Header.vue'
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('TemplateLibrary');
 
 export default {
   name: 'App',
@@ -215,12 +218,12 @@ app.get('/api/health', (req, res) => {
 
 // Error handling
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
 app.listen(PORT, () => {
-  console.log(\`Server running on port \${PORT}\`);
+  logger.info(\`Server running on port \${PORT}\`);
 });`
         }
       ],

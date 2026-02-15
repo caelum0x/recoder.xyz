@@ -8,6 +8,10 @@ import { getAuthEnv } from '../env';
 import { getSubscription } from '../utils/subscription-utils';
 import { sendOrganizationInvitation } from '../utils/email-service';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OrganizationPlugin');
+
 /**
  * Organization plugin configuration
  */
@@ -114,9 +118,9 @@ export function createOrganizationPlugin(config: OrganizationPluginConfig = {}) 
     async sendInvitationEmail(data: InvitationEmailData): Promise<void> {
       try {
         await sendInvitationEmail(data);
-        console.log(`[Organization] Invitation email sent to ${data.email}`);
+        logger.info(`[Organization] Invitation email sent to ${data.email}`);
       } catch (error) {
-        console.error(`[Organization] Failed to send invitation email:`, error);
+        logger.error(`[Organization] Failed to send invitation email:`, error);
         throw error;
       }
     },
@@ -145,7 +149,7 @@ export function createOrganizationPlugin(config: OrganizationPluginConfig = {}) 
         if (afterCreate) {
           await afterCreate(params);
         }
-        console.log(
+        logger.info(
           `[Organization] Organization created: ${params.organization.id} by user ${params.user.id}`
         );
       },
@@ -193,7 +197,7 @@ export async function getOrganizationById(
 
     return (await response.json()) as Organization;
   } catch (error) {
-    console.error(`[Organization] Failed to get organization:`, error);
+    logger.error(`[Organization] Failed to get organization:`, error);
     return null;
   }
 }
@@ -223,7 +227,7 @@ export async function getUserOrganizations(
     const data = (await response.json()) as { organizations?: Organization[] };
     return data.organizations || [];
   } catch (error) {
-    console.error(`[Organization] Failed to get user organizations:`, error);
+    logger.error(`[Organization] Failed to get user organizations:`, error);
     return [];
   }
 }

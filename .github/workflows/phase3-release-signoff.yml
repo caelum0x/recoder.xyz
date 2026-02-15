@@ -1,0 +1,157 @@
+name: Phase 3 Release Signoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase3_mode:
+        description: "Phase 3 mode"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+          - local-dev
+      dry_run:
+        description: "Skip network smoke steps"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      skip_env_gates:
+        description: "Skip environment readiness gates"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      skip_typecheck_gates:
+        description: "Skip frontend/mobile typecheck gates"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      enable_a2a_interop_smoke:
+        description: "Run A2A Codex/Claude interop smoke"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      a2a_worker_status_check:
+        description: "Check A2A worker status snapshot"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      allow_non_ga:
+        description: "Allow non-GA signoff (for staging rehearsals)"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      billing_actions_enabled:
+        description: "Billing mode used by phase1 smoke"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      recoder_web_url:
+        description: "recoder-web URL"
+        required: true
+        default: "https://web.recoder.xyz"
+        type: string
+      backend_url:
+        description: "docker-backend URL"
+        required: true
+        default: "https://docker.recoder.xyz"
+        type: string
+      base_url:
+        description: "app base URL"
+        required: true
+        default: "https://recoder.xyz"
+        type: string
+      expected_queue_backend:
+        description: "Expected backend queue mode"
+        required: true
+        default: "redis"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-release-signoff-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  signoff:
+    name: Phase 3 Signoff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install root deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Phase 3 gates
+        env:
+          PHASE3_MODE: ${{ inputs.phase3_mode }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          SKIP_ENV_GATES: ${{ inputs.skip_env_gates }}
+          SKIP_TYPECHECK_GATES: ${{ inputs.skip_typecheck_gates }}
+          ENABLE_A2A_INTEROP_SMOKE: ${{ inputs.enable_a2a_interop_smoke }}
+          A2A_WORKER_STATUS_CHECK: ${{ inputs.a2a_worker_status_check }}
+          BILLING_ACTIONS_ENABLED: ${{ inputs.billing_actions_enabled }}
+          RECODER_WEB_URL: ${{ inputs.recoder_web_url }}
+          BACKEND_URL: ${{ inputs.backend_url }}
+          BASE_URL: ${{ inputs.base_url }}
+          EXPECTED_QUEUE_BACKEND: ${{ inputs.expected_queue_backend }}
+        run: pnpm run phase3:gates
+
+      - name: Assert GA-ready signoff
+        env:
+          PHASE3_ALLOW_NON_GA: ${{ inputs.allow_non_ga }}
+        run: pnpm run phase3:assert-ga-ready
+
+      - name: Build evidence bundle
+        run: pnpm run phase3:evidence-pack
+
+      - name: Upload gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-gates-${{ github.run_id }}
+          path: logs/phase3-gates/
+          if-no-files-found: ignore
+
+      - name: Upload evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-evidence-${{ github.run_id }}
+          path: logs/phase3-evidence/
+          if-no-files-found: ignore

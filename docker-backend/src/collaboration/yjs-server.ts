@@ -14,6 +14,7 @@ import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { persistenceManager } from './persistence';
 import { awarenessManager, type UserInfo } from './awareness';
+import { buildInternalServiceHeaders } from '../public-api/byok-provider-keys.js';
 
 // Message types for Yjs protocol
 const MESSAGE_SYNC = 0;
@@ -60,13 +61,17 @@ async function verifySessionToken(token: string): Promise<{ userId: string; emai
   }
 
   try {
-    const response = await fetch(`${APP_API_URL}/api/auth/verify-token`, {
+    const pathname = '/api/auth/verify-token';
+    const body = JSON.stringify({ token });
+    const response = await fetch(`${APP_API_URL}${pathname}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(INTERNAL_SERVICE_KEY ? { 'X-Internal-Service-Key': INTERNAL_SERVICE_KEY } : {}),
-      },
-      body: JSON.stringify({ token }),
+      headers: buildInternalServiceHeaders({
+        method: 'POST',
+        pathname,
+        body,
+        serviceKey: INTERNAL_SERVICE_KEY,
+      }),
+      body,
     });
 
     if (!response.ok) {
@@ -105,13 +110,17 @@ async function checkProjectAccess(userId: string, projectId: string): Promise<bo
 
   try {
     // First check ownership
-    const ownershipResponse = await fetch(`${APP_API_URL}/api/project/verify-ownership`, {
+    const ownershipPath = '/api/project/verify-ownership';
+    const ownershipBody = JSON.stringify({ userId, projectId });
+    const ownershipResponse = await fetch(`${APP_API_URL}${ownershipPath}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Service-Key': INTERNAL_SERVICE_KEY,
-      },
-      body: JSON.stringify({ userId, projectId }),
+      headers: buildInternalServiceHeaders({
+        method: 'POST',
+        pathname: ownershipPath,
+        body: ownershipBody,
+        serviceKey: INTERNAL_SERVICE_KEY,
+      }),
+      body: ownershipBody,
     });
 
     if (ownershipResponse.ok) {
@@ -122,13 +131,17 @@ async function checkProjectAccess(userId: string, projectId: string): Promise<bo
     }
 
     // Then check collaboration access
-    const collabResponse = await fetch(`${APP_API_URL}/api/project/verify-collaborator`, {
+    const collabPath = '/api/project/verify-collaborator';
+    const collabBody = JSON.stringify({ userId, projectId });
+    const collabResponse = await fetch(`${APP_API_URL}${collabPath}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Service-Key': INTERNAL_SERVICE_KEY,
-      },
-      body: JSON.stringify({ userId, projectId }),
+      headers: buildInternalServiceHeaders({
+        method: 'POST',
+        pathname: collabPath,
+        body: collabBody,
+        serviceKey: INTERNAL_SERVICE_KEY,
+      }),
+      body: collabBody,
     });
 
     if (collabResponse.ok) {

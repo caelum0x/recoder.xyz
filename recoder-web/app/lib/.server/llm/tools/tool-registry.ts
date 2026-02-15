@@ -22,6 +22,9 @@ import { parse } from 'shell-quote';
 import { ToolErrorType } from './tool-error.js';
 import { safeJsonStringify } from '../utils/safeJsonStringify.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ToolRegistry');
+
 type ToolParams = Record<string, unknown>;
 
 class DiscoveredToolInvocation extends BaseToolInvocation<
@@ -193,7 +196,7 @@ export class ToolRegistry {
         tool = tool.asFullyQualifiedTool();
       } else {
         // Decide on behavior: throw error, log warning, or allow overwrite
-        console.warn(
+        logger.warn(
           `Tool with name "${tool.name}" is already registered. Overwriting.`,
         );
       }
@@ -350,8 +353,8 @@ export class ToolRegistry {
           }
 
           if (code !== 0) {
-            console.error(`Command failed with code ${code}`);
-            console.error(stderr);
+            logger.error(`Command failed with code ${code}`);
+            logger.error(stderr);
             return reject(
               new Error(`Tool discovery command failed with exit code ${code}`),
             );
@@ -384,7 +387,7 @@ export class ToolRegistry {
       // register each function as a tool
       for (const func of functions) {
         if (!func.name) {
-          console.warn('Discovered a tool with no name. Skipping.');
+          logger.warn('Discovered a tool with no name. Skipping.');
           continue;
         }
         const parameters =
@@ -403,7 +406,7 @@ export class ToolRegistry {
         );
       }
     } catch (e) {
-      console.error(`Tool discovery command "${discoveryCmd}" failed:`, e);
+      logger.error(`Tool discovery command "${discoveryCmd}" failed:`, e);
       throw e;
     }
   }

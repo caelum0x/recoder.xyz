@@ -35,6 +35,9 @@ export function createInputsFromTrigger(
 				required: parameter.required,
 			}));
 		}
+		case "whatsapp":
+		case "slack":
+			return [];
 		default: {
 			const _exhaustiveCheck: never = trigger.configuration;
 			throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);

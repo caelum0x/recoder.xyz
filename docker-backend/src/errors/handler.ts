@@ -5,6 +5,9 @@
 
 import type { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import { AppError, ErrorCode, ErrorStatusMap, ApiErrorResponse } from './types.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('error-handler');
 
 // Request ID counter for tracing
 let requestIdCounter = 0;
@@ -48,8 +51,7 @@ export function logError(entry: Partial<ErrorLogEntry> & { errorCode: ErrorCode;
     ...entry,
   };
 
-  // In production, you might send this to a logging service
-  console.error(JSON.stringify(logEntry));
+  logger.error(logEntry);
 }
 
 /**
@@ -69,7 +71,7 @@ export function logWarning(
     details,
   };
 
-  console.warn(JSON.stringify(logEntry));
+  logger.warn(logEntry);
 }
 
 /**
@@ -92,18 +94,14 @@ export function requestTimingMiddleware(req: Request, res: Response, next: NextF
   res.on('finish', () => {
     const duration = Date.now() - startTime;
     if (duration > 5000) {
-      console.warn(
-        JSON.stringify({
-          timestamp: new Date().toISOString(),
-          level: 'warn',
-          type: 'SLOW_REQUEST',
-          requestId: (req as any).requestId,
-          method: req.method,
-          path: req.path,
-          duration,
-          statusCode: res.statusCode,
-        })
-      );
+      logger.warn({
+        type: 'SLOW_REQUEST',
+        requestId: (req as any).requestId,
+        method: req.method,
+        path: req.path,
+        duration,
+        statusCode: res.statusCode,
+      }, 'Slow request detected');
     }
   });
 
@@ -273,7 +271,7 @@ export function sendWsError(
     const errorMessage = createWsError(error, options);
     ws.send(JSON.stringify(errorMessage));
   } catch (e) {
-    console.error('[WS Error] Failed to send error:', e);
+    logger.error({ err: e }, 'Failed to send WS error');
   }
 }
 
@@ -371,9 +369,7 @@ export async function withRetry<T>(
         throw appError;
       }
 
-      console.log(
-        `[Retry] Attempt ${attempt + 1}/${maxRetries + 1} failed, retrying in ${delay}ms...`
-      );
+      logger.info({ attempt: attempt + 1, maxRetries: maxRetries + 1, delay }, 'Retrying...');
 
       await new Promise((resolve) => setTimeout(resolve, delay));
       delay = Math.min(delay * backoffMultiplier, maxDelay);
@@ -429,14 +425,7 @@ export class CircuitBreaker {
 
     if (this.failures >= this.threshold) {
       this.state = 'open';
-      console.warn(
-        JSON.stringify({
-          timestamp: new Date().toISOString(),
-          level: 'warn',
-          type: 'CIRCUIT_BREAKER_OPEN',
-          failures: this.failures,
-        })
-      );
+      logger.warn({ type: 'CIRCUIT_BREAKER_OPEN', failures: this.failures }, 'Circuit breaker opened');
     }
   }
 

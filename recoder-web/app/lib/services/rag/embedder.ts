@@ -10,6 +10,9 @@ import type {
   EmbeddingProfileId,
 } from "./types";
 import { EMBEDDING_PROFILES } from "./types";
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('RAGEmbedder');
 
 /**
  * Create an AI SDK embedder with the specified configuration
@@ -80,7 +83,7 @@ export function createAiSdkEmbedder(
               providerMetadata: resultAny.providerMetadata,
             });
           } catch (error) {
-            console.error("Embedding callback error:", error);
+            logger.error("Embedding callback error:", error);
           }
         }
 
@@ -125,7 +128,7 @@ export function createAiSdkEmbedder(
               providerMetadata: resultAny.providerMetadata,
             });
           } catch (error) {
-            console.error("Embedding callback error:", error);
+            logger.error("Embedding callback error:", error);
           }
         }
 

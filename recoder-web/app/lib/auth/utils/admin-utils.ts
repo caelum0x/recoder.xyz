@@ -4,6 +4,9 @@
  */
 
 import { getAdminUserIds } from '../env';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AdminUtils');
 
 /**
  * Check if a user ID is in the admin list
@@ -54,7 +57,7 @@ export async function adminAction<T>(
       data,
     };
   } catch (error) {
-    console.error('[Admin] Action failed:', error);
+    logger.error('[Admin] Action failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -83,7 +86,7 @@ export function logAdminAction(entry: Omit<AdminLogEntry, 'timestamp'>): void {
     timestamp: new Date(),
   };
 
-  console.log('[Admin Action]', JSON.stringify(logEntry));
+  logger.info('[Admin Action]', JSON.stringify(logEntry));
 
   // In production, this should write to a proper audit log
   // e.g., database, external logging service, etc.

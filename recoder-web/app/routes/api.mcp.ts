@@ -11,6 +11,9 @@ import { createGitHubMCPServer } from '~/lib/.server/mcp/servers/github';
 import { createDatabaseMCPServer } from '~/lib/.server/mcp/servers/database';
 import { apiMCPServer } from '~/lib/.server/mcp/servers/api';
 import type { MCPToolCall } from '~/lib/.server/mcp/types';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCP');
 
 // Initialize MCP servers
 let initialized = false;
@@ -18,7 +21,7 @@ let initialized = false;
 function initializeMCPServers() {
   if (initialized) return;
 
-  console.log('🔧 Initializing MCP servers...');
+  logger.info('🔧 Initializing MCP servers...');
 
   // Register filesystem server
   mcpRegistry.register(filesystemMCPServer.getServer());
@@ -35,13 +38,19 @@ function initializeMCPServers() {
   mcpRegistry.register(apiMCPServer.getServer());
 
   initialized = true;
-  console.log(`✅ Initialized ${mcpRegistry.getStats().enabledServers} MCP servers`);
+  logger.info(`✅ Initialized ${mcpRegistry.getStats().enabledServers} MCP servers`);
 }
 
 /**
  * GET /api/mcp - List available tools and servers
  */
 export async function loader({ request }: LoaderFunctionArgs) {
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return json({ success: false, error: 'Authentication required' }, { status: 401 });
+  }
+
   initializeMCPServers();
 
   const url = new URL(request.url);
@@ -87,11 +96,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         });
     }
   } catch (error: any) {
-    console.error('MCP API error:', error);
+    logger.error('MCP API error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Internal server error',
       },
       { status: 500 }
     );
@@ -102,6 +111,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
  * POST /api/mcp - Execute a tool
  */
 export async function action({ request }: ActionFunctionArgs) {
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return json({ success: false, error: 'Authentication required' }, { status: 401 });
+  }
+
   initializeMCPServers();
 
   if (request.method !== 'POST') {
@@ -136,7 +151,7 @@ export async function action({ request }: ActionFunctionArgs) {
       timestamp: new Date(),
     };
 
-    console.log(`🔧 Executing tool: ${toolName}`);
+    logger.info(`🔧 Executing tool: ${toolName}`);
 
     // Execute tool
     const result = await mcpClient.executeTool(toolCall);
@@ -148,11 +163,11 @@ export async function action({ request }: ActionFunctionArgs) {
       executionTime: result.executionTime,
     });
   } catch (error: any) {
-    console.error('Tool execution error:', error);
+    logger.error('Tool execution error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Tool execution failed',
+        error: 'Tool execution failed',
       },
       { status: 500 }
     );

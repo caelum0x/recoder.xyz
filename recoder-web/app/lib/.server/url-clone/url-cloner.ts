@@ -5,6 +5,9 @@
 
 import * as path from 'path';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('URLCloner');
+
 export interface ClonedAsset {
   originalUrl: string;
   localPath: string;
@@ -30,7 +33,7 @@ export async function cloneWebsite(url: string): Promise<ClonedWebsite> {
   }
 
   const baseUrl = new URL(url);
-  console.log(`[URL Clone] Starting exact clone of: ${url}`);
+  logger.info(`[URL Clone] Starting exact clone of: ${url}`);
 
   // Fetch the main HTML
   const response = await fetch(url, {
@@ -54,7 +57,7 @@ export async function cloneWebsite(url: string): Promise<ClonedWebsite> {
   const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
   const title = titleMatch ? titleMatch[1].trim() : 'Cloned Website';
 
-  console.log(`[URL Clone] Page title: ${title}`);
+  logger.info(`[URL Clone] Page title: ${title}`);
 
   // Download and inline all CSS
   html = await processStylesheets(html, baseUrl, assets);
@@ -79,7 +82,7 @@ export async function cloneWebsite(url: string): Promise<ClonedWebsite> {
   // Generate project files
   const files = generateProjectFiles(html, title, assets);
 
-  console.log(`[URL Clone] Clone complete. Files: ${Object.keys(files).length}, Assets: ${assets.size}`);
+  logger.info(`[URL Clone] Clone complete. Files: ${Object.keys(files).length}, Assets: ${assets.size}`);
 
   return {
     url,
@@ -107,7 +110,7 @@ async function processStylesheets(
     if (!hrefMatch) continue;
 
     const cssUrl = resolveUrl(baseUrl, hrefMatch[1]);
-    console.log(`[URL Clone] Downloading CSS: ${cssUrl}`);
+    logger.info(`[URL Clone] Downloading CSS: ${cssUrl}`);
 
     try {
       const cssResponse = await fetch(cssUrl, {
@@ -134,7 +137,7 @@ async function processStylesheets(
         html = html.replace(link, `<link rel="stylesheet" href="${localPath}">`);
       }
     } catch (error) {
-      console.warn(`[URL Clone] Failed to fetch CSS: ${cssUrl}`, error);
+      logger.warn(`[URL Clone] Failed to fetch CSS: ${cssUrl}`, error);
     }
   }
 
@@ -222,7 +225,7 @@ async function processCssUrls(
         }
       }
     } catch (error) {
-      console.warn(`[URL Clone] Failed to fetch CSS asset: ${fullUrl}`);
+      logger.warn(`[URL Clone] Failed to fetch CSS asset: ${fullUrl}`);
     }
   }
 
@@ -270,10 +273,10 @@ async function processImages(
         const newTag = originalTag.replace(imgUrl, dataUrl);
         html = html.replace(originalTag, newTag);
 
-        console.log(`[URL Clone] Embedded image: ${imgUrl.slice(0, 50)}...`);
+        logger.info(`[URL Clone] Embedded image: ${imgUrl.slice(0, 50)}...`);
       }
     } catch (error) {
-      console.warn(`[URL Clone] Failed to fetch image: ${fullUrl}`);
+      logger.warn(`[URL Clone] Failed to fetch image: ${fullUrl}`);
     }
   }
 
@@ -318,10 +321,10 @@ async function processFonts(
 
         // Replace the link with inline style
         html = html.replace(match[0], `<style>${fontCss}</style>`);
-        console.log(`[URL Clone] Embedded Google Fonts`);
+        logger.info(`[URL Clone] Embedded Google Fonts`);
       }
     } catch (error) {
-      console.warn(`[URL Clone] Failed to fetch fonts: ${fontUrl}`);
+      logger.warn(`[URL Clone] Failed to fetch fonts: ${fontUrl}`);
     }
   }
 

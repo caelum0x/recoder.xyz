@@ -9,6 +9,10 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { createDockerAuthHeaders, dockerFetchJson, getDockerBackendUrl } from '~/lib/http/docker-server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Files');
 
 interface FileEntry {
   name: string;
@@ -149,30 +153,26 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     // In production, fetch file tree from docker-backend or sandbox
     // For now, return default structure
-    const env = context?.cloudflare?.env || process.env || {};
-    const dockerBackendUrl = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
+    const dockerBackendUrl = getDockerBackendUrl(context);
+    const headers = createDockerAuthHeaders(request);
 
     try {
       // Try to get files from docker-backend
-      const response = await fetch(`${dockerBackendUrl}/files/${projectId}?path=${path || '/'}`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const data = await dockerFetchJson<{ files: FileEntry }>(
+        `${dockerBackendUrl}/files/${projectId}?path=${path || '/'}`,
+        {},
+        headers,
+      );
 
-      if (response.ok) {
-        const data = await response.json() as { files: FileEntry };
-
-        if (flat) {
-          const files = flattenFileTree(data.files);
-          return json({ success: true, files });
-        }
-
-        return json({ success: true, fileTree: data.files });
+      if (flat) {
+        const files = flattenFileTree(data.files);
+        return json({ success: true, files });
       }
+
+      return json({ success: true, fileTree: data.files });
     } catch (fetchError) {
       // Fall through to default structure if docker-backend is unavailable
-      console.log('[Files] Docker backend unavailable, using default structure');
+      logger.info('[Files] Docker backend unavailable, using default structure');
     }
 
     // Return default structure
@@ -187,10 +187,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       isDefault: true,
     });
   } catch (error) {
-    console.error('[Files] Get file tree error:', error);
+    logger.error('[Files] Get file tree error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get file tree',
+      error: 'Failed to get file tree',
     }, { status: 500 });
   }
 }
@@ -220,12 +220,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ success: false, error: 'File path is required' }, { status: 400 });
     }
 
-    const env = context?.cloudflare?.env || process.env || {};
-    const dockerBackendUrl = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
-
-    // Extract session token from cookies
-    const cookieHeader = request.headers.get('Cookie') || '';
-    const sessionToken = extractSessionToken(cookieHeader);
+    const dockerBackendUrl = getDockerBackendUrl(context);
+    const headers = createDockerAuthHeaders(request);
 
     // POST - Write file
     if (request.method === 'POST') {
@@ -234,25 +230,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
 
       try {
-        const response = await fetch(`${dockerBackendUrl}/files/${projectId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sessionToken && { 'Authorization': `Bearer ${sessionToken}` }),
+        await dockerFetchJson<{ success?: boolean }>(
+          `${dockerBackendUrl}/files/${projectId}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              path,
+              content,
+              encoding,
+            }),
           },
-          body: JSON.stringify({
-            path,
-            content,
-            encoding,
-          }),
-        });
+          headers,
+        );
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as { error?: string };
-          throw new Error(errorData.error || 'Failed to write file');
-        }
-
-        console.log(`[Files] File written: ${path} in project ${projectId}`);
+        logger.info(`[Files] File written: ${path} in project ${projectId}`);
 
         return json({
           success: true,
@@ -261,10 +252,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
           language: getFileLanguage(path),
         });
       } catch (fetchError) {
-        console.error('[Files] Write error:', fetchError);
+        logger.error('[Files] Write error:', fetchError);
         return json({
           success: false,
-          error: fetchError instanceof Error ? fetchError.message : 'Failed to write file',
+          error: 'Failed to write file',
         }, { status: 500 });
       }
     }
@@ -272,21 +263,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // DELETE - Delete file
     if (request.method === 'DELETE') {
       try {
-        const response = await fetch(`${dockerBackendUrl}/files/${projectId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sessionToken && { 'Authorization': `Bearer ${sessionToken}` }),
+        await dockerFetchJson<{ success?: boolean }>(
+          `${dockerBackendUrl}/files/${projectId}`,
+          {
+            method: 'DELETE',
+            body: JSON.stringify({ path }),
           },
-          body: JSON.stringify({ path }),
-        });
+          headers,
+        );
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as { error?: string };
-          throw new Error(errorData.error || 'Failed to delete file');
-        }
-
-        console.log(`[Files] File deleted: ${path} in project ${projectId}`);
+        logger.info(`[Files] File deleted: ${path} in project ${projectId}`);
 
         return json({
           success: true,
@@ -294,34 +280,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
           path,
         });
       } catch (fetchError) {
-        console.error('[Files] Delete error:', fetchError);
+        logger.error('[Files] Delete error:', fetchError);
         return json({
           success: false,
-          error: fetchError instanceof Error ? fetchError.message : 'Failed to delete file',
+          error: 'Failed to delete file',
         }, { status: 500 });
       }
     }
 
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('[Files] Action error:', error);
+    logger.error('[Files] Action error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'File operation failed',
+      error: 'File operation failed',
     }, { status: 500 });
   }
-}
-
-/**
- * Extract session token from cookies
- */
-function extractSessionToken(cookieHeader: string): string | undefined {
-  const cookies = cookieHeader.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'recoder.session_token' || name === 'session_token') {
-      return decodeURIComponent(value);
-    }
-  }
-  return undefined;
 }

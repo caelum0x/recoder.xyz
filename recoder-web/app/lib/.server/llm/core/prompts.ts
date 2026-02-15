@@ -12,6 +12,8 @@ import process from 'node:process';
 import { isGitRepository } from '../utils/gitUtils.js';
 import { GEMINI_CONFIG_DIR } from '../tools/memoryTool.js';
 import type { GenerateContentConfig } from '@google/genai';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CorePrompts');
 
 export interface ModelTemplateMapping {
   baseUrls?: string[];
@@ -803,7 +805,7 @@ function getToolCallExamples(model?: string): string {
       case 'general':
         return generalToolCallExamples;
       default:
-        console.warn(
+        logger.warn(
           `Unknown QWEN_CODE_TOOL_CALL_STYLE value: ${toolCallStyle}. Using model-based detection.`,
         );
         break;

@@ -25,6 +25,9 @@ import {
 } from '~/lib/services/auto-fix';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerGet } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProblemsPanel');
 
 interface ProblemsPanelProps {
   /** Callback when clicking an error to navigate to file:line */
@@ -67,7 +70,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
         const data = await dockerGet<import('~/lib/stores/errors').ErrorsResponse>(`/api/errors/${projectId}?tail=200`);
         setErrors(data);
       } catch (e) {
-        console.warn('[ProblemsPanel] Failed to fetch errors:', e);
+        logger.warn('[ProblemsPanel] Failed to fetch errors:', e);
       } finally {
         setIsLoading(false);
       }
@@ -182,7 +185,7 @@ export const ProblemsPanel = memo(({ onErrorClick, onFixWithAI, className = '' }
       // Also call callback if provided
       onFixWithAI?.(filteredErrors);
     } catch (error) {
-      console.error('[ProblemsPanel] Fix failed:', error);
+      logger.error('[ProblemsPanel] Fix failed:', error);
     } finally {
       // Reset fixing state after a short delay
       setTimeout(() => setAutoFixing(false), 2000);

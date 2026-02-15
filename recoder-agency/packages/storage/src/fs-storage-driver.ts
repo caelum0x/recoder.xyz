@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, relative } from "node:path";
 import type * as z from "zod/v4";
 import type {
 	BlobLike,
@@ -16,12 +16,21 @@ async function ensureDir(filePath: string): Promise<void> {
 	await fs.mkdir(dirname(filePath), { recursive: true });
 }
 
+function assertSafePath(root: string, userPath: string): string {
+	const resolved = resolve(root, userPath);
+	const rel = relative(root, resolved);
+	if (rel.startsWith("..") || resolve(root, rel) !== resolved) {
+		throw new Error("Path traversal detected");
+	}
+	return resolved;
+}
+
 export function fsStorageDriver(config: FsStorageDriverConfig): GiselleStorage {
 	return {
 		async getJson<T extends z.ZodType>(
 			params: GetJsonParams<T>,
 		): Promise<z.infer<T>> {
-			const fullPath = join(config.root, params.path);
+			const fullPath = assertSafePath(config.root, params.path);
 
 			await fs.access(fullPath);
 
@@ -54,7 +63,7 @@ export function fsStorageDriver(config: FsStorageDriverConfig): GiselleStorage {
 		async setJson<T extends z.ZodType>(
 			params: SetJsonParams<T>,
 		): Promise<void> {
-			const fullPath = join(config.root, params.path);
+			const fullPath = assertSafePath(config.root, params.path);
 			await ensureDir(fullPath);
 			const data = params.schema
 				? params.schema.parse(params.data)
@@ -66,7 +75,7 @@ export function fsStorageDriver(config: FsStorageDriverConfig): GiselleStorage {
 			path: string,
 			options?: { range?: { start: number; end?: number } },
 		): Promise<Uint8Array> {
-			const fullPath = join(config.root, path);
+			const fullPath = assertSafePath(config.root, path);
 
 			if (!options?.range) {
 				const buffer = await fs.readFile(fullPath);
@@ -106,26 +115,26 @@ export function fsStorageDriver(config: FsStorageDriverConfig): GiselleStorage {
 		},
 
 		async setBlob(path: string, data: BlobLike): Promise<void> {
-			const fullPath = join(config.root, path);
+			const fullPath = assertSafePath(config.root, path);
 			await ensureDir(fullPath);
 			const uint8Array = new Uint8Array(data);
 			await fs.writeFile(fullPath, uint8Array);
 		},
 
 		async copy(source: string, destination: string): Promise<void> {
-			const srcPath = join(config.root, source);
-			const destPath = join(config.root, destination);
+			const srcPath = assertSafePath(config.root, source);
+			const destPath = assertSafePath(config.root, destination);
 			await ensureDir(destPath);
 			await fs.copyFile(srcPath, destPath);
 		},
 
 		async remove(path: string): Promise<void> {
-			const fullPath = join(config.root, path);
+			const fullPath = assertSafePath(config.root, path);
 			await fs.rm(fullPath, { recursive: true, force: true });
 		},
 
 		async exists(path: string): Promise<boolean> {
-			const fullPath = join(config.root, path);
+			const fullPath = assertSafePath(config.root, path);
 			try {
 				await fs.access(fullPath);
 				return true;
@@ -135,7 +144,7 @@ export function fsStorageDriver(config: FsStorageDriverConfig): GiselleStorage {
 		},
 
 		async contentLength(path: string): Promise<number> {
-			const fullPath = join(config.root, path);
+			const fullPath = assertSafePath(config.root, path);
 			const stats = await fs.stat(fullPath);
 			return stats.size;
 		},

@@ -6,6 +6,8 @@
  */
 
 import { atom, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('KeyboardShortcutsStore');
 
 // Storage key for persisting user customizations
 const SHORTCUTS_STORAGE_KEY = 'recoder_keyboard_shortcuts';
@@ -358,7 +360,7 @@ function loadBindings(): Record<string, KeyBinding> {
       return JSON.parse(stored);
     }
   } catch (e) {
-    console.error('[KeyboardShortcuts] Failed to load bindings:', e);
+    logger.error('[KeyboardShortcuts] Failed to load bindings:', e);
   }
 
   return {};
@@ -373,7 +375,7 @@ function saveBindings(bindings: Record<string, KeyBinding>): void {
   try {
     localStorage.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify(bindings));
   } catch (e) {
-    console.error('[KeyboardShortcuts] Failed to save bindings:', e);
+    logger.error('[KeyboardShortcuts] Failed to save bindings:', e);
   }
 }
 
@@ -581,7 +583,7 @@ export function importBindings(json: string): boolean {
       return true;
     }
   } catch (e) {
-    console.error('[KeyboardShortcuts] Failed to import bindings:', e);
+    logger.error('[KeyboardShortcuts] Failed to import bindings:', e);
   }
   return false;
 }

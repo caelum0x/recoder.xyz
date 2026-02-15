@@ -7,6 +7,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { webcontainer } from '~/lib/webcontainer';
 import type { WebContainer } from '@webcontainer/api';
 import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('RuntimeHook');
 
 export type RuntimeMode = 'webcontainer' | 'docker';
 
@@ -49,7 +52,7 @@ export function useRuntime(projectId: string) {
             const containerReady = await ensureContainerExists(projectId);
             if (containerReady && !cancelled) {
               setState({ mode: 'docker', ready: true, error: null });
-              console.log('🐳 Docker runtime ready');
+              logger.info('🐳 Docker runtime ready');
               return;
             }
           }
@@ -58,7 +61,7 @@ export function useRuntime(projectId: string) {
         wcRef.current = await webcontainer;
         if (!cancelled) {
           setState({ mode: 'webcontainer', ready: true, error: null });
-          console.log('📦 WebContainer runtime ready');
+          logger.info('📦 WebContainer runtime ready');
         }
       } catch (err: unknown) {
         if (!cancelled) {

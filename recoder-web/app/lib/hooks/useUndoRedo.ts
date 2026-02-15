@@ -31,6 +31,9 @@ import {
 import { workbenchStore } from '~/lib/stores/workbench';
 import { DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
 import type { FileState } from '~/lib/services/undo-manager';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('UndoRedo');
 
 interface UseUndoRedoOptions {
   /**
@@ -149,7 +152,7 @@ export function useUndoRedo(options: UseUndoRedoOptions = {}): [UndoRedoState, U
    */
   const writeFileToDocker = useCallback(async (filePath: string, content: string) => {
     if (!projectId) {
-      console.warn('[useUndoRedo] No project ID available');
+      logger.warn('[useUndoRedo] No project ID available');
       return false;
     }
 
@@ -173,13 +176,13 @@ export function useUndoRedo(options: UseUndoRedoOptions = {}): [UndoRedoState, U
 
       if (!res.ok) {
         const errData = await res.json() as { error?: string };
-        console.error('[useUndoRedo] Failed to write file:', errData.error);
+        logger.error('[useUndoRedo] Failed to write file:', errData.error);
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('[useUndoRedo] Error writing file:', error);
+      logger.error('[useUndoRedo] Error writing file:', error);
       return false;
     }
   }, [projectId]);
@@ -224,7 +227,7 @@ export function useUndoRedo(options: UseUndoRedoOptions = {}): [UndoRedoState, U
         workbenchStore.refreshFiles?.();
       }
     } catch (error) {
-      console.error('[useUndoRedo] Undo failed:', error);
+      logger.error('[useUndoRedo] Undo failed:', error);
     } finally {
       setIsUndoing(false);
     }

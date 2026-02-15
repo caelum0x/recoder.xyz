@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { encrypt, decrypt, maskApiKey, validateApiKeyFormat } from '@/lib/encryption';
 import { requireAuth } from '@/lib/auth-helpers';
+import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
 
 /**
  * GET /api/user/ai-provider-keys
@@ -195,14 +196,20 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const { userId, serviceKey } = await request.json();
+    const rawBody = await request.text();
+    let body: { userId?: string } = {};
+    try {
+      body = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
 
-    // Verify this is an internal service call
-    const expectedKey = process.env.INTERNAL_SERVICE_KEY;
-    if (!expectedKey || serviceKey !== expectedKey) {
+    const authResult = verifyInternalServiceRequest(request, { rawBody });
+    if (!authResult.ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { userId } = body;
     if (!userId) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }

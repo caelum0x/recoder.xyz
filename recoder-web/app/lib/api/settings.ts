@@ -3,6 +3,9 @@
  * Calls app folder settings APIs with cross-domain authentication
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SettingsAPI');
+
 const MAIN_SITE_URL = process.env.MAIN_SITE_URL || 'http://localhost:3000';
 
 // Types for settings
@@ -137,10 +140,10 @@ export async function getProfileSettings(): Promise<ProfileSettings | null> {
       return data.profile ?? null;
     }
 
-    console.error('Failed to fetch profile settings:', data.error);
+    logger.error('Failed to fetch profile settings:', data.error);
     return null;
   } catch (error) {
-    console.error('Error fetching profile settings:', error);
+    logger.error('Error fetching profile settings:', error);
     return null;
   }
 }
@@ -165,7 +168,7 @@ export async function updateProfileSettings(settings: Partial<ProfileSettings>):
     const data = await response.json() as ApiResponse;
     return data.success ?? false;
   } catch (error) {
-    console.error('Error updating profile settings:', error);
+    logger.error('Error updating profile settings:', error);
     return false;
   }
 }
@@ -191,10 +194,10 @@ export async function getEditorSettings(): Promise<EditorSettings | null> {
       return data.settings ?? null;
     }
 
-    console.error('Failed to fetch editor settings:', data.error);
+    logger.error('Failed to fetch editor settings:', data.error);
     return null;
   } catch (error) {
-    console.error('Error fetching editor settings:', error);
+    logger.error('Error fetching editor settings:', error);
     return null;
   }
 }
@@ -219,7 +222,7 @@ export async function updateEditorSettings(settings: Partial<EditorSettings>): P
     const data = await response.json() as ApiResponse;
     return data.success ?? false;
   } catch (error) {
-    console.error('Error updating editor settings:', error);
+    logger.error('Error updating editor settings:', error);
     return false;
   }
 }
@@ -245,10 +248,10 @@ export async function getAISettings(): Promise<AISettings | null> {
       return data.settings ?? null;
     }
 
-    console.error('Failed to fetch AI settings:', data.error);
+    logger.error('Failed to fetch AI settings:', data.error);
     return null;
   } catch (error) {
-    console.error('Error fetching AI settings:', error);
+    logger.error('Error fetching AI settings:', error);
     return null;
   }
 }
@@ -273,7 +276,7 @@ export async function updateAISettings(settings: Partial<AISettings>): Promise<b
     const data = await response.json() as ApiResponse;
     return data.success ?? false;
   } catch (error) {
-    console.error('Error updating AI settings:', error);
+    logger.error('Error updating AI settings:', error);
     return false;
   }
 }
@@ -299,10 +302,10 @@ export async function getAllSettings(): Promise<AllSettings | null> {
       return data.settings ?? null;
     }
 
-    console.error('Failed to fetch all settings:', data.error);
+    logger.error('Failed to fetch all settings:', data.error);
     return null;
   } catch (error) {
-    console.error('Error fetching all settings:', error);
+    logger.error('Error fetching all settings:', error);
     return null;
   }
 }

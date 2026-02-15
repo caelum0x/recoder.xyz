@@ -8,6 +8,9 @@ import { log, logVerbose } from './starter-config';
 // Import the bundle directly as a module - works in both Node.js and Cloudflare Workers
 import startersBundleData from './starters-bundle.json';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('StarterLoader');
+
 export interface LoadedStarterFiles {
   starterId: string;
   files: Record<string, string>; // filepath -> content
@@ -28,7 +31,7 @@ function loadBundle() {
     startersBundle = startersBundleData;
     return startersBundle;
   } catch (error) {
-    console.error('Failed to load starters bundle:', error);
+    logger.error('Failed to load starters bundle:', error);
     return {};
   }
 }
@@ -305,7 +308,7 @@ export const db = createClient({
 });
 
 export async function initializeDatabase() {
-  console.log('🔄 Initializing database...');
+  logger.info('🔄 Initializing database...');
 
   await db.execute(\`
     CREATE TABLE IF NOT EXISTS users (
@@ -326,7 +329,7 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)
   \`);
 
-  console.log('✅ Database initialized successfully');
+  logger.info('✅ Database initialized successfully');
 }`;
 
   // src/db/migrate.ts
@@ -335,10 +338,10 @@ export async function initializeDatabase() {
 async function migrate() {
   try {
     await initializeDatabase();
-    console.log('✅ Migration completed successfully');
+    logger.info('✅ Migration completed successfully');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Migration failed:', error);
+    logger.error('❌ Migration failed:', error);
     process.exit(1);
   }
 }
@@ -523,7 +526,7 @@ router.post('/register', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -561,7 +564,7 @@ router.post('/login', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -610,7 +613,7 @@ app.use('/api/auth', authRouter);
 
 // Error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
+  logger.error('Error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -620,11 +623,11 @@ async function start() {
     await initializeDatabase();
 
     app.listen(PORT, () => {
-      console.log(\`✅ Server running on http://localhost:\${PORT}\`);
-      console.log(\`📚 API Documentation: http://localhost:\${PORT}\`);
+      logger.info(\`✅ Server running on http://localhost:\${PORT}\`);
+      logger.info(\`📚 API Documentation: http://localhost:\${PORT}\`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 }

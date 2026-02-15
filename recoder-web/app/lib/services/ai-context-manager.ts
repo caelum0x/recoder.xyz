@@ -34,6 +34,9 @@ import {
   type ProjectContext,
 } from './code-context';
 import { dockerReadFile, DOCKER_URL, getSessionToken } from './docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AIContextManager');
 
 // Simple token estimation (~4 chars per token)
 function estimateTokens(content: string): number {
@@ -131,7 +134,7 @@ async function fetchFileContent(projectId: string, path: string): Promise<string
     const content = await dockerReadFile(projectId, path, { timeout: 10000 });
     return content;
   } catch (error) {
-    console.warn(`[AIContextManager] Failed to read file ${path}:`, error);
+    logger.warn(`[AIContextManager] Failed to read file ${path}:`, error);
     return null;
   }
 }
@@ -152,7 +155,7 @@ async function getFileList(projectId: string): Promise<Array<{ path: string; typ
     const data = await response.json() as { files: Array<{ path: string; type: string; name: string }> };
     return data.files || [];
   } catch (error) {
-    console.warn('[AIContextManager] Failed to get file list:', error);
+    logger.warn('[AIContextManager] Failed to get file list:', error);
     return [];
   }
 }
@@ -394,7 +397,7 @@ export async function autoDetectContextFiles(
     setAutoDetectedFiles(detectedFiles);
     return detectedFiles;
   } catch (error) {
-    console.error('[AIContextManager] Auto-detection error:', error);
+    logger.error('[AIContextManager] Auto-detection error:', error);
     autoDetectError.set(error instanceof Error ? error.message : 'Auto-detection failed');
     return [];
   } finally {
@@ -673,7 +676,7 @@ export async function suggestFilesForMessage(
     }
 
   } catch (error) {
-    console.warn('[AIContextManager] Failed to suggest files:', error);
+    logger.warn('[AIContextManager] Failed to suggest files:', error);
   }
 
   return suggestions.slice(0, 10);

@@ -296,9 +296,16 @@ export class DatabaseMCPServer {
   /**
    * Get table statistics
    */
+  private escapeIdentifier(name: string): string {
+    // Strip anything that's not alphanumeric or underscore to prevent SQL injection
+    return name.replace(/[^a-zA-Z0-9_]/g, '');
+  }
+
   private async getTableStats(table: string, schema: string = 'public'): Promise<any> {
     // Get row count
-    const countSql = `SELECT COUNT(*) as count FROM "${schema}"."${table}"`;
+    const safeSchema = this.escapeIdentifier(schema);
+    const safeTable = this.escapeIdentifier(table);
+    const countSql = `SELECT COUNT(*) as count FROM "${safeSchema}"."${safeTable}"`;
     const countResult = await this.executeQuery(countSql);
     
     // Get table size
@@ -311,7 +318,7 @@ export class DatabaseMCPServer {
       WHERE relname = $2
     `;
     
-    const sizeResult = await this.executeQuery(sizeSql, [`${schema}.${table}`, table]);
+    const sizeResult = await this.executeQuery(sizeSql, [`${safeSchema}.${safeTable}`, safeTable]);
     
     return {
       table,
@@ -328,10 +335,13 @@ export class DatabaseMCPServer {
    */
   private async searchTable(params: any): Promise<QueryResult> {
     const { table, column, value, limit } = params;
-    
+    const safeSchema = this.escapeIdentifier(params.schema || 'public');
+    const safeTable = this.escapeIdentifier(table);
+    const safeColumn = this.escapeIdentifier(column);
+
     const sql = `
-      SELECT * FROM "${params.schema || 'public'}"."${table}"
-      WHERE "${column}"::text ILIKE $1
+      SELECT * FROM "${safeSchema}"."${safeTable}"
+      WHERE "${safeColumn}"::text ILIKE $1
       LIMIT $2
     `;
     

@@ -5,6 +5,8 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import type { CorsConfig, EnvironmentConfig, MiddlewareHandler } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CORS');
 
 /**
  * Default CORS configuration
@@ -156,7 +158,7 @@ export function createCorsMiddleware(
 
     // Log rejected origins in debug mode
     if (!allowed && origin && envConfig?.LOG_LEVEL === 'debug') {
-      console.log(`CORS: Rejected origin ${origin}`);
+      logger.info(`CORS: Rejected origin ${origin}`);
     }
 
     next();

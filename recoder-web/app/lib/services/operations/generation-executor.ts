@@ -21,6 +21,11 @@ import {
   createGenerationId,
   isCompletedGeneration,
 } from './types';
+import {
+  isJsonContent as isSharedJsonContent,
+  jsonContentToPlainText as toSharedPlainText,
+  jsonContentToText as toSharedText,
+} from '~/lib/services/text/json-content';
 
 // ============================================================================
 // Generation Store
@@ -324,49 +329,21 @@ export async function queueGeneration(
  * Check if content is JSON
  */
 export function isJsonContent(content: string): boolean {
-  if (!content || typeof content !== 'string') {
-    return false;
-  }
-  const trimmed = content.trim();
-  return (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-         (trimmed.startsWith('[') && trimmed.endsWith(']'));
+  return isSharedJsonContent(content);
 }
 
 /**
  * Convert JSON content to plain text
  */
 export function jsonContentToText(json: unknown): string {
-  if (typeof json === 'string') {
-    return json;
-  }
-  if (Array.isArray(json)) {
-    return json.map(item => jsonContentToText(item)).join('\n');
-  }
-  if (typeof json === 'object' && json !== null) {
-    // Handle rich text format with paragraphs
-    if ('content' in json && Array.isArray((json as any).content)) {
-      return (json as any).content
-        .map((block: any) => {
-          if (block.type === 'paragraph' && block.content) {
-            return block.content
-              .map((item: any) => item.text || '')
-              .join('');
-          }
-          return '';
-        })
-        .filter(Boolean)
-        .join('\n');
-    }
-    return JSON.stringify(json);
-  }
-  return String(json);
+  return toSharedText(json);
 }
 
 /**
  * Convert JSON content to plain text (preserving line breaks)
  */
 export function jsonContentToPlainText(json: unknown): string {
-  return jsonContentToText(json);
+  return toSharedPlainText(json);
 }
 
 /**

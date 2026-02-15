@@ -240,7 +240,8 @@ function findEnclosingScopes(
   const tree = syntaxTree(state);
 
   // Walk up the tree from the current position
-  let node: SyntaxNode | null = tree.resolveInner(pos, -1);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @lezer/common version mismatch between codemirror deps
+  let node: SyntaxNode | null = tree.resolveInner(pos, -1) as any;
 
   while (node) {
     const isScope = SCOPE_NODE_TYPES.has(node.name);

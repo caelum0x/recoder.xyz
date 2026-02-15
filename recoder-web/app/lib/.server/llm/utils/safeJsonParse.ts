@@ -5,6 +5,8 @@
  */
 
 import { jsonrepair } from 'jsonrepair';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SafeJsonParse');
 
 /**
  * Safely parse JSON string with jsonrepair fallback for malformed JSON.
@@ -34,7 +36,7 @@ export function safeJsonParse<T = Record<string, unknown>>(
       // jsonrepair always returns a string, so we need to parse it
       return JSON.parse(repairedJson) as T;
     } catch (repairError) {
-      console.error('Failed to parse JSON even with jsonrepair:', {
+      logger.error('Failed to parse JSON even with jsonrepair:', {
         originalError: error,
         repairError,
         jsonString,

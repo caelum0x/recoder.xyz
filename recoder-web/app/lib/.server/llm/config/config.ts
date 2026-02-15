@@ -59,6 +59,8 @@ import {
 } from './models.js';
 import { Storage } from './storage.js';
 import { Logger, type ModelSwitchEvent } from '../core/logger.js';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LLMConfig');
 
 // Re-export OAuth config type
 export type { AnyToolInvocation, MCPOAuthConfig };
@@ -439,7 +441,7 @@ export class Config {
     // Initialize logger asynchronously
     this.logger = new Logger(this.sessionId, this.storage);
     this.logger.initialize().catch((error) => {
-      console.debug('Failed to initialize logger:', error);
+      logger.debug('Failed to initialize logger:', error);
     });
 
     if (params.contextFileName) {
@@ -557,7 +559,7 @@ export class Config {
 
       // Log asynchronously to avoid blocking
       this.logger.logModelSwitch(switchEvent).catch((error) => {
-        console.debug('Failed to log model switch:', error);
+        logger.debug('Failed to log model switch:', error);
       });
     }
 
@@ -568,7 +570,7 @@ export class Config {
       try {
         await geminiClient.reinitialize();
       } catch (error) {
-        console.error(
+        logger.error(
           'Failed to reinitialize chat with updated config:',
           error,
         );

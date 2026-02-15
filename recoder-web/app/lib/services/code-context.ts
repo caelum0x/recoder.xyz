@@ -10,6 +10,8 @@
  */
 
 import { dockerGet, DOCKER_URL, getSessionToken } from './docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CodeContext');
 
 export interface FileContext {
   path: string;
@@ -385,7 +387,7 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
 
     return context;
   } catch (error) {
-    console.error('Failed to load project context:', error);
+    logger.error('Failed to load project context:', error);
     return null;
   }
 }

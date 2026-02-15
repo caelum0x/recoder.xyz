@@ -18,6 +18,8 @@ import globalStyles from './styles/index.scss?url';
 import xtermStyles from '@xterm/xterm/css/xterm.css?url';
 
 import 'virtual:uno.css';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('Root');
 
 /**
  * Root loader - Verify authentication before loading the app
@@ -29,6 +31,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   // Set env vars for session.server.ts
   if (env.MAIN_SITE_URL) process.env.MAIN_SITE_URL = env.MAIN_SITE_URL;
   if (env.RECODER_WEB_URL) process.env.RECODER_WEB_URL = env.RECODER_WEB_URL;
+  if (env.INTERNAL_SERVICE_KEY) process.env.INTERNAL_SERVICE_KEY = env.INTERNAL_SERVICE_KEY;
 
   // Allow public routes (but still try to get user if authenticated)
   const publicPaths = ['/api/', '/health'];
@@ -47,12 +50,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   // If no session, redirect to login on main site
   if (!session) {
-    console.log('[Auth] No session found, redirecting to login');
+    logger.info('[Auth] No session found, redirecting to login');
     const loginUrl = getLoginUrl(url.pathname);
     return redirect(loginUrl);
   }
 
-  console.log('[Auth] Session verified for user:', session.user.email);
+  logger.info('[Auth] Session verified for user:', session.user.email);
 
   return json({
     user: session.user,
@@ -234,7 +237,7 @@ export default function App() {
       onError={(error: Error, errorInfo: React.ErrorInfo) => {
         // Log to console in development
         if (process.env.NODE_ENV !== 'production') {
-          console.error('[App Root Error]', error, errorInfo);
+          logger.error('[App Root Error]', error, errorInfo);
         }
       }}
     >

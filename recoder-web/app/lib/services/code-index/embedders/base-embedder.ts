@@ -4,12 +4,15 @@
  */
 
 import type { IEmbedder, EmbeddingResponse, EmbedderInfo, EmbedderProviderType } from '../interfaces';
+import { createScopedLogger } from '~/utils/logger';
 import {
   MAX_BATCH_TOKENS,
   MAX_ITEM_TOKENS,
   MAX_BATCH_RETRIES,
   INITIAL_RETRY_DELAY_MS
 } from '../constants';
+
+const logger = createScopedLogger('BaseEmbedder');
 
 export interface BaseEmbedderOptions {
   apiKey?: string;
@@ -75,7 +78,7 @@ export abstract class BaseEmbedder implements IEmbedder {
       const estimatedTokens = this.estimateTokens(text);
 
       if (estimatedTokens > MAX_ITEM_TOKENS) {
-        console.warn(`Text exceeds max tokens (${estimatedTokens}), truncating`);
+        logger.warn(`Text exceeds max tokens (${estimatedTokens}), truncating`);
         const truncated = this.truncateToTokens(text, MAX_ITEM_TOKENS);
         if (currentTokens + MAX_ITEM_TOKENS <= MAX_BATCH_TOKENS) {
           currentBatch.push(truncated);
@@ -152,7 +155,7 @@ export abstract class BaseEmbedder implements IEmbedder {
         // Check for rate limiting
         if (this.isRateLimitError(error)) {
           const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-          console.warn(`Rate limited, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+          logger.warn(`Rate limited, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
           await this.sleep(delayMs);
           continue;
         }
@@ -164,7 +167,7 @@ export abstract class BaseEmbedder implements IEmbedder {
 
         if (attempt < maxRetries - 1) {
           const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-          console.warn(`Request failed, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+          logger.warn(`Request failed, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
           await this.sleep(delayMs);
         }
       }

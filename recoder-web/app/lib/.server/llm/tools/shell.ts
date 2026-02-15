@@ -36,6 +36,9 @@ import {
   stripShellWrapper,
 } from '../utils/shell-utils.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ShellTool');
+
 export const OUTPUT_UPDATE_INTERVAL_MS = 1000;
 
 export interface ShellToolParams {
@@ -221,7 +224,7 @@ class ShellToolInvocation extends BaseToolInvocation<
             .filter(Boolean);
           for (const line of pgrepLines) {
             if (!/^\d+$/.test(line)) {
-              console.error(`pgrep: ${line}`);
+              logger.error(`pgrep: ${line}`);
             }
             const pid = Number(line);
             if (pid !== result.pid) {
@@ -230,7 +233,7 @@ class ShellToolInvocation extends BaseToolInvocation<
           }
         } else {
           if (!signal.aborted) {
-            console.error('missing pgrep output');
+            logger.error('missing pgrep output');
           }
         }
       }
@@ -455,7 +458,7 @@ export class ShellTool extends BaseDeclarativeTool<
     const commandCheck = isCommandAllowed(params.command, this.config);
     if (!commandCheck.allowed) {
       if (!commandCheck.reason) {
-        console.error(
+        logger.error(
           'Unexpected: isCommandAllowed returned false without a reason',
         );
         return `Command is not allowed: ${params.command}`;

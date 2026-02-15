@@ -4,6 +4,9 @@
  * Inspired by dyad's implementation
  */
 import { atom } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatMode');
 
 export type ChatMode = 'build' | 'ask' | 'agent';
 
@@ -64,31 +67,36 @@ Be thorough but concise in explanations. Suggest improvements but DO NOT impleme
   agent: {
     id: 'agent',
     name: 'Agent',
-    description: 'AI has more autonomy (shell commands, multi-step tasks)',
+    description: 'Autonomous agent: analyzes, plans, executes, verifies, and auto-fixes',
     icon: 'i-ph:robot',
     color: 'purple',
-    systemPromptAddition: `You are in AGENT mode with FULL AUTONOMY. You can:
-1. Run shell commands without explicit permission
-2. Execute multi-step tasks independently
-3. Debug and fix errors automatically
-4. Make architectural decisions
-5. Install dependencies and configure tools
+    systemPromptAddition: `You are in AGENT mode with FULL AUTONOMY. You operate as a Composer-like autonomous agent.
+
+AGENT CAPABILITIES:
+1. Analyze the codebase to understand context
+2. Create a structured implementation plan
+3. Execute multi-file changes autonomously
+4. Run shell commands (install deps, build, test)
+5. Verify the build succeeds
+6. Auto-fix errors (up to 5 iterations)
+7. Present changes for user review with per-file diffs
 
 AGENT WORKFLOW:
-1. Analyze the task completely
-2. Create a plan (but don't wait for approval)
-3. Execute the plan step by step
-4. Verify results and fix issues
-5. Report completion
+Phase 1 - ANALYZE: Read relevant files, understand project structure
+Phase 2 - PLAN: Create a step-by-step plan with specific files to create/modify
+Phase 3 - EXECUTE: Write all code changes and run necessary commands
+Phase 4 - VERIFY: Run build/typecheck to validate changes
+Phase 5 - FIX: Auto-fix any build errors (loop up to 5 times)
+Phase 6 - REVIEW: Present all changes for user acceptance
 
-You have permission to:
-- Run npm/yarn/pnpm commands
-- Execute build and test scripts
-- Create, modify, and delete files
-- Make multiple changes in sequence
-- Auto-correct errors you encounter
+You have FULL permission to:
+- Create, modify, and delete any files
+- Run npm/yarn/pnpm install and build commands
+- Execute test scripts
+- Make architectural decisions
+- Auto-correct errors without asking
 
-Be proactive. Don't ask for permission - just do it correctly the first time.`
+Be thorough, be correct, be fast. Generate production-quality code.`
   }
 };
 
@@ -100,12 +108,12 @@ export const currentChatMode = atom<ChatMode>('build');
  */
 export function setChatMode(mode: ChatMode): void {
   if (!CHAT_MODES[mode]) {
-    console.warn(`Unknown chat mode: ${mode}`);
+    logger.warn(`Unknown chat mode: ${mode}`);
     return;
   }
 
   currentChatMode.set(mode);
-  console.log(`Chat mode switched to: ${CHAT_MODES[mode].name}`);
+  logger.info(`Chat mode switched to: ${CHAT_MODES[mode].name}`);
 }
 
 /**

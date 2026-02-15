@@ -5,6 +5,7 @@
  * context lines, and search-and-replace functionality.
  */
 
+import { createScopedLogger } from '~/utils/logger';
 import type {
   CodeSearchResult,
   CodeSearchOptions,
@@ -12,6 +13,8 @@ import type {
   ReplacePreview,
   HighlightRange,
 } from './types';
+
+const logger = createScopedLogger('CodeSearch');
 
 // =============================================================================
 // Constants
@@ -123,7 +126,7 @@ export function searchInFile(
   if (mergedOptions.useRegex) {
     const validation = validateRegex(query);
     if (!validation.valid) {
-      console.warn(`[CodeSearch] Invalid regex: ${validation.error}`);
+      logger.warn(`[CodeSearch] Invalid regex: ${validation.error}`);
       return [];
     }
   }

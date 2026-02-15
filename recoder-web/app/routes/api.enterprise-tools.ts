@@ -1,8 +1,71 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import {
+  DockerHttpError,
+  createDockerProxyHeaders,
+  dockerFetchJson,
+  getDockerBackendUrl,
+  getSessionTokenFromRequest,
+} from '~/lib/http/docker-server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('EnterpriseTools');
+const WORKFLOW_CONTRACT_VERSION = 'internal-agent-workflow-v1' as const;
 
 interface EnterpriseToolRequest {
   tool: string;
   params: Record<string, unknown>;
+}
+
+type WorkflowAuthMode = 'session-token' | 'none';
+type WorkflowAuthSource = 'bearer-header' | 'session-cookie' | 'none';
+
+interface WorkflowBackendDiagnostics {
+  endpoint: string;
+  contract: 'internal-agent-workflow-v1';
+  responseContract: string | null;
+  contractStatus: 'match' | 'mismatch' | 'missing';
+  strictContract: boolean;
+  authMode: WorkflowAuthMode;
+  authSource: WorkflowAuthSource;
+  attempts: number;
+  maxAttempts: number;
+  warnings: string[];
+}
+
+function resolveWorkflowAuth(request: Request): { authMode: WorkflowAuthMode; authSource: WorkflowAuthSource } {
+  const authHeader = request.headers.get('Authorization');
+
+  if (authHeader?.match(/^Bearer\s+.+$/i)) {
+    return { authMode: 'session-token', authSource: 'bearer-header' };
+  }
+
+  if (getSessionTokenFromRequest(request)) {
+    return { authMode: 'session-token', authSource: 'session-cookie' };
+  }
+
+  return { authMode: 'none', authSource: 'none' };
+}
+
+function getWorkflowRetryLimit(context: unknown): number {
+  const env = (context as { cloudflare?: { env?: Record<string, string> } } | undefined)?.cloudflare?.env;
+  const raw =
+    env?.RECODER_WORKFLOW_FETCH_RETRIES ||
+    env?.OPENCLAW_WORKFLOW_FETCH_RETRIES ||
+    process.env.RECODER_WORKFLOW_FETCH_RETRIES ||
+    process.env.OPENCLAW_WORKFLOW_FETCH_RETRIES;
+  const parsed = Number.parseInt(raw || '2', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2;
+}
+
+function isStrictWorkflowContractEnabled(context: unknown): boolean {
+  const env = (context as { cloudflare?: { env?: Record<string, string> } } | undefined)?.cloudflare?.env;
+  const raw =
+    env?.RECODER_WORKFLOW_STRICT_CONTRACT ||
+    env?.OPENCLAW_WORKFLOW_STRICT_CONTRACT ||
+    process.env.RECODER_WORKFLOW_STRICT_CONTRACT ||
+    process.env.OPENCLAW_WORKFLOW_STRICT_CONTRACT ||
+    '';
+  return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase());
 }
 
 /**
@@ -23,7 +86,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   // SECURITY: Log tool usage for audit
-  console.log(`[EnterpriseTools] User ${session.user.email} calling tool`);
+  logger.info(`[EnterpriseTools] User ${session.user.email} calling tool`);
 
   const { tool, params } = await request.json() as EnterpriseToolRequest;
 
@@ -50,31 +113,26 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
         // If projectId is provided, prefer Docker backend file listing (container workspace)
         if (projectId) {
-          const env = (context as any)?.cloudflare?.env || process.env || {};
-          const dockerBackendUrl =
-            (env as any).DOCKER_BACKEND_URL ||
-            (env as any).VITE_DOCKER_BACKEND_URL ||
-            process.env.DOCKER_BACKEND_URL ||
-            'http://localhost:3100';
+          const dockerBackendUrl = getDockerBackendUrl(context);
+          const headers = createDockerProxyHeaders(request);
 
           try {
-            const response = await fetch(`${dockerBackendUrl}/api/files/${projectId}`, {
-              headers: { 'Content-Type': 'application/json' },
-            });
-            if (response.ok) {
-              const data = await response.json() as { files?: string[] };
-              const allFiles = (data.files || []).filter(Boolean);
-              const searchTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
-              const filtered = searchTerms.length === 0
-                ? allFiles.slice(0, 20)
-                : allFiles.filter(f => {
-                    const lower = f.toLowerCase();
-                    return searchTerms.some(term => lower.includes(term));
-                  }).slice(0, 20);
-              return json(filtered);
-            }
+            const data = await dockerFetchJson<{ files?: string[] }>(
+              `${dockerBackendUrl}/api/files/${projectId}`,
+              {},
+              headers,
+            );
+            const allFiles = (data.files || []).filter(Boolean);
+            const searchTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+            const filtered = searchTerms.length === 0
+              ? allFiles.slice(0, 20)
+              : allFiles.filter(f => {
+                  const lower = f.toLowerCase();
+                  return searchTerms.some(term => lower.includes(term));
+                }).slice(0, 20);
+            return json(filtered);
           } catch (error) {
-            console.warn('[EnterpriseTools] Docker file discovery failed:', error);
+            logger.warn('[EnterpriseTools] Docker file discovery failed:', error);
           }
         }
 
@@ -103,24 +161,121 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
 
       case 'delegateSubagent': {
-        // Simplified subagent delegation using built-in agent types
         const agentType = params.agentType as string;
         const task = params.task as string;
-        const context = params.context as string | undefined;
+        const contextText = params.context as string | undefined;
+        const projectId = typeof params.projectId === 'string' && params.projectId.trim().length > 0
+          ? params.projectId.trim()
+          : undefined;
+        const requestedPaths = Array.isArray(params.paths)
+          ? params.paths.filter((value): value is string => typeof value === 'string')
+          : undefined;
+        const continuous = params.continuous !== false;
+        const strictFromRequest = params.strict === true;
+        const strictContract = strictFromRequest || isStrictWorkflowContractEnabled(context);
 
-        // Built-in agent type responses
-        const agentResponses: Record<string, string> = {
-          coder: 'Code implementation agent ready. Use file tools to read, write, and modify code.',
-          debugger: 'Debug agent ready. Use readFile and shell tools to investigate errors.',
-          architect: 'Architecture agent ready. Use listFiles and readFile to analyze project structure.',
-          tester: 'Test agent ready. Use shell tool to run tests and readFile to check test files.',
+        const { buildSubagentWorkflowPlan } = await import('~/lib/services/subagent-workflow.server');
+        let workflow = buildSubagentWorkflowPlan({
+          task,
+          agentType,
+          requestedPaths,
+          continuous,
+        });
+        let source: 'docker-backend' | 'local-fallback' = 'local-fallback';
+        let fallbackReason: string | undefined;
+        const dockerBackendUrl = getDockerBackendUrl(context);
+        const endpoint = projectId
+          ? `${dockerBackendUrl}/api/agent/workflow/${encodeURIComponent(projectId)}`
+          : `${dockerBackendUrl}/api/agent/workflow`;
+        const { authMode, authSource } = resolveWorkflowAuth(request);
+        const maxAttempts = getWorkflowRetryLimit(context);
+        const backend: WorkflowBackendDiagnostics = {
+          endpoint,
+          contract: WORKFLOW_CONTRACT_VERSION,
+          responseContract: null,
+          contractStatus: 'missing',
+          strictContract,
+          authMode,
+          authSource,
+          attempts: 0,
+          maxAttempts,
+          warnings: [],
         };
+
+        try {
+          const headers = createDockerProxyHeaders(request);
+          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            backend.attempts = attempt;
+            try {
+              const dockerResult = await dockerFetchJson<{
+                contract?: string;
+                workflow?: typeof workflow;
+              }>(
+                endpoint,
+                {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    task,
+                    paths: requestedPaths,
+                    continuous,
+                  }),
+                },
+                headers,
+              );
+              const responseContract = typeof dockerResult.contract === 'string'
+                ? dockerResult.contract
+                : null;
+              backend.responseContract = responseContract;
+              backend.contractStatus = responseContract
+                ? responseContract === backend.contract
+                  ? 'match'
+                  : 'mismatch'
+                : 'missing';
+              if (!responseContract) {
+                backend.warnings.push(`response contract marker missing (expected ${backend.contract})`);
+              } else if (responseContract !== backend.contract) {
+                backend.warnings.push(`response contract mismatch: expected ${backend.contract}, got ${responseContract}`);
+              }
+              if (strictContract && backend.contractStatus !== 'match') {
+                fallbackReason = `strict contract check failed: expected ${backend.contract}, got ${responseContract || 'missing'}`;
+                backend.warnings.push(fallbackReason);
+                break;
+              }
+
+              if (dockerResult.workflow) {
+                workflow = dockerResult.workflow;
+                source = 'docker-backend';
+              } else {
+                fallbackReason = 'docker backend returned no workflow payload';
+                backend.warnings.push(fallbackReason);
+              }
+              break;
+            } catch (error) {
+              const internalReason = error instanceof DockerHttpError
+                ? `attempt ${attempt}/${maxAttempts}: ${error.status} ${error.message}`
+                : `attempt ${attempt}/${maxAttempts}: ${error instanceof Error ? error.message : String(error)}`;
+              logger.warn('[EnterpriseTools] delegateSubagent retry', internalReason);
+              const safeReason = `attempt ${attempt}/${maxAttempts}: backend unavailable`;
+              backend.warnings.push(safeReason);
+              fallbackReason = safeReason;
+              if (attempt >= maxAttempts) {
+                throw error;
+              }
+            }
+          }
+        } catch (error) {
+          logger.warn('[EnterpriseTools] delegateSubagent docker workflow failed, using local fallback', error);
+        }
 
         return json({
           success: true,
-          output: agentResponses[agentType] || `Unknown agent type: ${agentType}`,
+          output: workflow.summary,
           message: `Delegated to ${agentType}: ${task}`,
-          context: context?.substring(0, 500)
+          context: contextText?.substring(0, 500),
+          workflow,
+          source,
+          backend,
+          ...(fallbackReason ? { fallbackReason } : {}),
         });
       }
 
@@ -256,10 +411,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return json({ success: false, error: `Unknown tool: ${tool}` }, { status: 400 });
     }
   } catch (error) {
-    console.error(`Enterprise tool error (${tool}):`, error);
+    logger.error(`Enterprise tool error (${tool}):`, error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: 'Enterprise tool operation failed',
       tool
     }, { status: 500 });
   }

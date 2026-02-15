@@ -13,6 +13,9 @@ import { escapeXmlAttr, escapeXmlContent } from './types';
 
 const webSearchSchema = z.object({
   query: z.string().describe('The search query to look up on the web'),
+  allowedDomains: z.array(z.string()).optional().describe('Optional allowlist of domains to keep in results'),
+  blockedDomains: z.array(z.string()).optional().describe('Optional denylist of domains to exclude from results'),
+  maxUses: z.number().int().positive().optional().describe('Maximum number of web_search uses allowed in this run'),
 });
 
 export type WebSearchArgs = z.infer<typeof webSearchSchema>;
@@ -73,7 +76,12 @@ export async function webSearch(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({
+        query,
+        allowedDomains: args.allowedDomains,
+        blockedDomains: args.blockedDomains,
+        maxUses: args.maxUses,
+      }),
     });
 
     if (!response.ok) {

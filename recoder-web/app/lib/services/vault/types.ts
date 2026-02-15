@@ -8,4 +8,4 @@ export type {
   CryptoVaultConfig,
   Vault,
   VaultDriver,
-} from '../../../../../../packages/vault/src/types';
+} from '@giselles-ai/vault';

@@ -10,6 +10,10 @@
 
 import { atom, map } from 'nanostores';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ContextSettings');
+
 // Storage key
 const CONTEXT_SETTINGS_KEY = 'recoder_context_settings';
 
@@ -145,7 +149,7 @@ function loadSettings(): ContextSettings {
       };
     }
   } catch (e) {
-    console.error('[ContextSettings] Failed to load settings:', e);
+    logger.error('[ContextSettings] Failed to load settings:', e);
   }
 
   return DEFAULT_CONTEXT_SETTINGS;
@@ -163,7 +167,7 @@ function saveSettings(settings: ContextSettings): void {
       updatedAt: Date.now(),
     }));
   } catch (e) {
-    console.error('[ContextSettings] Failed to save settings:', e);
+    logger.error('[ContextSettings] Failed to save settings:', e);
   }
 }
 
@@ -269,7 +273,7 @@ export function addExcludedPattern(pattern: string): void {
   try {
     new RegExp(pattern);
   } catch {
-    console.error('[ContextSettings] Invalid regex pattern:', pattern);
+    logger.error('[ContextSettings] Invalid regex pattern:', pattern);
     return;
   }
 
@@ -303,7 +307,7 @@ export function addPriorityPattern(pattern: string): void {
   try {
     new RegExp(pattern);
   } catch {
-    console.error('[ContextSettings] Invalid regex pattern:', pattern);
+    logger.error('[ContextSettings] Invalid regex pattern:', pattern);
     return;
   }
 
@@ -407,7 +411,7 @@ export function importContextSettings(jsonString: string): boolean {
     });
     return true;
   } catch (e) {
-    console.error('[ContextSettings] Failed to import settings:', e);
+    logger.error('[ContextSettings] Failed to import settings:', e);
     return false;
   }
 }

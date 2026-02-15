@@ -38,8 +38,9 @@ export {
   SUCCESS_MESSAGES,
   EXTENSIONS,
   FEATURE_FLAGS,
-  
-  // Type exports with prefixes to avoid conflicts
+} from './constants';
+
+export type {
   TemplateCategory,
   FrameworkType,
   ProjectType as ConstantProjectType,

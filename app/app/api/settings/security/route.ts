@@ -6,7 +6,27 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
+import {
+  assertSecuritySettingsGetResponse,
+  assertSecuritySettingsPutResponse,
+} from '@/lib/contracts/security-contracts';
 import { prisma } from '@/lib/prisma';
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function toBoolean(value: unknown): boolean {
+  return Boolean(value);
+}
+
+function toNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 // GET /api/settings/security
 export async function GET(request: NextRequest) {
@@ -36,7 +56,7 @@ export async function GET(request: NextRequest) {
         ON CONFLICT (user_id) DO NOTHING
       `;
 
-      return NextResponse.json({
+      return NextResponse.json(assertSecuritySettingsGetResponse({
         success: true,
         settings: {
           two_factor_enabled: false,
@@ -46,18 +66,33 @@ export async function GET(request: NextRequest) {
           allowed_ip_addresses: [],
           block_unknown_devices: false,
         }
-      });
+      }));
     }
 
-    return NextResponse.json({
+    const rawSettings = Array.isArray(settings) ? settings[0] : settings;
+    const record = asRecord(rawSettings);
+    const allowedIpAddresses = record.allowed_ip_addresses;
+    const normalizedSettings = {
+      ...record,
+      two_factor_enabled: toBoolean(record.two_factor_enabled),
+      session_timeout: toNumber(record.session_timeout, 30),
+      require_password_change: toBoolean(record.require_password_change),
+      password_change_days: toNumber(record.password_change_days, 90),
+      allowed_ip_addresses: Array.isArray(allowedIpAddresses)
+        ? allowedIpAddresses.filter((value): value is string => typeof value === 'string')
+        : [],
+      block_unknown_devices: toBoolean(record.block_unknown_devices),
+    };
+
+    return NextResponse.json(assertSecuritySettingsGetResponse({
       success: true,
-      settings: Array.isArray(settings) ? settings[0] : settings
-    });
+      settings: normalizedSettings,
+    }));
 
   } catch (error: any) {
     console.error('[Security Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch security settings' },
+      { success: false, error: 'Failed to fetch security settings' },
       { status: 500 }
     );
   }
@@ -104,15 +139,15 @@ export async function PUT(request: NextRequest) {
         updated_at = NOW()
     `;
 
-    return NextResponse.json({
+    return NextResponse.json(assertSecuritySettingsPutResponse({
       success: true,
       message: 'Security settings updated successfully'
-    });
+    }));
 
   } catch (error: any) {
     console.error('[Security Settings PUT] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update security settings' },
+      { success: false, error: 'Failed to update security settings' },
       { status: 500 }
     );
   }

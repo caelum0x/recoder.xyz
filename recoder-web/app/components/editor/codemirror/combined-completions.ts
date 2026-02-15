@@ -8,6 +8,8 @@ import type { Extension } from '@codemirror/state';
 import { snippetCompletionSource } from './snippets';
 import { importCompletionSource } from './import-completions';
 import { lspCompletionSource as lspSource } from './lsp-extensions';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CombinedCompletions');
 
 // ============================================
 // Combined Completion Source
@@ -67,7 +69,7 @@ export function createCombinedCompletionSource(
           const result = source(context);
           return result instanceof Promise ? await result : result;
         } catch (err) {
-          console.warn('[Completions] Source error:', err);
+          logger.warn('[Completions] Source error:', err);
           return null;
         }
       })

@@ -22,6 +22,7 @@ export interface Snapshot {
   filesChanged?: number;
   additions?: number;
   deletions?: number;
+  neonDbTimestamp?: string;  // ISO timestamp of Neon DB state at snapshot time
 }
 
 export interface SnapshotDiff {
@@ -119,7 +120,8 @@ export class SnapshotManager {
     containerId: string,
     projectId: string,
     message: string,
-    author: 'user' | 'ai' | 'auto' = 'user'
+    author: 'user' | 'ai' | 'auto' = 'user',
+    options?: { neonDbTimestamp?: string }
   ): Promise<Snapshot> {
     try {
       await this.initRepo(containerId);
@@ -129,7 +131,7 @@ export class SnapshotManager {
 
       // Check if there are changes to commit
       const status = await execInContainer(containerId, 'cd /workspace && git status --porcelain');
-      
+
       if (!status.trim()) {
         // No changes, return current HEAD
         const headInfo = await this.getCurrentSnapshot(containerId);
@@ -139,9 +141,17 @@ export class SnapshotManager {
 
       // Create commit with metadata in message
       const fullMessage = `[${author}] ${message}`;
-      await execInContainer(containerId, 
+      await execInContainer(containerId,
         `cd /workspace && git commit -m "${fullMessage.replace(/"/g, '\\"')}" --allow-empty`
       );
+
+      // Store neonDbTimestamp in git notes if provided
+      if (options?.neonDbTimestamp) {
+        const noteContent = JSON.stringify({ neonDbTimestamp: options.neonDbTimestamp });
+        await execInContainer(containerId,
+          `cd /workspace && git notes add -m '${noteContent.replace(/'/g, "'\\''")}' HEAD 2>/dev/null || true`
+        );
+      }
 
       // Get commit info
       const commitInfo = await execInContainer(containerId,
@@ -169,9 +179,10 @@ export class SnapshotManager {
         filesChanged,
         additions,
         deletions,
+        neonDbTimestamp: options?.neonDbTimestamp,
       };
 
-      console.log(`[Snapshot] Created: ${snapshot.id} - ${message} for ${projectId}`);
+      console.log(`[Snapshot] Created: ${snapshot.id} - ${message} for ${projectId}${options?.neonDbTimestamp ? ' (with DB state)' : ''}`);
       return snapshot;
     } catch (error: any) {
       console.error(`[Snapshot] Create error: ${error.message}`);
@@ -191,11 +202,14 @@ export class SnapshotManager {
       if (!commitInfo.trim()) return null;
 
       const [fullHash, shortHash, message, timestamp] = commitInfo.split('|');
-      
+
       // Extract author from message format: [author] message
       const authorMatch = message.match(/^\[(user|ai|auto)\]\s*/);
       const author = (authorMatch?.[1] || 'user') as 'user' | 'ai' | 'auto';
       const cleanMessage = message.replace(/^\[(user|ai|auto)\]\s*/, '');
+
+      // Read neonDbTimestamp from git notes
+      const neonDbTimestamp = await this.readNoteTimestamp(containerId, fullHash);
 
       return {
         id: shortHash,
@@ -203,6 +217,7 @@ export class SnapshotManager {
         message: cleanMessage,
         timestamp: parseInt(timestamp) * 1000,
         author,
+        neonDbTimestamp,
       };
     } catch {
       return null;
@@ -222,9 +237,12 @@ export class SnapshotManager {
 
       if (!log.trim()) return [];
 
+      // Batch-read all git notes at once for efficiency
+      const notesMap = await this.readAllNotes(containerId);
+
       const snapshots: Snapshot[] = log.split('\n').filter(Boolean).map(line => {
         const [fullHash, shortHash, message, timestamp] = line.split('|');
-        
+
         // Extract author from message
         const authorMatch = message.match(/^\[(user|ai|auto)\]\s*/);
         const author = (authorMatch?.[1] || 'user') as 'user' | 'ai' | 'auto';
@@ -236,6 +254,7 @@ export class SnapshotManager {
           message: cleanMessage,
           timestamp: parseInt(timestamp) * 1000,
           author,
+          neonDbTimestamp: notesMap.get(fullHash),
         };
       });
 
@@ -262,6 +281,74 @@ export class SnapshotManager {
       console.error(`[Snapshot] Restore error: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Get neonDbTimestamp for a specific snapshot (public, for restore route)
+   */
+  async getSnapshotDbTimestamp(containerId: string, snapshotId: string): Promise<string | undefined> {
+    try {
+      // Resolve short hash to full hash
+      const fullHash = await execInContainer(containerId,
+        `cd /workspace && git rev-parse ${snapshotId} 2>/dev/null || echo ""`
+      );
+      if (!fullHash.trim()) return undefined;
+      return this.readNoteTimestamp(containerId, fullHash.trim());
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Read neonDbTimestamp from git notes for a single commit
+   */
+  private async readNoteTimestamp(containerId: string, commitHash: string): Promise<string | undefined> {
+    try {
+      const note = await execInContainer(containerId,
+        `cd /workspace && git notes show ${commitHash} 2>/dev/null || echo ""`
+      );
+      if (!note.trim()) return undefined;
+      const parsed = JSON.parse(note.trim());
+      return parsed.neonDbTimestamp || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Batch-read all git notes (hash → neonDbTimestamp) for efficiency
+   */
+  private async readAllNotes(containerId: string): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    try {
+      const notesOutput = await execInContainer(containerId,
+        'cd /workspace && git notes list 2>/dev/null || echo ""'
+      );
+      if (!notesOutput.trim()) return map;
+
+      // git notes list outputs: <note-blob-hash> <commit-hash>
+      const lines = notesOutput.split('\n').filter(Boolean);
+      for (const line of lines) {
+        const [noteBlob, commitHash] = line.split(/\s+/);
+        if (!noteBlob || !commitHash) continue;
+        try {
+          const noteContent = await execInContainer(containerId,
+            `cd /workspace && git cat-file -p ${noteBlob} 2>/dev/null || echo ""`
+          );
+          if (noteContent.trim()) {
+            const parsed = JSON.parse(noteContent.trim());
+            if (parsed.neonDbTimestamp) {
+              map.set(commitHash, parsed.neonDbTimestamp);
+            }
+          }
+        } catch {
+          // Skip malformed notes
+        }
+      }
+    } catch {
+      // Notes not available
+    }
+    return map;
   }
 
   /**

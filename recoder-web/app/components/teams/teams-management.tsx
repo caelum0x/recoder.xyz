@@ -14,11 +14,14 @@ import { InvitationTable } from './team-components/invitation-table';
 import { LoadingCard } from './team-components/loading-card';
 
 // Import type definitions
+import { createScopedLogger } from '~/utils/logger';
 import type {
   Member,
   Invitation,
   HandleInviteMemberParams
 } from './team-components/types';
+
+const logger = createScopedLogger('TeamsManagement');
 
 interface TeamsManagementProps {
   // Organization data from parent/context
@@ -66,7 +69,7 @@ export function TeamsManagement({
         setMembers(membersData || []);
       }
     } catch (error) {
-      console.error('Failed to fetch team data:', error);
+      logger.error('Failed to fetch team data:', error);
       toast.error('Failed to fetch team data');
     } finally {
       setIsLoading(false);
@@ -126,7 +129,7 @@ export function TeamsManagement({
 
       setInvitations((prev) => [...prev, newInvitation]);
     } catch (error) {
-      console.error('Failed to send invitation:', error);
+      logger.error('Failed to send invitation:', error);
       toast.error('Failed to send invitation');
     } finally {
       setIsLoading(false);
@@ -151,7 +154,7 @@ export function TeamsManagement({
         )
       );
     } catch (error) {
-      console.error('Failed to cancel invitation:', error);
+      logger.error('Failed to cancel invitation:', error);
       toast.error('Failed to cancel invitation');
     } finally {
       setIsLoading(false);
@@ -177,7 +180,7 @@ export function TeamsManagement({
       // Update member list
       setMembers(members.filter((member) => member.id !== memberId));
     } catch (error) {
-      console.error('Failed to remove member:', error);
+      logger.error('Failed to remove member:', error);
       toast.error('Failed to remove member');
     } finally {
       setIsLoading(false);
@@ -202,7 +205,7 @@ export function TeamsManagement({
         )
       );
     } catch (error) {
-      console.error('Failed to update member role:', error);
+      logger.error('Failed to update member role:', error);
       toast.error('Failed to update member role');
     } finally {
       setIsLoading(false);

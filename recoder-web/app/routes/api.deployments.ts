@@ -6,6 +6,9 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { createDeploymentManager } from '~/lib/.server/deployment/deployment-manager';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DeploymentsList');
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   try {
@@ -21,11 +24,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       deployments,
     });
   } catch (error) {
-    console.error('Failed to list deployments:', error);
+    logger.error('Failed to list deployments:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to list deployments',
+        error: 'Failed to list deployments',
       },
       { status: 500 }
     );
@@ -54,15 +57,33 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ success: false, error: 'API token required. Please configure your deployment tokens.' }, { status: 400 });
     }
 
-    // Create environment with user-provided tokens
-    const envWithTokens = {
-      ...(context as any)?.cloudflare?.env || process.env,
-      // Add user tokens to environment
-      VERCEL_TOKEN: platform === 'vercel' ? apiToken : (context as any)?.cloudflare?.env || process.env.VERCEL_TOKEN,
-      NETLIFY_TOKEN: platform === 'netlify' ? apiToken : (context as any)?.cloudflare?.env || process.env.NETLIFY_TOKEN,
-      CLOUDFLARE_API_TOKEN: platform === 'cloudflare' && apiToken?.token ? apiToken.token : (context as any)?.cloudflare?.env || process.env.CLOUDFLARE_API_TOKEN,
-      CLOUDFLARE_ACCOUNT_ID: platform === 'cloudflare' && apiToken?.accountId ? apiToken.accountId : (context as any)?.cloudflare?.env || process.env.CLOUDFLARE_ACCOUNT_ID,
+    // Validate token format (must be a non-empty string or a Cloudflare config object)
+    const allowedPlatforms = ['vercel', 'netlify', 'cloudflare', 'railway'];
+    if (!allowedPlatforms.includes(platform)) {
+      return json({ success: false, error: 'Unsupported deployment platform' }, { status: 400 });
+    }
+
+    // Build a minimal env with only the token for the selected platform.
+    // Never spread the full process.env to avoid leaking server secrets.
+    const baseEnv = (context as any)?.cloudflare?.env || {};
+    const deployEnv: Record<string, string> = {
+      NODE_ENV: baseEnv.NODE_ENV || process.env.NODE_ENV || 'production',
     };
+
+    if (platform === 'vercel' && typeof apiToken === 'string') {
+      deployEnv.VERCEL_TOKEN = apiToken;
+    } else if (platform === 'netlify' && typeof apiToken === 'string') {
+      deployEnv.NETLIFY_TOKEN = apiToken;
+    } else if (platform === 'cloudflare' && typeof apiToken === 'object' && apiToken !== null) {
+      if (typeof apiToken.token === 'string') deployEnv.CLOUDFLARE_API_TOKEN = apiToken.token;
+      if (typeof apiToken.accountId === 'string') deployEnv.CLOUDFLARE_ACCOUNT_ID = apiToken.accountId;
+    } else if (platform === 'railway' && typeof apiToken === 'string') {
+      deployEnv.RAILWAY_TOKEN = apiToken;
+    } else {
+      return json({ success: false, error: 'Invalid API token format for this platform' }, { status: 400 });
+    }
+
+    const envWithTokens = deployEnv;
 
     const manager = createDeploymentManager(envWithTokens);
     const deployment = await manager.createDeployment({
@@ -76,11 +97,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
       deployment,
     });
   } catch (error) {
-    console.error('Deployment creation error:', error);
+    logger.error('Deployment creation error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Deployment failed',
+        error: 'Deployment failed',
       },
       { status: 500 }
     );

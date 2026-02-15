@@ -1,0 +1,26 @@
+"use server";
+
+import type { Template } from "@repo/backend/prisma/client";
+import { parseError } from "@repo/lib/parse-error";
+import { revalidatePath } from "next/cache";
+import { database } from "@/lib/database";
+
+export const deleteTemplate = async (
+  id: Template["id"]
+): Promise<{
+  error?: string;
+}> => {
+  try {
+    await database.template.delete({
+      where: { id },
+    });
+
+    revalidatePath("/settings/templates");
+
+    return {};
+  } catch (error) {
+    const message = parseError(error);
+
+    return { error: message };
+  }
+};

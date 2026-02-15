@@ -10,6 +10,7 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
 import {
   WorkflowExecutor,
   workflow,
@@ -24,6 +25,8 @@ import {
   type StepExecutor,
   type StepContext,
 } from '~/lib/services/workflow';
+
+const logger = createScopedLogger('WorkflowsStore');
 
 // ============================================
 // Types
@@ -537,7 +540,7 @@ export async function startWorkflow(
 ): Promise<WorkflowState | null> {
   const template = getTemplateById(templateId);
   if (!template) {
-    console.error(`[Workflows] Template not found: ${templateId}`);
+    logger.error(`[Workflows] Template not found: ${templateId}`);
     return null;
   }
 
@@ -863,7 +866,7 @@ export function loadPersistedState(): void {
       customTemplatesStore.set(parsed);
     }
   } catch (error) {
-    console.warn('[Workflows] Failed to load persisted state:', error);
+    logger.warn('[Workflows] Failed to load persisted state:', error);
   }
 }
 
@@ -880,7 +883,7 @@ export function persistState(): void {
     const templates = customTemplatesStore.get();
     localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
   } catch (error) {
-    console.warn('[Workflows] Failed to persist state:', error);
+    logger.warn('[Workflows] Failed to persist state:', error);
   }
 }
 

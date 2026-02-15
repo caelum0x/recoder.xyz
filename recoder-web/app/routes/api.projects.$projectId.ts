@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectDetail');
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
   try {
@@ -27,7 +30,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
 
     return json({ project });
   } catch (error) {
-    console.error('Project API loader error:', error);
+    logger.error('Project API loader error:', error);
     return json({ error: 'Failed to load project' }, { status: 500 });
   }
 }
@@ -93,7 +96,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
     return json({ error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('Project API action error:', error);
-    return json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
+    logger.error('Project API action error:', error);
+    return json({ error: 'Internal server error' }, { status: 500 });
   }
 }

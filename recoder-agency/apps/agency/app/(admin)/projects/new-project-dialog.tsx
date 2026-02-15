@@ -2,11 +2,16 @@
 
 import { XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { createProject, createProjectFromTemplate } from "./actions";
+import {
+	createProject,
+	createProjectFromPlaybook,
+	createProjectFromTemplate,
+} from "./actions";
 
 interface NewProjectDialogProps {
 	clients: { id: string; name: string }[];
 	templates: { id: string; name: string | null }[];
+	playbooks: { dbId: number; name: string; defaultSlaDays: number }[];
 	serviceSkus: {
 		dbId: number;
 		id: string;
@@ -24,14 +29,18 @@ interface NewProjectDialogProps {
 export function NewProjectDialog({
 	clients,
 	templates,
+	playbooks,
 	serviceSkus,
 	preselectedTemplate,
 }: NewProjectDialogProps) {
 	const router = useRouter();
 
 	const handleSubmit = async (formData: FormData) => {
+		const playbookDbId = String(formData.get("playbookDbId") ?? "").trim();
 		const templateId = formData.get("templateWorkspaceId") as string;
-		if (templateId) {
+		if (playbookDbId) {
+			await createProjectFromPlaybook(formData);
+		} else if (templateId) {
 			await createProjectFromTemplate(formData);
 		} else {
 			await createProject(formData);
@@ -87,6 +96,31 @@ export function NewProjectDialog({
 								</option>
 							))}
 						</select>
+					</div>
+					<div>
+						<label
+							htmlFor="playbookDbId"
+							className="block text-sm font-medium text-text mb-1"
+						>
+							Delivery Playbook (optional)
+						</label>
+						<select
+							id="playbookDbId"
+							name="playbookDbId"
+							defaultValue=""
+							className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="">No playbook</option>
+							{playbooks.map((playbook) => (
+								<option key={playbook.dbId} value={String(playbook.dbId)}>
+									{playbook.name} (SLA {playbook.defaultSlaDays}d)
+								</option>
+							))}
+						</select>
+						<p className="mt-1 text-xs text-text-muted">
+							Playbook creates pre-wired deliverables/phases for faster project
+							bootstrap.
+						</p>
 					</div>
 					<div>
 						<label

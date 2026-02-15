@@ -1,0 +1,60 @@
+{
+	"name": "@giselle-internal/workflow-designer-ui",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"clean": "rm -rf node_modules",
+		"check-types": "tsc --noEmit",
+		"format": "biome check --write .",
+		"test": "vitest"
+	},
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"dependencies": {
+		"@giselle-internal/ui": "workspace:^",
+		"@giselles-ai/action-registry": "workspace:*",
+		"@giselles-ai/giselle": "workspace:*",
+		"@giselles-ai/language-model": "workspace:^",
+		"@giselles-ai/language-model-registry": "workspace:*",
+		"@giselles-ai/node-registry": "workspace:*",
+		"@giselles-ai/protocol": "workspace:*",
+		"@giselles-ai/react": "workspace:*",
+		"@giselles-ai/text-editor": "workspace:^",
+		"@giselles-ai/text-editor-utils": "workspace:^",
+		"@giselles-ai/trigger-registry": "workspace:*",
+		"@giselles-ai/utils": "workspace:*",
+		"@giselles-ai/workspace-utils": "workspace:*",
+		"@xyflow/react": "catalog:",
+		"boring-avatars": "1.11.1",
+		"clsx": "catalog:",
+		"fast-levenshtein": "catalog:",
+		"lucide-react": "catalog:",
+		"motion": "catalog:",
+		"next": "catalog:",
+		"radix-ui": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"react-resizable-panels": "catalog:",
+		"streamdown": "catalog:",
+		"swr": "catalog:",
+		"zustand": "catalog:"
+	},
+	"devDependencies": {
+		"@giselles-ai/tsconfig": "workspace:*",
+		"@types/fast-levenshtein": "catalog:",
+		"@types/node": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"ai": "catalog:",
+		"pino": "catalog:",
+		"tailwindcss": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"peerDependencies": {
+		"pino": "catalog:",
+		"zod": "catalog:"
+	}
+}

@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Device authorization error:', error);
     return NextResponse.json(
-      { error: 'Authorization failed', message: error.message },
+      { error: 'Authorization failed' },
       { status: 400 }
     );
   }
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Get device code error:', error);
     return NextResponse.json(
-      { error: 'Failed to get device code info', message: error.message },
+      { error: 'Failed to get device code info' },
       { status: 500 }
     );
   }

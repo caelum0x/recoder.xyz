@@ -20,8 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           valid: false,
-          error: 'Invalid request format',
-          details: validation.error.errors
+          error: 'Invalid request format'
         },
         { status: 400 }
       );

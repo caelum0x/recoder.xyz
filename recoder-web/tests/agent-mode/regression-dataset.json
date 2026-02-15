@@ -1,0 +1,347 @@
+{
+  "version": "1.0.0",
+  "description": "Composer/Agent-mode regression dataset for benchmarking agent quality",
+  "scoring": {
+    "pass_threshold": 0.7,
+    "weights": {
+      "files_correct": 0.3,
+      "build_passes": 0.25,
+      "functionality_correct": 0.25,
+      "no_regressions": 0.1,
+      "code_quality": 0.1
+    }
+  },
+  "test_cases": [
+    {
+      "id": "agent-001",
+      "name": "Add Todo List with localStorage",
+      "difficulty": "easy",
+      "prompt": "Add a todo list with localStorage persistence to this React app",
+      "starter_template": "react-vite",
+      "expected_outcomes": {
+        "files_created": [
+          "src/components/TodoList.tsx",
+          "src/components/TodoItem.tsx"
+        ],
+        "files_modified": [
+          "src/App.tsx"
+        ],
+        "must_contain_patterns": {
+          "src/components/TodoList.tsx": [
+            "localStorage.getItem",
+            "localStorage.setItem",
+            "useState",
+            "interface Todo"
+          ],
+          "src/App.tsx": [
+            "TodoList"
+          ]
+        },
+        "build_must_pass": true,
+        "functionality_checks": [
+          "renders_todo_input",
+          "adds_todo_on_submit",
+          "persists_across_reload",
+          "can_delete_todo",
+          "can_toggle_complete"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "All expected files created/modified (+/-1 extra file OK)",
+        "build_passes": "npm run build exits 0",
+        "functionality_correct": "At least 3/5 functionality checks pass",
+        "no_regressions": "Existing App.tsx routes still render",
+        "code_quality": "TypeScript types used, no any, proper component structure"
+      }
+    },
+    {
+      "id": "agent-002",
+      "name": "Add User Authentication",
+      "difficulty": "medium",
+      "prompt": "Add user authentication with email/password login and signup forms to this Next.js app",
+      "starter_template": "nextjs-app-router",
+      "expected_outcomes": {
+        "files_created": [
+          "app/login/page.tsx",
+          "app/signup/page.tsx",
+          "lib/auth.ts"
+        ],
+        "files_modified": [
+          "app/layout.tsx"
+        ],
+        "must_contain_patterns": {
+          "app/login/page.tsx": [
+            "email",
+            "password",
+            "onSubmit",
+            "form"
+          ],
+          "lib/auth.ts": [
+            "signIn",
+            "signUp",
+            "signOut"
+          ]
+        },
+        "build_must_pass": true,
+        "shell_commands_expected": [
+          "npm install"
+        ],
+        "functionality_checks": [
+          "login_form_renders",
+          "signup_form_renders",
+          "auth_state_management",
+          "protected_route_redirect",
+          "validation_on_empty_fields"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "Auth pages and lib/auth created",
+        "build_passes": "next build exits 0",
+        "functionality_correct": "At least 3/5 functionality checks pass",
+        "no_regressions": "Home page still renders",
+        "code_quality": "Form validation, proper error handling, no hardcoded secrets"
+      }
+    },
+    {
+      "id": "agent-003",
+      "name": "Fix CSS Layout Bug",
+      "difficulty": "easy",
+      "prompt": "The sidebar is overlapping the main content on mobile viewports. Fix the responsive layout so the sidebar collapses to a hamburger menu on screens below 768px",
+      "starter_template": "react-dashboard",
+      "expected_outcomes": {
+        "files_modified": [
+          "src/components/Sidebar.tsx",
+          "src/components/Layout.tsx"
+        ],
+        "must_contain_patterns": {
+          "src/components/Sidebar.tsx": [
+            "768",
+            "hamburger|menu|toggle|mobile"
+          ],
+          "src/components/Layout.tsx": [
+            "flex|grid"
+          ]
+        },
+        "build_must_pass": true,
+        "functionality_checks": [
+          "sidebar_hidden_on_mobile",
+          "hamburger_visible_on_mobile",
+          "sidebar_visible_on_desktop",
+          "hamburger_toggles_sidebar"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "Sidebar and Layout modified",
+        "build_passes": "Build succeeds",
+        "functionality_correct": "At least 3/4 responsive checks pass",
+        "no_regressions": "Desktop layout unchanged",
+        "code_quality": "Uses CSS media queries or Tailwind responsive prefixes"
+      }
+    },
+    {
+      "id": "agent-004",
+      "name": "Refactor Component to Custom Hook",
+      "difficulty": "medium",
+      "prompt": "Refactor the data fetching logic in ProductList.tsx into a custom hook called useProducts, and add loading/error states",
+      "starter_template": "react-ecommerce",
+      "expected_outcomes": {
+        "files_created": [
+          "src/hooks/useProducts.ts"
+        ],
+        "files_modified": [
+          "src/components/ProductList.tsx"
+        ],
+        "must_contain_patterns": {
+          "src/hooks/useProducts.ts": [
+            "export function useProducts",
+            "useState",
+            "useEffect",
+            "loading",
+            "error",
+            "fetch|axios"
+          ],
+          "src/components/ProductList.tsx": [
+            "useProducts",
+            "loading",
+            "error"
+          ]
+        },
+        "build_must_pass": true,
+        "functionality_checks": [
+          "hook_returns_products",
+          "hook_returns_loading_state",
+          "hook_returns_error_state",
+          "component_shows_loading",
+          "component_shows_error",
+          "products_still_render"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "Custom hook created, component refactored",
+        "build_passes": "TypeScript compilation passes",
+        "functionality_correct": "At least 4/6 checks pass",
+        "no_regressions": "ProductList still renders products",
+        "code_quality": "Proper TypeScript return type, cleanup in useEffect"
+      }
+    },
+    {
+      "id": "agent-005",
+      "name": "Add REST API Endpoint",
+      "difficulty": "medium",
+      "prompt": "Add a /api/tasks CRUD endpoint with GET, POST, PUT, DELETE methods. Use an in-memory array for storage. Include input validation.",
+      "starter_template": "nextjs-app-router",
+      "expected_outcomes": {
+        "files_created": [
+          "app/api/tasks/route.ts"
+        ],
+        "must_contain_patterns": {
+          "app/api/tasks/route.ts": [
+            "export async function GET",
+            "export async function POST",
+            "NextResponse",
+            "validation|validate|required"
+          ]
+        },
+        "build_must_pass": true,
+        "functionality_checks": [
+          "get_returns_array",
+          "post_creates_task",
+          "post_validates_input",
+          "put_updates_task",
+          "delete_removes_task",
+          "returns_proper_status_codes"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "API route file created with correct exports",
+        "build_passes": "Next.js build passes",
+        "functionality_correct": "At least 4/6 CRUD operations work",
+        "no_regressions": "Existing routes unaffected",
+        "code_quality": "Input validation, proper HTTP status codes, TypeScript interfaces"
+      }
+    },
+    {
+      "id": "agent-006",
+      "name": "Add Dark Mode Toggle",
+      "difficulty": "easy",
+      "prompt": "Add a dark mode toggle to the header that persists the user's preference in localStorage and applies dark styles to the entire app",
+      "starter_template": "react-vite-tailwind",
+      "expected_outcomes": {
+        "files_created_or_modified": [
+          "src/components/ThemeToggle.tsx",
+          "src/App.tsx",
+          "tailwind.config.js"
+        ],
+        "must_contain_patterns": {
+          "src/components/ThemeToggle.tsx": [
+            "dark",
+            "localStorage",
+            "toggle|switch"
+          ],
+          "tailwind.config.js": [
+            "darkMode"
+          ]
+        },
+        "build_must_pass": true,
+        "functionality_checks": [
+          "toggle_button_renders",
+          "click_toggles_dark_class",
+          "persists_preference",
+          "initial_state_from_storage"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "ThemeToggle created, config updated",
+        "build_passes": "Build succeeds",
+        "functionality_correct": "At least 3/4 checks pass",
+        "no_regressions": "Light mode still works",
+        "code_quality": "Respects system preference, smooth transition"
+      }
+    },
+    {
+      "id": "agent-007",
+      "name": "Multi-file Database Integration",
+      "difficulty": "hard",
+      "prompt": "Add a SQLite database with Drizzle ORM. Create a users table with id, name, email, createdAt. Add API routes for CRUD operations and a simple user list page.",
+      "starter_template": "nextjs-app-router",
+      "expected_outcomes": {
+        "files_created": [
+          "lib/db.ts",
+          "lib/schema.ts",
+          "app/api/users/route.ts",
+          "app/users/page.tsx"
+        ],
+        "must_contain_patterns": {
+          "lib/schema.ts": [
+            "sqliteTable|pgTable",
+            "text",
+            "integer",
+            "users"
+          ],
+          "lib/db.ts": [
+            "drizzle",
+            "export"
+          ],
+          "app/api/users/route.ts": [
+            "GET",
+            "POST",
+            "db"
+          ]
+        },
+        "shell_commands_expected": [
+          "npm install drizzle-orm better-sqlite3"
+        ],
+        "build_must_pass": true,
+        "functionality_checks": [
+          "database_initializes",
+          "can_create_user",
+          "can_list_users",
+          "user_page_renders",
+          "proper_error_handling"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "All 4+ files created with correct structure",
+        "build_passes": "Build succeeds with all deps installed",
+        "functionality_correct": "At least 3/5 checks pass",
+        "no_regressions": "Existing pages still work",
+        "code_quality": "Proper schema types, parameterized queries, no SQL injection"
+      }
+    },
+    {
+      "id": "agent-008",
+      "name": "Build Error Auto-Fix",
+      "difficulty": "medium",
+      "prompt": "I have TypeScript errors in my project. Fix all the type errors and make the build pass.",
+      "starter_template": "react-ts-broken",
+      "pre_condition": "Project has 5 intentional TypeScript errors across 3 files",
+      "expected_outcomes": {
+        "files_modified": [
+          "src/components/UserCard.tsx",
+          "src/utils/helpers.ts",
+          "src/App.tsx"
+        ],
+        "build_must_pass": true,
+        "expected_fix_iterations": 1,
+        "functionality_checks": [
+          "all_ts_errors_fixed",
+          "no_new_errors_introduced",
+          "original_functionality_preserved"
+        ]
+      },
+      "scoring_rubric": {
+        "files_correct": "All broken files identified and fixed",
+        "build_passes": "tsc --noEmit exits 0",
+        "functionality_correct": "All 3 checks pass",
+        "no_regressions": "No behavior changes, only type fixes",
+        "code_quality": "Uses proper types (not any), fixes root cause"
+      }
+    }
+  ],
+  "meta": {
+    "created": "2026-02-14",
+    "purpose": "Regression testing for Recoder Agent Mode (Composer)",
+    "how_to_run": "Each test case should be run in an isolated sandbox with the specified starter template. The agent receives the prompt and must complete all phases. Score each dimension 0-1 and compute weighted average.",
+    "pass_criteria": "Weighted score >= 0.7 for each test case, AND build_must_pass is true for all cases"
+  }
+}

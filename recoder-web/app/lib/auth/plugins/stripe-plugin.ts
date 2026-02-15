@@ -5,6 +5,8 @@
 
 import type { AuthUser, AuthSession, Subscription, PlanLimits } from '../types';
 import { getAuthEnv, isStripeConfigured } from '../env';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('StripePlugin');
 
 /**
  * Stripe checkout session parameters
@@ -234,7 +236,7 @@ export function createStripePlugin(config: StripePluginConfig = {}) {
 
   // If Stripe is not configured, return empty plugin
   if (!secretKey || !webhookSecret) {
-    console.warn('[Stripe] Stripe not configured - plugin disabled');
+    logger.warn('[Stripe] Stripe not configured - plugin disabled');
     return [];
   }
 
@@ -270,23 +272,23 @@ export function createStripePlugin(config: StripePluginConfig = {}) {
         : undefined,
 
       onEvent: async (event: StripeEvent) => {
-        console.log(`[Stripe] Received event: ${event.type}`);
+        logger.info(`[Stripe] Received event: ${event.type}`);
 
         // Handle product and price events
         switch (event.type) {
           case 'product.created':
           case 'product.updated':
-            console.log(`[Stripe] Product created/updated: ${event.data.object.id}`);
+            logger.info(`[Stripe] Product created/updated: ${event.data.object.id}`);
             break;
           case 'product.deleted':
-            console.log(`[Stripe] Product deleted: ${event.data.object.id}`);
+            logger.info(`[Stripe] Product deleted: ${event.data.object.id}`);
             break;
           case 'price.created':
           case 'price.updated':
-            console.log(`[Stripe] Price created/updated: ${event.data.object.id}`);
+            logger.info(`[Stripe] Price created/updated: ${event.data.object.id}`);
             break;
           case 'price.deleted':
-            console.log(`[Stripe] Price deleted: ${event.data.object.id}`);
+            logger.info(`[Stripe] Price deleted: ${event.data.object.id}`);
             break;
         }
 
@@ -297,7 +299,7 @@ export function createStripePlugin(config: StripePluginConfig = {}) {
       },
 
       onCustomerCreate: async (params: CustomerCreateParams) => {
-        console.log(`[Stripe] Customer created: ${params.stripeCustomer.id} for user ${params.user.id}`);
+        logger.info(`[Stripe] Customer created: ${params.stripeCustomer.id} for user ${params.user.id}`);
 
         if (onCustomerCreate) {
           await onCustomerCreate(params);
@@ -323,14 +325,14 @@ export async function verifyStripeWebhook(
   try {
     // In production, use the Stripe SDK to verify
     // This is a placeholder that should use stripe.webhooks.constructEvent
-    console.log('[Stripe] Verifying webhook signature...');
+    logger.info('[Stripe] Verifying webhook signature...');
 
     // For now, parse the payload directly (NOT SECURE - use Stripe SDK in production)
     const event = JSON.parse(typeof payload === 'string' ? payload : payload.toString()) as StripeEvent;
 
     return event;
   } catch (error) {
-    console.error('[Stripe] Webhook verification failed:', error);
+    logger.error('[Stripe] Webhook verification failed:', error);
     return null;
   }
 }
@@ -359,13 +361,13 @@ export async function createCheckoutSession(params: {
     });
 
     if (!response.ok) {
-      console.error('[Stripe] Failed to create checkout session:', await response.text());
+      logger.error('[Stripe] Failed to create checkout session:', await response.text());
       return null;
     }
 
     return (await response.json()) as { url: string };
   } catch (error) {
-    console.error('[Stripe] Error creating checkout session:', error);
+    logger.error('[Stripe] Error creating checkout session:', error);
     return null;
   }
 }
@@ -390,13 +392,13 @@ export async function createPortalSession(params: {
     });
 
     if (!response.ok) {
-      console.error('[Stripe] Failed to create portal session:', await response.text());
+      logger.error('[Stripe] Failed to create portal session:', await response.text());
       return null;
     }
 
     return (await response.json()) as { url: string };
   } catch (error) {
-    console.error('[Stripe] Error creating portal session:', error);
+    logger.error('[Stripe] Error creating portal session:', error);
     return null;
   }
 }

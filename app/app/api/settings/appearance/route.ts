@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[Appearance Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch appearance settings' },
+      { success: false, error: 'Failed to fetch appearance settings' },
       { status: 500 }
     );
   }
@@ -89,7 +89,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error('[Appearance Settings PUT] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update appearance settings' },
+      { success: false, error: 'Failed to update appearance settings' },
       { status: 500 }
     );
   }

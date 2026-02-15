@@ -5,6 +5,7 @@
  * Uses localStorage for browser-based storage with JSON serialization.
  */
 
+import { createScopedLogger } from '~/utils/logger';
 import type {
   McpServer,
   McpToolConsent,
@@ -13,6 +14,8 @@ import type {
   McpConsentValue,
   McpTransport,
 } from './types';
+
+const logger = createScopedLogger('MCPStorage');
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -50,7 +53,7 @@ function loadFromStorage<T>(key: string, defaultValue: T): T {
       return value;
     });
   } catch (error) {
-    console.error(`Failed to load ${key} from storage:`, error);
+    logger.error(`Failed to load ${key} from storage:`, error);
     return defaultValue;
   }
 }
@@ -62,7 +65,7 @@ function saveToStorage<T>(key: string, data: T): void {
   try {
     storage.setItem(key, JSON.stringify(data));
   } catch (error) {
-    console.error(`Failed to save ${key} to storage:`, error);
+    logger.error(`Failed to save ${key} to storage:`, error);
   }
 }
 

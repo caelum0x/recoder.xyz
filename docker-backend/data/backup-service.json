@@ -1,0 +1,84 @@
+{
+  "jobs": [
+    {
+      "id": "93a569ba-67f2-4f02-9a22-925cd99d6c99",
+      "type": "incremental",
+      "status": "completed",
+      "scope": "all",
+      "startedAt": 1770300878514,
+      "completedAt": 1770300878548,
+      "path": "data/backups/backup-incremental-all-2026-02-05T14-14-38-514Z.tar.gz",
+      "size": 6080,
+      "checksum": "ec0899b16680ec64ad39c879c4d03a1ce42ddd550bedbb90d0ecc11911d551cf"
+    },
+    {
+      "id": "204936c1-7d85-484d-9972-370575fdd50d",
+      "type": "full",
+      "status": "completed",
+      "scope": "all",
+      "startedAt": 1770300878550,
+      "completedAt": 1770300878568,
+      "path": "data/backups/backup-full-all-2026-02-05T14-14-38-550Z.tar.gz",
+      "size": 13203,
+      "checksum": "901417a5cd97d4e4ca0bd78d4002ae9e543bfbda6e3f7a43a006bf6294743923"
+    },
+    {
+      "id": "f64bf46d-f26d-4fe7-aabb-17d541fe4bef",
+      "type": "full",
+      "status": "completed",
+      "scope": "all",
+      "startedAt": 1770300878569,
+      "completedAt": 1770300878587,
+      "path": "data/backups/backup-full-all-2026-02-05T14-14-38-569Z.tar.gz",
+      "size": 26846,
+      "checksum": "e5dc4083088dc8552c0beccfa3b219f8bda61617dd852d4043a2e0b163aba26d"
+    },
+    {
+      "id": "63a9ad96-3c52-47cc-a2a5-9a4331ce2146",
+      "type": "incremental",
+      "status": "completed",
+      "scope": "all",
+      "startedAt": 1770304659375,
+      "completedAt": 1770304659434,
+      "path": "data/backups/backup-incremental-all-2026-02-05T15-17-39-381Z.tar.gz",
+      "size": 56314,
+      "checksum": "c67c11fb2b7eecec5cefd982b0cdada80d1a94b1a784e4969415c02da45ee6d6"
+    },
+    {
+      "id": "e4086946-c63d-40dd-a5ef-3f3b1aaf075d",
+      "type": "incremental",
+      "status": "completed",
+      "scope": "all",
+      "startedAt": 1770308317996,
+      "completedAt": 1770308318044,
+      "path": "data/backups/backup-incremental-all-2026-02-05T16-18-37-996Z.tar.gz",
+      "size": 114648,
+      "checksum": "cd93720b1836dc837cc0f87cc14781102e18285e072e32e31afe04bd58ac93fd"
+    },
+    {
+      "id": "11685a82-d58e-460a-95c4-98a337130b2c",
+      "type": "incremental",
+      "status": "completed",
+      "scope": "all",
+      "startedAt": 1770311926345,
+      "completedAt": 1770311926385,
+      "path": "data/backups/backup-incremental-all-2026-02-05T17-18-46-345Z.tar.gz",
+      "size": 231975,
+      "checksum": "cea9bd032a5d3ab2bf47b637d7220ece7c109fe2556600289621ba9e91ac5fca"
+    },
+    {
+      "id": "4b4d5193-7f96-46a4-9415-560e944b41d8",
+      "type": "incremental",
+      "status": "completed",
+      "scope": "all",
+      "startedAt": 1770315576482,
+      "completedAt": 1770315576567,
+      "path": "data/backups/backup-incremental-all-2026-02-05T18-19-36-487Z.tar.gz",
+      "size": 466762,
+      "checksum": "79b4297453c9d519302cf4b7e062babf94485485bb5eb1353fb3d56588def663"
+    }
+  ],
+  "lastHourly": 1770315576475,
+  "lastDaily": 1770300878514,
+  "lastWeekly": 1770300878514
+}

@@ -21,7 +21,12 @@ import {
 	projects,
 } from "@/db";
 import { getTeamBudgetOverview } from "@/lib/agency/budget-tracking";
-import { getTeamModelCostBreakdown } from "@/lib/agency/model-cost-breakdown";
+import {
+	getTeamFallbackTrendSummary,
+	getTeamModelCostBreakdown,
+	getTeamModelFallbackBreakdown,
+} from "@/lib/agency/model-cost-breakdown";
+import { getEffectiveModelRoutingByProject } from "@/lib/agency/model-routing";
 import { getTeamMarginOverview } from "@/lib/agency/project-economics";
 import {
 	fetchAuditGuardReadiness,
@@ -42,8 +47,20 @@ function formatCurrency(cents: number, currency = "USD") {
 	}).format(cents / 100);
 }
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+	searchParams,
+}: {
+	searchParams: Promise<{ fallbackWindow?: string }>;
+}) {
 	const team = await fetchCurrentTeam();
+	const params = await searchParams;
+	const fallbackWindowParam = params.fallbackWindow;
+	const fallbackWindow =
+		fallbackWindowParam === "30d" || fallbackWindowParam === "all"
+			? fallbackWindowParam
+			: "7d";
+	const fallbackWindowDays =
+		fallbackWindow === "7d" ? 7 : fallbackWindow === "30d" ? 30 : null;
 
 	const [
 		clientCount,
@@ -57,6 +74,9 @@ export default async function AdminDashboardPage() {
 		unitEconomicsRows,
 		marginOverview,
 		modelCostBreakdown,
+		modelFallbackBreakdown,
+		fallbackTrendSummary,
+		effectiveRoutingRows,
 		auditGuardReadiness,
 		restoreDrillReadiness,
 		recentAuditEvents,
@@ -127,6 +147,11 @@ export default async function AdminDashboardPage() {
 		fetchProjectUnitEconomicsRows(team.dbId, 8),
 		getTeamMarginOverview(team.dbId),
 		getTeamModelCostBreakdown(team.dbId, 8),
+		getTeamModelFallbackBreakdown(team.dbId, 8, fallbackWindowDays),
+		fallbackWindowDays
+			? getTeamFallbackTrendSummary(team.dbId, fallbackWindowDays)
+			: null,
+		getEffectiveModelRoutingByProject(team.dbId, 10),
 		fetchAuditGuardReadiness(),
 		fetchRestoreDrillReadiness(
 			Math.min(
@@ -821,6 +846,232 @@ export default async function AdminDashboardPage() {
 										</p>
 									</div>
 								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+
+			{/* Model Routing Fallbacks */}
+			<div className="rounded-xl border border-border bg-background p-4">
+				<div className="flex items-center justify-between gap-2">
+					<div className="flex items-center gap-2">
+						<BarChart3Icon className="size-4 text-text-muted" />
+						<h2 className="text-sm font-medium text-text-muted">
+							Model Fallback Rate
+						</h2>
+					</div>
+					<div className="flex items-center gap-2">
+						{fallbackTrendSummary && (
+							<div className="hidden items-end gap-1 rounded-md border border-border/70 bg-background px-2 py-1 md:inline-flex">
+								<div className="flex items-end gap-1">
+									<div
+										className="w-2 rounded-sm bg-blue-400/70"
+										style={{
+											height: `${Math.max(4, Math.min(24, (fallbackTrendSummary.priorRatePercent / 100) * 24))}px`,
+										}}
+										title={`Prior: ${fallbackTrendSummary.priorRatePercent.toFixed(1)}%`}
+									/>
+									<div
+										className="w-2 rounded-sm bg-emerald-400/80"
+										style={{
+											height: `${Math.max(4, Math.min(24, (fallbackTrendSummary.currentRatePercent / 100) * 24))}px`,
+										}}
+										title={`Current: ${fallbackTrendSummary.currentRatePercent.toFixed(1)}%`}
+									/>
+								</div>
+								<span
+									className={`text-[10px] ${
+										fallbackTrendSummary.deltaPercent > 0
+											? "text-red-400"
+											: fallbackTrendSummary.deltaPercent < 0
+												? "text-emerald-400"
+												: "text-text-muted"
+									}`}
+									title={`Current window: ${fallbackTrendSummary.currentCount} generations; Prior window: ${fallbackTrendSummary.priorCount} generations`}
+								>
+									{fallbackTrendSummary.currentRatePercent.toFixed(1)}%{" vs "}
+									{fallbackTrendSummary.priorRatePercent.toFixed(1)}%{" ("}
+									{fallbackTrendSummary.deltaPercent >= 0 ? "+" : ""}
+									{fallbackTrendSummary.deltaPercent.toFixed(1)}pp{")"}
+									{" · "}
+									{fallbackTrendSummary.currentCount}/
+									{fallbackTrendSummary.priorCount}
+								</span>
+							</div>
+						)}
+						<div className="inline-flex items-center rounded-md border border-border/70 bg-background p-0.5">
+							{[
+								{ key: "7d", label: "7d" },
+								{ key: "30d", label: "30d" },
+								{ key: "all", label: "All" },
+							].map((windowOption) => {
+								const active = fallbackWindow === windowOption.key;
+								return (
+									<Link
+										key={windowOption.key}
+										href={`/dashboard?fallbackWindow=${windowOption.key}`}
+										className={`rounded px-2 py-1 text-[11px] transition-colors ${
+											active
+												? "bg-bg-hover text-text font-medium"
+												: "text-text-muted hover:text-text"
+										}`}
+									>
+										{windowOption.label}
+									</Link>
+								);
+							})}
+						</div>
+						<span className="text-xs text-text-muted">
+							{modelFallbackBreakdown.length} row(s)
+						</span>
+					</div>
+				</div>
+				{modelFallbackBreakdown.length === 0 ? (
+					<p className="mt-3 text-sm text-text-muted">
+						No fallback routing data yet.
+					</p>
+				) : (
+					<div className="mt-3 space-y-2">
+						{modelFallbackBreakdown.map((row) => {
+							const fallbackRate = `${row.fallbackRatePercent.toFixed(1)}%`;
+							const projectLabel = row.projectId ? (
+								<Link
+									href={`/projects/${row.projectId}`}
+									className="text-sm font-medium text-text hover:text-primary transition-colors"
+								>
+									{row.projectName ?? row.projectId}
+								</Link>
+							) : (
+								<p className="text-sm font-medium text-text">No project link</p>
+							);
+							return (
+								<div
+									key={`${row.projectId ?? "none"}-${row.provider}-${row.modelId}`}
+									className="rounded-lg border border-border/70 bg-bg-hover/20 p-3"
+								>
+									<div className="flex flex-wrap items-center justify-between gap-2">
+										{projectLabel}
+										<span className="text-xs text-text-muted">
+											{row.generationCount} generation(s)
+										</span>
+									</div>
+									<p className="mt-1 text-xs text-text-muted">
+										<span className="font-mono text-text">{row.modelId}</span> (
+										{row.provider})
+									</p>
+									<div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
+										<div className="rounded border border-border/60 bg-background px-2 py-1.5">
+											<p className="text-[10px] text-text-muted">
+												Fallback Rate
+											</p>
+											<p className="text-xs font-medium text-text">
+												{fallbackRate}
+											</p>
+										</div>
+										<div className="rounded border border-border/60 bg-background px-2 py-1.5">
+											<p className="text-[10px] text-text-muted">Fallbacks</p>
+											<p className="text-xs font-medium text-text">
+												{row.fallbackCount.toLocaleString()}
+											</p>
+										</div>
+										<div className="rounded border border-border/60 bg-background px-2 py-1.5">
+											<p className="text-[10px] text-text-muted">
+												Non-Fallbacks
+											</p>
+											<p className="text-xs font-medium text-text">
+												{Math.max(
+													0,
+													row.generationCount - row.fallbackCount,
+												).toLocaleString()}
+											</p>
+										</div>
+									</div>
+								</div>
+							);
+						})}
+					</div>
+				)}
+			</div>
+
+			{/* Effective Model Routing */}
+			<div className="rounded-xl border border-border bg-background p-4">
+				<div className="flex items-center justify-between gap-2">
+					<div className="flex items-center gap-2">
+						<CpuIcon className="size-4 text-text-muted" />
+						<h2 className="text-sm font-medium text-text-muted">
+							Effective Model Routing Policies
+						</h2>
+					</div>
+					<span className="text-xs text-text-muted">
+						{effectiveRoutingRows.length} active project(s)
+					</span>
+				</div>
+				{effectiveRoutingRows.length === 0 ? (
+					<p className="mt-3 text-sm text-text-muted">
+						No active projects found for routing policy inspection.
+					</p>
+				) : (
+					<div className="mt-3 space-y-2">
+						{effectiveRoutingRows.map((row) => (
+							<div
+								key={row.projectDbId}
+								className="rounded-lg border border-border/70 bg-bg-hover/20 p-3"
+							>
+								<div className="flex flex-wrap items-center justify-between gap-2">
+									<Link
+										href={`/projects/${row.projectId}`}
+										className="text-sm font-medium text-text hover:text-primary transition-colors"
+									>
+										{row.projectName}
+									</Link>
+									<span className="text-xs text-text-muted">
+										{row.projectStatus}
+									</span>
+								</div>
+								<div className="mt-2 flex flex-wrap items-center gap-2">
+									<span
+										className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${
+											row.policyScope === "project"
+												? "bg-blue-500/10 text-blue-400"
+												: row.policyScope === "team"
+													? "bg-emerald-500/10 text-emerald-400"
+													: "bg-gray-500/10 text-text-muted"
+										}`}
+									>
+										{row.policyScope === "project"
+											? "Project policy"
+											: row.policyScope === "team"
+												? "Team policy"
+												: "No policy"}
+									</span>
+									{row.policyName && (
+										<span className="text-[11px] text-text-muted">
+											{row.policyName}
+										</span>
+									)}
+									{row.priority != null && (
+										<span className="text-[11px] text-text-muted">
+											priority {row.priority}
+										</span>
+									)}
+								</div>
+								<p className="mt-1 text-xs text-text-muted">
+									Preferred:{" "}
+									{row.preferredModelId ? (
+										<span className="font-mono text-text">
+											{row.preferredModelId}
+										</span>
+									) : (
+										"—"
+									)}{" "}
+									{row.fallbackModelId
+										? `• Fallback: ${row.fallbackModelId}`
+										: "• Fallback: —"}{" "}
+									{row.costCeilingCentsPerGeneration != null
+										? `• Ceiling: ${row.costCeilingCentsPerGeneration}¢/gen`
+										: "• Ceiling: none"}
+								</p>
 							</div>
 						))}
 					</div>

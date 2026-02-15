@@ -1,0 +1,12 @@
+name: recoder-infra-prod
+description: Recoder PRODUCTION environment - ECS + Lightsail + Cloudflare Router
+runtime:
+  name: nodejs
+  options:
+    packagemanager: bun
+config:
+  aws:region: us-west-2
+  pulumi:tags:
+    value:
+      pulumi:template: typescript
+      environment: prod

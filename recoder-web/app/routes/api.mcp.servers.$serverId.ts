@@ -33,7 +33,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
       }
     });
   } catch (error: any) {
-    return json({ error: 'Failed to get server', details: error.message }, { status: 500 });
+    return json({ error: 'Failed to get server' }, { status: 500 });
   }
 }
 
@@ -56,7 +56,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
       return json({ success: true });
     } catch (error: any) {
-      return json({ error: 'Failed to delete server', details: error.message }, { status: 500 });
+      return json({ error: 'Failed to delete server' }, { status: 500 });
     }
   }
 
@@ -131,7 +131,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
         }
       });
     } catch (error: any) {
-      return json({ error: 'Failed to update server', details: error.message }, { status: 500 });
+      return json({ error: 'Failed to update server' }, { status: 500 });
     }
   }
 

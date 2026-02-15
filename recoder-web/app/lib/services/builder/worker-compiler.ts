@@ -216,7 +216,7 @@ app.notFound((c) => {
 
 // Error handler
 app.onError((err, c) => {
-  console.error(err);
+  logger.error(err);
   return c.json({ error: 'Internal Server Error' }, 500);
 });
 
@@ -228,6 +228,8 @@ export default app;
  */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('WorkerCompiler');
 
 interface Env {
   ASSETS: Fetcher;

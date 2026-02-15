@@ -5,6 +5,9 @@
 
 import { type ActionFunctionArgs, json } from '@remix-run/node';
 import { getServerById } from '~/lib/.server/mcp/marketplace-catalog';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPMarketplaceInstall');
 
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
@@ -124,7 +127,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         if (dbError.message?.includes('UNIQUE constraint')) {
           return json({ error: 'Server already installed' }, { status: 409 });
         }
-        console.error('[Marketplace Install] DB error:', dbError);
+        logger.error('[Marketplace Install] DB error:', dbError);
         // Fall through to return success without DB
       }
     }
@@ -147,9 +150,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
       note: 'Server configured. Database not available - config may need to be saved locally.',
     });
   } catch (error: any) {
-    console.error('[Marketplace Install] Error:', error);
+    logger.error('[Marketplace Install] Error:', error);
     return json(
-      { error: 'Failed to install server', details: error.message },
+      { error: 'Failed to install server' },
       { status: 500 }
     );
   }

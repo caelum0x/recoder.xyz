@@ -23,6 +23,10 @@
  * - <recoder-diff>content</recoder-diff> - Show file changes/diffs
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ActionParser');
+
+
 // Action types
 export type ActionType = 'write' | 'rename' | 'delete' | 'shell' | 'dependency';
 
@@ -282,7 +286,7 @@ export function parseActions(content: string): ParseResult {
         end: match.index + match[0].length,
       });
     } catch (e) {
-      console.warn('[ActionParser] Failed to parse write action:', e);
+      logger.warn('[ActionParser] Failed to parse write action:', e);
     }
   }
 
@@ -297,7 +301,7 @@ export function parseActions(content: string): ParseResult {
         end: match.index + match[0].length,
       });
     } catch (e) {
-      console.warn('[ActionParser] Failed to parse rename action:', e);
+      logger.warn('[ActionParser] Failed to parse rename action:', e);
     }
   }
 
@@ -312,7 +316,7 @@ export function parseActions(content: string): ParseResult {
         end: match.index + match[0].length,
       });
     } catch (e) {
-      console.warn('[ActionParser] Failed to parse delete action:', e);
+      logger.warn('[ActionParser] Failed to parse delete action:', e);
     }
   }
 
@@ -327,7 +331,7 @@ export function parseActions(content: string): ParseResult {
         end: match.index + match[0].length,
       });
     } catch (e) {
-      console.warn('[ActionParser] Failed to parse shell action:', e);
+      logger.warn('[ActionParser] Failed to parse shell action:', e);
     }
   }
 
@@ -344,7 +348,7 @@ export function parseActions(content: string): ParseResult {
         });
       }
     } catch (e) {
-      console.warn('[ActionParser] Failed to parse dependency action:', e);
+      logger.warn('[ActionParser] Failed to parse dependency action:', e);
     }
   }
 
@@ -691,7 +695,7 @@ export function parseMessageBlocks(content: string): MessageBlockParseResult {
           end: match.index + match[0].length,
         });
       } catch (e) {
-        console.warn(`[ActionParser] Failed to parse ${type} block:`, e);
+        logger.warn(`[ActionParser] Failed to parse ${type} block:`, e);
       }
     }
   }

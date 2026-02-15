@@ -11,6 +11,8 @@ import type { MCPServer, MCPTool, FileInfo } from '../types';
 import { webcontainer } from '~/lib/webcontainer';
 import { WORK_DIR } from '~/utils/constants';
 import * as path from 'path';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MCPFilesystem');
 
 export class FilesystemMCPServer {
   private readonly serverId = 'filesystem';
@@ -231,7 +233,7 @@ export class FilesystemMCPServer {
     // Check if we're on server or client
     const isServer = typeof window === 'undefined';
 
-    console.log(`🔧 Executing ${toolName} on ${isServer ? 'server' : 'client'}`);
+    logger.info(`🔧 Executing ${toolName} on ${isServer ? 'server' : 'client'}`);
 
     if (isServer) {
       // Server-side: Use Node.js fs
@@ -418,7 +420,7 @@ export class FilesystemMCPServer {
             files.push(...subFiles);
           }
         } catch (statError) {
-          console.warn(`Failed to stat ${fullPath}:`, statError);
+          logger.warn(`Failed to stat ${fullPath}:`, statError);
         }
       }
 
@@ -569,7 +571,7 @@ export class FilesystemMCPServer {
             files.push(...subFiles);
           }
         } catch (statError) {
-          console.warn(`Failed to stat ${fullPath}:`, statError);
+          logger.warn(`Failed to stat ${fullPath}:`, statError);
         }
       }
 

@@ -453,7 +453,7 @@ export class AIClient extends EventEmitter {
 
   // Utility Methods
   private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `req_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   }
 
   private generateCacheKey(messages: ChatMessage[], options: AIRequestOptions): string {

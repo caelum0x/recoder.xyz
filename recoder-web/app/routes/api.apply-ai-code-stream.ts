@@ -9,6 +9,9 @@
 
 import type { ActionFunctionArgs } from '@remix-run/cloudflare';
 import { dockerWriteFile, dockerReadFile } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ApplyAiCodeStream');
 
 /**
  * Parsed response structure from AI output
@@ -117,10 +120,10 @@ function parseAIResponse(response: string): ParsedResponse {
       shouldReplace = true; // First occurrence
     } else if (!existing.isComplete && hasClosingTag) {
       shouldReplace = true; // Replace incomplete with complete
-      console.log(`[apply-ai-code-stream] Replacing incomplete ${filePath} with complete version`);
+      logger.info(`[apply-ai-code-stream] Replacing incomplete ${filePath} with complete version`);
     } else if (existing.isComplete && hasClosingTag && content.length > existing.content.length) {
       shouldReplace = true; // Replace with longer complete version
-      console.log(`[apply-ai-code-stream] Replacing ${filePath} with longer complete version`);
+      logger.info(`[apply-ai-code-stream] Replacing ${filePath} with longer complete version`);
     } else if (!existing.isComplete && !hasClosingTag && content.length > existing.content.length) {
       shouldReplace = true; // Both incomplete, keep longer one
     }
@@ -128,7 +131,7 @@ function parseAIResponse(response: string): ParsedResponse {
     if (shouldReplace) {
       // Additional validation: reject obviously broken content
       if (content.includes('...') && !content.includes('...props') && !content.includes('...rest')) {
-        console.warn(`[apply-ai-code-stream] Warning: ${filePath} contains ellipsis, may be truncated`);
+        logger.warn(`[apply-ai-code-stream] Warning: ${filePath} contains ellipsis, may be truncated`);
         // Still use it if it's the only version we have
         if (!existing) {
           fileMap.set(filePath, { content, isComplete: hasClosingTag });
@@ -153,7 +156,7 @@ function parseAIResponse(response: string): ParsedResponse {
   // Convert map to array for sections.files
   for (const [path, { content, isComplete }] of Array.from(fileMap.entries())) {
     if (!isComplete) {
-      console.log(`[apply-ai-code-stream] Warning: File ${path} appears to be truncated (no closing tag)`);
+      logger.info(`[apply-ai-code-stream] Warning: File ${path} appears to be truncated (no closing tag)`);
     }
 
     sections.files.push({
@@ -166,7 +169,7 @@ function parseAIResponse(response: string): ParsedResponse {
     for (const pkg of filePackages) {
       if (!sections.packages.includes(pkg)) {
         sections.packages.push(pkg);
-        console.log(`[apply-ai-code-stream] Package detected from imports: ${pkg}`);
+        logger.info(`[apply-ai-code-stream] Package detected from imports: ${pkg}`);
       }
     }
   }
@@ -210,7 +213,7 @@ function parseAIResponse(response: string): ParsedResponse {
           f.endsWith('.json') ||
           f.endsWith('.html')
       );
-    console.log(`[apply-ai-code-stream] Detected generated files from plain text: ${filesList.join(', ')}`);
+    logger.info(`[apply-ai-code-stream] Detected generated files from plain text: ${filesList.join(', ')}`);
 
     // Try to extract the actual file content if it follows
     for (const fileName of filesList) {
@@ -417,24 +420,24 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Debug log
-    console.log('[apply-ai-code-stream] Received response to parse:');
-    console.log('[apply-ai-code-stream] Response length:', response.length);
-    console.log('[apply-ai-code-stream] Response preview:', response.substring(0, 500));
-    console.log('[apply-ai-code-stream] Project ID:', projectId);
-    console.log('[apply-ai-code-stream] Packages:', packages);
+    logger.info('[apply-ai-code-stream] Received response to parse:');
+    logger.info('[apply-ai-code-stream] Response length:', response.length);
+    logger.info('[apply-ai-code-stream] Response preview:', response.substring(0, 500));
+    logger.info('[apply-ai-code-stream] Project ID:', projectId);
+    logger.info('[apply-ai-code-stream] Packages:', packages);
 
     // Parse the AI response
     const parsed = parseAIResponse(response);
 
     // Log what was parsed
-    console.log('[apply-ai-code-stream] Parsed result:');
-    console.log('[apply-ai-code-stream] Files found:', parsed.files.length);
+    logger.info('[apply-ai-code-stream] Parsed result:');
+    logger.info('[apply-ai-code-stream] Files found:', parsed.files.length);
     if (parsed.files.length > 0) {
       parsed.files.forEach((f) => {
-        console.log(`[apply-ai-code-stream] - ${f.path} (${f.content.length} chars)`);
+        logger.info(`[apply-ai-code-stream] - ${f.path} (${f.content.length} chars)`);
       });
     }
-    console.log('[apply-ai-code-stream] Packages found:', parsed.packages);
+    logger.info('[apply-ai-code-stream] Packages found:', parsed.packages);
 
     // Track existing files
     const existingFilesSet = new Set<string>(existingFiles);
@@ -554,7 +557,7 @@ export async function action({ request }: ActionFunctionArgs) {
             await dockerWriteFile(projectId, normalizedPath, cleanedContent, {
               timeout: 30000,
               onRetry: (attempt) => {
-                console.log(`[apply-ai-code-stream] Retry ${attempt} for ${normalizedPath}`);
+                logger.info(`[apply-ai-code-stream] Retry ${attempt} for ${normalizedPath}`);
               },
             });
 
@@ -572,11 +575,12 @@ export async function action({ request }: ActionFunctionArgs) {
               action: isUpdate ? 'updated' : 'created',
             });
           } catch (error) {
-            results.errors.push(`Failed to create ${file.path}: ${(error as Error).message}`);
+            logger.error(`[apply-ai-code] Failed to create ${file.path}:`, error);
+            results.errors.push(`Failed to create ${file.path}`);
             await sendProgress({
               type: 'file-error',
               fileName: file.path,
-              error: (error as Error).message,
+              error: 'File operation failed',
             });
           }
         }
@@ -621,9 +625,10 @@ export async function action({ request }: ActionFunctionArgs) {
           message: `Successfully applied ${results.filesCreated.length} new files and updated ${results.filesUpdated.length} files`,
         });
       } catch (error) {
+        logger.error('[apply-ai-code] Stream error:', error);
         await sendProgress({
           type: 'error',
-          error: (error as Error).message,
+          error: 'Code application failed',
         });
       } finally {
         await writer.close();
@@ -639,9 +644,9 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('Apply AI code stream error:', error);
+    logger.error('Apply AI code stream error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to parse AI code' }),
+      JSON.stringify({ error: 'Failed to parse AI code' }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },

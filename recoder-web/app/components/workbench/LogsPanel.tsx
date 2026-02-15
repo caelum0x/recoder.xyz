@@ -5,6 +5,8 @@ import { parseErrorsFromLogs } from '~/lib/errors/parse-logs';
 import { errorsAtom } from '~/lib/stores/errors';
 import { dockerGet } from '~/lib/services/docker-api';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LogsPanel');
 
 interface LogsPanelProps {
   projectId: string | null;
@@ -23,10 +25,43 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
   const [autoScroll, setAutoScroll] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExpo, setIsExpo] = useState(false);
   const logsRef = useRef<HTMLPreElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
   const backoffUntilRef = useRef(0);
+
+  // Detect Expo project type (same pattern as Preview.tsx)
+  useEffect(() => {
+    if (!projectId || !containerReady) return;
+
+    let cancelled = false;
+
+    dockerGet<{ type: string }>(`/api/project-type/${projectId}`, { skipRetry: true, timeout: 10000 })
+      .then((data) => {
+        if (!cancelled && data?.type === 'expo') {
+          setIsExpo(true);
+        }
+      })
+      .catch(() => {
+        // Silently ignore - best effort
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, containerReady]);
+
+  // Listen for dev-server-ready events that indicate Expo framework
+  useEffect(() => {
+    const handler = (e: Event) => {
+      if ((e as CustomEvent).detail?.framework === 'expo') {
+        setIsExpo(true);
+      }
+    };
+    window.addEventListener('recoder:dev-server-ready', handler);
+    return () => window.removeEventListener('recoder:dev-server-ready', handler);
+  }, []);
 
   const fetchLogs = useCallback(async () => {
     if (!projectId || !containerReady) return;
@@ -37,7 +72,8 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
     }
 
     try {
-      const data = await dockerGet<{ logs?: string }>(`/api/logs/${projectId}?tail=200`);
+      const sourceParam = isExpo ? '&source=expo' : '';
+      const data = await dockerGet<{ logs?: string }>(`/api/logs/${projectId}?tail=200${sourceParam}`);
       const newLogs = data?.logs || 'No logs available';
       setLogs(newLogs);
       setError(null);
@@ -50,12 +86,12 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
     } catch (err: any) {
       consecutiveFailuresRef.current++;
       if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-        console.debug(`[LogsPanel] ${MAX_CONSECUTIVE_FAILURES} consecutive failures, pausing polling for ${BACKOFF_PAUSE_MS / 1000}s`);
+        logger.debug(`[LogsPanel] ${MAX_CONSECUTIVE_FAILURES} consecutive failures, pausing polling for ${BACKOFF_PAUSE_MS / 1000}s`);
         backoffUntilRef.current = Date.now() + BACKOFF_PAUSE_MS;
       }
       setError(err.message);
     }
-  }, [projectId, containerReady]);
+  }, [projectId, containerReady, isExpo]);
 
   // Reset failure tracking when container readiness changes
   useEffect(() => {
@@ -112,8 +148,14 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
     }
   }, []);
 
-  // Parse and colorize log output
-  const colorizedLogs = logs.replace(
+  // HTML-escape logs first to prevent XSS, then apply ANSI colorization
+  const escapedLogs = logs
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  const colorizedLogs = escapedLogs.replace(
     /\x1b\[(\d+)m/g,
     (_, code) => {
       const colorMap: Record<string, string> = {
@@ -149,7 +191,7 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
       <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
         <div className="flex items-center gap-2">
           <div className="i-ph:terminal text-lg" />
-          <span className="text-sm font-medium">Dev Server Logs</span>
+          <span className="text-sm font-medium">{isExpo ? 'Metro Logs' : 'Dev Server Logs'}</span>
           {isLoading && (
             <div className="i-ph:spinner animate-spin text-sm text-bolt-elements-textTertiary" />
           )}

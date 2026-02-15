@@ -13,6 +13,9 @@
 
 import { atom, map } from 'nanostores';
 import type { ScrollPosition } from '~/components/editor/codemirror/CodeMirrorEditor';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('WorkspaceStore');
 
 // Storage keys
 const WORKSPACE_KEY_PREFIX = 'recoder_workspace_';
@@ -53,8 +56,8 @@ export interface WorkspaceState {
   splitState: WorkspaceSplitState;
   /** Panel visibility states */
   panelState: WorkspacePanelState;
-  /** Current view (code or preview) */
-  currentView: 'code' | 'preview';
+  /** Current view (code, preview, or agent) */
+  currentView: 'code' | 'preview' | 'agent';
   /** Last saved timestamp */
   savedAt: number;
 }
@@ -131,7 +134,7 @@ function loadWorkspaceState(projectId: string): WorkspaceState | null {
       };
     }
   } catch (e) {
-    console.warn('[Workspace] Failed to load workspace state:', e);
+    logger.warn('[Workspace] Failed to load workspace state:', e);
   }
 
   return null;
@@ -149,9 +152,9 @@ function saveWorkspaceState(projectId: string, state: WorkspaceState): void {
       savedAt: Date.now(),
     };
     localStorage.setItem(getWorkspaceKey(projectId), JSON.stringify(stateToSave));
-    console.log(`[Workspace] Saved workspace state for project: ${projectId}`);
+    logger.info(`[Workspace] Saved workspace state for project: ${projectId}`);
   } catch (e) {
-    console.warn('[Workspace] Failed to save workspace state:', e);
+    logger.warn('[Workspace] Failed to save workspace state:', e);
   }
 }
 
@@ -168,7 +171,7 @@ function loadWorkspaceSettings(): WorkspaceSettings {
       return { ...DEFAULT_WORKSPACE_SETTINGS, ...parsed };
     }
   } catch (e) {
-    console.warn('[Workspace] Failed to load workspace settings:', e);
+    logger.warn('[Workspace] Failed to load workspace settings:', e);
   }
 
   return DEFAULT_WORKSPACE_SETTINGS;
@@ -183,7 +186,7 @@ function saveWorkspaceSettings(settings: WorkspaceSettings): void {
   try {
     localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(settings));
   } catch (e) {
-    console.warn('[Workspace] Failed to save workspace settings:', e);
+    logger.warn('[Workspace] Failed to save workspace settings:', e);
   }
 }
 
@@ -195,9 +198,9 @@ export function deleteWorkspaceState(projectId: string): void {
 
   try {
     localStorage.removeItem(getWorkspaceKey(projectId));
-    console.log(`[Workspace] Deleted workspace state for project: ${projectId}`);
+    logger.info(`[Workspace] Deleted workspace state for project: ${projectId}`);
   } catch (e) {
-    console.warn('[Workspace] Failed to delete workspace state:', e);
+    logger.warn('[Workspace] Failed to delete workspace state:', e);
   }
 }
 
@@ -238,7 +241,7 @@ export function initWorkspace(projectId: string): WorkspaceState | null {
   const settings = workspaceSettingsStore.get();
 
   if (!settings.restoreEnabled) {
-    console.log('[Workspace] Restore disabled, starting with fresh workspace');
+    logger.info('[Workspace] Restore disabled, starting with fresh workspace');
     workspaceStateStore.set(DEFAULT_WORKSPACE_STATE);
     startAutoSave();
     return null;
@@ -248,10 +251,10 @@ export function initWorkspace(projectId: string): WorkspaceState | null {
   const savedState = loadWorkspaceState(projectId);
 
   if (savedState) {
-    console.log(`[Workspace] Restoring workspace for project: ${projectId}`);
-    console.log(`[Workspace] - Open tabs: ${savedState.openTabs.length}`);
-    console.log(`[Workspace] - Active file: ${savedState.activeFile || 'none'}`);
-    console.log(`[Workspace] - Split enabled: ${savedState.splitState.enabled}`);
+    logger.info(`[Workspace] Restoring workspace for project: ${projectId}`);
+    logger.info(`[Workspace] - Open tabs: ${savedState.openTabs.length}`);
+    logger.info(`[Workspace] - Active file: ${savedState.activeFile || 'none'}`);
+    logger.info(`[Workspace] - Split enabled: ${savedState.splitState.enabled}`);
 
     isRestoringWorkspace.set(true);
     workspaceStateStore.set(savedState);
@@ -265,7 +268,7 @@ export function initWorkspace(projectId: string): WorkspaceState | null {
     return savedState;
   }
 
-  console.log(`[Workspace] No saved workspace for project: ${projectId}`);
+  logger.info(`[Workspace] No saved workspace for project: ${projectId}`);
   workspaceStateStore.set(DEFAULT_WORKSPACE_STATE);
   startAutoSave();
   return null;
@@ -285,7 +288,7 @@ function startAutoSave(): void {
       }
     }, settings.autoSaveInterval);
 
-    console.log(`[Workspace] Auto-save started (interval: ${settings.autoSaveInterval}ms)`);
+    logger.info(`[Workspace] Auto-save started (interval: ${settings.autoSaveInterval}ms)`);
   }
 }
 
@@ -433,7 +436,7 @@ export function updateWorkspacePanelState(updates: Partial<WorkspacePanelState>)
 /**
  * Update current view (code/preview)
  */
-export function updateWorkspaceCurrentView(view: 'code' | 'preview'): void {
+export function updateWorkspaceCurrentView(view: 'code' | 'preview' | 'agent'): void {
   const current = workspaceStateStore.get();
   workspaceStateStore.set({
     ...current,
@@ -529,7 +532,7 @@ export function setWorkspaceRestoreEnabled(enabled: boolean): void {
     restoreEnabled: enabled,
   });
 
-  console.log(`[Workspace] Restore ${enabled ? 'enabled' : 'disabled'}`);
+  logger.info(`[Workspace] Restore ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 /**
@@ -602,7 +605,7 @@ export function clearAllWorkspaces(): void {
   }
 
   keysToRemove.forEach(key => localStorage.removeItem(key));
-  console.log(`[Workspace] Cleared ${keysToRemove.length} saved workspaces`);
+  logger.info(`[Workspace] Cleared ${keysToRemove.length} saved workspaces`);
 }
 
 /**

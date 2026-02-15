@@ -209,7 +209,7 @@ export const Breadcrumbs = memo<BreadcrumbsProps>(({ files, pathSegments = [], o
             <DropdownMenu.Root open={isActive} modal={false}>
               <DropdownMenu.Trigger asChild>
                 <span
-                  ref={(ref) => (segmentRefs.current[index] = ref)}
+                  ref={(ref) => { segmentRefs.current[index] = ref; }}
                   className={classNames('flex items-center gap-1 cursor-pointer shrink-0 text-sm', {
                     'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary': !isActive,
                     'text-bolt-elements-textPrimary underline': isActive,

@@ -1,4 +1,7 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPServers');
 
 const DEFAULT_SERVERS = [
   { id: 'github', name: 'GitHub', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] },
@@ -96,8 +99,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
         }
       });
     } catch (error: any) {
-      console.error('Failed to add MCP server:', error);
-      return json({ error: 'Failed to add server', details: error.message }, { status: 500 });
+      logger.error('Failed to add MCP server:', error);
+      return json({ error: 'Failed to add server' }, { status: 500 });
     }
   }
 

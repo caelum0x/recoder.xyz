@@ -34,6 +34,9 @@ import {
   InvalidChunkEvent,
 } from '../telemetry/types.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('GeminiChat');
+
 export enum StreamEventType {
   /** A regular content chunk from the API. */
   CHUNK = 'chunk',
@@ -233,7 +236,7 @@ export class GeminiChat {
           return null; // Model was switched but don't continue with current prompt
         }
       } catch (error) {
-        console.warn('Flash fallback handler failed:', error);
+        logger.warn('Flash fallback handler failed:', error);
       }
     }
 
@@ -279,7 +282,7 @@ export class GeminiChat {
     if (fullHistory.length > MAX_HISTORY_ITEMS) {
       // Keep only recent messages to prevent token explosion
       recentHistory = fullHistory.slice(-MAX_HISTORY_ITEMS);
-      console.log(`[Token Optimization] Reduced context from ${fullHistory.length} to ${recentHistory.length} messages (saved ~${((fullHistory.length - recentHistory.length) / fullHistory.length * 100).toFixed(0)}% tokens)`);
+      logger.info(`[Token Optimization] Reduced context from ${fullHistory.length} to ${recentHistory.length} messages (saved ~${((fullHistory.length - recentHistory.length) / fullHistory.length * 100).toFixed(0)}% tokens)`);
     }
     
     const requestContents = recentHistory.concat(userContent);
@@ -406,7 +409,7 @@ export class GeminiChat {
     let requestContents = fullHistory;
     if (fullHistory.length > MAX_HISTORY_ITEMS) {
       requestContents = fullHistory.slice(-MAX_HISTORY_ITEMS);
-      console.log(`[Token Optimization - Stream] Reduced context from ${fullHistory.length} to ${requestContents.length} messages`);
+      logger.info(`[Token Optimization - Stream] Reduced context from ${fullHistory.length} to ${requestContents.length} messages`);
     }
 
      
@@ -822,17 +825,17 @@ export class GeminiChat {
       errorMessage.includes('too many requests');
 
     if (isAuthError) {
-      console.warn('Qwen OAuth authentication error detected:', errorMessage);
+      logger.warn('Qwen OAuth authentication error detected:', errorMessage);
       // The QwenContentGenerator should automatically handle token refresh
       // If it still fails, it likely means the refresh token is also expired
-      console.log(
+      logger.info(
         'Note: If this persists, you may need to re-authenticate with Qwen OAuth',
       );
       return null;
     }
 
     if (isRateLimitError) {
-      console.warn('Qwen API rate limit encountered:', errorMessage);
+      logger.warn('Qwen API rate limit encountered:', errorMessage);
       // For rate limiting, we don't need to do anything special
       // The retry mechanism will handle the backoff
       return null;

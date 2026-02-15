@@ -5,6 +5,8 @@
 
 import { useEffect, useState } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SystemMonitor');
 
 interface SystemHealth {
   status: 'operational' | 'degraded' | 'down';
@@ -36,8 +38,28 @@ interface ComponentStatus {
   metrics?: Record<string, any>;
 }
 
+interface PublicApiReadiness {
+  status: 'ready' | 'not_ready' | 'error';
+  overallReady?: boolean;
+  queue?: {
+    status?: string;
+    queue?: {
+      configuredBackend?: string;
+      selectedBackend?: string;
+      hasRedisUrl?: boolean;
+    };
+    warnings?: string[];
+  };
+  byok?: {
+    missing?: string[];
+    warnings?: string[];
+  };
+  error?: string;
+}
+
 export function SystemMonitor() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [publicApiReadiness, setPublicApiReadiness] = useState<PublicApiReadiness | null>(null);
   const [logs, setLogs] = useState<Array<{ time: string; level: string; message: string }>>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -51,19 +73,24 @@ export function SystemMonitor() {
 
   const fetchSystemHealth = async () => {
     try {
-      const response = await fetch('/api/system-health');
+      const [response, readinessResponse] = await Promise.all([
+        fetch('/api/system-health'),
+        fetch('/api/health/public-api-readiness'),
+      ]);
       const data = await response.json() as { health: SystemHealth };
       setHealth(data.health);
+      const readinessData = await readinessResponse.json() as PublicApiReadiness;
+      setPublicApiReadiness(readinessData);
 
       // Add log entry
       const newLog = {
         time: new Date().toLocaleTimeString(),
-        level: data.health.status === 'operational' ? 'info' : 'warn',
-        message: `System check: ${data.health.status}`,
+        level: data.health.status === 'operational' && readinessData.status === 'ready' ? 'info' : 'warn',
+        message: `System check: ${data.health.status}; public API readiness: ${readinessData.status}`,
       };
       setLogs((prev) => [newLog, ...prev].slice(0, 50)); // Keep last 50 logs
     } catch (error) {
-      console.error('Failed to fetch system health:', error);
+      logger.error('Failed to fetch system health:', error);
       const errorLog = {
         time: new Date().toLocaleTimeString(),
         level: 'error',
@@ -174,6 +201,9 @@ export function SystemMonitor() {
         />
       </div>
 
+      {/* Public API/BYOK readiness */}
+      <PublicApiReadinessCard readiness={publicApiReadiness} />
+
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <PerformanceCard
@@ -259,6 +289,73 @@ export function SystemMonitor() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function PublicApiReadinessCard({ readiness }: { readiness: PublicApiReadiness | null }) {
+  if (!readiness) {
+    return (
+      <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-2">Public API / BYOK Readiness</h2>
+        <div className="text-sm text-bolt-elements-textTertiary">Loading readiness...</div>
+      </div>
+    );
+  }
+
+  const ready = readiness.status === 'ready';
+  const queueSelected = readiness.queue?.queue?.selectedBackend || 'unknown';
+  const queueConfigured = readiness.queue?.queue?.configuredBackend || 'unknown';
+  const hasRedisUrl = readiness.queue?.queue?.hasRedisUrl;
+  const missing = readiness.byok?.missing || [];
+  const warnings = [...(readiness.queue?.warnings || []), ...(readiness.byok?.warnings || [])];
+
+  return (
+    <div className={`rounded-lg border p-6 mb-6 ${
+      ready
+        ? 'bg-green-50 border-green-300'
+        : 'bg-yellow-50 border-yellow-300'
+    }`}>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xl font-semibold">Public API / BYOK Readiness</h2>
+        <span className={`text-sm font-semibold px-2 py-1 rounded ${
+          ready ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+        }`}>
+          {ready ? 'READY' : readiness.status === 'error' ? 'ERROR' : 'NOT READY'}
+        </span>
+      </div>
+
+      {readiness.error && (
+        <div className="text-sm text-red-700 mb-3">{readiness.error}</div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+        <div className="bg-bolt-elements-background-depth-1 rounded p-3">
+          <div className="text-bolt-elements-textTertiary mb-1">Queue Configured</div>
+          <div className="font-semibold text-bolt-elements-textPrimary">{queueConfigured}</div>
+        </div>
+        <div className="bg-bolt-elements-background-depth-1 rounded p-3">
+          <div className="text-bolt-elements-textTertiary mb-1">Queue Selected</div>
+          <div className="font-semibold text-bolt-elements-textPrimary">{queueSelected}</div>
+        </div>
+        <div className="bg-bolt-elements-background-depth-1 rounded p-3">
+          <div className="text-bolt-elements-textTertiary mb-1">Redis URL</div>
+          <div className="font-semibold text-bolt-elements-textPrimary">{typeof hasRedisUrl === 'boolean' ? String(hasRedisUrl) : 'unknown'}</div>
+        </div>
+      </div>
+
+      {missing.length > 0 && (
+        <div className="mt-3 text-sm">
+          <span className="font-medium text-yellow-700">Missing: </span>
+          <span className="text-yellow-800">{missing.join(', ')}</span>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="mt-2 text-sm">
+          <span className="font-medium text-yellow-700">Warnings: </span>
+          <span className="text-yellow-800">{warnings.join(' | ')}</span>
+        </div>
+      )}
     </div>
   );
 }

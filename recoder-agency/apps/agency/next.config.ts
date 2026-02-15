@@ -93,6 +93,28 @@ const nextConfig: NextConfig = {
 						key: "Referrer-Policy",
 						value: "origin-when-cross-origin",
 					},
+					{
+						key: "Strict-Transport-Security",
+						value: "max-age=63072000; includeSubDomains; preload",
+					},
+					{
+						key: "Permissions-Policy",
+						value: "camera=(), microphone=(), geolocation=()",
+					},
+					{
+						key: "Content-Security-Policy",
+						value: [
+							"default-src 'self'",
+							"script-src 'self' 'unsafe-inline'",
+							"style-src 'self' 'unsafe-inline'",
+							"img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com",
+							"font-src 'self'",
+							"connect-src 'self' https://*.ingest.us.sentry.io https://*.posthog.com https://*.supabase.co wss://*.supabase.co",
+							"frame-ancestors 'none'",
+							"base-uri 'self'",
+							"form-action 'self'",
+						].join("; "),
+					},
 				],
 			},
 		];

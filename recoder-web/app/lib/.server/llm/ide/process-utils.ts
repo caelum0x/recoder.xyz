@@ -8,6 +8,8 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import os from 'node:os';
 import path from 'node:path';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('IDEProcessUtils');
 
 const execAsync = promisify(exec);
 
@@ -60,7 +62,7 @@ async function getProcessInfo(pid: number): Promise<{
       };
     }
   } catch (_e) {
-    console.debug(`Failed to get process info for pid ${pid}:`, _e);
+    logger.debug(`Failed to get process info for pid ${pid}:`, _e);
     return { parentPid: 0, name: '', command: '' };
   }
 }

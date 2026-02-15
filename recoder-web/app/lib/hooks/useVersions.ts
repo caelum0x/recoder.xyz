@@ -17,6 +17,8 @@ import {
 } from '~/lib/stores/snapshots';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('Versions');
 
 export interface Version {
   id: string;
@@ -28,6 +30,7 @@ export interface Version {
   additions?: number;
   deletions?: number;
   isCurrent?: boolean;
+  neonDbTimestamp?: string;  // ISO timestamp of Neon DB state at snapshot time
 }
 
 export interface VersionDiff {
@@ -86,6 +89,7 @@ export function useVersions(projectId: string | null): UseVersionsReturn {
       additions: snapshot.additions,
       deletions: snapshot.deletions,
       isCurrent: index === 0,
+      neonDbTimestamp: snapshot.neonDbTimestamp,
     }));
   }, [snapshotState.snapshots]);
 
@@ -102,6 +106,7 @@ export function useVersions(projectId: string | null): UseVersionsReturn {
       additions: snapshotState.currentSnapshot.additions,
       deletions: snapshotState.currentSnapshot.deletions,
       isCurrent: true,
+      neonDbTimestamp: snapshotState.currentSnapshot.neonDbTimestamp,
     };
   }, [snapshotState.currentSnapshot]);
 
@@ -136,7 +141,7 @@ export function useVersions(projectId: string | null): UseVersionsReturn {
       }
       return null;
     } catch (error) {
-      console.error('[useVersions] Get diff error:', error);
+      logger.error('[useVersions] Get diff error:', error);
       return null;
     } finally {
       setDiffLoading(false);
@@ -151,7 +156,7 @@ export function useVersions(projectId: string | null): UseVersionsReturn {
       const diff = await getFileDiff(projectId, filePath, versionId, 'HEAD');
       return diff;
     } catch (error) {
-      console.error('[useVersions] Get file diff error:', error);
+      logger.error('[useVersions] Get file diff error:', error);
       return null;
     }
   }, [projectId, containerReady]);
@@ -165,9 +170,13 @@ export function useVersions(projectId: string | null): UseVersionsReturn {
 
     setIsRestoring(true);
     try {
-      const success = await restoreSnapshot(projectId, versionId);
-      if (success) {
-        toast.success('Restored to selected version');
+      const result = await restoreSnapshot(projectId, versionId);
+      if (result.success) {
+        if (result.dbRestored) {
+          toast.success('Restored files and database to selected version');
+        } else {
+          toast.success('Restored to selected version');
+        }
         // Refresh file tree
         workbenchStore.refreshFiles?.();
         // Clear selection
@@ -176,9 +185,9 @@ export function useVersions(projectId: string | null): UseVersionsReturn {
       } else {
         toast.error('Failed to restore version');
       }
-      return success;
+      return result.success;
     } catch (error) {
-      console.error('[useVersions] Restore error:', error);
+      logger.error('[useVersions] Restore error:', error);
       toast.error('Failed to restore version');
       return false;
     } finally {

@@ -35,12 +35,18 @@
     "test:templates": "tsx scripts/test-template-matching.ts",
     "test:openrouter": "tsx scripts/test-openrouter.ts",
     "test:clone": "tsx scripts/test-github-clone.mjs",
-    "bundle:starters": "node scripts/build-starters.mjs"
+    "bundle:starters": "node scripts/build-starters.mjs",
+    "smoke:byok": "bash scripts/smoke-byok-internal-auth.sh",
+    "smoke:prod-blockers": "bash scripts/smoke-production-blockers.sh",
+    "a2a:worker": "node scripts/a2a-intent-worker.mjs"
   },
   "engines": {
     "node": ">=18.18.0"
   },
   "dependencies": {
+    "@recoder/shared": "workspace:*",
+    "@giselles-ai/stream": "workspace:*",
+    "@giselles-ai/vault": "workspace:*",
     "@ai-sdk/anthropic": "^0.0.39",
     "@ai-sdk/google": "^2.0.17",
     "@ai-sdk/mistral": "^2.0.17",
@@ -94,16 +100,20 @@
     "@xterm/xterm": "^5.5.0",
     "@xyflow/react": "^12.10.0",
     "ai": "3.3.4",
+    "binaryextensions": "^6.0.0",
     "classnames": "^2.5.1",
     "date-fns": "^3.6.0",
     "diff": "^5.2.0",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "framer-motion": "^11.2.12",
     "fuse.js": "^7.1.0",
     "fzf": "^0.5.2",
+    "hast-util-sanitize": "^5.0.1",
     "https-proxy-agent": "^7.0.6",
     "isbot": "^4.1.0",
     "istextorbinary": "^9.5.0",
+    "ioredis": "^5.9.1",
     "jose": "^5.6.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.555.0",
@@ -123,9 +133,12 @@
     "remix-utils": "^7.6.0",
     "set-cookie-parser": "^2.7.1",
     "shiki": "^1.9.1",
+    "textextensions": "^6.0.0",
     "tsx": "^4.20.6",
+    "uuid": "^9.0.1",
     "unist-util-visit": "^5.0.0",
-    "y-protocols": "^1.0.7"
+    "y-protocols": "^1.0.7",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@blitz/eslint-plugin": "0.1.0",
@@ -137,7 +150,6 @@
     "@types/diff": "^5.2.1",
     "@types/react": "^18.2.20",
     "@types/react-dom": "^18.2.7",
-    "dotenv": "^17.2.3",
     "fast-glob": "^3.3.2",
     "is-ci": "^3.0.1",
     "node-fetch": "^3.3.2",

@@ -4,6 +4,7 @@
  */
 
 import { atom, computed, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
 import {
   createDefaultSettings,
   loadProjectSettings,
@@ -19,6 +20,8 @@ import {
   type TerminalSettings,
   type ValidationResult,
 } from '~/lib/services/project-settings';
+
+const logger = createScopedLogger('ProjectSettingsStore');
 
 // ==================== STATE ====================
 
@@ -91,7 +94,7 @@ export function initProjectSettings(projectId: string): void {
   projectSettingsStore.set(settings);
   hasUnsavedChanges.set(false);
   validationResult.set(validateSettings(settings));
-  console.log(`[ProjectSettings] Initialized settings for project: ${projectId}`);
+  logger.info(`[ProjectSettings] Initialized settings for project: ${projectId}`);
 }
 
 /**

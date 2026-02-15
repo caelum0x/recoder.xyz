@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHubInfo');
 
 /**
  * API endpoint to get GitHub repository information
@@ -22,7 +25,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    console.log('ℹ️ [github-info] Getting info for', `${owner}/${repo}`);
+    logger.info('[github-info] Getting info for', `${owner}/${repo}`);
 
     const octokit = new Octokit({ auth: accessToken });
 
@@ -46,7 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
       per_page: 5,
     });
 
-    console.log('✅ [github-info] Retrieved info successfully');
+    logger.info('[github-info] Retrieved info successfully');
 
     return new Response(
       JSON.stringify({
@@ -90,11 +93,10 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('❌ [github-info] Failed:', error);
+    logger.error('[github-info] Failed:', error);
     return new Response(
       JSON.stringify({
-        error: error.message || 'Failed to get GitHub info',
-        details: error.response?.data || error.toString(),
+        error: 'Failed to get GitHub info',
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );

@@ -2,6 +2,9 @@ import { json } from '@remix-run/cloudflare';
 import type { LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { getDatabase } from '~/lib/.server/db/client';
 import JSZip from 'jszip';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectDownload');
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const projectId = params.projectId;
@@ -47,7 +50,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('Download error:', error);
+    logger.error('Download error:', error);
     return json({ error: 'Failed to download project' }, { status: 500 });
   }
 }

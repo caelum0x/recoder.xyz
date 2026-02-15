@@ -2,6 +2,8 @@ import { memo, useCallback, useRef, useState, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('EditorTabs');
 
 // File extension to icon class mapping using Phosphor icons
 const FILE_ICON_MAP: Record<string, string> = {
@@ -239,7 +241,7 @@ export const EditorTabs = memo(({ unsavedFiles, onRevealInTree, onOpenNewFile }:
     try {
       await navigator.clipboard.writeText(contextMenu.filePath);
     } catch (err) {
-      console.error('Failed to copy path:', err);
+      logger.error('Failed to copy path:', err);
     }
     closeContextMenu();
   }, [contextMenu.filePath, closeContextMenu]);

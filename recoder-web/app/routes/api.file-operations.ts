@@ -11,7 +11,12 @@
  * DELETE /api/file-operations - Remove a file
  */
 
-import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs, type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { JsonResponse } from '~/lib/http/json-response';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('FileOperations');
+import { memoryStorageDriver } from '../../../packages/storage/src/memory-storage-driver';
 import { z } from 'zod';
 
 // Dynamic import for session verification
@@ -80,8 +85,62 @@ const AddWebPageInput = z.object({
 
 type FileEntryType = z.infer<typeof FileEntry>;
 
-// In-memory store (replace with actual storage in production)
-const fileStore = new Map<string, FileEntryType>();
+const fileStorage = memoryStorageDriver();
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+function getFileStoragePath(workspaceId: string, fileId: string): string {
+  return `workspaces/${workspaceId}/files/${fileId}.json`;
+}
+
+async function storeFile(file: FileEntryType): Promise<void> {
+  await fileStorage.setBlob(
+    getFileStoragePath(file.workspaceId, file.id),
+    textEncoder.encode(JSON.stringify(file)),
+    { contentType: 'application/json' },
+  );
+}
+
+async function readFile(workspaceId: string, fileId: string): Promise<FileEntryType | null> {
+  const path = getFileStoragePath(workspaceId, fileId);
+  if (!(await fileStorage.exists(path))) {
+    return null;
+  }
+
+  const blob = await fileStorage.getBlob(path);
+  const parsed = JSON.parse(textDecoder.decode(blob));
+  const result = FileEntry.safeParse(parsed);
+  return result.success ? result.data : null;
+}
+
+async function deleteFile(workspaceId: string, fileId: string): Promise<void> {
+  await fileStorage.remove(getFileStoragePath(workspaceId, fileId));
+}
+
+async function listWorkspaceFiles(workspaceId: string): Promise<FileEntryType[]> {
+  const prefix = `workspaces/${workspaceId}/files/`;
+  const results: FileEntryType[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await fileStorage.listBlobs({ prefix, cursor, limit: 200 });
+    for (const blob of page.blobs) {
+      try {
+        const content = await fileStorage.getBlob(blob.pathname);
+        const parsed = JSON.parse(textDecoder.decode(content));
+        const result = FileEntry.safeParse(parsed);
+        if (result.success) {
+          results.push(result.data);
+        }
+      } catch {
+        // Skip malformed entries
+      }
+    }
+    cursor = page.cursor;
+  } while (cursor);
+
+  return results;
+}
 
 /**
  * Generate a unique file ID
@@ -125,6 +184,21 @@ function getMimeType(filename: string): string {
  */
 async function fetchWebPageContent(url: string, selector?: string): Promise<{ title: string; content: string }> {
   try {
+    // Validate URL to prevent SSRF
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('Only HTTP and HTTPS URLs are allowed');
+    }
+    const h = parsed.hostname.toLowerCase();
+    if (
+      h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' ||
+      h === '::1' || h === '[::1]' ||
+      h.startsWith('10.') || h.startsWith('172.') || h.startsWith('192.168.') ||
+      h === '169.254.169.254' || h.endsWith('.internal') || h.endsWith('.local')
+    ) {
+      throw new Error('Internal network addresses are not allowed');
+    }
+
     const response = await fetch(url);
     const html = await response.text();
 
@@ -147,7 +221,7 @@ async function fetchWebPageContent(url: string, selector?: string): Promise<{ ti
 
     return { title, content };
   } catch (error) {
-    throw new Error(`Failed to fetch web page: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error('Failed to fetch web page');
   }
 }
 
@@ -157,7 +231,7 @@ async function fetchWebPageContent(url: string, selector?: string): Promise<{ ti
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await verifySession(request);
   if (!session?.user) {
-    return json({ success: false, error: 'Authentication required' }, { status: 401 });
+    return JsonResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
   try {
@@ -167,19 +241,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const getText = url.searchParams.get('text') === 'true';
 
     if (!workspaceId) {
-      return json({ success: false, error: 'workspaceId required' }, { status: 400 });
+      return JsonResponse.json({ success: false, error: 'workspaceId required' }, { status: 400 });
     }
 
     // Get file text content
     if (fileId && getText) {
-      const file = fileStore.get(fileId);
-
+      const file = await readFile(workspaceId, fileId);
       if (!file) {
-        return json({ success: false, error: 'File not found' }, { status: 404 });
-      }
-
-      if (file.workspaceId !== workspaceId) {
-        return json({ success: false, error: 'File not in workspace' }, { status: 403 });
+        return JsonResponse.json({ success: false, error: 'File not found' }, { status: 404 });
       }
 
       // Return text content
@@ -187,37 +256,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ? Buffer.from(file.content, 'base64').toString('utf-8')
         : file.content || '';
 
-      return json({ success: true, text });
+      return JsonResponse.json({ success: true, text });
     }
 
     // Get file metadata
     if (fileId) {
-      const file = fileStore.get(fileId);
-
+      const file = await readFile(workspaceId, fileId);
       if (!file) {
-        return json({ success: false, error: 'File not found' }, { status: 404 });
-      }
-
-      if (file.workspaceId !== workspaceId) {
-        return json({ success: false, error: 'File not in workspace' }, { status: 403 });
+        return JsonResponse.json({ success: false, error: 'File not found' }, { status: 404 });
       }
 
       // Return file without content (for metadata only)
       const { content, ...metadata } = file;
-      return json({ success: true, file: metadata });
+      return JsonResponse.json({ success: true, file: metadata });
     }
 
     // List all files in workspace
-    const files = Array.from(fileStore.values())
-      .filter((f) => f.workspaceId === workspaceId)
-      .map(({ content, ...metadata }) => metadata);
+    const files = (await listWorkspaceFiles(workspaceId)).map(({ content, ...metadata }) => metadata);
 
-    return json({ success: true, files });
+    return JsonResponse.json({ success: true, files });
   } catch (error) {
-    console.error('[FileOperations] Loader error:', error);
-    return json({
+    logger.error('[FileOperations] Loader error:', error);
+    return JsonResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get files',
+      error: 'Failed to get files',
     }, { status: 500 });
   }
 }
@@ -229,7 +291,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const session = await verifySession(request);
   if (!session?.user) {
-    return json({ success: false, error: 'Authentication required' }, { status: 401 });
+    return JsonResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
   try {
@@ -246,7 +308,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const file = formData.get('file') as File;
 
       if (!workspaceId || !fileName || !file) {
-        return json({
+        return JsonResponse.json({
           success: false,
           error: 'workspaceId, fileName, and file are required',
         }, { status: 400 });
@@ -274,9 +336,9 @@ export async function action({ request }: ActionFunctionArgs) {
         metadata: { userId: session.user.id },
       };
 
-      fileStore.set(fileId, newFile);
+      await storeFile(newFile);
 
-      console.log(`[FileOperations] Uploaded: ${fileId} (${fileName})`);
+      logger.info(`[FileOperations] Uploaded: ${fileId} (${fileName})`);
       return new Response(null, { status: 202 });
     }
 
@@ -287,7 +349,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (actionType === 'copy') {
       const validation = CopyFileInput.safeParse(body);
       if (!validation.success) {
-        return json({
+        return JsonResponse.json({
           success: false,
           error: 'Invalid input',
           details: validation.error.errors,
@@ -295,14 +357,10 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       const { workspaceId, sourceFileId, destinationFileId } = validation.data;
-      const sourceFile = fileStore.get(sourceFileId);
+      const sourceFile = await readFile(workspaceId, sourceFileId);
 
       if (!sourceFile) {
-        return json({ success: false, error: 'Source file not found' }, { status: 404 });
-      }
-
-      if (sourceFile.workspaceId !== workspaceId) {
-        return json({ success: false, error: 'Source file not in workspace' }, { status: 403 });
+        return JsonResponse.json({ success: false, error: 'Source file not found' }, { status: 404 });
       }
 
       const now = new Date().toISOString();
@@ -313,9 +371,9 @@ export async function action({ request }: ActionFunctionArgs) {
         updatedAt: now,
       };
 
-      fileStore.set(destinationFileId, copiedFile);
+      await storeFile(copiedFile);
 
-      console.log(`[FileOperations] Copied: ${sourceFileId} -> ${destinationFileId}`);
+      logger.info(`[FileOperations] Copied: ${sourceFileId} -> ${destinationFileId}`);
       return new Response(null, { status: 204 });
     }
 
@@ -323,7 +381,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (actionType === 'addWebPage') {
       const validation = AddWebPageInput.safeParse(body);
       if (!validation.success) {
-        return json({
+        return JsonResponse.json({
           success: false,
           error: 'Invalid input',
           details: validation.error.errors,
@@ -355,17 +413,17 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       };
 
-      fileStore.set(fileId, newFile);
+      await storeFile(newFile);
 
-      console.log(`[FileOperations] Added web page: ${fileId} (${webpage.url})`);
-      return json({ success: true, file: { id: fileId, name: fileName, path: newFile.path } });
+      logger.info(`[FileOperations] Added web page: ${fileId} (${webpage.url})`);
+      return JsonResponse.json({ success: true, file: { id: fileId, name: fileName, path: newFile.path } });
     }
 
     // POST - Upload file (JSON body)
     if (request.method === 'POST') {
       const validation = UploadFileInput.safeParse(body);
       if (!validation.success) {
-        return json({
+        return JsonResponse.json({
           success: false,
           error: 'Invalid input',
           details: validation.error.errors,
@@ -390,9 +448,9 @@ export async function action({ request }: ActionFunctionArgs) {
         metadata: { userId: session.user.id },
       };
 
-      fileStore.set(fileId, newFile);
+      await storeFile(newFile);
 
-      console.log(`[FileOperations] Uploaded: ${fileId} (${validation.data.fileName})`);
+      logger.info(`[FileOperations] Uploaded: ${fileId} (${validation.data.fileName})`);
       return new Response(null, { status: 202 });
     }
 
@@ -402,31 +460,27 @@ export async function action({ request }: ActionFunctionArgs) {
       const fileId = body.fileId;
 
       if (!workspaceId || !fileId) {
-        return json({ success: false, error: 'workspaceId and fileId required' }, { status: 400 });
+        return JsonResponse.json({ success: false, error: 'workspaceId and fileId required' }, { status: 400 });
       }
 
-      const file = fileStore.get(fileId);
+      const file = await readFile(workspaceId, fileId);
 
       if (!file) {
-        return json({ success: false, error: 'File not found' }, { status: 404 });
+        return JsonResponse.json({ success: false, error: 'File not found' }, { status: 404 });
       }
 
-      if (file.workspaceId !== workspaceId) {
-        return json({ success: false, error: 'File not in workspace' }, { status: 403 });
-      }
+      await deleteFile(workspaceId, fileId);
 
-      fileStore.delete(fileId);
-
-      console.log(`[FileOperations] Removed: ${fileId}`);
+      logger.info(`[FileOperations] Removed: ${fileId}`);
       return new Response(null, { status: 204 });
     }
 
-    return json({ success: false, error: 'Method not allowed' }, { status: 405 });
+    return JsonResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('[FileOperations] Action error:', error);
-    return json({
+    logger.error('[FileOperations] Action error:', error);
+    return JsonResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'File operation failed',
+      error: 'File operation failed',
     }, { status: 500 });
   }
 }

@@ -8,18 +8,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { isSubpath } from './paths.js';
 import { marked } from 'marked';
+import { createScopedLogger } from '~/utils/logger';
 
-// Simple console logger for import processing
-const logger = {
-   
-  debug: (...args: any[]) =>
-    console.debug('[DEBUG] [ImportProcessor]', ...args),
-   
-  warn: (...args: any[]) => console.warn('[WARN] [ImportProcessor]', ...args),
-   
-  error: (...args: any[]) =>
-    console.error('[ERROR] [ImportProcessor]', ...args),
-};
+const logger = createScopedLogger('MemoryImportProcessor');
 
 /**
  * Interface for tracking import processing state to prevent circular imports
