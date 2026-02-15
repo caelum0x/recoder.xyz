@@ -53,9 +53,11 @@ Deferred from this wave:
 1. Any failed gate command changes repo decision to NO-GO.
 2. Any contract mismatch on workflow endpoints (`requestContract` or `responseContract`) blocks promotion.
 3. Missing rollback command for a target blocks promotion.
+4. Production deployment workflow failures (CI infra/tooling) block promotion until pipeline is green.
 
 ## Owner Actions (Now)
 1. Backend owner: expose/fix production health routes (`/api/health/public-api-queue`, `/api/health/byok-readiness`) on `docker.recoder.xyz`, then rerun smoke.
 2. Web owner: expose/fix production readiness routes (`/api/health/byok-readiness`, `/api/health/public-api-readiness`) and verify `/auth/verify` auth behavior contract.
 3. Platform owner: app/frontend/mobile noninteractive gates are green in this cycle; keep rerunning per release candidate.
 4. CLI owner: OpenClaw targeted tests are green in this cycle; attach CI artifact for release evidence pack.
+5. Platform owner: merge/push `.github/workflows/deploy.yml` pnpm cache/install fix, then rerun `Deploy Production`.
