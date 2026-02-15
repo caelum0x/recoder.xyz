@@ -26,32 +26,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
       
       - name: Install dependencies
-        working-directory: ${{ matrix.project }}
-        run: |
-          if [ -f "package-lock.json" ]; then
-            npm ci --legacy-peer-deps
-          elif [ -f "package.json" ]; then
-            npm install --legacy-peer-deps
-          else
-            echo "No package.json found in ${{ matrix.project }}"
-            exit 1
-          fi
+        run: pnpm install --frozen-lockfile
       
       - name: Run tests
-        working-directory: ${{ matrix.project }}
         run: |
-          if npm run test --if-present; then
+          if pnpm -C "${{ matrix.project }}" run test --if-present; then
             echo "Tests passed"
           else
             echo "No tests or tests failed"
           fi
       
       - name: Build project
-        working-directory: ${{ matrix.project }}
-        run: SKIP_ENV_VALIDATION=true npm run build
+        run: SKIP_ENV_VALIDATION=true pnpm -C "${{ matrix.project }}" run build
         env:
           SKIP_ENV_VALIDATION: true
 
