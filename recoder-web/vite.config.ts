@@ -30,8 +30,13 @@ export default defineConfig((config) => {
       alias: {
         // Do NOT alias React here - it breaks SSR (CJS vs ESM conflict)
         // Instead, rely on dedupe + correct node_modules resolution
+        // Force Node builtins for SSR resolution.
+        crypto: 'node:crypto',
+        stream: 'node:stream',
         // Skip ajv JSON schema files that cause build issues
         'ajv/dist/refs/json-schema-draft-07.json': resolve(__dirname, 'app/lib/empty-json.js'),
+        // Resolve vault polyfill shim to Node.js buffer for SSR
+        'vite-plugin-node-polyfills/shims/buffer': 'node:buffer',
       },
     },
     build: {
@@ -193,6 +198,10 @@ export default defineConfig((config) => {
         'ajv',
         'ajv-formats',
         '@modelcontextprotocol/sdk',
+        'vite-plugin-node-polyfills',
+        'glob',
+        'jsdom',
+        'defuddle',
       ],
       // Don't externalize these in SSR - they need to be bundled
       noExternal: [
@@ -208,6 +217,8 @@ export default defineConfig((config) => {
         'rehype-sanitize',
         'remark-gfm',
         'unist-util-visit',
+        '@giselles-ai/vault',
+        'vite-plugin-node-polyfills',
       ],
       resolve: {
         conditions: ['node'],

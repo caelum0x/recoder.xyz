@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { RECODER_ECOSYSTEM_APPS } from '@recoder/ecosystem-config';
+const RECODER_ECOSYSTEM_APPS = [
+  { id: 'web', label: 'Recoder Web', description: 'AI-powered coding platform', href: 'https://recoder.xyz' },
+  { id: 'app', label: 'Recoder App', description: 'Dashboard & settings', href: 'https://app.recoder.xyz' },
+  { id: 'agency', label: 'Recoder Agency', description: 'AI agent workflows', href: 'https://agency.recoder.xyz' },
+  { id: 'studio', label: 'Giselle Studio', description: 'Visual workflow designer', href: 'https://studio.giselles.ai' },
+];
 
 export function AppSwitcher() {
   const [showMenu, setShowMenu] = useState(false);

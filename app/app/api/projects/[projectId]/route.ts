@@ -7,7 +7,7 @@ const RECODER_WEB_URL = process.env.RECODER_WEB_URL || 'http://localhost:5173';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string } },
+  { params }: { params: Promise<{ projectId: string }> },
 ) {
   try {
     const hasInternalHeaders = Boolean(
@@ -33,7 +33,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.projectId;
+    const { projectId } = await params;
     if (!projectId) {
       return NextResponse.json({ success: false, error: 'projectId is required' }, { status: 400 });
     }
