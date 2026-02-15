@@ -16,6 +16,8 @@ import {
   isFunctionResponse,
 } from '../utils/messageInspectors.js';
 import { DEFAULT_QWEN_FLASH_MODEL } from '../config/models.js';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LoopDetection');
 
 const TOOL_CALL_LOOP_THRESHOLD = 5;
 const CONTENT_LOOP_THRESHOLD = 10;
@@ -408,7 +410,7 @@ Please analyze the conversation history to determine the possibility that the co
     if (typeof result['confidence'] === 'number') {
       if (result['confidence'] > 0.9) {
         if (typeof result['reasoning'] === 'string' && result['reasoning']) {
-          console.warn(result['reasoning']);
+          logger.warn(result['reasoning']);
         }
         logLoopDetected(
           this.config,

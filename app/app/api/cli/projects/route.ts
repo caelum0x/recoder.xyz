@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
     console.error('❌ [api/cli/projects] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to fetch projects',
+        error: 'Failed to fetch projects',
       },
       { status: 500 }
     );
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     console.error('❌ [api/cli/projects] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to fetch project',
+        error: 'Failed to fetch project',
       },
       { status: 500 }
     );

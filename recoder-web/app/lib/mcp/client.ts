@@ -1,5 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPClientLib');
 
 export interface MCPServerConfig {
   id: string;
@@ -57,10 +60,10 @@ export class MCPClient {
       });
       this.serverTools.set(config.id, serverTools);
 
-      console.log(`✅ MCP: Connected to ${config.name} with ${serverTools.length} tools`);
+      logger.info(`✅ MCP: Connected to ${config.name} with ${serverTools.length} tools`);
       return serverTools;
     } catch (err: any) {
-      console.error(`❌ MCP: Failed to connect to ${config.name}:`, err.message);
+      logger.error(`❌ MCP: Failed to connect to ${config.name}:`, err.message);
       return [];
     }
   }

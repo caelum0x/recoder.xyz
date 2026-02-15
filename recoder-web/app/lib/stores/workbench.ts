@@ -24,6 +24,9 @@ import type {
 } from '~/lib/types/proposals';
 import { createCodeProposal } from '~/lib/types/proposals';
 import * as workspace from './workspace';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('WorkbenchStore');
 
 // 🔒 Global container creation coordination - prevents duplicate container creation
 // This is module-level to ensure coordination across all callers
@@ -50,14 +53,14 @@ export async function ensureContainerExists(
   options?: ContainerCreationOptions
 ): Promise<boolean> {
   if (!DOCKER_URL) {
-    console.warn('[ensureContainerExists] DOCKER_URL not configured');
+    logger.warn('[ensureContainerExists] DOCKER_URL not configured');
     return false;
   }
 
   // If already creating this container, wait for the existing promise
   const existingPromise = containerCreationPromises.get(projectId);
   if (existingPromise) {
-    console.log('⏳ [ensureContainerExists] Waiting for existing container creation...');
+    logger.info('⏳ [ensureContainerExists] Waiting for existing container creation...');
     return existingPromise;
   }
 
@@ -65,7 +68,7 @@ export async function ensureContainerExists(
   const createPromise = (async (): Promise<boolean> => {
     try {
       const userId = getCurrentUserId();
-      console.log('🐳 [ensureContainerExists] Creating container for', projectId,
+      logger.info('🐳 [ensureContainerExists] Creating container for', projectId,
         options?.framework ? `(framework: ${options.framework})` : '',
         options?.templateId ? `(template: ${options.templateId})` : '');
 
@@ -80,18 +83,18 @@ export async function ensureContainerExists(
       // Container creation can take 30-120s (Docker pull, pool acquire, env setup).
       await dockerPost<{ success: boolean }>('/api/container', body, { timeout: CONTAINER_CREATE_TIMEOUT_MS });
 
-      console.log('✅ [ensureContainerExists] Container ready for', projectId);
+      logger.info('✅ [ensureContainerExists] Container ready for', projectId);
       return true;
     } catch (error: any) {
       // 409 Conflict means container already exists - that's OK
       if (error?.statusCode === 409 || error?.message?.includes('already exists')) {
-        console.log('✅ [ensureContainerExists] Container already exists for', projectId);
+        logger.info('✅ [ensureContainerExists] Container already exists for', projectId);
         return true;
       }
 
       // 429 Container limit — auto-evict oldest stale containers and retry
       if (error?.statusCode === 429 && error?.message?.includes('Container limit')) {
-        console.log('⚠️ [ensureContainerExists] Container limit hit, attempting auto-eviction...');
+        logger.info('⚠️ [ensureContainerExists] Container limit hit, attempting auto-eviction...');
         try {
           const { containers: userContainers, count, max } = await dockerGet<{
             containers: { projectId: string; lastActive: number }[];
@@ -103,10 +106,10 @@ export async function ensureContainerExists(
           const evictCandidates = userContainers.filter((c) => c.projectId !== projectId);
           const numToEvict = Math.max(1, count - max + 1); // e.g. 6 - 5 + 1 = 2
 
-          console.log(`🗑️ [ensureContainerExists] Need to evict ${numToEvict} containers (have ${count}, max ${max})`);
+          logger.info(`🗑️ [ensureContainerExists] Need to evict ${numToEvict} containers (have ${count}, max ${max})`);
 
           for (let i = 0; i < numToEvict && i < evictCandidates.length; i++) {
-            console.log(`🗑️ [ensureContainerExists] Evicting container ${i + 1}/${numToEvict}: ${evictCandidates[i].projectId}`);
+            logger.info(`🗑️ [ensureContainerExists] Evicting container ${i + 1}/${numToEvict}: ${evictCandidates[i].projectId}`);
             await dockerDelete(`/api/container/${evictCandidates[i].projectId}`);
           }
 
@@ -116,14 +119,14 @@ export async function ensureContainerExists(
           if (options?.templateId) retryBody.templateId = options.templateId;
 
           await dockerPost<{ success: boolean }>('/api/container', retryBody, { timeout: CONTAINER_CREATE_TIMEOUT_MS });
-          console.log('✅ [ensureContainerExists] Container created after eviction for', projectId);
+          logger.info('✅ [ensureContainerExists] Container created after eviction for', projectId);
           return true;
         } catch (retryError: any) {
-          console.error('❌ [ensureContainerExists] Auto-eviction failed:', retryError.message);
+          logger.error('❌ [ensureContainerExists] Auto-eviction failed:', retryError.message);
         }
       }
 
-      console.error('❌ [ensureContainerExists] Error:', error.message);
+      logger.error('❌ [ensureContainerExists] Error:', error.message);
       return false;
     } finally {
       containerCreationPromises.delete(projectId);
@@ -156,7 +159,25 @@ export type ArtifactUpdateState = Pick<ArtifactState, 'title' | 'closed'>;
 
 type Artifacts = MapStore<Record<string, ArtifactState>>;
 
-export type WorkbenchViewType = 'code' | 'preview';
+export type WorkbenchViewType = 'code' | 'preview' | 'agent';
+
+// ==================== Publish State ====================
+export type PublishStatus = 'idle' | 'building' | 'publishing' | 'published' | 'error';
+
+export interface CustomDomainInfo {
+  domain: string;
+  status: string;
+  url: string | null;
+}
+
+export interface PublishState {
+  status: PublishStatus;
+  url: string | null;
+  slug: string | null;
+  publishedAt: string | null;
+  error: string | null;
+  customDomains?: CustomDomainInfo[];
+}
 
 export interface BuildStatus {
   phase: 'idle' | 'creating' | 'installing' | 'starting' | 'ready';
@@ -199,6 +220,22 @@ export class WorkbenchStore {
     progress: 0,
   });
 
+  // ✅ Publish (Go Live) state
+  publishState: WritableAtom<PublishState> = import.meta.hot?.data.publishState ?? atom<PublishState>({
+    status: 'idle',
+    url: null,
+    slug: null,
+    publishedAt: null,
+    error: null,
+  });
+
+  // Container recovery status
+  containerRecoveryStatus = atom<{
+    recovering: boolean;
+    lastRecovery: number | null;
+    message: string | null;
+  }>({ recovering: false, lastRecovery: null, message: null });
+
   // ==================== PROPOSAL SYSTEM ====================
   // When enabled, AI actions are collected into proposals for user review
 
@@ -224,6 +261,7 @@ export class WorkbenchStore {
       import.meta.hot.data.projectId = this.projectId;
       import.meta.hot.data.proposalModeEnabled = this.proposalModeEnabled;
       import.meta.hot.data.pendingProposals = this.pendingProposals;
+      import.meta.hot.data.publishState = this.publishState;
       // NOTE: Do NOT preserve containerReady - must always start false
     }
   }
@@ -240,7 +278,7 @@ export class WorkbenchStore {
     this.#isRestoredChat = true;
     this.#restoredFilePaths = restoredFiles || [];
     this.#restoredMessageIds = new Set(restoredMessageIds || []);
-    console.log(`📂 [WorkbenchStore] Marked as restored chat with ${this.#restoredFilePaths.length} files, ${this.#restoredMessageIds.size} messageIds`);
+    logger.info(`📂 [WorkbenchStore] Marked as restored chat with ${this.#restoredFilePaths.length} files, ${this.#restoredMessageIds.size} messageIds`);
   }
 
   /**
@@ -256,7 +294,7 @@ export class WorkbenchStore {
   resetRestoredChatFlag() {
     this.#isRestoredChat = false;
     this.#restoredMessageIds.clear();
-    console.log('🔄 [WorkbenchStore] Reset restored chat flag');
+    logger.info('🔄 [WorkbenchStore] Reset restored chat flag');
   }
 
   /**
@@ -272,7 +310,7 @@ export class WorkbenchStore {
   setContainerReady(ready: boolean = true) {
     this.containerReady.set(ready);
     if (ready) {
-      console.log('✅ [WorkbenchStore] Container marked as ready');
+      logger.info('✅ [WorkbenchStore] Container marked as ready');
     }
   }
 
@@ -291,11 +329,11 @@ export class WorkbenchStore {
   async retryContainerCreation(): Promise<boolean> {
     const projectId = this.#currentProjectId;
     if (!projectId) {
-      console.warn('[WorkbenchStore] Cannot retry container creation: no projectId');
+      logger.warn('[WorkbenchStore] Cannot retry container creation: no projectId');
       return false;
     }
 
-    console.log('[WorkbenchStore] Retrying container creation for', projectId);
+    logger.info('[WorkbenchStore] Retrying container creation for', projectId);
 
     // Reset both flags to enter the "creating" state
     this.containerCreationFailed.set(false);
@@ -307,7 +345,7 @@ export class WorkbenchStore {
       if (success) {
         this.containerCreationFailed.set(false);
         this.setContainerReady(true);
-        console.log('[WorkbenchStore] Container retry succeeded for', projectId);
+        logger.info('[WorkbenchStore] Container retry succeeded for', projectId);
 
         // Re-initialize dependent stores now that the container is back
         await this.#terminalStore.setProjectId(projectId);
@@ -317,12 +355,12 @@ export class WorkbenchStore {
         return true;
       } else {
         this.containerCreationFailed.set(true);
-        console.error('[WorkbenchStore] Container retry failed for', projectId);
+        logger.error('[WorkbenchStore] Container retry failed for', projectId);
         return false;
       }
     } catch (error) {
       this.containerCreationFailed.set(true);
-      console.error('[WorkbenchStore] Container retry threw for', projectId, error);
+      logger.error('[WorkbenchStore] Container retry threw for', projectId, error);
       return false;
     }
   }
@@ -417,7 +455,7 @@ export class WorkbenchStore {
     // This prevents 404 errors from terminal, preview, files, etc.
     let containerExists = false;
     if (DOCKER_URL) {
-      console.log('🔄 [WorkbenchStore] Ensuring container exists before initialization...');
+      logger.info('🔄 [WorkbenchStore] Ensuring container exists before initialization...');
       containerExists = await ensureContainerExists(projectId, options);
 
       if (containerExists) {
@@ -426,9 +464,9 @@ export class WorkbenchStore {
         // because the action runner needs containerReady=true to start writing files.
         this.containerCreationFailed.set(false);
         this.setContainerReady(true);
-        console.log('✅ [WorkbenchStore] Container exists, marked ready, proceeding with initialization');
+        logger.info('✅ [WorkbenchStore] Container exists, marked ready, proceeding with initialization');
       } else {
-        console.warn('⚠️ [WorkbenchStore] Container creation failed, proceeding anyway');
+        logger.warn('⚠️ [WorkbenchStore] Container creation failed, proceeding anyway');
         this.containerCreationFailed.set(true);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('recoder:container-error', {
@@ -460,7 +498,7 @@ export class WorkbenchStore {
     const savedWorkspace = workspace.initWorkspace(projectId);
 
     if (savedWorkspace) {
-      console.log('[WorkbenchStore] Restoring workspace state...');
+      logger.info('[WorkbenchStore] Restoring workspace state...');
 
       // Restore open tabs
       if (savedWorkspace.openTabs.length > 0) {
@@ -497,7 +535,7 @@ export class WorkbenchStore {
         this.currentView.set(savedWorkspace.currentView);
       }
 
-      console.log('[WorkbenchStore] Workspace state restored');
+      logger.info('[WorkbenchStore] Workspace state restored');
     }
 
     // Subscribe to state changes to sync with workspace store
@@ -627,9 +665,9 @@ export class WorkbenchStore {
       const data = await resp.json() as { files: any[] };
       // Update files store with new file list
       // The files are returned as { files: [...] }
-      console.log('[WorkbenchStore] Refreshed file list from Docker');
+      logger.info('[WorkbenchStore] Refreshed file list from Docker');
     } catch (e) {
-      console.warn('[WorkbenchStore] Failed to refresh files:', e);
+      logger.warn('[WorkbenchStore] Failed to refresh files:', e);
     }
   }
 
@@ -928,18 +966,18 @@ export class WorkbenchStore {
     }
 
     if (totalCancelled > 0) {
-      console.log(`[WorkbenchStore] Aborted ${totalCancelled} action(s) across all artifacts`);
+      logger.info(`[WorkbenchStore] Aborted ${totalCancelled} action(s) across all artifacts`);
     }
 
     return totalCancelled;
   }
 
   addArtifact({ messageId, title, id }: ArtifactCallbackData) {
-    console.log('🎨 [WorkbenchStore] addArtifact called:', id, title, 'messageId:', messageId);
+    logger.info('🎨 [WorkbenchStore] addArtifact called:', id, title, 'messageId:', messageId);
     const artifact = this.#getArtifact(messageId);
 
     if (artifact) {
-      console.log('⏭️  [WorkbenchStore] Artifact already exists, skipping');
+      logger.info('⏭️  [WorkbenchStore] Artifact already exists, skipping');
       return;
     }
 
@@ -949,10 +987,10 @@ export class WorkbenchStore {
 
     const projectIdToUse = this.#currentProjectId || this.projectId.get();
     if (!projectIdToUse) {
-      console.error('[WorkbenchStore] CRITICAL: No projectId when creating ActionRunner');
+      logger.error('[WorkbenchStore] CRITICAL: No projectId when creating ActionRunner');
     }
     const runner = new ActionRunner(projectIdToUse || undefined);
-    console.log(`[WorkbenchStore] ActionRunner created with projectId: ${projectIdToUse}`);
+    logger.info(`[WorkbenchStore] ActionRunner created with projectId: ${projectIdToUse}`);
     
     // 🔧 CRITICAL FIX: Only mark runner as restored if THIS messageId was part of the restored chat.
     // This prevents NEW AI messages (after restoration) from being skipped.
@@ -961,9 +999,9 @@ export class WorkbenchStore {
     const isRestoredMessage = this.#isRestoredChat && this.#restoredMessageIds.has(messageId);
     if (isRestoredMessage) {
       runner.markAsRestoredChat(this.#restoredFilePaths);
-      console.log(`📂 [WorkbenchStore] Marked runner as restored for messageId: ${messageId}`);
+      logger.info(`📂 [WorkbenchStore] Marked runner as restored for messageId: ${messageId}`);
     } else if (this.#isRestoredChat) {
-      console.log(`✨ [WorkbenchStore] NEW message after restoration, runner NOT marked as restored: ${messageId}`);
+      logger.info(`✨ [WorkbenchStore] NEW message after restoration, runner NOT marked as restored: ${messageId}`);
     }
 
     this.artifacts.setKey(messageId, {
@@ -986,31 +1024,31 @@ export class WorkbenchStore {
 
   async addAction(data: ActionCallbackData) {
     const { messageId } = data;
-    console.log('🏪 [WorkbenchStore] addAction called:', data.action?.type, 'messageId:', messageId);
+    logger.info('🏪 [WorkbenchStore] addAction called:', data.action?.type, 'messageId:', messageId);
 
     const artifact = this.#getArtifact(messageId);
 
     if (!artifact) {
-      console.error('❌ [WorkbenchStore] Artifact not found for messageId:', messageId, 'Available:', Object.keys(this.artifacts.get()));
+      logger.error('❌ [WorkbenchStore] Artifact not found for messageId:', messageId, 'Available:', Object.keys(this.artifacts.get()));
       unreachable('Artifact not found');
     }
 
-    console.log('🏪 [WorkbenchStore] Calling artifact.runner.addAction');
+    logger.info('🏪 [WorkbenchStore] Calling artifact.runner.addAction');
     artifact.runner.addAction(data);
   }
 
   async runAction(data: ActionCallbackData) {
     const { messageId } = data;
-    console.log('🏪 [WorkbenchStore] runAction called:', data.action?.type, 'messageId:', messageId);
+    logger.info('🏪 [WorkbenchStore] runAction called:', data.action?.type, 'messageId:', messageId);
 
     const artifact = this.#getArtifact(messageId);
 
     if (!artifact) {
-      console.error('❌ [WorkbenchStore] Artifact not found for messageId:', messageId, 'Available:', Object.keys(this.artifacts.get()));
+      logger.error('❌ [WorkbenchStore] Artifact not found for messageId:', messageId, 'Available:', Object.keys(this.artifacts.get()));
       unreachable('Artifact not found');
     }
 
-    console.log('🏪 [WorkbenchStore] Calling artifact.runner.runAction');
+    logger.info('🏪 [WorkbenchStore] Calling artifact.runner.runAction');
     artifact.runner.runAction(data);
   }
 
@@ -1286,7 +1324,7 @@ export class WorkbenchStore {
       const { loadProjectContext } = await import('~/lib/services/code-context');
       return await loadProjectContext(projectId);
     } catch (error) {
-      console.warn('[WorkbenchStore] Failed to load project context:', error);
+      logger.warn('[WorkbenchStore] Failed to load project context:', error);
       return null;
     }
   }
@@ -1303,7 +1341,7 @@ export class WorkbenchStore {
       const { getSmartFileSelection } = await import('~/lib/services/code-context');
       return await getSmartFileSelection(projectId, userMessage);
     } catch (error) {
-      console.warn('[WorkbenchStore] Failed to get smart file selection:', error);
+      logger.warn('[WorkbenchStore] Failed to get smart file selection:', error);
       return [];
     }
   }
@@ -1322,7 +1360,7 @@ export class WorkbenchStore {
       if (!context) return null;
       return await findRelatedFiles(projectId, filePath, context.files);
     } catch (error) {
-      console.warn('[WorkbenchStore] Failed to find related files:', error);
+      logger.warn('[WorkbenchStore] Failed to find related files:', error);
       return null;
     }
   }
@@ -1343,7 +1381,7 @@ export class WorkbenchStore {
       if (!res.ok) return null;
       return await res.text();
     } catch (error) {
-      console.warn('[WorkbenchStore] Failed to read file:', error);
+      logger.warn('[WorkbenchStore] Failed to read file:', error);
       return null;
     }
   }
@@ -1390,7 +1428,7 @@ export class WorkbenchStore {
       const { analyzeTerminalOutput } = await import('~/lib/services/error-analyzer');
       return analyzeTerminalOutput(terminalOutput);
     } catch (error) {
-      console.warn('[WorkbenchStore] Failed to analyze errors:', error);
+      logger.warn('[WorkbenchStore] Failed to analyze errors:', error);
       return { hasErrors: false, errors: [], summary: '', autoFixAvailable: false };
     }
   }
@@ -1410,7 +1448,7 @@ export class WorkbenchStore {
 
       return generateFixPrompt(error, fileContent);
     } catch (err) {
-      console.warn('[WorkbenchStore] Failed to generate fix prompt:', err);
+      logger.warn('[WorkbenchStore] Failed to generate fix prompt:', err);
       return `Fix error: ${error.message}`;
     }
   }
@@ -1423,7 +1461,7 @@ export class WorkbenchStore {
       const { createDiagnosticReport } = await import('~/lib/services/error-analyzer');
       return createDiagnosticReport(errors);
     } catch (error) {
-      console.warn('[WorkbenchStore] Failed to create diagnostic report:', error);
+      logger.warn('[WorkbenchStore] Failed to create diagnostic report:', error);
       return 'Unable to generate diagnostic report';
     }
   }
@@ -1573,7 +1611,7 @@ export class WorkbenchStore {
    */
   setProposalMode(enabled: boolean): void {
     this.proposalModeEnabled.set(enabled);
-    console.log(`[WorkbenchStore] Proposal mode ${enabled ? 'enabled' : 'disabled'}`);
+    logger.info(`[WorkbenchStore] Proposal mode ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -1589,7 +1627,7 @@ export class WorkbenchStore {
   startProposal(messageId: string): void {
     this.#proposalFileChanges.set(messageId, []);
     this.#queuedActions.set(messageId, []);
-    console.log(`[WorkbenchStore] Started proposal collection for message: ${messageId}`);
+    logger.info(`[WorkbenchStore] Started proposal collection for message: ${messageId}`);
   }
 
   /**
@@ -1636,7 +1674,7 @@ export class WorkbenchStore {
     const fileChanges = this.#proposalFileChanges.get(messageId);
 
     if (!fileChanges || fileChanges.length === 0) {
-      console.log(`[WorkbenchStore] No file changes for proposal: ${messageId}`);
+      logger.info(`[WorkbenchStore] No file changes for proposal: ${messageId}`);
       return null;
     }
 
@@ -1652,7 +1690,7 @@ export class WorkbenchStore {
     proposals.set(messageId, proposalResult);
     this.pendingProposals.set(proposals);
 
-    console.log(`[WorkbenchStore] Created proposal: ${proposal.id} with ${fileChanges.length} file changes`);
+    logger.info(`[WorkbenchStore] Created proposal: ${proposal.id} with ${fileChanges.length} file changes`);
     return proposal;
   }
 
@@ -1672,7 +1710,8 @@ export class WorkbenchStore {
   }
 
   /**
-   * Approve a proposal and execute the queued actions
+   * Approve a proposal — write approved files directly to Docker container.
+   * Writes file content from the proposal data (no need to re-run actions).
    */
   async approveProposal(
     messageId: string,
@@ -1685,34 +1724,57 @@ export class WorkbenchStore {
     }
 
     const proposal = proposalResult.proposal;
-    const queuedActions = this.#queuedActions.get(messageId) || [];
+    const projectId = this.projectId.get();
 
-    // Filter actions if partial approval
-    const actionsToRun = selectedFiles
-      ? queuedActions.filter(a => {
-          const action = a.action;
-          const filePath = action && 'filePath' in action ? (action as { filePath: string }).filePath : undefined;
-          return !filePath || selectedFiles.includes(filePath);
-        })
-      : queuedActions;
+    if (!projectId) {
+      return { success: false, error: 'No active project' };
+    }
+
+    // Filter files if partial approval
+    const filesToApply = selectedFiles
+      ? proposal.filesChanged.filter(f => selectedFiles.includes(f.path))
+      : proposal.filesChanged;
 
     const appliedFiles: string[] = [];
     const failedFiles: string[] = [];
 
-    // Execute the queued actions
-    for (const actionData of actionsToRun) {
+    // Write each approved file directly to Docker
+    for (const fileChange of filesToApply) {
       try {
-        const artifact = this.artifacts.get()[actionData.messageId];
-        if (artifact?.runner) {
-          artifact.runner.runAction(actionData);
-          if (actionData.action && 'filePath' in actionData.action) {
-            appliedFiles.push((actionData.action as { filePath: string }).filePath);
-          }
+        if (fileChange.type === 'delete') {
+          // Delete file from container
+          await dockerDelete(`/api/file/${projectId}?path=${encodeURIComponent(fileChange.path)}`);
+        } else if (fileChange.newContent !== undefined) {
+          // Write (create or update) file to container
+          await dockerPost(`/api/file/${projectId}`, {
+            filePath: fileChange.path,
+            content: fileChange.newContent,
+          });
         }
+        appliedFiles.push(fileChange.path);
       } catch (error) {
-        console.error(`[WorkbenchStore] Failed to run action:`, error);
-        if (actionData.action && 'filePath' in actionData.action) {
-          failedFiles.push((actionData.action as { filePath: string }).filePath);
+        logger.error(`[WorkbenchStore] Failed to write file ${fileChange.path}:`, error);
+        failedFiles.push(fileChange.path);
+      }
+    }
+
+    // Revert local file store for rejected files (restore old content)
+    if (selectedFiles) {
+      const rejectedFiles = proposal.filesChanged.filter(f => !selectedFiles.includes(f.path));
+      for (const rejected of rejectedFiles) {
+        const relativePath = rejected.path.startsWith('/') ? rejected.path.substring(1) : rejected.path;
+        const fullPath = `/home/user/${relativePath}`;
+        if (rejected.type === 'create') {
+          // Remove from local store — was never written to Docker
+          const currentFiles = this.files.get();
+          if (currentFiles[fullPath]) {
+            const updated = { ...currentFiles };
+            delete updated[fullPath];
+            this.files.set(updated as any);
+          }
+        } else if (rejected.oldContent !== undefined) {
+          // Restore old content in local store
+          this.files.setKey(fullPath, { type: 'file', content: rejected.oldContent, isBinary: false });
         }
       }
     }
@@ -1723,6 +1785,9 @@ export class WorkbenchStore {
       ...proposalResult,
       status: selectedFiles ? 'partial' : 'approved',
       approvedChanges: selectedFiles || proposal.filesChanged.map(f => f.path),
+      rejectedChanges: selectedFiles
+        ? proposal.filesChanged.filter(f => !selectedFiles.includes(f.path)).map(f => f.path)
+        : undefined,
     };
     proposals.set(messageId, updatedResult);
     this.pendingProposals.set(proposals);
@@ -1731,7 +1796,7 @@ export class WorkbenchStore {
     this.#proposalFileChanges.delete(messageId);
     this.#queuedActions.delete(messageId);
 
-    console.log(`[WorkbenchStore] Approved proposal: ${messageId}, applied ${appliedFiles.length} files`);
+    logger.info(`[WorkbenchStore] Approved proposal: ${messageId}, applied ${appliedFiles.length} files`);
 
     return {
       success: true,
@@ -1741,14 +1806,34 @@ export class WorkbenchStore {
   }
 
   /**
-   * Reject a proposal and discard the queued actions
+   * Reject a proposal — revert local file store and discard changes.
+   * No Docker writes needed since proposal mode never wrote to the container.
    */
   rejectProposal(messageId: string): void {
     const proposalResult = this.pendingProposals.get().get(messageId);
 
     if (!proposalResult) {
-      console.warn(`[WorkbenchStore] Proposal not found for rejection: ${messageId}`);
+      logger.warn(`[WorkbenchStore] Proposal not found for rejection: ${messageId}`);
       return;
+    }
+
+    // Revert local file store for all file changes
+    for (const fileChange of proposalResult.proposal.filesChanged) {
+      const relativePath = fileChange.path.startsWith('/') ? fileChange.path.substring(1) : fileChange.path;
+      const fullPath = `/home/user/${relativePath}`;
+
+      if (fileChange.type === 'create') {
+        // Remove newly created files from local store
+        const currentFiles = this.files.get();
+        if (currentFiles[fullPath]) {
+          const updated = { ...currentFiles };
+          delete updated[fullPath];
+          this.files.set(updated as any);
+        }
+      } else if (fileChange.type === 'update' && fileChange.oldContent !== undefined) {
+        // Restore old content
+        this.files.setKey(fullPath, { type: 'file', content: fileChange.oldContent, isBinary: false });
+      }
     }
 
     // Update proposal status
@@ -1764,7 +1849,7 @@ export class WorkbenchStore {
     this.#proposalFileChanges.delete(messageId);
     this.#queuedActions.delete(messageId);
 
-    console.log(`[WorkbenchStore] Rejected proposal: ${messageId}`);
+    logger.info(`[WorkbenchStore] Rejected proposal: ${messageId}`);
   }
 
   /**
@@ -1774,7 +1859,7 @@ export class WorkbenchStore {
     this.pendingProposals.set(new Map());
     this.#proposalFileChanges.clear();
     this.#queuedActions.clear();
-    console.log('[WorkbenchStore] Cleared all proposals');
+    logger.info('[WorkbenchStore] Cleared all proposals');
   }
 
   /**
@@ -1854,6 +1939,210 @@ export class WorkbenchStore {
    */
   deleteWorkspaceState(projectId: string): void {
     workspace.deleteWorkspaceState(projectId);
+  }
+
+  // ==================== PUBLISH (GO LIVE) ====================
+
+  /**
+   * Publish the current project. Builds and deploys to web.recoder.xyz/<slug>.
+   */
+  async publishProject(projectName?: string): Promise<{ url: string; slug: string } | null> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return null;
+
+    this.publishState.set({
+      status: 'building',
+      url: null,
+      slug: null,
+      publishedAt: null,
+      error: null,
+    });
+
+    try {
+      const result = await dockerPost<{ url: string; slug: string; publishedAt: string }>(
+        `/api/publish/${projectId}`,
+        { name: projectName || projectId },
+        { timeout: 120000 } // 2 minute timeout for build
+      );
+
+      this.publishState.set({
+        status: 'published',
+        url: result.url,
+        slug: result.slug,
+        publishedAt: result.publishedAt,
+        error: null,
+      });
+
+      return { url: result.url, slug: result.slug };
+    } catch (error: any) {
+      this.publishState.set({
+        status: 'error',
+        url: null,
+        slug: null,
+        publishedAt: null,
+        error: error.message || 'Publish failed',
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Unpublish the current project
+   */
+  async unpublishProject(): Promise<boolean> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return false;
+
+    try {
+      await dockerPost(`/api/unpublish/${projectId}`, {});
+      this.publishState.set({
+        status: 'idle',
+        url: null,
+        slug: null,
+        publishedAt: null,
+        error: null,
+      });
+      return true;
+    } catch (error: any) {
+      logger.error('[WorkbenchStore] Unpublish failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Change the slug (URL path) for a published project
+   */
+  async changeSlug(newSlug: string): Promise<boolean> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return false;
+
+    try {
+      const result = await dockerPost<{ url: string; slug: string; changed: boolean }>(
+        `/api/publish/${projectId}/slug`,
+        { slug: newSlug },
+      );
+
+      if (result.changed) {
+        const currentState = this.publishState.get();
+        this.publishState.set({
+          ...currentState,
+          url: result.url,
+          slug: result.slug,
+        });
+      }
+
+      return true;
+    } catch (error: any) {
+      logger.error('[WorkbenchStore] Change slug failed:', error);
+
+      // Dispatch a toast-style event so the UI can show the error
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('recoder:toast', {
+          detail: { type: 'error', message: error.message || 'Failed to change slug' },
+        }));
+      }
+
+      return false;
+    }
+  }
+
+  /**
+   * Add a custom domain to the current published project.
+   */
+  async addCustomDomain(domain: string): Promise<{ success: boolean; instructions?: any; error?: string }> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return { success: false, error: 'No project' };
+
+    try {
+      const result = await dockerPost<{ domain: any; instructions: any }>(`/api/domains/${projectId}`, { domain });
+      await this.checkPublishStatus(); // Refresh state
+      return { success: true, instructions: result.instructions };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to add domain' };
+    }
+  }
+
+  /**
+   * Remove a custom domain from the current published project.
+   */
+  async removeCustomDomain(domain: string): Promise<boolean> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return false;
+
+    try {
+      await dockerDelete(`/api/domains/${projectId}/${domain}`);
+      await this.checkPublishStatus();
+      return true;
+    } catch (error: any) {
+      logger.error('[WorkbenchStore] Remove custom domain failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verify DNS for a custom domain.
+   */
+  async verifyCustomDomain(domain: string): Promise<{ verified: boolean; error?: string }> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return { verified: false, error: 'No project' };
+
+    try {
+      const result = await dockerPost<{ verified: boolean; method?: string; error?: string }>(`/api/domains/${projectId}/${domain}/verify`, {});
+      await this.checkPublishStatus();
+      return { verified: result.verified, error: result.error };
+    } catch (error: any) {
+      return { verified: false, error: error.message || 'Verification failed' };
+    }
+  }
+
+  /**
+   * Activate a custom domain (verify DNS + provision SSL + configure nginx).
+   */
+  async activateCustomDomain(domain: string): Promise<{ success: boolean; error?: string }> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return { success: false, error: 'No project' };
+
+    try {
+      const result = await dockerPost<{ activated: boolean; status: string; error?: string; url?: string }>(`/api/domains/${projectId}/${domain}/activate`, {});
+      await this.checkPublishStatus();
+      if (result.activated) {
+        return { success: true };
+      }
+      return { success: false, error: result.error || `Domain status: ${result.status}` };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Activation failed' };
+    }
+  }
+
+  /**
+   * Check publish status for the current project
+   */
+  async checkPublishStatus(): Promise<void> {
+    const projectId = this.#currentProjectId;
+    if (!projectId || !DOCKER_URL) return;
+
+    try {
+      const result = await dockerGet<{
+        published: boolean;
+        url?: string;
+        slug?: string;
+        publishedAt?: string;
+        customDomains?: CustomDomainInfo[];
+      }>(`/api/publish-status/${projectId}`);
+
+      if (result.published) {
+        this.publishState.set({
+          status: 'published',
+          url: result.url || null,
+          slug: result.slug || null,
+          publishedAt: result.publishedAt || null,
+          error: null,
+          customDomains: result.customDomains || [],
+        });
+      }
+    } catch {
+      // ignore - project may not be published
+    }
   }
 }
 

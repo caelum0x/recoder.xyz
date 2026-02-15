@@ -31,11 +31,14 @@ import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import type { Config } from '../config/config.js';
 import { SERVICE_NAME } from './constants.js';
 import { initializeMetrics } from './metrics.js';
+import { createScopedLogger } from '~/utils/logger';
 import {
   FileLogExporter,
   FileMetricExporter,
   FileSpanExporter,
 } from './file-exporters.js';
+
+const logger = createScopedLogger('TelemetrySDK');
 
 // For troubleshooting, set the log level to DiagLogLevel.DEBUG
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
@@ -160,12 +163,12 @@ export function initializeTelemetry(config: Config): void {
   try {
     sdk.start();
     if (config.getDebugMode()) {
-      console.log('OpenTelemetry SDK started successfully.');
+      logger.info('OpenTelemetry SDK started successfully.');
     }
     telemetryInitialized = true;
     initializeMetrics(config);
   } catch (error) {
-    console.error('Error starting OpenTelemetry SDK:', error);
+    logger.error('Error starting OpenTelemetry SDK:', error);
   }
 
   process.on('SIGTERM', () => {
@@ -183,10 +186,10 @@ export async function shutdownTelemetry(config: Config): Promise<void> {
   try {
     await sdk.shutdown();
     if (config.getDebugMode()) {
-      console.log('OpenTelemetry SDK shut down successfully.');
+      logger.info('OpenTelemetry SDK shut down successfully.');
     }
   } catch (error) {
-    console.error('Error shutting down SDK:', error);
+    logger.error('Error shutting down SDK:', error);
   } finally {
     telemetryInitialized = false;
   }

@@ -3,6 +3,9 @@
  * Handles loading/saving per-project configuration settings
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectSettings');
 // ==================== TYPES ====================
 
 export type SettingsCategory = 'general' | 'ai' | 'editor' | 'preview' | 'terminal';
@@ -347,7 +350,7 @@ export function loadProjectSettings(projectId: string): ProjectSettings {
       return migrateSettings(parsed, projectId);
     }
   } catch (error) {
-    console.error('[ProjectSettings] Failed to load settings:', error);
+    logger.error('[ProjectSettings] Failed to load settings:', error);
   }
 
   return createDefaultSettings(projectId);
@@ -364,7 +367,7 @@ export function saveProjectSettings(settings: ProjectSettings): boolean {
   // Validate before saving
   const validation = validateSettings(settings);
   if (!validation.valid) {
-    console.error('[ProjectSettings] Validation failed:', validation.errors);
+    logger.error('[ProjectSettings] Validation failed:', validation.errors);
     return false;
   }
 
@@ -375,10 +378,10 @@ export function saveProjectSettings(settings: ProjectSettings): boolean {
       updatedAt: Date.now(),
     };
     localStorage.setItem(key, JSON.stringify(toSave));
-    console.log(`[ProjectSettings] Saved settings for project: ${settings.projectId}`);
+    logger.info(`[ProjectSettings] Saved settings for project: ${settings.projectId}`);
     return true;
   } catch (error) {
-    console.error('[ProjectSettings] Failed to save settings:', error);
+    logger.error('[ProjectSettings] Failed to save settings:', error);
     return false;
   }
 }
@@ -394,10 +397,10 @@ export function deleteProjectSettings(projectId: string): boolean {
   try {
     const key = getStorageKey(projectId);
     localStorage.removeItem(key);
-    console.log(`[ProjectSettings] Deleted settings for project: ${projectId}`);
+    logger.info(`[ProjectSettings] Deleted settings for project: ${projectId}`);
     return true;
   } catch (error) {
-    console.error('[ProjectSettings] Failed to delete settings:', error);
+    logger.error('[ProjectSettings] Failed to delete settings:', error);
     return false;
   }
 }
@@ -510,13 +513,13 @@ export function importSettings(json: string, projectId: string): ProjectSettings
     const validation = validateSettings(migrated);
 
     if (!validation.valid) {
-      console.error('[ProjectSettings] Import validation failed:', validation.errors);
+      logger.error('[ProjectSettings] Import validation failed:', validation.errors);
       return null;
     }
 
     return migrated;
   } catch (error) {
-    console.error('[ProjectSettings] Failed to import settings:', error);
+    logger.error('[ProjectSettings] Failed to import settings:', error);
     return null;
   }
 }

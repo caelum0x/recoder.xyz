@@ -24,6 +24,8 @@ import {
 	type NodeId,
 	type OutputId,
 	type QueuedGeneration,
+	type SlackActionConfiguredState,
+	type WhatsAppActionConfiguredState,
 } from "@giselles-ai/protocol";
 import {
 	isJsonContent,
@@ -31,7 +33,12 @@ import {
 } from "@giselles-ai/text-editor-utils";
 import { useGenerationExecutor } from "../generations/internal/use-generation-executor";
 import type { AppEntryResolver } from "../generations/types";
+import { sendSlackMessage, sendSlackReply } from "../slack/execute-action";
 import type { GiselleContext } from "../types";
+import {
+	sendWhatsAppMedia,
+	sendWhatsAppMessage,
+} from "../whatsapp/execute-action";
 
 export function executeAction(args: {
 	context: GiselleContext;
@@ -65,12 +72,27 @@ export function executeAction(args: {
 						appEntryResolver,
 					});
 					break;
+				case "whatsapp":
+					generationOutputs = await executeWhatsAppAction({
+						state: command.state,
+						generationContext,
+						generationContentResolver,
+						appEntryResolver,
+					});
+					break;
+				case "slack":
+					generationOutputs = await executeSlackAction({
+						state: command.state,
+						generationContext,
+						generationContentResolver,
+						appEntryResolver,
+					});
+					break;
 				default: {
-					// TODO: Uncomment after implementing all action providers
-					// const _exhaustiveCheck: never = command.provider;
-					// throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);
-					const unknownProvider = (command as { provider: string }).provider;
-					throw new Error(`Unhandled provider: ${unknownProvider}`);
+					const _exhaustiveCheck: never = command;
+					throw new Error(
+						`Unhandled provider: ${(_exhaustiveCheck as { provider: string }).provider}`,
+					);
 				}
 			}
 			await finishGeneration({
@@ -348,6 +370,143 @@ async function executeGitHubAction(args: {
 		default: {
 			const _exhaustiveCheck: never = args.state.commandId;
 			throw new Error(`Unhandled command: ${_exhaustiveCheck}`);
+		}
+	}
+}
+
+async function resolveInputByAccessor(args: {
+	accessor: string;
+	generationContext: GenerationContext;
+	generationContentResolver: (
+		nodeId: NodeId,
+		outputId: OutputId,
+	) => Promise<string | undefined>;
+	appEntryResolver: AppEntryResolver;
+}): Promise<string> {
+	const input = args.generationContext.operationNode.inputs.find(
+		(i) => i.accessor === args.accessor,
+	);
+	if (!input) return "";
+
+	const connection = args.generationContext.connections.find(
+		(c) => c.inputId === input.id,
+	);
+	const sourceNode = args.generationContext.sourceNodes.find(
+		(n) => n.id === connection?.outputNode.id,
+	);
+	if (!connection || !sourceNode) return "";
+
+	switch (sourceNode.type) {
+		case "operation": {
+			if (isAppEntryNode(sourceNode)) {
+				const parts = await args.appEntryResolver(
+					connection.outputNode.id,
+					connection.outputId,
+				);
+				const textParts = parts.filter((p) => p.type === "text");
+				return textParts.map((p) => p.text).join(" ");
+			}
+			const content = await args.generationContentResolver(
+				connection.outputNode.id,
+				connection.outputId,
+			);
+			return content ?? "";
+		}
+		case "variable": {
+			if (isTextNode(sourceNode)) {
+				const jsonOrText = sourceNode.content.text;
+				return isJsonContent(jsonOrText)
+					? jsonContentToText(JSON.parse(jsonOrText))
+					: jsonOrText;
+			}
+			return "";
+		}
+		default:
+			return "";
+	}
+}
+
+async function executeWhatsAppAction(args: {
+	state: WhatsAppActionConfiguredState;
+	generationContext: GenerationContext;
+	generationContentResolver: (
+		nodeId: NodeId,
+		outputId: OutputId,
+	) => Promise<string | undefined>;
+	appEntryResolver: AppEntryResolver;
+}): Promise<GenerationOutput[]> {
+	const resolve = (accessor: string) =>
+		resolveInputByAccessor({
+			accessor,
+			generationContext: args.generationContext,
+			generationContentResolver: args.generationContentResolver,
+			appEntryResolver: args.appEntryResolver,
+		});
+
+	switch (args.state.commandId) {
+		case "whatsapp.send.message": {
+			const result = await sendWhatsAppMessage({
+				phoneNumberId: args.state.phoneNumberId,
+				accessToken: args.state.accessToken,
+				to: await resolve("to"),
+				body: await resolve("body"),
+			});
+			return createActionOutput(result, args.generationContext);
+		}
+		case "whatsapp.send.media": {
+			const result = await sendWhatsAppMedia({
+				phoneNumberId: args.state.phoneNumberId,
+				accessToken: args.state.accessToken,
+				to: await resolve("to"),
+				mediaUrl: await resolve("mediaUrl"),
+			});
+			return createActionOutput(result, args.generationContext);
+		}
+		default: {
+			const _exhaustiveCheck: never = args.state.commandId;
+			throw new Error(`Unhandled WhatsApp command: ${_exhaustiveCheck}`);
+		}
+	}
+}
+
+async function executeSlackAction(args: {
+	state: SlackActionConfiguredState;
+	generationContext: GenerationContext;
+	generationContentResolver: (
+		nodeId: NodeId,
+		outputId: OutputId,
+	) => Promise<string | undefined>;
+	appEntryResolver: AppEntryResolver;
+}): Promise<GenerationOutput[]> {
+	const resolve = (accessor: string) =>
+		resolveInputByAccessor({
+			accessor,
+			generationContext: args.generationContext,
+			generationContentResolver: args.generationContentResolver,
+			appEntryResolver: args.appEntryResolver,
+		});
+
+	switch (args.state.commandId) {
+		case "slack.send.message": {
+			const result = await sendSlackMessage({
+				botToken: args.state.botToken,
+				channelId: args.state.channelId,
+				text: await resolve("text"),
+			});
+			return createActionOutput(result, args.generationContext);
+		}
+		case "slack.send.reply": {
+			const result = await sendSlackReply({
+				botToken: args.state.botToken,
+				channelId: args.state.channelId,
+				text: await resolve("text"),
+				threadTs: await resolve("threadTs"),
+			});
+			return createActionOutput(result, args.generationContext);
+		}
+		default: {
+			const _exhaustiveCheck: never = args.state.commandId;
+			throw new Error(`Unhandled Slack command: ${_exhaustiveCheck}`);
 		}
 	}
 }

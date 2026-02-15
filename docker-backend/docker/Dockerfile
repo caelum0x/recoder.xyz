@@ -234,8 +234,23 @@ RUN gem install debug --no-document
 
 # Expo CLI for React Native development
 # EAS CLI for Expo Application Services (builds, updates)
-RUN npm install -g expo-cli eas-cli \
+# @expo/ngrok for tunnel mode (allows QR code scanning from any network)
+RUN npm install -g expo-cli eas-cli @expo/ngrok@^4.1.0 \
     && npm cache clean --force
+
+# Pre-cache common Expo native modules for faster project setup
+RUN mkdir -p /opt/expo-modules-cache && cd /opt/expo-modules-cache \
+    && npm init -y \
+    && npm install --prefer-offline --no-audit --no-fund \
+       expo-camera expo-location expo-notifications \
+       expo-sensors expo-av expo-file-system \
+       react-native-maps expo-media-library \
+    && npm cache clean --force
+
+# Expo environment variables
+ENV EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+ENV BROWSER=none
+ENV CI=1
 
 # ============================================
 # LSP Environment Variables

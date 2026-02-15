@@ -3,6 +3,10 @@
  * Verifies sessions shared from recoder.xyz via better-auth
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('AuthSession');
+
+
 export interface User {
   id: string;
   email: string;
@@ -39,7 +43,7 @@ interface SessionApiResponse {
  */
 function getMainSiteUrl(): string {
   const mainSiteUrl = process.env.MAIN_SITE_URL;
-  console.log('[Auth] MAIN_SITE_URL env:', mainSiteUrl, 'NODE_ENV:', process.env.NODE_ENV);
+  logger.info('[Auth] MAIN_SITE_URL env:', mainSiteUrl, 'NODE_ENV:', process.env.NODE_ENV);
   if (mainSiteUrl) {
     return mainSiteUrl;
   }
@@ -59,7 +63,7 @@ export async function verifySession(request: Request): Promise<Session | null> {
     const cookieHeader = request.headers.get('Cookie');
 
     if (!cookieHeader) {
-      console.log('[Auth] No cookies found in request');
+      logger.info('[Auth] No cookies found in request');
       return null;
     }
 
@@ -75,18 +79,18 @@ export async function verifySession(request: Request): Promise<Session | null> {
     });
 
     if (!response.ok) {
-      console.log('[Auth] Session verification failed:', response.status);
+      logger.info('[Auth] Session verification failed:', response.status);
       return null;
     }
 
     const data = await response.json() as SessionApiResponse;
 
     if (!data?.user) {
-      console.log('[Auth] No user in session response');
+      logger.info('[Auth] No user in session response');
       return null;
     }
 
-    console.log('[Auth] Session verified for user:', data.user.email);
+    logger.info('[Auth] Session verified for user:', data.user.email);
 
     return {
       user: {
@@ -101,7 +105,7 @@ export async function verifySession(request: Request): Promise<Session | null> {
       expiresAt: data.session?.expiresAt ? new Date(data.session.expiresAt) : new Date(),
     };
   } catch (error) {
-    console.error('[Auth] Error verifying session:', error);
+    logger.error('[Auth] Error verifying session:', error);
     return null;
   }
 }

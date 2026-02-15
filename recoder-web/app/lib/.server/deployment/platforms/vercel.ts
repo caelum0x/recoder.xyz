@@ -7,6 +7,9 @@
 
 import type { DeploymentConfig, DeploymentResult, FileTree } from '../types';
 import { fetchWithRetry, withRetry } from '../utils/retry';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('VercelDeploy');
 
 export class VercelDeployer {
   private apiUrl = 'https://api.vercel.com';
@@ -23,7 +26,7 @@ export class VercelDeployer {
     const startTime = Date.now();
 
     try {
-      console.log(`🚀 Starting Vercel deployment: ${config.projectName}`);
+      logger.info(`🚀 Starting Vercel deployment: ${config.projectName}`);
 
       if (!this.token) {
         throw new Error('Vercel token not configured. Set VERCEL_TOKEN environment variable.');
@@ -31,14 +34,14 @@ export class VercelDeployer {
 
       // Step 1: Create or get project
       const project = await this.createOrGetProject(config.projectName, config.framework);
-      console.log(`📦 Project: ${project.name} (${project.id})`);
+      logger.info(`📦 Project: ${project.name} (${project.id})`);
 
       // Step 2: Prepare deployment payload
       const deploymentPayload = this.prepareDeploymentPayload(config, files, project.id);
 
       // Step 3: Create deployment
       const deployment = await this.createDeployment(deploymentPayload);
-      console.log(`🔨 Deployment created: ${deployment.id}`);
+      logger.info(`🔨 Deployment created: ${deployment.id}`);
 
       // Step 4: Monitor deployment status
       const finalDeployment = await this.waitForDeployment(deployment.id);
@@ -46,7 +49,7 @@ export class VercelDeployer {
       const endTime = Date.now();
       const totalTime = endTime - startTime;
 
-      console.log(`✅ Deployment successful: ${finalDeployment.url}`);
+      logger.info(`✅ Deployment successful: ${finalDeployment.url}`);
 
       return {
         id: deployment.id,
@@ -62,7 +65,7 @@ export class VercelDeployer {
         },
       };
     } catch (error) {
-      console.error('❌ Vercel deployment failed:', error);
+      logger.error('❌ Vercel deployment failed:', error);
 
       return {
         id: `vercel-${Date.now()}`,
@@ -116,7 +119,7 @@ export class VercelDeployer {
     }, {
       maxRetries: 2,
       onRetry: (attempt, error) => {
-        console.log(`[Vercel] Retrying project setup (attempt ${attempt}): ${error.message}`);
+        logger.info(`[Vercel] Retrying project setup (attempt ${attempt}): ${error.message}`);
       },
     });
   }
@@ -166,7 +169,7 @@ export class VercelDeployer {
     }, {
       maxRetries: 2,
       onRetry: (attempt, error) => {
-        console.log(`[Vercel] Retrying deployment creation (attempt ${attempt}): ${error.message}`);
+        logger.info(`[Vercel] Retrying deployment creation (attempt ${attempt}): ${error.message}`);
       },
     });
   }

@@ -2,6 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
 import Redis from 'ioredis';
+import {
+  getPromptTaskQueueDiagnosticsFromConfig,
+  readPromptTaskQueueConfig,
+  resolvePromptTaskQueueBackend,
+  validatePromptTaskQueueConfig,
+} from './prompt-task-queue-config.js';
 
 export interface ClaimedPromptTask {
   taskId: string;
@@ -357,18 +363,19 @@ class RedisPromptTaskQueueStore implements PromptTaskQueue {
   }
 }
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-const defaultQueueDbPath = process.env.PROMPT_TASK_QUEUE_DB_PATH || path.join(DATA_DIR, 'public-api-queue.sqlite');
-const queueBackend = (process.env.PUBLIC_PROMPT_TASK_QUEUE_BACKEND || '').trim().toLowerCase();
-const redisUrl = (process.env.REDIS_URL || '').trim();
-const redisKeyPrefix = (process.env.PUBLIC_PROMPT_TASK_QUEUE_REDIS_PREFIX || 'recoder:public_prompt_queue').trim();
+const queueConfig = readPromptTaskQueueConfig(process.env);
+
+export function getPromptTaskQueueDiagnostics() {
+  return getPromptTaskQueueDiagnosticsFromConfig(queueConfig);
+}
 
 function createPromptTaskQueue(): PromptTaskQueue {
-  const wantsRedis = queueBackend === 'redis' || (!queueBackend && redisUrl);
-  if (wantsRedis && redisUrl) {
-    return new RedisPromptTaskQueueStore(redisUrl, redisKeyPrefix);
+  validatePromptTaskQueueConfig(queueConfig);
+  const selectedBackend = resolvePromptTaskQueueBackend(queueConfig);
+  if (selectedBackend === 'redis') {
+    return new RedisPromptTaskQueueStore(queueConfig.redisUrl, queueConfig.redisKeyPrefix);
   }
-  return new PromptTaskQueueStore(defaultQueueDbPath);
+  return new PromptTaskQueueStore(queueConfig.sqlitePath);
 }
 
 export const promptTaskQueue = createPromptTaskQueue();

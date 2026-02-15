@@ -1,12 +1,26 @@
 import { githubActions } from "./github";
+import { slackActions } from "./slack";
+import { whatsappActions } from "./whatsapp";
 
 export * from "./github";
+export * from "./slack";
+export * from "./whatsapp";
 
 export const actionRegistry = [
 	{
 		provider: "github",
 		label: "GitHub Action",
 		actions: githubActions,
+	},
+	{
+		provider: "whatsapp",
+		label: "WhatsApp Action",
+		actions: whatsappActions,
+	},
+	{
+		provider: "slack",
+		label: "Slack Action",
+		actions: slackActions,
 	},
 ] as const;
 

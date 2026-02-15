@@ -12,6 +12,10 @@
 /**
  * Represents a single search result with location and context
  */
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('FileSearchExecutor');
+
 export interface SearchResult {
   /** Path to the file containing the match */
   filePath: string;
@@ -145,7 +149,7 @@ export function executeSearchPlan(
                 break;
               }
             } catch (e) {
-              console.warn(`[file-search] Invalid regex pattern: ${pattern}`, e);
+              logger.warn(`[file-search] Invalid regex pattern: ${pattern}`, e);
             }
           }
         }
@@ -180,7 +184,7 @@ export function executeSearchPlan(
 
   // If no results and we have a fallback, try it
   if (results.length === 0 && fallbackSearch) {
-    console.log('[file-search] No results from primary search, trying fallback...');
+    logger.info('[file-search] No results from primary search, trying fallback...');
     usedFallback = true;
     results.push(...performSearch(fallbackSearch.terms, fallbackSearch.patterns));
   }

@@ -1,4 +1,7 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Templates');
 
 const DEFAULT_TEMPLATES = [
   {
@@ -75,7 +78,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   try {
     if (!db) {
-      console.warn('Database not available, using default templates');
+      logger.warn('Database not available, using default templates');
       return json({ templates: DEFAULT_TEMPLATES });
     }
 

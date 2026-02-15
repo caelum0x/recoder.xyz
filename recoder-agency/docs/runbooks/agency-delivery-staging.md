@@ -15,23 +15,44 @@ psql "$AGENCY_STAGING_DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 ## 2. Apply delivery migrations
 
+### 2A) Fresh DB track (preferred for new staging)
+
+Run migrations once using the migration tool:
+
+```bash
+pnpm -C apps/agency exec drizzle-kit migrate
+```
+
+### 2B) Existing DB track (incremental patching)
+
+Only apply missing delivery migrations in ascending order. Do not replay old baseline migrations on an already-running database.
+
 ```bash
 psql "$AGENCY_STAGING_DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f apps/agency/db/migrate/0097_restore_drills_nullable_team.sql \
-  -f apps/agency/db/migrate/0096_restore_drills.sql \
-  -f apps/agency/db/migrate/0095_project_status_audit_guard.sql \
-  -f apps/agency/db/migrate/0094_agency_roles.sql \
-  -f apps/agency/db/migrate/0093_project_unit_economics_view.sql \
-  -f apps/agency/db/migrate/0092_project_cost_guardrails.sql \
-  -f apps/agency/db/migrate/0091_milestone_billing_and_invoice_retry.sql \
-  -f apps/agency/db/migrate/0087_quotes_and_sows.sql \
-  -f apps/agency/db/migrate/0090_change_order_workflow.sql \
-  -f apps/agency/db/migrate/0086_service_catalog.sql \
-  -f apps/agency/db/migrate/0084_sla_policies.sql \
-  -f apps/agency/db/migrate/0085_definition_of_done_and_qa_gates.sql \
   -f apps/agency/db/migrate/0081_workflow_stability_constraints_and_indexes.sql \
   -f apps/agency/db/migrate/0082_weekly_delivery_metrics.sql \
-  -f apps/agency/db/migrate/0083_transition_guardrail_dedupe_index.sql
+  -f apps/agency/db/migrate/0083_transition_guardrail_dedupe_index.sql \
+  -f apps/agency/db/migrate/0084_sla_policies.sql \
+  -f apps/agency/db/migrate/0085_definition_of_done_and_qa_gates.sql \
+  -f apps/agency/db/migrate/0086_service_catalog.sql \
+  -f apps/agency/db/migrate/0087_quotes_and_sows.sql \
+  -f apps/agency/db/migrate/0088_cost_ledger_and_project_budget.sql \
+  -f apps/agency/db/migrate/0089_invoice_milestone_link.sql \
+  -f apps/agency/db/migrate/0090_change_order_workflow.sql \
+  -f apps/agency/db/migrate/0091_milestone_billing_and_invoice_retry.sql \
+  -f apps/agency/db/migrate/0092_project_cost_guardrails.sql \
+  -f apps/agency/db/migrate/0093_project_unit_economics_view.sql \
+  -f apps/agency/db/migrate/0094_agency_roles.sql \
+  -f apps/agency/db/migrate/0095_project_status_audit_guard.sql \
+  -f apps/agency/db/migrate/0096_restore_drills.sql \
+  -f apps/agency/db/migrate/0097_restore_drills_nullable_team.sql
+```
+
+Optional verification of latest tracked migrations:
+
+```bash
+psql "$AGENCY_STAGING_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -c "SELECT id, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 10;"
 ```
 
 ## 3. Run seed/cleanup transition check

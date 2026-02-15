@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth-helpers';
 
 const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:4567';
+
+const ALLOWED_ENDPOINT_PREFIXES = [
+  '/api/billing/',
+  '/api/projects/',
+  '/api/chat/',
+  '/api/user/',
+  '/api/usage/',
+];
 
 // Proxy requests to the production engine
 export async function GET(request: NextRequest) {
@@ -20,34 +29,37 @@ export async function DELETE(request: NextRequest) {
 }
 
 async function handleProxyRequest(request: NextRequest, method: string) {
+  const authResult = await requireAuth(request);
+  if (authResult.error) return authResult.response;
+  const userId = authResult.session.user.id;
+
   try {
     const { searchParams } = new URL(request.url);
     const endpoint = searchParams.get('endpoint');
-    
+
     if (!endpoint) {
       return NextResponse.json({ error: 'Endpoint parameter required' }, { status: 400 });
     }
 
-    // Extract user information from headers or auth
-    const userId = request.headers.get('x-user-id') || 'anonymous';
-    const authToken = request.headers.get('authorization');
-    
+    // Validate endpoint against allowlist to prevent SSRF
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    if (normalizedEndpoint.includes('..') || !ALLOWED_ENDPOINT_PREFIXES.some(p => normalizedEndpoint.startsWith(p))) {
+      return NextResponse.json({ error: 'Endpoint not allowed' }, { status: 403 });
+    }
+
     // Construct the production engine URL
-    const targetUrl = `${PRODUCTION_ENGINE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-    
+    const targetUrl = `${PRODUCTION_ENGINE_URL}${normalizedEndpoint}`;
+
     // Prepare headers for the production engine
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-user-id': userId,
     };
-    
-    if (authToken) {
-      headers['authorization'] = authToken;
-    }
 
     // For admin endpoints, add admin key
-    if (endpoint.includes('/enterprise/dashboard') || endpoint.includes('/admin')) {
-      headers['x-admin-key'] = process.env.ADMIN_KEY || 'admin-key';
+    const adminKey = process.env.ADMIN_KEY;
+    if (adminKey && (normalizedEndpoint.includes('/enterprise/dashboard') || normalizedEndpoint.includes('/admin'))) {
+      headers['x-admin-key'] = adminKey;
     }
 
     const requestOptions: RequestInit = {
@@ -79,13 +91,9 @@ async function handleProxyRequest(request: NextRequest, method: string) {
     });
 
   } catch (error) {
-    console.error('Production engine proxy error:', error);
+    console.error('Production engine proxy error:', error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { 
-        success: false,
-        error: 'Failed to connect to production engine',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: 'Failed to connect to production engine' },
       { status: 500 }
     );
   }

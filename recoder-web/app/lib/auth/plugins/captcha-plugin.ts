@@ -4,6 +4,9 @@
  */
 
 import { getAuthEnv, isCaptchaConfigured } from '../env';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CaptchaPlugin');
 
 /**
  * Captcha providers
@@ -81,14 +84,14 @@ export async function verifyTurnstileToken(
     }
 
     const errorCodes = data['error-codes'] || [];
-    console.error('[Captcha] Turnstile verification failed:', errorCodes);
+    logger.error('[Captcha] Turnstile verification failed:', errorCodes);
 
     return {
       success: false,
       error: errorCodes.length > 0 ? errorCodes.join(', ') : 'Verification failed',
     };
   } catch (error) {
-    console.error('[Captcha] Error verifying Turnstile token:', error);
+    logger.error('[Captcha] Error verifying Turnstile token:', error);
     return { success: false, error: 'Verification failed' };
   }
 }
@@ -125,14 +128,14 @@ export async function verifyRecaptchaToken(
     }
 
     const errorCodes = data['error-codes'] || [];
-    console.error('[Captcha] reCAPTCHA verification failed:', errorCodes);
+    logger.error('[Captcha] reCAPTCHA verification failed:', errorCodes);
 
     return {
       success: false,
       error: errorCodes.length > 0 ? errorCodes.join(', ') : 'Verification failed',
     };
   } catch (error) {
-    console.error('[Captcha] Error verifying reCAPTCHA token:', error);
+    logger.error('[Captcha] Error verifying reCAPTCHA token:', error);
     return { success: false, error: 'Verification failed' };
   }
 }
@@ -169,14 +172,14 @@ export async function verifyHcaptchaToken(
     }
 
     const errorCodes = data['error-codes'] || [];
-    console.error('[Captcha] hCaptcha verification failed:', errorCodes);
+    logger.error('[Captcha] hCaptcha verification failed:', errorCodes);
 
     return {
       success: false,
       error: errorCodes.length > 0 ? errorCodes.join(', ') : 'Verification failed',
     };
   } catch (error) {
-    console.error('[Captcha] Error verifying hCaptcha token:', error);
+    logger.error('[Captcha] Error verifying hCaptcha token:', error);
     return { success: false, error: 'Verification failed' };
   }
 }
@@ -217,7 +220,7 @@ export function createCaptchaPlugin(config: CaptchaPluginConfig = {}) {
 
   // If captcha is not configured, return null
   if (!secretKey) {
-    console.warn('[Captcha] Captcha not configured - plugin disabled');
+    logger.warn('[Captcha] Captcha not configured - plugin disabled');
     return null;
   }
 
@@ -294,7 +297,7 @@ export async function captchaMiddleware(
 
   // If captcha is not configured, skip verification
   if (!secretKey) {
-    console.warn('[Captcha] Captcha not configured - skipping verification');
+    logger.warn('[Captcha] Captcha not configured - skipping verification');
     return { success: true };
   }
 

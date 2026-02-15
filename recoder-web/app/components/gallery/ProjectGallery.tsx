@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ProjectGallery');
 
 interface Project {
   id: string;
@@ -25,7 +27,7 @@ export function ProjectGallery() {
       const data = (await res.json()) as { projects?: Project[] };
       setProjects(data.projects || []);
     } catch (error) {
-      console.error('Failed to load projects:', error);
+      logger.error('Failed to load projects:', error);
     }
     setLoading(false);
   }

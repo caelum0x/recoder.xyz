@@ -380,7 +380,7 @@ export class CollaborationService extends EventEmitter {
       throw new Error('Session not found');
     }
 
-    const generationId = `gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const generationId = `gen_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
     const participants = Array.from(session.users.keys());
 
     const codeGeneration: CollaborativeCodeGeneration = {

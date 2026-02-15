@@ -15,10 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: 
+        project:
           - recoder-web
-          - recoder-extension
-          - recoder-chat
     
     steps:
       - name: Checkout code
@@ -53,18 +51,7 @@ jobs:
       
       - name: Build project
         working-directory: ${{ matrix.project }}
-        run: |
-          if [ "${{ matrix.project }}" = "recoder-web" ]; then
-            SKIP_ENV_VALIDATION=true npm run build
-          elif [ "${{ matrix.project }}" = "recoder-extension" ]; then
-            npm run bundle || npm run build || npm run compile
-          elif [ "${{ matrix.project }}" = "recoder-chat" ]; then
-            SKIP_ENV_VALIDATION=true npm run build
-          elif [ -f "package.json" ]; then
-            npm run build || echo "No build script available"
-          else
-            echo "No package.json found, skipping build"
-          fi
+        run: SKIP_ENV_VALIDATION=true npm run build
         env:
           SKIP_ENV_VALIDATION: true
 
@@ -87,6 +74,22 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           working-directory: recoder-web
           vercel-args: '--prod'
+
+  # Static asset production smoke (can be set as required status check)
+  static-assets-smoke:
+    name: Static Assets Smoke (Prod)
+    needs: [deploy-web]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run static asset smoke
+        run: |
+          chmod +x app/scripts/smoke-static-assets.sh
+          BASE_URL="https://recoder.xyz" app/scripts/smoke-static-assets.sh
 
   # Publish VS Code Extension
   publish-vscode-extension:

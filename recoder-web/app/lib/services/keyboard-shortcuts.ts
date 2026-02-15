@@ -18,6 +18,9 @@ import {
   getBindingsForContext,
   clearSequenceBuffer,
 } from '~/lib/stores/keyboard-shortcuts';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('KeyboardShortcuts');
 
 // Types
 export interface KeyCombo {
@@ -282,7 +285,7 @@ function handleKeyDown(event: KeyboardEvent): void {
           try {
             handler.handler();
           } catch (err) {
-            console.error(`[KeyboardShortcuts] Error executing handler ${id}:`, err);
+            logger.error(`[KeyboardShortcuts] Error executing handler ${id}:`, err);
           }
 
           clearSequenceBuffer();
@@ -314,7 +317,7 @@ function handleKeyDown(event: KeyboardEvent): void {
         try {
           handler.handler();
         } catch (err) {
-          console.error(`[KeyboardShortcuts] Error executing handler ${id}:`, err);
+          logger.error(`[KeyboardShortcuts] Error executing handler ${id}:`, err);
         }
 
         if (handler.preventDefault !== false) {
@@ -351,7 +354,7 @@ function handleKeyDown(event: KeyboardEvent): void {
  */
 export function registerShortcut(handler: ShortcutHandler): () => void {
   if (handlers.has(handler.id)) {
-    console.warn(`[KeyboardShortcuts] Handler ${handler.id} already registered, replacing`);
+    logger.warn(`[KeyboardShortcuts] Handler ${handler.id} already registered, replacing`);
   }
 
   handlers.set(handler.id, handler);
@@ -482,14 +485,14 @@ export function initKeyboardShortcuts(): () => void {
   }
 
   if (isInitialized) {
-    console.warn('[KeyboardShortcuts] Already initialized');
+    logger.warn('[KeyboardShortcuts] Already initialized');
     return () => {};
   }
 
   window.addEventListener('keydown', handleKeyDown, { capture: true });
   isInitialized = true;
 
-  console.log('[KeyboardShortcuts] Initialized');
+  logger.info('[KeyboardShortcuts] Initialized');
 
   // Return cleanup function
   return () => {
@@ -501,7 +504,7 @@ export function initKeyboardShortcuts(): () => void {
       clearTimeout(sequenceTimeoutId);
       sequenceTimeoutId = null;
     }
-    console.log('[KeyboardShortcuts] Cleaned up');
+    logger.info('[KeyboardShortcuts] Cleaned up');
   };
 }
 
@@ -518,7 +521,7 @@ export async function executeShortcut(id: string): Promise<boolean> {
     await handler.handler();
     return true;
   } catch (err) {
-    console.error(`[KeyboardShortcuts] Error executing handler ${id}:`, err);
+    logger.error(`[KeyboardShortcuts] Error executing handler ${id}:`, err);
     return false;
   }
 }

@@ -7,6 +7,9 @@ import { calculateCost, formatCost, isExpensiveModel } from './modelPricing.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CostTracker');
 
 export interface UsageRecord {
   timestamp: Date;
@@ -62,7 +65,7 @@ export class CostTracker {
     try {
       fs.mkdirSync(logDir, { recursive: true });
     } catch (error) {
-      console.warn('Failed to create log directory:', error);
+      logger.warn('Failed to create log directory:', error);
     }
     this.logFilePath = path.join(logDir, 'cost-tracking.log');
   }
@@ -186,7 +189,7 @@ export class CostTracker {
       const percentage = this.sessionStats.totalCost / this.budget.sessionLimit;
       if (percentage >= threshold) {
         this.warningIssued = true;
-        console.warn(
+        logger.warn(
           `\n⚠️  Cost Warning: You've used ${formatCost(this.sessionStats.totalCost)} ` +
           `out of ${formatCost(this.budget.sessionLimit)} session budget (${(percentage * 100).toFixed(0)}%)\n`,
         );

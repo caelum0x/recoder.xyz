@@ -15,6 +15,9 @@
 
 import { tracingConfigStore, addTrace, type Trace, type SpanContext } from '~/lib/stores/tracing';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('Tracing');
+
 // ============================================
 // Types
 // ============================================
@@ -232,25 +235,25 @@ function exportToConsole(span: Span): void {
   const statusIcon = span.status === 'ok' ? '✓' : span.status === 'error' ? '✗' : '○';
   const duration = span.duration?.toFixed(2) ?? '?';
 
-  console.groupCollapsed(
+  logger.info(
     `%c[Trace] ${statusIcon} ${span.name} (${duration}ms)`,
     span.status === 'error' ? 'color: #ef4444' : span.status === 'ok' ? 'color: #22c55e' : 'color: #6b7280'
   );
-  console.log('Trace ID:', span.traceId);
-  console.log('Span ID:', span.spanId);
+  logger.info('Trace ID:', span.traceId);
+  logger.info('Span ID:', span.spanId);
   if (span.parentSpanId) {
-    console.log('Parent Span ID:', span.parentSpanId);
+    logger.info('Parent Span ID:', span.parentSpanId);
   }
-  console.log('Kind:', span.kind);
-  console.log('Duration:', `${duration}ms`);
-  console.log('Status:', span.status, span.statusMessage ?? '');
+  logger.info('Kind:', span.kind);
+  logger.info('Duration:', `${duration}ms`);
+  logger.info('Status:', span.status, span.statusMessage ?? '');
   if (Object.keys(span.attributes).length > 0) {
-    console.log('Attributes:', span.attributes);
+    logger.info('Attributes:', span.attributes);
   }
   if (span.events.length > 0) {
-    console.log('Events:', span.events);
+    logger.info('Events:', span.events);
   }
-  console.groupEnd();
+  logger.debug();
 }
 
 async function exportToOTLP(
@@ -323,7 +326,7 @@ async function exportToOTLP(
       body: JSON.stringify(otlpSpan),
     });
   } catch (error) {
-    console.warn('[Tracing] Failed to export span to OTLP:', error);
+    logger.warn('[Tracing] Failed to export span to OTLP:', error);
   }
 }
 

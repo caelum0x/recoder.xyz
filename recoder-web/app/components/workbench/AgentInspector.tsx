@@ -10,7 +10,7 @@
  * - Pause/resume inspection controls
  */
 
-import { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { memo, forwardRef, useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useStore } from '@nanostores/react';
 import {
   inspectorConfigStore,
@@ -431,7 +431,7 @@ interface TimelineViewProps {
   onNavigateToFile?: (filePath: string) => void;
 }
 
-const TimelineView = memo(
+const TimelineView = memo(forwardRef<HTMLDivElement, TimelineViewProps>(
   ({
     steps,
     expandedSteps,
@@ -445,7 +445,7 @@ const TimelineView = memo(
     onExpandAll,
     onCollapseAll,
     onNavigateToFile,
-  }: TimelineViewProps, ref: React.ForwardedRef<HTMLDivElement>) => {
+  }, ref) => {
     return (
       <div className="flex flex-col h-full">
         {/* Toolbar */}
@@ -508,12 +508,7 @@ const TimelineView = memo(
       </div>
     );
   }
-);
-
-// Add forwardRef wrapper
-import { forwardRef } from 'react';
-const ForwardedTimelineView = forwardRef(TimelineView);
-ForwardedTimelineView.displayName = 'TimelineView';
+));
 
 // ============================================
 // Timeline Step

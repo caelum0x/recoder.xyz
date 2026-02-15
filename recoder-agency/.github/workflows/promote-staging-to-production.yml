@@ -1,0 +1,67 @@
+name: Promote Staging To Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: "Git ref to promote (branch, tag, or SHA)"
+        required: true
+        default: "main"
+        type: string
+      dry_run:
+        description: "Skip deploy webhook and run approval + checks only"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-gate:
+    uses: ./.github/workflows/deploy-gate.yml
+    secrets: inherit
+
+  approval-gate:
+    name: Manual Approval Gate
+    runs-on: ubuntu-latest
+    needs:
+      - deploy-gate
+    environment:
+      name: production-promotion
+    steps:
+      - name: Promotion approved
+        run: |
+          echo "Manual approval granted for ref: ${{ inputs.candidate_ref }}"
+
+  promote:
+    name: Trigger Production Deploy
+    runs-on: ubuntu-latest
+    needs:
+      - approval-gate
+    env:
+      CANDIDATE_REF: ${{ inputs.candidate_ref }}
+      DRY_RUN: ${{ inputs.dry_run }}
+      PRODUCTION_DEPLOY_WEBHOOK_URL: ${{ secrets.PRODUCTION_DEPLOY_WEBHOOK_URL }}
+    steps:
+      - name: Validate deploy webhook secret
+        if: env.DRY_RUN != 'true'
+        run: |
+          if [ -z "${PRODUCTION_DEPLOY_WEBHOOK_URL}" ]; then
+            echo "Missing secret: PRODUCTION_DEPLOY_WEBHOOK_URL"
+            echo "Set this secret to your production deploy endpoint."
+            exit 1
+          fi
+
+      - name: Trigger production deploy webhook
+        if: env.DRY_RUN != 'true'
+        run: |
+          curl -fsS -X POST "${PRODUCTION_DEPLOY_WEBHOOK_URL}" \
+            -H "Content-Type: application/json" \
+            -d "{\"ref\":\"${CANDIDATE_REF}\",\"source\":\"promote-staging-to-production\"}"
+
+      - name: Dry run summary
+        if: env.DRY_RUN == 'true'
+        run: |
+          echo "Dry run complete for ref: ${CANDIDATE_REF}"
+          echo "Deploy webhook was not called."

@@ -13,6 +13,9 @@ import type { Config } from '../config/config.js';
 import { DEFAULT_FILE_FILTERING_OPTIONS } from '../config/config.js';
 import { ToolErrorType } from './tool-error.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LsTool');
+
 /**
  * Parameters for the LS tool
  */
@@ -220,7 +223,7 @@ class LSToolInvocation extends BaseToolInvocation<LSToolParams, ToolResult> {
           });
         } catch (error) {
           // Log error internally but don't fail the whole listing
-          console.error(`Error accessing ${fullPath}: ${error}`);
+          logger.error(`Error accessing ${fullPath}: ${error}`);
         }
       }
 

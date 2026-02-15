@@ -1,0 +1,39 @@
+{
+  "generated_at_utc": "2026-02-14T09:24:50.421Z",
+  "source": "sample-fallback",
+  "files_used": [
+    "/Users/arhansubasi/recoder.xyz/tools/evals/composer/sample-results.json"
+  ],
+  "cases": [
+    {
+      "id": "composer.copy-route-regression",
+      "changes": [
+        {
+          "file": "recoder-web/app/routes/api.projects.copy.ts",
+          "summary": "copy route stability update",
+          "diff": "Ensure copy flow remains stable and preserve logger.error reporting."
+        }
+      ]
+    },
+    {
+      "id": "composer.tools-copy-smoke",
+      "changes": [
+        {
+          "file": "recoder-web/app/routes/api.tools-and-copy.smoke.test.ts",
+          "summary": "tool and copy route smoke tests coverage",
+          "diff": "assert copyProjectAction integration in tool and copy route smoke tests."
+        }
+      ]
+    },
+    {
+      "id": "composer.message-parser-actions",
+      "changes": [
+        {
+          "file": "recoder-web/app/lib/runtime/message-parser-actions.test.ts",
+          "summary": "message parser action coverage",
+          "diff": "expand message parser action assertions."
+        }
+      ]
+    }
+  ]
+}

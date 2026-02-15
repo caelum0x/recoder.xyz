@@ -1,4 +1,7 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Completions');
 
 // Provider priority order for completions (fast models preferred)
 const PROVIDER_PRIORITY = ['groq', 'openrouter', 'openai', 'anthropic'] as const;
@@ -130,7 +133,7 @@ Output only the code that should be inserted at the cursor position:`;
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Completion error:', error);
+    logger.error('Completion error:', error);
     return new Response(JSON.stringify({ completion: '', error: 'API request failed' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

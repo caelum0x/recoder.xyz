@@ -6,11 +6,14 @@ import {
   replaceNullCharacters,
 } from "../types";
 import { executeRestRequest } from "../utils";
+import { createScopedLogger } from '~/utils/logger';
 import type {
   GitHubBlobMetadata,
   GitHubTreeLoaderParams,
   GitHubTreeLoaderOptions,
 } from "./types";
+
+const logger = createScopedLogger('TreeLoader');
 
 /**
  * Create a document loader that traverses a GitHub repository tree
@@ -34,7 +37,7 @@ export function createGitHubTreeLoader(
       }
 
       if (size > maxBlobSize) {
-        console.warn(
+        logger.warn(
           `Blob size is too large: ${size} bytes, skipping: ${path}`
         );
         continue;

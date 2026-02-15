@@ -14,54 +14,20 @@
  */
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import {
+  DockerHttpError,
+  createDockerProxyHeaders,
+  dockerFetchJson,
+  getDockerBackendUrl,
+} from '~/lib/http/docker-server';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('CreateSandbox');
-
-// Get the Docker backend URL from environment
-function getDockerBackendUrl(context: ActionFunctionArgs['context']): string {
-  const env = (context as unknown as { cloudflare?: { env?: Record<string, string> } }).cloudflare?.env;
-  return env?.DOCKER_BACKEND_URL || process.env.DOCKER_BACKEND_URL || 'http://localhost:3100';
-}
 
 // Get the public Docker backend URL for client access
 function getPublicDockerUrl(context: ActionFunctionArgs['context']): string {
   const env = (context as unknown as { cloudflare?: { env?: Record<string, string> } }).cloudflare?.env;
   return env?.VITE_DOCKER_BACKEND_URL || process.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
-}
-
-/**
- * Make an authenticated request to docker-backend
- */
-async function dockerFetch<T>(
-  url: string,
-  options: Omit<RequestInit, 'body'> & { body?: unknown } = {},
-  authHeader?: string | null
-): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  // Forward authentication if provided
-  if (authHeader) {
-    headers['Authorization'] = authHeader;
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...headers,
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
-    throw new Error(errorData.error || `Request failed with status ${response.status}`);
-  }
-
-  return response.json() as Promise<T>;
 }
 
 /**
@@ -325,6 +291,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
     );
   }
 
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return json<CreateSandboxResponse>(
+      { success: false, error: 'Authentication required' },
+      { status: 401 }
+    );
+  }
+
   try {
     logger.info('Creating sandbox...');
 
@@ -334,7 +309,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       skipInit?: boolean;
     };
 
-    const { projectId, template = 'vite-react-ts', skipInit = false } = body;
+    const { projectId, skipInit = false } = body;
 
     if (!projectId) {
       return json<CreateSandboxResponse>(
@@ -346,31 +321,31 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const dockerUrl = getDockerBackendUrl(context);
     const publicDockerUrl = getPublicDockerUrl(context);
 
-    // Get auth header from request to forward to docker-backend
-    const authHeader = request.headers.get('Authorization');
+    const dockerHeaders = createDockerProxyHeaders(request);
 
     // Step 1: Create or get container from docker-backend
     logger.info(`Creating/getting container for project ${projectId}...`);
 
     let containerResponse: ContainerResponse;
     try {
-      containerResponse = await dockerFetch<ContainerResponse>(
+      containerResponse = await dockerFetchJson<ContainerResponse>(
         `${dockerUrl}/api/container`,
         {
           method: 'POST',
-          body: { projectId },
+          body: JSON.stringify({ projectId }),
         },
-        authHeader
+        dockerHeaders,
       );
     } catch (error) {
       logger.error('Failed to create container:', error);
+      const status = error instanceof DockerHttpError ? error.status : 503;
       return json<CreateSandboxResponse>(
         {
           success: false,
-          error: error instanceof Error ? error.message : 'Failed to create container',
+          error: 'Failed to create container',
           details: 'Could not create Docker container. Make sure docker-backend is running.',
         },
-        { status: 503 }
+        { status }
       );
     }
 
@@ -387,13 +362,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
           content,
         }));
 
-        await dockerFetch(
+        await dockerFetchJson(
           `${dockerUrl}/api/files/${projectId}/batch`,
           {
             method: 'POST',
-            body: { files },
+            body: JSON.stringify({ files }),
           },
-          authHeader
+          dockerHeaders,
         );
 
         logger.info(`Wrote ${files.length} template files to container`);
@@ -439,8 +414,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json<CreateSandboxResponse>(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to create sandbox',
-        details: error instanceof Error ? error.stack : undefined,
+        error: 'Failed to create sandbox',
       },
       { status: 500 }
     );
@@ -457,20 +431,14 @@ export async function loader({ context }: ActionFunctionArgs) {
 
   // Check if docker-backend is healthy
   try {
-    const healthResponse = await fetch(`${dockerUrl}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!healthResponse.ok) {
-      return json({
-        healthy: false,
-        error: 'Docker backend unhealthy',
-        dockerUrl,
-      });
-    }
-
-    const health = await healthResponse.json() as { status: string; containers: number };
+    const health = await dockerFetchJson<{ status: string; containers: number }>(
+      `${dockerUrl}/health`,
+      {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000),
+      },
+      {},
+    );
 
     return json({
       healthy: true,
@@ -482,7 +450,7 @@ export async function loader({ context }: ActionFunctionArgs) {
   } catch (error) {
     return json({
       healthy: false,
-      error: error instanceof Error ? error.message : 'Failed to connect to docker-backend',
+      error: 'Failed to connect to docker-backend',
       dockerUrl,
     });
   }

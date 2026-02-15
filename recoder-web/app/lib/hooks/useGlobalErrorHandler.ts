@@ -17,11 +17,14 @@ import {
   ErrorCode,
   createErrorReporter,
 } from '~/lib/utils/error-handler';
+import { createScopedLogger } from '~/utils/logger';
 import {
   showSmartError,
   showNetworkError,
   showAuthError,
 } from '~/lib/errors/toast-error';
+
+const logger = createScopedLogger('GlobalErrorHandler');
 
 interface UseGlobalErrorHandlerOptions {
   /** Show toast notifications for errors (default: true) */
@@ -55,7 +58,7 @@ export function useGlobalErrorHandler(options: UseGlobalErrorHandlerOptions = {}
   const debouncedReporter = useRef(
     createErrorReporter((error, context) => {
       if (logToConsole) {
-        console.error('[GlobalError]', context, error);
+        logger.error('[GlobalError]', context, error);
       }
       onError?.(error, context?.type as string || 'unknown');
     }, 3000)
@@ -167,7 +170,7 @@ export function useGlobalErrorHandler(options: UseGlobalErrorHandlerOptions = {}
     // Listen for reconnect-all event
     const handleReconnectAll = () => {
       // This will be handled by individual connection components
-      console.log('[GlobalErrorHandler] Reconnect-all event received');
+      logger.info('[GlobalErrorHandler] Reconnect-all event received');
     };
     window.addEventListener('recoder:reconnect-all', handleReconnectAll);
 

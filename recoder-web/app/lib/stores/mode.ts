@@ -3,6 +3,9 @@
  */
 import { atom } from 'nanostores';
 import { MODES, type ModeDefinition } from '~/lib/modes/types';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ModeStore');
 
 // Current mode (default to 'code')
 export const currentMode = atom<string>('code');
@@ -15,7 +18,7 @@ export const modeHistory = atom<string[]>(['code']);
  */
 export function setMode(modeId: string): void {
   if (!MODES[modeId]) {
-    console.warn(`Unknown mode: ${modeId}`);
+    logger.warn(`Unknown mode: ${modeId}`);
     return;
   }
 
@@ -23,7 +26,7 @@ export function setMode(modeId: string): void {
   modeHistory.set([...history.slice(-9), modeId]); // Keep last 10
   currentMode.set(modeId);
 
-  console.log(`🔄 Mode switched to: ${MODES[modeId].name}`);
+  logger.info(`🔄 Mode switched to: ${MODES[modeId].name}`);
 }
 
 /**

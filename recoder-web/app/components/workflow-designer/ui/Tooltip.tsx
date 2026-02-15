@@ -28,7 +28,7 @@ export function Tooltip({
   const [position, setPosition] = useState<CSSProperties>({});
   const triggerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     if (isVisible && triggerRef.current && tooltipRef.current) {

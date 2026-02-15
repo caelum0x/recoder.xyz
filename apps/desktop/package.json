@@ -1,0 +1,72 @@
+{
+  "name": "recoder-desktop",
+  "version": "1.0.0",
+  "description": "Recoder Desktop",
+  "author": {
+    "name": "Recoder",
+    "email": "support@recoder.xyz",
+    "url": "https://recoder.xyz"
+  },
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke:prod": "node scripts/smoke-production.js",
+    "validate:release": "node scripts/validate-release-artifacts.js",
+    "build": "electron-builder",
+    "build:mac": "node -r dotenv/config -e 'require(\"./build-signed.js\")' || electron-builder --mac",
+    "build:mac:ci-signed": "electron-builder --mac",
+    "build:mac:unsigned": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electron/notarize": "^2.3.2",
+    "dotenv": "^16.4.5",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "xyz.recoder.desktop",
+    "productName": "Recoder",
+    "protocols": {
+      "name": "Recoder",
+      "schemes": ["recoder"]
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
+    },
+    "afterSign": "notarize.js",
+    "dmg": {
+      "sign": false,
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "assets/**/*"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "recoder-xyz",
+      "repo": "recoder-desktop"
+    }
+  }
+}

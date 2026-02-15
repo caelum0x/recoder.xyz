@@ -1,0 +1,40 @@
+{
+	"name": "@giselles-ai/vault",
+	"version": "0.0.0",
+	"private": true,
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"format": "biome format --write .",
+		"test": "vitest --run"
+	},
+	"exports": {
+		"./package.json": "./package.json",
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		},
+		"./node-crypto": {
+			"types": "./dist/node-crypto.d.ts",
+			"import": "./dist/node-crypto.mjs",
+			"require": "./dist/node-crypto.js"
+		}
+	},
+	"typesVersions": {
+		"*": {
+			"node-crypto": ["./dist/node-crypto.d.ts"]
+		}
+	},
+	"devDependencies": {
+		"@giselles-ai/tsconfig": "workspace:*",
+		"tsup": "^8.0.0",
+		"vitest": "^2.0.1"
+	},
+	"peerDependencies": {
+		"zod": "^3.25.0"
+	}
+}

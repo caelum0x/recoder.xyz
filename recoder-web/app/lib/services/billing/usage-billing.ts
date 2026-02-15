@@ -13,12 +13,17 @@ import {
   type UsageSummary,
   type UsageType,
 } from './types';
+
+export type { UsageType } from './types';
+import { createScopedLogger } from '~/utils/logger';
 import {
   currentPlan,
   currentSubscription,
   usageSummary,
   updateUsageSummary,
 } from './subscription-manager';
+
+const logger = createScopedLogger('UsageBilling');
 
 // ==================== Configuration ====================
 
@@ -261,7 +266,7 @@ export async function flushUsage(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to report usage';
     usageError.set(message);
-    console.error('Failed to flush usage:', error);
+    logger.error('Failed to flush usage:', error);
     // Don't clear pending - will retry on next flush
   } finally {
     isReportingUsage.set(false);
@@ -314,7 +319,7 @@ export async function refreshUsageSummary(): Promise<UsageSummary[]> {
     updateUsageSummary(summary);
     return summary;
   } catch (error) {
-    console.error('Failed to refresh usage summary:', error);
+    logger.error('Failed to refresh usage summary:', error);
     return [];
   }
 }

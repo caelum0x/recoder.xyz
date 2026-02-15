@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LLMAnalytics');
 /**
  * LLM Analytics and Cost Tracking System
  */
@@ -64,7 +66,7 @@ class LLMAnalytics {
       this.optimizationMetrics = this.optimizationMetrics.slice(-1000);
     }
 
-    console.log('📊 Optimization tracked:', {
+    logger.info('📊 Optimization tracked:', {
       strategy: metrics.strategy,
       model: metrics.model,
       savings: `${metrics.savingsPercent.toFixed(1)}%`,

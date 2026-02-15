@@ -9,6 +9,9 @@ import { useLoaderData } from '@remix-run/react';
 import type { LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { getEditorSettings, updateEditorSettings, type EditorSettings } from '~/lib/api/settings';
 import { useAutoSaveSettings } from '~/lib/hooks/useAutoSave';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SettingsEditor');
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Load editor settings from API
@@ -61,7 +64,7 @@ export default function EditorSettingsPage() {
         setSaveStatus('error');
       }
     } catch (error) {
-      console.error('Failed to save editor settings:', error);
+      logger.error('Failed to save editor settings:', error);
       setSaveStatus('error');
     } finally {
       setSaving(false);

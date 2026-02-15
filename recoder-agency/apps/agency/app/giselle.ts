@@ -8,6 +8,7 @@ import { traceEmbedding } from "@giselles-ai/langfuse";
 import { getRequestId, NextGiselle } from "@giselles-ai/nextjs/internal";
 import {
 	type CompletedGeneration,
+	type Generation,
 	type RunningGeneration,
 	WorkspaceId,
 } from "@giselles-ai/protocol";
@@ -21,6 +22,10 @@ import { eq, sql } from "drizzle-orm";
 import { apps, db, tasks } from "@/db";
 import { generateContentNodeFlag } from "@/flags";
 import { logGenerationCost } from "@/lib/agency/generation-cost-logger";
+import {
+	extractRequestedModelIdFromGeneration,
+	resolveModelRoutingPolicyForWorkspace,
+} from "@/lib/agency/model-routing";
 import { GenerationMetadata } from "@/lib/generation-metadata";
 import { logger } from "@/lib/logger";
 import { traceGenerationForTeam } from "@/lib/trace";
@@ -162,6 +167,72 @@ function parseEnvNumber(value: string | undefined, fallback: number): number {
 	return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseProviderAndModel(
+	modelSpecifier: string,
+): { provider: string; modelId: string } | null {
+	const trimmed = modelSpecifier.trim();
+	const slashIndex = trimmed.indexOf("/");
+	if (slashIndex <= 0 || slashIndex === trimmed.length - 1) return null;
+	return {
+		provider: trimmed.slice(0, slashIndex),
+		modelId: trimmed.slice(slashIndex + 1),
+	};
+}
+
+function getRequestedGatewayModelSpecifier(
+	generation: Pick<Generation, "context">,
+): string | null {
+	const content = generation.context.operationNode.content as Record<
+		string,
+		unknown
+	>;
+	if (content.type === "textGeneration") {
+		const llm = content.llm as { provider?: string; id?: string } | undefined;
+		if (!llm?.provider || !llm?.id) return null;
+		return `${llm.provider}/${llm.id}`;
+	}
+	if (content.type === "contentGeneration") {
+		const languageModel = content.languageModel as { id?: string } | undefined;
+		return languageModel?.id?.trim() ? languageModel.id.trim() : null;
+	}
+	return null;
+}
+
+function pickRuntimeModelOverride(args: {
+	requestedModelSpecifier: string | null;
+	preferredModelSpecifier: string;
+	fallbackModelSpecifier: string | null;
+}): { selectedModelSpecifier: string; wasFallback: boolean } | null {
+	const preferred = parseProviderAndModel(args.preferredModelSpecifier);
+	if (!preferred) return null;
+
+	const requested = args.requestedModelSpecifier
+		? parseProviderAndModel(args.requestedModelSpecifier)
+		: null;
+	if (!requested) {
+		return {
+			selectedModelSpecifier: args.preferredModelSpecifier,
+			wasFallback: false,
+		};
+	}
+	if (requested.provider === preferred.provider) {
+		return {
+			selectedModelSpecifier: args.preferredModelSpecifier,
+			wasFallback: false,
+		};
+	}
+	if (args.fallbackModelSpecifier) {
+		const fallback = parseProviderAndModel(args.fallbackModelSpecifier);
+		if (fallback && fallback.provider === requested.provider) {
+			return {
+				selectedModelSpecifier: args.fallbackModelSpecifier,
+				wasFallback: true,
+			};
+		}
+	}
+	return null;
+}
+
 /**
  * Find the agency project linked to a workspace, if any.
  * Returns only the db_id so the cost logger can reference it.
@@ -194,7 +265,27 @@ async function logCostIfAgencyProject(
 	try {
 		const workspaceId = generation.context.origin.workspaceId;
 		const projectDbId = await findProjectDbIdForWorkspace(workspaceId);
-		await logGenerationCost({ generation, teamDbId, projectDbId });
+		const policy = await resolveModelRoutingPolicyForWorkspace(workspaceId);
+		const requestedModelSpecifier =
+			getRequestedGatewayModelSpecifier(generation);
+		const runtimeChoice = policy
+			? pickRuntimeModelOverride({
+					requestedModelSpecifier,
+					preferredModelSpecifier: policy.preferredModelId,
+					fallbackModelSpecifier: policy.fallbackModelId,
+				})
+			: null;
+		const routedModel = runtimeChoice
+			? parseProviderAndModel(runtimeChoice.selectedModelSpecifier)
+			: null;
+		await logGenerationCost({
+			generation,
+			teamDbId,
+			projectDbId,
+			routingPolicyDbId: policy?.dbId ?? null,
+			routedModel,
+			wasFallback: runtimeChoice?.wasFallback ?? false,
+		});
 	} catch (error) {
 		console.error("logCostIfAgencyProject failed:", error);
 	}
@@ -451,12 +542,12 @@ const callbacks: GiselleCallbacks = {
 			teamDbId: workspace.team.dbId,
 		});
 	},
-	buildAiGatewayHeaders: ({
+	buildAiGatewayHeaders: async ({
 		metadata,
 		generation,
 	}: BuildAiGatewayHeadersArgs) => {
 		const parsedMetadata = GenerationMetadata.safeParse(metadata);
-		const stripeCustomerId = parsedMetadata.success
+		const polarCustomerId = parsedMetadata.success
 			? (parsedMetadata.data.team.activeCustomerId ?? undefined)
 			: undefined;
 		const teamPlan = parsedMetadata.success
@@ -467,15 +558,61 @@ const callbacks: GiselleCallbacks = {
 				process.env.AI_GATEWAY_HTTP_REFERER ?? "https://agency.recoder.xyz",
 			"x-title": process.env.AI_GATEWAY_X_TITLE ?? "Recoder Agency",
 		};
-		if (stripeCustomerId !== undefined) {
-			aiGatewayHeaders["stripe-customer-id"] = stripeCustomerId;
-			aiGatewayHeaders["stripe-restricted-access-key"] =
-				process.env.STRIPE_AI_GATEWAY_RESTRICTED_ACCESS_KEY ?? "";
+		if (polarCustomerId !== undefined) {
+			aiGatewayHeaders["polar-customer-id"] = polarCustomerId;
 		} else if (teamPlan === "pro" || teamPlan === "team") {
 			logger.warn(
-				`Stripe customer ID not found for generation ${generation.id}`,
+				`Polar customer ID not found for generation ${generation.id}`,
 			);
 		}
+
+		// Best-effort model-routing hint headers for AI gateway.
+		// Also includes runtime model override (`x-giselle-model-override`) so
+		// fallback enforcement applies before provider call execution.
+		try {
+			const workspaceId = generation.context.origin.workspaceId;
+			const policy = await resolveModelRoutingPolicyForWorkspace(workspaceId);
+			if (policy) {
+				const requestedModelSpecifier =
+					getRequestedGatewayModelSpecifier(generation);
+				const requestedModelId =
+					extractRequestedModelIdFromGeneration(generation);
+				aiGatewayHeaders["x-recoder-routing-policy-id"] = String(policy.dbId);
+				aiGatewayHeaders["x-recoder-routing-policy-name"] = policy.name;
+				aiGatewayHeaders["x-recoder-routing-preferred-model-id"] =
+					policy.preferredModelId;
+				if (policy.fallbackModelId) {
+					aiGatewayHeaders["x-recoder-routing-fallback-model-id"] =
+						policy.fallbackModelId;
+				}
+				if (policy.costCeilingCentsPerGeneration != null) {
+					aiGatewayHeaders["x-recoder-routing-cost-ceiling-cents"] = String(
+						policy.costCeilingCentsPerGeneration,
+					);
+				}
+				if (requestedModelId) {
+					aiGatewayHeaders["x-recoder-routing-requested-model-id"] =
+						requestedModelId;
+				}
+
+				const runtimeChoice = pickRuntimeModelOverride({
+					requestedModelSpecifier,
+					preferredModelSpecifier: policy.preferredModelId,
+					fallbackModelSpecifier: policy.fallbackModelId,
+				});
+				if (runtimeChoice) {
+					aiGatewayHeaders["x-giselle-model-override"] =
+						runtimeChoice.selectedModelSpecifier;
+					aiGatewayHeaders["x-recoder-routing-was-fallback"] =
+						runtimeChoice.wasFallback ? "1" : "0";
+				}
+			}
+		} catch (error) {
+			logger.warn(
+				`Model routing policy resolution failed for generation ${generation.id}: ${error}`,
+			);
+		}
+
 		return aiGatewayHeaders;
 	},
 };

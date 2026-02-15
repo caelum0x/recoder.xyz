@@ -17,6 +17,9 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { z } from 'zod';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Generations');
 
 // Dynamic import for session verification
 async function verifySession(request: Request) {
@@ -163,10 +166,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return json({ success: false, error: 'generationId, nodeId+origin, or taskId required' }, { status: 400 });
   } catch (error) {
-    console.error('[Generations] Loader error:', error);
+    logger.error('[Generations] Loader error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get generations',
+      error: 'Failed to get generations',
     }, { status: 500 });
   }
 }
@@ -206,7 +209,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       generationStore.set(generationId, cancelledGeneration);
 
-      console.log(`[Generations] Cancelled: ${generationId}`);
+      logger.info(`[Generations] Cancelled: ${generationId}`);
       return json({ success: true, generation: cancelledGeneration });
     }
 
@@ -224,7 +227,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const generation = validation.data;
       generationStore.set(generation.id, generation);
 
-      console.log(`[Generations] Set: ${generation.id}`);
+      logger.info(`[Generations] Set: ${generation.id}`);
       return new Response(null, { status: 204 });
     }
 
@@ -258,7 +261,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       // In production, this would stream content and update the generation
       // For now, we just return the running state
-      console.log(`[Generations] Generating content: ${generationId}`);
+      logger.info(`[Generations] Generating content: ${generationId}`);
       return json({ success: true, generation: runningGeneration });
     }
 
@@ -293,7 +296,7 @@ export async function action({ request }: ActionFunctionArgs) {
       generationStore.set(generationId, generation);
 
       // In production, this would call an image generation API
-      console.log(`[Generations] Generating image: ${generationId}`);
+      logger.info(`[Generations] Generating image: ${generationId}`);
       return new Response(null, { status: 204 });
     }
 
@@ -318,7 +321,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       generationStore.set(generation.id, runningGeneration);
 
-      console.log(`[Generations] Started content generation: ${generation.id}`);
+      logger.info(`[Generations] Started content generation: ${generation.id}`);
       return json({ success: true, generation: runningGeneration });
     }
 
@@ -353,7 +356,7 @@ export async function action({ request }: ActionFunctionArgs) {
       generationStore.set(generationId, generation);
 
       // In production, this would execute the action
-      console.log(`[Generations] Executing action: ${generationId}`);
+      logger.info(`[Generations] Executing action: ${generationId}`);
       return new Response(null, { status: 204 });
     }
 
@@ -387,7 +390,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       generationStore.set(generationId, generation);
 
-      console.log(`[Generations] Executing query: ${generationId}`);
+      logger.info(`[Generations] Executing query: ${generationId}`);
       return new Response(null, { status: 204 });
     }
 
@@ -420,16 +423,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
       generationStore.set(generationId, generation);
 
-      console.log(`[Generations] Queued: ${generationId}`);
+      logger.info(`[Generations] Queued: ${generationId}`);
       return json({ success: true, generation });
     }
 
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('[Generations] Action error:', error);
+    logger.error('[Generations] Action error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Generation operation failed',
+      error: 'Generation operation failed',
     }, { status: 500 });
   }
 }

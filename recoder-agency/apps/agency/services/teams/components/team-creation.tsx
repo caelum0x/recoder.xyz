@@ -1,7 +1,5 @@
-import invariant from "tiny-invariant";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { isEmailFromRoute06 } from "@/lib/utils";
-import { formatStripePrice, getCachedPrice } from "@/services/external/stripe";
 import { fetchUserTeams } from "../fetch-user-teams";
 import { TeamCreationForm } from "./team-creation-form";
 
@@ -14,10 +12,9 @@ export default async function TeamCreation({
 	const isInternalUser = user.email != null && isEmailFromRoute06(user.email);
 	const teams = await fetchUserTeams();
 	const hasExistingFreeTeam = teams.some((team) => team.plan === "free");
-	const proPlanPriceId = process.env.STRIPE_PRO_PLAN_PRICE_ID;
-	invariant(proPlanPriceId, "STRIPE_PRO_PLAN_PRICE_ID is not set");
-	const proPlan = await getCachedPrice(proPlanPriceId);
-	const proPlanPrice = formatStripePrice(proPlan);
+
+	// Pro plan price is now managed via Polar.sh product configuration
+	const proPlanPrice = "$20/mo";
 
 	return (
 		<TeamCreationForm

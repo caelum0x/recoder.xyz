@@ -1,8 +1,4 @@
-import type {
-	stripePricingPlanSubscriptionHistories,
-	TeamRole,
-	teams,
-} from "@/db";
+import type { polarSubscriptionHistories, TeamRole, teams } from "@/db";
 
 export type TeamId = `tm_${string}`;
 export function isTeamId(id: string): id is TeamId {
@@ -17,7 +13,7 @@ export type CurrentTeam = {
 	role?: TeamRole;
 	plan: typeof teams.$inferSelect.plan;
 	activeSubscriptionId:
-		| typeof stripePricingPlanSubscriptionHistories.$inferInsert.id
+		| typeof polarSubscriptionHistories.$inferInsert.subscriptionId
 		| null;
 	activeCustomerId: typeof teams.$inferSelect.activeCustomerId;
 };

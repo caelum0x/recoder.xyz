@@ -1,0 +1,49 @@
+{
+  "name": "api",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3004",
+    "build": "POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:-build-time-placeholder} POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-build-time-placeholder} POLAR_PRODUCT_PRO_ID=${POLAR_PRODUCT_PRO_ID:-build-time-placeholder} POLAR_PRODUCT_ENTERPRISE_ID=${POLAR_PRODUCT_ENTERPRISE_ID:-build-time-placeholder} next build",
+    "analyze": "ANALYZE=true pnpm build",
+    "worker": "tsx worker.ts",
+    "test:a2a": "tsx --test tests/a2a-envelope.test.ts tests/a2a-intents.test.ts",
+    "a2a:worker": "node scripts/a2a-intent-worker.mjs"
+  },
+  "dependencies": {
+    "@recoder/shared": "file:../../../shared",
+    "@repo/atlassian": "workspace:*",
+    "@repo/backend": "workspace:*",
+    "@repo/canny": "workspace:*",
+    "@repo/design-system": "workspace:*",
+    "@repo/editor": "workspace:*",
+    "@repo/github": "workspace:*",
+    "@repo/lib": "workspace:*",
+    "@repo/linear": "workspace:*",
+    "@repo/next-config": "workspace:*",
+    "@repo/observability": "workspace:*",
+    "@repo/payments": "workspace:*",
+    "@polar-sh/nextjs": "^0.9.3",
+    "@repo/productboard": "workspace:*",
+    "@repo/queue": "workspace:*",
+    "@repo/scheduler": "workspace:*",
+    "@repo/widget": "workspace:*",
+    "@t3-oss/env-nextjs": "^0.13.8",
+    "ai": "^5.0.21",
+    "date-fns": "^4.1.0",
+    "email-providers": "^2.11.0",
+    "friendlier-words": "^1.1.3",
+    "ioredis": "^5.9.1",
+    "next": "16.0.10",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
+    "standardwebhooks": "^1.0.0",
+    "tsx": "^4.19.1",
+    "zod": "^3.25.17"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "19.2.7",
+    "tailwindcss": "^4.1.7",
+    "typescript": "^5.8.3"
+  }
+}

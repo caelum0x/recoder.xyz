@@ -1,4 +1,7 @@
 import { atom, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('NotificationsStore');
 
 // Storage key for persisting notifications
 const NOTIFICATIONS_KEY = 'recoder_notifications';
@@ -40,7 +43,7 @@ function loadNotifications(): Notification[] {
       return parsed.filter((n: Notification) => n.timestamp > sevenDaysAgo);
     }
   } catch (e) {
-    console.error('[Notifications] Failed to load notifications:', e);
+    logger.error('[Notifications] Failed to load notifications:', e);
   }
 
   return [];
@@ -57,7 +60,7 @@ function saveNotifications(notifications: Notification[]): void {
       .slice(0, MAX_NOTIFICATIONS);
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(toSave));
   } catch (e) {
-    console.error('[Notifications] Failed to save notifications:', e);
+    logger.error('[Notifications] Failed to save notifications:', e);
   }
 }
 

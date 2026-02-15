@@ -16,6 +16,7 @@ interface Env {
   // Application URLs
   APP_URL?: string;
   MAIN_SITE_URL?: string;
+  INTERNAL_SERVICE_KEY?: string;
 
   // Paddle Payment Provider (US/EU markets)
   PADDLE_VENDOR_ID?: string;

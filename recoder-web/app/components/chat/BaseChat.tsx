@@ -14,6 +14,7 @@ import { ProjectGallery } from '~/components/gallery/ProjectGallery';
 import type { TemplateRepo } from '~/lib/.server/github/types';
 
 import { ChatModeSelector } from './ChatModeSelector';
+import { ModelProfileSelector } from './ModelProfileSelector';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { CommandPalette, useCommandPalette } from './CommandPalette';
 import { parseSlashCommand, isSlashCommand } from '~/lib/utils/slash-commands';
@@ -24,6 +25,8 @@ import { DragDropOverlay } from './DragDropOverlay';
 import { FileDropZone, DropHint } from './FileDropZone';
 import { ContextFilesPanel, ContextFilesPill } from './ContextFilesPanel';
 import { ParameterPanelToggle } from './ParameterPanel';
+import { ThemeSelector } from '~/components/workbench/ThemeSelector';
+import { PromptMentionMenu } from './PromptMentionMenu';
 
 import { formatFileSize, MAX_FILE_SIZE, MAX_TOTAL_SIZE } from '~/lib/services/attachments';
 
@@ -33,7 +36,7 @@ interface BaseChatProps {
   chatId?: string;
   projectId?: string;
   projectName?: string;
-  textareaRef?: React.RefObject<HTMLTextAreaElement> | undefined;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null> | undefined;
   messageRef?: RefCallback<HTMLDivElement> | undefined;
   scrollRef?: RefCallback<HTMLDivElement> | undefined;
   showChat?: boolean;
@@ -100,6 +103,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [slashFilter, setSlashFilter] = useState('');
     const commandPalette = useCommandPalette();
 
+    // @prompt mention state
+    const [showPromptMenu, setShowPromptMenu] = useState(false);
+    const [promptFilter, setPromptFilter] = useState('');
+
     // Attachments hook for file uploads, drag-drop, and paste
     const {
       attachments,
@@ -138,6 +145,25 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
       }
     }, [sendMessage, projectId]);
+
+    // Handle @mention selection (file, folder, symbol, prompt)
+    const handlePromptSelect = useCallback((item: { type: string; id: string; label: string }) => {
+      setShowPromptMenu(false);
+      const textarea = actualTextareaRef.current;
+      if (textarea) {
+        const value = textarea.value;
+        const lastAtIdx = value.lastIndexOf('@');
+        if (lastAtIdx !== -1) {
+          const before = value.slice(0, lastAtIdx);
+          const newValue = `${before}@${item.type}:${item.id} `;
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+          nativeInputValueSetter?.call(textarea, newValue);
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          textarea.focus();
+        }
+      }
+    }, [actualTextareaRef]);
 
     // Handle sending message with attachments
     const handleSendWithAttachments = useCallback((event: React.UIEvent, messageInput?: string) => {
@@ -256,6 +282,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       <div className="p-3 border-b border-bolt-elements-borderColor">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
+                            <ModelProfileSelector />
                             <ModelSelector
                               selectedProvider={selectedProvider}
                               selectedModel={selectedModel}
@@ -264,6 +291,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               onSettingsClick={onSettingsClick}
                             />
                             <ChatModeSelector compact />
+                            <ThemeSelector />
                           </div>
                           <div className="flex items-center gap-2">
                             <ParameterPanelToggle />
@@ -300,6 +328,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         position="above"
                       />
                     )}
+
+                    {/* @Prompt Mention Menu */}
+                    <ClientOnly>
+                      {() => showPromptMenu && !showSlashMenu ? (
+                        <PromptMentionMenu
+                          filter={promptFilter}
+                          projectId={projectId}
+                          onSelect={handlePromptSelect}
+                          onClose={() => setShowPromptMenu(false)}
+                          position="above"
+                        />
+                      ) : null}
+                    </ClientOnly>
 
                     {/* Auto-expanding Chat Input Textarea */}
                     <textarea
@@ -362,9 +403,29 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         if (value.trimStart().startsWith('/')) {
                           setShowSlashMenu(true);
                           setSlashFilter(value.trimStart().slice(1));
+                          setShowPromptMenu(false);
                         } else {
                           setShowSlashMenu(false);
                           setSlashFilter('');
+                        }
+
+                        // Show/hide @mention menu (file, folder, symbol, prompt)
+                        // Detect if cursor is after an @ sign that's not part of a completed mention
+                        const cursorPos = event.target.selectionStart || 0;
+                        const textBeforeCursor = value.slice(0, cursorPos);
+                        const lastAtIdx = textBeforeCursor.lastIndexOf('@');
+                        const completedMentionPattern = /@(?:file|folder|symbol|prompt):[^\s]+/;
+                        if (lastAtIdx !== -1 && !completedMentionPattern.test(textBeforeCursor.slice(lastAtIdx))) {
+                          const afterAt = textBeforeCursor.slice(lastAtIdx + 1);
+                          // Only show if we're still typing the mention (no space after @, unless it's a type prefix like @file:)
+                          if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+                            setShowPromptMenu(true);
+                            setPromptFilter(afterAt);
+                          } else {
+                            setShowPromptMenu(false);
+                          }
+                        } else {
+                          setShowPromptMenu(false);
                         }
                       }}
                       style={{
@@ -372,11 +433,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         minHeight: TEXTAREA_MIN_HEIGHT,
                         maxHeight: TEXTAREA_MAX_HEIGHT,
                       }}
-                      placeholder="What would you like to build today? Type / for commands"
+                      placeholder="What would you like to build today? Type / for commands, @ for files & prompts"
                       translate="no"
                       aria-label="Enter your prompt"
                     />
-                  
+
                   <ClientOnly>
                     {() => (
                       <SendButton
@@ -413,11 +474,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       {/* REMOVED: UI declutter — Enhance prompt button removed. Use /enhance slash command instead. */}
                     </div>
                     <div className="flex items-center gap-4">
-                      {input.length > 3 ? (
-                        <div className="text-xs text-bolt-elements-textTertiary">
-                          Use <kbd className="kdb">Shift</kbd> + <kbd className="kdb">Return</kbd> for a new line
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                 </FileDropZone>

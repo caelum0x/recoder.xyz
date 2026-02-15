@@ -34,6 +34,7 @@ import {
 } from '../request-validation.js';
 import { fetchUserByokProviderKeys, getAvailableProviders, SUPPORTED_PROVIDERS, type AIProviderKeys } from '../byok-provider-keys.js';
 import { type ClaimedPromptTask, promptTaskQueue } from '../prompt-task-queue.js';
+import { createLogger } from '../../logger.js';
 
 // ==================== Types ====================
 
@@ -154,6 +155,7 @@ const PROMPT_TASK_QUEUE_BATCH_SIZE = Number.parseInt(process.env.PUBLIC_PROMPT_T
 const PROMPT_TASK_MAX_ATTEMPTS = Number.parseInt(process.env.PUBLIC_PROMPT_TASK_MAX_ATTEMPTS || '4', 10);
 const PROMPT_TASK_BACKOFF_BASE_MS = Number.parseInt(process.env.PUBLIC_PROMPT_TASK_BACKOFF_BASE_MS || '1000', 10);
 const PROMPT_TASK_BACKOFF_MAX_MS = Number.parseInt(process.env.PUBLIC_PROMPT_TASK_BACKOFF_MAX_MS || '30000', 10);
+const logger = createLogger('public-api:projects');
 
 // ==================== Storage ====================
 
@@ -263,7 +265,7 @@ export function initProjectRoutes(dependencies: ProjectDependencies): void {
   deps = dependencies;
   recoverPromptTasksOnStartup();
   startPromptTaskQueueWorker();
-  console.log('[Public API] Project routes initialized with dependencies');
+  logger.info('Project routes initialized with dependencies');
 }
 
 // ==================== Helpers ====================
@@ -482,13 +484,7 @@ function startPromptTaskQueueWorker(): void {
       zombieLockCheckCounter = 0;
       void promptTaskQueue.releaseZombieLocks(Date.now(), ZOMBIE_LOCK_MAX_AGE_MS).then((count) => {
         if (count > 0) {
-          console.warn(JSON.stringify({
-            timestamp: new Date().toISOString(),
-            level: 'warn',
-            type: 'ZOMBIE_LOCKS_RELEASED',
-            count,
-            maxAgeMs: ZOMBIE_LOCK_MAX_AGE_MS,
-          }));
+          logger.warn({ count, maxAgeMs: ZOMBIE_LOCK_MAX_AGE_MS }, 'Released zombie prompt task queue locks');
         }
       }).catch(() => {});
     }
@@ -604,9 +600,7 @@ async function processPromptTask(taskId: string, options?: { allowRetry?: boolea
   } catch (error) {
     const errorMessage = abortController.signal.aborted
       ? 'Task cancelled by user'
-      : error instanceof Error
-        ? error.message
-        : 'Prompt execution failed';
+      : 'Prompt execution failed';
 
     if (abortController.signal.aborted) {
       task.status = 'failed';
@@ -968,7 +962,7 @@ router.post(
       project.state = 'running';
       saveProjectsStore();
 
-      console.log(`[Public API] Created project ${projectId} for key ${apiKey.keyPrefix}`);
+      logger.info({ projectId, apiKeyPrefix: apiKey.keyPrefix }, 'Created public API project');
 
       sendApiSuccess(res, toProjectResponse(project), req.requestId!, 201);
     } catch (error) {
@@ -976,7 +970,7 @@ router.post(
       project.state = 'error';
       saveProjectsStore();
 
-      console.error(`[Public API] Failed to create project ${projectId}:`, error);
+      logger.error({ err: error, projectId }, 'Failed to create public API project');
 
       sendApiError(res, {
         code: 'PROJECT_CREATION_FAILED',

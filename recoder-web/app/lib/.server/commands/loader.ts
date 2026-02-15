@@ -18,6 +18,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CommandsLoader');
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -88,7 +92,7 @@ export async function loadProjectCommands(projectPath: string): Promise<Command[
       }
     }
   } catch (error) {
-    console.error('Failed to load custom commands:', error);
+    logger.error('Failed to load custom commands:', error);
   }
 
   return commands;
@@ -120,7 +124,7 @@ export async function loadProjectWorkflows(projectPath: string): Promise<Command
       }
     }
   } catch (error) {
-    console.error('Failed to load workflows:', error);
+    logger.error('Failed to load workflows:', error);
   }
 
   return workflows;
@@ -165,7 +169,7 @@ export function parseCommandFile(content: string, filename: string): Command | n
 
     return command;
   } catch (error) {
-    console.error(`Failed to parse command file ${filename}:`, error);
+    logger.error(`Failed to parse command file ${filename}:`, error);
     return null;
   }
 }
@@ -183,7 +187,7 @@ export function parseWorkflowFile(content: string, filename: string): Command | 
     const steps = frontmatter.steps || parseWorkflowSteps(body);
 
     if (!steps || steps.length === 0) {
-      console.warn(`Workflow ${filename} has no steps`);
+      logger.warn(`Workflow ${filename} has no steps`);
       return null;
     }
 
@@ -199,7 +203,7 @@ export function parseWorkflowFile(content: string, filename: string): Command | 
       category: frontmatter.category || 'custom',
     };
   } catch (error) {
-    console.error(`Failed to parse workflow file ${filename}:`, error);
+    logger.error(`Failed to parse workflow file ${filename}:`, error);
     return null;
   }
 }

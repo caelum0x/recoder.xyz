@@ -65,6 +65,8 @@ import {
 } from '~/lib/services/dependency-manager';
 
 import { PACKAGE_MANAGERS, detectPackageManagerFromFiles } from '~/lib/stores/packages';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DependencyPanel');
 
 interface DependencyPanelProps {
   files: Record<string, unknown>;
@@ -94,7 +96,7 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<Dependency | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const detectedManager = detectPackageManagerFromFiles(files);
 
   // Detect package manager
@@ -155,7 +157,7 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
         }
       });
     } catch (err) {
-      console.error('Failed to check outdated:', err);
+      logger.error('Failed to check outdated:', err);
     } finally {
       setCheckingOutdated(false);
     }

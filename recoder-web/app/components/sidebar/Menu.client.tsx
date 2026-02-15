@@ -25,7 +25,6 @@ import {
   type ChatSessionMetadata,
 } from '~/lib/stores/chat-sessions';
 import { cubicEasingFn } from '~/utils/easings';
-import { logger } from '~/utils/logger';
 import { showSmartError, showQuickError } from '~/lib/errors/toast-error';
 import { getCurrentUser } from '~/utils/auth-utils';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
@@ -33,6 +32,9 @@ import { HistoryItem } from './HistoryItem';
 import { EnhancedHistoryItem } from './EnhancedHistoryItem';
 import { binDates } from './date-binning';
 import { ProjectsList } from './ProjectsList';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SidebarMenu');
 
 const menuVariants = {
   closed: {
@@ -95,7 +97,7 @@ export function Menu() {
         setList([]);
       }
     } catch (error) {
-      console.error('Failed to load chat history:', error);
+      logger.error('Failed to load chat history:', error);
       showSmartError(error instanceof Error ? error : new Error(String(error)));
 
       // Final fallback to IndexedDB
@@ -106,7 +108,7 @@ export function Menu() {
           const filtered = indexedDBChats.filter((item) => item.urlId && item.description);
           setList(filtered);
         } catch (e) {
-          console.error('Final fallback failed:', e);
+          logger.error('Final fallback failed:', e);
           setList([]);
         }
       } else {
@@ -137,7 +139,7 @@ export function Menu() {
           body: JSON.stringify({ sessionId: item.id }),
         });
       } catch (error) {
-        console.error('Failed to delete from database:', error);
+        logger.error('Failed to delete from database:', error);
       }
 
       // Also delete from IndexedDB if it exists there
@@ -146,7 +148,7 @@ export function Menu() {
         try {
           await deleteById(db, item.id);
         } catch (error) {
-          console.error('Failed to delete from IndexedDB:', error);
+          logger.error('Failed to delete from IndexedDB:', error);
         }
       }
 

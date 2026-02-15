@@ -782,6 +782,34 @@ export function createMobileApiRouter(deps: MobileApiDependencies): Router {
     }, { message: 'Device registered successfully' });
   }));
 
+  // ==================== Session Validation (public) ====================
+
+  /**
+   * POST /api/mobile/session/validate
+   * Validate a mobile session token — used by Remix proxy routes
+   * to authenticate mobile clients without cookies.
+   */
+  router.post('/session/validate', asyncHandler(async (req: Request, res: Response) => {
+    const { token } = req.body as { token?: string };
+
+    if (!token || typeof token !== 'string') {
+      res.json({ valid: false });
+      return;
+    }
+
+    const session = validateMobileSession(token);
+    if (!session) {
+      res.json({ valid: false });
+      return;
+    }
+
+    res.json({
+      valid: true,
+      userId: session.userId,
+      deviceId: session.deviceId,
+    });
+  }));
+
   // ==================== Protected Routes ====================
 
   // Apply authentication middleware for all routes below
@@ -1215,6 +1243,146 @@ export function createMobileApiRouter(deps: MobileApiDependencies): Router {
       token: newSession.token,
       expiresAt: newSession.expiresAt,
     }, { message: 'Session refreshed successfully' });
+  }));
+
+  // ==================== AI Task Endpoints ====================
+
+  /**
+   * POST /api/mobile/projects/:projectId/prompt
+   * Start an AI task from mobile — resolves BYOK keys and proxies to
+   * the public API prompt handler.
+   */
+  router.post('/projects/:projectId/prompt', asyncHandler(async (req: MobileAuthenticatedRequest, res: Response) => {
+    const userId = req.userId!;
+    const { projectId } = req.params;
+    const { prompt, model, apiKey } = req.body as {
+      prompt?: string;
+      model?: string;
+      apiKey?: string;
+    };
+
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+      throw new AppError(ErrorCode.MISSING_REQUIRED_FIELD, 'prompt is required');
+    }
+
+    // Use provided apiKey or fall back to BYOK keys
+    let resolvedApiKey = apiKey;
+    if (!resolvedApiKey) {
+      const appApiUrl = process.env.APP_API_URL || process.env.MAIN_SITE_URL || 'http://localhost:3000';
+      const serviceKey = process.env.INTERNAL_SERVICE_KEY || '';
+      if (serviceKey) {
+        try {
+          const { fetchUserByokProviderKeys } = await import('../public-api/byok-provider-keys.js');
+          const keys = await fetchUserByokProviderKeys({
+            appApiUrl,
+            userId,
+            serviceKey,
+          });
+          // Pick the first available key
+          const { getAvailableProviders } = await import('../public-api/byok-provider-keys.js');
+          const available = getAvailableProviders(keys);
+          if (available.length > 0) {
+            resolvedApiKey = keys[available[0]!];
+          }
+        } catch (err) {
+          console.error('[Mobile] Failed to resolve BYOK keys:', err);
+        }
+      }
+    }
+
+    if (!resolvedApiKey) {
+      throw new AppError(ErrorCode.AUTH_REQUIRED, 'No API key available. Provide apiKey in body or configure BYOK keys.');
+    }
+
+    // Forward to the internal prompt handler
+    const backendPort = process.env.PORT || '3001';
+    const internalUrl = `http://localhost:${backendPort}/api/v1/projects/${encodeURIComponent(projectId)}/prompt`;
+
+    const upstream = await fetch(internalUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${resolvedApiKey}`,
+      },
+      body: JSON.stringify({
+        prompt: prompt.trim(),
+        ...(model ? { model } : {}),
+      }),
+    });
+
+    const payload = await upstream.json().catch(() => ({ success: false, error: 'Invalid response' }));
+    res.status(upstream.status).json(payload);
+  }));
+
+  /**
+   * GET /api/mobile/projects/:projectId/tasks/:taskId
+   * Get task status — proxies to the internal task status endpoint.
+   */
+  router.get('/projects/:projectId/tasks/:taskId', asyncHandler(async (req: MobileAuthenticatedRequest, res: Response) => {
+    const { projectId, taskId } = req.params;
+
+    const backendPort = process.env.PORT || '3001';
+    const internalUrl = `http://localhost:${backendPort}/api/v1/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`;
+
+    const upstream = await fetch(internalUrl);
+    const payload = await upstream.json().catch(() => ({ success: false, error: 'Invalid response' }));
+    res.status(upstream.status).json(payload);
+  }));
+
+  /**
+   * GET /api/mobile/projects/:projectId/tasks/:taskId/stream
+   * Stream task results via SSE — proxies to the internal stream endpoint
+   * with mobile-friendly compression headers.
+   */
+  router.get('/projects/:projectId/tasks/:taskId/stream', asyncHandler(async (req: MobileAuthenticatedRequest, res: Response) => {
+    const { projectId, taskId } = req.params;
+
+    const backendPort = process.env.PORT || '3001';
+    const internalUrl = `http://localhost:${backendPort}/api/v1/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/stream`;
+
+    const headers: Record<string, string> = {
+      'Accept': 'text/event-stream',
+    };
+    const lastEventId = req.headers['last-event-id'];
+    if (typeof lastEventId === 'string') {
+      headers['Last-Event-ID'] = lastEventId;
+    }
+
+    const upstream = await fetch(internalUrl, { headers });
+
+    if (!upstream.ok || !upstream.body) {
+      const payload = await upstream.json().catch(() => ({ success: false, error: 'Invalid response' }));
+      res.status(upstream.status).json(payload);
+      return;
+    }
+
+    res.writeHead(upstream.status, {
+      'Content-Type': upstream.headers.get('Content-Type') || 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    // Pipe the upstream SSE stream to the mobile client
+    const reader = (upstream.body as ReadableStream).getReader();
+    const pump = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      } catch {
+        // Client disconnected or upstream error
+      } finally {
+        res.end();
+      }
+    };
+    pump();
+
+    req.on('close', () => {
+      reader.cancel().catch(() => {});
+    });
   }));
 
   return router;

@@ -4,6 +4,9 @@
  */
 
 import type { TaskStorage, TaskLogger, TaskExecutionContext } from './types';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MemoryStorage');
 
 /**
  * Create an in-memory storage implementation
@@ -41,17 +44,17 @@ export function createConsoleLogger(prefix = '[TaskExecution]'): TaskLogger {
   return {
     debug(message: string, data?: Record<string, unknown>) {
       if (process.env.NODE_ENV === 'development') {
-        console.debug(`${prefix} DEBUG:`, message, data || '');
+        logger.debug(`${prefix} DEBUG:`, message, data || '');
       }
     },
     info(message: string, data?: Record<string, unknown>) {
-      console.info(`${prefix} INFO:`, message, data || '');
+      logger.info(`${prefix} INFO:`, message, data || '');
     },
     warn(message: string, data?: Record<string, unknown>) {
-      console.warn(`${prefix} WARN:`, message, data || '');
+      logger.warn(`${prefix} WARN:`, message, data || '');
     },
     error(message: string, data?: Record<string, unknown>) {
-      console.error(`${prefix} ERROR:`, message, data || '');
+      logger.error(`${prefix} ERROR:`, message, data || '');
     },
   };
 }
@@ -80,7 +83,7 @@ export function createMemoryContext(): TaskExecutionContext {
     logger: createConsoleLogger(),
     waitUntil(fn: () => Promise<void>) {
       const promise = fn().catch((error) => {
-        console.error('Background task error:', error);
+        logger.error('Background task error:', error);
       });
       pendingPromises.push(promise);
     },
@@ -99,7 +102,7 @@ export function createTaskContext(options: {
     logger: options.logger || createConsoleLogger(),
     waitUntil(fn: () => Promise<void>) {
       fn().catch((error) => {
-        console.error('Background task error:', error);
+        logger.error('Background task error:', error);
       });
     },
   };

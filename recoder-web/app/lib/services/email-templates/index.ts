@@ -5,6 +5,9 @@
  */
 
 import type { ReactElement } from 'react';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('EmailTemplates');
 
 // ==================== Types ====================
 
@@ -462,14 +465,14 @@ export class EmailService {
 
   private async send(options: EmailOptions): Promise<EmailResult> {
     if (!this.provider) {
-      console.warn('[EmailService] No provider configured, email not sent:', options.subject);
+      logger.warn('[EmailService] No provider configured, email not sent:', options.subject);
       return { success: false, error: 'No email provider configured' };
     }
 
     try {
       return await this.provider.send(options);
     } catch (error) {
-      console.error('[EmailService] Failed to send email:', error);
+      logger.error('[EmailService] Failed to send email:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

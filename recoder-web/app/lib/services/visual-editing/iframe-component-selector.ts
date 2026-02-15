@@ -11,6 +11,10 @@
  * This is a string that will be injected via <script> tag or eval.
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('IframeComponentSelector');
+
 export const COMPONENT_SELECTOR_SCRIPT = `
 (() => {
   // Skip if already initialized
@@ -493,7 +497,7 @@ export function injectComponentSelector(iframe: HTMLIFrameElement): boolean {
   try {
     const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!iframeDoc) {
-      console.warn('[VisualEditing] Cannot access iframe document');
+      logger.warn('[VisualEditing] Cannot access iframe document');
       return false;
     }
 
@@ -503,7 +507,7 @@ export function injectComponentSelector(iframe: HTMLIFrameElement): boolean {
 
     return true;
   } catch (error) {
-    console.error('[VisualEditing] Failed to inject component selector:', error);
+    logger.error('[VisualEditing] Failed to inject component selector:', error);
     return false;
   }
 }

@@ -19,6 +19,9 @@ import { getTask } from './get-task';
 import { createPatchQueue } from './patch-queue';
 import { executeTask } from './shared/task-execution-utils';
 import { generationPath } from './paths';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('RunTask');
 
 /**
  * Wait for a generation to finish execution
@@ -178,7 +181,7 @@ async function executeStep(args: {
       }
     }
   } catch (error) {
-    console.error('Step execution error:', error);
+    logger.error('Step execution error:', error);
 
     // Mark as failed
     const failedGeneration = {
@@ -285,7 +288,7 @@ export async function runTask(
   patchQueue.cleanup();
 
   if (executionError !== null) {
-    console.error('Execution failed:', executionError);
+    logger.error('Execution failed:', executionError);
     throw executionError;
   }
 }

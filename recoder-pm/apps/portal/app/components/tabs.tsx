@@ -1,0 +1,45 @@
+"use client";
+
+import { Link } from "@repo/design-system/components/link";
+import { cn } from "@repo/design-system/lib/utils";
+import { ListIcon, MapIcon } from "lucide-react";
+import { usePathname } from "next/navigation";
+
+const tabs = [
+  {
+    icon: MapIcon,
+    label: "Roadmap",
+    href: "/",
+    active: (pathname: string) => pathname === "/",
+  },
+  {
+    icon: ListIcon,
+    label: "Changelog",
+    href: "/changelog",
+    active: (pathname: string) => pathname.startsWith("/changelog"),
+  },
+];
+
+export const Tabs = () => {
+  const pathname = usePathname();
+
+  return (
+    <div className="-mb-px flex items-center gap-4">
+      {tabs.map((tab) => (
+        <Link
+          className={cn(
+            "flex items-center gap-2 border-b py-3 font-medium text-sm",
+            tab.active(pathname)
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground"
+          )}
+          href={tab.href}
+          key={tab.label}
+        >
+          <tab.icon size={16} />
+          {tab.label}
+        </Link>
+      ))}
+    </div>
+  );
+};

@@ -4,13 +4,15 @@
  */
 
 import type { ProjectDetection, ProjectFramework, DeploymentPlatform, FileTree } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DeployDetector');
 
 export class ProjectDetector {
   /**
    * Detect project type from files
    */
   async detect(files: Record<string, any>): Promise<ProjectDetection> {
-    console.log('🔍 Detecting project type...');
+    logger.info('🔍 Detecting project type...');
 
     // Check for Next.js
     if (this.isNextJs(files)) {

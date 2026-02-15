@@ -1,0 +1,39 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"generate-output": {
+			"outputs": ["src/graphql-env.d.ts"],
+			"passThroughEnv": [
+				"*_API_KEY",
+				"*_SECRET",
+				"GITHUB_*",
+				"LANGFUSE_*",
+				"POSTGRES_*",
+				"REDIS_URL",
+				"SIGNOZ_*",
+				"STRIPE_*",
+				"SMTP_*",
+				"SUPABASE_*",
+				"GTM_ID",
+				"SENTRY_*",
+				"BLOB_READ_WRITE_TOKEN",
+				"SEND_EMAIL_DEBUG",
+				"SAMPLE_APP_WORKSPACE_IDS",
+				"INNGEST_*",
+				"OTEL_*",
+				"GOOGLE_OAUTH_CLIENT_*",
+				"GOOGLE_VERTEX_*",
+				"GOOGLE_CLIENT_EMAIL",
+				"GOOGLE_PRIVATE_*",
+				"WAITUNTIL_OFFSET_MILLIS",
+				"EDGE_CONFIG",
+				"TRIGGER_SECRET_KEY"
+			]
+		},
+		"build": {
+			"dependsOn": ["^build", "generate-output"],
+			"outputs": ["**/dist/**"]
+		}
+	}
+}

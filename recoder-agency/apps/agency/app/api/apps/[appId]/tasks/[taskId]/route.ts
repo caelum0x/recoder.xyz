@@ -141,7 +141,7 @@ export async function GET(
 						title: step.name,
 						status: generation.status,
 						generationId: generation.id,
-						error: generation.error.message,
+						error: "Generation failed",
 					} satisfies ApiStepItem;
 				}
 				return {

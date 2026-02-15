@@ -17,6 +17,9 @@ import type { TelemetryService, RequestContext } from './telemetryService.js';
 import type { ErrorHandler } from './errorHandler.js';
 import { getCostTracker } from '../../utils/costTracker.js';
 import { isExpensiveModel, formatCost } from '../../utils/modelPricing.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ContentPipeline');
 
 export interface PipelineConfig {
   cliConfig: Config;
@@ -477,10 +480,10 @@ export class ContentGenerationPipeline {
             (estimatedSavings > 0 ? ` (saved ~${formatCost(estimatedSavings)})` : ' (90% cost reduction)');
         }
         
-        console.warn(costMessage + '\n');
+        logger.warn(costMessage + '\n');
       } else if (cachedTokens > 0) {
         // Show cache info even for inexpensive requests
-        console.log(
+        logger.info(
           `⚡ Cache hit: ${cachedTokens.toLocaleString()} cached tokens (90% cost reduction)\n`,
         );
       }
@@ -488,7 +491,7 @@ export class ContentGenerationPipeline {
       // Check if approaching budget limits
       const budgetCheck = costTracker.wouldExceedBudget(0);
       if (budgetCheck.wouldExceed) {
-        console.warn(
+        logger.warn(
           `\n⚠️  BUDGET ALERT: You've reached your ${budgetCheck.reason} limit!\n` +
           `Current: ${formatCost(budgetCheck.currentCost)} / Limit: ${formatCost(budgetCheck.limit)}\n`,
         );

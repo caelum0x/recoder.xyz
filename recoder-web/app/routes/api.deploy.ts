@@ -6,28 +6,24 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { createDeploymentManager } from '~/lib/.server/deployment/manager';
 import type { DeploymentConfig } from '~/lib/.server/deployment/types';
+import { getDockerBackendUrl, getSessionTokenFromRequest } from '~/lib/http/docker-server';
+import { createScopedLogger } from '~/utils/logger';
 
-/**
- * Extract session token from cookies for docker-backend authentication
- */
-function extractSessionToken(cookieHeader: string): string | undefined {
-  const cookies = cookieHeader.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'recoder.session_token' || name === 'session_token') {
-      return decodeURIComponent(value);
-    }
-  }
-  return undefined;
-}
+const logger = createScopedLogger('Deploy');
 
 /**
  * GET /api/deploy - Get deployment info
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return json({ success: false, error: 'Authentication required' }, { status: 401 });
+  }
+
   const url = new URL(request.url);
   const action = url.searchParams.get('action');
-  
+
   // Support both Cloudflare Workers and local development
   const env = context?.cloudflare?.env || process.env || {};
 
@@ -54,11 +50,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         });
 
       case 'history':
-        // TODO: Get user ID from session/auth
-        const userId = url.searchParams.get('userId');
-        if (!userId) {
-          return json({ success: false, error: 'userId required' }, { status: 400 });
-        }
         const history = await manager.getDeploymentHistory(20);
         return json({
           success: true,
@@ -75,11 +66,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         });
     }
   } catch (error) {
-    console.error('Deployment API error:', error);
+    logger.error('Deployment API error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Deployment API error',
       },
       { status: 500 }
     );
@@ -152,9 +143,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
         const deploymentConfig: DeploymentConfig = config;
 
-        console.log(`🚀 Starting deployment to ${deploymentConfig.platform}`);
-        console.log(`   Project: ${deploymentConfig.projectName}`);
-        console.log(`   Framework: ${deploymentConfig.framework || 'auto-detect'}`);
+        logger.info(`Starting deployment to ${deploymentConfig.platform}`);
+        logger.info(`   Project: ${deploymentConfig.projectName}`);
+        logger.info(`   Framework: ${deploymentConfig.framework || 'auto-detect'}`);
 
         // Deploy using manager
         const result = await manager.deploy(deploymentConfig, files);
@@ -171,12 +162,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
           return json({ success: false, error: 'projectId required' }, { status: 400 });
         }
 
-        // Extract session token from cookies for docker-backend authentication
-        const cookieHeader = request.headers.get('Cookie') || '';
-        const sessionToken = extractSessionToken(cookieHeader);
+        const sessionToken = getSessionTokenFromRequest(request) || undefined;
 
         const { startTunnel } = await import('~/lib/.server/deploy/tunnel-deploy');
-        const DOCKER_URL = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
+        const DOCKER_URL = getDockerBackendUrl(context);
         const tunnel = await startTunnel(projectId, localPort, DOCKER_URL, sessionToken);
 
         return json({
@@ -196,12 +185,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
           return json({ success: false, error: 'projectId required' }, { status: 400 });
         }
 
-        // Extract session token from cookies for docker-backend authentication
-        const stopCookieHeader = request.headers.get('Cookie') || '';
-        const stopSessionToken = extractSessionToken(stopCookieHeader);
+        const stopSessionToken = getSessionTokenFromRequest(request) || undefined;
 
         const { stopTunnel } = await import('~/lib/.server/deploy/tunnel-deploy');
-        const DOCKER_URL = (env as any).DOCKER_BACKEND_URL || 'http://localhost:3100';
+        const DOCKER_URL = getDockerBackendUrl(context);
         await stopTunnel(projectId, DOCKER_URL, stopSessionToken);
 
         return json({ success: true, message: 'Tunnel stopped' });
@@ -237,12 +224,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
         );
     }
   } catch (error) {
-    console.error('Deployment error:', error);
+    logger.error('Deployment error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Deployment failed',
-        stack: error instanceof Error ? error.stack : undefined,
+        error: 'Deployment failed',
       },
       { status: 500 }
     );

@@ -18,6 +18,10 @@ import type {
   OutputId,
   WebPageData,
 } from './types';
+import {
+  isJsonContent,
+  jsonContentToText,
+} from '~/lib/services/text/json-content';
 
 // =============================================================================
 // Message Building
@@ -357,35 +361,6 @@ function getFilesDescription(currentCount: number, newFilesCount: number): strin
 // =============================================================================
 // JSON Content Helpers
 // =============================================================================
-
-function isJsonContent(content: string): boolean {
-  if (!content.startsWith('{') && !content.startsWith('[')) return false;
-  try {
-    JSON.parse(content);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function jsonContentToText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => {
-        if (typeof item === 'string') return item;
-        if (item && typeof item === 'object' && 'text' in item) {
-          return (item as { text: string }).text;
-        }
-        return JSON.stringify(item);
-      })
-      .join('\n');
-  }
-  if (content && typeof content === 'object' && 'text' in content) {
-    return (content as { text: string }).text;
-  }
-  return JSON.stringify(content);
-}
 
 // =============================================================================
 // Image Type Detection

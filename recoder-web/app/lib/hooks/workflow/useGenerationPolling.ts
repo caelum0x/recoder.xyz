@@ -24,11 +24,14 @@ import {
   updateGeneration,
   getGeneration,
 } from './generation-store';
+import { createScopedLogger } from '~/utils/logger';
 import {
   waitAndGetGenerationCompleted,
   waitAndGetGenerationRunning,
   withRetry,
 } from './helpers';
+
+const logger = createScopedLogger('GenerationPolling');
 
 // ============================================================
 // Types
@@ -147,7 +150,7 @@ export function useGenerationPolling(
         const data = (await response.json()) as Record<string, any>;
         return data.generation;
       } catch (err) {
-        console.error('Error fetching generation:', err);
+        logger.error('Error fetching generation:', err);
         // Return local copy if available
         return local;
       }
@@ -265,7 +268,7 @@ export function useGenerationPolling(
 
           await new Promise((r) => setTimeout(r, getNextInterval()));
         } catch (err) {
-          console.error('Polling error:', err);
+          logger.error('Polling error:', err);
           // Continue polling on transient errors
           await new Promise((r) => setTimeout(r, getNextInterval()));
         }

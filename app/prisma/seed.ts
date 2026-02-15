@@ -4,7 +4,7 @@
  * FIXED VERSION - Updated to use correct Prisma models
  */
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../lib/prisma-client';
 import { hashPassword } from '../lib/crypto';
 import crypto from 'crypto';
 

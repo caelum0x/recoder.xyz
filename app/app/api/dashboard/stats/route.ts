@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       fetch(`${PRODUCTION_ENGINE_URL}/api/billing/subscription/${userId}`, {
         headers: {
           'x-user-id': userId,
-          'x-admin-key': process.env.ADMIN_KEY || 'admin-key',
+          'x-admin-key': process.env.ADMIN_KEY ?? '',
         }
       }),
       fetch(`${PRODUCTION_ENGINE_URL}/api/dev/projects`, {
@@ -87,46 +87,10 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Dashboard stats error:', error);
-    
-    // Return mock data as fallback
-    const mockStats = {
-      subscription: {
-        tier: 'Free',
-        status: 'active',
-        usage: {
-          codeGenerated: 1250,
-          apiCalls: 45,
-          deploymentsCount: 1
-        },
-        limits: {
-          codeGeneration: 5000,
-          apiCalls: 100,
-          deployments: 2
-        }
-      },
-      billing: {
-        currentCost: 0,
-        nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        paymentMethod: 'No payment method'
-      },
-      projects: {
-        total: 3,
-        active: 2,
-        shared: 1
-      },
-      analytics: {
-        thisMonth: {
-          projects: 3,
-          deployments: 1,
-          savings: 25
-        }
-      }
-    };
 
-    return NextResponse.json({ 
-      success: true, 
-      data: mockStats,
-      fallback: true 
-    });
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to load dashboard stats'
+    }, { status: 500 });
   }
 }

@@ -7,6 +7,7 @@ import {
 	alertSubscriptions,
 	db,
 } from "@/db";
+import { notifyTeam } from "@/lib/agency/channel-notifier";
 import { sendEmail } from "@/services/external/email";
 
 export type AlertPayload = {
@@ -48,6 +49,18 @@ export async function sendAlert(
 			);
 		}
 	}
+
+	// Also fan out to all linked channels for the team
+	try {
+		const channelMessage = [
+			`[${payload.eventType}] ${payload.title}`,
+			payload.details,
+			...payload.items.map((item) => `${item.label}: ${item.value}`),
+		].join("\n");
+		await notifyTeam(teamDbId, channelMessage);
+	} catch (error) {
+		console.error(`Channel alert fan-out failed for team ${teamDbId}:`, error);
+	}
 }
 
 async function sendEmailAlert(
@@ -65,10 +78,38 @@ async function sendEmailAlert(
 	await sendEmail(`[Alert] ${payload.title}`, body, config.recipients);
 }
 
+function isAllowedWebhookUrl(raw: string): boolean {
+	try {
+		const url = new URL(raw);
+		if (url.protocol !== "https:") return false;
+		const blocked = [
+			"localhost",
+			"127.0.0.1",
+			"0.0.0.0",
+			"[::1]",
+			"metadata.google.internal",
+		];
+		if (blocked.includes(url.hostname)) return false;
+		if (url.hostname.startsWith("10.")) return false;
+		if (url.hostname.startsWith("172.")) return false;
+		if (url.hostname.startsWith("192.168.")) return false;
+		if (url.hostname.startsWith("169.254.")) return false;
+		if (url.hostname.endsWith(".internal") || url.hostname.endsWith(".local"))
+			return false;
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export async function sendSlackWebhook(
 	webhookUrl: string,
 	payload: AlertPayload,
 ): Promise<void> {
+	if (!isAllowedWebhookUrl(webhookUrl)) {
+		throw new Error("Webhook URL is not allowed");
+	}
+
 	const blocks = [
 		{
 			type: "header",

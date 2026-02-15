@@ -35,10 +35,13 @@ const SHORTCUTS = [
   {
     category: 'Actions',
     items: [
-      { keys: ['⌘', 'K'], description: 'Quick actions', mac: true },
-      { keys: ['Ctrl', 'K'], description: 'Quick actions', windows: true },
+      { keys: ['⌘', 'K'], description: 'Inline edit (select code first)', mac: true },
+      { keys: ['Ctrl', 'K'], description: 'Inline edit (select code first)', windows: true },
       { keys: ['⌘', 'Shift', 'P'], description: 'Command palette', mac: true },
       { keys: ['Ctrl', 'Shift', 'P'], description: 'Command palette', windows: true },
+      { keys: ['⌘', '.'], description: 'Toggle chat mode (Build/Ask/Agent)', mac: true },
+      { keys: ['Ctrl', '.'], description: 'Toggle chat mode (Build/Ask/Agent)', windows: true },
+      { keys: ['Tab'], description: 'Accept inline completion' },
       { keys: ['Esc'], description: 'Cancel/Close' },
     ],
   },
@@ -142,8 +145,8 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
             <div className="flex items-start gap-2">
               <div className="text-lg flex-shrink-0"><div className="i-ph:lightbulb" /></div>
               <div className="text-sm text-bolt-elements-textSecondary">
-                <strong className="text-bolt-elements-textPrimary">Pro tip:</strong> Most shortcuts work with both Cmd (Mac) and Ctrl (Windows/Linux). 
-                Press <kbd className="kdb">Cmd/Ctrl</kbd> + <kbd className="kdb">K</kbd> anytime to open quick actions!
+                <strong className="text-bolt-elements-textPrimary">Pro tip:</strong> Select code in the editor and press <kbd className="kdb">Cmd/Ctrl</kbd> + <kbd className="kdb">K</kbd> to edit with AI.
+                Use <kbd className="kdb">@</kbd> in chat to reference files, folders, or symbols.
               </div>
             </div>
           </div>

@@ -10,6 +10,8 @@
 import { useEffect, useRef } from 'react';
 import { errorsAtom, type BuildError } from '~/lib/stores/errors';
 import { getSessionToken } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LSPDiagnostics');
 
 const WS_URL = import.meta.env.VITE_DOCKER_BACKEND_URL?.replace('http', 'ws') || 'ws://localhost:3100';
 
@@ -51,7 +53,7 @@ export function useLSPDiagnostics(projectId: string | null) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('[LSP] Connected to diagnostics stream');
+      logger.info('[LSP] Connected to diagnostics stream');
     };
 
     ws.onmessage = (event) => {

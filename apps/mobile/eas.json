@@ -1,0 +1,93 @@
+{
+  "cli": {
+    "version": ">= 5.9.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENV_MODE": "staging",
+        "EXPO_PUBLIC_AUTH_PROVIDER_URL": "https://staging.recoder.xyz",
+        "EXPO_PUBLIC_BACKEND_URL": "https://staging-api.recoder.xyz/v1",
+        "EXPO_PUBLIC_FRONTEND_URL": "https://staging.recoder.xyz",
+        "EXPO_PUBLIC_USE_REVENUECAT": "true",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_UpcFYduOZYUgSqKPNvtzgXkPCeh",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_wckzzdVDdOjbVHemqCsuFckMrMQ"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "ios": {
+        "simulator": false,
+        "autoIncrement": true
+      },
+      "android": {
+        "autoIncrement": true
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV_MODE": "production",
+        "EXPO_PUBLIC_AUTH_PROVIDER_URL": "https://recoder.xyz",
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.recoder.xyz/v1",
+        "EXPO_PUBLIC_FRONTEND_URL": "https://recoder.xyz",
+        "EXPO_PUBLIC_USE_REVENUECAT": "true",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_UpcFYduOZYUgSqKPNvtzgXkPCeh",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_wckzzdVDdOjbVHemqCsuFckMrMQ"
+      }
+    },
+    "testflight": {
+      "channel": "main",
+      "environment": "preview",
+      "ios": {
+        "simulator": false,
+        "distribution": "store",
+        "autoIncrement": true
+      },
+      "android": {
+        "autoIncrement": true
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV_MODE": "staging",
+        "EXPO_PUBLIC_AUTH_PROVIDER_URL": "https://staging.recoder.xyz",
+        "EXPO_PUBLIC_BACKEND_URL": "https://staging-api.recoder.xyz/v1",
+        "EXPO_PUBLIC_FRONTEND_URL": "https://staging.recoder.xyz",
+        "EXPO_PUBLIC_USE_REVENUECAT": "true",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_UpcFYduOZYUgSqKPNvtzgXkPCeh",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_wckzzdVDdOjbVHemqCsuFckMrMQ"
+      }
+    },
+    "development-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "environment": "development"
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "mkprivat2005@gmail.com",
+        "ascAppId": "6754448524",
+        "appleTeamId": "T8G9J33433"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    },
+    "testflight": {
+      "ios": {
+        "appleId": "mkprivat2005@gmail.com",
+        "ascAppId": "6754448524",
+        "appleTeamId": "T8G9J33433"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

@@ -3,6 +3,9 @@ import { ClientOnly } from 'remix-utils/client-only';
 import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Index');
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Recoder.xyz - AI Full-Stack Development' }, { name: 'description', content: 'Build complete full-stack applications with AI assistance - from frontend to backend, APIs to databases' }];
@@ -21,8 +24,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
                           cookies.includes('recoder.session') ||
                           cookies.includes('session_token');
   
-  console.log('Cookies received:', cookies);
-  console.log('Has session token:', hasSessionToken);
+  logger.info('Cookies received:', cookies);
+  logger.info('Has session token:', hasSessionToken);
 
   // Skip auth check in local development for docker-backend testing
   const isDevelopment = process.env.NODE_ENV !== 'production';
@@ -74,7 +77,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
           projectTemplateId: project.templateId || undefined,
         });
       } catch (e) {
-        console.error('Error loading project:', e);
+        logger.error('Error loading project:', e);
       }
     }
     

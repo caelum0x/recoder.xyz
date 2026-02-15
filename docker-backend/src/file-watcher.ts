@@ -43,7 +43,7 @@ const POLL_RESET_ON_CHANGE = true;  // Reset to fast polling when changes detect
 // Configuration for deduplication buffer
 const MAX_DEDUP_BUFFER_SIZE = 1000; // Maximum entries per project in dedup buffer
 
-class FileWatcher extends EventEmitter {
+export class FileWatcher extends EventEmitter {
   private watchers = new Map<string, {
     interval: NodeJS.Timeout;
     lastCheck: Map<string, number>;

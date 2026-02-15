@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MCPToolsLoader');
 /**
  * MCP Tools Loader
  * Loads MCP tools and formats them for AI system prompt
@@ -34,7 +36,7 @@ These tools run in recoder-web and provide access to:
 When you need to use these tools, mention them in your response.
 `;
   } catch (error) {
-    console.error('Failed to load MCP tools:', error);
+    logger.error('Failed to load MCP tools:', error);
     return '';
   }
 }

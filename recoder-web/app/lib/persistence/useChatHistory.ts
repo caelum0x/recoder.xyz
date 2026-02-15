@@ -16,6 +16,9 @@ import { canAutoFix, setAutoFixing } from '~/lib/stores/errors';
 import { dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 import * as chatSessions from '~/lib/stores/chat-sessions';
 import type { ChatSessionMetadata } from '~/lib/stores/chat-sessions';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatHistoryPersistence');
 
 // Re-export ensureContainerExists for backward compatibility
 export { ensureContainerExists } from '~/lib/stores/workbench';
@@ -34,28 +37,28 @@ async function checkAndAutoFixErrors(projectId: string): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 3000));
 
   try {
-    console.log('🔍 [AutoFix] Checking for build errors...');
+    logger.info('🔍 [AutoFix] Checking for build errors...');
     const errorResponse = await fetchProjectErrors(projectId);
 
     if (!errorResponse) {
-      console.log('✅ [AutoFix] No errors detected');
+      logger.info('✅ [AutoFix] No errors detected');
       return;
     }
 
     const { errors, hasBlockingErrors } = errorResponse;
 
     if (!hasBlockingErrors || errors.length === 0) {
-      console.log('✅ [AutoFix] No blocking errors');
+      logger.info('✅ [AutoFix] No blocking errors');
       return;
     }
 
     // Check if we can still auto-fix (haven't exceeded max attempts)
     if (!canAutoFix()) {
-      console.warn('⚠️ [AutoFix] Max auto-fix attempts reached, skipping');
+      logger.warn('⚠️ [AutoFix] Max auto-fix attempts reached, skipping');
       return;
     }
 
-    console.log(`🔧 [AutoFix] Found ${errors.length} errors, triggering automatic fix...`);
+    logger.info(`🔧 [AutoFix] Found ${errors.length} errors, triggering automatic fix...`);
 
     // Format errors for AI
     const prompt = formatErrorsForAI(errors);
@@ -68,9 +71,9 @@ async function checkAndAutoFixErrors(projectId: string): Promise<void> {
       detail: { prompt, automatic: true }
     }));
 
-    console.log('🚀 [AutoFix] Automatic fix triggered');
+    logger.info('🚀 [AutoFix] Automatic fix triggered');
   } catch (err) {
-    console.error('❌ [AutoFix] Error checking for build errors:', err);
+    logger.error('❌ [AutoFix] Error checking for build errors:', err);
   }
 }
 
@@ -117,7 +120,7 @@ function getDatabase() {
   
   if (!dbPromise) {
     dbPromise = openDatabase().catch((error) => {
-      console.error('Failed to initialize database:', error);
+      logger.error('Failed to initialize database:', error);
       return undefined;
     });
     dbPromise.then((result) => {
@@ -179,7 +182,7 @@ export async function loadAllSessions(limit: number = 50): Promise<ChatSessionMe
 
     return sessions;
   } catch (error) {
-    console.error('Failed to load sessions:', error);
+    logger.error('Failed to load sessions:', error);
     chatSessions.setError(error instanceof Error ? error.message : 'Failed to load sessions');
     return [];
   } finally {
@@ -232,7 +235,7 @@ export async function createNewSession(projectId?: string): Promise<string | nul
 
     return urlId;
   } catch (error) {
-    console.error('Failed to create new session:', error);
+    logger.error('Failed to create new session:', error);
     return null;
   }
 }
@@ -268,7 +271,7 @@ export async function renameSessionPersistent(sessionId: string, newTitle: strin
 
     return response.ok;
   } catch (error) {
-    console.error('Failed to rename session:', error);
+    logger.error('Failed to rename session:', error);
     return false;
   }
 }
@@ -299,7 +302,7 @@ export async function deleteSessionPersistent(sessionId: string): Promise<boolea
 
     return false;
   } catch (error) {
-    console.error('Failed to delete session:', error);
+    logger.error('Failed to delete session:', error);
     return false;
   }
 }
@@ -314,7 +317,7 @@ export async function archiveSessionPersistent(sessionId: string): Promise<boole
     // For now, archived state is local-only
     return true;
   } catch (error) {
-    console.error('Failed to archive session:', error);
+    logger.error('Failed to archive session:', error);
     return false;
   }
 }
@@ -341,7 +344,7 @@ export async function duplicateSession(sessionId: string): Promise<string | null
     chatSessions.setSession(newMetadata);
     return newId;
   } catch (error) {
-    console.error('Failed to duplicate session:', error);
+    logger.error('Failed to duplicate session:', error);
     return null;
   }
 }
@@ -387,7 +390,7 @@ export async function exportConversation(sessionId: string): Promise<void> {
     chatSessions.exportSessionAsMarkdown(session, messages);
     toast.success('Conversation exported successfully');
   } catch (error) {
-    console.error('Failed to export conversation:', error);
+    logger.error('Failed to export conversation:', error);
     toast.error('Failed to export conversation');
   }
 }
@@ -414,7 +417,7 @@ export async function exportMultipleConversations(sessionIds: string[]): Promise
 
       sessions.push({ metadata: session, messages });
     } catch (error) {
-      console.error(`Failed to load session ${sessionId}:`, error);
+      logger.error(`Failed to load session ${sessionId}:`, error);
     }
   }
 
@@ -540,7 +543,7 @@ async function saveChatToDatabase(
 
       if (!response.ok) {
         const error = await response.json() as { error?: string };
-        console.error(`❌ [saveChatToDatabase] Database save error (attempt ${attempt}):`, error);
+        logger.error(`❌ [saveChatToDatabase] Database save error (attempt ${attempt}):`, error);
         throw new Error(error.error || 'Failed to save to database');
       }
 
@@ -548,7 +551,7 @@ async function saveChatToDatabase(
       return true;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`❌ [saveChatToDatabase] Attempt ${attempt}/${maxRetries} failed:`, lastError.message);
+      logger.error(`❌ [saveChatToDatabase] Attempt ${attempt}/${maxRetries} failed:`, lastError.message);
 
       // If not the last attempt, wait before retrying (exponential backoff)
       if (attempt < maxRetries) {
@@ -560,9 +563,9 @@ async function saveChatToDatabase(
   }
 
   // All retries failed
-  console.error('❌ [saveChatToDatabase] All retry attempts exhausted:', lastError?.message);
+  logger.error('❌ [saveChatToDatabase] All retry attempts exhausted:', lastError?.message);
   if (lastError instanceof Error) {
-    console.error('❌ [saveChatToDatabase] Final error details:', lastError.message, lastError.stack);
+    logger.error('❌ [saveChatToDatabase] Final error details:', lastError.message, lastError.stack);
   }
   return false;
 }
@@ -612,7 +615,7 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
 
     return null;
   } catch (error) {
-    console.error('❌ Database load failed:', error);
+    logger.error('❌ Database load failed:', error);
     return null;
   }
 }
@@ -621,15 +624,15 @@ async function markContainerReady(projectId: string) {
   try {
     const { workbenchStore } = await import('~/lib/stores/workbench');
     workbenchStore.setContainerReady(true);
-    console.log('✅ [markContainerReady] Container marked as ready');
+    logger.info('✅ [markContainerReady] Container marked as ready');
 
     // 🔧 AUTO-FIX: Check for errors after dev server starts
     // Run in background so we don't block the UI
     checkAndAutoFixErrors(projectId).catch(err => {
-      console.warn('⚠️ [AutoFix] Background error check failed:', err);
+      logger.warn('⚠️ [AutoFix] Background error check failed:', err);
     });
   } catch (e) {
-    console.warn('Could not set container ready:', e);
+    logger.warn('Could not set container ready:', e);
   }
 }
 
@@ -654,16 +657,16 @@ async function startDevServerOnly(projectId: string): Promise<boolean> {
       background: true
     });
 
-    console.log('✅ [startDevServerOnly] Dev server started in background');
+    logger.info('✅ [startDevServerOnly] Dev server started in background');
 
     if (devResult.ready) {
-      console.log(`✅ [startDevServerOnly] Dev server confirmed ready on port ${devResult.port}`);
+      logger.info(`✅ [startDevServerOnly] Dev server confirmed ready on port ${devResult.port}`);
       await markContainerReady(projectId);
       return true;
     }
 
     // Dev server started but not ready yet - poll the health endpoint
-    console.log('⏳ [startDevServerOnly] Dev server building, polling for ready state...');
+    logger.info('⏳ [startDevServerOnly] Dev server building, polling for ready state...');
     const maxWaitMs = 45000;
     const pollInterval = 2000;
     const startTime = Date.now();
@@ -676,7 +679,7 @@ async function startDevServerOnly(projectId: string): Promise<boolean> {
         );
         const readyPort = health.ports?.find(p => p.responding);
         if (readyPort) {
-          console.log(`✅ [startDevServerOnly] Dev server ready on port ${readyPort.port}`);
+          logger.info(`✅ [startDevServerOnly] Dev server ready on port ${readyPort.port}`);
           await markContainerReady(projectId);
           return true;
         }
@@ -687,11 +690,11 @@ async function startDevServerOnly(projectId: string): Promise<boolean> {
     }
 
     // Timeout - mark ready anyway so user can see error in preview
-    console.warn('⚠️ [startDevServerOnly] Health check timeout, marking ready anyway');
+    logger.warn('⚠️ [startDevServerOnly] Health check timeout, marking ready anyway');
     await markContainerReady(projectId);
     return true;
   } catch (err) {
-    console.warn('⚠️ [startDevServerOnly] Failed to start dev server:', err);
+    logger.warn('⚠️ [startDevServerOnly] Failed to start dev server:', err);
     return false;
   }
 }
@@ -703,13 +706,13 @@ async function startDevServerOnly(projectId: string): Promise<boolean> {
 async function runNpmInstallWithCoordination(projectId: string): Promise<boolean> {
   // If already running, wait for it to complete
   if (globalNpmInstallRunning && globalNpmInstallPromise) {
-    console.log('⏳ [runInstallWithCoordination] bun install already running, waiting...');
+    logger.info('⏳ [runInstallWithCoordination] bun install already running, waiting...');
     await globalNpmInstallPromise;
     return true;
   }
 
   if (globalNpmInstallRunning) {
-    console.log('⏭️ [runInstallWithCoordination] bun install already in progress, skipping');
+    logger.info('⏭️ [runInstallWithCoordination] bun install already in progress, skipping');
     return false;
   }
 
@@ -722,48 +725,48 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
       const isValid = checkResult.output?.includes('valid');
 
       if (!isValid) {
-        console.log('🧹 [runInstallWithCoordination] Cleaning invalid node_modules...');
+        logger.info('🧹 [runInstallWithCoordination] Cleaning invalid node_modules...');
         await dockerPost(`/api/exec/${projectId}`, { command: 'rm -rf node_modules package-lock.json bun.lockb' });
       }
 
       // 🚀 OPTIMIZATION: Use bun for faster installs - --force handles peer deps
-      console.log('📦 [runInstallWithCoordination] Running bun install...');
+      logger.info('📦 [runInstallWithCoordination] Running bun install...');
       let result: { output?: string; error?: string };
 
       try {
         result = await dockerPost<{ output?: string; error?: string }>(`/api/exec/${projectId}`, { command: 'bun install --force' });
       } catch (error) {
-        console.warn('⚠️ [runInstallWithCoordination] bun install request failed, trying npm fallback...');
+        logger.warn('⚠️ [runInstallWithCoordination] bun install request failed, trying npm fallback...');
         try {
           result = await dockerPost<{ output?: string; error?: string }>(`/api/exec/${projectId}`, { command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' });
         } catch (npmError) {
-          console.warn('⚠️ [runInstallWithCoordination] Install request failed');
+          logger.warn('⚠️ [runInstallWithCoordination] Install request failed');
           return;
         }
       }
 
       // Check for bun/npm errors
       if (result.error || result.output?.includes('error:') || result.output?.includes('npm ERR!')) {
-        console.warn('⚠️ [runInstallWithCoordination] Install had errors:', result.error || result.output?.substring(0, 200));
+        logger.warn('⚠️ [runInstallWithCoordination] Install had errors:', result.error || result.output?.substring(0, 200));
         // Try npm fallback if bun failed
         if (!result.output?.includes('npm ERR!')) {
-          console.log('📦 [runInstallWithCoordination] Trying npm fallback...');
+          logger.info('📦 [runInstallWithCoordination] Trying npm fallback...');
           try {
             await dockerPost<{ output?: string; error?: string }>(`/api/exec/${projectId}`, { command: 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund' });
-            console.log('✅ [runInstallWithCoordination] npm fallback succeeded');
+            logger.info('✅ [runInstallWithCoordination] npm fallback succeeded');
           } catch (e) {
-            console.warn('⚠️ [runInstallWithCoordination] npm fallback failed');
+            logger.warn('⚠️ [runInstallWithCoordination] npm fallback failed');
           }
         }
       } else {
-        console.log('✅ [runInstallWithCoordination] bun install completed');
+        logger.info('✅ [runInstallWithCoordination] bun install completed');
       }
 
       // Mark install as complete globally so ActionRunner knows
       markNpmInstallComplete();
 
       // 🚀 OPTIMIZATION: Automatically start dev server after install
-      console.log('🚀 [runInstallWithCoordination] Starting dev server...');
+      logger.info('🚀 [runInstallWithCoordination] Starting dev server...');
       
       const markReady = async () => {
         await markContainerReady(projectId);
@@ -776,14 +779,14 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
           background: true
         });
 
-        console.log('✅ [runInstallWithCoordination] Dev server started in background');
+        logger.info('✅ [runInstallWithCoordination] Dev server started in background');
 
         if (devResult.ready) {
-          console.log(`✅ [runInstallWithCoordination] Dev server confirmed ready on port ${devResult.port}`);
+          logger.info(`✅ [runInstallWithCoordination] Dev server confirmed ready on port ${devResult.port}`);
           await markReady();
         } else {
           // Dev server started but not ready yet - poll the health endpoint
-          console.log('⏳ [runInstallWithCoordination] Dev server building, polling for ready state...');
+          logger.info('⏳ [runInstallWithCoordination] Dev server building, polling for ready state...');
           const maxWaitMs = 45000;
           const pollInterval = 2000;
           const startTime = Date.now();
@@ -793,7 +796,7 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
               const health = await dockerGet<{ ports?: Array<{ port: number; responding: boolean }> }>(`/api/preview/${projectId}/health`, { timeout: 10000, skipRetry: true });
               const readyPort = health.ports?.find(p => p.responding);
               if (readyPort) {
-                console.log(`✅ [runInstallWithCoordination] Dev server ready on port ${readyPort.port}`);
+                logger.info(`✅ [runInstallWithCoordination] Dev server ready on port ${readyPort.port}`);
                 await markReady();
                 return;
               }
@@ -804,15 +807,15 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
           }
           
           // Timeout - mark ready anyway so user can see error in preview
-          console.warn('⚠️ [runInstallWithCoordination] Dev server health check timeout, marking ready anyway');
+          logger.warn('⚠️ [runInstallWithCoordination] Dev server health check timeout, marking ready anyway');
           await markReady();
         }
       } catch (err) {
-        console.warn('⚠️ [runInstallWithCoordination] Dev server start failed:', err);
+        logger.warn('⚠️ [runInstallWithCoordination] Dev server start failed:', err);
         await markReady(); // Mark ready anyway so UI isn't stuck
       }
     } catch (error: any) {
-      console.error('❌ [runInstallWithCoordination] Install failed:', error);
+      logger.error('❌ [runInstallWithCoordination] Install failed:', error);
     } finally {
       globalNpmInstallRunning = false;
       globalNpmInstallPromise = null;
@@ -864,14 +867,14 @@ async function restoreFilesToDocker(
 
   // 🔒 Skip if already restored (prevents duplicate restoration on HMR)
   if (restoredProjectIds.has(projectId)) {
-    console.log(`⏭️ [restoreFilesToDocker] Already restored ${projectId}, skipping`);
+    logger.info(`⏭️ [restoreFilesToDocker] Already restored ${projectId}, skipping`);
     return true;
   }
 
   // 🔒 Wait for existing restoration if in progress
   const existingPromise = fileRestorationPromises.get(projectId);
   if (existingPromise) {
-    console.log(`⏳ [restoreFilesToDocker] Waiting for existing restoration of ${projectId}...`);
+    logger.info(`⏳ [restoreFilesToDocker] Waiting for existing restoration of ${projectId}...`);
     return existingPromise;
   }
 
@@ -1030,7 +1033,7 @@ export function useChatHistory() {
         setReady(true);
 
         if (persistenceEnabled) {
-          console.warn('Chat persistence is unavailable - database not initialized');
+          logger.warn('Chat persistence is unavailable - database not initialized');
         }
 
         return;
@@ -1077,7 +1080,7 @@ export function useChatHistory() {
               // 🚀 OPTIMIZATION: Restore files FIRST, then run npm install
               // Use the urlId as projectId for consistency
               const projectId = chat.urlId || chat.id || mixedId;
-              console.log(`📂 [useChatHistory] Restoring past chat files to Docker, projectId: ${projectId}`);
+              logger.info(`📂 [useChatHistory] Restoring past chat files to Docker, projectId: ${projectId}`);
 
               // Check if package.json exists
               const hasPackageJson = Object.keys(chat.fileSnapshot!).some(path =>
@@ -1088,7 +1091,7 @@ export function useChatHistory() {
               const dockerRestored = await restoreFilesToDocker(projectId, chat.fileSnapshot!);
 
               if (dockerRestored) {
-                console.log('✅ [useChatHistory] Files restored to Docker container');
+                logger.info('✅ [useChatHistory] Files restored to Docker container');
 
                 // ✅ FIX: Reset restored chat flag AFTER restoration completes
                 // so that new user messages get fresh ActionRunners without
@@ -1113,20 +1116,20 @@ export function useChatHistory() {
                     const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' });
 
                     if (!checkResult.output?.trim()) {
-                      console.log('📦 [useChatHistory] Running bun install after file restoration...');
+                      logger.info('📦 [useChatHistory] Running bun install after file restoration...');
                       runNpmInstallWithCoordination(projectId).catch(err => {
-                        console.warn('⚠️ [useChatHistory] bun install failed:', err);
+                        logger.warn('⚠️ [useChatHistory] bun install failed:', err);
                       });
                     } else {
-                      console.log('⚡ [useChatHistory] Skipping install - node_modules is recent');
+                      logger.info('⚡ [useChatHistory] Skipping install - node_modules is recent');
                       startDevServerOnly(projectId).catch(err => {
-                        console.warn('⚠️ [useChatHistory] start dev server failed:', err);
+                        logger.warn('⚠️ [useChatHistory] start dev server failed:', err);
                       });
                     }
                   } catch (e) {
-                    console.log('📦 [useChatHistory] Running bun install after file restoration...');
+                    logger.info('📦 [useChatHistory] Running bun install after file restoration...');
                     runNpmInstallWithCoordination(projectId).catch(err => {
-                      console.warn('⚠️ [useChatHistory] bun install failed:', err);
+                      logger.warn('⚠️ [useChatHistory] bun install failed:', err);
                     });
                   }
                 }
@@ -1134,18 +1137,18 @@ export function useChatHistory() {
                 // Trigger auto-fix after restoration
                 setTimeout(() => {
                   checkAndAutoFixErrors(projectId).catch(err => {
-                    console.warn('⚠️ [useChatHistory] Auto-fix failed:', err);
+                    logger.warn('⚠️ [useChatHistory] Auto-fix failed:', err);
                   });
                 }, 2000);
               } else {
-                console.warn('⚠️ [useChatHistory] File restoration failed, skipping bun install');
+                logger.warn('⚠️ [useChatHistory] File restoration failed, skipping bun install');
                 // Reset flag even on failure — don't poison new messages
                 workbenchStore.resetRestoredChatFlag();
               }
 
               // console.log('✅ [useChatHistory] Workbench files restored successfully:', Object.keys(updatedFiles).length, 'files');
             } catch (error) {
-              console.error('❌ [useChatHistory] Failed to restore workbench files:', error);
+              logger.error('❌ [useChatHistory] Failed to restore workbench files:', error);
               // Reset flag on error so new messages aren't blocked
               workbenchStore.resetRestoredChatFlag();
               toast.error('Failed to restore project files');
@@ -1160,7 +1163,7 @@ export function useChatHistory() {
         // This catches edge cases where restoration hangs or takes an unexpected path.
         setTimeout(() => {
           if (workbenchStore.isRestoredChat()) {
-            console.warn('⚠️ [useChatHistory] Restored chat flag still set after 15s, force-resetting');
+            logger.warn('⚠️ [useChatHistory] Restored chat flag still set after 15s, force-resetting');
             workbenchStore.resetRestoredChatFlag();
           }
         }, 15000);
@@ -1195,13 +1198,13 @@ export function useChatHistory() {
             // console.log('✅ Loaded chat from IndexedDB:', storedMessages.id);
             await handleLoadedChat(storedMessages as ChatHistoryItem);
           } else {
-            console.warn('No messages found for chat:', mixedId);
+            logger.warn('No messages found for chat:', mixedId);
             navigate(`/`, { replace: true });
             setReady(true);
           }
         })
         .catch((error) => {
-          console.error('Failed to load chat history:', error);
+          logger.error('Failed to load chat history:', error);
           toast.error('Failed to load chat history');
           setReady(true);
         });
@@ -1225,7 +1228,7 @@ export function useChatHistory() {
       // CRITICAL: Prevent session contamination - if we're on home page, force clear state
       const currentPath = window.location.pathname;
       if (currentPath === '/' && urlId) {
-        console.warn('⚠️ [useChatHistory] Session contamination detected! urlId exists on home page:', urlId);
+        logger.warn('⚠️ [useChatHistory] Session contamination detected! urlId exists on home page:', urlId);
         // console.log('🧹 [useChatHistory] Force clearing contaminated state');
         setUrlId(undefined);
         clearSessionState();
@@ -1255,7 +1258,7 @@ export function useChatHistory() {
           // CRITICAL FIX: Ensure chatId is ALWAYS set even if DB fails
           const fallbackId = Date.now().toString();
           chatId.set(fallbackId);
-          console.warn('⚠️ [useChatHistory] DB error, using fallback chat ID:', fallbackId, error);
+          logger.warn('⚠️ [useChatHistory] DB error, using fallback chat ID:', fallbackId, error);
         }
       } else {
         // console.log('🆔 [useChatHistory] Using existing chat ID:', chatId.get());
@@ -1274,7 +1277,7 @@ export function useChatHistory() {
           // console.log('🔗 [useChatHistory] Set URL ID from artifact:', newUrlId);
         } catch (error) {
           // Fallback: use artifact ID directly if getUrlId fails
-          console.warn('⚠️ [useChatHistory] getUrlId failed, using artifact ID directly:', error);
+          logger.warn('⚠️ [useChatHistory] getUrlId failed, using artifact ID directly:', error);
           navigateChat(firstArtifact.id);
           setUrlId(firstArtifact.id);
           currentUrlId = firstArtifact.id;
@@ -1292,7 +1295,7 @@ export function useChatHistory() {
       if (!currentUrlId) {
         const finalChatId = chatId.get();
         if (finalChatId) {
-          console.warn('⚠️ [useChatHistory] No urlId set, using chatId as final fallback:', finalChatId);
+          logger.warn('⚠️ [useChatHistory] No urlId set, using chatId as final fallback:', finalChatId);
           navigateChat(finalChatId);
           setUrlId(finalChatId);
           currentUrlId = finalChatId;
@@ -1320,7 +1323,7 @@ export function useChatHistory() {
       const finalDescription = description.get();
 
       if (!finalChatId || !finalUrlId) {
-        console.error('❌ [useChatHistory] Cannot save: missing chat ID or URL ID', {
+        logger.error('❌ [useChatHistory] Cannot save: missing chat ID or URL ID', {
           finalChatId,
           finalUrlId,
         });
@@ -1405,7 +1408,7 @@ export function useChatHistory() {
           await setMessages(db, finalChatId as string, messages, finalUrlId, finalDescription);
           // console.log('✅ [useChatHistory] Chat history saved to IndexedDB (fallback)');
         } catch (error) {
-          console.error('❌ [useChatHistory] Failed to save chat history to IndexedDB:', error);
+          logger.error('❌ [useChatHistory] Failed to save chat history to IndexedDB:', error);
           throw error;
         }
       }

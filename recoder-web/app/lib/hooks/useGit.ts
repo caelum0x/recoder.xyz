@@ -21,6 +21,9 @@ import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerGet, dockerPost, dockerDelete } from '~/lib/services/docker-api';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHook');
 
 export interface GitFileChange {
   path: string;
@@ -64,6 +67,18 @@ export interface GitDiff {
   deletions: number;
 }
 
+export type GitStateType = 'clean' | 'merging' | 'rebasing' | 'cherry-picking';
+
+export interface GitState {
+  state: GitStateType;
+  conflictFiles?: string[];
+}
+
+export interface GitConflicts {
+  files: string[];
+  type: 'merge' | 'rebase';
+}
+
 export interface UseGitOptions {
   /** Auto-fetch status when container is ready */
   autoFetch?: boolean;
@@ -79,6 +94,7 @@ export interface UseGitReturn {
   isLoading: boolean;
   isGitRepo: boolean | null;
   error: string | null;
+  gitState: GitState | null;
 
   // Operations
   refreshStatus: () => Promise<void>;
@@ -101,9 +117,28 @@ export interface UseGitReturn {
 
   // History operations
   getHistory: (limit?: number) => Promise<GitCommit[]>;
+  loadMoreHistory: () => Promise<void>;
+  hasMoreHistory: boolean;
 
   // Init
   initRepo: () => Promise<boolean>;
+
+  // Remote operations
+  push: (options?: { remote?: string; branch?: string; force?: boolean; setUpstream?: boolean; token?: string }) => Promise<boolean>;
+  pull: (options?: { remote?: string; branch?: string; rebase?: boolean; token?: string }) => Promise<boolean>;
+  fetchRemote: (remote?: string, token?: string) => Promise<boolean>;
+  getRemotes: () => Promise<{ name: string; url: string; type: string }[]>;
+  setRemote: (name: string, url: string) => Promise<boolean>;
+
+  // Enhanced operations
+  merge: (branch: string, options?: { noFf?: boolean; squash?: boolean }) => Promise<{ success: boolean; conflicts?: string[] }>;
+  rebase: (branch: string) => Promise<{ success: boolean; conflicts?: string[] }>;
+  rebaseAbort: () => Promise<boolean>;
+  rebaseContinue: () => Promise<{ success: boolean; conflicts?: string[] }>;
+  getGitState: () => Promise<GitState | null>;
+  getConflicts: () => Promise<GitConflicts | null>;
+  renameBranch: (oldName: string, newName: string) => Promise<boolean>;
+  forcePush: (options?: { remote?: string; branch?: string; token?: string }) => Promise<boolean>;
 }
 
 /** Max consecutive failures before suspending git polling */
@@ -122,6 +157,9 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
   const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [suspended, setSuspended] = useState(false);
+  const [gitState, setGitState] = useState<GitState | null>(null);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const historyPageSizeRef = useRef(50);
   const consecutiveFailuresRef = useRef(0);
 
   // Reset failure tracking when container becomes ready
@@ -163,10 +201,10 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
     } catch (err) {
       consecutiveFailuresRef.current++;
       if (consecutiveFailuresRef.current >= MAX_GIT_FAILURES) {
-        console.debug(`[useGit] ${MAX_GIT_FAILURES} consecutive failures, suspending until container is ready`);
+        logger.debug(`[useGit] ${MAX_GIT_FAILURES} consecutive failures, suspending until container is ready`);
         setSuspended(true);
       } else {
-        console.debug('[useGit] Status error:', err);
+        logger.debug('[useGit] Status error:', err);
       }
       setIsGitRepo(false);
       setError(err instanceof Error ? err.message : 'Failed to get git status');
@@ -192,7 +230,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await refreshStatus();
       return true;
     } catch (err) {
-      console.error('[useGit] Stage error:', err);
+      logger.error('[useGit] Stage error:', err);
       toast.error('Failed to stage files');
       return false;
     }
@@ -209,7 +247,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await refreshStatus();
       return true;
     } catch (err) {
-      console.error('[useGit] Unstage error:', err);
+      logger.error('[useGit] Unstage error:', err);
       toast.error('Failed to unstage files');
       return false;
     }
@@ -224,7 +262,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await refreshStatus();
       return true;
     } catch (err) {
-      console.error('[useGit] Stage all error:', err);
+      logger.error('[useGit] Stage all error:', err);
       toast.error('Failed to stage all files');
       return false;
     }
@@ -239,7 +277,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await refreshStatus();
       return true;
     } catch (err) {
-      console.error('[useGit] Unstage all error:', err);
+      logger.error('[useGit] Unstage all error:', err);
       toast.error('Failed to unstage all files');
       return false;
     }
@@ -262,7 +300,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await refreshStatus();
       return true;
     } catch (err) {
-      console.error('[useGit] Commit error:', err);
+      logger.error('[useGit] Commit error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
       toast.error(errorMsg);
       return false;
@@ -283,7 +321,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await refreshStatus();
       return true;
     } catch (err) {
-      console.error('[useGit] Discard error:', err);
+      logger.error('[useGit] Discard error:', err);
       toast.error('Failed to discard changes');
       return false;
     }
@@ -310,7 +348,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       const data = await dockerGet<GitDiff>(`/api/git/${projectId}/diff?path=${encodeURIComponent(filePath)}`);
       return data || null;
     } catch (err) {
-      console.error('[useGit] Diff error:', err);
+      logger.error('[useGit] Diff error:', err);
       return null;
     }
   }, [projectId]);
@@ -325,7 +363,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       setBranches(branchList);
       return branchList;
     } catch (err) {
-      console.error('[useGit] Branches error:', err);
+      logger.error('[useGit] Branches error:', err);
       return [];
     }
   }, [projectId]);
@@ -343,7 +381,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await getBranches();
       return true;
     } catch (err) {
-      console.error('[useGit] Checkout error:', err);
+      logger.error('[useGit] Checkout error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to switch branch';
       toast.error(errorMsg);
       return false;
@@ -365,7 +403,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await getBranches();
       return true;
     } catch (err) {
-      console.error('[useGit] Create branch error:', err);
+      logger.error('[useGit] Create branch error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to create branch';
       toast.error(errorMsg);
       return false;
@@ -384,7 +422,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await getBranches();
       return true;
     } catch (err) {
-      console.error('[useGit] Delete branch error:', err);
+      logger.error('[useGit] Delete branch error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to delete branch';
       toast.error(errorMsg);
       return false;
@@ -401,14 +439,22 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       const data = await dockerGet<{ commits: GitCommit[] }>(`/api/git/${projectId}/log?limit=${limit}`);
       const commitList = data?.commits || [];
       setCommits(commitList);
+      historyPageSizeRef.current = limit;
+      setHasMoreHistory(commitList.length >= limit);
       return commitList;
     } catch (err) {
-      console.error('[useGit] History error:', err);
+      logger.error('[useGit] History error:', err);
       return [];
     } finally {
       setIsLoading(false);
     }
   }, [projectId]);
+
+  // Load more commits (increases the fetch limit)
+  const loadMoreHistory = useCallback(async (): Promise<void> => {
+    const nextLimit = historyPageSizeRef.current + 50;
+    await getHistory(nextLimit);
+  }, [getHistory]);
 
   // Initialize repository
   const initRepo = useCallback(async (): Promise<boolean> => {
@@ -423,13 +469,299 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       await refreshStatus();
       return true;
     } catch (err) {
-      console.error('[useGit] Init error:', err);
+      logger.error('[useGit] Init error:', err);
       toast.error('Failed to initialize repository');
       return false;
     } finally {
       setIsLoading(false);
     }
   }, [projectId, refreshStatus]);
+
+  // Push to remote
+  const push = useCallback(async (options?: {
+    remote?: string;
+    branch?: string;
+    force?: boolean;
+    setUpstream?: boolean;
+    token?: string;
+  }): Promise<boolean> => {
+    if (!projectId) return false;
+
+    setIsLoading(true);
+    try {
+      await dockerPost(`/api/git/${projectId}/push`, {
+        remote: options?.remote || 'origin',
+        branch: options?.branch,
+        force: options?.force,
+        setUpstream: options?.setUpstream,
+        token: options?.token,
+      });
+      toast.success('Pushed to remote');
+      await refreshStatus();
+      return true;
+    } catch (err: any) {
+      const msg = err?.message || 'Push failed';
+      toast.error(msg);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus]);
+
+  // Pull from remote
+  const pull = useCallback(async (options?: {
+    remote?: string;
+    branch?: string;
+    rebase?: boolean;
+    token?: string;
+  }): Promise<boolean> => {
+    if (!projectId) return false;
+
+    setIsLoading(true);
+    try {
+      const result = await dockerPost<{ error?: string; conflicts?: string[] }>(`/api/git/${projectId}/pull`, {
+        remote: options?.remote || 'origin',
+        branch: options?.branch,
+        rebase: options?.rebase,
+        token: options?.token,
+      });
+
+      if (result?.conflicts && result.conflicts.length > 0) {
+        toast.warning(`Pulled with ${result.conflicts.length} conflict(s)`);
+      } else {
+        toast.success('Pulled from remote');
+      }
+      await refreshStatus();
+      return true;
+    } catch (err: any) {
+      const msg = err?.message || 'Pull failed';
+      toast.error(msg);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus]);
+
+  // Fetch from remote (no merge)
+  const fetchRemote = useCallback(async (remote?: string, token?: string): Promise<boolean> => {
+    if (!projectId) return false;
+
+    try {
+      await dockerPost(`/api/git/${projectId}/fetch`, { remote: remote || 'origin', token });
+      await refreshStatus();
+      return true;
+    } catch (err) {
+      logger.error('[useGit] Fetch error:', err);
+      return false;
+    }
+  }, [projectId, refreshStatus]);
+
+  // Get remotes
+  const getRemotes = useCallback(async (): Promise<{ name: string; url: string; type: string }[]> => {
+    if (!projectId) return [];
+
+    try {
+      const data = await dockerGet<{ remotes: { name: string; url: string; type: string }[] }>(`/api/git/${projectId}/remotes`);
+      return data?.remotes || [];
+    } catch (err) {
+      logger.error('[useGit] Remotes error:', err);
+      return [];
+    }
+  }, [projectId]);
+
+  // Set remote
+  const setRemote = useCallback(async (name: string, url: string): Promise<boolean> => {
+    if (!projectId) return false;
+
+    try {
+      await dockerPost(`/api/git/${projectId}/remote`, { name, url });
+      return true;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to set remote');
+      return false;
+    }
+  }, [projectId]);
+
+  // Enhanced operations
+
+  // Merge branch into current
+  const merge = useCallback(async (branch: string, options?: { noFf?: boolean; squash?: boolean }): Promise<{ success: boolean; conflicts?: string[] }> => {
+    if (!projectId) return { success: false };
+
+    setIsLoading(true);
+    try {
+      const result = await dockerPost<{ success?: boolean; error?: string; conflicts?: string[] }>(`/api/git/${projectId}/merge`, {
+        branch,
+        noFf: options?.noFf,
+        squash: options?.squash,
+      });
+
+      if (result?.conflicts) {
+        toast.warning(`Merge conflicts in ${result.conflicts.length} file(s)`);
+        await refreshStatus();
+        return { success: false, conflicts: result.conflicts };
+      }
+
+      toast.success(`Merged ${branch}`);
+      await refreshStatus();
+      return { success: true };
+    } catch (err: any) {
+      const msg = err?.message || 'Merge failed';
+      if (msg.includes('conflicts')) {
+        toast.warning(msg);
+      } else {
+        toast.error(msg);
+      }
+      await refreshStatus();
+
+      // Try to extract conflicts from error response
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.conflicts) return { success: false, conflicts: parsed.conflicts };
+      } catch {}
+
+      return { success: false };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus]);
+
+  // Rebase onto branch
+  const rebase = useCallback(async (branch: string): Promise<{ success: boolean; conflicts?: string[] }> => {
+    if (!projectId) return { success: false };
+
+    setIsLoading(true);
+    try {
+      const result = await dockerPost<{ success?: boolean; error?: string; conflicts?: string[] }>(`/api/git/${projectId}/rebase`, { branch });
+
+      if (result?.conflicts) {
+        toast.warning(`Rebase conflicts in ${result.conflicts.length} file(s)`);
+        await refreshStatus();
+        return { success: false, conflicts: result.conflicts };
+      }
+
+      toast.success(`Rebased onto ${branch}`);
+      await refreshStatus();
+      return { success: true };
+    } catch (err: any) {
+      toast.error(err?.message || 'Rebase failed');
+      await refreshStatus();
+      return { success: false };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus]);
+
+  // Abort rebase
+  const rebaseAbort = useCallback(async (): Promise<boolean> => {
+    if (!projectId) return false;
+
+    setIsLoading(true);
+    try {
+      await dockerPost(`/api/git/${projectId}/rebase-abort`);
+      toast.success('Rebase aborted');
+      await refreshStatus();
+      return true;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to abort rebase');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus]);
+
+  // Continue rebase
+  const rebaseContinue = useCallback(async (): Promise<{ success: boolean; conflicts?: string[] }> => {
+    if (!projectId) return { success: false };
+
+    setIsLoading(true);
+    try {
+      const result = await dockerPost<{ success?: boolean; error?: string; conflicts?: string[] }>(`/api/git/${projectId}/rebase-continue`);
+
+      if (result?.conflicts) {
+        toast.warning(`More conflicts in ${result.conflicts.length} file(s)`);
+        await refreshStatus();
+        return { success: false, conflicts: result.conflicts };
+      }
+
+      toast.success('Rebase continued');
+      await refreshStatus();
+      return { success: true };
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to continue rebase');
+      await refreshStatus();
+      return { success: false };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, refreshStatus]);
+
+  // Get git state (merging/rebasing/clean)
+  const getGitState = useCallback(async (): Promise<GitState | null> => {
+    if (!projectId) return null;
+
+    try {
+      const data = await dockerGet<GitState>(`/api/git/${projectId}/state`);
+      if (data) {
+        setGitState(data);
+      }
+      return data || null;
+    } catch {
+      return null;
+    }
+  }, [projectId]);
+
+  // Get conflict files
+  const getConflicts = useCallback(async (): Promise<GitConflicts | null> => {
+    if (!projectId) return null;
+
+    try {
+      const data = await dockerGet<GitConflicts>(`/api/git/${projectId}/conflicts`);
+      return data || null;
+    } catch {
+      return null;
+    }
+  }, [projectId]);
+
+  // Rename branch
+  const renameBranch = useCallback(async (oldName: string, newName: string): Promise<boolean> => {
+    if (!projectId) return false;
+
+    setIsLoading(true);
+    try {
+      await dockerPost(`/api/git/${projectId}/branch-rename`, { oldName, newName });
+      toast.success(`Renamed branch to ${newName}`);
+      await getBranches();
+      return true;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to rename branch');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, getBranches]);
+
+  // Force push (safe, with lease)
+  const forcePush = useCallback(async (options?: { remote?: string; branch?: string; token?: string }): Promise<boolean> => {
+    if (!projectId) return false;
+
+    setIsLoading(true);
+    try {
+      await dockerPost(`/api/git/${projectId}/force-push`, {
+        remote: options?.remote || 'origin',
+        branch: options?.branch || status?.branch,
+        token: options?.token,
+      });
+      toast.success('Force pushed (with lease)');
+      await refreshStatus();
+      return true;
+    } catch (err: any) {
+      toast.error(err?.message || 'Force push failed');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, status?.branch, refreshStatus]);
 
   // Auto-fetch on mount when container is ready
   useEffect(() => {
@@ -439,13 +771,16 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
     }
   }, [autoFetch, containerReady, projectId, refreshStatus, getBranches]);
 
-  // Polling for auto-refresh
+  // Polling for auto-refresh (includes git state detection)
   useEffect(() => {
     if (pollInterval > 0 && containerReady && projectId && isGitRepo) {
-      const interval = setInterval(refreshStatus, pollInterval);
+      const interval = setInterval(() => {
+        refreshStatus();
+        getGitState();
+      }, pollInterval);
       return () => clearInterval(interval);
     }
-  }, [pollInterval, containerReady, projectId, isGitRepo, refreshStatus]);
+  }, [pollInterval, containerReady, projectId, isGitRepo, refreshStatus, getGitState]);
 
   return useMemo(
     () => ({
@@ -456,6 +791,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       isLoading,
       isGitRepo,
       error,
+      gitState,
 
       // Operations
       refreshStatus,
@@ -478,9 +814,28 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
 
       // History
       getHistory,
+      loadMoreHistory,
+      hasMoreHistory,
 
       // Init
       initRepo,
+
+      // Remote operations
+      push,
+      pull,
+      fetchRemote,
+      getRemotes,
+      setRemote,
+
+      // Enhanced operations
+      merge,
+      rebase,
+      rebaseAbort,
+      rebaseContinue,
+      getGitState,
+      getConflicts,
+      renameBranch,
+      forcePush,
     }),
     [
       status,
@@ -489,6 +844,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       isLoading,
       isGitRepo,
       error,
+      gitState,
       refreshStatus,
       getStatus,
       getCurrentBranch,
@@ -505,7 +861,22 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       createBranch,
       deleteBranch,
       getHistory,
+      loadMoreHistory,
+      hasMoreHistory,
       initRepo,
+      push,
+      pull,
+      fetchRemote,
+      getRemotes,
+      setRemote,
+      merge,
+      rebase,
+      rebaseAbort,
+      rebaseContinue,
+      getGitState,
+      getConflicts,
+      renameBranch,
+      forcePush,
     ]
   );
 }

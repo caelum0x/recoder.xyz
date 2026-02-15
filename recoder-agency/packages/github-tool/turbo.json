@@ -12,7 +12,7 @@
 				"POSTGRES_*",
 				"REDIS_URL",
 				"SIGNOZ_*",
-				"STRIPE_*",
+				"POLAR_*",
 				"SMTP_*",
 				"SUPABASE_*",
 				"GTM_ID",

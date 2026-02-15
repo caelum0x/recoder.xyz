@@ -7,6 +7,9 @@
 import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 // Import the bundle directly - works in Cloudflare Workers
 import startersBundleData from '~/lib/.server/llm/starters-bundle.json';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Starters');
 
 // Simple path joining utility
 function joinPath(...parts: string[]): string {
@@ -55,11 +58,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       data: starters,
     });
   } catch (error) {
-    console.error('Starters API error:', error);
+    logger.error('Starters API error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Failed to load starters',
       },
       { status: 500 }
     );
@@ -99,11 +102,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
-    console.error('Starters import error:', error);
+    logger.error('Starters import error:', error);
     return json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Import failed',
+        error: 'Import failed',
       },
       { status: 500 }
     );

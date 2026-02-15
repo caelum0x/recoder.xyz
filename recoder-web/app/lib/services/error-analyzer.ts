@@ -180,6 +180,164 @@ const errorPatterns: ErrorPattern[] = [
     suggestion: () => `Convert CommonJS syntax to ES modules or rename file to .cjs`,
     autoFixable: true,
   },
+
+  // ========================================
+  // React Native / Expo specific patterns
+  // ========================================
+
+  // Text strings must be in <Text>
+  {
+    pattern: /Text strings must be rendered within a <Text> component/,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Wrap text content in a <Text> component. Bare strings inside <View> are not allowed in React Native.`,
+    autoFixable: true,
+  },
+  // HTML elements not available in React Native
+  {
+    pattern: /Unknown component:\s*(?:div|span|button|input|form|img|a|p|h[1-6]|ul|ol|li)/i,
+    type: 'runtime_error',
+    extractor: (match) => ({
+      code: match[0],
+    }),
+    suggestion: () => `HTML elements are not available in React Native. Use View, Text, Pressable, TextInput, Image instead.`,
+    autoFixable: true,
+  },
+  // className not supported in React Native
+  {
+    pattern: /className.*is not a valid.*prop/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `className is not supported in React Native. Use style prop with StyleSheet.create() instead.`,
+    autoFixable: true,
+  },
+  // onClick not supported in React Native
+  {
+    pattern: /onClick.*is not a valid.*prop/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `onClick is not supported in React Native. Use onPress instead.`,
+    autoFixable: true,
+  },
+  // Unable to resolve module (Expo/Metro)
+  {
+    pattern: /Unable to resolve module ['"]([^'"]+)['"]/,
+    type: 'module_not_installed',
+    extractor: (match) => ({
+      code: match[1],
+    }),
+    suggestion: (match) => `Module '${match[1]}' not found. Run: npx expo install ${match[1]}`,
+    autoFixable: true,
+  },
+  // Metro bundler resolve error
+  {
+    pattern: /Metro.*error.*Unable to resolve/i,
+    type: 'build_error',
+    extractor: () => ({}),
+    suggestion: () => `Metro bundler cannot find a module. Check import paths and installed packages.`,
+    autoFixable: false,
+  },
+  // Native component not linked
+  {
+    pattern: /requireNativeComponent.*was not found in the UIManager/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Native component not linked. For Expo managed projects, use an Expo-compatible package instead.`,
+    autoFixable: false,
+  },
+  // Invariant Violation
+  {
+    pattern: /Invariant Violation/,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `React Native invariant violation — often caused by using HTML elements or missing required props.`,
+    autoFixable: true,
+  },
+  // View config getter callback error
+  {
+    pattern: /View config getter callback for component ['"]([^'"]+)['"] must be a function/,
+    type: 'runtime_error',
+    extractor: (match) => ({
+      code: match[1],
+    }),
+    suggestion: (match) => `Component '${match[1]}' not registered. This usually means a native module is not properly linked or you're using an HTML element name.`,
+    autoFixable: false,
+  },
+  // NativeModules undefined
+  {
+    pattern: /Cannot read propert(?:y|ies).*of undefined.*NativeModules/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Native module not available. Make sure you're using Expo-compatible packages in a managed workflow.`,
+    autoFixable: false,
+  },
+
+  // VirtualizedList nested in ScrollView
+  {
+    pattern: /VirtualizedLists should never be nested/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Remove the wrapping ScrollView or use FlatList's ListHeaderComponent/ListFooterComponent instead.`,
+    autoFixable: true,
+  },
+  // Missing key prop
+  {
+    pattern: /Each child in a list should have a unique "key" prop/,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Add a unique key prop to each child element in the list, or use keyExtractor on FlatList.`,
+    autoFixable: true,
+  },
+  // Navigation object not found
+  {
+    pattern: /Couldn't find a navigation object/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Wrap your app in a NavigationContainer or use expo-router's layout system.`,
+    autoFixable: false,
+  },
+  // Too many re-renders
+  {
+    pattern: /Too many re-renders/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Check for state updates in the render body. Move them into useEffect or wrap callbacks in useCallback.`,
+    autoFixable: false,
+  },
+  // Unmatched Route
+  {
+    pattern: /Unmatched Route/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `Check your app/ directory for a matching route file. Create a +not-found.tsx for a catch-all.`,
+    autoFixable: false,
+  },
+  // window/document not available in RN
+  {
+    pattern: /(?:window|document) is not defined/i,
+    type: 'runtime_error',
+    extractor: () => ({}),
+    suggestion: () => `window/document are not available in React Native. Use Platform.OS checks or react-native APIs instead.`,
+    autoFixable: true,
+  },
+  // Invalid style prop in StyleSheet
+  {
+    pattern: /Invalid prop `(\w+)` supplied to.*StyleSheet/i,
+    type: 'runtime_error',
+    extractor: (match) => ({
+      code: match[1],
+    }),
+    suggestion: (match) => `CSS property "${match[1]}" is not supported in React Native StyleSheet. Use the React Native equivalent.`,
+    autoFixable: true,
+  },
+  // Expo modules version mismatch
+  {
+    pattern: /expo-modules-core.*version.*mismatch/i,
+    type: 'build_error',
+    extractor: () => ({}),
+    suggestion: () => `Run "npx expo install --fix" to align Expo package versions.`,
+    autoFixable: true,
+  },
 ];
 
 /**
@@ -292,6 +450,11 @@ export function generateAutoFix(error: ParsedError): string | null {
     case 'module_not_installed':
     case 'missing_dependency':
       if (error.code) {
+        // Use npx expo install for Expo/RN packages
+        const isExpoPackage = error.code.startsWith('expo-') || error.code.startsWith('@expo/') || error.code.startsWith('@react-native');
+        if (isExpoPackage) {
+          return `<recoderAction type="shell">npx expo install ${error.code}</recoderAction>`;
+        }
         // Clean the module name
         const moduleName = error.code.replace(/^@/, '').split('/')[0];
         return `<recoderAction type="shell">npm install ${moduleName}</recoderAction>`;
@@ -307,6 +470,24 @@ export function generateAutoFix(error: ParsedError): string | null {
     case 'network_error':
       if (error.code) {
         return `<recoderAction type="shell">kill -9 $(lsof -ti:${error.code}) 2>/dev/null || true</recoderAction>`;
+      }
+      break;
+
+    case 'runtime_error':
+      // HTML elements used in React Native
+      if (error.message?.includes('Unknown component') || error.message?.includes('HTML elements')) {
+        return null; // Requires full file rewrite — let AI handle this
+      }
+      // window/document not available
+      if (error.message?.includes('window') || error.message?.includes('document')) {
+        return null; // Requires code analysis — let AI handle this
+      }
+      break;
+
+    case 'build_error':
+      // Expo version mismatch
+      if (error.message?.includes('expo-modules-core') || error.message?.includes('version') && error.message?.includes('mismatch')) {
+        return `<recoderAction type="shell">npx expo install --fix</recoderAction>`;
       }
       break;
 

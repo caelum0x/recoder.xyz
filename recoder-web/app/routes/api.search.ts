@@ -34,6 +34,10 @@
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SearchApi');
+import { DockerHttpError, createDockerProxyHeaders, dockerFetchJson, getDockerBackendUrl } from '~/lib/http/docker-server';
 
 // Type definitions
 interface SearchOptions {
@@ -210,35 +214,6 @@ function validateProjectId(projectId: unknown): { valid: boolean; projectId?: st
   return { valid: true, projectId: sanitized };
 }
 
-/**
- * Get authorization token from request
- */
-function getAuthToken(request: Request): string | null {
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.replace('Bearer ', '');
-  }
-
-  // Try cookie
-  const cookieHeader = request.headers.get('Cookie');
-  if (cookieHeader) {
-    const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-      const [name, ...rest] = cookie.trim().split('=');
-      if (name && rest.length > 0) {
-        acc[name] = decodeURIComponent(rest.join('='));
-      }
-      return acc;
-    }, {} as Record<string, string>);
-
-    return cookies['__Secure-recoder.session_token']
-      || cookies['recoder.session_token']
-      || cookies['session_token']
-      || null;
-  }
-
-  return null;
-}
-
 export async function action({ request, context }: ActionFunctionArgs): Promise<Response> {
   const startTime = Date.now();
 
@@ -296,53 +271,23 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     // Build exclude pattern
     searchOptions.exclude = buildExcludePattern(body.exclude);
 
-    // Get docker backend URL
-    const env = (context as any)?.cloudflare?.env || process.env;
-    const dockerBackendUrl = env.VITE_DOCKER_BACKEND_URL || env.DOCKER_BACKEND_URL || 'http://localhost:3100';
-
-    // Get auth token for proxying
-    const authToken = getAuthToken(request);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
+    const dockerBackendUrl = getDockerBackendUrl(context);
+    const headers = createDockerProxyHeaders(request);
 
     // Call docker-backend search API
     const searchUrl = `${dockerBackendUrl}/api/search/${projectValidation.projectId}`;
 
-    const dockerResponse = await fetch(searchUrl, {
-      method: 'POST',
+    const dockerResult = await dockerFetchJson<{ results: SearchResult[]; total: number }>(
+      searchUrl,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          query: queryValidation.query,
+          options: searchOptions,
+        }),
+      },
       headers,
-      body: JSON.stringify({
-        query: queryValidation.query,
-        options: searchOptions,
-      }),
-    });
-
-    if (!dockerResponse.ok) {
-      const errorText = await dockerResponse.text();
-      console.error(`[Search API] Docker backend error: ${dockerResponse.status} - ${errorText}`);
-
-      if (dockerResponse.status === 404) {
-        return json({
-          error: 'Project container not found. Make sure the project is running.',
-          code: 'CONTAINER_NOT_FOUND'
-        }, { status: 404 });
-      }
-
-      if (dockerResponse.status === 401 || dockerResponse.status === 403) {
-        return json({ error: 'Not authorized to access this project' }, { status: 403 });
-      }
-
-      return json({
-        error: 'Search service unavailable',
-        code: 'SEARCH_ERROR'
-      }, { status: 502 });
-    }
-
-    const dockerResult = await dockerResponse.json() as { results: SearchResult[]; total: number };
+    );
 
     // Check if results were truncated
     const truncated = dockerResult.results.length > maxResults;
@@ -360,7 +305,27 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     return json(response);
 
   } catch (error) {
-    console.error('[Search API] Error:', error);
+    logger.error('[Search API] Error:', error);
+
+    if (error instanceof DockerHttpError) {
+      logger.error(`[Search API] Docker backend error: ${error.status} - ${error.message}`);
+
+      if (error.status === 404) {
+        return json({
+          error: 'Project container not found. Make sure the project is running.',
+          code: 'CONTAINER_NOT_FOUND'
+        }, { status: 404 });
+      }
+
+      if (error.status === 401 || error.status === 403) {
+        return json({ error: 'Not authorized to access this project' }, { status: 403 });
+      }
+
+      return json({
+        error: 'Search service unavailable',
+        code: 'SEARCH_ERROR'
+      }, { status: 502 });
+    }
 
     // Handle network errors to docker-backend
     if (error instanceof TypeError && error.message.includes('fetch')) {

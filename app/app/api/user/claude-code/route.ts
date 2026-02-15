@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { encryptApiKey, decryptApiKey } from '@/lib/crypto';
+import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
+import { requireAuth } from '@/lib/auth-helpers';
 
 // Validate Claude Code OAuth token format
 function isValidClaudeCodeToken(token: string): boolean {
@@ -14,12 +16,24 @@ function isValidClaudeCodeToken(token: string): boolean {
   return token.startsWith('sk-ant-oat01-') && token.length > 50;
 }
 
+function userModel() {
+  return (prisma as any).user;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { userId, token } = await request.json();
+    const authResult = await requireAuth(request);
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
 
-    if (!userId || !token) {
+    const { userId, token } = await request.json();
+    const effectiveUserId = user.id;
+
+    if (!token) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+    if (userId && userId !== effectiveUserId) {
+      return NextResponse.json({ error: 'Forbidden: userId mismatch' }, { status: 403 });
     }
 
     // Validate token format
@@ -30,8 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user exists (web users use 'user' table)
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
+    const existingUser = await userModel().findUnique({ where: { id: effectiveUserId } });
+    if (!existingUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -39,15 +53,15 @@ export async function POST(request: NextRequest) {
     const encrypted = encryptApiKey(token);
 
     // Update user
-    await prisma.user.update({
-      where: { id: userId },
+    await userModel().update({
+      where: { id: effectiveUserId },
       data: {
         claudeCodeToken: encrypted,
         updatedAt: new Date(),
       },
     });
 
-    console.log(`[Claude Code] Token saved for user ${userId}`);
+    console.log(`[Claude Code] Token saved for user ${effectiveUserId}`);
 
     return NextResponse.json({
       success: true,
@@ -61,25 +75,41 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.nextUrl.searchParams.get('userId');
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    const authResult = await requireAuth(request);
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
+    const requestedUserId = request.nextUrl.searchParams.get('userId');
+    const effectiveUserId = user.id;
+    if (requestedUserId && requestedUserId !== effectiveUserId) {
+      return NextResponse.json({ error: 'Forbidden: userId mismatch' }, { status: 403 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    const dbUser = await userModel().findUnique({
+      where: { id: effectiveUserId },
       select: {
         claudeCodeToken: true,
       },
     });
 
-    if (!user) {
+    if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    const claudeToken = (dbUser as any).claudeCodeToken as string | null | undefined;
+
+    let tokenMasked: string | null = null;
+    if (claudeToken) {
+      try {
+        const decrypted = decryptApiKey(claudeToken);
+        tokenMasked = `${decrypted.slice(0, 13)}...${decrypted.slice(-4)}`;
+      } catch {
+        // If decryption fails, show a generic indicator instead of leaking ciphertext
+        tokenMasked = 'sk-ant-oat01-****';
+      }
     }
 
     return NextResponse.json({
-      hasToken: !!user.claudeCodeToken,
-      tokenMasked: user.claudeCodeToken ? `sk-ant-oat01-...${user.claudeCodeToken.slice(-8)}` : null,
+      hasToken: !!claudeToken,
+      tokenMasked,
     });
   } catch (error: any) {
     console.error('Get Claude Code token status error:', error);
@@ -89,20 +119,24 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const userId = request.nextUrl.searchParams.get('userId');
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    const authResult = await requireAuth(request);
+    if (authResult.error) return authResult.response;
+    const { user } = authResult;
+    const requestedUserId = request.nextUrl.searchParams.get('userId');
+    const effectiveUserId = user.id;
+    if (requestedUserId && requestedUserId !== effectiveUserId) {
+      return NextResponse.json({ error: 'Forbidden: userId mismatch' }, { status: 403 });
     }
 
-    await prisma.user.update({
-      where: { id: userId },
+    await userModel().update({
+      where: { id: effectiveUserId },
       data: {
         claudeCodeToken: null,
         updatedAt: new Date(),
       },
     });
 
-    console.log(`[Claude Code] Token removed for user ${userId}`);
+    console.log(`[Claude Code] Token removed for user ${effectiveUserId}`);
 
     return NextResponse.json({
       success: true,
@@ -120,26 +154,33 @@ export async function DELETE(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const { userId, serviceKey } = await request.json();
+    const rawBody = await request.text();
+    let body: { userId?: string } = {};
+    try {
+      body = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
 
-    // Verify this is an internal service call
-    const expectedKey = process.env.INTERNAL_SERVICE_KEY;
-    if (!expectedKey || serviceKey !== expectedKey) {
+    const authResult = verifyInternalServiceRequest(request, { rawBody });
+    if (!authResult.ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { userId } = body;
     if (!userId) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await userModel().findUnique({
       where: { id: userId },
       select: {
         claudeCodeToken: true,
       },
     });
+    const claudeToken = (user as any)?.claudeCodeToken as string | null | undefined;
 
-    if (!user || !user.claudeCodeToken) {
+    if (!user || !claudeToken) {
       return NextResponse.json({
         hasToken: false,
         token: null
@@ -147,7 +188,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Decrypt token for container use
-    const decrypted = decryptApiKey(user.claudeCodeToken);
+    const decrypted = decryptApiKey(claudeToken);
 
     return NextResponse.json({
       hasToken: true,

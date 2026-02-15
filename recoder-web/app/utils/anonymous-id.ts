@@ -3,6 +3,10 @@
  * Stored in localStorage to persist across sessions
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AnonymousId');
+
 export function getOrCreateAnonymousId(): string {
   // Server-side rendering check
   if (typeof window === 'undefined') {
@@ -16,7 +20,7 @@ export function getOrCreateAnonymousId(): string {
     // Generate unique anonymous ID
     id = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
     localStorage.setItem(key, id);
-    console.log('🆔 Created new anonymous ID:', id);
+    logger.info('🆔 Created new anonymous ID:', id);
   }
 
   return id;
@@ -42,7 +46,7 @@ export function clearAnonymousId(): void {
   }
 
   localStorage.removeItem('bolt_anonymous_id');
-  console.log('🗑️ Cleared anonymous ID');
+  logger.info('🗑️ Cleared anonymous ID');
 }
 
 /**
@@ -67,14 +71,14 @@ export async function claimAnonymousSessions(userId: string): Promise<number> {
     }
 
     const result = await response.json() as { claimedCount: number };
-    console.log(`✅ Claimed ${result.claimedCount} anonymous sessions for user ${userId}`);
+    logger.info(`✅ Claimed ${result.claimedCount} anonymous sessions for user ${userId}`);
     
     // Clear anonymous ID after claiming
     clearAnonymousId();
     
     return result.claimedCount;
   } catch (error) {
-    console.error('❌ Failed to claim anonymous sessions:', error);
+    logger.error('❌ Failed to claim anonymous sessions:', error);
     return 0;
   }
 }

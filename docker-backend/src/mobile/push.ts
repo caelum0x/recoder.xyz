@@ -361,12 +361,17 @@ async function sendAPNSNotifications(
   notifications: APNSNotification[],
   config: { keyId: string; teamId: string; bundleId: string; key: string }
 ): Promise<Array<{ success: boolean; error?: string }>> {
-  // In production, use a proper APNS library like 'apn' or 'node-apn'
-  // This is a placeholder that simulates the API
-  console.log(`[Push] APNS: Would send ${notifications.length} notifications`);
+  // APNS requires HTTP/2 and JWT authentication.
+  // A production implementation should use a library like 'apn' or '@parse/node-apn'.
+  // Until then, return honest failure so callers know notifications were not delivered.
+  console.warn(
+    `[Push] APNS: not yet implemented - ${notifications.length} notifications will not be delivered to iOS devices`,
+  );
 
-  // Simulate successful sends
-  return notifications.map(() => ({ success: true }));
+  return notifications.map(() => ({
+    success: false,
+    error: 'APNS not configured - integrate a production APNS library',
+  }));
 }
 
 // ==================== Push Notification Service ====================

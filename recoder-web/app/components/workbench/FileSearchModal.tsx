@@ -23,7 +23,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Create fuse instance for fuzzy search
-  const fuse = useRef<Fuse<string>>();
+  const fuse = useRef<Fuse<string> | undefined>(undefined);
 
   useEffect(() => {
     // Build file paths list from FileMap
@@ -127,7 +127,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
 
     const match = matches[0];
     const indices = match.indices;
-    const parts: JSX.Element[] = [];
+    const parts: React.JSX.Element[] = [];
     let lastIndex = 0;
 
     indices.forEach(([start, end]: [number, number], i: number) => {

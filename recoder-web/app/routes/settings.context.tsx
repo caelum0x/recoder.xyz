@@ -6,6 +6,9 @@
 import { useEffect, useState } from 'react';
 import { RecoderContext } from '~/components/settings/RecoderContext';
 import { getWebContainer } from '~/lib/runtime';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SettingsContext');
 
 export default function ContextSettings() {
   const [isReady, setIsReady] = useState(false);
@@ -24,7 +27,7 @@ export default function ContextSettings() {
         await wc.fs.writeFile(`.recoder/${file}`, content);
       }
     } catch (error) {
-      console.error('Failed to save file:', error);
+      logger.error('Failed to save file:', error);
     }
   };
 

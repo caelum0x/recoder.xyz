@@ -6,6 +6,9 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectsFork');
 
 interface ForkRequest {
   projectId: string;
@@ -78,12 +81,12 @@ function buildForkHistory(
     }
 
     if (!foundTarget) {
-      console.warn(`[Fork] Target planId ${targetPlanId} not found in history`);
+      logger.warn(`[Fork] Target planId ${targetPlanId} not found in history`);
     }
 
     return { forkHistory, initialMessage };
   } catch (error) {
-    console.error('[Fork] Failed to parse message history:', error);
+    logger.error('[Fork] Failed to parse message history:', error);
     return { forkHistory: [], initialMessage: '' };
   }
 }
@@ -173,7 +176,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Update with fork history (requires custom SQL since ProjectsDB doesn't support messageHistory)
     // For now, store fork metadata in the metadata field
-    console.log(`[Fork] Project forked successfully:`, {
+    logger.info(`[Fork] Project forked successfully:`, {
       sourceProjectId: projectId,
       forkedProjectId: forkedProject.id,
       forkPlanId: planId,
@@ -193,10 +196,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('[Fork] Project fork error:', error);
+    logger.error('[Fork] Project fork error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: 'Internal server error',
     }, { status: 500 });
   }
 }

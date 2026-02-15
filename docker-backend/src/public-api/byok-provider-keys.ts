@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { getCachedKeys, setCachedKeys } from '../byok-key-cache';
 
 export interface AIProviderKeys {
   openrouter?: string;
@@ -141,6 +142,11 @@ export async function fetchUserByokProviderKeys(
   options: FetchByokKeysOptions,
 ): Promise<AIProviderKeys> {
   const { appApiUrl, userId, serviceKey } = options;
+
+  // Check encrypted cache first
+  const cached = await getCachedKeys(userId);
+  if (cached) return cached;
+
   const pathname = '/api/user/ai-provider-keys';
   const body = JSON.stringify({
     userId,
@@ -166,5 +172,10 @@ export async function fetchUserByokProviderKeys(
   }
 
   const payload = await response.json().catch(() => ({}));
-  return normalizeByokKeysPayload(payload);
+  const keys = normalizeByokKeysPayload(payload);
+
+  // Populate encrypted cache (no-op if VAULT_MASTER_KEY is not set)
+  await setCachedKeys(userId, keys);
+
+  return keys;
 }

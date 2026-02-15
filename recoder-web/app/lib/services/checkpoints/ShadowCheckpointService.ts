@@ -28,6 +28,9 @@ import type {
   FileChange,
 } from './types';
 import { getExcludePatterns } from './excludes';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ShadowCheckpoint');
 
 /**
  * Check if a file exists at the given path
@@ -765,9 +768,9 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 
     try {
       await this.deleteBranch(workspaceRepoDir, branchName);
-      console.log(`[${this.name}#deleteTask.${taskId}] deleted branch ${branchName}`);
+      logger.info(`[${this.name}#deleteTask.${taskId}] deleted branch ${branchName}`);
     } catch (error) {
-      console.error(`[${this.name}#deleteTask.${taskId}] failed to delete branch ${branchName}`);
+      logger.error(`[${this.name}#deleteTask.${taskId}] failed to delete branch ${branchName}`);
     }
   }
 
@@ -779,7 +782,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
       const { stdout: branches } = await execGit(['branch', '--list'], { cwd: repoDir });
 
       if (!branches.includes(branchName)) {
-        console.error(`[ShadowCheckpointService#deleteBranch] branch ${branchName} does not exist`);
+        logger.error(`[ShadowCheckpointService#deleteBranch] branch ${branchName} does not exist`);
         return false;
       }
 
@@ -799,7 +802,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
       await execGit(['branch', '-D', branchName], { cwd: repoDir });
       return true;
     } catch (error) {
-      console.error(
+      logger.error(
         `[ShadowCheckpointService#deleteBranch] failed to delete branch ${branchName}: ${
           error instanceof Error ? error.message : String(error)
         }`

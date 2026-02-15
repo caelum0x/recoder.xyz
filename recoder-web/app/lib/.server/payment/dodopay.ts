@@ -3,6 +3,10 @@
  * For users in China and regions where Paddle is not available
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DodoPayServer');
+
 interface DodoPayConfig {
   apiKey: string;
   apiSecret: string;
@@ -72,7 +76,66 @@ export class DodoPayClient {
         sessionId: data.session_id,
       };
     } catch (error) {
-      console.error('DodoPay checkout creation failed:', error);
+      logger.error('DodoPay checkout creation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel a subscription
+   */
+  async cancelSubscription(subscriptionId: string, options: { immediate?: boolean } = {}) {
+    try {
+      const response = await fetch(`${this.baseUrl}/subscriptions/${subscriptionId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          merchant_id: this.config.merchantId,
+          effective: options.immediate ? 'immediately' : 'end_of_period',
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json() as { message?: string };
+        throw new Error(`DodoPay cancel error: ${error.message}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      logger.error('DodoPay cancel subscription failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a billing portal session for self-service management
+   */
+  async createBillingPortalSession(customerId: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/billing/portal`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          merchant_id: this.config.merchantId,
+          customer_id: customerId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json() as { message?: string };
+        throw new Error(`DodoPay portal error: ${error.message}`);
+      }
+
+      const data = await response.json() as { portal_url: string };
+      return { url: data.portal_url };
+    } catch (error) {
+      logger.error('DodoPay billing portal creation failed:', error);
       throw error;
     }
   }
@@ -89,7 +152,7 @@ export class DodoPayClient {
 
       return signature === expectedSignature;
     } catch (error) {
-      console.error('DodoPay webhook verification failed:', error);
+      logger.error('DodoPay webhook verification failed:', error);
       return false;
     }
   }

@@ -24,8 +24,15 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "~/*": ["./*"]
+      "@/*": [
+        "./*"
+      ],
+      "~/*": [
+        "./*"
+      ],
+      "@recoder/ecosystem-config": [
+        "../packages/ecosystem-config/src/index.ts"
+      ]
     }
   },
   "include": [

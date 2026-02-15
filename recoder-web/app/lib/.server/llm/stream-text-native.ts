@@ -20,6 +20,10 @@ import { checkSemanticCache, storeInSemanticCache } from './semantic-cache';
 import { validateResponse, logQualityMetrics } from './response-validator';
 import type { Messages } from '~/lib/types/chat';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('StreamTextNative');
+
 // Re-export for convenience
 export type { Messages };
 
@@ -74,7 +78,7 @@ export async function streamTextNative(
     
     const cachedResponse = await checkSemanticCache(lastUserMessage, 'any');
     if (cachedResponse) {
-      console.log('💾 Semantic cache hit - 100% cost savings');
+      logger.info('💾 Semantic cache hit - 100% cost savings');
       
       // Return cached response as stream
       const cachedStream = new ReadableStream({
@@ -158,8 +162,8 @@ export async function streamTextNative(
     llmAnalytics.trackPromptUsage(strategy, lastUserMessage, conversationLength);
   }
 
-  console.log('🔧 System prompt strategy:', strategy);
-  console.log('📝 System prompt length:', systemPrompt.length);
+  logger.info('🔧 System prompt strategy:', strategy);
+  logger.info('📝 System prompt length:', systemPrompt.length);
 
   // Convert messages to OpenRouter format
   const openrouterMessages: OpenRouterMessage[] = [
@@ -192,7 +196,7 @@ export async function streamTextNative(
     }
   }
 
-  console.log('🌐 Using OpenRouter model:', DEFAULT_MODEL);
+  logger.info('🌐 Using OpenRouter model:', DEFAULT_MODEL);
 
   // Create streaming response in AI SDK format
   // Format: "0:text\n" for each text chunk
@@ -247,7 +251,7 @@ export async function streamTextNative(
           });
         }
       } catch (error) {
-        console.error('Stream error:', error);
+        logger.error('Stream error:', error);
         controller.error(error);
       }
     }

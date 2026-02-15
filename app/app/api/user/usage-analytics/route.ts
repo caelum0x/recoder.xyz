@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       console.error('Failed to fetch usage analytics:', error);
       
       return NextResponse.json(
-        { error: 'Failed to fetch usage analytics', details: error },
+        { error: 'Failed to fetch usage analytics' },
         { status: response.status }
       );
     }
@@ -85,7 +85,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Failed to fetch usage analytics',
       },
       { status: 500 }
     );
@@ -169,7 +168,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Failed to export usage analytics',
+        message: 'Failed to export usage analytics',
       },
       { status: 500 }
     );

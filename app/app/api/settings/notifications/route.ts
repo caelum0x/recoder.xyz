@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[Notification Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch notification settings' },
+      { success: false, error: 'Failed to fetch notification settings' },
       { status: 500 }
     );
   }
@@ -121,7 +121,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error('[Notification Settings PUT] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update notification settings' },
+      { success: false, error: 'Failed to update notification settings' },
       { status: 500 }
     );
   }

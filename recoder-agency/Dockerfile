@@ -1,4 +1,4 @@
-FROM node:24-alpine AS base
+FROM node:24-alpine@sha256:26eb49fbfdf03bf69f728b73178fa6f9e7c2cef88b06561b65497f5ae8e50a3d AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@10.16.0 --activate
 WORKDIR /app
@@ -46,6 +46,9 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/apps/agency/.next/standalone ./
 COPY --from=builder /app/apps/agency/.next/static ./apps/agency/.next/static
 COPY --from=builder /app/apps/agency/public ./apps/agency/public
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/health || exit 1
 
 USER nextjs
 EXPOSE 3000

@@ -12,6 +12,9 @@
 
 import { atom, map } from 'nanostores';
 import type { ActionType } from '~/types/actions';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AutoApproval');
 
 // ==================== TYPES ====================
 
@@ -193,7 +196,7 @@ function loadFromStorage<T>(key: string, defaultValue: T): T {
       return { ...defaultValue, ...JSON.parse(stored) };
     }
   } catch (e) {
-    console.error(`[AutoApproval] Failed to load ${key}:`, e);
+    logger.error(`[AutoApproval] Failed to load ${key}:`, e);
   }
 
   return defaultValue;
@@ -205,7 +208,7 @@ function saveToStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    console.error(`[AutoApproval] Failed to save ${key}:`, e);
+    logger.error(`[AutoApproval] Failed to save ${key}:`, e);
   }
 }
 
@@ -480,6 +483,9 @@ const READ_ONLY_ACTIONS: ActionType[] = [
   'ripgrep_search',
   'glob_search',
   'read_many_files',
+  'web_search',
+  'web_fetch',
+  'web_crawl',
 ];
 
 /** Write action types */
@@ -488,6 +494,7 @@ const WRITE_ACTIONS: ActionType[] = [
   'str_replace',
   'edit_file',
   'multi_apply_diff',
+  'copy_project',
 ];
 
 /** Shell/command action types */
@@ -655,6 +662,12 @@ export function checkAutoApproval(params: ApprovalCheckParams): ApprovalResult {
       : { decision: 'ask' };
   }
 
+  if (actionType === 'web_crawl') {
+    return flags.alwaysAllowBrowser
+      ? { decision: 'approve' }
+      : { decision: 'ask' };
+  }
+
   // ===== MEMORY OPERATIONS =====
   if (actionType === 'memory_operation') {
     // Memory operations are generally safe
@@ -665,7 +678,8 @@ export function checkAutoApproval(params: ApprovalCheckParams): ApprovalResult {
   if (
     actionType === 'importStarter' ||
     actionType === 'cloneGitHub' ||
-    actionType === 'cloneUrl'
+    actionType === 'cloneUrl' ||
+    actionType === 'copy_project'
   ) {
     // These modify the workspace significantly, ask by default
     return { decision: 'ask' };

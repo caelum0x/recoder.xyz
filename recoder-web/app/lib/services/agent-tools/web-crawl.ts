@@ -13,6 +13,9 @@ import { escapeXmlContent } from './types';
 
 const webCrawlSchema = z.object({
   url: z.string().describe('URL to crawl'),
+  allowedDomains: z.array(z.string()).optional().describe('Optional allowlist of crawl domains'),
+  blockedDomains: z.array(z.string()).optional().describe('Optional denylist of crawl domains'),
+  maxUses: z.number().int().positive().optional().describe('Maximum number of web_crawl uses allowed in this run'),
 });
 
 export type WebCrawlArgs = z.infer<typeof webCrawlSchema>;
@@ -102,7 +105,14 @@ export async function webCrawl(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({
+        url,
+        projectId: ctx.projectId,
+        includeScreenshot: true,
+        allowedDomains: args.allowedDomains,
+        blockedDomains: args.blockedDomains,
+        maxUses: args.maxUses,
+      }),
     });
 
     if (!response.ok) {
@@ -124,7 +134,11 @@ export async function webCrawl(
     let instructions = CLONE_INSTRUCTIONS;
 
     if (result.screenshot) {
-      instructions += `\n\nScreenshot URL: ${result.screenshot}`;
+      if (result.screenshot.startsWith('data:')) {
+        instructions += '\n\nScreenshot captured (inline data URL omitted for brevity).';
+      } else {
+        instructions += `\n\nScreenshot URL: ${result.screenshot}`;
+      }
     }
 
     instructions += '\n\n' + formatSnippet('Markdown snapshot', result.markdown, 'markdown');

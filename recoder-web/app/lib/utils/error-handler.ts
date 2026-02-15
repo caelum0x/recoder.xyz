@@ -9,6 +9,8 @@
  * - WebSocket connection management
  * - Error reporting and logging
  */
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ErrorHandler');
 
 // Error codes matching the backend
 export enum ErrorCode {
@@ -663,7 +665,7 @@ export class ReconnectingWebSocket {
         this.config.onMessage?.(event);
       };
     } catch (error) {
-      console.error('[WebSocket] Connection error:', error);
+      logger.error('[WebSocket] Connection error:', error);
       this.scheduleReconnect();
     }
   }
@@ -968,7 +970,7 @@ class ErrorEventEmitter {
       try {
         listener(error);
       } catch (e) {
-        console.error('[ErrorEventEmitter] Listener error:', e);
+        logger.error('[ErrorEventEmitter] Listener error:', e);
       }
     });
   }
@@ -991,7 +993,7 @@ export function reportError(
 
   // Log for debugging
   if (process.env.NODE_ENV !== 'production') {
-    console.error('[ErrorHandler]', errorInfo);
+    logger.error('[ErrorHandler]', errorInfo);
   }
 }
 

@@ -1,0 +1,198 @@
+// The client you created from the Server-Side Auth instructions
+
+import type { Session, User } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
+import { getSiteOrigin, isValidReturnUrl } from "@/app/(auth)/lib";
+import { db, oauthCredentials, supabaseUserMappings, users } from "@/db";
+import { logger } from "@/lib/logger";
+import { createClient } from "@/lib/supabase";
+import { encryptToken } from "@/lib/token-encryption";
+import { initializeAccount, type OAuthProvider } from "@/services/accounts";
+
+function isValidOAuthProvider(provider: string): provider is OAuthProvider {
+	return provider === "github" || provider === "google";
+}
+
+export async function GET(
+	request: NextRequest,
+	{ params }: { params: Promise<{ provider: string }> },
+) {
+	const { searchParams, origin } = new URL(request.url);
+	const { provider: providerParam } = await params;
+
+	// Validate provider parameter
+	if (!isValidOAuthProvider(providerParam)) {
+		return new Response(`Invalid provider: ${providerParam}`, { status: 400 });
+	}
+	const provider: OAuthProvider = providerParam;
+
+	logger.debug(
+		{
+			searchParams,
+			origin,
+			url: request.url,
+		},
+		"'searchParams' and 'origin' got from request",
+	);
+
+	// Get and validate the redirect URL to prevent open redirects
+	const nextParam = searchParams.get("next");
+	const next = isValidReturnUrl(nextParam) ? nextParam : "/";
+
+	// Check for authentication errors using existing function
+	const errorMessage = checkError(searchParams);
+	if (errorMessage) {
+		// Instead of returning an error response, redirect with the error message
+		return handleRedirect(
+			next,
+			`authError=${encodeURIComponent(errorMessage)}`,
+		);
+	}
+
+	const code = searchParams.get("code");
+	logger.debug({ code }, "code got from query param");
+	if (!code) {
+		return new Response("No code provided", { status: 400 });
+	}
+
+	const supabase = await createClient();
+	const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+	if (error) {
+		const { code, message, name, status } = error;
+		// Redirect with error instead of showing error page
+		return handleRedirect(
+			next,
+			`authError=${encodeURIComponent(`${name} occurred: ${code} (${status}): ${message}`)}`,
+		);
+	}
+
+	logger.debug(
+		{
+			provider: data.session.user.app_metadata.provider,
+			providers: data.session.user.app_metadata.providers,
+		},
+		"session data got from Supabase",
+	);
+
+	try {
+		const { user, session } = data;
+		await initializeUserIfNeeded(user);
+		await storeProviderTokens(user, session, provider);
+	} catch (error) {
+		const errorMsg =
+			error instanceof Error ? error.message : "Unknown error occurred";
+		// Redirect with error instead of showing error page
+		return handleRedirect(next, `authError=${encodeURIComponent(errorMsg)}`);
+	}
+
+	// Success case - redirect to the next page without error
+	return handleRedirect(next);
+}
+
+function checkError(searchParams: URLSearchParams) {
+	const error = searchParams.get("error");
+	if (error) {
+		// if error is in param, return an error response
+		const errorDescription = searchParams.get("error_description");
+		const errorCode = searchParams.get("error_code");
+		return `Error occurred: ${errorCode} - ${errorDescription}`;
+	}
+	return "";
+}
+
+function handleRedirect(path: string, queryString?: string) {
+	const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+	const redirectPath = queryString
+		? `${normalizedPath}?${queryString}`
+		: normalizedPath;
+	return NextResponse.redirect(`${getSiteOrigin()}${redirectPath}`);
+}
+
+async function initializeUserIfNeeded(user: User) {
+	const dbUser = await db.query.supabaseUserMappings.findFirst({
+		where: eq(supabaseUserMappings.supabaseUserId, user.id),
+	});
+	if (!dbUser) {
+		const avatarUrl = getAvatarUrlFromMetadata(
+			user.app_metadata.provider,
+			user.user_metadata,
+		);
+		await initializeAccount(user.id, user.email, avatarUrl);
+	}
+}
+
+function getAvatarUrlFromMetadata(
+	provider: User["app_metadata"]["provider"],
+	metadata: User["user_metadata"],
+): string | undefined {
+	switch (provider) {
+		case "google":
+		case "github":
+			return metadata.avatar_url;
+		default:
+			logger.debug(
+				{ provider, metadata },
+				"Unknown provider metadata structure",
+			);
+			return undefined;
+	}
+}
+
+// store accessToken and refreshToken
+async function storeProviderTokens(
+	user: User,
+	session: Session,
+	provider: string,
+) {
+	const { provider_token, provider_refresh_token } = session;
+	if (!provider_token) {
+		throw new Error("No provider token found");
+	}
+
+	logger.debug(`provider: '${provider}'`);
+
+	const identity = user.identities?.find((identity) => {
+		return identity.provider === provider;
+	});
+	logger.debug({ currentProvider: provider });
+	if (!identity) {
+		throw new Error(`No identity found for provider: ${provider}`);
+	}
+	const providerAccountId = identity.id;
+
+	const [dbUser] = await db
+		.select({ dbid: users.dbId })
+		.from(users)
+		.innerJoin(
+			supabaseUserMappings,
+			eq(users.dbId, supabaseUserMappings.userDbId),
+		)
+		.where(eq(supabaseUserMappings.supabaseUserId, user.id));
+	const encryptedAccessToken = encryptToken(provider_token);
+	const encryptedRefreshToken = provider_refresh_token
+		? encryptToken(provider_refresh_token)
+		: null;
+
+	await db
+		.insert(oauthCredentials)
+		.values({
+			userId: dbUser.dbid,
+			provider,
+			providerAccountId,
+			accessToken: encryptedAccessToken,
+			refreshToken: encryptedRefreshToken,
+		})
+		.onConflictDoUpdate({
+			target: [
+				oauthCredentials.userId,
+				oauthCredentials.provider,
+				oauthCredentials.providerAccountId,
+			],
+			set: {
+				accessToken: encryptedAccessToken,
+				refreshToken: encryptedRefreshToken,
+				updatedAt: new Date(),
+			},
+		});
+}

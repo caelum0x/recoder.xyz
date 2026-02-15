@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[OAuth Status] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to get OAuth status' },
+      { success: false, error: 'Failed to get OAuth status' },
       { status: 500 }
     );
   }

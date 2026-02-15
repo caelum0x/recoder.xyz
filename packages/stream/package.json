@@ -1,0 +1,43 @@
+{
+	"name": "@giselles-ai/stream",
+	"version": "0.0.0",
+	"private": true,
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"format": "biome format --write .",
+		"test": "vitest --run"
+	},
+	"exports": {
+		"./package.json": "./package.json",
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		},
+		"./public-task-stream": {
+			"types": "./dist/public-task-stream.d.ts",
+			"import": "./dist/public-task-stream.mjs",
+			"require": "./dist/public-task-stream.js"
+		}
+	},
+	"typesVersions": {
+		"*": {
+			"public-task-stream": ["./dist/public-task-stream.d.ts"]
+		}
+	},
+	"devDependencies": {
+		"@giselles-ai/tsconfig": "workspace:*",
+		"tsup": "^8.0.0",
+		"vitest": "^2.0.1"
+	},
+	"peerDependencies": {
+		"zod": "^3.25.0"
+	},
+	"dependencies": {
+		"@giselles-ai/protocol": "workspace:*"
+	}
+}

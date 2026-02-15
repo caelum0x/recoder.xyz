@@ -4,6 +4,10 @@
  */
 
 import { neon } from '@neondatabase/serverless';
+import { sanitizePostgresText } from './postgres-text-safety';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectsDB');
 
 export interface Project {
   id: string;
@@ -57,6 +61,8 @@ export interface CreateProjectData {
   starterPath?: string;
   config?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  knowledge?: string;
+  messageHistory?: string;
 }
 
 export class ProjectsDB {
@@ -90,7 +96,7 @@ export class ProjectsDB {
       return result;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.getUserProjects] Database error:', message);
+      logger.error('❌ [ProjectsDB.getUserProjects] Database error:', message);
       throw new Error(`Failed to get user projects: ${message}`);
     }
   }
@@ -102,8 +108,15 @@ export class ProjectsDB {
     try {
       const id = crypto.randomUUID();
       const now = new Date();
+      const safeName = sanitizePostgresText(data.name) || '';
+      const safeDescription = sanitizePostgresText(data.description || '') || '';
+      const safeType = sanitizePostgresText(data.type || 'web') || 'web';
+      const safeFramework = sanitizePostgresText(data.framework || null);
+      const safeLanguage = sanitizePostgresText(data.language || null);
+      const safeKnowledge = sanitizePostgresText(data.knowledge ?? null);
+      const safeMessageHistory = sanitizePostgresText(data.messageHistory ?? null);
       
-      console.log('📝 Creating project in DB:', { 
+      logger.info('📝 Creating project in DB:', { 
         id, 
         name: data.name, 
         userId: data.userId,
@@ -113,19 +126,21 @@ export class ProjectsDB {
       const result = await this.sql`
         INSERT INTO projects (
           id, name, type, description, status, config, framework, language,
-          "isPrivate", metadata, "userId", "templateId", "starterPath", "createdAt", "updatedAt"
+          "isPrivate", metadata, "knowledge", "messageHistory", "userId", "templateId", "starterPath", "createdAt", "updatedAt"
         )
         VALUES (
           ${id},
-          ${data.name},
-          ${data.type || 'web'},
-          ${data.description || ''},
+          ${safeName},
+          ${safeType},
+          ${safeDescription},
           'active',
           ${JSON.stringify(data.config || {})}::jsonb,
-          ${data.framework || null},
-          ${data.language || null},
+          ${safeFramework},
+          ${safeLanguage},
           ${data.isPrivate || false},
           ${JSON.stringify(data.metadata || {})}::jsonb,
+          ${safeKnowledge},
+          ${safeMessageHistory},
           ${data.userId},
           ${data.templateId || null},
           ${data.starterPath || null},
@@ -139,12 +154,12 @@ export class ProjectsDB {
         throw new Error('No project returned from database');
       }
 
-      console.log('✅ Project created in DB:', result[0].id);
+      logger.info('✅ Project created in DB:', result[0].id);
       return result[0];
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.createProject] Database error:', message);
-      console.error('❌ [ProjectsDB.createProject] Data:', data);
+      logger.error('❌ [ProjectsDB.createProject] Database error:', message);
+      logger.error('❌ [ProjectsDB.createProject] Data:', data);
       throw new Error(`Failed to create project: ${message}`);
     }
   }
@@ -154,13 +169,17 @@ export class ProjectsDB {
    */
   async updateProject(projectId: string, data: Partial<CreateProjectData>, userId: string): Promise<Project | null> {
     try {
+      const safeName = sanitizePostgresText(data.name || null);
+      const safeDescription = sanitizePostgresText(data.description || null);
+      const safeFramework = sanitizePostgresText(data.framework || null);
+      const safeLanguage = sanitizePostgresText(data.language || null);
       const result = await this.sql`
         UPDATE projects
         SET
-          name = COALESCE(${data.name || null}, name),
-          description = COALESCE(${data.description || null}, description),
-          framework = COALESCE(${data.framework || null}, framework),
-          language = COALESCE(${data.language || null}, language),
+          name = COALESCE(${safeName}, name),
+          description = COALESCE(${safeDescription}, description),
+          framework = COALESCE(${safeFramework}, framework),
+          language = COALESCE(${safeLanguage}, language),
           "isPrivate" = COALESCE(${data.isPrivate ?? null}, "isPrivate"),
           "templateId" = COALESCE(${data.templateId || null}, "templateId"),
           "starterPath" = COALESCE(${data.starterPath || null}, "starterPath"),
@@ -176,7 +195,7 @@ export class ProjectsDB {
       return result[0];
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.updateProject] Database error:', message);
+      logger.error('❌ [ProjectsDB.updateProject] Database error:', message);
       throw new Error(`Failed to update project: ${message}`);
     }
   }
@@ -195,7 +214,7 @@ export class ProjectsDB {
       return result && result.length > 0;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.deleteProject] Database error:', message);
+      logger.error('❌ [ProjectsDB.deleteProject] Database error:', message);
       throw new Error(`Failed to delete project: ${message}`);
     }
   }
@@ -227,7 +246,7 @@ export class ProjectsDB {
       return projects[0];
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.getProject] Database error:', message);
+      logger.error('❌ [ProjectsDB.getProject] Database error:', message);
       throw new Error(`Failed to get project: ${message}`);
     }
   }
@@ -247,7 +266,7 @@ export class ProjectsDB {
       return result;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.getPublicProjects] Database error:', message);
+      logger.error('❌ [ProjectsDB.getPublicProjects] Database error:', message);
       throw new Error(`Failed to get public projects: ${message}`);
     }
   }
@@ -263,7 +282,7 @@ export class ProjectsDB {
         WHERE id = ${projectId}
       `;
     } catch (error: unknown) {
-      console.error('❌ [ProjectsDB.touchProject] Database error:', error);
+      logger.error('❌ [ProjectsDB.touchProject] Database error:', error);
     }
   }
 
@@ -281,7 +300,7 @@ export class ProjectsDB {
       // Update project timestamp
       await this.touchProject(projectId);
     } catch (error: unknown) {
-      console.error('❌ [ProjectsDB.linkChatToProject] Database error:', error);
+      logger.error('❌ [ProjectsDB.linkChatToProject] Database error:', error);
     }
   }
 
@@ -298,7 +317,7 @@ export class ProjectsDB {
 
       return result;
     } catch (error: unknown) {
-      console.error('❌ [ProjectsDB.getProjectChats] Database error:', error);
+      logger.error('❌ [ProjectsDB.getProjectChats] Database error:', error);
       return [];
     }
   }
@@ -326,7 +345,7 @@ export class ProjectsDB {
       return result && result.length > 0 ? result[0] : null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.updateDeploymentStatus] Database error:', message);
+      logger.error('❌ [ProjectsDB.updateDeploymentStatus] Database error:', message);
       throw new Error(`Failed to update deployment status: ${message}`);
     }
   }
@@ -336,10 +355,11 @@ export class ProjectsDB {
    */
   async updateKnowledge(projectId: string, knowledge: string, userId: string): Promise<Project | null> {
     try {
+      const safeKnowledge = sanitizePostgresText(knowledge) || '';
       const result = await this.sql`
         UPDATE projects
         SET
-          knowledge = ${knowledge},
+          knowledge = ${safeKnowledge},
           "updatedAt" = NOW()
         WHERE id = ${projectId} AND "userId" = ${userId}
         RETURNING *
@@ -348,7 +368,7 @@ export class ProjectsDB {
       return result && result.length > 0 ? result[0] : null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.updateKnowledge] Database error:', message);
+      logger.error('❌ [ProjectsDB.updateKnowledge] Database error:', message);
       throw new Error(`Failed to update knowledge: ${message}`);
     }
   }
@@ -378,7 +398,7 @@ export class ProjectsDB {
       return result && result.length > 0 ? result[0] : null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.updateCustomDomain] Database error:', message);
+      logger.error('❌ [ProjectsDB.updateCustomDomain] Database error:', message);
       throw new Error(`Failed to update custom domain: ${message}`);
     }
   }
@@ -428,7 +448,7 @@ export class ProjectsDB {
       return projects && projects.length > 0 ? projects[0] : null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.getProjectWithDetails] Database error:', message);
+      logger.error('❌ [ProjectsDB.getProjectWithDetails] Database error:', message);
       throw new Error(`Failed to get project details: ${message}`);
     }
   }
@@ -452,7 +472,7 @@ export class ProjectsDB {
       return result;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ProjectsDB.searchProjects] Database error:', message);
+      logger.error('❌ [ProjectsDB.searchProjects] Database error:', message);
       return [];
     }
   }
@@ -469,7 +489,7 @@ export class ProjectsDB {
 
       return parseInt(result[0]?.count || '0', 10);
     } catch (error: unknown) {
-      console.error('❌ [ProjectsDB.getProjectCount] Database error:', error);
+      logger.error('❌ [ProjectsDB.getProjectCount] Database error:', error);
       return 0;
     }
   }

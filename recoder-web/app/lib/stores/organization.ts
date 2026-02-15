@@ -5,6 +5,9 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OrganizationStore');
 
 // ============================================================================
 // API Response Types (for type-safe JSON parsing)
@@ -582,7 +585,7 @@ export async function fetchMembers(orgId: string): Promise<OrganizationMember[]>
 
     return memberList;
   } catch (error) {
-    console.error('Failed to fetch members:', error);
+    logger.error('Failed to fetch members:', error);
     return [];
   } finally {
     membersLoadingAtom.set(false);
@@ -617,7 +620,7 @@ export async function changeMemberRole(
 
     return true;
   } catch (error) {
-    console.error('Failed to change member role:', error);
+    logger.error('Failed to change member role:', error);
     return false;
   }
 }
@@ -643,7 +646,7 @@ export async function removeMember(orgId: string, memberId: string): Promise<boo
 
     return true;
   } catch (error) {
-    console.error('Failed to remove member:', error);
+    logger.error('Failed to remove member:', error);
     return false;
   }
 }
@@ -670,7 +673,7 @@ export async function fetchInvitations(orgId: string): Promise<Invitation[]> {
 
     return invitations;
   } catch (error) {
-    console.error('Failed to fetch invitations:', error);
+    logger.error('Failed to fetch invitations:', error);
     return [];
   } finally {
     invitationsLoadingAtom.set(false);
@@ -709,7 +712,7 @@ export async function sendInvitation(
 
     return invitation;
   } catch (error) {
-    console.error('Failed to send invitation:', error);
+    logger.error('Failed to send invitation:', error);
     return null;
   }
 }
@@ -730,7 +733,7 @@ export async function resendInvitation(orgId: string, invitationId: string): Pro
 
     return true;
   } catch (error) {
-    console.error('Failed to resend invitation:', error);
+    logger.error('Failed to resend invitation:', error);
     return false;
   }
 }
@@ -758,7 +761,7 @@ export async function revokeInvitation(orgId: string, invitationId: string): Pro
 
     return true;
   } catch (error) {
-    console.error('Failed to revoke invitation:', error);
+    logger.error('Failed to revoke invitation:', error);
     return false;
   }
 }
@@ -791,7 +794,7 @@ export async function fetchTeams(orgId: string): Promise<Team[]> {
 
     return teamList;
   } catch (error) {
-    console.error('Failed to fetch teams:', error);
+    logger.error('Failed to fetch teams:', error);
     return [];
   } finally {
     teamsLoadingAtom.set(false);
@@ -829,7 +832,7 @@ export async function createTeam(
 
     return team;
   } catch (error) {
-    console.error('Failed to create team:', error);
+    logger.error('Failed to create team:', error);
     return null;
   }
 }
@@ -862,7 +865,7 @@ export async function updateTeam(
 
     return true;
   } catch (error) {
-    console.error('Failed to update team:', error);
+    logger.error('Failed to update team:', error);
     return false;
   }
 }
@@ -888,7 +891,7 @@ export async function deleteTeam(orgId: string, teamId: string): Promise<boolean
 
     return true;
   } catch (error) {
-    console.error('Failed to delete team:', error);
+    logger.error('Failed to delete team:', error);
     return false;
   }
 }
@@ -911,7 +914,7 @@ export async function fetchTeamMembers(orgId: string, teamId: string): Promise<T
 
     return members;
   } catch (error) {
-    console.error('Failed to fetch team members:', error);
+    logger.error('Failed to fetch team members:', error);
     return [];
   }
 }
@@ -944,7 +947,7 @@ export async function addTeamMember(
 
     return true;
   } catch (error) {
-    console.error('Failed to add team member:', error);
+    logger.error('Failed to add team member:', error);
     return false;
   }
 }
@@ -976,7 +979,7 @@ export async function removeTeamMember(
 
     return true;
   } catch (error) {
-    console.error('Failed to remove team member:', error);
+    logger.error('Failed to remove team member:', error);
     return false;
   }
 }
@@ -1011,7 +1014,7 @@ export async function changeTeamMemberRole(
 
     return true;
   } catch (error) {
-    console.error('Failed to change team member role:', error);
+    logger.error('Failed to change team member role:', error);
     return false;
   }
 }
@@ -1067,7 +1070,7 @@ export async function fetchAuditLog(
 
     return entries;
   } catch (error) {
-    console.error('Failed to fetch audit log:', error);
+    logger.error('Failed to fetch audit log:', error);
     return [];
   } finally {
     auditLogLoadingAtom.set(false);
@@ -1099,7 +1102,7 @@ export async function exportAuditLog(
 
     return await response.blob();
   } catch (error) {
-    console.error('Failed to export audit log:', error);
+    logger.error('Failed to export audit log:', error);
     return null;
   }
 }
@@ -1124,7 +1127,7 @@ export async function fetchActivityFeed(orgId: string, limit = 20): Promise<Orga
 
     return activities;
   } catch (error) {
-    console.error('Failed to fetch activity feed:', error);
+    logger.error('Failed to fetch activity feed:', error);
     return [];
   }
 }

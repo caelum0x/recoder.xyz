@@ -24,6 +24,9 @@ import {
   validateFactoryConfig,
 } from './config';
 import { tryCatch, retryWithBackoff, isRetryableError } from './utils';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SandboxFactory');
 
 /**
  * Sandbox factory for creating and managing sandbox providers
@@ -51,7 +54,7 @@ export class SandboxFactory {
         dockerProvider.initialize(this.config.providers.docker).then(() => {
           this.providers.set('docker', dockerProvider);
         }).catch((error) => {
-          console.warn('Failed to initialize Docker provider:', error.message);
+          logger.warn('Failed to initialize Docker provider:', error.message);
         })
       );
     }
@@ -63,7 +66,7 @@ export class SandboxFactory {
         e2bProvider.initialize(this.config.providers.e2b).then(() => {
           this.providers.set('e2b', e2bProvider);
         }).catch((error) => {
-          console.warn('Failed to initialize E2B provider:', error.message);
+          logger.warn('Failed to initialize E2B provider:', error.message);
         })
       );
     }
@@ -75,7 +78,7 @@ export class SandboxFactory {
         daytonaProvider.initialize(this.config.providers.daytona).then(() => {
           this.providers.set('daytona', daytonaProvider);
         }).catch((error) => {
-          console.warn('Failed to initialize Daytona provider:', error.message);
+          logger.warn('Failed to initialize Daytona provider:', error.message);
         })
       );
     }
@@ -95,7 +98,7 @@ export class SandboxFactory {
     if (!this.providers.has(this.config.defaultProvider)) {
       // Fall back to first available provider
       const firstProvider = Array.from(this.providers.keys())[0];
-      console.warn(
+      logger.warn(
         `Default provider '${this.config.defaultProvider}' not available. Falling back to '${firstProvider}'`
       );
       this.config.defaultProvider = firstProvider;
@@ -137,7 +140,7 @@ export class SandboxFactory {
       // Check health before attempting
       const health = await this.getProviderHealth(providerType);
       if (!health.healthy) {
-        console.warn(`Provider ${providerType} is unhealthy, skipping`);
+        logger.warn(`Provider ${providerType} is unhealthy, skipping`);
         continue;
       }
 
@@ -150,7 +153,7 @@ export class SandboxFactory {
       }
 
       lastError = error;
-      console.warn(`Failed to create sandbox with ${providerType}: ${error?.message}`);
+      logger.warn(`Failed to create sandbox with ${providerType}: ${error?.message}`);
     }
 
     throw new SandboxError(

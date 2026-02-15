@@ -1,35 +1,32 @@
 /**
  * Prisma Client for Recoder.xyz
- * Singleton pattern to prevent multiple instances
+ *
+ * Singleton pattern: reuses the same PrismaClient instance across hot-reloads
+ * in development and avoids exhausting the connection pool in production.
+ *
+ * Prefer importing { prisma } from '@/lib/prisma' rather than instantiating
+ * PrismaClient directly in route handlers or service files.
  */
 
 import * as crypto from 'crypto';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from './prisma-client';
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
 
-export const prisma =
-  globalForPrisma.prisma ||
+export const prisma: PrismaClient =
+  globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
+    datasourceUrl: process.env.DATABASE_URL,
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['warn', 'error']
+        : ['error'],
   });
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
-
-// Graceful shutdown - close Prisma connection when process terminates
-if (typeof window === 'undefined') {
-  const cleanup = async () => {
-    await prisma.$disconnect();
-  };
-
-  process.on('beforeExit', cleanup);
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
 }
 
 // Helper functions for common operations

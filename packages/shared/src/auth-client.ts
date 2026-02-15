@@ -395,7 +395,7 @@ export class AuthClient extends EventEmitter {
     } catch (error) {
       // Fallback to client-side generation
       const timestamp = Date.now().toString(36);
-      const random = Math.random().toString(36).substr(2, 8);
+      const random = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
       return `${deviceType}-${platform}-${timestamp}-${random}`;
     }
   }

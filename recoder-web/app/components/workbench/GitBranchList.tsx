@@ -18,9 +18,11 @@ interface GitBranchListProps {
   branches: GitBranch[];
   currentBranch: string;
   isLoading: boolean;
-  onCheckout: (branch: string) => Promise<void>;
-  onCreate: (name: string) => Promise<void>;
-  onDelete: (name: string, force?: boolean) => Promise<void>;
+  onCheckout: (branch: string) => Promise<boolean | void>;
+  onCreate: (name: string) => Promise<boolean | void>;
+  onDelete: (name: string, force?: boolean) => Promise<boolean | void>;
+  onMerge?: (branch: string) => Promise<void>;
+  onRename?: (oldName: string, newName: string) => Promise<boolean | void>;
   onRefresh: () => void;
 }
 
@@ -31,14 +33,19 @@ export const GitBranchList = memo(({
   onCheckout,
   onCreate,
   onDelete,
+  onMerge,
+  onRename,
   onRefresh,
 }: GitBranchListProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [renamingBranch, setRenamingBranch] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Filter out duplicates (local vs remote)
   const localBranches = branches.filter(b => !b.remote);
@@ -99,6 +106,38 @@ export const GitBranchList = memo(({
     if (!confirm(`Delete branch "${branch}"?`)) return;
     await onDelete(branch);
   }, [currentBranch, onDelete]);
+
+  const handleMerge = useCallback(async (branch: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (branch === currentBranch) {
+      toast.error("Can't merge a branch into itself");
+      return;
+    }
+    if (!confirm(`Merge "${branch}" into "${currentBranch}"?`)) return;
+    setIsOpen(false);
+    await onMerge?.(branch);
+  }, [currentBranch, onMerge]);
+
+  const handleStartRename = useCallback((branch: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenamingBranch(branch);
+    setRenameValue(branch);
+    setTimeout(() => renameInputRef.current?.focus(), 50);
+  }, []);
+
+  const handleRename = useCallback(async () => {
+    if (!renamingBranch || !renameValue.trim() || renameValue === renamingBranch) {
+      setRenamingBranch(null);
+      return;
+    }
+    const sanitized = renameValue.trim().replace(/[^a-zA-Z0-9/_-]/g, '-');
+    if (!sanitized) {
+      toast.error('Invalid branch name');
+      return;
+    }
+    await onRename?.(renamingBranch, sanitized);
+    setRenamingBranch(null);
+  }, [renamingBranch, renameValue, onRename]);
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -181,8 +220,16 @@ export const GitBranchList = memo(({
                     key={branch.name}
                     branch={branch}
                     isCurrent={branch.name === currentBranch}
+                    isRenaming={renamingBranch === branch.name}
+                    renameValue={renameValue}
+                    renameInputRef={renameInputRef}
                     onCheckout={() => handleCheckout(branch.name)}
                     onDelete={(e) => handleDelete(branch.name, e)}
+                    onMerge={onMerge ? (e) => handleMerge(branch.name, e) : undefined}
+                    onStartRename={onRename ? (e) => handleStartRename(branch.name, e) : undefined}
+                    onRenameChange={setRenameValue}
+                    onRenameSubmit={handleRename}
+                    onRenameCancel={() => setRenamingBranch(null)}
                   />
                 ))}
               </>
@@ -199,6 +246,9 @@ export const GitBranchList = memo(({
                     key={`remote-${branch.name}`}
                     branch={branch}
                     isCurrent={false}
+                    isRenaming={false}
+                    renameValue=""
+                    renameInputRef={renameInputRef}
                     onCheckout={() => handleCheckout(branch.name)}
                   />
                 ))}
@@ -237,16 +287,25 @@ GitBranchList.displayName = 'GitBranchList';
 interface BranchItemProps {
   branch: GitBranch;
   isCurrent: boolean;
+  isRenaming: boolean;
+  renameValue: string;
+  renameInputRef: React.Ref<HTMLInputElement>;
   onCheckout: () => void;
   onDelete?: (e: React.MouseEvent) => void;
+  onMerge?: (e: React.MouseEvent) => void;
+  onStartRename?: (e: React.MouseEvent) => void;
+  onRenameChange?: (value: string) => void;
+  onRenameSubmit?: () => void;
+  onRenameCancel?: () => void;
 }
 
-const BranchItem = memo(({ branch, isCurrent, onCheckout, onDelete }: BranchItemProps) => {
+const BranchItem = memo(({ branch, isCurrent, isRenaming, renameValue, renameInputRef, onCheckout, onDelete, onMerge, onStartRename, onRenameChange, onRenameSubmit, onRenameCancel }: BranchItemProps) => {
   return (
     <div
-      onClick={onCheckout}
+      onClick={isRenaming ? undefined : onCheckout}
       className={classNames(
-        'flex items-center gap-2 px-2 py-1.5 cursor-pointer group',
+        'flex items-center gap-2 px-2 py-1.5 group',
+        isRenaming ? '' : 'cursor-pointer',
         isCurrent
           ? 'bg-purple-500/10 text-purple-400'
           : 'hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
@@ -254,20 +313,58 @@ const BranchItem = memo(({ branch, isCurrent, onCheckout, onDelete }: BranchItem
     >
       {isCurrent && <span className="i-ph:check text-purple-400" />}
       {branch.remote && <span className="i-ph:cloud text-xs text-bolt-elements-textTertiary" />}
-      <span className="flex-1 text-xs truncate">{branch.name}</span>
-      {branch.lastCommitDate && (
+      {isRenaming ? (
+        <input
+          ref={renameInputRef}
+          type="text"
+          value={renameValue}
+          onChange={(e) => onRenameChange?.(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onRenameSubmit?.();
+            if (e.key === 'Escape') onRenameCancel?.();
+          }}
+          onBlur={() => onRenameCancel?.()}
+          className="flex-1 px-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="flex-1 text-xs truncate">{branch.name}</span>
+      )}
+      {branch.lastCommitDate && !isRenaming && (
         <span className="text-xs text-bolt-elements-textTertiary">
           {branch.lastCommitDate}
         </span>
       )}
-      {!isCurrent && onDelete && (
-        <button
-          onClick={onDelete}
-          className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded text-red-400"
-          title="Delete branch"
-        >
-          <span className="i-ph:trash text-xs" />
-        </button>
+      {!isCurrent && !isRenaming && (
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+          {onMerge && (
+            <button
+              onClick={onMerge}
+              className="p-0.5 hover:bg-purple-500/20 rounded text-purple-400"
+              title="Merge into current branch"
+            >
+              <span className="i-ph:git-merge text-xs" />
+            </button>
+          )}
+          {onStartRename && (
+            <button
+              onClick={onStartRename}
+              className="p-0.5 hover:bg-blue-500/20 rounded text-blue-400"
+              title="Rename branch"
+            >
+              <span className="i-ph:pencil-simple text-xs" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="p-0.5 hover:bg-red-500/20 rounded text-red-400"
+              title="Delete branch"
+            >
+              <span className="i-ph:trash text-xs" />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

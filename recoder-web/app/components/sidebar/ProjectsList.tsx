@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '~/lib/contexts/AuthContext';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ProjectsList');
 
 interface Project {
   id: string;
@@ -59,7 +61,7 @@ export function ProjectsList() {
         setProjects(data.projects);
       }
     } catch (error) {
-      console.error('Failed to load projects:', error);
+      logger.error('Failed to load projects:', error);
     }
   }
 
@@ -196,11 +198,11 @@ function CreateProjectModal({ onClose, onCreated, userId }: { onClose: () => voi
         onCreated();
       } else {
         const result = await response.json() as { error?: string };
-        console.error('Failed to create project:', result.error);
+        logger.error('Failed to create project:', result.error);
         alert(result.error || 'Failed to create project');
       }
     } catch (error) {
-      console.error('Failed to create project:', error);
+      logger.error('Failed to create project:', error);
     } finally {
       setSubmitting(false);
     }

@@ -15,6 +15,7 @@ import {
   consumeAttachments,
   getAttachments,
 } from '~/lib/stores/attachments';
+import { createScopedLogger } from '~/utils/logger';
 import {
   formatAttachmentsForAPI,
   validateFiles,
@@ -23,6 +24,8 @@ import {
   type ProcessedAttachment,
   type AttachmentError,
 } from '~/lib/services/attachments';
+
+const logger = createScopedLogger('Attachments');
 
 /**
  * Legacy FileAttachment interface for backward compatibility
@@ -164,7 +167,7 @@ export function useAttachments() {
 
       if (imageFiles.length > 0) {
         await addFiles(imageFiles);
-        console.log(`Pasted ${imageFiles.length} image(s) from clipboard`);
+        logger.info(`Pasted ${imageFiles.length} image(s) from clipboard`);
       }
     }
   }, []);

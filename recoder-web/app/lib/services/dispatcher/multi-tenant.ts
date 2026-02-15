@@ -270,19 +270,44 @@ export async function verifyCustomDomain(domain: string): Promise<{
     return { success: false, verified: false, error: 'Verification has expired' }
   }
 
-  // TODO: Implement actual DNS verification
-  // For now, this is a placeholder that returns unverified
-  // In production:
-  // 1. Query DNS TXT records for the domain
-  // 2. Check if expected value exists
-  // 3. Optionally verify CNAME records point to expected target
+  // Perform DNS TXT record verification
+  try {
+    const { promises: dns } = await import('node:dns')
+    const txtRecords = await dns.resolveTxt(cleanDomain)
+    // txtRecords is an array of arrays (each TXT record can be chunked)
+    const flatRecords = txtRecords.map((chunks) => chunks.join(''))
 
-  // Update verification status
-  verification.lastCheckedAt = new Date()
+    const expectedValue = verification.expectedValue
+    const found = flatRecords.some((record) => record === expectedValue)
 
-  return {
-    success: true,
-    verified: verification.verified,
+    verification.lastCheckedAt = new Date()
+    verification.verified = found
+
+    if (found) {
+      markDomainVerified(cleanDomain)
+    }
+
+    domainRegistry.setVerification(verification)
+
+    return {
+      success: true,
+      verified: found,
+    }
+  } catch (dnsError) {
+    verification.lastCheckedAt = new Date()
+    domainRegistry.setVerification(verification)
+
+    // ENOTFOUND / ENODATA means no TXT records — not verified yet
+    const code = (dnsError as NodeJS.ErrnoException).code
+    if (code === 'ENOTFOUND' || code === 'ENODATA') {
+      return { success: true, verified: false }
+    }
+
+    return {
+      success: false,
+      verified: false,
+      error: 'DNS lookup failed',
+    }
   }
 }
 

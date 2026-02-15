@@ -19,6 +19,8 @@ import type {
 } from './types';
 
 import { CompletionTriggerKind } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LSPClient');
 
 // Re-export types for backward compatibility
 export type {
@@ -75,7 +77,7 @@ export class LSPClient {
   private async doInitialize(): Promise<void> {
     // Guard: don't start LSP until container is ready
     if (!workbenchStore.containerReady.get()) {
-      console.log('[LSPClient] Skipping LSP start - container not ready');
+      logger.info('[LSPClient] Skipping LSP start - container not ready');
       this.isStarted = false;
       this.initPromise = null;
       return;
@@ -93,13 +95,13 @@ export class LSPClient {
           this.serverStatus.set(server.languageId, server);
         }
         this.isStarted = true;
-        console.log('[LSPClient] LSP servers started:', data.message);
+        logger.info('[LSPClient] LSP servers started:', data.message);
       } else {
-        console.error('[LSPClient] Failed to start LSP servers');
+        logger.error('[LSPClient] Failed to start LSP servers');
         this.isStarted = false;
       }
     } catch (err) {
-      console.error('[LSPClient] Error initializing LSP:', err);
+      logger.error('[LSPClient] Error initializing LSP:', err);
       this.isStarted = false;
     }
   }
@@ -152,7 +154,7 @@ export class LSPClient {
 
       return false;
     } catch (err) {
-      console.error('[LSPClient] Error syncing document:', err);
+      logger.error('[LSPClient] Error syncing document:', err);
       return false;
     }
   }
@@ -203,7 +205,7 @@ export class LSPClient {
       if ((err as Error).name === 'AbortError') {
         return [];
       }
-      console.error('[LSPClient] Completion error:', err);
+      logger.error('[LSPClient] Completion error:', err);
       return [];
     } finally {
       this.pendingRequests.delete(requestId);
@@ -234,7 +236,7 @@ export class LSPClient {
 
       return data && data.success ? data.result : null;
     } catch (err) {
-      console.error('[LSPClient] Hover error:', err);
+      logger.error('[LSPClient] Hover error:', err);
       return null;
     }
   }
@@ -268,7 +270,7 @@ export class LSPClient {
       // Normalize to array
       return Array.isArray(data.result) ? data.result : [data.result];
     } catch (err) {
-      console.error('[LSPClient] Definition error:', err);
+      logger.error('[LSPClient] Definition error:', err);
       return [];
     }
   }
@@ -301,7 +303,7 @@ export class LSPClient {
 
       return data && data.success && data.result ? data.result : [];
     } catch (err) {
-      console.error('[LSPClient] References error:', err);
+      logger.error('[LSPClient] References error:', err);
       return [];
     }
   }
@@ -330,7 +332,7 @@ export class LSPClient {
 
       return data && data.success ? data.result : null;
     } catch (err) {
-      console.error('[LSPClient] SignatureHelp error:', err);
+      logger.error('[LSPClient] SignatureHelp error:', err);
       return null;
     }
   }
@@ -368,7 +370,7 @@ export class LSPClient {
         children?: Array<unknown>;
       }>;
     } catch (err) {
-      console.error('[LSPClient] DocumentSymbol error:', err);
+      logger.error('[LSPClient] DocumentSymbol error:', err);
       return [];
     }
   }
@@ -392,7 +394,7 @@ export class LSPClient {
 
       return Array.from(this.serverStatus.values());
     } catch (err) {
-      console.error('[LSPClient] Status error:', err);
+      logger.error('[LSPClient] Status error:', err);
       return Array.from(this.serverStatus.values());
     }
   }
@@ -414,7 +416,7 @@ export class LSPClient {
       }
       this.pendingRequests.clear();
     } catch (err) {
-      console.error('[LSPClient] Stop error:', err);
+      logger.error('[LSPClient] Stop error:', err);
     }
   }
 

@@ -23,6 +23,7 @@ jobs:
           - firefox-authenticated
           - webkit-authenticated
         spec:
+          - tests/e2e/logged-in/admin-playbook-bootstrap-smoke.spec.ts
           - tests/e2e/logged-in/admin-transition-history-roundtrip.spec.ts
           - tests/e2e/logged-in/admin-retry-panel-suggestions.spec.ts
           - tests/e2e/logged-in/admin-delivery-ops-risk-filters.spec.ts
@@ -46,6 +47,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Validate required secrets
+        env:
+          DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+          PLAYWRIGHT_LOGIN_EMAIL: ${{ secrets.PLAYWRIGHT_LOGIN_EMAIL }}
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "Missing secret: AGENCY_STAGING_DATABASE_URL"
+            exit 1
+          fi
+          if [ -z "${PLAYWRIGHT_LOGIN_EMAIL}" ]; then
+            echo "Missing secret: PLAYWRIGHT_LOGIN_EMAIL"
+            exit 1
+          fi
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Seed deterministic playbook bootstrap fixtures
+        env:
+          DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+          PLAYWRIGHT_LOGIN_EMAIL: ${{ secrets.PLAYWRIGHT_LOGIN_EMAIL }}
+        run: |
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -v playwright_login_email="$PLAYWRIGHT_LOGIN_EMAIL" \
+            -f apps/agency/db/scripts/seed_playwright_playbook_smoke.sql
+
       - name: Install Playwright browsers
         run: pnpm --filter agency exec playwright install --with-deps
 
@@ -56,6 +84,16 @@ jobs:
           PLAYWRIGHT_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.playwright_base_url || secrets.PLAYWRIGHT_BASE_URL }}
           PLAYWRIGHT_LOGIN_EMAIL: ${{ secrets.PLAYWRIGHT_LOGIN_EMAIL }}
           PLAYWRIGHT_LOGIN_PASSWORD: ${{ secrets.PLAYWRIGHT_LOGIN_PASSWORD }}
+      - name: Cleanup deterministic playbook bootstrap fixtures
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+          PLAYWRIGHT_LOGIN_EMAIL: ${{ secrets.PLAYWRIGHT_LOGIN_EMAIL }}
+        run: |
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -v playwright_login_email="$PLAYWRIGHT_LOGIN_EMAIL" \
+            -f apps/agency/db/scripts/cleanup_playwright_playbook_smoke.sql
 
   seeded-state-transition:
     runs-on: ubuntu-latest

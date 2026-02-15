@@ -11,6 +11,9 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
 import { neon } from '@neondatabase/serverless';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Domains');
 
 // Domain validation regex - supports standard domain formats
 const DOMAIN_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
@@ -127,10 +130,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       isPremium: hasPremiumAccess(session.user.subscriptionPlan),
     });
   } catch (error) {
-    console.error('[Domains] Get status error:', error);
+    logger.error('[Domains] Get status error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get domain status',
+      error: 'Failed to get domain status',
     }, { status: 500 });
   }
 }
@@ -163,7 +166,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   // Verify project ownership
   const projects = await sql`
-    SELECT id, name, "userId", "customDomain", "customDomainStatus"
+    SELECT id, name, "userId", "customDomain", "customDomainStatus", "ownershipVerification"
     FROM projects
     WHERE id = ${projectId} AND "userId" = ${session.user.id}
   ` as any[];
@@ -223,7 +226,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         WHERE id = ${projectId}
       `;
 
-      console.log(`[Domains] Custom domain set for project ${projectId}: ${customDomain}`);
+      logger.info(`[Domains] Custom domain set for project ${projectId}: ${customDomain}`);
 
       return json({
         success: true,
@@ -240,9 +243,22 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return json({ success: false, error: 'No custom domain configured' }, { status: 400 });
       }
 
-      // In production, this would call Cloudflare API to check verification status
-      // For now, simulate verification check
-      const isVerified = await simulateDomainVerification(project.customDomain);
+      // Parse stored verification to get the expected TXT value
+      let expectedTxtValue = '';
+      try {
+        const verification = typeof project.ownershipVerification === 'string'
+          ? JSON.parse(project.ownershipVerification)
+          : project.ownershipVerification;
+        expectedTxtValue = verification?.value || '';
+      } catch {
+        // Malformed verification data
+      }
+
+      if (!expectedTxtValue) {
+        return json({ success: false, error: 'Verification record not found. Please re-add the domain.' }, { status: 400 });
+      }
+
+      const isVerified = await verifyDomainOwnership(project.customDomain, expectedTxtValue);
 
       if (!isVerified) {
         return json({
@@ -261,7 +277,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         WHERE id = ${projectId}
       `;
 
-      console.log(`[Domains] Custom domain verified for project ${projectId}: ${project.customDomain}`);
+      logger.info(`[Domains] Custom domain verified for project ${projectId}: ${project.customDomain}`);
 
       return json({
         success: true,
@@ -290,7 +306,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         WHERE id = ${projectId}
       `;
 
-      console.log(`[Domains] Custom domain removed for project ${projectId}`);
+      logger.info(`[Domains] Custom domain removed for project ${projectId}`);
 
       return json({
         success: true,
@@ -300,24 +316,26 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('[Domains] Action error:', error);
+    logger.error('[Domains] Action error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Domain operation failed',
+      error: 'Domain operation failed',
     }, { status: 500 });
   }
 }
 
 /**
- * Simulate domain verification (in production, call Cloudflare API)
+ * Verify domain ownership by checking DNS TXT records
  */
-async function simulateDomainVerification(domain: string): Promise<boolean> {
-  // In production, this would:
-  // 1. Query Cloudflare Custom Hostnames API
-  // 2. Check if the TXT record is properly configured
-  // 3. Return actual verification status
-
-  // For demo purposes, simulate a 50% chance of verification
-  // This allows testing both success and pending flows
-  return Math.random() > 0.3;
+async function verifyDomainOwnership(domain: string, expectedValue: string): Promise<boolean> {
+  try {
+    const { promises: dns } = await import('node:dns');
+    // Check the _recoder.{domain} TXT record
+    const txtRecords = await dns.resolveTxt(`_recoder.${domain}`);
+    const flatRecords = txtRecords.map((chunks) => chunks.join(''));
+    return flatRecords.some((record) => record === expectedValue);
+  } catch {
+    // ENOTFOUND/ENODATA = no TXT record yet
+    return false;
+  }
 }

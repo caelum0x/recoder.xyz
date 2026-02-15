@@ -4,6 +4,9 @@
  */
 
 import { getAuthEnv, isEmailConfigured } from '../env';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('EmailOTPPlugin');
 
 /**
  * OTP types
@@ -47,8 +50,7 @@ async function defaultSendVerificationOTP(params: SendOTPParams): Promise<void> 
   const env = getAuthEnv();
 
   if (!isEmailConfigured()) {
-    console.warn('[EmailOTP] Email not configured - OTP not sent');
-    console.log(`[EmailOTP] OTP for ${email}: ${otp} (type: ${type})`);
+    logger.warn(`[EmailOTP] Email not configured - OTP not sent for ${email} (type: ${type})`);
     return;
   }
 
@@ -70,27 +72,27 @@ async function defaultSendVerificationOTP(params: SendOTPParams): Promise<void> 
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('[EmailOTP] Failed to send OTP:', error);
+      logger.error('[EmailOTP] Failed to send OTP:', error);
       throw new Error(`Failed to send OTP: ${error}`);
     }
 
-    console.log(`[EmailOTP] OTP sent successfully to ${email}`);
+    logger.info(`[EmailOTP] OTP sent successfully to ${email}`);
   } catch (error) {
-    console.error('[EmailOTP] Error sending OTP:', error);
+    logger.error('[EmailOTP] Error sending OTP:', error);
     throw error;
   }
 }
 
 /**
- * Generate a random OTP code
+ * Generate a cryptographically secure random OTP code
  */
 export function generateOTP(length: number = 6): string {
-  const digits = '0123456789';
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
   let otp = '';
 
   for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * digits.length);
-    otp += digits[randomIndex];
+    otp += (bytes[i] % 10).toString();
   }
 
   return otp;
@@ -114,7 +116,7 @@ export function createEmailOTPPlugin(config: EmailOTPPluginConfig = {}) {
       try {
         await sendVerificationOTP(params);
       } catch (error) {
-        console.error('[EmailOTP] Failed to send verification OTP:', error);
+        logger.error('[EmailOTP] Failed to send verification OTP:', error);
         throw error;
       }
     },
@@ -157,7 +159,7 @@ export async function verifyOTP(params: {
 
     return { success: true };
   } catch (error) {
-    console.error('[EmailOTP] Error verifying OTP:', error);
+    logger.error('[EmailOTP] Error verifying OTP:', error);
     return { success: false, error: 'Verification failed' };
   }
 }
@@ -188,7 +190,7 @@ export async function requestSignInOTP(email: string): Promise<{ success: boolea
 
     return { success: true };
   } catch (error) {
-    console.error('[EmailOTP] Error requesting sign-in OTP:', error);
+    logger.error('[EmailOTP] Error requesting sign-in OTP:', error);
     return { success: false, error: 'Failed to send OTP' };
   }
 }
@@ -221,7 +223,7 @@ export async function requestVerificationOTP(
 
     return { success: true };
   } catch (error) {
-    console.error('[EmailOTP] Error requesting verification OTP:', error);
+    logger.error('[EmailOTP] Error requesting verification OTP:', error);
     return { success: false, error: 'Failed to send OTP' };
   }
 }

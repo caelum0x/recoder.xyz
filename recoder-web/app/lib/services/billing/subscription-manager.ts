@@ -5,6 +5,7 @@
  */
 
 import { atom, computed, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
 import {
   BillingError,
   BillingErrorCodes,
@@ -18,6 +19,8 @@ import {
   type UsageSummary,
   type UsageType,
 } from './types';
+
+const logger = createScopedLogger('SubscriptionManager');
 
 // ==================== Subscription Plans Configuration ====================
 
@@ -506,7 +509,7 @@ export async function fetchUsageSummary(): Promise<UsageSummary[]> {
     updateUsageSummary(summary);
     return summary;
   } catch (error) {
-    console.error('Failed to fetch usage summary:', error);
+    logger.error('Failed to fetch usage summary:', error);
     return [];
   }
 }
@@ -630,6 +633,6 @@ export async function initializeSubscription(): Promise<void> {
     await fetchSubscription();
     await fetchUsageSummary();
   } catch (error) {
-    console.error('Failed to initialize subscription:', error);
+    logger.error('Failed to initialize subscription:', error);
   }
 }

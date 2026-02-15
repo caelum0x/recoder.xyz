@@ -1,4 +1,3 @@
-// @ts-expect-error - @embedpdf/pdfium may not have type declarations installed
 import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
 
 import { assertNotAborted } from "./abort";

@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('GitHubAutoSync');
 function getChatIdFromUrl(): string | null {
   if (typeof window === 'undefined') return null;
   const match = window.location.pathname.match(/\/chat\/([^\/]+)/);
@@ -76,7 +78,7 @@ async function flushPendingFiles(chatId: string) {
       // console.log(`✅ Auto-synced ${files.length} files to GitHub`);
     }
   } catch (error) {
-    console.error('Failed to auto-sync to GitHub:', error);
+    logger.error('Failed to auto-sync to GitHub:', error);
   }
 }
 

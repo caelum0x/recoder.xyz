@@ -1,0 +1,196 @@
+"use client";
+
+import { DropdownMenu } from "@giselle-internal/ui/dropdown-menu";
+import { useFeatureFlag } from "@giselles-ai/react";
+import Avatar from "boring-avatars";
+import clsx from "clsx/lite";
+import { ChevronDownIcon } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRef } from "react";
+import {
+	useAppDesignerStore,
+	useUpdateWorkspaceName,
+} from "../../../app-designer";
+import { GiselleIcon } from "../../../icons";
+import { EditableText, type EditableTextRef } from "../../properties-panel/ui";
+import { RunButton } from "./run-button";
+
+export function V2Header({
+	teamName,
+	teamAvatarUrl,
+	onNameChange,
+}: {
+	teamName?: string;
+	teamAvatarUrl?: string | null;
+	onNameChange?: (name: string) => Promise<void>;
+}) {
+	const { workspaceId, name } = useAppDesignerStore((s) => ({
+		workspaceId: s.workspaceId,
+		name: s.name,
+	}));
+	const updateWorkspaceName = useUpdateWorkspaceName();
+	const editableTextRef = useRef<EditableTextRef>(null);
+	const { layoutV3 } = useFeatureFlag();
+
+	const handleUpdateName = async (value?: string) => {
+		if (!value) return;
+		updateWorkspaceName(value);
+		await onNameChange?.(value);
+	};
+
+	return (
+		<div
+			className={clsx(
+				"relative h-[48px] flex items-center justify-between",
+				"pl-[8px] pr-[8px] gap-[8px]",
+				"border-b border-white/10",
+				"shrink-0",
+			)}
+		>
+			{/* Left section: Logo + Team/App names */}
+			<div className="flex items-center gap-[3px] min-w-0">
+				<Link
+					href="/"
+					className="flex items-center gap-[3px] group"
+					aria-label="Go to home"
+				>
+					<GiselleIcon className="text-inverse w-[24px] h-[24px] group-hover:text-primary-100 transition-colors" />
+					<span className="text-inverse text-[13px] font-semibold group-hover:text-primary-100 transition-colors">
+						Studio
+					</span>
+				</Link>
+				<span className="text-inverse/20 text-[18px] font-[250] leading-none ml-[4px]">
+					/
+				</span>
+
+				{/* Team / App names */}
+				<div className="flex items-center gap-[3px] min-w-0">
+					{teamName && (
+						<Link
+							href="/workspaces"
+							className="flex items-center gap-[6px] overflow-hidden text-ellipsis whitespace-nowrap max-w-[160px] !pt-[2px] !pr-[8px] !pb-[2px] !pl-[12px] hover:opacity-80 transition-opacity"
+						>
+							{teamAvatarUrl ? (
+								<div
+									className="relative rounded-full overflow-hidden shrink-0"
+									style={{ width: 16, height: 16 }}
+								>
+									<Image
+										src={teamAvatarUrl}
+										alt={teamName}
+										fill
+										sizes="16px"
+										className="object-cover"
+										style={{ objectPosition: "center" }}
+									/>
+								</div>
+							) : (
+								<div className="shrink-0" style={{ width: 16, height: 16 }}>
+									<Avatar
+										name={teamName}
+										variant="marble"
+										width={16}
+										height={16}
+										colors={[
+											"#2563eb",
+											"#7c3aed",
+											"#dc2626",
+											"#ea580c",
+											"#16a34a",
+										]}
+									/>
+								</div>
+							)}
+							<span className="text-inverse text-[14px] font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+								{teamName}
+							</span>
+						</Link>
+					)}
+					{teamName && (
+						<span className="text-inverse/20 text-[18px] font-[250] leading-none ml-[4px]">
+							/
+						</span>
+					)}
+					{/* app name editable */}
+					<div className="max-w-[300px]">
+						<EditableText
+							key={workspaceId}
+							ref={editableTextRef}
+							fallbackValue="Untitled"
+							onChange={handleUpdateName}
+							value={name}
+							className="text-[#6B8FF0] font-medium"
+						/>
+					</div>
+					{/* dropdown menu */}
+					{layoutV3 && (
+						<DropdownMenu
+							items={[
+								{
+									value: "rename",
+									label: "Rename",
+									action: () => editableTextRef.current?.triggerEdit(),
+								},
+								{
+									value: "duplicate",
+									label: "Duplicate",
+									action: () => {
+										// TODO: Implement app duplication functionality
+										console.warn("Duplicate functionality not yet implemented");
+									},
+								},
+								{
+									value: "template",
+									label: "Create a Template",
+									disabled: true,
+								},
+								{
+									value: "delete",
+									label: "Delete",
+									action: () => {
+										// TODO: Implement app deletion functionality
+										console.warn("Delete functionality not yet implemented");
+									},
+									destructive: true,
+								},
+							]}
+							trigger={
+								<button
+									type="button"
+									className="ml-[4px] p-0 border-none bg-transparent w-auto h-auto hover:bg-transparent focus:bg-transparent outline-none"
+								>
+									<ChevronDownIcon className="size-[16px] text-[#6B8FF0] hover:text-inverse" />
+								</button>
+							}
+							renderItem={(item) =>
+								item.value === "template" ? (
+									<div className="flex items-center justify-between w-full opacity-50">
+										<span>{item.label}</span>
+										<span className="ml-2 text-[10px] leading-none text-inverse bg-bg/30 px-1.5 py-[1px] rounded-full">
+											Coming&nbsp;soon
+										</span>
+									</div>
+								) : (
+									<span className={item.destructive ? "text-error-900" : ""}>
+										{item.label}
+									</span>
+								)
+							}
+							onSelect={(_event, item) => {
+								if (!item.disabled && item.action) {
+									item.action();
+								}
+							}}
+							sideOffset={12}
+							align="start"
+						/>
+					)}
+				</div>
+			</div>
+
+			{/* Right section: Run button */}
+			<RunButton />
+		</div>
+	);
+}

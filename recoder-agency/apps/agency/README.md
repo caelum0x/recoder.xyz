@@ -7,27 +7,51 @@ https://recoder.xyz
 > [!WARNING]
 > It is difficult to start because there are many environment variables that need to be set.
 
-## Required environment variables (API Publishing)
+## Required environment variables
 
-- **`GISELLE_API_SECRET_SCRYPT_N`**: scrypt N parameter (default: `16384`)
-- **`GISELLE_API_SECRET_SCRYPT_R`**: scrypt r parameter (default: `8`)
-- **`GISELLE_API_SECRET_SCRYPT_P`**: scrypt p parameter (default: `1`)
-- **`GISELLE_API_SECRET_SCRYPT_KEY_LEN`**: derived key length (default: `32`)
-- **`GISELLE_API_SECRET_SCRYPT_SALT_BYTES`**: salt size in bytes (default: `16`)
-- **`GISELLE_API_SECRET_SCRYPT_LOG_DURATION`**: set to `1` to log scrypt duration to server logs (default: disabled)
-- **`FEATURE_RETRY_PANEL`**: enable/disable admin retry transition panel (default: `true`)
-- **`NEXT_PUBLIC_FEATURE_RETRY_PANEL`**: client-visible mirror for retry panel flag where needed
-- **`NEXT_PUBLIC_FEATURE_FUNNEL_ANALYTICS`**: enable client review funnel PostHog events
-- **`FEATURE_AUTO_REFRESH_WEEKLY_METRICS`**: refresh weekly KPI materialized view on status transitions (off by default)
-- **`FEATURE_MANUAL_REFRESH_WEEKLY_METRICS`**: enable manual "Refresh KPIs" action on admin dashboard
-- **`WEEKLY_METRICS_STALE_AFTER_DAYS`**: stale threshold (days) used by dashboard freshness badge
-- **`AGENCY_STAGING_DATABASE_URL`**: staging DB URL used by delivery runbooks/CI checks
+Core runtime:
+- **`DATABASE_URL`**: PostgreSQL connection string
+- **`BETTER_AUTH_SECRET`**: auth secret (32+ chars)
+- **`BETTER_AUTH_URL`**: app origin (for local: `http://localhost:3000`)
+
+OAuth (canonical names used by app):
+- **`GOOGLE_OAUTH_CLIENT_ID`**
+- **`GOOGLE_OAUTH_CLIENT_SECRET`**
+- **`GITHUB_APP_CLIENT_ID`**
+- **`GITHUB_APP_CLIENT_SECRET`**
+
+Delivery ops / release gates:
+- **`AGENCY_STAGING_DATABASE_URL`**: staging DB URL used by runbooks and CI checks
+- **`WEEKLY_METRICS_STALE_AFTER_DAYS`**: freshness threshold used by readiness checks
+- **`RESTORE_DRILL_STALE_AFTER_DAYS`**: restore-drill freshness threshold
+- **`CRON_RATE_LIMIT_MAX_REQUESTS`**: max requests per cron route key within a window
+- **`CRON_RATE_LIMIT_WINDOW_MS`**: cron rate-limit window size in milliseconds
+
+Feature flags:
+- **`FEATURE_RETRY_PANEL`** / **`NEXT_PUBLIC_FEATURE_RETRY_PANEL`**
+- **`FEATURE_AUTO_REFRESH_WEEKLY_METRICS`**
+- **`FEATURE_MANUAL_REFRESH_WEEKLY_METRICS`**
+- **`NEXT_PUBLIC_FEATURE_FUNNEL_ANALYTICS`**
+
+Optional analytics (only if funnel analytics enabled):
+- **`NEXT_PUBLIC_ENABLE_POSTHOG`**
+- **`NEXT_PUBLIC_POSTHOG_KEY`**
+- **`NEXT_PUBLIC_POSTHOG_HOST`**
+
+Notes:
+- Use canonical OAuth names above; avoid alias vars like `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
+- Keep `AGENCY_STAGING_DATABASE_URL` on a single line with no newline wrap.
 
 ## Delivery operations docs
 
 - `docs/runbooks/agency-delivery-staging.md`
 - `docs/runbooks/agency-delivery-rollout-checklist.md`
 - `docs/runbooks/agency-delivery-rollback-snippets.sql`
+- `docs/runbooks/incident-response.md`
+- `docs/runbooks/production-troubleshooting.md`
+- `docs/runbooks/monitoring-and-alerts.md`
+- `docs/runbooks/disaster-recovery.md`
+- `docs/runbooks/release-promotion.md`
 
 ## Delivery ops commands
 

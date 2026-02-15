@@ -6,6 +6,9 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { getDatabase } from '~/lib/.server/db/client';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('api.subscribe');
 
 function isProductionEnv(env: any): boolean {
   return String(env?.NODE_ENV || process.env.NODE_ENV || '').toLowerCase() === 'production';
@@ -75,7 +78,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     return json(data);
   } catch (error) {
-    console.error('Failed to fetch subscription data:', error);
+    logger.error('Failed to fetch subscription data:', error);
     return json(
       { error: 'Failed to fetch subscription data' },
       { status: 500 }
@@ -114,9 +117,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return json({ error: 'Invalid action' }, { status: 400 });
     }
   } catch (error) {
-    console.error('Subscription action failed:', error);
+    logger.error('Subscription action failed:', error);
     return json(
-      { error: error instanceof Error ? error.message : 'Action failed' },
+      { error: 'Action failed' },
       { status: 500 }
     );
   }
@@ -160,8 +163,7 @@ async function getSubscriptionData(env: Env, userId: string) {
     };
     
     const limit = subscription?.monthly_request_limit || planLimits[planId as keyof typeof planLimits] || 5;
-    const used = limit - usage.used;
-    
+
     return {
       subscription: subscription ? {
         subscription_id: subscription.subscription_id,
@@ -185,7 +187,7 @@ async function getSubscriptionData(env: Env, userId: string) {
       stats,
     };
   } catch (error) {
-    console.error('Database query failed:', error);
+    logger.error('Database query failed:', error);
     
     // Fallback to free tier if database fails
     return {
@@ -311,7 +313,7 @@ async function createCheckoutSession(env: Env, data: any) {
       });
     }
   } catch (error) {
-    console.error('Payment integration error:', error);
+    logger.error('Payment integration error:', error);
     throw error;
   }
 }
@@ -374,7 +376,7 @@ async function cancelSubscription(env: Env, data: any) {
         : 'Subscription will cancel at end of billing period',
     });
   } catch (error) {
-    console.error('Failed to cancel subscription:', error);
+    logger.error('Failed to cancel subscription:', error);
     throw error;
   }
 }
@@ -405,7 +407,7 @@ async function createBillingPortal(env: Env, data: any) {
 
     // SSRF protection: only redirect to known payment provider domains
     if (!isAllowedPortalUrl(portalUrl)) {
-      console.error(`[api.subscribe] Rejected portal URL from ${provider}: ${portalUrl}`);
+      logger.error(`Rejected portal URL from ${provider}: ${portalUrl}`);
       return json(
         { error: 'Billing portal returned an unexpected URL' },
         { status: 502 },
@@ -414,7 +416,7 @@ async function createBillingPortal(env: Env, data: any) {
 
     return json({ portalUrl });
   } catch (error) {
-    console.error(`Failed to create billing portal for customer ${customerId}:`, error);
+    logger.error(`Failed to create billing portal for customer ${customerId}:`, error);
     return json(
       { error: 'Failed to create billing portal session' },
       { status: 502 },

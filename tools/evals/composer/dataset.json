@@ -1,0 +1,56 @@
+[
+  {
+    "id": "composer.copy-route-regression",
+    "title": "Copy route keeps copy semantics and error logging",
+    "critical": true,
+    "expected": {
+      "files_touched": [
+        "recoder-web/app/routes/api.projects.copy.ts"
+      ],
+      "required_snippets": [
+        "copy",
+        "logger.error"
+      ],
+      "forbidden_snippets": [
+        "TODO",
+        "FIXME"
+      ]
+    }
+  },
+  {
+    "id": "composer.tools-copy-smoke",
+    "title": "Tools-and-copy smoke path remains covered",
+    "critical": true,
+    "expected": {
+      "files_touched": [
+        "recoder-web/app/routes/api.tools-and-copy.smoke.test.ts"
+      ],
+      "required_snippets": [
+        "tool and copy route smoke tests",
+        "copyProjectAction"
+      ],
+      "forbidden_snippets": [
+        "skip(",
+        "it.skip"
+      ]
+    }
+  },
+  {
+    "id": "composer.message-parser-actions",
+    "title": "Message parser action tests retain action coverage",
+    "critical": false,
+    "expected": {
+      "files_touched": [
+        "recoder-web/app/lib/runtime/message-parser-actions.test.ts"
+      ],
+      "required_snippets": [
+        "message parser",
+        "action"
+      ],
+      "forbidden_snippets": [
+        "TODO",
+        "FIXME"
+      ]
+    }
+  }
+]

@@ -307,10 +307,10 @@ export class OAuthHandler extends EventEmitter {
    */
   private generateState(provider: string, platform: string): string {
     const timestamp = Date.now().toString();
-    const randomBytes = Array.from({ length: 16 }, () => 
-      Math.floor(Math.random() * 256).toString(16).padStart(2, '0')
-    ).join('');
-    
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const randomBytes = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
     return Buffer.from(`${provider}:${platform}:${timestamp}:${randomBytes}`).toString('base64url');
   }
 

@@ -125,6 +125,7 @@ export async function newShellProcess(terminal: ITerminal, projectId: string, te
       newWs.binaryType = 'arraybuffer';
 
       newWs.onopen = () => {
+        const wasReconnect = reconnectAttempts > 0;
         ws = newWs;
         reconnectAttempts = 0;
         reconnectDelay = RECONNECT_INITIAL_DELAY;
@@ -138,6 +139,11 @@ export async function newShellProcess(terminal: ITerminal, projectId: string, te
               ws.send(data);
             }
           });
+        }
+
+        // On reconnect, notify file watcher to re-sync state
+        if (wasReconnect) {
+          window.dispatchEvent(new CustomEvent('recoder:file-resync'));
         }
 
         resolve();

@@ -8,12 +8,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import type { FileFilteringOptions } from '../config/config.js';
-// Simple console logger for now.
-// TODO: Integrate with a more robust server-side logger.
-const logger = {
-   
-  debug: (...args: any[]) => console.debug('[DEBUG] [BfsFileSearch]', ...args),
-};
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('BfsFileSearch');
 
 interface BfsFileSearchOptions {
   fileName: string;
@@ -84,7 +81,7 @@ export async function bfsFileSearch(
       } catch (error) {
         // Warn user that a directory could not be read, as this affects search results.
         const message = (error as Error)?.message ?? 'Unknown error';
-        console.warn(
+        logger.warn(
           `[WARN] Skipping unreadable directory: ${currentDir} (${message})`,
         );
         if (debug) {

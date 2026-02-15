@@ -8,6 +8,10 @@ import type { Content } from '@google/genai';
 import { DEFAULT_QWEN_MODEL } from '../config/models.js';
 import type { GeminiClient } from '../core/client.js';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SubagentGenerator');
+
 const SYSTEM_PROMPT = `You are an elite AI agent architect specializing in crafting high-performance agent configurations. Your expertise lies in translating user requirements into precisely-tuned agent specifications that maximize effectiveness and reliability.
 
 **Important Context**: You may have access to project-specific instructions from RECODER.md files and other context that may include coding standards, project structure, and custom requirements. Consider this context when creating agents to ensure they align with the project's established patterns and practices.
@@ -153,7 +157,7 @@ export async function subagentGenerator(
         .slice(0, 4)
         .join('-');
       parsedResponse.name = nameFromDescription || 'custom-agent';
-      console.log('[Subagent] Auto-generated name:', parsedResponse.name);
+      logger.info('[Subagent] Auto-generated name:', parsedResponse.name);
     }
 
     // Auto-fix systemPrompt if missing or invalid
@@ -166,20 +170,20 @@ export async function subagentGenerator(
         `- Following best practices in your domain\n` +
         `- Being proactive in identifying potential issues\n\n` +
         `Always be thorough, accurate, and helpful in your responses.`;
-      console.log('[Subagent] Auto-generated system prompt (length:', parsedResponse.systemPrompt.length, 'chars)');
+      logger.info('[Subagent] Auto-generated system prompt (length:', parsedResponse.systemPrompt.length, 'chars)');
     }
 
     // Auto-fix description if missing
     if (!parsedResponse.description || typeof parsedResponse.description !== 'string' || parsedResponse.description.trim() === '') {
       // Generate a default description from the name and user input
       parsedResponse.description = `Use this agent for ${userDescription}`;
-      console.log('[Subagent] Auto-generated description:', parsedResponse.description);
+      logger.info('[Subagent] Auto-generated description:', parsedResponse.description);
     }
 
     // Final validation - ensure we have all required fields
     if (!parsedResponse.name || !parsedResponse.systemPrompt) {
-      console.error('[Subagent] Validation failed after auto-fix attempts');
-      console.error('[Subagent] Response:', JSON.stringify(parsedResponse, null, 2));
+      logger.error('[Subagent] Validation failed after auto-fix attempts');
+      logger.error('[Subagent] Response:', JSON.stringify(parsedResponse, null, 2));
       throw new Error(
         `Failed to generate valid subagent configuration.\n` +
         `Please try being more specific about what the agent should do.`

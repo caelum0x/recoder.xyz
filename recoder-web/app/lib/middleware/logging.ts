@@ -5,6 +5,8 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import type { LoggingConfig, LogEntry, ExtendedRequest, MiddlewareHandler } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LoggingMiddleware');
 
 /**
  * Default logging configuration
@@ -120,7 +122,7 @@ export function createLoggingMiddleware(config?: Partial<LoggingConfig>): Middle
           }),
         },
       };
-      console.log(JSON.stringify(logEntry));
+      logger.info(JSON.stringify(logEntry));
     }
 
     // Capture response finish
@@ -187,7 +189,7 @@ export function createLoggingMiddleware(config?: Partial<LoggingConfig>): Middle
           stack: error.stack,
         },
       };
-      console.error(JSON.stringify(logEntry));
+      logger.error(JSON.stringify(logEntry));
     });
 
     next();
@@ -215,7 +217,7 @@ export function createLogger(service: string) {
           requestId: crypto.randomUUID(),
           metadata,
         };
-        console.log(JSON.stringify(logEntry));
+        logger.info(JSON.stringify(logEntry));
       }
     },
 
@@ -229,7 +231,7 @@ export function createLogger(service: string) {
           requestId: crypto.randomUUID(),
           metadata,
         };
-        console.log(JSON.stringify(logEntry));
+        logger.info(JSON.stringify(logEntry));
       }
     },
 
@@ -243,7 +245,7 @@ export function createLogger(service: string) {
           requestId: crypto.randomUUID(),
           metadata,
         };
-        console.warn(JSON.stringify(logEntry));
+        logger.warn(JSON.stringify(logEntry));
       }
     },
 
@@ -263,7 +265,7 @@ export function createLogger(service: string) {
             }),
           },
         };
-        console.error(JSON.stringify(logEntry));
+        logger.error(JSON.stringify(logEntry));
       }
     },
 
@@ -285,7 +287,7 @@ export function createLogger(service: string) {
               requestId,
               metadata,
             };
-            console.log(JSON.stringify(logEntry));
+            logger.info(JSON.stringify(logEntry));
           }
         },
 
@@ -299,7 +301,7 @@ export function createLogger(service: string) {
               requestId,
               metadata,
             };
-            console.log(JSON.stringify(logEntry));
+            logger.info(JSON.stringify(logEntry));
           }
         },
 
@@ -313,7 +315,7 @@ export function createLogger(service: string) {
               requestId,
               metadata,
             };
-            console.warn(JSON.stringify(logEntry));
+            logger.warn(JSON.stringify(logEntry));
           }
         },
 
@@ -333,7 +335,7 @@ export function createLogger(service: string) {
                 }),
               },
             };
-            console.error(JSON.stringify(logEntry));
+            logger.error(JSON.stringify(logEntry));
           }
         },
       };
@@ -378,7 +380,7 @@ export function createPerformanceLoggingMiddleware(
               status: res.statusCode,
             },
           };
-          console.warn(JSON.stringify(logEntry));
+          logger.warn(JSON.stringify(logEntry));
         }
       }
 
@@ -415,7 +417,7 @@ export function createAccessLogMiddleware(service?: string): MiddlewareHandler {
 
         // Combined log format: %h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-agent}i"
         const timestamp = new Date().toISOString();
-        console.log(
+        logger.info(
           `[${serviceName}] ${clientIp} - - [${timestamp}] "${method} ${url}" ${status} ${contentLength} "${userAgent}" ${duration}ms`
         );
       }

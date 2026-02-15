@@ -11,7 +11,12 @@
  * - API key rotation with failover on rate limits, timeouts, and server errors
  */
 
-import { classifyError, type ClassifiedError } from '~/lib/services/error-classifier';
+import { classifyError } from '~/lib/services/error-classifier';
+import { createScopedLogger } from '~/utils/logger';
+import { SSEParser, decode, encode, extractChatCompletionDelta } from './sse-utils';
+
+const logger = createScopedLogger('OpenRouterStream');
+
 
 export interface StreamOptions {
   model?: string;
@@ -87,7 +92,7 @@ function initializeKeys(primaryKey: string, env?: Record<string, string | undefi
   _initializedEnvFingerprint = fp;
 
   if (_keyStates.length > 1) {
-    console.log(`[openrouter] Key pool initialized with ${_keyStates.length} keys`);
+    logger.info(`[openrouter] Key pool initialized with ${_keyStates.length} keys`);
   }
 }
 
@@ -150,7 +155,7 @@ function markKeyFailed(key: string, errorType: 'rate_limit' | 'auth' | 'timeout'
   _currentKeyIndex = (_currentKeyIndex + 1) % _keyStates.length;
 
   if (total > 1) {
-    console.log(`[openrouter] Rotating to key ${(_currentKeyIndex + 1)}/${total} after ${errorType}`);
+    logger.info(`[openrouter] Rotating to key ${(_currentKeyIndex + 1)}/${total} after ${errorType}`);
   }
 }
 
@@ -256,10 +261,10 @@ export async function streamOpenRouterResponse(
   const model = options.model || 'google/gemini-2.0-flash-exp:free';
   const maxTokens = options.max_tokens ?? 16000; // Increased from 8000
 
-  console.log('🚀 [OpenRouter] Starting request to OpenRouter API');
-  console.log('📝 [OpenRouter] Model:', model);
-  console.log('📊 [OpenRouter] Messages count:', messages.length);
-  console.log('🔢 [OpenRouter] Max tokens:', maxTokens);
+  logger.info('🚀 [OpenRouter] Starting request to OpenRouter API');
+  logger.info('📝 [OpenRouter] Model:', model);
+  logger.info('📊 [OpenRouter] Messages count:', messages.length);
+  logger.info('🔢 [OpenRouter] Max tokens:', maxTokens);
 
   // Initialize key pool (primary key + any env rotation keys)
   initializeKeys(apiKey, options.env);
@@ -270,7 +275,7 @@ export async function streamOpenRouterResponse(
   for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
     if (attempt > 0) {
       const delay = getRetryDelay(attempt - 1);
-      console.log(`🔄 [OpenRouter] Retry attempt ${attempt}/${RETRY_CONFIG.maxRetries} after ${Math.round(delay)}ms delay`);
+      logger.info(`🔄 [OpenRouter] Retry attempt ${attempt}/${RETRY_CONFIG.maxRetries} after ${Math.round(delay)}ms delay`);
       await sleep(delay);
     }
 
@@ -301,12 +306,12 @@ export async function streamOpenRouterResponse(
       }
 
       if (!isRetryableError(error) || attempt === RETRY_CONFIG.maxRetries) {
-        console.error(`❌ [OpenRouter] Final error [${classified.category}] after ${attempt + 1} attempt(s):`, error.message);
-        console.error(`   User message: ${classified.userMessage}${classified.suggestion ? ` | Suggestion: ${classified.suggestion}` : ''}`);
+        logger.error(`❌ [OpenRouter] Final error [${classified.category}] after ${attempt + 1} attempt(s):`, error.message);
+        logger.error(`   User message: ${classified.userMessage}${classified.suggestion ? ` | Suggestion: ${classified.suggestion}` : ''}`);
         throw error;
       }
 
-      console.warn(`⚠️ [OpenRouter] Attempt ${attempt + 1} failed [${classified.category}] (retryable): ${error.message}`);
+      logger.warn(`⚠️ [OpenRouter] Attempt ${attempt + 1} failed [${classified.category}] (retryable): ${error.message}`);
     }
   }
 
@@ -360,7 +365,7 @@ async function attemptStreamRequest(
   } catch (error: any) {
     clearTimeout(timeoutId);
     const fetchClassified = classifyError(error);
-    console.error(`❌ [OpenRouter] Fetch error [${fetchClassified.category}]:`, error.message);
+    logger.error(`❌ [OpenRouter] Fetch error [${fetchClassified.category}]:`, error.message);
     if (error.name === 'AbortError') {
       throw new OpenRouterError(
         'Request timed out. The AI response is taking too long. Please try a shorter message.',
@@ -377,11 +382,11 @@ async function attemptStreamRequest(
     );
   }
 
-  console.log('📡 [OpenRouter] Response received:', response.status, response.statusText);
+  logger.info('📡 [OpenRouter] Response received:', response.status, response.statusText);
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('❌ [OpenRouter] Error response:', errorText);
+    logger.error('❌ [OpenRouter] Error response:', errorText);
 
     let errorData: any = {};
     try {
@@ -419,7 +424,7 @@ async function attemptStreamRequest(
 
     // Classify for observability logging
     const classified = classifyError(message);
-    console.error(`   Classified as [${classified.category}] retryable=${classified.retryable}`);
+    logger.error(`   Classified as [${classified.category}] retryable=${classified.retryable}`);
 
     throw new OpenRouterError(message, code, statusCode, retryable);
   }
@@ -428,97 +433,94 @@ async function attemptStreamRequest(
     throw new OpenRouterError('No response body received', 'NO_RESPONSE_BODY', undefined, true);
   }
 
-  console.log('✅ [OpenRouter] Starting stream processing');
-
-  // Transform SSE stream to plain text with improved handling
-  const textEncoder = new TextEncoder();
-  const textDecoder = new TextDecoder();
+  logger.info('✅ [OpenRouter] Starting stream processing');
 
   return new ReadableStream({
     async start(streamController) {
       const reader = response.body!.getReader();
-      let buffer = '';
       let chunkCount = 0;
       let totalContent = '';
       let finishReason: string | null = null;
+      const parser = new SSEParser((frame) => {
+        const dataString = frame.data.trim();
+        if (!dataString || dataString === '[DONE]') return;
 
-      console.log('🔄 [OpenRouter] Stream reader started');
+        try {
+          const data = JSON.parse(dataString);
+
+          // Check for API errors in the stream
+          if (data.error) {
+            logger.error('❌ [OpenRouter] API error in stream:', data.error);
+            streamController.error(new OpenRouterError(
+              `OpenRouter API error: ${JSON.stringify(data.error)}`,
+              'STREAM_ERROR',
+              undefined,
+              false
+            ));
+            return;
+          }
+
+          // Track finish reason
+          if (data.choices?.[0]?.finish_reason) {
+            finishReason = data.choices[0].finish_reason;
+          }
+
+          const content = extractChatCompletionDelta(dataString);
+          if (content) {
+            chunkCount++;
+            totalContent += content;
+            if (chunkCount === 1) {
+              logger.info('📝 [OpenRouter] First chunk received');
+            }
+            if (chunkCount % 100 === 0) {
+              logger.info(`📝 [OpenRouter] Progress: ${chunkCount} chunks, ${totalContent.length} chars`);
+            }
+            streamController.enqueue(encode(content));
+          }
+        } catch {
+          // Only warn for non-empty, non-comment lines
+          if (dataString && !dataString.startsWith(':')) {
+            logger.warn('⚠️ [OpenRouter] Failed to parse SSE line:', dataString.substring(0, 100));
+          }
+        }
+      });
+
+      logger.info('🔄 [OpenRouter] Stream reader started');
 
       try {
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
-            console.log('✅ [OpenRouter] Stream complete. Total chunks:', chunkCount);
-            console.log('📊 [OpenRouter] Total content length:', totalContent.length);
+            logger.info('✅ [OpenRouter] Stream complete. Total chunks:', chunkCount);
+            logger.info('📊 [OpenRouter] Total content length:', totalContent.length);
 
             // Check for incomplete response
             if (finishReason === 'length') {
-              console.warn('⚠️ [OpenRouter] Response may be truncated (finish_reason: length)');
+              logger.warn('⚠️ [OpenRouter] Response may be truncated (finish_reason: length)');
             }
 
             break;
           }
 
-          buffer += textDecoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed === 'data: [DONE]') continue;
-            if (!trimmed.startsWith('data: ')) continue;
-
-            try {
-              const data = JSON.parse(trimmed.substring(6));
-
-              // Check for API errors in the stream
-              if (data.error) {
-                console.error('❌ [OpenRouter] API error in stream:', data.error);
-                streamController.error(new OpenRouterError(
-                  `OpenRouter API error: ${JSON.stringify(data.error)}`,
-                  'STREAM_ERROR',
-                  undefined,
-                  false
-                ));
-                return;
-              }
-
-              // Track finish reason
-              if (data.choices?.[0]?.finish_reason) {
-                finishReason = data.choices[0].finish_reason;
-              }
-
-              const content = data.choices?.[0]?.delta?.content;
-              if (content) {
-                chunkCount++;
-                totalContent += content;
-                if (chunkCount === 1) {
-                  console.log('📝 [OpenRouter] First chunk received');
-                }
-                if (chunkCount % 100 === 0) {
-                  console.log(`📝 [OpenRouter] Progress: ${chunkCount} chunks, ${totalContent.length} chars`);
-                }
-                streamController.enqueue(textEncoder.encode(content));
-              }
-            } catch (e) {
-              // Only warn for non-empty, non-comment lines
-              if (trimmed && !trimmed.startsWith(':')) {
-                console.warn('⚠️ [OpenRouter] Failed to parse SSE line:', trimmed.substring(0, 100));
-              }
-            }
-          }
+          parser.push(decode(value));
         }
 
+        const finalChunk = decode(new Uint8Array(), false);
+        if (finalChunk) {
+          parser.push(finalChunk);
+        }
+        parser.flush();
+
         if (chunkCount === 0) {
-          console.warn('⚠️ [OpenRouter] Stream completed but NO content chunks were received!');
-          console.warn('   This could indicate an API error, invalid model, or authentication issue.');
+          logger.warn('⚠️ [OpenRouter] Stream completed but NO content chunks were received!');
+          logger.warn('   This could indicate an API error, invalid model, or authentication issue.');
         }
 
         streamController.close();
-        console.log('🏁 [OpenRouter] Stream closed successfully');
+        logger.info('🏁 [OpenRouter] Stream closed successfully');
       } catch (error) {
-        console.error('❌ [OpenRouter] Stream error:', error);
+        logger.error('❌ [OpenRouter] Stream error:', error);
         streamController.error(error);
       } finally {
         reader.releaseLock();

@@ -9,6 +9,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { UAParser } from 'ua-parser-js';
+import { assertAuthSessionsListResponse } from '@/lib/contracts/auth-session-contracts';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        assertAuthSessionsListResponse({ success: false, error: 'Unauthorized' }),
         { status: 401 }
       );
     }
@@ -57,15 +58,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({
+    return NextResponse.json(assertAuthSessionsListResponse({
       success: true,
       sessions: sessionsWithInfo
-    });
+    }));
 
   } catch (error: any) {
     console.error('[Sessions GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch sessions' },
+      assertAuthSessionsListResponse({ success: false, error: 'Failed to fetch sessions' }),
       { status: 500 }
     );
   }
@@ -79,7 +80,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!session?.user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        assertAuthSessionsListResponse({ success: false, error: 'Unauthorized' }),
         { status: 401 }
       );
     }
@@ -89,7 +90,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!sessionId) {
       return NextResponse.json(
-        { success: false, error: 'Session ID required' },
+        assertAuthSessionsListResponse({ success: false, error: 'Session ID required' }),
         { status: 400 }
       );
     }
@@ -101,7 +102,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!sessionToDelete || sessionToDelete.userId !== session.user.id) {
       return NextResponse.json(
-        { success: false, error: 'Session not found or unauthorized' },
+        assertAuthSessionsListResponse({ success: false, error: 'Session not found or unauthorized' }),
         { status: 404 }
       );
     }
@@ -109,7 +110,10 @@ export async function DELETE(request: NextRequest) {
     // Don't allow deleting current session
     if (sessionId === session.session.id) {
       return NextResponse.json(
-        { success: false, error: 'Cannot revoke current session. Please sign out instead.' },
+        assertAuthSessionsListResponse({
+          success: false,
+          error: 'Cannot revoke current session. Please sign out instead.',
+        }),
         { status: 400 }
       );
     }
@@ -119,15 +123,15 @@ export async function DELETE(request: NextRequest) {
       where: { id: sessionId }
     });
 
-    return NextResponse.json({
+    return NextResponse.json(assertAuthSessionsListResponse({
       success: true,
       message: 'Session revoked successfully'
-    });
+    }));
 
   } catch (error: any) {
     console.error('[Sessions DELETE] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to revoke session' },
+      assertAuthSessionsListResponse({ success: false, error: 'Failed to revoke session' }),
       { status: 500 }
     );
   }

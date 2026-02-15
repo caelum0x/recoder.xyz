@@ -54,10 +54,10 @@ jobs:
           
           if [[ "$ENV" == "production" ]]; then
             WEB_URL="https://recoder.xyz"
-            CHAT_URL="https://recoder.xyz/chat"
+            PM_URL="https://pm.recoder.xyz"
           else
             WEB_URL="https://staging.recoder.xyz"
-            CHAT_URL="https://chat-staging.recoder.xyz"
+            PM_URL="https://pm-staging.recoder.xyz"
           fi
           
           echo "🔍 Running health checks for $ENV environment..."
@@ -72,14 +72,14 @@ jobs:
             WEB_STATUS="❌ Unhealthy"
           fi
           
-          # Chat Platform Health Check
-          echo "💬 Checking Chat Platform..."
-          if curl -f -s "$CHAT_URL/api/health" > /dev/null; then
-            echo "✅ Chat Platform: Healthy"
-            CHAT_STATUS="✅ Healthy"
+          # PM Platform Health Check
+          echo "📋 Checking PM Platform..."
+          if curl -f -s "$PM_URL/api/health" > /dev/null; then
+            echo "✅ PM Platform: Healthy"
+            PM_STATUS="✅ Healthy"
           else
-            echo "❌ Chat Platform: Unhealthy" 
-            CHAT_STATUS="❌ Unhealthy"
+            echo "❌ PM Platform: Unhealthy"
+            PM_STATUS="❌ Unhealthy"
           fi
           
           # AI Providers Health Check
@@ -95,9 +95,17 @@ jobs:
           
           # Store results for summary
           echo "WEB_STATUS=$WEB_STATUS" >> $GITHUB_ENV
-          echo "CHAT_STATUS=$CHAT_STATUS" >> $GITHUB_ENV
+          echo "PM_STATUS=$PM_STATUS" >> $GITHUB_ENV
           echo "AI_STATUS=$AI_STATUS" >> $GITHUB_ENV
           echo "DB_STATUS=$DB_STATUS" >> $GITHUB_ENV
+          echo "WEB_BASE_URL=$WEB_URL" >> $GITHUB_ENV
+
+      - name: 🧪 Static asset smoke checks
+        run: |
+          BASE_URL="${WEB_BASE_URL:-https://recoder.xyz}"
+          echo "🔍 Running static asset smoke checks against $BASE_URL"
+          chmod +x app/scripts/smoke-static-assets.sh
+          BASE_URL="$BASE_URL" app/scripts/smoke-static-assets.sh
           
       - name: ⚡ Performance monitoring
         run: |
@@ -108,7 +116,7 @@ jobs:
           # Simulate performance metrics collection
           echo "📈 Performance Metrics for $ENV:"
           echo "- 🌐 Web Platform Response Time: ~1.2s"
-          echo "- 💬 Chat Platform Response Time: ~0.8s"
+          echo "- 💬 PM Platform Response Time: ~0.8s"
           echo "- 🤖 AI Response Times:"
           echo "  - Claude Sonnet 4 (OpenRouter): ~2.3s"
           echo "  - Gemini 2.5 Flash (OpenRouter): ~1.1s"
@@ -178,7 +186,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🏥 Health Status" >> $GITHUB_STEP_SUMMARY
           echo "- **Web Platform**: ${{ env.WEB_STATUS }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Chat Platform**: ${{ env.CHAT_STATUS }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PM Platform**: ${{ env.PM_STATUS }}" >> $GITHUB_STEP_SUMMARY
           echo "- **AI Providers**: ${{ env.AI_STATUS }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Database**: ${{ env.DB_STATUS }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -240,20 +248,20 @@ jobs:
           
           echo "✅ Web Platform rollback completed"
           
-      - name: 💬 Rollback chat platform
+      - name: 📋 Rollback PM platform
         run: |
           ENV="${{ github.event.inputs.environment }}"
           VERSION="${{ github.event.inputs.rollback_version }}"
-          
-          echo "💬 Rolling back Chat Platform to version $VERSION..."
-          
+
+          echo "📋 Rolling back PM Platform to version $VERSION..."
+
           # Simulate rollback process
           echo "📦 Downloading artifacts for version $VERSION"
           echo "🔄 Updating deployment configuration"
           echo "🚀 Deploying previous version"
           echo "🔍 Verifying rollback success"
-          
-          echo "✅ Chat Platform rollback completed"
+
+          echo "✅ PM Platform rollback completed"
           
       - name: 📱 Rollback mobile apps
         run: |
@@ -312,7 +320,7 @@ jobs:
           # Health checks after rollback
           echo "🏥 Running post-rollback health checks..."
           echo "✅ Web Platform: Healthy"
-          echo "✅ Chat Platform: Healthy"
+          echo "✅ PM Platform: Healthy"
           echo "✅ Database: Connected"
           echo "✅ AI Providers: Operational"
           
@@ -335,7 +343,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🏗️ Platforms Rolled Back" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Web Platform** (recoder-web)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Chat Platform** (recoder-chat)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **PM Platform** (recoder-pm)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Mobile Apps** (iOS/Android)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Desktop Apps** (Cross-platform)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Browser Extension** (Chrome/Firefox)" >> $GITHUB_STEP_SUMMARY
@@ -358,7 +366,7 @@ jobs:
       matrix:
         platform:
           - { name: 'Web', url: 'https://recoder.xyz', staging_url: 'https://staging.recoder.xyz' }
-          - { name: 'Chat', url: 'https://recoder.xyz/chat', staging_url: 'https://chat-staging.recoder.xyz' }
+          - { name: 'PM', url: 'https://pm.recoder.xyz', staging_url: 'https://pm-staging.recoder.xyz' }
           
     steps:
       - name: 📂 Checkout code
@@ -497,7 +505,7 @@ jobs:
           # Update system status
           echo "🏥 System Health Status:"
           echo "  - Web Platform: ✅ Operational"
-          echo "  - Chat Platform: ✅ Operational"
+          echo "  - PM Platform: ✅ Operational"
           echo "  - Mobile Apps: ✅ Operational"
           echo "  - Desktop Apps: ✅ Operational"
           echo "  - Browser Extension: ✅ Operational"

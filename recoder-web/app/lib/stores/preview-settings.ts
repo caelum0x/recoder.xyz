@@ -6,6 +6,10 @@
 
 import { atom, computed } from 'nanostores';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PreviewSettings');
+
 // Storage key for persisting preferences
 const PREVIEW_SETTINGS_KEY = 'recoder_preview_settings';
 
@@ -80,7 +84,7 @@ function loadState(): PreviewSettingsState {
       };
     }
   } catch (e) {
-    console.error('[PreviewSettings] Failed to load state:', e);
+    logger.error('[PreviewSettings] Failed to load state:', e);
   }
 
   return DEFAULT_STATE;
@@ -98,7 +102,7 @@ function saveState(state: PreviewSettingsState): void {
     };
     localStorage.setItem(PREVIEW_SETTINGS_KEY, JSON.stringify(toSave));
   } catch (e) {
-    console.error('[PreviewSettings] Failed to save state:', e);
+    logger.error('[PreviewSettings] Failed to save state:', e);
   }
 }
 
@@ -174,7 +178,7 @@ export function toggleFullscreen(): void {
     ...state,
     isFullscreen: !state.isFullscreen,
   });
-  console.log(`[PreviewSettings] Fullscreen: ${!state.isFullscreen}`);
+  logger.info(`[PreviewSettings] Fullscreen: ${!state.isFullscreen}`);
 }
 
 /**
@@ -215,7 +219,7 @@ export function setQuickDevicePreset(preset: QuickDevicePreset): void {
     ...state,
     quickDevicePreset: preset,
   });
-  console.log(`[PreviewSettings] Quick preset: ${preset}`);
+  logger.info(`[PreviewSettings] Quick preset: ${preset}`);
 }
 
 /**
@@ -245,5 +249,5 @@ export function toggleAutoPolling(): void {
  */
 export function resetPreviewSettings(): void {
   previewSettingsStore.set(DEFAULT_STATE);
-  console.log('[PreviewSettings] Reset to defaults');
+  logger.info('[PreviewSettings] Reset to defaults');
 }

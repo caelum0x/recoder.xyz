@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('RateLimiter');
 /**
  * @license
  * Copyright 2025 Google LLC
@@ -54,7 +56,7 @@ export class RateLimiter {
     const waitTime = Math.ceil(tokensNeeded / this.refillRate);
     
     if (waitTime > 0) {
-      console.log(`[Rate Limiter] Throttling request, waiting ${waitTime}ms to avoid rate limits...`);
+      logger.info(`[Rate Limiter] Throttling request, waiting ${waitTime}ms to avoid rate limits...`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
       return this.acquire();
     }

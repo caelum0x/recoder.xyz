@@ -9,6 +9,7 @@ import {
 	createProjectFromPlaybook as createFromPlaybook,
 	upsertDeliveryPlaybook as upsertPlaybook,
 } from "@/lib/agency/playbook-actions";
+import { normalizePlaybookPhases } from "@/lib/agency/playbook-phase-validation";
 import { requireAdminRole } from "@/services/teams";
 
 function parseChecklistItems(raw: string): string[] {
@@ -193,13 +194,19 @@ export async function upsertDeliveryPlaybookAction(formData: FormData) {
 	let phases: PlaybookPhase[] = [];
 	const phasesRaw = String(formData.get("phases") ?? "").trim();
 	if (phasesRaw) {
+		let parsedPhases: unknown;
 		try {
-			const parsed = JSON.parse(phasesRaw);
-			if (Array.isArray(parsed)) {
-				phases = parsed;
-			}
+			parsedPhases = JSON.parse(phasesRaw);
 		} catch {
 			throw new Error("Phases must be valid JSON array.");
+		}
+		try {
+			phases = normalizePlaybookPhases(parsedPhases);
+		} catch (error) {
+			if (error instanceof Error) {
+				throw error;
+			}
+			throw new Error("Invalid phase configuration.");
 		}
 	}
 

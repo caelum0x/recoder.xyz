@@ -5,6 +5,8 @@
 import { useEffect, useState } from 'react';
 import { getWebContainer } from '~/lib/runtime';
 import { integrateRecoderContext } from '~/lib/recoder-context/webcontainer-integration';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('RecoderContext');
 
 export function useRecoderContext(isFirstMessage: boolean) {
   const [context, setContext] = useState<string>('');
@@ -32,7 +34,7 @@ export function useRecoderContext(isFirstMessage: boolean) {
       );
       setContext(contextPrompt);
     } catch (error) {
-      console.error('Failed to load .recoder/ context:', error);
+      logger.error('Failed to load .recoder/ context:', error);
       setContext('');
     } finally {
       setIsLoading(false);

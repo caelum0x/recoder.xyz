@@ -3,6 +3,10 @@
  * Send alerts for system issues, errors, and important events
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MonitoringAlerts');
+
 interface AlertConfig {
   webhookUrl?: string;
   email?: string;
@@ -38,7 +42,7 @@ export class AlertManager {
    * Send alert
    */
   async sendAlert(alert: Alert): Promise<void> {
-    console.log(`[ALERT ${alert.level.toUpperCase()}] ${alert.title}: ${alert.message}`);
+    logger.info(`[ALERT ${alert.level.toUpperCase()}] ${alert.title}: ${alert.message}`);
 
     // Send to configured channels
     const promises: Promise<void>[] = [];
@@ -91,7 +95,7 @@ export class AlertManager {
         }),
       });
     } catch (error) {
-      console.error('Failed to send Slack alert:', error);
+      logger.error('Failed to send Slack alert:', error);
     }
   }
 
@@ -129,7 +133,7 @@ export class AlertManager {
         }),
       });
     } catch (error) {
-      console.error('Failed to send Discord alert:', error);
+      logger.error('Failed to send Discord alert:', error);
     }
   }
 
@@ -146,7 +150,7 @@ export class AlertManager {
         body: JSON.stringify(alert),
       });
     } catch (error) {
-      console.error('Failed to send webhook alert:', error);
+      logger.error('Failed to send webhook alert:', error);
     }
   }
 

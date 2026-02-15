@@ -10,6 +10,10 @@
  * - Optional Prometheus-compatible format output
  */
 
+import { createLogger } from './logger.js';
+
+const logger = createLogger('metrics');
+
 // ==================== TYPES ====================
 
 export interface RequestMetric {
@@ -492,7 +496,7 @@ class MetricsCollector {
     this.errors = this.errors.filter(e => e.timestamp > cutoff);
 
     if (this.errors.length < originalLength) {
-      console.log(`[Metrics] Cleaned up ${originalLength - this.errors.length} old errors`);
+      logger.info({ removed: originalLength - this.errors.length }, 'Cleaned up old errors');
     }
   }
 

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     console.error('❌ [api/cli/device] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to create device code',
+        error: 'Failed to create device code',
       },
       { status: 500 }
     );
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
     console.error('❌ [api/cli/device/poll] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Polling failed',
+        error: 'Polling failed',
       },
       { status: 500 }
     );
@@ -269,7 +269,7 @@ export async function PUT(request: NextRequest) {
     console.error('❌ [api/cli/device/authorize] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Authorization failed',
+        error: 'Authorization failed',
       },
       { status: 500 }
     );

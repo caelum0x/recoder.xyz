@@ -1,0 +1,18 @@
+{
+  "name": "@repo/productboard",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run build",
+    "build": "test -f ./types.d.ts",
+    "generate:types": "npx -y openapi-typescript@latest ./schema.json -o ./types.d.ts"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.14.0"
+  }
+}

@@ -1,5 +1,10 @@
+import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import {
+	buildCronRateLimitHeaders,
+	consumeCronRateLimit,
+} from "@/app/api/_lib/cron-rate-limit";
 import { alertSubscriptions, db } from "@/db";
 import {
 	checkAndFireAlerts,
@@ -7,13 +12,36 @@ import {
 	parseDeliveryOpsFilters,
 } from "@/lib/agency/delivery-ops";
 
+function verifyCronSecret(authHeader: string | null): boolean {
+	const cronSecret = process.env.CRON_SECRET;
+	if (!cronSecret || !authHeader) return false;
+	const expected = `Bearer ${cronSecret}`;
+	if (authHeader.length !== expected.length) return false;
+	return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+}
+
 // Recommended cron schedule: 0 8 * * * (daily 8 AM UTC)
 export async function GET(request: Request) {
-	const authHeader = request.headers.get("authorization");
-	const cronSecret = process.env.CRON_SECRET;
-
-	if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+	if (!verifyCronSecret(request.headers.get("authorization"))) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	}
+
+	const rateLimit = consumeCronRateLimit({
+		routeKey: "agency_cron_delivery_alerts",
+	});
+	const rateLimitHeaders = buildCronRateLimitHeaders({
+		limit: rateLimit.limit,
+		remaining: rateLimit.remaining,
+		resetAt: rateLimit.resetAt,
+		retryAfterSeconds: rateLimit.allowed
+			? undefined
+			: rateLimit.retryAfterSeconds,
+	});
+	if (!rateLimit.allowed) {
+		return NextResponse.json(
+			{ error: "Too many cron requests" },
+			{ status: 429, headers: rateLimitHeaders },
+		);
 	}
 
 	try {
@@ -35,12 +63,15 @@ export async function GET(request: Request) {
 			}
 		}
 
-		return NextResponse.json({ ok: true, teamsProcessed: processed });
+		return NextResponse.json(
+			{ ok: true, teamsProcessed: processed },
+			{ headers: rateLimitHeaders },
+		);
 	} catch (error) {
 		console.error("Delivery alerts cron error:", error);
 		return NextResponse.json(
 			{ error: "Internal server error" },
-			{ status: 500 },
+			{ status: 500, headers: rateLimitHeaders },
 		);
 	}
 }

@@ -28,6 +28,9 @@ import {
 import { addGenerations } from './generation-store';
 import { useGenerationPolling } from './useGenerationPolling';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('GiselleTaskSystem');
+
 // ============================================================
 // Types
 // ============================================================
@@ -92,7 +95,7 @@ async function fetchInProgressTask(
     const data = (await response.json()) as Record<string, any>;
     return data.task;
   } catch (err) {
-    console.error('Error fetching in-progress task:', err);
+    logger.error('Error fetching in-progress task:', err);
     return undefined;
   }
 }
@@ -119,7 +122,7 @@ async function fetchGeneration(
     const data = (await response.json()) as Record<string, any>;
     return data.generation;
   } catch (err) {
-    console.error('Error fetching generation:', err);
+    logger.error('Error fetching generation:', err);
     return undefined;
   }
 }
@@ -274,7 +277,7 @@ export function useTaskSystem(
 
           await new Promise((r) => setTimeout(r, pollingInterval));
         } catch (err) {
-          console.error('Error polling task generations:', err);
+          logger.error('Error polling task generations:', err);
           await new Promise((r) => setTimeout(r, pollingInterval));
         }
       }
@@ -322,7 +325,7 @@ export function useTaskSystem(
         // Start polling
         await pollingTaskGenerations(task.id, callbacks);
       } catch (err) {
-        console.error('Error creating/starting task:', err);
+        logger.error('Error creating/starting task:', err);
         throw err;
       } finally {
         setTaskCreating(false);
@@ -346,7 +349,7 @@ export function useTaskSystem(
         completedAt: Date.now(),
       });
     } catch (err) {
-      console.error('Error cancelling task:', err);
+      logger.error('Error cancelling task:', err);
     }
   }, [activeTask]);
 
@@ -363,7 +366,7 @@ export function useTaskSystem(
         });
         return task;
       } catch (err) {
-        console.error('Error refreshing task status:', err);
+        logger.error('Error refreshing task status:', err);
         return null;
       }
     },

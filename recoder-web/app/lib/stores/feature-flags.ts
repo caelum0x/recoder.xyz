@@ -10,6 +10,7 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
 import {
   type FeatureFlagName,
   type FeatureFlagConfig,
@@ -28,6 +29,8 @@ import {
   resetFlagCache,
   isFeatureEnabled,
 } from '~/lib/services/feature-flags';
+
+const logger = createScopedLogger('FeatureFlagsStore');
 
 // User ID for percentage rollouts
 export const featureFlagUserId = atom<string | null>(null);
@@ -236,7 +239,7 @@ export function initializeFeatureFlags(userId?: string | null): void {
     const urlOverrides = parseUrlOverrides(window.location.href);
     if (Object.keys(urlOverrides).length > 0) {
       featureFlagUrlOverrides.set(urlOverrides);
-      console.log('[FeatureFlags] URL overrides applied:', urlOverrides);
+      logger.info('[FeatureFlags] URL overrides applied:', urlOverrides);
     }
   }
 
@@ -327,9 +330,9 @@ export function getFeatureFlagsSummary(): string {
  * Debug utility: log current feature flag states
  */
 export function logFeatureFlags(): void {
-  console.log(getFeatureFlagsSummary());
-  console.log('User ID:', featureFlagUserId.get());
-  console.log('Environment:', featureFlagEnvironment.get());
+  logger.info(getFeatureFlagsSummary());
+  logger.info('User ID:', featureFlagUserId.get());
+  logger.info('Environment:', featureFlagEnvironment.get());
 }
 
 /**

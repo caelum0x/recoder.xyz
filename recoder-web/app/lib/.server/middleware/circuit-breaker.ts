@@ -3,6 +3,10 @@
  * Prevents cascading failures from external services
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CircuitBreaker');
+
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export interface CircuitBreakerConfig {
@@ -45,7 +49,7 @@ export class CircuitBreaker {
 
       // Move to half-open state
       this.state = 'HALF_OPEN';
-      console.log(`🔄 Circuit breaker '${this.name}' entering HALF_OPEN state`);
+      logger.info(`🔄 Circuit breaker '${this.name}' entering HALF_OPEN state`);
     }
 
     try {
@@ -70,7 +74,7 @@ export class CircuitBreaker {
         this.failures = 0;
         this.successes = 0;
         this.failureTimestamps = [];
-        console.log(`✅ Circuit breaker '${this.name}' CLOSED after recovery`);
+        logger.info(`✅ Circuit breaker '${this.name}' CLOSED after recovery`);
       }
     }
   }
@@ -94,13 +98,13 @@ export class CircuitBreaker {
       this.state = 'OPEN';
       this.nextAttemptTime = now + this.config.timeout;
       this.successes = 0;
-      console.warn(`⚠️ Circuit breaker '${this.name}' reopened after failed recovery attempt`);
+      logger.warn(`⚠️ Circuit breaker '${this.name}' reopened after failed recovery attempt`);
     } else if (this.failureTimestamps.length >= this.config.failureThreshold) {
       // Too many failures in monitoring period, open circuit
       this.state = 'OPEN';
       this.nextAttemptTime = now + this.config.timeout;
       this.successes = 0;
-      console.error(`❌ Circuit breaker '${this.name}' OPEN due to ${this.failures} failures`);
+      logger.error(`❌ Circuit breaker '${this.name}' OPEN due to ${this.failures} failures`);
     }
   }
 
@@ -127,7 +131,7 @@ export class CircuitBreaker {
     this.lastFailureTime = null;
     this.nextAttemptTime = null;
     this.failureTimestamps = [];
-    console.log(`🔄 Circuit breaker '${this.name}' manually reset`);
+    logger.info(`🔄 Circuit breaker '${this.name}' manually reset`);
   }
 
   /**

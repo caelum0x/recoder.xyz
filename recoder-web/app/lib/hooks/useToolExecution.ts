@@ -5,6 +5,7 @@
 
 import { useCallback, useMemo, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
+import { createScopedLogger } from '~/utils/logger';
 import {
   toolExecutionsStore,
   pendingApproval,
@@ -29,6 +30,8 @@ import {
   type ToolExecution,
   type ToolCallbacks,
 } from '~/lib/services/tools';
+
+const logger = createScopedLogger('ToolExecution');
 
 export interface UseToolExecutionOptions {
   onApprovalRequired?: (toolUse: ToolUse, message: string) => Promise<boolean>;
@@ -90,7 +93,7 @@ export function useToolExecution(
   // Check for too many consecutive mistakes
   useEffect(() => {
     if (mistakes >= maxConsecutiveMistakes) {
-      console.warn(`Tool execution: ${mistakes} consecutive mistakes detected`);
+      logger.warn(`Tool execution: ${mistakes} consecutive mistakes detected`);
     }
   }, [mistakes, maxConsecutiveMistakes]);
 
@@ -124,7 +127,7 @@ export function useToolExecution(
       }
 
       if (repetition.shouldWarn) {
-        console.warn(`Tool ${toolUse.name} called ${repetition.count} times with same parameters`);
+        logger.warn(`Tool ${toolUse.name} called ${repetition.count} times with same parameters`);
       }
 
       // Start execution

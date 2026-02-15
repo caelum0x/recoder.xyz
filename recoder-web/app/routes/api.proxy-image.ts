@@ -4,6 +4,41 @@
  */
 
 import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProxyImage');
+
+/**
+ * Validate that a URL is safe to fetch (no SSRF to internal networks).
+ */
+function isSafeUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    // Block internal/private IPs and metadata endpoints
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      hostname === '[::1]' ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.') ||
+      hostname.startsWith('192.168.') ||
+      hostname === '169.254.169.254' ||
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.local')
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -11,6 +46,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   if (!imageUrl) {
     return new Response('Missing url parameter', { status: 400 });
+  }
+
+  if (!isSafeUrl(imageUrl)) {
+    return new Response('URL not allowed', { status: 403 });
   }
 
   try {
@@ -34,7 +73,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('Image proxy error:', error);
+    logger.error('Image proxy error:', error);
     return new Response('Failed to proxy image', { status: 500 });
   }
 }

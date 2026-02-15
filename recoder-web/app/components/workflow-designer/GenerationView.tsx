@@ -7,9 +7,14 @@ import type { Generation } from './types';
 
 // Markdown rendering component (simplified)
 function MarkdownContent({ content }: { content: string }) {
-  // Simple markdown rendering - in production, use a proper markdown library
   const html = useMemo(() => {
-    return content
+    // HTML-escape first to prevent XSS
+    const escaped = content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    return escaped
       // Code blocks
       .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-bolt-elements-background-depth-2 p-3 rounded-lg my-2 overflow-x-auto"><code>$2</code></pre>')
       // Inline code
@@ -18,8 +23,8 @@ function MarkdownContent({ content }: { content: string }) {
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       // Italic
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-accent-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+      // Links (only allow https:// URLs)
+      .replace(/\[([^\]]+)\]\((https:\/\/[^)]+)\)/g, '<a href="$2" class="text-accent-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
       // Line breaks
       .replace(/\n/g, '<br />');
   }, [content]);

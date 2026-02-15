@@ -1,0 +1,80 @@
+{
+  "taxonomyVersion": "phase1-runner-v1",
+  "generatedAt": "2026-02-15T09:17:47Z",
+  "overall": {
+    "ok": false,
+    "failedSteps": 5,
+    "totalSteps": 10
+  },
+  "steps": [
+    {
+      "label": "openclaw core checks",
+      "result": "passed",
+      "exitCode": 0,
+      "classification": "ok"
+    }
+    ,
+    {
+      "label": "app ci determinism (frozen)",
+      "result": "failed",
+      "exitCode": 10,
+      "classification": "env_blocker"
+    }
+    ,
+    {
+      "label": "app ci determinism (local fallback)",
+      "result": "skipped",
+      "exitCode": 0,
+      "classification": "skipped_redundant"
+    }
+    ,
+    {
+      "label": "apps/frontend ci determinism (frozen)",
+      "result": "failed",
+      "exitCode": 10,
+      "classification": "env_blocker"
+    }
+    ,
+    {
+      "label": "apps/frontend ci determinism (local fallback)",
+      "result": "skipped",
+      "exitCode": 0,
+      "classification": "skipped_redundant"
+    }
+    ,
+    {
+      "label": "apps/mobile ci determinism (frozen)",
+      "result": "failed",
+      "exitCode": 10,
+      "classification": "env_blocker"
+    }
+    ,
+    {
+      "label": "apps/mobile ci determinism (local fallback)",
+      "result": "skipped",
+      "exitCode": 0,
+      "classification": "skipped_redundant"
+    }
+    ,
+    {
+      "label": "studio deploy governance checks",
+      "result": "failed",
+      "exitCode": 10,
+      "classification": "env_blocker"
+    }
+    ,
+    {
+      "label": "docker-backend ci determinism (frozen)",
+      "result": "failed",
+      "exitCode": 10,
+      "classification": "env_blocker"
+    }
+    ,
+    {
+      "label": "docker-backend ci determinism (local fallback)",
+      "result": "skipped",
+      "exitCode": 0,
+      "classification": "skipped_redundant"
+    }
+  ]
+}

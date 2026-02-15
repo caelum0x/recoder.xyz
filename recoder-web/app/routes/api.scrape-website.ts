@@ -1,4 +1,8 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { firecrawlDisabledError, isFirecrawlEnabled } from '~/lib/.server/firecrawl-control';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ScrapeWebsite');
 
 /**
  * POST /api/scrape-website
@@ -54,12 +58,20 @@ interface ScrapeWebsiteResponse {
 }
 
 /**
- * Validate URL format
+ * Validate URL format and reject internal/private addresses.
  */
 function isValidUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const h = url.hostname.toLowerCase();
+    if (
+      h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' ||
+      h === '::1' || h === '[::1]' ||
+      h.startsWith('10.') || h.startsWith('172.') || h.startsWith('192.168.') ||
+      h === '169.254.169.254' || h.endsWith('.internal') || h.endsWith('.local')
+    ) return false;
+    return true;
   } catch {
     return false;
   }
@@ -121,6 +133,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
   }
 
+  if (!isFirecrawlEnabled(context)) {
+    return json(firecrawlDisabledError(), { status: 403 });
+  }
+
   try {
     const body = (await request.json()) as ScrapeWebsiteRequest;
     const { url, formats = ['markdown', 'html'], options = {} } = body;
@@ -147,11 +163,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Return mock data if API key is not configured
     if (!apiKey) {
-      console.warn('[scrape-website] FIRECRAWL_API_KEY not configured, returning mock data');
+      logger.warn('[scrape-website] FIRECRAWL_API_KEY not configured, returning mock data');
       return json(getMockData(url));
     }
 
-    console.log('[scrape-website] Scraping with Firecrawl:', url, 'formats:', formats);
+    logger.info('[scrape-website] Scraping with Firecrawl:', url, 'formats:', formats);
 
     // Build Firecrawl request payload
     const firecrawlPayload = {
@@ -176,7 +192,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Handle API errors
     if (!firecrawlResponse.ok) {
       const errorText = await firecrawlResponse.text();
-      console.error('[scrape-website] Firecrawl API error:', firecrawlResponse.status, errorText);
+      logger.error('[scrape-website] Firecrawl API error:', firecrawlResponse.status, errorText);
 
       let errorMessage = 'Failed to scrape website';
       try {
@@ -197,7 +213,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Handle unsuccessful scrape result
     if (scrapeResult.success === false || !scrapeResult.data) {
       const errorMessage = scrapeResult.error || 'Failed to scrape website';
-      console.error('[scrape-website] Firecrawl returned unsuccessful:', scrapeResult);
+      logger.error('[scrape-website] Firecrawl returned unsuccessful:', scrapeResult);
       return json(
         getErrorFallbackData(url, errorMessage),
         { status: 500 }
@@ -222,7 +238,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       },
     };
 
-    console.log('[scrape-website] Success:', {
+    logger.info('[scrape-website] Success:', {
       url,
       title: response.data?.title,
       contentLength: response.data?.content.length,
@@ -232,7 +248,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     return json(response);
   } catch (error) {
-    console.error('[scrape-website] Error:', error);
+    logger.error('[scrape-website] Error:', error);
 
     // Handle JSON parsing errors
     if (error instanceof SyntaxError) {
@@ -242,9 +258,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       );
     }
 
-    const errorMessage = error instanceof Error ? error.message : 'Failed to scrape website';
     return json(
-      getErrorFallbackData('', errorMessage),
+      getErrorFallbackData('', 'Failed to scrape website'),
       { status: 500 }
     );
   }

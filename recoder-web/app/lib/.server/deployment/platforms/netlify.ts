@@ -10,6 +10,8 @@
 
 import type { DeploymentConfig, DeploymentResult, FileTree } from '../types';
 import { fetchWithRetry, withRetry, RateLimiter } from '../utils/retry';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('NetlifyDeploy');
 
 interface NetlifySite {
   id: string;
@@ -53,7 +55,7 @@ export class NetlifyDeployer {
     const startTime = Date.now();
 
     try {
-      console.log(`[Netlify] Starting deployment: ${config.projectName}`);
+      logger.info(`[Netlify] Starting deployment: ${config.projectName}`);
 
       if (!this.token) {
         throw new Error('Netlify token not configured. Get your token from https://app.netlify.com/user/applications#personal-access-tokens');
@@ -61,25 +63,25 @@ export class NetlifyDeployer {
 
       // Step 1: Create or get site
       const site = await this.createOrGetSite(config.projectName);
-      console.log(`[Netlify] Site: ${site.name} (${site.id})`);
+      logger.info(`[Netlify] Site: ${site.name} (${site.id})`);
 
       // Step 2: Set environment variables if provided
       if (config.environmentVariables && Object.keys(config.environmentVariables).length > 0) {
         await this.setEnvironmentVariables(site.id, config.environmentVariables);
-        console.log(`[Netlify] Environment variables set`);
+        logger.info(`[Netlify] Environment variables set`);
       }
 
       // Step 3: Prepare files with SHA1 hashes
       const preparedFiles = await this.prepareFilesWithHashes(files, config);
-      console.log(`[Netlify] Prepared ${preparedFiles.length} files`);
+      logger.info(`[Netlify] Prepared ${preparedFiles.length} files`);
 
       // Step 4: Create deploy with file hashes
       const deploy = await this.createDeploy(site.id, preparedFiles);
-      console.log(`[Netlify] Deploy created: ${deploy.id}, state: ${deploy.state}`);
+      logger.info(`[Netlify] Deploy created: ${deploy.id}, state: ${deploy.state}`);
 
       // Step 5: Upload required files (files that Netlify doesn't have cached)
       if (deploy.required && deploy.required.length > 0) {
-        console.log(`[Netlify] Uploading ${deploy.required.length} files...`);
+        logger.info(`[Netlify] Uploading ${deploy.required.length} files...`);
         await this.uploadRequiredFiles(deploy.id, preparedFiles, deploy.required);
       }
 
@@ -90,7 +92,7 @@ export class NetlifyDeployer {
       const totalTime = endTime - startTime;
 
       const url = finalDeploy.ssl_url || finalDeploy.url;
-      console.log(`[Netlify] Deployment successful: ${url}`);
+      logger.info(`[Netlify] Deployment successful: ${url}`);
 
       return {
         id: deploy.id,
@@ -108,7 +110,7 @@ export class NetlifyDeployer {
         },
       };
     } catch (error) {
-      console.error('[Netlify] Deployment failed:', error);
+      logger.error('[Netlify] Deployment failed:', error);
 
       return {
         id: `netlify-${Date.now()}`,
@@ -147,12 +149,12 @@ export class NetlifyDeployer {
           );
 
           if (existing) {
-            console.log(`[Netlify] Found existing site: ${existing.name}`);
+            logger.info(`[Netlify] Found existing site: ${existing.name}`);
             return existing;
           }
         }
       } catch (error) {
-        console.log(`[Netlify] Could not search for existing sites, creating new one`);
+        logger.info(`[Netlify] Could not search for existing sites, creating new one`);
       }
 
       // Create new site
@@ -197,7 +199,7 @@ export class NetlifyDeployer {
     }, {
       maxRetries: 2,
       onRetry: (attempt, error) => {
-        console.log(`[Netlify] Retrying site setup (attempt ${attempt}): ${error.message}`);
+        logger.info(`[Netlify] Retrying site setup (attempt ${attempt}): ${error.message}`);
       },
     });
   }
@@ -384,7 +386,7 @@ export class NetlifyDeployer {
     const uploadFile = async (hash: string): Promise<void> => {
       const file = hashToFile.get(hash);
       if (!file) {
-        console.warn(`[Netlify] Required file with hash ${hash} not found`);
+        logger.warn(`[Netlify] Required file with hash ${hash} not found`);
         return;
       }
 
@@ -412,7 +414,7 @@ export class NetlifyDeployer {
         }, {
           maxRetries: 3,
           onRetry: (attempt, error) => {
-            console.log(`[Netlify] Retrying upload of ${file.path} (attempt ${attempt}): ${error.message}`);
+            logger.info(`[Netlify] Retrying upload of ${file.path} (attempt ${attempt}): ${error.message}`);
           },
         })
       );
@@ -432,7 +434,7 @@ export class NetlifyDeployer {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const deploy = await this.getDeploy(deployId);
 
-      console.log(`[Netlify] Deploy state: ${deploy.state}`);
+      logger.info(`[Netlify] Deploy state: ${deploy.state}`);
 
       if (deploy.state === 'ready') {
         return deploy;

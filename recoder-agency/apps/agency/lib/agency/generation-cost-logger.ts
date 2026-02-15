@@ -39,10 +39,15 @@ export async function logGenerationCost(args: {
 	generation: CompletedGeneration;
 	teamDbId: number;
 	projectDbId: number | null;
+	routingPolicyDbId?: number | null;
+	routedModel?: { provider: string; modelId: string } | null;
+	wasFallback?: boolean;
 }): Promise<void> {
 	try {
-		const model = extractModelInfo(args.generation);
+		const model = args.routedModel ?? extractModelInfo(args.generation);
 		if (!model) return;
+		const wasFallback = args.wasFallback ?? false;
+		const routingPolicyDbId = args.routingPolicyDbId ?? null;
 
 		const usage = args.generation.usage;
 		const inputTokens = usage?.inputTokens ?? 0;
@@ -81,7 +86,7 @@ export async function logGenerationCost(args: {
 				INSERT INTO public.generation_cost_logs (
 					team_db_id, project_db_id, workspace_id, generation_id,
 					model_id, provider, input_tokens, output_tokens,
-					total_cost_cents, cost_ledger_entry_db_id, was_fallback
+					total_cost_cents, cost_ledger_entry_db_id, routing_policy_db_id, was_fallback
 				)
 				SELECT
 					${args.teamDbId},
@@ -94,7 +99,8 @@ export async function logGenerationCost(args: {
 					${outputTokens},
 					${totalCostCents},
 					new_ledger.db_id,
-					false
+					${routingPolicyDbId},
+					${wasFallback}
 				FROM new_ledger
 			`);
 		} else {
@@ -103,7 +109,7 @@ export async function logGenerationCost(args: {
 				INSERT INTO public.generation_cost_logs (
 					team_db_id, project_db_id, workspace_id, generation_id,
 					model_id, provider, input_tokens, output_tokens,
-					total_cost_cents, was_fallback
+					total_cost_cents, routing_policy_db_id, was_fallback
 				) VALUES (
 					${args.teamDbId},
 					${null},
@@ -114,7 +120,8 @@ export async function logGenerationCost(args: {
 					${inputTokens},
 					${outputTokens},
 					${totalCostCents},
-					false
+					${routingPolicyDbId},
+					${wasFallback}
 				)
 			`);
 		}

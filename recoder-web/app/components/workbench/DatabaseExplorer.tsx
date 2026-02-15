@@ -11,6 +11,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerPost, dockerGet, dockerDelete } from '~/lib/services/docker-api';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
 import {
   connectionsAtom,
   activeConnectionIdAtom,
@@ -60,6 +61,8 @@ import {
   type ColumnInfo,
   type DatabaseType,
 } from '~/lib/stores/database';
+
+const logger = createScopedLogger('DatabaseExplorer');
 
 interface DatabaseExplorerProps {
   className?: string;
@@ -126,7 +129,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
         setConnections(data.connections);
       }
     } catch (error) {
-      console.error('[Database] Failed to load connections:', error);
+      logger.error('[Database] Failed to load connections:', error);
     }
   }, [projectId]);
 
@@ -159,7 +162,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
         toast.error(data.error);
       }
     } catch (error: any) {
-      console.error('[Database] Failed to load schema:', error);
+      logger.error('[Database] Failed to load schema:', error);
       toast.error('Failed to load database schema');
     } finally {
       setLoadingSchema(false);
@@ -203,7 +206,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
         // Ignore preview loading errors
       }
     } catch (error: any) {
-      console.error('[Database] Failed to load table details:', error);
+      logger.error('[Database] Failed to load table details:', error);
     } finally {
       setLoadingTable(false);
     }

@@ -9,6 +9,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerPost, dockerGet } from '~/lib/services/docker-api';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
 import {
   packagesAtom,
   detectedManagerAtom,
@@ -31,6 +32,8 @@ import {
   type PackageSearchResult,
 } from '~/lib/stores/packages';
 
+const logger = createScopedLogger('PackageManager');
+
 interface PackageManagerPanelProps {
   files: Record<string, unknown>;
   className?: string;
@@ -50,7 +53,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'deps' | 'dev'>('deps');
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Detect package manager when files change
   useEffect(() => {
@@ -81,7 +84,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
         setPackageError(data.error);
       }
     } catch (error: unknown) {
-      console.error('[Packages] Load error:', error);
+      logger.error('[Packages] Load error:', error);
       setPackageError('Failed to connect to container');
     } finally {
       setLoading(false);
@@ -105,7 +108,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
 
       setSearchResults(data?.results || []);
     } catch (error) {
-      console.error('[Packages] Search error:', error);
+      logger.error('[Packages] Search error:', error);
     } finally {
       setSearching(false);
     }

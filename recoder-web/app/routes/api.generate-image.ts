@@ -1,4 +1,7 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GenerateImage');
 
 /**
  * POST /api/generate-image
@@ -47,7 +50,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('[generate-image] OpenRouter error:', error);
+      logger.error('[generate-image] OpenRouter error:', error);
       return json({ error: 'Image generation failed' }, { status: 500 });
     }
 
@@ -71,7 +74,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       isBase64: !!data.data?.[0]?.b64_json
     });
   } catch (error) {
-    console.error('[generate-image] Error:', error);
+    logger.error('[generate-image] Error:', error);
     return json({ error: 'Image generation failed' }, { status: 500 });
   }
 }

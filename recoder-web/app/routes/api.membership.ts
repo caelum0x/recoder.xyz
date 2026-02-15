@@ -6,6 +6,9 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
 import { neon } from '@neondatabase/serverless';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Membership');
 
 // Plan feature configuration
 const PLAN_FEATURES = {
@@ -125,10 +128,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     return json(response);
   } catch (error) {
-    console.error('[Membership] Status error:', error);
+    logger.error('[Membership] Status error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get membership status',
+      error: 'Failed to get membership status',
     }, { status: 500 });
   }
 }
@@ -173,7 +176,7 @@ async function getUserUsage(
       enhancesLimit: planFeatures.enhancesPerDay,
     };
   } catch (error) {
-    console.error('[Membership] Usage query error:', error);
+    logger.error('[Membership] Usage query error:', error);
     return {
       projectsUsed: 0,
       projectsLimit: planFeatures.projectLimit,

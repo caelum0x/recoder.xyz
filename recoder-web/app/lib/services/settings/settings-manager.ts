@@ -24,6 +24,7 @@ import type {
   SettingsSyncState,
   SettingsExport,
 } from './types';
+import { createScopedLogger } from '~/utils/logger';
 import {
   DEFAULT_USER_PREFERENCES,
   DEFAULT_EDITOR_SETTINGS,
@@ -36,6 +37,8 @@ import {
   DEFAULT_WORKSPACE_SETTINGS,
   SETTINGS_VERSION,
 } from './defaults';
+
+const logger = createScopedLogger('SettingsManager');
 
 // ============================================================================
 // Storage Keys
@@ -145,7 +148,7 @@ function loadSettings(): UserPreferences {
       return deepMerge(DEFAULT_USER_PREFERENCES as unknown as Record<string, unknown>, parsed as unknown as Record<string, unknown>) as unknown as UserPreferences;
     }
   } catch (error) {
-    console.error('[Settings] Failed to load settings:', error);
+    logger.error('[Settings] Failed to load settings:', error);
   }
 
   return DEFAULT_USER_PREFERENCES;
@@ -161,7 +164,7 @@ function saveSettings(settings: UserPreferences): void {
     settings.lastUpdated = Date.now();
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (error) {
-    console.error('[Settings] Failed to save settings:', error);
+    logger.error('[Settings] Failed to save settings:', error);
   }
 }
 
@@ -672,7 +675,7 @@ export async function loadFromServer(userId: string): Promise<void> {
       });
     }
   } catch (error) {
-    console.error('[Settings] Failed to load from server:', error);
+    logger.error('[Settings] Failed to load from server:', error);
   }
 }
 

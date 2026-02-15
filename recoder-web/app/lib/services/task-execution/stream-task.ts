@@ -5,6 +5,9 @@
 
 import type { Task, TaskId, TaskExecutionContext } from './types';
 import { getTask } from './get-task';
+import { createScopedLogger } from '~/utils/logger';
+import { createSSEStream, serializeSSE } from '~/lib/.server/llm/sse-utils';
+const logger = createScopedLogger('StreamTask');
 
 // Stream event types
 export interface StreamConnectedEvent {
@@ -44,7 +47,7 @@ function createDataHash(data: StreamData): string {
  * Format a stream event for SSE transmission
  */
 export function formatStreamData(event: StreamEvent): string {
-  return `data: ${JSON.stringify(event)}\n\n`;
+  return serializeSSE(event);
 }
 
 export interface StreamTaskOptions {
@@ -60,118 +63,46 @@ export interface StreamTaskOptions {
  */
 export function streamTask(options: StreamTaskOptions): ReadableStream<Uint8Array> {
   const { taskId, context, pollInterval = 500, timeout = 20 * 60 * 1000 } = options;
-  const encoder = new TextEncoder();
+  const isTerminal = (status: Task['status']) =>
+    status === 'completed' || status === 'failed' || status === 'cancelled';
 
-  let pollIntervalId: ReturnType<typeof setInterval> | null = null;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let polling = true;
+  return createSSEStream(async function* streamTaskEvents() {
+    let lastDataHash = '';
+    const startTime = Date.now();
 
-  const cleanupResources = () => {
-    polling = false;
+    yield formatStreamData({ type: 'connected' });
 
-    if (pollIntervalId) {
-      clearInterval(pollIntervalId);
-      pollIntervalId = null;
-    }
-
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-  };
-
-  return new ReadableStream({
-    async start(controller) {
-      let lastDataHash = '';
-      let lastFetchedData: StreamData | null = null;
-
-      // Send connection established event
-      controller.enqueue(encoder.encode(formatStreamData({ type: 'connected' })));
-
-      const sendUpdate = async () => {
-        if (!polling || controller.desiredSize === null) {
-          return;
-        }
-
-        try {
-          lastFetchedData = {
-            task: await getTask({ taskId, context }),
-          };
-          const currentHash = createDataHash(lastFetchedData);
-
-          if (currentHash === lastDataHash) {
-            return;
-          }
-          lastDataHash = currentHash;
-
-          controller.enqueue(
-            encoder.encode(
-              formatStreamData({
-                type: 'data',
-                data: lastFetchedData,
-              })
-            )
-          );
-        } catch (error) {
-          console.error('Error fetching task:', error);
-          lastFetchedData = null;
-
-          // Only send error if controller is still active
-          try {
-            controller.enqueue(
-              encoder.encode(
-                formatStreamData({
-                  type: 'error',
-                  message: 'Failed to fetch task data',
-                })
-              )
-            );
-          } catch {
-            // Ignore if controller is already closed
-          }
-        }
-      };
-
-      const cleanup = () => {
-        cleanupResources();
-
-        // Send end message and close if controller is still active
-        if (controller.desiredSize !== null) {
-          controller.enqueue(encoder.encode(formatStreamData({ type: 'end' })));
-          controller.close();
-        }
-      };
-
-      const poll = async () => {
-        if (!polling || controller.desiredSize === null) {
-          return;
-        }
-
-        await sendUpdate();
-
-        // Check if task is complete
-        if (
-          lastFetchedData?.task.status === 'completed' ||
-          lastFetchedData?.task.status === 'failed' ||
-          lastFetchedData?.task.status === 'cancelled'
-        ) {
-          cleanup();
-        }
-      };
-
-      // Execute immediately first
-      await poll();
-
-      // Only set up polling if we haven't cleaned up already
-      if (polling) {
-        pollIntervalId = setInterval(poll, pollInterval);
-        timeoutId = setTimeout(cleanup, timeout);
+    while (true) {
+      if (Date.now() - startTime > timeout) {
+        yield formatStreamData({ type: 'end' });
+        return;
       }
-    },
 
-    cancel() {
-      cleanupResources();
-    },
+      try {
+        const data: StreamData = {
+          task: await getTask({ taskId, context }),
+        };
+        const currentHash = createDataHash(data);
+
+        if (currentHash !== lastDataHash) {
+          lastDataHash = currentHash;
+          yield formatStreamData({ type: 'data', data });
+        }
+
+        if (isTerminal(data.task.status)) {
+          yield formatStreamData({ type: 'end' });
+          return;
+        }
+      } catch (error) {
+        logger.error('Error fetching task:', error);
+        yield formatStreamData({
+          type: 'error',
+          message: 'Failed to fetch task data',
+        });
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
   });
 }
 

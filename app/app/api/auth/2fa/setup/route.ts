@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('[2FA Setup] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to setup 2FA' },
+      { success: false, error: 'Failed to setup 2FA' },
       { status: 500 }
     );
   }

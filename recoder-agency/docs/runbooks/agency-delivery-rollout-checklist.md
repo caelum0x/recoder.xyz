@@ -15,6 +15,11 @@
 - Run `pnpm -C apps/agency ops:staging:assert-release-readiness`.
 - Run `pnpm -C apps/agency ops:staging:log-restore-drill` when new restore proof is recorded.
 - Trigger `Agency Smokes Nightly` manually once on staging URL.
+- Confirm `Deploy Gate` workflow is green with required agency smoke jobs:
+  - `agency-smoke-required`
+  - `agency-seeded-smoke-required`
+- Confirm `Security Container Scan` workflow is green and SBOM artifact is uploaded.
+- For production promotion, use `Promote Staging To Production` workflow and approve via `production-promotion` environment gate.
 - Confirm admin page shows transition history filters and retry panel.
 - Confirm client portal approve/reject and bulk reject reason validation.
 - Confirm project deliverables can be marked as billable milestones.
@@ -65,6 +70,7 @@
 - Review Delivery Ops for forced transitions and rework spikes.
 - Review dashboard weekly metrics card population.
 - Keep nightly agency smoke workflow enabled.
+- Keep deploy-time required agency smokes enabled (`Deploy Gate`).
 
 ## Rollback companion
 

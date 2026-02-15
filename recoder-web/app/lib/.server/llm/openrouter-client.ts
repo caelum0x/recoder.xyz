@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('OpenRouterClient');
 /**
  * OpenRouter Native Client
  * Direct API integration without AI SDK
@@ -197,7 +199,7 @@ export class OpenRouterClient {
             const chunk = JSON.parse(data) as OpenRouterStreamChunk;
             yield chunk;
           } catch (e) {
-            console.error('Failed to parse SSE chunk:', e, data);
+            logger.error('Failed to parse SSE chunk:', e, data);
           }
         }
       }

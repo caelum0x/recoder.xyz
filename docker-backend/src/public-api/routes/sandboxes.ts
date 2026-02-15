@@ -48,6 +48,8 @@ import {
   getMaxCommandTimeout,
   getMaxSandboxDuration,
 } from '../rate-limiter.js';
+import { createLogger } from '../../logger.js';
+import { loadStore, saveStore, debouncedSave } from '../../persistence.js';
 
 // ==================== Types ====================
 
@@ -77,10 +79,62 @@ interface SandboxRecord {
   metadata?: Record<string, unknown>;
 }
 
+// ==================== Helpers ====================
+
+/** Validate a file/directory path for sandbox operations */
+function isValidSandboxPath(p: string): boolean {
+  if (!p || typeof p !== 'string') return false;
+  // Block null bytes
+  if (p.includes('\0')) return false;
+  // Block path traversal patterns (including encoded)
+  if (p.includes('..')) return false;
+  // Block absolute paths outside workspace
+  if (p.startsWith('/') && !p.startsWith('/workspace')) return false;
+  // Resolve and verify the path stays within /workspace
+  const path = require('path');
+  const base = '/workspace';
+  const resolved = p.startsWith('/') ? path.resolve(p) : path.resolve(base, p);
+  if (!resolved.startsWith(base + '/') && resolved !== base) return false;
+  return true;
+}
+
 // ==================== Storage ====================
 
-const sandboxes = new Map<string, SandboxRecord>();
-const sandboxesByApiKey = new Map<string, Set<string>>();
+interface SandboxesStoreData {
+  sandboxes: [string, SandboxRecord][];
+  sandboxesByApiKey: [string, string[]][];
+}
+
+function loadSandboxesStore(): SandboxesStoreData {
+  return loadStore<SandboxesStoreData>('sandboxes', {
+    sandboxes: [],
+    sandboxesByApiKey: [],
+  });
+}
+
+function buildSandboxesStoreData(): SandboxesStoreData {
+  return {
+    sandboxes: Array.from(sandboxes.entries()),
+    sandboxesByApiKey: Array.from(sandboxesByApiKey.entries()).map(
+      ([keyId, sandboxSet]) => [keyId, Array.from(sandboxSet)]
+    ),
+  };
+}
+
+function saveSandboxesStore(immediate?: boolean): void {
+  const data = buildSandboxesStoreData();
+  if (immediate) {
+    saveStore('sandboxes', data);
+  } else {
+    debouncedSave('sandboxes', data);
+  }
+}
+
+const _stored = loadSandboxesStore();
+const sandboxes = new Map<string, SandboxRecord>(_stored.sandboxes);
+const sandboxesByApiKey = new Map<string, Set<string>>(
+  _stored.sandboxesByApiKey.map(([keyId, sandboxIds]) => [keyId, new Set(sandboxIds)])
+);
 
 // ==================== Dependencies ====================
 
@@ -147,13 +201,14 @@ export interface SandboxDependencies {
 }
 
 let deps: SandboxDependencies | null = null;
+const logger = createLogger('public-api:sandboxes');
 
 /**
  * Initialize sandbox routes with dependencies
  */
 export function initSandboxRoutes(dependencies: SandboxDependencies): void {
   deps = dependencies;
-  console.log('[Public API] Sandbox routes initialized with dependencies');
+  logger.info('Sandbox routes initialized with dependencies');
 }
 
 // ==================== Helpers ====================
@@ -206,6 +261,7 @@ function getSandboxForApiKey(
  */
 function updateActivity(sandbox: SandboxRecord): void {
   sandbox.lastActivityAt = Date.now();
+  saveSandboxesStore();
 }
 
 // ==================== Auto-cleanup ====================
@@ -218,15 +274,16 @@ async function cleanupExpiredSandboxes(): Promise<void> {
 
   for (const [id, sandbox] of sandboxes.entries()) {
     if (sandbox.expiresAt && sandbox.expiresAt < now && sandbox.state === 'running') {
-      console.log(`[Public API] Auto-stopping expired sandbox: ${id}`);
+      logger.info({ sandboxId: id }, 'Auto-stopping expired sandbox');
 
       try {
         if (deps && sandbox.containerId) {
           await deps.stopContainer(sandbox.containerId);
         }
         sandbox.state = 'stopped';
+        saveSandboxesStore();
       } catch (error) {
-        console.error(`[Public API] Failed to stop expired sandbox ${id}:`, error);
+        logger.error({ err: error, sandboxId: id }, 'Failed to stop expired sandbox');
       }
     }
   }
@@ -301,6 +358,7 @@ router.post(
       sandboxesByApiKey.set(apiKey.id, new Set());
     }
     sandboxesByApiKey.get(apiKey.id)!.add(sandboxId);
+    saveSandboxesStore();
 
     try {
       // Create container
@@ -335,15 +393,17 @@ router.post(
 
       // Update state
       sandbox.state = 'running';
+      saveSandboxesStore();
 
-      console.log(`[Public API] Created sandbox ${sandboxId} for key ${apiKey.keyPrefix}`);
+      logger.info({ sandboxId, apiKeyPrefix: apiKey.keyPrefix }, 'Created public API sandbox');
 
       sendApiSuccess(res, toSandboxResponse(sandbox), req.requestId!, 201);
     } catch (error) {
       // Clean up on failure
       sandbox.state = 'error';
+      saveSandboxesStore();
 
-      console.error(`[Public API] Failed to create sandbox ${sandboxId}:`, error);
+      logger.error({ err: error, sandboxId }, 'Failed to create public API sandbox');
 
       sendApiError(res, {
         code: 'SANDBOX_CREATION_FAILED',
@@ -462,8 +522,9 @@ router.delete(
       if (apiKeySandboxes) {
         apiKeySandboxes.delete(id);
       }
+      saveSandboxesStore(true);
 
-      console.log(`[Public API] Deleted sandbox ${id}`);
+      logger.info({ sandboxId: id }, 'Deleted public API sandbox');
 
       sendApiSuccess(res, { deleted: true, id }, req.requestId!);
     } catch (error) {
@@ -708,10 +769,10 @@ router.get(
     const filePath = path as string;
 
     // Validate path
-    if (filePath.includes('..')) {
+    if (!isValidSandboxPath(filePath)) {
       sendApiError(res, {
         code: 'INVALID_FILE_PATH',
-        message: 'Invalid file path. Paths cannot contain ".."',
+        message: 'Invalid file path',
       }, req.requestId);
       return;
     }
@@ -797,7 +858,7 @@ router.get(
     const dirPath = path as string;
 
     // Validate path
-    if (dirPath.includes('..')) {
+    if (!isValidSandboxPath(dirPath)) {
       sendApiError(res, {
         code: 'INVALID_FILE_PATH',
         message: 'Invalid directory path',
@@ -813,7 +874,7 @@ router.get(
     } catch (error) {
       sendApiError(res, {
         code: 'FILE_OPERATION_FAILED',
-        message: `Failed to list files: ${(error as Error).message}`,
+        message: 'Failed to list files',
       }, req.requestId);
     }
   })
@@ -873,7 +934,7 @@ router.delete(
     const filePath = path as string;
 
     // Validate path
-    if (filePath.includes('..')) {
+    if (!isValidSandboxPath(filePath)) {
       sendApiError(res, {
         code: 'INVALID_FILE_PATH',
         message: 'Invalid file path',
@@ -889,7 +950,7 @@ router.delete(
     } catch (error) {
       sendApiError(res, {
         code: 'FILE_OPERATION_FAILED',
-        message: `Failed to delete file: ${(error as Error).message}`,
+        message: 'Failed to delete file',
       }, req.requestId);
     }
   })
@@ -1013,5 +1074,6 @@ export const _testing = {
   clearAll: () => {
     sandboxes.clear();
     sandboxesByApiKey.clear();
+    saveSandboxesStore(true);
   },
 };

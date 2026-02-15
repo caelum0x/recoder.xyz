@@ -17,6 +17,8 @@ import { createSecuritySummary } from './types';
 import { SECURITY_REVIEW_SYSTEM_PROMPT, SECURITY_REVIEW_USER_PROMPT, generateFocusedSecurityPrompt } from './prompts';
 import { parseSecurityFindings, toSecurityFinding, sortFindingsBySeverity } from './parser';
 import { analyzeFilesForSecurity, calculateSecurityScore } from './analyzer';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SecurityReview');
 
 // Storage for security review history
 const reviewHistory = new Map<string, SecurityReviewResult[]>();
@@ -46,7 +48,7 @@ export async function performSecurityReview(
     try {
       aiFindings = await performAISecurityReview(filesToAnalyze, options, aiReviewFn);
     } catch (error) {
-      console.error('AI security review failed:', error);
+      logger.error('AI security review failed:', error);
       // Continue with static findings only
     }
   }

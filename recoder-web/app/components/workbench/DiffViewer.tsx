@@ -15,6 +15,8 @@
 import { memo, useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import * as Diff from 'diff';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DiffViewer');
 
 export interface DiffViewerProps {
   /** File path for display */
@@ -111,7 +113,7 @@ export const DiffViewer = memo(({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy diff:', err);
+      logger.error('Failed to copy diff:', err);
     }
   }, [unifiedDiffString]);
 

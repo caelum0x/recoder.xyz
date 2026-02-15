@@ -4,6 +4,8 @@
  */
 
 import type { Messages } from '~/lib/types/chat';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ContextOptimizer');
 
 // ============================================================================
 // Types
@@ -108,9 +110,9 @@ export function selectContextFiles(
   // Select files within token budget
   const selection = selectWithinBudget(prioritizedFiles, fileInfos, maxTokens, intent);
 
-  console.log(`📦 Context Optimizer: Selected ${selection.primaryFiles.length} primary, ${selection.contextFiles.length} context files`);
-  console.log(`📊 Estimated tokens: ${selection.totalTokens}`);
-  console.log(`🎯 Edit intent: ${intent.type} (${Math.round(intent.confidence * 100)}% confident)`);
+  logger.info(`📦 Context Optimizer: Selected ${selection.primaryFiles.length} primary, ${selection.contextFiles.length} context files`);
+  logger.info(`📊 Estimated tokens: ${selection.totalTokens}`);
+  logger.info(`🎯 Edit intent: ${intent.type} (${Math.round(intent.confidence * 100)}% confident)`);
 
   return selection;
 }

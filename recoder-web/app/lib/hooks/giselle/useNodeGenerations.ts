@@ -28,6 +28,9 @@ import {
   getGenerationsForNode,
 } from './generation-store';
 import { useGenerationPolling } from './useGenerationPolling';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GiselleNodeGenerations');
 
 // ============================================================
 // Types
@@ -117,7 +120,7 @@ async function fetchNodeGenerations(
     const data = (await response.json()) as Record<string, any>;
     return data.generations || [];
   } catch (err) {
-    console.error('Error fetching node generations:', err);
+    logger.error('Error fetching node generations:', err);
     return [];
   }
 }
@@ -257,7 +260,7 @@ export function useNodeGenerations(
       const generation = allGenerations.find((g) => g.id === generationId);
 
       if (!generation || !isCreatedGeneration(generation)) {
-        console.warn(
+        logger.warn(
           `Cannot start generation ${generationId}: not in created state`
         );
         return;
@@ -295,7 +298,7 @@ export function useNodeGenerations(
         // Start polling for updates
         startPolling(generationId);
       } catch (err) {
-        console.error('Error starting generation:', err);
+        logger.error('Error starting generation:', err);
         // Update to failed state
         updateGeneration({
           ...queued,
@@ -358,7 +361,7 @@ export function useNodeGenerations(
           body: JSON.stringify({ generationId: currentGeneration.id }),
         });
       } catch (err) {
-        console.error('Error cancelling generation on server:', err);
+        logger.error('Error cancelling generation on server:', err);
       }
     }
   }, [currentGeneration, stopPollingHook]);

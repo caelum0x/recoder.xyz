@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ModelPricing');
 /**
  * Model Pricing Database
  * Prices are in USD per million tokens
@@ -137,7 +139,7 @@ export function calculateCost(
 
   if (!pricing) {
     // Unknown model - assume expensive pricing as safety measure
-    console.warn(`Unknown model pricing for: ${modelId}, using conservative estimate`);
+    logger.warn(`Unknown model pricing for: ${modelId}, using conservative estimate`);
     return ((promptTokens * 3.0) + (completionTokens * 15.0)) / 1_000_000;
   }
 

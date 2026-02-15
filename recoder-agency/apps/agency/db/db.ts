@@ -7,3 +7,17 @@ const pool = new pg.Pool({
 });
 
 export const db = drizzle(pool, { schema, logger: false });
+
+export async function closePool() {
+	await pool.end();
+}
+
+process.once("SIGTERM", async () => {
+	await pool.end();
+	process.exit(0);
+});
+
+process.once("SIGINT", async () => {
+	await pool.end();
+	process.exit(0);
+});

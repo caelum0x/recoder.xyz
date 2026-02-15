@@ -1,5 +1,9 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
+import { getCacheManager, CacheKeys, CacheTTL } from '~/lib/.server/cache/redis';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectsApi');
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
@@ -11,7 +15,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
-      console.warn('DATABASE_URL not available');
+      logger.warn('DATABASE_URL not available');
       return json({ projects: [], error: 'Database not configured' });
     }
 
@@ -19,12 +23,27 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       return json({ projects: [], error: null }); // Return empty for no user
     }
 
+    // Try Redis cache first
+    const cacheManager = getCacheManager(env as any);
+    if (cacheManager) {
+      const cached = await cacheManager.getOrSet(
+        CacheKeys.projectMetadata(userId),
+        async () => {
+          const projectsDB = new ProjectsDB(databaseUrl);
+          return projectsDB.getUserProjects(userId);
+        },
+        CacheTTL.MEDIUM,
+      );
+      return json({ projects: cached, error: null });
+    }
+
+    // No cache available, query directly
     const projectsDB = new ProjectsDB(databaseUrl);
     const projects = await projectsDB.getUserProjects(userId);
 
     return json({ projects, error: null });
   } catch (error) {
-    console.error('Projects API loader error:', error);
+    logger.error('Projects API loader error:', error);
     return json({ projects: [], error: 'Failed to load projects' });
   }
 }
@@ -35,7 +54,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
-      console.error('❌ Database not configured');
+      logger.error('Database not configured');
       return json({ error: 'Database not configured' }, { status: 500 });
     }
 
@@ -50,7 +69,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       data = Object.fromEntries(formData);
     }
 
-    console.log('📝 Projects API action:', request.method, data);
+    logger.info('Projects API action:', request.method, data);
 
     if (request.method === 'POST') {
       const { name, description, type, framework, language, isPrivate, userId, templateId, starterPath } = data as {
@@ -66,16 +85,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
       };
 
       if (!userId) {
-        console.error('❌ User ID missing in request');
         return json({ error: 'User ID required' }, { status: 400 });
       }
 
       if (!name) {
-        console.error('❌ Project name missing in request');
         return json({ error: 'Project name required' }, { status: 400 });
       }
-
-      console.log('✅ Creating project:', { name, userId, type, templateId });
 
       const project = await projectsDB.createProject({
         name,
@@ -89,13 +104,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
         starterPath,
       });
 
-      console.log('✅ Project created:', project.id);
+      // Invalidate cache on mutation
+      const cacheManager = getCacheManager(env as any);
+      if (cacheManager && userId) {
+        await cacheManager.delete(CacheKeys.projectMetadata(userId));
+      }
+
+      logger.info('Project created:', project.id);
       return json({ success: true, project });
     }
 
     return json({ error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('❌ Projects API action error:', error);
-    return json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
+    logger.error('Projects API action error:', error);
+    return json({ error: 'Internal server error' }, { status: 500 });
   }
 }

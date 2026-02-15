@@ -1,3 +1,6 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('PublicClone');
+
 /**
  * GitHub Public Repository Cloning
  * Clone public repos WITHOUT authentication token
@@ -17,12 +20,12 @@ interface GitHubFile {
 export async function clonePublicRepo(repoUrl: string): Promise<Record<string, string>> {
   const { owner, repo, branch } = parseGitHubUrl(repoUrl);
 
-  console.log(`📦 Cloning public repo: ${owner}/${repo} (${branch})`);
+  logger.info(`📦 Cloning public repo: ${owner}/${repo} (${branch})`);
 
   try {
     // Step 1: Get repository tree
     const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
-    console.log(`🌳 Fetching tree from: ${treeUrl}`);
+    logger.info(`🌳 Fetching tree from: ${treeUrl}`);
 
     const treeResponse = await fetch(treeUrl, {
       headers: {
@@ -39,7 +42,7 @@ export async function clonePublicRepo(repoUrl: string): Promise<Record<string, s
     const treeData = await treeResponse.json() as any;
     const files: Record<string, string> = {};
 
-    console.log(`📁 Found ${treeData.tree.length} items in repository`);
+    logger.info(`📁 Found ${treeData.tree.length} items in repository`);
 
     // Step 2: Filter and download files
     const fileItems = treeData.tree.filter((item: any) => {
@@ -47,7 +50,7 @@ export async function clonePublicRepo(repoUrl: string): Promise<Record<string, s
       return !shouldIgnoreFile(item.path);
     });
 
-    console.log(`⬇️  Downloading ${fileItems.length} files (filtered from ${treeData.tree.length} total items)...`);
+    logger.info(`⬇️  Downloading ${fileItems.length} files (filtered from ${treeData.tree.length} total items)...`);
 
     // Download files in batches to avoid rate limits
     // Increased batch size and removed unnecessary delays for better performance
@@ -70,13 +73,13 @@ export async function clonePublicRepo(repoUrl: string): Promise<Record<string, s
 
               // Log progress every 10 files
               if (downloaded % 10 === 0 || downloaded === fileItems.length) {
-                console.log(`  📦 Progress: ${downloaded}/${fileItems.length} files (${Math.round((downloaded / fileItems.length) * 100)}%)`);
+                logger.info(`  📦 Progress: ${downloaded}/${fileItems.length} files (${Math.round((downloaded / fileItems.length) * 100)}%)`);
               }
             } else {
-              console.warn(`  ⚠️  Failed to download ${item.path} (HTTP ${fileResponse.status})`);
+              logger.warn(`  ⚠️  Failed to download ${item.path} (HTTP ${fileResponse.status})`);
             }
           } catch (error) {
-            console.warn(`  ⚠️  Error downloading ${item.path}:`, error);
+            logger.warn(`  ⚠️  Error downloading ${item.path}:`, error);
           }
         })
       );
@@ -85,11 +88,11 @@ export async function clonePublicRepo(repoUrl: string): Promise<Record<string, s
       // Removed delay for faster cloning - GitHub's raw content doesn't have strict rate limits
     }
 
-    console.log(`✅ Successfully cloned ${Object.keys(files).length} files`);
+    logger.info(`✅ Successfully cloned ${Object.keys(files).length} files`);
 
     return files;
   } catch (error) {
-    console.error('❌ Failed to clone public repository:', error);
+    logger.error('❌ Failed to clone public repository:', error);
     throw error;
   }
 }

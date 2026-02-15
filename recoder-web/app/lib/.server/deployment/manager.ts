@@ -10,6 +10,8 @@ import { createNetlifyDeployer } from './platforms/netlify';
 import { createRailwayDeployer } from './platforms/railway';
 import { createCloudflareDeployer } from './platforms/cloudflare';
 import { neon } from '@neondatabase/serverless';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DeployManager');
 
 export interface DeploymentOptions {
   userId?: string;
@@ -39,9 +41,9 @@ export class DeploymentManager {
   ): Promise<DeploymentResult> {
     const startTime = Date.now();
 
-    console.log(`🚀 Deploying to ${config.platform}...`);
-    console.log(`   Project: ${config.projectName}`);
-    console.log(`   Framework: ${config.framework || 'auto-detect'}`);
+    logger.info(`🚀 Deploying to ${config.platform}...`);
+    logger.info(`   Project: ${config.projectName}`);
+    logger.info(`   Framework: ${config.framework || 'auto-detect'}`);
 
     try {
       // Select deployer based on platform
@@ -107,8 +109,8 @@ export class DeploymentManager {
         await this.saveDeployment(config, result);
       }
 
-      console.log(`✅ Deployment successful in ${totalTime}ms`);
-      console.log(`   URL: ${result.url}`);
+      logger.info(`✅ Deployment successful in ${totalTime}ms`);
+      logger.info(`   URL: ${result.url}`);
 
       return result;
     } catch (error) {
@@ -125,7 +127,7 @@ export class DeploymentManager {
         await this.saveDeployment(config, errorResult);
       }
 
-      console.error(`❌ Deployment failed after ${totalTime}ms:`, error);
+      logger.error(`❌ Deployment failed after ${totalTime}ms:`, error);
       return errorResult;
     }
   }
@@ -174,9 +176,9 @@ export class DeploymentManager {
         )
       `;
 
-      console.log('💾 Saved deployment to database');
+      logger.info('💾 Saved deployment to database');
     } catch (error) {
-      console.error('Failed to save deployment to database:', error);
+      logger.error('Failed to save deployment to database:', error);
       // Don't throw - deployment succeeded even if save failed
     }
   }
@@ -210,7 +212,7 @@ export class DeploymentManager {
 
       return result as any[];
     } catch (error) {
-      console.error('Failed to get deployment history:', error);
+      logger.error('Failed to get deployment history:', error);
       return [];
     }
   }

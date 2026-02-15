@@ -3,10 +3,14 @@
  * Handles authenticated cloning of private repositories
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CloneHelpers');
+
 export async function fetchGitHubRepoInfo(owner: string, repo: string, githubToken?: string) {
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}`;
 
-  console.log('📦 [GitHub] Fetching repo info:', { owner, repo, hasToken: !!githubToken });
+  logger.info('📦 [GitHub] Fetching repo info:', { owner, repo, hasToken: !!githubToken });
 
   const headers: HeadersInit = {
     'Accept': 'application/vnd.github.v3+json',
@@ -16,14 +20,14 @@ export async function fetchGitHubRepoInfo(owner: string, repo: string, githubTok
   // Add authorization header if token is available
   if (githubToken) {
     headers['Authorization'] = `Bearer ${githubToken}`;
-    console.log('📦 [GitHub] Using GitHub token for authentication');
+    logger.info('📦 [GitHub] Using GitHub token for authentication');
   } else {
-    console.warn('⚠️ [GitHub] No GitHub token provided - may hit rate limits');
+    logger.warn('⚠️ [GitHub] No GitHub token provided - may hit rate limits');
   }
 
   const response = await fetch(apiUrl, { headers });
 
-  console.log('📦 [GitHub] API response:', {
+  logger.info('📦 [GitHub] API response:', {
     status: response.status,
     statusText: response.statusText,
     remaining: response.headers.get('x-ratelimit-remaining'),
@@ -66,7 +70,7 @@ export async function cloneGitHubRepo(
   githubToken?: string
 ): Promise<{ files: Record<string, string>; repository: any }> {
 
-  console.log('📦 [GitHub] Cloning repository:', { owner, repo, branch, subPath });
+  logger.info('📦 [GitHub] Cloning repository:', { owner, repo, branch, subPath });
 
   // First, get repository info
   const repository = await fetchGitHubRepoInfo(owner, repo, githubToken);
@@ -74,12 +78,12 @@ export async function cloneGitHubRepo(
   // Use the actual default branch if 'main' doesn't exist
   const actualBranch = branch === 'main' ? repository.default_branch : branch;
 
-  console.log('📦 [GitHub] Using branch:', actualBranch);
+  logger.info('📦 [GitHub] Using branch:', actualBranch);
 
   // Fetch the file tree
   const files = await fetchGitHubTree(owner, repo, actualBranch, subPath, githubToken);
 
-  console.log('📦 [GitHub] Fetched', Object.keys(files).length, 'files');
+  logger.info('📦 [GitHub] Fetched', Object.keys(files).length, 'files');
 
   return { files, repository };
 }
@@ -92,7 +96,7 @@ async function fetchGitHubTree(
   githubToken?: string
 ): Promise<Record<string, string>> {
 
-  console.log('📦 [GitHub] Fetching tree:', { owner, repo, branch, subPath });
+  logger.info('📦 [GitHub] Fetching tree:', { owner, repo, branch, subPath });
 
   // Get the tree SHA for the branch
   const refUrl = `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`;
@@ -115,7 +119,7 @@ async function fetchGitHubTree(
   const refData = await refResponse.json() as any;
   const commitSha = refData.object.sha as string;
 
-  console.log('📦 [GitHub] Got commit SHA:', commitSha);
+  logger.info('📦 [GitHub] Got commit SHA:', commitSha);
 
   // Get the commit to find the tree SHA
   const commitUrl = `https://api.github.com/repos/${owner}/${repo}/git/commits/${commitSha}`;
@@ -129,7 +133,7 @@ async function fetchGitHubTree(
   const commitData = await commitResponse.json() as any;
   const treeSha = commitData.tree.sha as string;
 
-  console.log('📦 [GitHub] Got tree SHA:', treeSha);
+  logger.info('📦 [GitHub] Got tree SHA:', treeSha);
 
   // Get the full tree recursively
   const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${treeSha}?recursive=1`;
@@ -142,7 +146,7 @@ async function fetchGitHubTree(
 
   const treeData = await treeResponse.json() as any;
 
-  console.log('📦 [GitHub] Got tree data, total items:', treeData.tree.length);
+  logger.info('📦 [GitHub] Got tree data, total items:', treeData.tree.length);
 
   // Filter files based on subPath and type (only files, not trees)
   let filteredFiles = treeData.tree.filter((item: any) => {
@@ -173,10 +177,10 @@ async function fetchGitHubTree(
     filteredFiles = filteredFiles.filter((item: any) =>
       item.path.startsWith(normalizedSubPath + '/')
     );
-    console.log('📦 [GitHub] Filtered to subpath:', normalizedSubPath, '- files:', filteredFiles.length);
+    logger.info('📦 [GitHub] Filtered to subpath:', normalizedSubPath, '- files:', filteredFiles.length);
   }
 
-  console.log(`📦 [GitHub] Cloning ${filteredFiles.length} files (ignoring build artifacts and dependencies)`);
+  logger.info(`📦 [GitHub] Cloning ${filteredFiles.length} files (ignoring build artifacts and dependencies)`);
 
   // Download ALL files (removed arbitrary 50 file limit)
   // Files are downloaded in batches to respect rate limits
@@ -201,7 +205,7 @@ async function fetchGitHubTree(
 
           files[filePath] = content;
         } catch (error) {
-          console.error(`Failed to fetch file ${file.path}:`, error);
+          logger.error(`Failed to fetch file ${file.path}:`, error);
           // Continue with other files
         }
       })

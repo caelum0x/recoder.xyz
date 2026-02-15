@@ -4,6 +4,8 @@ import { NodeId } from "../node/base";
 import { WorkspaceId } from "../workspace/id";
 import { GitHubEventConfiguration } from "./github";
 import { ManualTrigger } from "./manual";
+import { SlackEventConfiguration } from "./slack";
+import { WhatsAppEventConfiguration } from "./whatsapp";
 
 export {
 	ManualParameterType as ParameterType,
@@ -24,8 +26,12 @@ export const Trigger = z.object({
 	configuration: z.discriminatedUnion("provider", [
 		GitHubEventConfiguration,
 		ManualTrigger,
+		WhatsAppEventConfiguration,
+		SlackEventConfiguration,
 	]),
 });
 export type Trigger = z.infer<typeof Trigger>;
 
 export * from "./github";
+export * from "./slack";
+export * from "./whatsapp";

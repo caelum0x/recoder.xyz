@@ -6,6 +6,7 @@
  */
 
 import Fuse, { type FuseResultMatch } from 'fuse.js';
+import { createScopedLogger } from '~/utils/logger';
 import type {
   FileSearchResult,
   FileSearchOptions,
@@ -13,6 +14,8 @@ import type {
   HighlightRange,
   DEFAULT_SEARCH_FILTER,
 } from './types';
+
+const logger = createScopedLogger('FileSearch');
 
 // =============================================================================
 // Constants
@@ -74,7 +77,7 @@ function loadRecentFiles(): Map<string, RecentFile> {
       return new Map(entries.map((f) => [f.filePath, f]));
     }
   } catch (e) {
-    console.warn('[FileSearch] Failed to load recent files:', e);
+    logger.warn('[FileSearch] Failed to load recent files:', e);
   }
   return new Map();
 }
@@ -91,7 +94,7 @@ function saveRecentFiles(): void {
       .slice(0, MAX_RECENT_FILES);
     localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(entries));
   } catch (e) {
-    console.warn('[FileSearch] Failed to save recent files:', e);
+    logger.warn('[FileSearch] Failed to save recent files:', e);
   }
 }
 

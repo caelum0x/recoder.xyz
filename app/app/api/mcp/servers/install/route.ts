@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Failed to install server:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to install server' },
+      { error: 'Failed to install server' },
       { status: 500 }
     );
   }

@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('[2FA Verify] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to verify code' },
+      { success: false, error: 'Failed to verify code' },
       { status: 500 }
     );
   }

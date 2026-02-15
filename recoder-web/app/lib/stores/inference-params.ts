@@ -1,4 +1,7 @@
 import { atom, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('InferenceParams');
 
 // Storage key
 const INFERENCE_PARAMS_KEY = 'recoder_inference_params';
@@ -119,7 +122,7 @@ function loadParams(): InferenceParams {
       return { ...DEFAULT_INFERENCE_PARAMS, ...parsed };
     }
   } catch (e) {
-    console.error('[InferenceParams] Failed to load params:', e);
+    logger.error('[InferenceParams] Failed to load params:', e);
   }
 
   return DEFAULT_INFERENCE_PARAMS;
@@ -134,7 +137,7 @@ function saveParams(params: InferenceParams): void {
   try {
     localStorage.setItem(INFERENCE_PARAMS_KEY, JSON.stringify(params));
   } catch (e) {
-    console.error('[InferenceParams] Failed to save params:', e);
+    logger.error('[InferenceParams] Failed to save params:', e);
   }
 }
 

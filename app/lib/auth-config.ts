@@ -77,6 +77,8 @@ export const auth = betterAuth({
         "https://recoder.xyz",
         "https://www.recoder.xyz",
         "https://web.recoder.xyz",
+        "https://pm.recoder.xyz",
+        "https://agency.recoder.xyz",
         "https://docker.recoder.xyz", // Docker backend for cross-origin API calls
       ]
     : [
@@ -88,6 +90,8 @@ export const auth = betterAuth({
         "https://recoder.xyz",
         "https://www.recoder.xyz",
         "https://web.recoder.xyz",
+        "https://pm.recoder.xyz",
+        "https://agency.recoder.xyz",
         "https://docker.recoder.xyz",
       ],
   pages: {

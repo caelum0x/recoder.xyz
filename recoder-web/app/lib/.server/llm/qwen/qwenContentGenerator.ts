@@ -18,6 +18,9 @@ import type {
   EmbedContentResponse,
 } from '@google/genai';
 import type { ContentGeneratorConfig } from '../core/contentGenerator.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('QwenContentGenerator');
 
 // Default fallback base URL if no endpoint is provided
 const DEFAULT_QWEN_BASE_URL =
@@ -105,7 +108,7 @@ export class QwenContentGenerator extends OpenAIContentGenerator {
       if (this.isAuthError(error)) {
         throw error;
       }
-      console.warn('Failed to get token from shared manager:', error);
+      logger.warn('Failed to get token from shared manager:', error);
       throw new Error(
         'Failed to obtain valid Qwen access token. Please re-authenticate.',
       );

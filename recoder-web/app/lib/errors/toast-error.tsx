@@ -12,6 +12,8 @@ import {
   getRecoverySuggestions,
 } from '~/lib/utils/error-handler';
 import { useEffect, useState, useCallback } from 'react';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ToastError');
 
 // Track active error toasts to prevent duplicates
 const activeErrorToasts = new Map<string, Id>();
@@ -249,7 +251,7 @@ function RecoveryErrorToast({ errorInfo }: { errorInfo: ErrorInfo }) {
       await action.action();
       toast.dismiss();
     } catch (e) {
-      console.error('Recovery action failed:', e);
+      logger.error('Recovery action failed:', e);
     } finally {
       setIsExecuting(false);
     }

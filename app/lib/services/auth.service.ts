@@ -4,12 +4,10 @@
  * FIXED VERSION - Updated to use correct Prisma models (users, user_quota, verification, etc.)
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { hashPassword, verifyPassword, generateSecureToken } from '../crypto';
 import { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } from '../email';
 import crypto from 'crypto';
-
-const prisma = new PrismaClient();
 
 export class AuthService {
   /**

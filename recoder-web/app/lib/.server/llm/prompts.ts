@@ -215,7 +215,7 @@ Step 3 - Add diagnostic logs:
   oldString="const result = await api.login(credentials);"
   newString="console.log('Login attempt:', credentials);
 const result = await api.login(credentials);
-console.log('Login result:', result);">
+logger.info('Login result:', result);">
 Add diagnostic logging
 </recoderAction>
 
@@ -1058,9 +1058,19 @@ CRITICAL RULES:
   - expo-status-bar (status bar control)
   - expo-linear-gradient (gradient backgrounds)
   - expo-haptics (haptic feedback)
-  - expo-camera (camera access)
+  - expo-camera (camera access — photo/video capture, barcode scanning)
+  - expo-location (GPS, geolocation, geocoding)
+  - expo-notifications (push notifications — local and remote)
+  - expo-sensors (accelerometer, gyroscope, magnetometer, barometer, pedometer)
+  - expo-av (audio/video playback and recording)
+  - expo-file-system (file read/write, downloads, uploads)
+  - react-native-maps (MapView with markers, polylines, polygons)
+  - expo-media-library (access photos/videos from device gallery)
   - react-native-safe-area-context (safe area insets)
   - @expo/vector-icons (icon sets: Ionicons, MaterialIcons, FontAwesome, etc.)
+  - @react-native-async-storage/async-storage (persistent key-value storage)
+  - expo-clipboard (copy/paste support)
+  - expo-secure-store (secure credential storage)
 
   PROJECT STRUCTURE:
   \`\`\`
@@ -1089,6 +1099,56 @@ CRITICAL RULES:
   - No className - use style prop with StyleSheet objects
   - Flexbox is default layout (flexDirection defaults to 'column')
   - Use "npm run web" or "npx expo start --web" for dev server
+
+  <common_mistakes>
+  NEVER DO THIS (will crash):
+  - <div> → Use <View> instead
+  - <span> → Use <Text> instead
+  - <button onClick={fn}> → Use <Pressable onPress={fn}> instead
+  - <input> → Use <TextInput> instead
+  - <img src="..."> → Use <Image source={{uri: "..."}}> or expo-image
+  - className="text-lg" → Use style={styles.text} with StyleSheet.create()
+  - <p>Hello</p> → Use <Text>Hello</Text>
+  - Bare text: <View>Hello</View> → Must wrap: <View><Text>Hello</Text></View>
+  </common_mistakes>
+
+  <built_in_backend_services>
+  BUILT-IN BACKEND SERVICES:
+  The container includes SQLite (via better-sqlite3) for persistent data storage.
+
+  DATABASE USAGE:
+  - SQLite database is available at /workspace/data/app.db
+  - Use better-sqlite3 for synchronous database access (already installed)
+  - Initialize the database before first use
+
+  PATTERN:
+  \`\`\`typescript
+  import Database from 'better-sqlite3';
+  const db = new Database('/workspace/data/app.db');
+
+  // Create tables
+  db.exec(\`CREATE TABLE IF NOT EXISTS items (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    title TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )\`);
+
+  // CRUD operations
+  const insert = db.prepare('INSERT INTO items (title) VALUES (?)');
+  const getAll = db.prepare('SELECT * FROM items ORDER BY created_at DESC');
+  const getById = db.prepare('SELECT * FROM items WHERE id = ?');
+  \`\`\`
+
+  AUTH SCAFFOLDING:
+  - Use crypto.scryptSync for password hashing (no external deps needed)
+  - Store sessions in SQLite with expiration timestamps
+  - JWT alternative: use jsonwebtoken package if needed
+
+  STRIPE INTEGRATION:
+  - Install stripe package: npm install stripe
+  - Use checkout sessions for payments
+  - Store webhook events in SQLite for reliability
+  </built_in_backend_services>
 </mobile_app_development>
 
 <system_constraints>
@@ -1350,6 +1410,43 @@ CRITICAL RULES:
         The user can then ask you to modify specific parts of the cloned site.
 
         Example: \`<recoderAction type="cloneUrl" url="https://booking.com" reason="User wants exact clone of Booking.com homepage">Cloning the complete website</recoderAction>\`
+
+      - web_crawl: For crawling and extracting the content of a webpage (low-cost fallback without paid crawler APIs). Use this when:
+        - User needs content from a specific URL for research or implementation
+        - You need page text/structure before coding from a reference site
+
+        Add a \`url\` attribute with the full URL to crawl.
+        Optional safety-control attributes:
+        - \`providerHint\` ("openai", "anthropic", "google", or "free-fallback")
+        - \`allowedDomains\` (comma-separated domains)
+        - \`blockedDomains\` (comma-separated domains)
+        - \`maxUses\` (integer usage budget within this response)
+        Example: \`<recoderAction type="web_crawl" url="https://example.com/docs">Extracting page content for implementation details</recoderAction>\`
+
+      - github_documents: For loading read-only GitHub issue/PR documents for research and implementation context. Use this when:
+        - User asks to analyze issues/PRs from a repository
+        - You need repo discussion/diff context before coding
+
+        Add required attributes:
+        - \`owner\` (repo owner/org)
+        - \`repo\` (repository name)
+        Optional attributes:
+        - \`sourceType\` ("issues" or "pull_requests")
+        - \`maxDocuments\` (integer document cap)
+        - \`accessToken\` (optional PAT; omit if user already connected GitHub)
+        - \`maxUses\` (integer usage budget within this response)
+        Example: \`<recoderAction type="github_documents" owner="vercel" repo="next.js" sourceType="pull_requests" maxDocuments="20">Loading PR context for implementation decisions</recoderAction>\`
+
+      - copy_project: For duplicating the current app/project into a new one. Use this when:
+        - User asks to clone/copy/duplicate an existing project
+        - User wants a safe branch-like duplicate before major changes
+
+        Add optional attributes:
+        - \`sourceProjectId\` (defaults to current project)
+        - \`newProjectName\` (optional name for the duplicate)
+        - \`includeGit\` ("true" or "false")
+        - \`includeEnvFiles\`, \`includeSecrets\`, \`includeDeployConfig\`, \`includeDomains\` (all default to "false" for safe copy)
+        Example: \`<recoderAction type="copy_project" newProjectName="My App Copy" includeGit="false">Creating a duplicate of the current project</recoderAction>\`
 
       - spawn_task: For delegating complex subtasks to specialized modes. Use this when:
         - A task is too complex and should be broken into subtasks
@@ -2630,6 +2727,239 @@ PROJECT TYPE: Expo / React Native
 - Use React Native safe area handling (SafeAreaView or useSafeAreaInsets).
 - For icons use @expo/vector-icons. For animations use react-native-reanimated.
 - File structure: app/ for routes, components/, hooks/, utils/, constants/.
+- NEVER use className prop — it doesn't exist in React Native.
+- NEVER use onClick — always use onPress.
+- NEVER import from 'react-dom' — only from 'react-native'.
+- ALWAYS wrap text content in <Text> component — bare strings cause crashes.
+- flexDirection defaults to 'column' in RN (opposite of web CSS).
+- Dimensions use density-independent pixels (no px, em, rem units).
+- Use Platform.select() or Platform.OS for platform differences.
+
+<common_patterns>
+## Bottom Tab Navigation (app/(tabs)/_layout.tsx)
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function TabLayout() {
+  return (
+    <Tabs screenOptions={{ tabBarActiveTintColor: '#7C3AED' }}>
+      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} /> }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} /> }} />
+    </Tabs>
+  );
+}
+
+## Stack Navigation with Header
+import { Stack } from 'expo-router';
+
+export default function Layout() {
+  return (
+    <Stack screenOptions={{ headerStyle: { backgroundColor: '#0A0A0A' }, headerTintColor: '#fff' }}>
+      <Stack.Screen name="index" options={{ title: 'Home' }} />
+      <Stack.Screen name="details" options={{ title: 'Details' }} />
+    </Stack>
+  );
+}
+
+## Modal Screen
+// app/modal.tsx
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
+
+export default function Modal() {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Modal Content</Text>
+      <Pressable onPress={() => router.back()} style={styles.button}>
+        <Text style={styles.buttonText}>Close</Text>
+      </Pressable>
+    </View>
+  );
+}
+// In _layout.tsx: <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+
+## Pull-to-Refresh List
+import { FlatList, RefreshControl } from 'react-native';
+import { useState, useCallback } from 'react';
+
+function MyList() {
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, []);
+
+  return (
+    <FlatList
+      data={items}
+      renderItem={({ item }) => <ItemCard item={item} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    />
+  );
+}
+
+## Keyboard Avoidance
+import { KeyboardAvoidingView, Platform } from 'react-native';
+
+<KeyboardAvoidingView
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  style={{ flex: 1 }}
+>
+  {/* Form content */}
+</KeyboardAvoidingView>
+
+## Safe Area Usage
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+function Screen() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+      {/* Content */}
+    </View>
+  );
+}
+
+## AsyncStorage (Persistent Data)
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Save
+await AsyncStorage.setItem('user_token', token);
+// Load
+const token = await AsyncStorage.getItem('user_token');
+// Remove
+await AsyncStorage.removeItem('user_token');
+// Multi get
+const values = await AsyncStorage.multiGet(['key1', 'key2']);
+
+## API Fetch with Loading/Error States
+import { useState, useEffect } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+
+function DataScreen() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('https://api.example.com/data')
+      .then(res => { if (!res.ok) throw new Error('Network error'); return res.json(); })
+      .then(setData)
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <ActivityIndicator size="large" style={styles.center} />;
+  if (error) return <Text style={styles.error}>{error}</Text>;
+  return <View>{/* Render data */}</View>;
+}
+
+## Form with TextInput + Validation
+import { useState } from 'react';
+import { View, TextInput, Text, Pressable, StyleSheet, Alert } from 'react-native';
+
+function LoginForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = () => {
+    if (!email.includes('@')) { Alert.alert('Error', 'Invalid email'); return; }
+    if (password.length < 6) { Alert.alert('Error', 'Password too short'); return; }
+    // Submit logic
+  };
+
+  return (
+    <View style={styles.form}>
+      <TextInput value={email} onChangeText={setEmail} placeholder="Email" keyboardType="email-address" autoCapitalize="none" style={styles.input} />
+      <TextInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry style={styles.input} />
+      <Pressable onPress={handleSubmit} style={styles.button}><Text style={styles.buttonText}>Log In</Text></Pressable>
+    </View>
+  );
+}
+
+## Alert.alert() for Confirmations
+import { Alert } from 'react-native';
+
+Alert.alert(
+  'Delete Item',
+  'Are you sure you want to delete this?',
+  [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: () => handleDelete() },
+  ]
+);
+
+## Animated Component with Reanimated
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+
+function AnimatedBox() {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  const handlePress = () => { scale.value = withSpring(scale.value === 1 ? 1.2 : 1); };
+
+  return (
+    <Pressable onPress={handlePress}>
+      <Animated.View style={[styles.box, animatedStyle]} />
+    </Pressable>
+  );
+}
+
+## Platform-Specific Code
+import { Platform, StyleSheet } from 'react-native';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LLMPrompts');
+
+const styles = StyleSheet.create({
+  shadow: Platform.select({
+    ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+    android: { elevation: 4 },
+    default: {},
+  }),
+});
+
+// Conditional rendering
+if (Platform.OS === 'ios') { /* iOS only */ }
+if (Platform.OS === 'android') { /* Android only */ }
+</common_patterns>
+
+<common_rn_mistakes>
+COMMON REACT NATIVE MISTAKES — NEVER DO THESE:
+
+1. NEVER nest VirtualizedList (FlatList, SectionList) inside ScrollView
+   — Use FlatList's ListHeaderComponent/ListFooterComponent instead
+
+2. NEVER use flex: 1 on Text without a parent with defined height
+   — Text expands infinitely; wrap in a View with explicit height or flex
+
+3. ALWAYS add keyExtractor to FlatList
+   — Without it, you get warnings and poor performance
+   — Example: keyExtractor={(item) => item.id.toString()}
+
+4. NEVER use window.*, document.*, or navigator.* (except navigator in specific RN APIs)
+   — These browser APIs do not exist in React Native
+   — Use Dimensions, Platform, Linking, etc. from react-native instead
+
+5. NEVER use <a href="..."> for links
+   — Use <Link> from expo-router or Linking.openURL() from react-native
+
+6. NEVER use CSS units (px, em, rem, %, vh, vw)
+   — React Native uses unitless numbers (density-independent pixels)
+   — Wrong: { fontSize: '16px' } / Right: { fontSize: 16 }
+
+7. NEVER import from 'react-dom' or 'react-dom/client'
+   — React Native has no DOM. Use react-native imports only.
+
+8. NEVER use addEventListener('click', ...) or DOM event listeners
+   — Use onPress, onLongPress, onPressIn, onPressOut on Pressable/TouchableOpacity
+
+9. NEVER use localStorage or sessionStorage
+   — Use AsyncStorage from @react-native-async-storage/async-storage
+
+10. NEVER use CSS-in-JS libraries (styled-components, emotion) without RN-specific versions
+    — Use StyleSheet.create() or the react-native variant of these libraries
+</common_rn_mistakes>
 </framework_guidelines>
 `;
   }

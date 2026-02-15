@@ -4,6 +4,9 @@
  */
 
 import { useState } from 'react';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PricingPage');
 
 // Icon components using UnoCSS classes (Cloudflare Workers compatible)
 const Check = ({ className }: { className?: string }) => <div className={`i-ph:check ${className || ''}`} />;
@@ -142,12 +145,12 @@ export function PricingPage() {
 
       const { checkoutUrl, provider } = (await response.json()) as { checkoutUrl: string; provider: string };
 
-      console.log(`Redirecting to ${provider} checkout...`);
+      logger.info(`Redirecting to ${provider} checkout...`);
 
       // Redirect to checkout page
       window.location.href = checkoutUrl;
     } catch (err: unknown) {
-      console.error('Subscription error:', err);
+      logger.error('Subscription error:', err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(null);

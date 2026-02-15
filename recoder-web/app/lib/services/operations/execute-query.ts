@@ -18,6 +18,7 @@ import {
   isTextNode,
   QueryExecutionError,
 } from './types';
+import { createScopedLogger } from '~/utils/logger';
 import {
   useGenerationExecutor,
   type AppEntryResolver,
@@ -26,6 +27,8 @@ import {
   jsonContentToText,
   getNodeGenerations,
 } from './generation-executor';
+
+const logger = createScopedLogger('ExecuteQuery');
 
 // ============================================================================
 // Constants
@@ -421,7 +424,7 @@ async function queryVectorStores(
           })),
         };
       } catch (error) {
-        console.error(`Vector store query failed for ${provider}:`, error);
+        logger.error(`Vector store query failed for ${provider}:`, error);
         return null;
       }
     })
@@ -471,7 +474,7 @@ async function executeFileSearch(
       },
     ];
   } catch (error) {
-    console.error('File search failed:', error);
+    logger.error('File search failed:', error);
     return [];
   }
 }
@@ -517,7 +520,7 @@ async function executeApiSearch(
       })),
     };
   } catch (error) {
-    console.error(`API search failed for ${provider}:`, error);
+    logger.error(`API search failed for ${provider}:`, error);
     return null;
   }
 }

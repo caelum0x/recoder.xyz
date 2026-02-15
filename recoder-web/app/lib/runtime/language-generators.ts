@@ -394,6 +394,10 @@ public class App {
  */
 export function getInstallCommand(framework: string): string {
   switch (framework) {
+    // Expo / React Native (Node-based, uses bun/npm)
+    case 'expo':
+      return 'bun install --force || npm install --legacy-peer-deps';
+
     // Python
     case 'flask':
     case 'django':
@@ -424,6 +428,10 @@ export function getInstallCommand(framework: string): string {
  */
 export function getDevServerCommand(framework: string): { command: string; port: number } {
   switch (framework) {
+    // Expo / React Native
+    case 'expo':
+      return { command: 'EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --host 0.0.0.0 --port 8081', port: 8081 };
+
     // Python
     case 'flask':
       return { command: 'python -m flask run --host=0.0.0.0 --port=5173', port: 5173 };

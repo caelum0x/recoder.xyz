@@ -17,19 +17,9 @@ import type { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { processImports } from './memoryImportProcessor.js';
 import type { FileFilteringOptions } from '../config/config.js';
 import { DEFAULT_MEMORY_FILE_FILTERING_OPTIONS } from '../config/config.js';
+import { createScopedLogger } from '~/utils/logger';
 
-// Simple console logger, similar to the one previously in CLI's config.ts
-// TODO: Integrate with a more robust server-side logger if available/appropriate.
-const logger = {
-   
-  debug: (...args: any[]) =>
-    console.debug('[DEBUG] [MemoryDiscovery]', ...args),
-   
-  warn: (...args: any[]) => console.warn('[WARN] [MemoryDiscovery]', ...args),
-   
-  error: (...args: any[]) =>
-    console.error('[ERROR] [MemoryDiscovery]', ...args),
-};
+const logger = createScopedLogger('MemoryDiscovery');
 
 interface GeminiFileContent {
   filePath: string;

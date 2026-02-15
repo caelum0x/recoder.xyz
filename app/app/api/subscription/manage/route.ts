@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Failed to fetch subscription',
+        message: 'Failed to fetch subscription',
       },
       { status: 500 }
     );
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Failed to update subscription',
+        message: 'Failed to update subscription',
       },
       { status: 500 }
     );
@@ -284,7 +284,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Failed to cancel subscription',
+        message: 'Failed to cancel subscription',
       },
       { status: 500 }
     );

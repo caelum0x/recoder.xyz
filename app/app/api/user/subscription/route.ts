@@ -111,25 +111,62 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // For now, we'll allow plan changes without payment
-    // TODO: Integrate with payment provider (Wise)
-    const success = await userManager.changePlan(user.id, plan as PlanType);
-    
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Failed to change plan' },
-        { status: 500 }
-      );
+    // Downgrade to FREE is allowed without payment
+    if (plan === 'FREE') {
+      const success = await userManager.changePlan(user.id, plan as PlanType);
+      if (!success) {
+        return NextResponse.json(
+          { error: 'Failed to change plan' },
+          { status: 500 }
+        );
+      }
+      const profile = await userManager.getUserProfile(user.id);
+      return NextResponse.json({
+        plan: profile?.subscription_plan,
+        subscription_status: profile?.subscription_status,
+        changed_at: new Date().toISOString(),
+        message: 'Downgraded to Free plan',
+      });
     }
 
-    // Return updated subscription info
-    const profile = await userManager.getUserProfile(user.id);
-    
+    // Paid plan upgrades require going through the checkout flow
+    // Check if user already has an active subscription they can upgrade
+    const existingSub = await prisma.subscriptions.findFirst({
+      where: { userId: user.id, status: 'active' },
+    });
+
+    if (existingSub && existingSub.provider === 'dodo' && existingSub.providerId) {
+      // Upgrade via Dodo plan change (prorated)
+      const { DodoPaymentsService } = await import('@/lib/services/dodopayments.service');
+      const planProductMap: Record<string, string> = {
+        PRO: process.env.DODO_PRODUCT_PRO || 'prod_pro',
+        ENTERPRISE: process.env.DODO_PRODUCT_ENTERPRISE || 'prod_enterprise',
+      };
+      const productId = planProductMap[plan];
+      if (!productId) {
+        return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+      }
+
+      await DodoPaymentsService.changePlan(
+        existingSub.id,
+        productId,
+        'prorated_immediately'
+      );
+
+      return NextResponse.json({
+        plan,
+        subscription_status: 'active',
+        changed_at: new Date().toISOString(),
+        message: `Plan change to ${plan} initiated. Billing will be prorated.`,
+      });
+    }
+
+    // No existing subscription — redirect to checkout
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://recoder.xyz';
     return NextResponse.json({
-      plan: profile?.subscription_plan,
-      subscription_status: profile?.subscription_status,
-      changed_at: new Date().toISOString(),
-      message: `Successfully upgraded to ${plan} plan`
+      requiresCheckout: true,
+      checkoutUrl: `${baseUrl}/billing/checkout?plan=${plan.toLowerCase()}`,
+      message: `To upgrade to ${plan}, please complete the checkout process.`,
     });
   } catch (error) {
     console.error('Plan change error:', error);

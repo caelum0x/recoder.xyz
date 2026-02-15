@@ -4,18 +4,22 @@ import {
   loadProjectConfigPromptFromDocker,
   loadThemePromptFromDocker,
   resolvePromptMentionsBestEffort,
+  resolveFileMentionsBestEffort,
 } from '~/lib/services/chat/docker-enrichment';
 import type { Messages } from '~/lib/types/chat';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Chat');
 
 const DEBUG_CHAT = process.env.NODE_ENV !== 'production' && process.env.DEBUG_CHAT === 'true';
 
 function chatDebug(message: string, meta?: unknown) {
   if (!DEBUG_CHAT) return;
   if (typeof meta !== 'undefined') {
-    console.debug(`[chat] ${message}`, meta);
+    logger.debug(`[chat] ${message}`, meta);
     return;
   }
-  console.debug(`[chat] ${message}`);
+  logger.debug(`[chat] ${message}`);
 }
 
 export async function action(args: ActionFunctionArgs) {
@@ -331,14 +335,14 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     const validation = validateChatMessages(requestBody.messages);
 
     if (!validation.valid) {
-      console.error('Message validation failed');
+      logger.error('Message validation failed');
       chatDebug('validation errors', validation.errors);
       return createValidationErrorResponse(validation.errors);
     }
 
     messages = validation.sanitized as Messages;
   } catch (error) {
-    console.error('Failed to parse request');
+    logger.error('Failed to parse request');
     chatDebug('parse request error', error instanceof Error ? error.message : String(error));
     throw new Response(JSON.stringify({ error: 'Invalid request format' }), {
       status: 400,
@@ -356,7 +360,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     : (lastUserMessage as any[]).map((c: any) => c.text || '').join('');
   const injectionCheck = detectInjectionPatterns(lastUserMessageStr);
   if (injectionCheck.risk === 'high') {
-    console.warn('[security] High-risk injection patterns detected');
+    logger.warn('[security] High-risk injection patterns detected');
     chatDebug('injection patterns', injectionCheck.patterns);
   }
 
@@ -365,7 +369,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   const loopCheck = await checkForLoops(messages);
   
   if (loopCheck.hasLoop) {
-    console.warn('🔄 Loop detected in conversation');
+    logger.warn('Loop detected in conversation');
     if (loopCheck.suggestion) {
       messages.push({
         role: 'system',
@@ -376,7 +380,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
 
   // Enterprise AI: Record chat session (non-blocking)
   recordChatSession(`chat-${Date.now()}`, messages).catch((err) => {
-    console.warn('Chat recording failed');
+    logger.warn('Chat recording failed');
     chatDebug('chat recording error', err instanceof Error ? err.message : String(err));
   });
 
@@ -594,10 +598,37 @@ IMPORTANT:
     const themePrompt = await loadThemePromptFromDocker(dockerUrl, requestBody.projectId, dockerHeaders);
 
     await resolvePromptMentionsBestEffort(messages, dockerUrl, dockerHeaders);
+    await resolveFileMentionsBestEffort(messages, dockerUrl, requestBody.containerId || requestBody.projectId, dockerHeaders);
+
+    // RAG context injection — additive, never blocks chat
+    let ragContextPrompt = '';
+    if (requestBody.projectId) {
+      try {
+        const { isVectorModeAvailable, queryRag } = await import('~/lib/services/rag/rag-backend');
+        if (isVectorModeAvailable()) {
+          const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+          const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
+          if (queryText.length > 0) {
+            const ragResults = await Promise.race([
+              queryRag(requestBody.projectId, queryText.slice(0, 800), 5),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('RAG timeout')), 2000)),
+            ]);
+            if (ragResults.length > 0) {
+              const ragChunks = ragResults
+                .map((r) => `[score=${r.similarity.toFixed(3)}] ${r.content}`)
+                .join('\n---\n');
+              ragContextPrompt = `\n<rag_context>\n${ragChunks}\n</rag_context>\n`;
+            }
+          }
+        }
+      } catch (err) {
+        chatDebug('RAG context injection failed (non-blocking)', err);
+      }
+    }
 
     const { getWebToolCapabilityPrompt } = modesModule;
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
-    const systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt;
+    const systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
 
     // Get API key (User's BYOK > Environment variable)
     const { getAPIKey } = apiKeyModule;
@@ -812,14 +843,14 @@ RULES:
                 });
               }
             } catch (ctxErr) {
-              console.warn('Failed to load focused context (non-critical)');
+              logger.warn('Failed to load focused context (non-critical)');
               chatDebug('focused context error', ctxErr instanceof Error ? ctxErr.message : String(ctxErr));
             }
           }
         }
       } catch (e) {
         // Best-effort: edit-intent is optional, don't fail the request
-        console.warn('Edit intent analysis failed (non-critical)');
+        logger.warn('Edit intent analysis failed (non-critical)');
         chatDebug('edit intent analysis error', e instanceof Error ? e.message : String(e));
       }
     }
@@ -876,7 +907,7 @@ RULES:
       }
     } catch (compactionError) {
       // Non-critical: compaction failure must never break the chat request
-      console.warn('[context-compaction] Compaction failed (non-critical)');
+      logger.warn('[context-compaction] Compaction failed (non-critical)');
       chatDebug(
         'context compaction error',
         compactionError instanceof Error ? compactionError.message : String(compactionError),
@@ -1021,7 +1052,7 @@ RULES:
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-    console.error('Chat action error:', errorMessage);
+    logger.error('Chat action error:', errorMessage);
     if (DEBUG_CHAT && error instanceof Error) {
       chatDebug('chat error details', {
         name: error.name,

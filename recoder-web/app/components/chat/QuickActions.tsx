@@ -7,6 +7,8 @@ interface QuickActionsProps {
   onCloneWebsite?: () => void;
   onImportGitHub?: () => void;
   onDeploy?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 type ActionType = 'prompt' | 'clone' | 'github' | 'deploy';
@@ -48,6 +50,53 @@ const QUICK_ACTIONS: QuickAction[] = [
     actionType: 'deploy',
   },
   // Prompt-based actions
+  {
+    id: 'research-web',
+    iconClass: 'i-ph:globe-hemisphere-west',
+    label: 'Research Web',
+    prompt: `Use recoderAction tools to research this topic with sources.
+
+1) Start with web_search to find relevant pages.
+2) Use web_crawl on the best result URLs.
+3) Summarize findings with links and key implementation details.
+
+If I did not provide the exact topic yet, ask one short clarifying question first.`,
+    description: 'Search + crawl with citations',
+    color: 'from-sky-500 to-sky-600',
+    actionType: 'prompt',
+  },
+  {
+    id: 'github-docs',
+    iconClass: 'i-ph:git-pull-request',
+    label: 'GitHub PR/Issue Docs',
+    prompt: `Load repository context with github_documents and then summarize it.
+
+Required:
+- Ask me for owner/repo if missing
+- Use sourceType pull_requests by default (or issues if I ask)
+- Return top findings, risks, and links
+
+Execute via recoderAction type="github_documents".`,
+    description: 'Fetch PR/issues context',
+    color: 'from-slate-600 to-slate-700',
+    actionType: 'prompt',
+  },
+  {
+    id: 'copy-project',
+    iconClass: 'i-ph:copy',
+    label: 'Duplicate App',
+    prompt: `Duplicate this app as a new project using recoderAction type="copy_project".
+
+Before executing:
+1) Ask me the new project name
+2) Use safe defaults: includeGit=false, includeGitRemotes=false, includeTriggers=false, includeEnvFiles=false, includeSecrets=false, includeDeployConfig=false, includeDomains=false
+3) Confirm and run the action once
+
+After copy completes, share the new project id/name.`,
+    description: 'Create a safe app copy',
+    color: 'from-amber-500 to-amber-600',
+    actionType: 'prompt',
+  },
   {
     id: 'database',
     iconClass: 'i-ph:database',
@@ -114,9 +163,25 @@ After analysis, ask if I want to apply any changes using str_replace or multi_ap
   },
 ];
 
-export function QuickActions({ onSelectAction, disabled, onCloneWebsite, onImportGitHub, onDeploy }: QuickActionsProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function QuickActions({
+  onSelectAction,
+  disabled,
+  onCloneWebsite,
+  onImportGitHub,
+  onDeploy,
+  open,
+  onOpenChange,
+}: QuickActionsProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [hoveredAction, setHoveredAction] = useState<string | null>(null);
+  const isOpen = open ?? internalOpen;
+  const setIsOpen = (nextOpen: boolean) => {
+    if (open === undefined) {
+      setInternalOpen(nextOpen);
+    }
+
+    onOpenChange?.(nextOpen);
+  };
 
   const handleActionClick = (action: QuickAction) => {
     switch (action.actionType) {

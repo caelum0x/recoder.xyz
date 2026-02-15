@@ -1,80 +1,22 @@
 import "server-only";
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { magicLink } from "better-auth/plugins";
-import { db } from "@/db";
-import * as schema from "@/db/schema";
+import { createAuth } from "@recoder/auth";
+import { sendEmail } from "@/services/external/email/send-email";
 
-export const auth = betterAuth({
-	database: drizzleAdapter(db, {
-		provider: "pg",
-		schema: {
-			user: schema.users,
-			session: schema.authSessions,
-			account: schema.authAccounts,
-			verification: schema.authVerifications,
-		},
-	}),
-	secret: process.env.BETTER_AUTH_SECRET,
-	baseURL: process.env.BETTER_AUTH_URL,
-	emailAndPassword: {
-		enabled: false,
-	},
-	plugins: [
-		magicLink({
-			sendMagicLink: async ({ email, url }) => {
-				// TODO: implement email sending via Resend/nodemailer
-				console.log(`Magic link for ${email}: ${url}`);
+export const auth = createAuth({
+	sendMagicLink: async ({ email, url }) => {
+		await sendEmail(
+			"Sign in to Recoder Agency",
+			`Click the link below to sign in:\n\n${url}\n\nIf you did not request this, you can safely ignore this email.`,
+			[{ userDisplayName: email.split("@")[0], userEmail: email }],
+			{
+				html: [
+					"<h2>Sign in to Recoder Agency</h2>",
+					`<p>Click the link below to sign in:</p>`,
+					`<p><a href="${url}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Sign in</a></p>`,
+					`<p style="color:#6b7280;font-size:14px;">Or copy this URL: ${url}</p>`,
+					`<p style="color:#6b7280;font-size:12px;">If you did not request this, you can safely ignore this email.</p>`,
+				].join("\n"),
 			},
-		}),
-	],
-	socialProviders: {
-		...(process.env.GITHUB_APP_CLIENT_ID && process.env.GITHUB_APP_CLIENT_SECRET
-			? {
-					github: {
-						clientId: process.env.GITHUB_APP_CLIENT_ID,
-						clientSecret: process.env.GITHUB_APP_CLIENT_SECRET,
-					},
-				}
-			: {}),
-		...(process.env.GOOGLE_OAUTH_CLIENT_ID &&
-		process.env.GOOGLE_OAUTH_CLIENT_SECRET
-			? {
-					google: {
-						clientId: process.env.GOOGLE_OAUTH_CLIENT_ID,
-						clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-					},
-				}
-			: {}),
-	},
-	user: {
-		modelName: "user",
-		additionalFields: {
-			displayName: {
-				type: "string",
-				required: false,
-				fieldName: "displayName",
-			},
-			avatarUrl: {
-				type: "string",
-				required: false,
-				fieldName: "avatarUrl",
-			},
-			dbId: {
-				type: "number",
-				required: false,
-				fieldName: "dbId",
-				input: false,
-			},
-		},
-	},
-	session: {
-		modelName: "authSession",
-	},
-	account: {
-		modelName: "authAccount",
-	},
-	verification: {
-		modelName: "authVerification",
+		);
 	},
 });

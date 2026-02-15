@@ -10,6 +10,10 @@ export function buttonLabel(node: TriggerNode) {
 			return "Start Manual Flow";
 		case "github":
 			return "Test with Dummy Data";
+		case "whatsapp":
+			return "Test WhatsApp Flow";
+		case "slack":
+			return "Test Slack Flow";
 		default: {
 			const _exhaustiveCheck: never = node.content.provider;
 			throw new Error(`Unhandled trigger provider type: ${_exhaustiveCheck}`);
@@ -49,6 +53,9 @@ export function createInputsFromTrigger(
 				required: parameter.required,
 			}));
 		}
+		case "whatsapp":
+		case "slack":
+			return [];
 		default: {
 			const _exhaustiveCheck: never = trigger.configuration;
 			throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);

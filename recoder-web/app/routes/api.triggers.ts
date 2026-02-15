@@ -14,6 +14,17 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { z } from 'zod';
+import {
+  addTrigger,
+  generateTriggerId,
+  getTrigger,
+  listTriggersForWorkspace,
+  removeTrigger,
+  updateTrigger,
+} from '~/lib/.server/workspaces/triggers-store';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Triggers');
 
 // Dynamic import for session verification
 async function verifySession(request: Request) {
@@ -90,16 +101,6 @@ const ReconfigureGitHubInput = z.object({
 
 type TriggerType = z.infer<typeof Trigger>;
 
-// In-memory store (replace with DB in production)
-const triggerStore = new Map<string, TriggerType>();
-
-/**
- * Generate a unique trigger ID
- */
-function generateTriggerId(): string {
-  return `trg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-}
-
 /**
  * GET /api/triggers
  */
@@ -116,7 +117,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Get specific trigger
     if (triggerId) {
-      const trigger = triggerStore.get(triggerId);
+      const trigger = getTrigger(triggerId);
       if (!trigger) {
         return json({ success: false, error: 'Trigger not found' }, { status: 404 });
       }
@@ -125,18 +126,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Get all triggers for workspace
     if (workspaceId) {
-      const triggers = Array.from(triggerStore.values()).filter(
-        (t) => t.workspaceId === workspaceId
-      );
+      const triggers = listTriggersForWorkspace(workspaceId);
       return json({ success: true, triggers });
     }
 
     return json({ success: false, error: 'triggerId or workspaceId required' }, { status: 400 });
   } catch (error) {
-    console.error('[Triggers] Loader error:', error);
+    logger.error('[Triggers] Loader error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get triggers',
+      error: 'Failed to get triggers',
     }, { status: 500 });
   }
 }
@@ -167,7 +166,7 @@ export async function action({ request }: ActionFunctionArgs) {
       // In production, this would resolve the trigger from the generation context
       // For now, return a placeholder
       const trigger = generation.origin?.type === 'trigger'
-        ? triggerStore.get(generation.origin.id)
+        ? getTrigger(generation.origin.id)
         : null;
 
       return json({ success: true, trigger: trigger || null });
@@ -185,7 +184,7 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       const { triggerId, repositoryNodeId, installationId, event } = validation.data;
-      const trigger = triggerStore.get(triggerId);
+      const trigger = getTrigger(triggerId);
 
       if (!trigger) {
         return json({ success: false, error: 'Trigger not found' }, { status: 404 });
@@ -195,7 +194,7 @@ export async function action({ request }: ActionFunctionArgs) {
         return json({ success: false, error: 'Trigger is not a GitHub trigger' }, { status: 400 });
       }
 
-      const updatedTrigger: TriggerType = {
+      const updatedTrigger = {
         ...trigger,
         config: {
           repositoryNodeId,
@@ -205,9 +204,9 @@ export async function action({ request }: ActionFunctionArgs) {
         updatedAt: new Date().toISOString(),
       };
 
-      triggerStore.set(triggerId, updatedTrigger);
+      updateTrigger(updatedTrigger as any);
 
-      console.log(`[Triggers] Reconfigured GitHub trigger: ${triggerId}`);
+      logger.info(`[Triggers] Reconfigured GitHub trigger: ${triggerId}`);
       return json({ success: true, triggerId });
     }
 
@@ -240,9 +239,9 @@ export async function action({ request }: ActionFunctionArgs) {
         updatedAt: now,
       };
 
-      triggerStore.set(triggerId, newTrigger);
+      addTrigger(newTrigger as any);
 
-      console.log(`[Triggers] Configured: ${triggerId}`);
+      logger.info(`[Triggers] Configured: ${triggerId}`);
       return json({ success: true, triggerId });
     }
 
@@ -258,7 +257,7 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       const trigger = validation.data;
-      const existingTrigger = triggerStore.get(trigger.id);
+      const existingTrigger = getTrigger(trigger.id);
 
       if (!existingTrigger) {
         return json({ success: false, error: 'Trigger not found' }, { status: 404 });
@@ -269,9 +268,9 @@ export async function action({ request }: ActionFunctionArgs) {
         updatedAt: new Date().toISOString(),
       };
 
-      triggerStore.set(trigger.id, updatedTrigger);
+      updateTrigger(updatedTrigger as any);
 
-      console.log(`[Triggers] Updated: ${trigger.id}`);
+      logger.info(`[Triggers] Updated: ${trigger.id}`);
       return json({ success: true, triggerId: trigger.id });
     }
 
@@ -283,24 +282,24 @@ export async function action({ request }: ActionFunctionArgs) {
         return json({ success: false, error: 'Trigger ID required' }, { status: 400 });
       }
 
-      const trigger = triggerStore.get(triggerId);
+      const trigger = getTrigger(triggerId);
 
       if (!trigger) {
         return json({ success: false, error: 'Trigger not found' }, { status: 404 });
       }
 
-      triggerStore.delete(triggerId);
+      removeTrigger(triggerId);
 
-      console.log(`[Triggers] Deleted: ${triggerId}`);
+      logger.info(`[Triggers] Deleted: ${triggerId}`);
       return new Response(null, { status: 204 });
     }
 
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('[Triggers] Action error:', error);
+    logger.error('[Triggers] Action error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Trigger operation failed',
+      error: 'Trigger operation failed',
     }, { status: 500 });
   }
 }

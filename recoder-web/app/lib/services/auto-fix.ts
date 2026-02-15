@@ -10,6 +10,9 @@
 
 import type { BuildError } from '~/lib/stores/errors';
 import { dockerGet, dockerPost } from './docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AutoFix');
 
 // ============================================
 // Types
@@ -103,6 +106,41 @@ const TERMINAL_ERROR_PATTERNS: TerminalErrorPattern[] = [
     severity: 'error',
     extractMessage: (match) => `Cannot find module '${match[1]}'`,
   },
+
+  // ========================================
+  // React Native / Metro bundler errors
+  // ========================================
+
+  // Metro bundler error format: "error: /path/to/file: Error message"
+  {
+    pattern: /error: (.+?):\s*(.+)/,
+    type: 'build' as const,
+    severity: 'error' as const,
+    extractFilePath: (match: RegExpMatchArray) => match[1],
+    extractMessage: (match: RegExpMatchArray) => match[2],
+  },
+  // Metro unable to resolve module: "Unable to resolve module 'foo' from '/path/to/file'"
+  {
+    pattern: /Unable to resolve module ['"]([^'"]+)['"] from ['"]([^'"]+)['"]/,
+    type: 'module' as const,
+    severity: 'error' as const,
+    extractFilePath: (match: RegExpMatchArray) => match[2],
+    extractMessage: (match: RegExpMatchArray) => `Unable to resolve module '${match[1]}'`,
+  },
+  // Expo app.json config error
+  {
+    pattern: /Error: .* in app\.json/,
+    type: 'build' as const,
+    severity: 'error' as const,
+    extractMessage: (match: RegExpMatchArray) => match[0],
+  },
+  // Metro/Watchman file watcher errors
+  {
+    pattern: /Watchman.*error|EMFILE.*too many open files/i,
+    type: 'build' as const,
+    severity: 'error' as const,
+    extractMessage: (match: RegExpMatchArray) => match[0],
+  },
 ];
 
 // ============================================
@@ -186,7 +224,7 @@ export async function checkMissingDependencies(
 
     return requiredDeps.filter(dep => !allDeps[dep]);
   } catch (error) {
-    console.warn('[AutoFix] Failed to check package.json:', error);
+    logger.warn('[AutoFix] Failed to check package.json:', error);
     return requiredDeps; // Assume all are missing if we can't read package.json
   }
 }
@@ -204,7 +242,7 @@ export async function readFileForError(
     );
     return content;
   } catch (error) {
-    console.warn(`[AutoFix] Failed to read file ${filePath}:`, error);
+    logger.warn(`[AutoFix] Failed to read file ${filePath}:`, error);
     return null;
   }
 }
@@ -220,7 +258,7 @@ export async function createFixSnapshot(projectId: string): Promise<string | nul
     );
     return response.snapshotId;
   } catch (error) {
-    console.warn('[AutoFix] Failed to create snapshot:', error);
+    logger.warn('[AutoFix] Failed to create snapshot:', error);
     return null;
   }
 }
@@ -236,7 +274,7 @@ export async function rollbackToSnapshot(
     await dockerPost(`/api/snapshot/${projectId}/restore`, { snapshotId });
     return true;
   } catch (error) {
-    console.error('[AutoFix] Failed to rollback:', error);
+    logger.error('[AutoFix] Failed to rollback:', error);
     return false;
   }
 }
@@ -389,6 +427,25 @@ export function formatErrorsForAI(
 
   if (requireConfirmation) {
     prompt += `\nREMEMBER: NEVER fix without confirmation. Present diagnosis first, wait for approval.`;
+  }
+
+  // If React Native errors detected, add RN-specific instructions
+  const hasRNErrors = errors.some(e =>
+    /Text strings must be rendered|Unknown component|className.*not.*valid|onClick.*not.*valid|Invariant Violation|Unable to resolve module|VirtualizedLists should never|window is not defined|document is not defined|expo-modules-core.*mismatch/i.test(e.message || e.rawError || '')
+  );
+
+  if (hasRNErrors) {
+    prompt += `\n\n## React Native Specific Rules\n`;
+    prompt += `- Replace ALL HTML elements: div→View, span→Text, button→Pressable, input→TextInput, img→Image\n`;
+    prompt += `- Replace className with style prop using StyleSheet.create()\n`;
+    prompt += `- Replace onClick with onPress\n`;
+    prompt += `- Wrap ALL bare text in <Text> components\n`;
+    prompt += `- Import from 'react-native', NOT 'react-dom'\n`;
+    prompt += `- Use 'npx expo install <package>' to install missing Expo packages\n`;
+    prompt += `- Replace ALL \`window.\` and \`document.\` usage with React Native equivalents or Platform checks\n`;
+    prompt += `- Never nest FlatList/SectionList inside ScrollView — use ListHeaderComponent/ListFooterComponent\n`;
+    prompt += `- Use \`key\` prop on mapped elements and \`keyExtractor\` on FlatList\n`;
+    prompt += `- Run \`npx expo install --fix\` if you see version mismatch errors\n`;
   }
 
   return prompt;

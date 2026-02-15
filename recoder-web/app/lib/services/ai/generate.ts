@@ -33,6 +33,8 @@ import {
 } from './utils';
 import { getSystemPrompt } from './prompts/system-prompt';
 import { getEnhancedSystemPrompt } from './prompts/enhanced-system-prompt';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('AIGenerate');
 
 // ============================================================================
 // Configuration
@@ -121,7 +123,7 @@ export async function generateStreamResponse(
 
   if (error) {
     const operation = config.isFileEdit ? 'streamGenerateAppForFileEdit' : 'streamGenerateApp';
-    console.error(`Error in ${operation}:`, error);
+    logger.error(`Error in ${operation}:`, error);
     throw error;
   }
 

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Device code generation error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate device code', message: error.message },
+      { error: 'Failed to generate device code' },
       { status: 500 }
     );
   }

@@ -245,7 +245,6 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
                 className="relative flex items-center h-7"
                 data-connected={isConnected}
               >
-                {/* @ts-expect-error reactflow Handle JSX compatibility */}
                 <Handle
                   type="target"
                   position={Position.Left}
@@ -290,7 +289,6 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
                 >
                   {output.label}
                 </span>
-                {/* @ts-expect-error reactflow Handle JSX compatibility */}
                 <Handle
                   type="source"
                   position={Position.Right}

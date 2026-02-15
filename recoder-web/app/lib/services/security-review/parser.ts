@@ -6,6 +6,8 @@
 
 import type { SecurityFinding, SecurityLevel, ParsedSecurityFinding } from './types';
 import { isValidSecurityLevel } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SecurityParser');
 
 // Regex to match security finding blocks
 const FINDING_REGEX = /<security-finding\s+title="([^"]+)"\s+level="([^"]+)">([\s\S]*?)<\/security-finding>/gi;
@@ -31,7 +33,7 @@ export function parseSecurityFindings(response: string): ParsedSecurityFinding[]
     const level = normalizeSecurityLevel(levelStr);
 
     if (!level) {
-      console.warn(`Invalid security level "${levelStr}" for finding "${title}"`);
+      logger.warn(`Invalid security level "${levelStr}" for finding "${title}"`);
       continue;
     }
 

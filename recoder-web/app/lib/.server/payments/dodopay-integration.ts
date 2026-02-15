@@ -3,6 +3,9 @@
  * Alternative payment processor with lower fees for international customers
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DodoPayIntegration');
+
 export interface DodoPayConfig {
   merchantId: string;
   apiKey: string;
@@ -96,8 +99,9 @@ export class DodoPayClient {
     });
 
     if (!response.ok) {
-      const error = await response.json() as { message?: string };
-      throw new Error(`DodoPay session failed: ${error.message}`);
+      const error = await response.json().catch(() => ({})) as { message?: string };
+      logger.error('DodoPay session failed:', error.message);
+      throw new Error('DodoPay session creation failed');
     }
 
     const data = await response.json() as {
@@ -207,36 +211,36 @@ export class DodoPayClient {
         await this.onInvoicePaid(event.data);
         break;
       default:
-        console.log('Unhandled DodoPay webhook:', event.type);
+        logger.info('Unhandled DodoPay webhook:', event.type);
     }
   }
 
   private async onSubscriptionCreated(data: any): Promise<void> {
     const userId = data.metadata?.userId;
-    console.log(`DodoPay subscription created for user ${userId}`);
+    logger.info(`DodoPay subscription created for user ${userId}`);
     // Update database
   }
 
   private async onSubscriptionUpdated(data: any): Promise<void> {
-    console.log('DodoPay subscription updated:', data);
+    logger.info('DodoPay subscription updated:', data);
   }
 
   private async onSubscriptionCancelled(data: any): Promise<void> {
-    console.log('DodoPay subscription cancelled:', data);
+    logger.info('DodoPay subscription cancelled:', data);
   }
 
   private async onPaymentSucceeded(data: any): Promise<void> {
-    console.log('DodoPay payment succeeded:', data);
+    logger.info('DodoPay payment succeeded:', data);
     // Reset usage counters
   }
 
   private async onPaymentFailed(data: any): Promise<void> {
-    console.log('DodoPay payment failed:', data);
+    logger.info('DodoPay payment failed:', data);
     // Send notification to user
   }
 
   private async onInvoicePaid(data: any): Promise<void> {
-    console.log('DodoPay invoice paid:', data);
+    logger.info('DodoPay invoice paid:', data);
   }
 
   /**

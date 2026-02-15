@@ -5,6 +5,10 @@
  * Supports command registration, search, execution, and recently used tracking.
  */
 
+
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CommandRegistry');
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -61,7 +65,7 @@ class CommandRegistry {
    */
   register(command: Command): void {
     if (this.commands.has(command.id)) {
-      console.warn(`[CommandRegistry] Command "${command.id}" already registered, overwriting`);
+      logger.warn(`[CommandRegistry] Command "${command.id}" already registered, overwriting`);
     }
     this.commands.set(command.id, command);
   }
@@ -221,13 +225,13 @@ class CommandRegistry {
     const command = this.commands.get(id);
 
     if (!command) {
-      console.warn(`[CommandRegistry] Command not found: ${id}`);
+      logger.warn(`[CommandRegistry] Command not found: ${id}`);
       return false;
     }
 
     // Check if command should be shown
     if (command.when && !command.when()) {
-      console.warn(`[CommandRegistry] Command "${id}" condition not met`);
+      logger.warn(`[CommandRegistry] Command "${id}" condition not met`);
       return false;
     }
 
@@ -239,7 +243,7 @@ class CommandRegistry {
       await command.action();
       return true;
     } catch (error) {
-      console.error(`[CommandRegistry] Error executing command "${id}":`, error);
+      logger.error(`[CommandRegistry] Error executing command "${id}":`, error);
       return false;
     }
   }
@@ -302,7 +306,7 @@ class CommandRegistry {
         }
       }
     } catch (error) {
-      console.warn('[CommandRegistry] Failed to load recent commands:', error);
+      logger.warn('[CommandRegistry] Failed to load recent commands:', error);
     }
   }
 
@@ -315,7 +319,7 @@ class CommandRegistry {
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.recentCommandIds));
     } catch (error) {
-      console.warn('[CommandRegistry] Failed to save recent commands:', error);
+      logger.warn('[CommandRegistry] Failed to save recent commands:', error);
     }
   }
 

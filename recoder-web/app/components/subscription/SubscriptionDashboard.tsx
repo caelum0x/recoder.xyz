@@ -96,7 +96,7 @@ function CancelModal({
   );
 }
 
-export function SubscriptionDashboard() {
+export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?: boolean }) {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -280,12 +280,13 @@ export function SubscriptionDashboard() {
               <div className="flex gap-3">
                 <button
                   onClick={handleManageBilling}
+                  disabled={readOnlyMode}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors text-sm"
                 >
-                  Manage Billing
+                  {readOnlyMode ? 'Billing Disabled' : 'Manage Billing'}
                 </button>
 
-                {!subscription.cancel_at_period_end && (
+                {!subscription.cancel_at_period_end && !readOnlyMode && (
                   <button
                     onClick={() => setCancelModalOpen(true)}
                     className="flex-1 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-item-backgroundHover text-bolt-elements-textSecondary py-2 px-4 rounded-lg font-medium transition-colors text-sm"
@@ -300,6 +301,13 @@ export function SubscriptionDashboard() {
                   <p className="text-yellow-400 text-sm">
                     Subscription will cancel on{' '}
                     {new Date(subscription.current_period_end).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+              {readOnlyMode && (
+                <div className="mt-4 p-3 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg">
+                  <p className="text-bolt-elements-textSecondary text-sm">
+                    Billing write actions are disabled in this environment.
                   </p>
                 </div>
               )}
@@ -431,4 +439,3 @@ export function SubscriptionDashboard() {
     </div>
   );
 }
-

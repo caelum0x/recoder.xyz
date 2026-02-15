@@ -171,7 +171,6 @@ export function NodeCanvas() {
         proOptions={{ hideAttribution: true }}
       >
         <Background />
-        {/* @ts-expect-error reactflow Controls JSX compatibility */}
         <Controls
           className="!bg-bolt-elements-background-depth-2 !border-bolt-elements-borderColor !rounded-lg !shadow-lg"
           showInteractive={false}

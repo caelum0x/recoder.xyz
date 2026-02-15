@@ -6,6 +6,9 @@
 import { json, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { getDodoPayClient } from '~/lib/.server/payment/dodopay';
 import { getDatabase } from '~/lib/.server/db/client';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('api.webhooks.dodopay');
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
@@ -20,7 +23,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const isValid = dodopay.verifyWebhook(body, signature);
 
     if (!isValid) {
-      console.error('Invalid DodoPay webhook signature');
+      logger.warn('Invalid DodoPay webhook signature');
       return json({ error: 'Invalid signature' }, { status: 401 });
     }
 
@@ -29,7 +32,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const eventType = event.type;
     const eventId = event.id;
 
-    console.log(`Processing DodoPay webhook: ${eventType} (${eventId})`);
+    logger.info(`Processing DodoPay webhook: ${eventType} (${eventId})`);
 
     // Store webhook event
     const db = getDatabase(env);
@@ -47,7 +50,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     return json({ received: true });
   } catch (error) {
-    console.error('DodoPay webhook processing failed:', error);
+    logger.error('DodoPay webhook processing failed:', error);
     return json(
       { error: 'Webhook processing failed' },
       { status: 500 }
@@ -85,7 +88,7 @@ async function processWebhookEvent(env: Env, event: any) {
       break;
 
     default:
-      console.log(`Unhandled DodoPay event type: ${eventType}`);
+      logger.info(`Unhandled DodoPay event type: ${eventType}`);
   }
 }
 
@@ -94,7 +97,7 @@ async function handleSubscriptionCreated(db: any, event: any) {
   const userId = subscription.metadata?.user_id;
 
   if (!userId) {
-    console.error('No user ID in DodoPay subscription data');
+    logger.warn('No user ID in DodoPay subscription data');
     return;
   }
 
@@ -130,7 +133,7 @@ async function handleSubscriptionCreated(db: any, event: any) {
     JSON.stringify(subscription),
   ]);
 
-  console.log(`DodoPay subscription created for user ${userId}: ${planId}`);
+  logger.info(`DodoPay subscription created for user ${userId}: ${planId}`);
 }
 
 async function handleSubscriptionUpdated(db: any, event: any) {
@@ -155,7 +158,7 @@ async function handleSubscriptionUpdated(db: any, event: any) {
     subscription.id,
   ]);
 
-  console.log(`DodoPay subscription updated: ${subscription.id}`);
+  logger.info(`DodoPay subscription updated: ${subscription.id}`);
 }
 
 async function handleSubscriptionCancelled(db: any, event: any) {
@@ -171,7 +174,7 @@ async function handleSubscriptionCancelled(db: any, event: any) {
     WHERE subscription_id = $1
   `, [subscription.id]);
 
-  console.log(`DodoPay subscription cancelled: ${subscription.id}`);
+  logger.info(`DodoPay subscription cancelled: ${subscription.id}`);
 }
 
 async function handlePaymentSucceeded(db: any, event: any) {
@@ -183,7 +186,7 @@ async function handlePaymentSucceeded(db: any, event: any) {
   `, [subscriptionId]);
 
   if (!subscription || subscription.length === 0) {
-    console.error('No subscription found for DodoPay payment');
+    logger.warn('No subscription found for DodoPay payment');
     return;
   }
 
@@ -216,14 +219,39 @@ async function handlePaymentSucceeded(db: any, event: any) {
     subscriptionId,
   ]);
 
-  console.log(`DodoPay payment succeeded: ${payment.id}`);
+  logger.info(`DodoPay payment succeeded: ${payment.id}`);
 }
 
 async function handlePaymentFailed(db: any, event: any) {
   const payment = event.data;
 
-  console.error(`DodoPay payment failed: ${payment.id}`);
-  // TODO: Notify user about failed payment
+  logger.warn({
+    paymentId: payment.id,
+    customerId: payment.customer_id,
+    amount: payment.amount,
+    currency: payment.currency,
+    failureReason: payment.failure_reason || payment.error_code,
+  }, 'DodoPay payment failed');
+
+  // Look up user for monitoring/alerting
+  try {
+    const result = await db.execute(`
+      SELECT u.email, u.id FROM users u
+      JOIN subscriptions s ON s.user_id = u.id
+      WHERE s.customer_id = $1
+      LIMIT 1
+    `, [payment.customer_id]);
+
+    if (result.rows?.[0]) {
+      logger.warn({
+        userId: result.rows[0].id,
+        userEmail: result.rows[0].email,
+        paymentId: payment.id,
+      }, 'DodoPay payment failed for user - requires follow-up');
+    }
+  } catch {
+    // User lookup is best-effort for monitoring
+  }
 }
 
 async function handleSubscriptionExpired(db: any, event: any) {
@@ -237,7 +265,7 @@ async function handleSubscriptionExpired(db: any, event: any) {
     WHERE subscription_id = $1
   `, [subscription.id]);
 
-  console.log(`DodoPay subscription expired: ${subscription.id}`);
+  logger.info(`DodoPay subscription expired: ${subscription.id}`);
 }
 
 function getGenerationLimit(planId: string): number {

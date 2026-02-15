@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CopyToClipboard');
 
 export interface CopyOptions {
   /** Time in ms before copied state resets (default: 2000) */
@@ -91,7 +93,7 @@ export function useCopyToClipboard(options: CopyOptions = {}): UseCopyToClipboar
       return true;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to copy to clipboard');
-      console.error('Failed to copy:', error);
+      logger.error('Failed to copy:', error);
       setError(error);
       return false;
     }
@@ -126,7 +128,7 @@ export function useCopyToClipboard(options: CopyOptions = {}): UseCopyToClipboar
       return true;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to copy HTML to clipboard');
-      console.error('Failed to copy HTML:', error);
+      logger.error('Failed to copy HTML:', error);
       setError(error);
 
       // Try plain text fallback on error
@@ -177,7 +179,7 @@ export function useCopyToClipboard(options: CopyOptions = {}): UseCopyToClipboar
       return true;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to copy image to clipboard');
-      console.error('Failed to copy image:', error);
+      logger.error('Failed to copy image:', error);
       setError(error);
       return false;
     }

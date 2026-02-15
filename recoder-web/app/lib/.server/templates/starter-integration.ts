@@ -5,6 +5,10 @@
  */
 
 // Conditionally import fs only in Node.js environment
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('StarterIntegration');
+
 const isNode = typeof process !== 'undefined' && process.versions?.node;
 
 // Simple path joining utility for cross-platform compatibility
@@ -76,7 +80,7 @@ export function loadStarterTemplates(startersPath: string = getStartersPath()): 
       fs = eval('require')('node:fs');
     } catch {
       // fs not available - likely in browser or bundled context
-      console.log('→ Using static template definitions (file system unavailable)');
+      logger.info('→ Using static template definitions (file system unavailable)');
       return [];
     }
 
@@ -118,14 +122,14 @@ export function loadStarterTemplates(startersPath: string = getStartersPath()): 
       });
     }
 
-    console.log(`✅ Loaded ${templates.length} starter templates`);
+    logger.info(`✅ Loaded ${templates.length} starter templates`);
 
     // Cache the results
     cachedTemplates = templates;
 
     return templates;
   } catch (error) {
-    console.error('Failed to load starter templates:', error);
+    logger.error('Failed to load starter templates:', error);
     return [];
   }
 }
@@ -336,7 +340,7 @@ function getAllFiles(dirPath: string, relativePath: string = ''): string[] {
       }
     }
   } catch (error) {
-    console.error(`Error reading directory ${dirPath}:`, error);
+    logger.error(`Error reading directory ${dirPath}:`, error);
   }
 
   return files;

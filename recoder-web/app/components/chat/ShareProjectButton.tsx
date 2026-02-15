@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ShareProject');
 
 interface ShareProjectButtonProps {
   username: string;
@@ -36,7 +38,7 @@ export function ShareProjectButton({ username, onShare }: ShareProjectButtonProp
         onShare?.();
       }
     } catch (error) {
-      console.error('Failed to share project:', error);
+      logger.error('Failed to share project:', error);
     }
     setLoading(false);
   }

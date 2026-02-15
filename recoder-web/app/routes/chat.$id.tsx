@@ -1,5 +1,8 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { default as IndexRoute } from './_index';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatDetail');
 
 export async function loader({ params, context }: LoaderFunctionArgs) {
   const chatId = params.id;
@@ -32,7 +35,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
       }
     } catch (e) {
       // Non-critical: fall through to default response without framework info
-      console.debug('[chat.$id] Could not look up project framework:', e);
+      logger.debug('[chat.$id] Could not look up project framework:', e);
     }
   }
 

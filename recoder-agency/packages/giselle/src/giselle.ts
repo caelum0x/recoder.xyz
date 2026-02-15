@@ -50,6 +50,14 @@ import {
 	getGitHubRepositoryFullname,
 	handleGitHubWebhookV2,
 } from "./github";
+import {
+	handleSlackTrigger,
+	type SlackWebhookPayload,
+} from "./slack/handle-webhook";
+import {
+	handleWhatsAppTrigger,
+	type WhatsAppWebhookPayload,
+} from "./whatsapp/handle-webhook";
 import { executeAction, executeDataQuery } from "./operations";
 import { executeQuery } from "./operations/execute-query";
 import { addSecret, deleteSecret, getWorkspaceSecrets } from "./secrets";
@@ -301,6 +309,20 @@ export function Giselle(config: GiselleConfig) {
 			onGenerationError?: OnGenerationError;
 			onTaskCreate?: OnTaskCreate;
 		}) => handleGitHubWebhookV2({ ...args, context }),
+		handleSlackTrigger: async (args: {
+			trigger: Parameters<typeof handleSlackTrigger>[0]["trigger"];
+			payload: SlackWebhookPayload;
+			onGenerationComplete?: OnGenerationComplete;
+			onGenerationError?: OnGenerationError;
+			onTaskCreate?: OnTaskCreate;
+		}) => handleSlackTrigger({ ...args, context }),
+		handleWhatsAppTrigger: async (args: {
+			trigger: Parameters<typeof handleWhatsAppTrigger>[0]["trigger"];
+			payload: WhatsAppWebhookPayload;
+			onGenerationComplete?: OnGenerationComplete;
+			onGenerationError?: OnGenerationError;
+			onTaskCreate?: OnTaskCreate;
+		}) => handleWhatsAppTrigger({ ...args, context }),
 		executeQuery: async (generation: QueuedGeneration) =>
 			executeQuery({ context, generation }),
 		executeDataQuery: async (generation: QueuedGeneration) =>

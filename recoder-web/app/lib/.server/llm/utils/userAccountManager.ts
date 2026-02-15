@@ -7,6 +7,9 @@
 import path from 'node:path';
 import { promises as fsp, readFileSync } from 'node:fs';
 import { Storage } from '../config/storage.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('UserAccountManager');
 
 interface UserAccounts {
   active: string | null;
@@ -33,7 +36,7 @@ export class UserAccountManager {
 
     // Inlined validation logic
     if (typeof parsed !== 'object' || parsed === null) {
-      console.log('Invalid accounts file schema, starting fresh.');
+      logger.info('Invalid accounts file schema, starting fresh.');
       return defaultState;
     }
     const { active, old } = parsed as Partial<UserAccounts>;
@@ -43,7 +46,7 @@ export class UserAccountManager {
         (Array.isArray(old) && old.every((i) => typeof i === 'string')));
 
     if (!isValid) {
-      console.log('Invalid accounts file schema, starting fresh.');
+      logger.info('Invalid accounts file schema, starting fresh.');
       return defaultState;
     }
 
@@ -66,7 +69,7 @@ export class UserAccountManager {
       ) {
         return defaultState;
       }
-      console.log('Error during sync read of accounts, starting fresh.', error);
+      logger.info('Error during sync read of accounts, starting fresh.', error);
       return defaultState;
     }
   }
@@ -84,7 +87,7 @@ export class UserAccountManager {
       ) {
         return defaultState;
       }
-      console.log('Could not parse accounts file, starting fresh.', error);
+      logger.info('Could not parse accounts file, starting fresh.', error);
       return defaultState;
     }
   }

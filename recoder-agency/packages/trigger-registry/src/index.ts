@@ -1,6 +1,10 @@
 import { githubEvents } from "./github";
+import { slackEvents } from "./slack";
+import { whatsappEvents } from "./whatsapp";
 
 export * from "./github";
+export * from "./slack";
+export * from "./whatsapp";
 
 export const triggerRegistry = [
 	{
@@ -12,6 +16,16 @@ export const triggerRegistry = [
 		provider: "manual",
 		label: "Manual Trigger",
 		events: [],
+	},
+	{
+		provider: "whatsapp",
+		label: "WhatsApp Trigger",
+		events: whatsappEvents,
+	},
+	{
+		provider: "slack",
+		label: "Slack Trigger",
+		events: slackEvents,
 	},
 ] as const;
 

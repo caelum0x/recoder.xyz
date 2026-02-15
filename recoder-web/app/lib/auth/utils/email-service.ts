@@ -5,6 +5,8 @@
 
 import { getAuthEnv, isEmailConfigured } from '../env';
 import type { OrganizationInvitationOptions } from '../types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('EmailService');
 
 /**
  * Send a welcome email to a new subscriber
@@ -26,14 +28,14 @@ export async function sendWelcomeEmail(stripeCustomerId: string, planName: strin
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`[Email] Failed to send welcome email: ${error}`);
-      throw new Error(`Failed to send welcome email: ${error}`);
+      const errorBody = await response.text();
+      logger.error(`[Email] Failed to send welcome email (${response.status}):`, errorBody);
+      throw new Error('Failed to send welcome email');
     }
 
-    console.log(`[Email] Welcome email sent for customer ${stripeCustomerId}`);
+    logger.info(`[Email] Welcome email sent for customer ${stripeCustomerId}`);
   } catch (error) {
-    console.error(`[Email] Error sending welcome email:`, error);
+    logger.error(`[Email] Error sending welcome email:`, error);
     throw error;
   }
 }
@@ -57,14 +59,14 @@ export async function sendCancellationEmail(userId: string): Promise<void> {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`[Email] Failed to send cancellation email: ${error}`);
-      throw new Error(`Failed to send cancellation email: ${error}`);
+      const errorBody = await response.text();
+      logger.error(`[Email] Failed to send cancellation email (${response.status}):`, errorBody);
+      throw new Error('Failed to send cancellation email');
     }
 
-    console.log(`[Email] Cancellation email sent for user ${userId}`);
+    logger.info(`[Email] Cancellation email sent for user ${userId}`);
   } catch (error) {
-    console.error(`[Email] Error sending cancellation email:`, error);
+    logger.error(`[Email] Error sending cancellation email:`, error);
     throw error;
   }
 }
@@ -88,14 +90,14 @@ export async function sendOrganizationInvitation(
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`[Email] Failed to send invitation email: ${error}`);
-      throw new Error(`Failed to send invitation email: ${error}`);
+      const errorBody = await response.text();
+      logger.error(`[Email] Failed to send invitation email (${response.status}):`, errorBody);
+      throw new Error('Failed to send invitation email');
     }
 
-    console.log(`[Email] Invitation email sent to ${options.email}`);
+    logger.info(`[Email] Invitation email sent to ${options.email}`);
   } catch (error) {
-    console.error(`[Email] Error sending invitation email:`, error);
+    logger.error(`[Email] Error sending invitation email:`, error);
     throw error;
   }
 }
@@ -129,13 +131,14 @@ export async function sendEmail(params: {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to send email: ${error}`);
+      const errorBody = await response.text();
+      logger.error(`[Email] Failed to send email (${response.status}):`, errorBody);
+      throw new Error('Failed to send email');
     }
 
-    console.log(`[Email] Email sent to ${params.to}`);
+    logger.info(`[Email] Email sent to ${params.to}`);
   } catch (error) {
-    console.error(`[Email] Error sending email:`, error);
+    logger.error(`[Email] Error sending email:`, error);
     throw error;
   }
 }
@@ -199,12 +202,15 @@ export const emailTemplates = {
 
   invitation: {
     subject: (teamName: string) => `You've been invited to join ${teamName} on Recoder`,
-    getHtml: (options: OrganizationInvitationOptions) => `
+    getHtml: (options: OrganizationInvitationOptions) => {
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const safeLink = options.inviteLink.startsWith('https://') ? esc(options.inviteLink) : '#';
+      return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #6366f1;">You're Invited!</h1>
-        <p><strong>${options.invitedByUsername}</strong> (${options.invitedByEmail}) has invited you to join <strong>${options.teamName}</strong> on Recoder.</p>
+        <p><strong>${esc(options.invitedByUsername)}</strong> (${esc(options.invitedByEmail)}) has invited you to join <strong>${esc(options.teamName)}</strong> on Recoder.</p>
         <p>Click the button below to accept the invitation:</p>
-        <a href="${options.inviteLink}" style="
+        <a href="${safeLink}" style="
           display: inline-block;
           padding: 12px 24px;
           background-color: #6366f1;
@@ -219,6 +225,7 @@ export const emailTemplates = {
           If you didn't expect this invitation, you can safely ignore this email.
         </p>
       </div>
-    `,
+    `;
+    },
   },
 };

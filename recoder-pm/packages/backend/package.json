@@ -1,0 +1,41 @@
+{
+  "name": "@repo/backend",
+  "version": "0.0.0",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "dev": "npm run build",
+    "build": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints && prisma generate --schema=\"./prisma/auth-schema.prisma\" --no-hints"
+  },
+  "dependencies": {
+    "@recoder/auth": "file:../../../packages/auth",
+    "@repo/analytics-connectors": "workspace:*",
+    "@repo/editor": "workspace:*",
+    "@repo/lib": "workspace:*",
+    "@repo/observability": "workspace:*",
+    "@repo/payments": "workspace:*",
+    "@repo/zendesk": "workspace:*",
+    "@repo/session-recordings": "workspace:*",
+    "@repo/coding-agents": "workspace:*",
+    "@ai-sdk/anthropic": "^1.2.8",
+    "@ai-sdk/openai": "^2.0.74",
+    "@prisma/adapter-pg": "^7.1.0",
+    "@prisma/client": "7.1.0",
+    "@prisma/client-runtime-utils": "^7.1.0",
+    "@t3-oss/env-nextjs": "^0.13.8",
+    "ai": "^5.0.21",
+    "better-auth": "^1.2.0",
+    "react": "19.2.1",
+    "resend": "^4.0.0",
+    "server-only": "^0.0.1",
+    "zod": "^3.25.17"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "22.15.21",
+    "@types/react": "^19.2.7",
+    "next": "^16.0.10",
+    "prisma": "7.1.0",
+    "typescript": "^5.8.3"
+  }
+}

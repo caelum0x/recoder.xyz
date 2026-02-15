@@ -8,6 +8,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerPost } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SearchPanel');
 
 interface SearchResult {
   file: string;
@@ -52,7 +54,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
 
   const inputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
 
   // PERFORMANCE: Memoize grouping of results by file to avoid recalculation on every render
@@ -76,7 +78,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
       // Reset collapsed state when new search
       setCollapsedFiles(new Set());
     } catch (error) {
-      console.error('[Search] Error:', error);
+      logger.error('[Search] Error:', error);
     } finally {
       setIsSearching(false);
     }
@@ -125,7 +127,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
       // Refresh search
       handleSearch();
     } catch (error) {
-      console.error('[Search] Replace error:', error);
+      logger.error('[Search] Replace error:', error);
     } finally {
       setIsReplacing(false);
     }
@@ -141,7 +143,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
       await dockerPost(`/api/replace/${projectId}`, { searchQuery: query, replaceText, files });
       handleSearch();
     } catch (error) {
-      console.error('[Search] Replace all error:', error);
+      logger.error('[Search] Replace all error:', error);
     } finally {
       setIsReplacing(false);
     }

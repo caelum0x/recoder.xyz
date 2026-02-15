@@ -4,6 +4,8 @@
  */
 
 import type { BuildError } from '~/lib/stores/errors';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ParseLogs');
 
 // Error patterns for different tools
 const ERROR_PATTERNS = [
@@ -88,7 +90,7 @@ export function parseErrorsFromLogs(logs: string): BuildError[] {
       try {
         errors.push(pattern.parse(match));
       } catch (e) {
-        console.warn('Failed to parse error:', match[0]);
+        logger.warn('Failed to parse error:', match[0]);
       }
     }
   }

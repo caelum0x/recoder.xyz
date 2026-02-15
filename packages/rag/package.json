@@ -1,0 +1,42 @@
+{
+	"name": "@giselles-ai/rag",
+	"version": "0.1.0",
+	"description": "Simplified RAG system with type safety",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"dev": "tsup --watch",
+		"test": "vitest run",
+		"format": "biome check --write ."
+	},
+	"dependencies": {
+		"@ai-sdk/gateway": "catalog:",
+		"@ai-sdk/google": "catalog:",
+		"@ai-sdk/openai": "catalog:",
+		"@giselles-ai/protocol": "workspace:*",
+		"ai": "catalog:",
+		"pg": "catalog:",
+		"pgvector": "catalog:"
+	},
+	"devDependencies": {
+		"@giselles-ai/tsconfig": "workspace:^",
+		"@types/node": "catalog:",
+		"@types/pg": "catalog:",
+		"tsup": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"peerDependencies": {
+		"openai": "catalog:",
+		"zod": "catalog:"
+	},
+	"keywords": [
+		"rag",
+		"vector-search",
+		"embeddings",
+		"typescript"
+	],
+	"license": "MIT"
+}

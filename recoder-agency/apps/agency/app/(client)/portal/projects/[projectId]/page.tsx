@@ -278,9 +278,9 @@ export default async function ClientProjectDetailPage({
 									>
 										{inv.status}
 									</span>
-									{inv.stripeInvoiceId && inv.status === "sent" && (
+									{inv.polarOrderId && inv.status === "sent" && (
 										<a
-											href={`https://invoice.stripe.com/i/${inv.stripeInvoiceId}`}
+											href={`https://polar.sh/checkout/${inv.polarOrderId}`}
 											target="_blank"
 											rel="noopener noreferrer"
 											className="inline-flex items-center gap-1 text-xs text-primary hover:underline"

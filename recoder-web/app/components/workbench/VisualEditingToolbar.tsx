@@ -9,15 +9,19 @@
 import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '@nanostores/react';
 import { classNames } from '~/utils/classNames';
+import { toast } from 'react-toastify';
 import {
   visualEditingEnabled,
   selectedComponent,
   componentCoordinates,
   isDynamicallyStyled,
   hasStaticText,
+  hasPendingChanges,
+  isSavingToSource,
   clearSelection,
   addPendingStyleChange,
   generateEditPrompt,
+  saveChangesToSource,
   type ComponentStyles,
 } from '~/lib/stores/visual-editing';
 
@@ -176,6 +180,8 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
   const coordinates = useStore(componentCoordinates);
   const isDynamic = useStore(isDynamicallyStyled);
   const hasText = useStore(hasStaticText);
+  const hasPending = useStore(hasPendingChanges);
+  const isSaving = useStore(isSavingToSource);
 
   // Local state for style inputs
   const [margin, setMargin] = useState({ x: '', y: '' });
@@ -340,6 +346,16 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
       onEditInChat(prompt);
     }
   }, [onEditInChat]);
+
+  // Handle save to source
+  const handleSaveToSource = useCallback(async () => {
+    const result = await saveChangesToSource();
+    if (result.success) {
+      toast.success(`Saved to ${result.modifiedFiles?.join(', ')}`);
+    } else {
+      toast.error(result.error || 'Failed to save');
+    }
+  }, []);
 
   // Don't render if not enabled or no component selected
   if (!enabled || !component || !coordinates) {
@@ -561,6 +577,29 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
 
       {/* Separator */}
       <div className="w-px h-6 bg-bolt-elements-borderColor mx-1" />
+
+      {/* Save to Source button */}
+      {!isDynamic && (
+        <button
+          onClick={handleSaveToSource}
+          disabled={!hasPending || isSaving}
+          className={classNames(
+            'flex items-center gap-1.5 px-2 py-1 rounded',
+            'text-xs font-medium transition-colors',
+            hasPending && !isSaving
+              ? 'bg-green-600 hover:bg-green-700 text-white'
+              : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary cursor-not-allowed'
+          )}
+          title={isDynamic ? 'Dynamic className — use Edit in Chat' : hasPending ? 'Save style changes to source file' : 'No pending changes'}
+        >
+          {isSaving ? (
+            <div className="i-ph:spinner animate-spin text-sm" />
+          ) : (
+            <div className="i-ph:floppy-disk text-sm" />
+          )}
+          <span>{isSaving ? 'Saving...' : 'Save to Source'}</span>
+        </button>
+      )}
 
       {/* Edit in chat button */}
       <button

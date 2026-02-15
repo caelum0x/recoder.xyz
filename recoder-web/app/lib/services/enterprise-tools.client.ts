@@ -83,9 +83,10 @@ export async function codeAssist(query: string, context?: any) {
 export async function delegateSubagent(
   agentType: 'coder' | 'debugger' | 'architect' | 'tester',
   task: string,
-  context?: any
+  context?: any,
+  options?: { paths?: string[]; continuous?: boolean; projectId?: string }
 ) {
-  return callTool('delegateSubagent', { agentType, task, context });
+  return callTool('delegateSubagent', { agentType, task, context, ...options });
 }
 
 /**

@@ -3,6 +3,10 @@
  * Uses Cloudflare Tunnel (cloudflared) for free, fast public URLs
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('TunnelDeploy');
+
 export interface TunnelDeployment {
   id: string;
   projectId: string;
@@ -76,12 +80,12 @@ export async function startTunnel(
     deployment.status = 'active';
     deployment.expiresAt = result.expiresAt;
 
-    console.log(`[Tunnel] Started ${result.type || 'preview'} tunnel for ${projectId}: ${result.url}`);
+    logger.info(`[Tunnel] Started ${result.type || 'preview'} tunnel for ${projectId}: ${result.url}`);
 
     return deployment;
   } catch (error) {
     deployment.status = 'error';
-    console.error(`[Tunnel] Failed to start tunnel for ${projectId}:`, error);
+    logger.error(`[Tunnel] Failed to start tunnel for ${projectId}:`, error);
     throw error;
   }
 }
@@ -114,9 +118,9 @@ export async function stopTunnel(
     tunnel.status = 'stopped';
     activeTunnels.delete(projectId);
 
-    console.log(`[Tunnel] Stopped tunnel for ${projectId}`);
+    logger.info(`[Tunnel] Stopped tunnel for ${projectId}`);
   } catch (error) {
-    console.error(`[Tunnel] Failed to stop tunnel for ${projectId}:`, error);
+    logger.error(`[Tunnel] Failed to stop tunnel for ${projectId}:`, error);
   }
 }
 

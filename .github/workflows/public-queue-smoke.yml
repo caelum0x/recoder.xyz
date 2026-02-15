@@ -1,0 +1,51 @@
+name: Public Queue Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_url:
+        description: "Docker backend base URL"
+        required: true
+        default: "https://docker.recoder.xyz"
+        type: string
+      expected_queue_backend:
+        description: "Expected selected queue backend"
+        required: true
+        default: "redis"
+        type: choice
+        options:
+          - redis
+          - sqlite
+  workflow_run:
+    workflows:
+      - "Deploy Production"
+      - "📊 Monitoring & Rollback Capabilities"
+    types:
+      - completed
+
+jobs:
+  queue-smoke:
+    name: Queue Backend Smoke
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    env:
+      BACKEND_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.backend_url || 'https://docker.recoder.xyz' }}
+      EXPECTED_QUEUE_BACKEND: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_queue_backend || 'redis' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run queue smoke script
+        run: |
+          chmod +x docker-backend/scripts/smoke-public-queue.sh
+          BACKEND_URL="${BACKEND_URL}" EXPECTED_QUEUE_BACKEND="${EXPECTED_QUEUE_BACKEND}" docker-backend/scripts/smoke-public-queue.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Public Queue Smoke" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Backend URL: ${BACKEND_URL}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Expected queue backend: ${EXPECTED_QUEUE_BACKEND}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Result: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

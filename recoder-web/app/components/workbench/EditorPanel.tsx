@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from 'react-resizable-panels';
 import {
   CodeMirrorEditor,
@@ -33,14 +33,15 @@ import { CLIStatus } from './terminal/CLIStatus';
 import { HistorySearch } from './terminal/HistorySearch';
 import { QuickCommands } from './terminal/QuickCommands';
 import { terminalSync } from '~/lib/terminal-sync';
-import { LogsPanel } from './LogsPanel';
-import { ProblemsPanel } from './ProblemsPanel';
-import { SearchPanel } from './SearchPanel';
-import { AppConsolePanel } from './AppConsolePanel';
-import { GitPanel } from './GitPanel';
-import { DiffViewer } from './DiffViewer';
-import { PackageManagerPanel } from './PackageManagerPanel';
-import { SecretsPanel } from './SecretsPanel';
+// Lazy-loaded bottom panels — only fetched when their tab is active
+const LogsPanel = lazy(() => import('./LogsPanel').then(m => ({ default: m.LogsPanel })));
+const ProblemsPanel = lazy(() => import('./ProblemsPanel').then(m => ({ default: m.ProblemsPanel })));
+const SearchPanel = lazy(() => import('./SearchPanel').then(m => ({ default: m.SearchPanel })));
+const AppConsolePanel = lazy(() => import('./AppConsolePanel').then(m => ({ default: m.AppConsolePanel })));
+const GitPanel = lazy(() => import('./GitPanel').then(m => ({ default: m.GitPanel })));
+const DiffViewer = lazy(() => import('./DiffViewer').then(m => ({ default: m.DiffViewer })));
+const PackageManagerPanel = lazy(() => import('./PackageManagerPanel').then(m => ({ default: m.PackageManagerPanel })));
+const SecretsPanel = lazy(() => import('./SecretsPanel').then(m => ({ default: m.SecretsPanel })));
 // Note: DatabaseExplorer removed - needs security rewrite
 import { useStore as useNanoStore } from '@nanostores/react';
 import { errorCountAtom, criticalErrorCountAtom } from '~/lib/stores/errors';
@@ -58,12 +59,15 @@ import { SaveIndicator } from './SaveIndicator';
 import { preferencesStore, updateEditorPreferences } from '~/lib/stores/settings';
 import { SplitEditorPane } from './SplitEditorPane';
 import { StatusBar } from './StatusBar';
+import { createScopedLogger } from '~/utils/logger';
 import {
   setCursorPosition,
   setFileSyncStatus,
   updateMetadataFromFile,
   setGitBranch,
 } from '~/lib/stores/status-bar';
+
+const logger = createScopedLogger('EditorPanel');
 
 interface EditorPanelProps {
   files?: FileMap;
@@ -609,7 +613,7 @@ export const EditorPanel = memo(
         targetFile = `${WORK_DIR}/${targetFile}`;
       }
 
-      console.log('[EditorPanel] Go to definition:', { file: targetFile, line, character });
+      logger.info('[EditorPanel] Go to definition:', { file: targetFile, line, character });
 
       // Navigate to file and line - this will open the file and scroll to the line
       workbenchStore.navigateToLine(targetFile, line, character);
@@ -730,29 +734,35 @@ export const EditorPanel = memo(
                   )}
                   {sidebarView === 'search' && (
                     <PanelErrorBoundary panelName="Search">
-                      <SearchPanel
-                        onFileOpen={(file, line, column) => {
-                          onFileSelect?.(`${WORK_DIR}/${file}`);
-                        }}
-                      />
+                      <Suspense fallback={<div className="flex items-center justify-center h-full text-bolt-elements-textTertiary text-sm">Loading...</div>}>
+                        <SearchPanel
+                          onFileOpen={(file, line, column) => {
+                            onFileSelect?.(`${WORK_DIR}/${file}`);
+                          }}
+                        />
+                      </Suspense>
                     </PanelErrorBoundary>
                   )}
                   {sidebarView === 'git' && (
                     <PanelErrorBoundary panelName="Git">
-                      <GitPanel
-                        files={files || {}}
-                        onFileSelect={onFileSelect}
-                        onShowDiff={(path, original, modified) => {
-                          setDiffView({ path, original, modified });
-                        }}
-                      />
+                      <Suspense fallback={<div className="flex items-center justify-center h-full text-bolt-elements-textTertiary text-sm">Loading...</div>}>
+                        <GitPanel
+                          files={files || {}}
+                          onFileSelect={onFileSelect}
+                          onShowDiff={(path, original, modified) => {
+                            setDiffView({ path, original, modified });
+                          }}
+                        />
+                      </Suspense>
                     </PanelErrorBoundary>
                   )}
                   {sidebarView === 'packages' && (
                     <PanelErrorBoundary panelName="Package Manager">
-                      <PackageManagerPanel
-                        files={files || {}}
-                      />
+                      <Suspense fallback={<div className="flex items-center justify-center h-full text-bolt-elements-textTertiary text-sm">Loading...</div>}>
+                        <PackageManagerPanel
+                          files={files || {}}
+                        />
+                      </Suspense>
                     </PanelErrorBoundary>
                   )}
                   {sidebarView === 'architecture' && (
@@ -939,7 +949,7 @@ export const EditorPanel = memo(
                 className={classNames(
                   'flex items-center bg-bolt-elements-background-depth-2 border-y border-bolt-elements-borderColor gap-1.5 min-h-[34px] p-2 transition-all duration-300',
                   {
-                    'animate-pulse bg-gradient-to-r from-orange-500/20 via-orange-400/30 to-orange-500/20 border-orange-500/50':
+                    'bg-orange-500/10 border-orange-500/30':
                       highlightTerminal,
                   },
                 )}
@@ -1153,31 +1163,39 @@ export const EditorPanel = memo(
 
               {/* Logs View */}
               {bottomPanelView === 'logs' && (
-                <LogsPanel projectId={projectId ?? null} className="flex-1" />
+                <Suspense fallback={null}>
+                  <LogsPanel projectId={projectId ?? null} className="flex-1" />
+                </Suspense>
               )}
 
               {/* Problems View */}
               {bottomPanelView === 'problems' && (
-                <ProblemsPanel
-                  className="flex-1"
-                  onErrorClick={(error) => {
-                    // Navigate to file when error is clicked
-                    if (error.filePath) {
-                      const filePath = error.filePath.replace('/workspace', '');
-                      onFileSelect?.(filePath);
-                    }
-                  }}
-                />
+                <Suspense fallback={null}>
+                  <ProblemsPanel
+                    className="flex-1"
+                    onErrorClick={(error) => {
+                      // Navigate to file when error is clicked
+                      if (error.filePath) {
+                        const filePath = error.filePath.replace('/workspace', '');
+                        onFileSelect?.(filePath);
+                      }
+                    }}
+                  />
+                </Suspense>
               )}
 
               {/* Console View */}
               {bottomPanelView === 'console' && (
-                <AppConsolePanel className="flex-1" />
+                <Suspense fallback={null}>
+                  <AppConsolePanel className="flex-1" />
+                </Suspense>
               )}
 
               {/* Secrets View */}
               {bottomPanelView === 'secrets' && (
-                <SecretsPanel className="flex-1" />
+                <Suspense fallback={null}>
+                  <SecretsPanel className="flex-1" />
+                </Suspense>
               )}
             </div>
           </div>
@@ -1191,12 +1209,14 @@ export const EditorPanel = memo(
 
       {/* Diff Viewer Modal */}
       {diffView && (
-        <DiffViewer
-          filePath={diffView.path}
-          original={diffView.original}
-          modified={diffView.modified}
-          onClose={() => setDiffView(null)}
-        />
+        <Suspense fallback={null}>
+          <DiffViewer
+            filePath={diffView.path}
+            original={diffView.original}
+            modified={diffView.modified}
+            onClose={() => setDiffView(null)}
+          />
+        </Suspense>
       )}
 
       {/* File History Modal */}
