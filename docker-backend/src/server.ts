@@ -1682,6 +1682,15 @@ app.get('/api/health/byok-readiness', (_req, res) => {
   res.status(report.overallReady ? 200 : 503).json(report);
 });
 
+// Metrics auth: require bearer token in production to prevent info leak
+const metricsAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const metricsToken = process.env.METRICS_BEARER_TOKEN;
+  if (!metricsToken) return next(); // skip auth if not configured
+  const auth = req.headers.authorization;
+  if (auth === `Bearer ${metricsToken}`) return next();
+  return res.status(401).json({ error: 'Unauthorized' });
+};
+
 // Pool stats endpoint
 app.get('/api/pool/stats', metricsAuth, (_, res) => {
   if (!ENABLE_CONTAINER_POOL) {
@@ -2002,15 +2011,6 @@ app.get('/api/ports/container/:containerId', (req, res) => {
 
 // ==================== COMPREHENSIVE METRICS ENDPOINT ====================
 // Aggregates all metrics into a single endpoint for monitoring dashboards
-
-// Metrics auth: require bearer token in production to prevent info leak
-const metricsAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const metricsToken = process.env.METRICS_BEARER_TOKEN;
-  if (!metricsToken) return next(); // skip auth if not configured
-  const auth = req.headers.authorization;
-  if (auth === `Bearer ${metricsToken}`) return next();
-  return res.status(401).json({ error: 'Unauthorized' });
-};
 
 app.get('/api/metrics', metricsAuth, (_, res) => {
   // Get metrics from all sources
@@ -10371,7 +10371,7 @@ app.post(
       retryBackoffMs,
     });
 
-    sendApiSuccess(
+    sendSuccess(
       res,
       buildPublicWorkflowResponseData({ workflow, requestContract }),
       req.requestId || 'unknown',
@@ -10533,7 +10533,7 @@ app.post(
       return res.status(400).json({ error: 'Invalid status. Must be running, completed, or failed.' });
     }
     upsertLaneStatus(laneId, parsed);
-    sendApiSuccess(
+    sendSuccess(
       res,
       {
         acknowledged: true,
@@ -10553,7 +10553,7 @@ app.get(
   asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
     const workflowRunId = String(req.query.workflowRunId || '').trim() || undefined;
     const snapshot = resolveLaneHealthSnapshot(workflowRunId);
-    sendApiSuccess(res, {
+    sendSuccess(res, {
       contract: PUBLIC_WORKFLOW_HEALTH_CONTRACT,
       ...(workflowRunId ? { workflowRunId } : {}),
       ...snapshot,
@@ -10569,7 +10569,7 @@ app.post(
   asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
     const cleared = laneStatusStore.size;
     laneStatusStore.clear();
-    sendApiSuccess(res, {
+    sendSuccess(res, {
       contract: PUBLIC_WORKFLOW_CONTRACT,
       cleared,
     }, req.requestId || 'unknown');

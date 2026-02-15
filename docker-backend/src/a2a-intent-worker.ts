@@ -266,7 +266,8 @@ export async function startA2AIntentWorker(input?: { serviceId?: string }): Prom
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const _isMain = typeof require !== 'undefined' && require.main === module;
+if (_isMain) {
   startA2AIntentWorker().then((handle) => {
     if (!handle) {
       console.error('[a2a-worker] Missing RECODER_A2A_REDIS_URL/REDIS_URL');
